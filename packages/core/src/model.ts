@@ -66,12 +66,7 @@ function buildTree(rows: BlockRow[]): Block[] {
 }
 
 export function buildBlockTree(rows: BlockRow[]): Block[] {
-  return buildTree(rows).flatMap((root) => {
-    if (root.type === BlockType.Document) {
-      return [root]
-    }
-    return [root]
-  })
+  return buildTree(rows)
 }
 
 export function buildHeadingTree(blocks: Block[]): HeadingNode[] {

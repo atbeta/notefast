@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { initDb, closeDb, getDb } from './db'
+import { initDb, closeDb } from './db'
 import { authMiddleware } from './middleware/auth'
 import { createMcpTransport } from './mcp/server'
 import blocks from './api/blocks'
@@ -8,6 +8,7 @@ import docs from './api/docs'
 import search from './api/search'
 import importRouter from './api/import'
 import refs from './api/refs'
+import notebooks from './api/notebooks'
 
 const PORT = parseInt(process.env.PORT || '3140', 10)
 const DATA_DIR = process.env.DATA_DIR || './data'
@@ -36,11 +37,7 @@ app.route('/api/v1/search', search)
 app.route('/api/v1/import', importRouter)
 app.route('/api/v1/refs', refs)
 
-app.get('/api/v1/notebook', (c) => {
-  const db = getDb()
-  const row = db.query('SELECT * FROM notebooks WHERE id = ?').get(notebookId)
-  return c.json(row)
-})
+app.route('/api/v1/notebooks', notebooks)
 
 const mcpTransport = await createMcpTransport(notebookId)
 

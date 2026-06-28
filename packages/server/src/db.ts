@@ -83,6 +83,12 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
 
   db.exec(SCHEMA_SQL)
 
+  const ftsCount = (db.query('SELECT count(*) as c FROM blocks_fts').get() as { c: number })?.c ?? 0
+  const blocksCount = (db.query('SELECT count(*) as c FROM blocks').get() as { c: number })?.c ?? 0
+  if (ftsCount < blocksCount) {
+    db.exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
+  }
+
   let notebookId = getDefaultNotebookId(db)
   if (!notebookId) {
     notebookId = createDefaultNotebook(db)
