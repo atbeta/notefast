@@ -1,0 +1,17 @@
+services:
+  notefast:
+    build: .
+    ports:
+      - '3140:3140'
+    environment:
+      - PORT=3140
+      - DATA_DIR=/app/data
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-}
+      - API_TOKEN=${API_TOKEN:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3140}
+    volumes:
+      - notefast_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  notefast_data:

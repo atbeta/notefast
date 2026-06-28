@@ -1,0 +1,102 @@
+import { Database } from 'bun:sqlite'
+import { existsSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+
+let db: Database
+
+const SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS notebooks (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  icon        TEXT DEFAULT '',
+  sort        INTEGER DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS blocks (
+  id          TEXT PRIMARY KEY,
+  notebook_id TEXT NOT NULL,
+  parent_id   TEXT,
+  root_id     TEXT NOT NULL,
+  type        TEXT NOT NULL,
+  content     TEXT DEFAULT '',
+  properties  TEXT DEFAULT '{}',
+  sort        INTEGER DEFAULT 0,
+  level       INTEGER DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (parent_id) REFERENCES blocks(id) ON DELETE CASCADE,
+  FOREIGN KEY (root_id) REFERENCES blocks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_blocks_parent ON blocks(parent_id);
+CREATE INDEX IF NOT EXISTS idx_blocks_root ON blocks(root_id);
+CREATE INDEX IF NOT EXISTS idx_blocks_notebook ON blocks(notebook_id);
+CREATE INDEX IF NOT EXISTS idx_blocks_type ON blocks(type);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS blocks_fts USING fts5(
+  id UNINDEXED,
+  content,
+  tokenize='unicode61'
+);
+
+CREATE TABLE IF NOT EXISTS block_refs (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_id   TEXT NOT NULL,
+  target_id   TEXT NOT NULL,
+  ref_type    TEXT DEFAULT 'link',
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (source_id) REFERENCES blocks(id) ON DELETE CASCADE,
+  FOREIGN KEY (target_id) REFERENCES blocks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_refs_source ON block_refs(source_id);
+CREATE INDEX IF NOT EXISTS idx_refs_target ON block_refs(target_id);
+`
+
+export function initDb(dataDir: string): { db: Database; notebookId: string } {
+  if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true })
+  }
+
+  const dbPath = join(dataDir, 'notefast.db')
+  db = new Database(dbPath)
+  db.exec('PRAGMA journal_mode=WAL')
+  db.exec('PRAGMA foreign_keys=ON')
+
+  db.exec(SCHEMA_SQL)
+
+  let notebookId = getDefaultNotebookId(db)
+  if (!notebookId) {
+    notebookId = createDefaultNotebook(db)
+  }
+
+  return { db, notebookId }
+}
+
+export function getDb(): Database {
+  if (!db) {
+    throw new Error('数据库未初始化，请先调用 initDb()')
+  }
+  return db
+}
+
+export function closeDb(): void {
+  if (db) {
+    db.close()
+  }
+}
+
+function getDefaultNotebookId(database: Database): string | null {
+  const row = database.query('SELECT id FROM notebooks LIMIT 1').get() as { id: string } | undefined
+  return row?.id ?? null
+}
+
+function createDefaultNotebook(database: Database): string {
+  const id = crypto.randomUUID()
+  database
+    .query('INSERT INTO notebooks (id, name) VALUES (?, ?)')
+    .run(id, '我的笔记')
+  return id
+}

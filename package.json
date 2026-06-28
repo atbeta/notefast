@@ -1,0 +1,18 @@
+{
+  "name": "notefast",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/core",
+    "packages/server",
+    "packages/web"
+  ],
+  "scripts": {
+    "dev": "bun --filter @notefast/server dev",
+    "dev:web": "bun --filter @notefast/web dev",
+    "build": "bun --filter @notefast/server build && bun --filter @notefast/web build",
+    "lint": "bun --filter '*' lint",
+    "test": "bun --filter '*' test",
+    "typecheck": "bun --filter '*' typecheck"
+  }
+}

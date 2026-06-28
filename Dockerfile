@@ -1,0 +1,30 @@
+FROM oven/bun:1 AS base
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json bunfig.toml bun.lock ./
+COPY packages/core/package.json packages/core/
+COPY packages/server/package.json packages/server/
+RUN bun install --frozen-lockfile
+
+FROM base AS builder
+COPY --from=deps /app/node_modules node_modules
+COPY . .
+RUN bun run build
+
+FROM base AS runner
+WORKDIR /app
+COPY --from=deps /app/node_modules node_modules
+COPY --from=builder /app/packages/server/dist ./server-dist
+COPY --from=builder /app/packages/web/dist ./web-dist
+COPY --from=deps /app/package.json ./
+
+ENV NODE_ENV=production
+ENV PORT=3140
+ENV DATA_DIR=/app/data
+
+RUN mkdir -p /app/data
+
+EXPOSE 3140
+
+CMD ["bun", "run", "server-dist/index.js"]
