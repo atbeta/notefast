@@ -100,7 +100,6 @@ docs.delete('/:id', (c) => {
   const allIds = [id, ...childIds.map((r) => r.id)]
 
   for (const delId of allIds) {
-    db.query('DELETE FROM blocks_fts WHERE id = ?').run(delId)
     db.query('DELETE FROM block_refs WHERE source_id = ? OR target_id = ?').run(delId, delId)
   }
 

@@ -176,8 +176,6 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
          VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
       ).run(id, nid, parent_id || null, rootId, type, content, level, now, now)
 
-      db.query('INSERT INTO blocks_fts (id, content) VALUES (?, ?)').run(id, content)
-
       const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
       return { content: [toText({ block: rowToBlock(row) })] }
     },
@@ -199,13 +197,6 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       }
 
       db.query("UPDATE blocks SET content = ?, updated_at = datetime('now') WHERE id = ?").run(content, block_id)
-
-      const ftsExists = db.query('SELECT id FROM blocks_fts WHERE id = ?').get(block_id)
-      if (ftsExists) {
-        db.query('UPDATE blocks_fts SET content = ? WHERE id = ?').run(content, block_id)
-      } else {
-        db.query('INSERT INTO blocks_fts (id, content) VALUES (?, ?)').run(block_id, content)
-      }
 
       const row = db.query('SELECT * FROM blocks WHERE id = ?').get(block_id) as BlockRow
       return { content: [toText({ block: rowToBlock(row) })] }
@@ -252,8 +243,6 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
           now,
           now,
         )
-
-        db.query('INSERT INTO blocks_fts (id, content) VALUES (?, ?)').run(blockId, inp.content || '')
       }
 
       return {

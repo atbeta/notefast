@@ -91,8 +91,6 @@ blocks.post('/', zValidator('json', createBlockSchema), (c) => {
     now,
   )
 
-  insertFts(db, id, input.content || '')
-
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
   return c.json(rowToBlock(row), 201)
 })
@@ -132,10 +130,6 @@ blocks.patch('/:id', zValidator('json', updateBlockSchema), (c) => {
 
   db.query(`UPDATE blocks SET ${updates.join(', ')} WHERE id = ?`)
     .run(...params as [string, ...string[]])
-
-  if (input.content !== undefined) {
-    updateFts(db, id, input.content)
-  }
 
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
   return c.json(rowToBlock(row))
@@ -203,7 +197,6 @@ blocks.delete('/:id', (c) => {
   const allIds = [id, ...childIds.map((r) => r.id)]
 
   for (const delId of allIds) {
-    db.query('DELETE FROM blocks_fts WHERE id = ?').run(delId)
     db.query('DELETE FROM block_refs WHERE source_id = ? OR target_id = ?').run(delId, delId)
   }
 
@@ -229,19 +222,6 @@ function fetchSubtree(database: ReturnType<typeof getDb>, rootId: string): Block
   }
 
   return rows
-}
-
-function insertFts(database: ReturnType<typeof getDb>, id: string, content: string): void {
-  database.query('INSERT INTO blocks_fts (id, content) VALUES (?, ?)').run(id, content)
-}
-
-function updateFts(database: ReturnType<typeof getDb>, id: string, content: string): void {
-  const exists = database.query('SELECT id FROM blocks_fts WHERE id = ?').get(id)
-  if (exists) {
-    database.query('UPDATE blocks_fts SET content = ? WHERE id = ?').run(content, id)
-  } else {
-    insertFts(database, id, content)
-  }
 }
 
 function limitDepth(blocks: import('@notefast/core').Block[], maxDepth: number, current: number): import('@notefast/core').Block[] {

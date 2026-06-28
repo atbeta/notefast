@@ -37,7 +37,7 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
     ).run(
       blockId,
       inp.notebook_id,
-      parentId,
+      parentId as string,
       docId,
       inp.type,
       inp.content ?? '',
@@ -47,7 +47,6 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
       now,
     )
 
-    db.query('INSERT INTO blocks_fts (id, content) VALUES (?, ?)').run(blockId, inp.content || '')
     createdIds.push(blockId)
   }
 

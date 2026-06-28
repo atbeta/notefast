@@ -53,6 +53,22 @@ CREATE TABLE IF NOT EXISTS block_refs (
 
 CREATE INDEX IF NOT EXISTS idx_refs_source ON block_refs(source_id);
 CREATE INDEX IF NOT EXISTS idx_refs_target ON block_refs(target_id);
+
+-- FTS 自动同步触发器
+CREATE TRIGGER IF NOT EXISTS blocks_fts_insert AFTER INSERT ON blocks
+BEGIN
+  INSERT INTO blocks_fts (id, content) VALUES (NEW.id, NEW.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS blocks_fts_update AFTER UPDATE ON blocks
+BEGIN
+  UPDATE blocks_fts SET content = NEW.content WHERE id = OLD.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS blocks_fts_delete AFTER DELETE ON blocks
+BEGIN
+  DELETE FROM blocks_fts WHERE id = OLD.id;
+END;
 `
 
 export function initDb(dataDir: string): { db: Database; notebookId: string } {

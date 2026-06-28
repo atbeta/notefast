@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { initDb, closeDb, getDb } from './db'
 import { authMiddleware } from './middleware/auth'
+import { createMcpTransport } from './mcp/server'
 import blocks from './api/blocks'
 import docs from './api/docs'
 import search from './api/search'
@@ -41,8 +42,15 @@ app.get('/api/v1/notebook', (c) => {
   return c.json(row)
 })
 
+const mcpTransport = await createMcpTransport(notebookId)
+
+app.all('/mcp', authMiddleware, async (c) => {
+  return mcpTransport.handleRequest(c.req.raw)
+})
+
 console.log(`🚀 NoteFast Server running at http://localhost:${PORT}`)
 console.log(`📦 Default notebook: ${notebookId}`)
+console.log(`🔧 MCP endpoint: http://localhost:${PORT}/mcp`)
 
 export default {
   port: PORT,
