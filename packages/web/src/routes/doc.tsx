@@ -5,6 +5,9 @@ import { ArrowLeft } from 'lucide-react'
 import { request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
 import SearchBar from '../components/SearchBar'
+import DocTree from '../components/DocTree'
+import Backlinks from '../components/Backlinks'
+import MarkdownEditor from '../components/MarkdownEditor'
 import type { SearchResult } from '@notefast/core'
 
 export default function DocPage() {
@@ -12,6 +15,7 @@ export default function DocPage() {
   const [doc, setDoc] = useState<Block | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     if (!id) return
@@ -21,7 +25,7 @@ export default function DocPage() {
       .then(setDoc)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [id])
+  }, [id, refreshKey])
 
   const handleSearch = useCallback(async (query: string): Promise<SearchResult[]> => {
     const params = new URLSearchParams({ q: query, limit: '10' })
@@ -30,6 +34,10 @@ export default function DocPage() {
 
   const handleSelectResult = useCallback((docId: string) => {
     window.location.href = `/doc/${docId}`
+  }, [])
+
+  const handleEditSaved = useCallback(() => {
+    setRefreshKey((k) => k + 1)
   }, [])
 
   if (loading) {
@@ -55,21 +63,36 @@ export default function DocPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Link
-          to="/"
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-blue-600 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          返回
-        </Link>
-        <div className="w-64">
-          <SearchBar onSearch={handleSearch} onSelect={handleSelectResult} />
+    <div className="flex gap-8">
+      <div className="flex-1 min-w-0 space-y-6">
+        <div className="flex items-center justify-between">
+          <Link
+            to="/"
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-blue-600 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            返回
+          </Link>
+          <div className="flex items-center gap-4">
+            {id && (
+              <MarkdownEditor
+                docId={id}
+                onSaved={handleEditSaved}
+              />
+            )}
+            <div className="w-64">
+              <SearchBar onSearch={handleSearch} onSelect={handleSelectResult} />
+            </div>
+          </div>
         </div>
+
+        <BlockRenderer block={doc} />
       </div>
 
-      <BlockRenderer block={doc} />
+      <aside className="hidden lg:block w-56 shrink-0 space-y-6">
+        {id && <DocTree key={`tree-${refreshKey}`} docId={id} />}
+        {id && <Backlinks key={`bl-${refreshKey}`} blockId={id} />}
+      </aside>
     </div>
   )
 }

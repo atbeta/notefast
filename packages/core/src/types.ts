@@ -165,3 +165,8 @@ export const importMarkdownSchema = z.object({
   markdown: z.string().min(1),
   title: z.string().optional(),
 })
+
+export const updateDocMarkdownSchema = z.object({
+  markdown: z.string().min(1),
+  title: z.string().min(1).optional(),
+})

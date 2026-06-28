@@ -21,7 +21,7 @@ beforeAll(() => {
   notebookId = result.notebookId
 
   app = new Hono()
-  app.use('*', cors({ origin: '*', allowMethods: ['GET', 'POST', 'PATCH', 'DELETE'] }))
+  app.use('*', cors({ origin: '*', allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'] }))
   app.route('/api/v1/blocks', blocks)
   app.route('/api/v1/docs', docs)
   app.route('/api/v1/search', search)
@@ -201,5 +201,50 @@ describe('Import API', () => {
     expect(status).toBe(201)
     expect(body.doc).toBeDefined()
     expect(body.block_count).toBeGreaterThan(1)
+  })
+})
+
+describe('Markdown Edit API', () => {
+  test('PUT /api/v1/docs/:id/markdown 更新文档内容', async () => {
+    const { body: doc } = await api('POST', '/api/v1/docs', {
+      notebook_id: notebookId,
+      title: '编辑前标题',
+    })
+
+    const newMarkdown = `## 新章节
+
+更新后的段落内容。
+
+\`\`\`js
+const x = 1
+\`\`\``
+
+    const { status, body } = await api('PUT', `/api/v1/docs/${doc.id}/markdown`, {
+      markdown: newMarkdown,
+      title: '编辑后标题',
+    })
+
+    expect(status).toBe(200)
+    expect(body.doc).toBeDefined()
+    expect(body.doc.content).toBe('编辑后标题')
+
+    const headings = body.doc.children.filter((c: { type: string }) => c.type === 'heading')
+    expect(headings.length).toBe(1)
+    expect(headings[0].content).toBe('新章节')
+  })
+
+  test('PUT /api/v1/docs/:id/markdown 缺少 markdown 返回 400', async () => {
+    const { body: doc } = await api('POST', '/api/v1/docs', {
+      notebook_id: notebookId,
+      title: '测试文档',
+    })
+
+    const { status } = await api('PUT', `/api/v1/docs/${doc.id}/markdown`, { title: '空' })
+    expect(status).toBe(400)
+  })
+
+  test('PUT /api/v1/docs/:id/markdown 不存在的文档返回 404', async () => {
+    const { status } = await api('PUT', '/api/v1/docs/nonexistent/markdown', { markdown: '# test' })
+    expect(status).toBe(404)
   })
 })
