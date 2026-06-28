@@ -4,6 +4,8 @@ node_modules/
 # Build output
 dist/
 build/
+*.tsbuildinfo
+packages/**/vite.config.d.ts
 
 # Data
 data/
