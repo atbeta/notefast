@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { serveStatic } from 'hono/bun'
 import { initDb, closeDb } from './db'
 import { authMiddleware } from './middleware/auth'
 import { createMcpTransport } from './mcp/server'
@@ -44,6 +45,12 @@ const mcpTransport = await createMcpTransport(notebookId)
 app.all('/mcp', authMiddleware, async (c) => {
   return mcpTransport.handleRequest(c.req.raw)
 })
+
+const webDist = process.env.WEB_DIST || ''
+if (webDist) {
+  app.use('/*', serveStatic({ root: webDist }))
+  app.get('/*', serveStatic({ path: 'index.html', root: webDist }))
+}
 
 console.log(`🚀 NoteFast Server running at http://localhost:${PORT}`)
 console.log(`📦 Default notebook: ${notebookId}`)

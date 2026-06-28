@@ -22,6 +22,7 @@ COPY --from=deps /app/package.json ./
 ENV NODE_ENV=production
 ENV PORT=3140
 ENV DATA_DIR=/app/data
+ENV WEB_DIST=/app/web-dist
 
 RUN mkdir -p /app/data
 

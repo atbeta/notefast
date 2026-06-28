@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/backlinks.tsx","./src/components/blockrenderer.tsx","./src/components/doclist.tsx","./src/components/doctree.tsx","./src/components/layout.tsx","./src/components/markdowneditor.tsx","./src/components/searchbar.tsx","./src/hooks/useapi.ts","./src/routes/doc.tsx","./src/routes/home.tsx"],"version":"5.9.3"}
