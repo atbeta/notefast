@@ -200,6 +200,7 @@ function blocksToCreateInputs(root: ParsedBlock, notebookId: string): CreateBloc
     }
 
     inputs.push({
+      id,
       notebook_id: notebookId,
       parent_id: parentId,
       type: parsed.type,

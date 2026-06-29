@@ -10,11 +10,16 @@ docs.get('/list', (c) => {
   const db = getDb()
   const notebookId = c.req.query('notebook_id') || ''
 
-  const rows = db
-    .query(
-      'SELECT * FROM blocks WHERE type = ? AND notebook_id = ? ORDER BY updated_at DESC',
-    )
-    .all('document', notebookId) as BlockRow[]
+  let rows: BlockRow[]
+  if (notebookId) {
+    rows = db
+      .query('SELECT * FROM blocks WHERE type = ? AND notebook_id = ? ORDER BY updated_at DESC')
+      .all('document', notebookId) as BlockRow[]
+  } else {
+    rows = db
+      .query('SELECT * FROM blocks WHERE type = ? ORDER BY updated_at DESC')
+      .all('document') as BlockRow[]
+  }
 
   const summaries: DocSummary[] = rows.map((r) => ({
     id: r.id,

@@ -146,5 +146,22 @@ function isContainerType(type: BlockType): boolean {
   return CONTAINER_TYPES.includes(type)
 }
 
+export function inputsToBlockTree(inputs: CreateBlockInput[]): Block[] {
+  const rows: BlockRow[] = inputs.map((inp) => ({
+    id: inp.id ?? crypto.randomUUID(),
+    notebook_id: inp.notebook_id,
+    parent_id: inp.parent_id ?? null,
+    root_id: '',
+    type: inp.type,
+    content: inp.content ?? '',
+    properties: JSON.stringify(inp.properties ?? {}),
+    sort: inp.sort ?? 0,
+    level: 0,
+    created_at: '',
+    updated_at: '',
+  }))
+  return buildTree(rows)
+}
+
 export { buildTree, isContainerType }
 export type { BlockRow, Block, CreateBlockInput, UpdateBlockInput, MoveBlockInput, DocSummary, HeadingNode }

@@ -46,6 +46,7 @@ export interface BlockRow {
 
 /** 创建 Block 的输入 */
 export interface CreateBlockInput {
+  id?: string
   notebook_id: string
   parent_id?: string | null
   type: BlockType

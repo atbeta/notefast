@@ -1,17 +1,22 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import type { DocSummary } from '@notefast/core'
 import { FileText, Plus } from 'lucide-react'
-import { request } from '../hooks/useAPI'
+import { api } from '../hooks/useAPI'
 import DocList from '../components/DocList'
 
 export default function HomePage() {
   const [docs, setDocs] = useState<DocSummary[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    request<DocSummary[]>('/docs/list').then(setDocs).catch(console.error).finally(() => setLoading(false))
+  const fetchDocs = useCallback(() => {
+    setLoading(true)
+    api.get<DocSummary[]>('/docs/list').then(setDocs).catch(console.error).finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => { fetchDocs() }, [fetchDocs])
+
+  const handleRefresh = useCallback(() => { fetchDocs() }, [fetchDocs])
 
   return (
     <div className="animate-fade-in space-y-8">
@@ -58,7 +63,7 @@ export default function HomePage() {
           </Link>
         </div>
       ) : (
-        <DocList docs={docs} />
+        <DocList docs={docs} onRefresh={handleRefresh} />
       )}
     </div>
   )
