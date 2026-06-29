@@ -1,31 +1,57 @@
-import { Link, useLocation } from 'react-router-dom'
-import { BookOpen } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
 import type { ReactNode } from 'react'
+import { Menu, X } from 'lucide-react'
+import Sidebar from './Sidebar'
+import { useNavigate } from 'react-router-dom'
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const location = useLocation()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const navigate = useNavigate()
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => !prev)
+  }, [])
+
+  const toggleMobileSidebar = useCallback(() => {
+    setMobileOpen((prev) => !prev)
+  }, [])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+        e.preventDefault()
+        toggleSidebar()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
+        e.preventDefault()
+        navigate('/new')
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [toggleSidebar, navigate])
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 font-bold text-lg text-gray-900 hover:text-blue-600 transition-colors">
-            <BookOpen className="w-5 h-5" />
-            NoteFast
-          </Link>
-          <nav className="flex items-center gap-4 text-sm">
-            <Link
-              to="/"
-              className={`hover:text-blue-600 transition-colors ${location.pathname === '/' ? 'text-blue-600 font-medium' : 'text-gray-500'}`}
-            >
-              文档
-            </Link>
-          </nav>
+    <div className="flex h-screen overflow-hidden bg-warm-50 dark:bg-warm-900">
+      <div className={`fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:relative md:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <Sidebar collapsed={sidebarCollapsed} onToggle={mobileOpen ? toggleMobileSidebar : toggleSidebar} />
+      </div>
+      {mobileOpen && (
+        <div className="fixed inset-0 bg-black/30 z-40 md:hidden" onClick={toggleMobileSidebar} />
+      )}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div className="md:hidden flex items-center h-12 px-4 border-b border-warm-200 dark:border-warm-700 bg-white dark:bg-warm-800">
+          <button onClick={toggleMobileSidebar} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-warm-100 dark:hover:bg-warm-700 text-warm-500 dark:text-warm-300 transition-colors">
+            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </div>
-      </header>
-      <main className="flex-1 max-w-5xl mx-auto px-4 py-6 w-full">
-        {children}
-      </main>
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-prose mx-auto px-6 py-8">
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
   )
 }
