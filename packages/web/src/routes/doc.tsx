@@ -26,21 +26,21 @@ export default function DocPage() {
   if (loading) {
     return (
       <div className="space-y-4 animate-pulse">
-        <div className="h-8 bg-warm-100 dark:bg-warm-700 rounded-lg w-2/3" />
-        <div className="h-4 bg-warm-100 dark:bg-warm-700 rounded w-full" />
-        <div className="h-4 bg-warm-100 dark:bg-warm-700 rounded w-5/6" />
-        <div className="h-4 bg-warm-100 dark:bg-warm-700 rounded w-4/6" />
+        <div className="h-8 bg-secondary rounded-lg w-2/3" />
+        <div className="h-4 bg-secondary rounded w-full" />
+        <div className="h-4 bg-secondary rounded w-5/6" />
+        <div className="h-4 bg-secondary rounded w-4/6" />
       </div>
     )
   }
-  if (error) return <div className="text-center py-24"><p className="text-red-500 mb-4">{error}</p><Link to="/" className="text-brand-600 hover:underline text-sm">返回首页</Link></div>
-  if (!doc) return <div className="text-center py-24"><p className="text-warm-400 mb-4">文档不存在</p><Link to="/" className="text-brand-600 hover:underline text-sm">返回首页</Link></div>
+  if (error) return <div className="text-center py-24"><p className="text-destructive mb-4">{error}</p><Link to="/" className="text-primary hover:underline text-sm">返回首页</Link></div>
+  if (!doc) return <div className="text-center py-24"><p className="text-muted-foreground mb-4">文档不存在</p><Link to="/" className="text-primary hover:underline text-sm">返回首页</Link></div>
 
   return (
     <div className="animate-fade-in flex gap-8">
       <div className="flex-1 min-w-0 space-y-6">
         <div className="flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-1.5 text-sm text-warm-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
+          <Link to="/" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors">
             <ArrowLeft className="w-4 h-4" />返回
           </Link>
           <div className="flex items-center gap-3">{id && <MarkdownEditor docId={id} onSaved={handleEditSaved} />}</div>

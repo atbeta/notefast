@@ -50,7 +50,7 @@ export default function MarkdownEditor({ docId, onSaved }: MarkdownEditorProps) 
     return (
       <button
         onClick={handleStartEdit}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-warm-700 dark:text-warm-200 bg-warm-100 dark:bg-warm-800 hover:bg-warm-200 dark:hover:bg-warm-700 hover:text-brand-600 dark:hover:text-brand-400 rounded-xl transition-colors"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-foreground bg-secondary hover:bg-accent hover:text-primary rounded-xl transition-colors"
       >
         <Edit3 className="w-4 h-4" />
         Edit
@@ -60,8 +60,8 @@ export default function MarkdownEditor({ docId, onSaved }: MarkdownEditorProps) 
 
   if (loadingMd) {
     return (
-      <div className="inline-flex items-center gap-2 px-4 py-2 text-sm text-warm-600 dark:text-warm-400 bg-warm-50 dark:bg-warm-900 border border-warm-200 dark:border-warm-700 rounded-xl">
-        <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
+      <div className="inline-flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground bg-background border border-border rounded-xl">
+        <Loader2 className="w-4 h-4 animate-spin text-primary" />
         <span>Loading Markdown...</span>
       </div>
     )
@@ -73,7 +73,7 @@ export default function MarkdownEditor({ docId, onSaved }: MarkdownEditorProps) 
         <button
           onClick={handleSave}
           disabled={saving}
-          className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-brand-500 text-white text-sm font-medium rounded-xl hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
+          className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-xl hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
         >
           {saving ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -85,7 +85,7 @@ export default function MarkdownEditor({ docId, onSaved }: MarkdownEditorProps) 
         <button
           onClick={handleCancel}
           disabled={saving}
-          className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-warm-100 dark:bg-warm-800 text-warm-700 dark:text-warm-200 text-sm font-medium rounded-xl hover:bg-warm-200 dark:hover:bg-warm-700 disabled:opacity-50 transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-secondary text-foreground text-sm font-medium rounded-xl hover:bg-accent disabled:opacity-50 transition-colors"
         >
           <X className="w-4 h-4" />
           Cancel
@@ -94,7 +94,7 @@ export default function MarkdownEditor({ docId, onSaved }: MarkdownEditorProps) 
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
-        className="w-full h-96 p-4 font-mono text-sm text-warm-900 dark:text-warm-50 bg-warm-50 dark:bg-warm-900 border border-warm-200 dark:border-warm-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400 dark:focus:border-brand-600 resize-y placeholder:text-warm-400 dark:placeholder:text-warm-500 transition-colors"
+        className="w-full h-96 p-4 font-mono text-sm text-foreground bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring resize-y placeholder:text-muted-foreground transition-colors"
         placeholder="Enter Markdown content..."
       />
     </div>

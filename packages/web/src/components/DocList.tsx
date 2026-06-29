@@ -24,12 +24,12 @@ export default function DocList({ docs }: DocListProps) {
       {docs.map((doc) => (
         <Link key={doc.id} to={'/doc/' + doc.id} className="card-interactive p-4 group">
           <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-lg bg-brand-50 dark:bg-brand-900/30 flex items-center justify-center shrink-0 group-hover:bg-brand-100 dark:group-hover:bg-brand-900/50 transition-colors">
-              <FileText className="w-5 h-5 text-brand-500 dark:text-brand-400" />
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
+              <FileText className="w-5 h-5 text-primary" />
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="font-medium text-sm text-warm-900 dark:text-warm-50 truncate">{doc.title || '未命名文档'}</h3>
-              <p className="text-xs text-warm-400 mt-1">更新于 {formatRelative(doc.updated_at)}</p>
+              <h3 className="font-medium text-sm text-foreground truncate">{doc.title || '未命名文档'}</h3>
+              <p className="text-xs text-muted-foreground mt-1">更新于 {formatRelative(doc.updated_at)}</p>
             </div>
           </div>
         </Link>

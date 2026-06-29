@@ -1,55 +1,33 @@
+@import './styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --color-bg-primary: #fafaf9;
-    --color-bg-secondary: #ffffff;
-    --color-bg-tertiary: #f5f5f4;
-    --color-text-primary: #1c1917;
-    --color-text-secondary: #57534e;
-    --color-text-tertiary: #a8a29e;
-    --color-border: #e7e5e4;
-  }
-
-  .dark {
-    --color-bg-primary: #1c1917;
-    --color-bg-secondary: #242220;
-    --color-bg-tertiary: #2d2b28;
-    --color-text-primary: #fafaf9;
-    --color-text-secondary: #a8a29e;
-    --color-text-tertiary: #78716c;
-    --color-border: #3d3a36;
-  }
-
   body {
-    @apply bg-warm-50 text-warm-900 antialiased;
+    @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  }
-
-  .dark body {
-    @apply bg-warm-900 text-warm-50;
   }
 }
 
 @layer components {
   .card {
-    @apply bg-white dark:bg-warm-800 rounded-xl border border-warm-200 dark:border-warm-700 shadow-card;
+    @apply bg-card text-card-foreground rounded-xl border border-border shadow-card;
   }
 
   .card-interactive {
-    @apply card hover:shadow-card-hover hover:border-brand-200 dark:hover:border-brand-700 transition-all duration-150 cursor-pointer;
+    @apply card hover:shadow-card-hover hover:border-primary/30 transition-all duration-150 cursor-pointer;
   }
 
   .sidebar-link {
-    @apply flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-warm-600 dark:text-warm-300
-           hover:bg-warm-100 dark:hover:bg-warm-700 hover:text-warm-900 dark:hover:text-warm-50
+    @apply flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-sidebar-foreground
+           hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
            transition-colors duration-150;
   }
 
   .sidebar-link-active {
-    @apply sidebar-link bg-warm-100 dark:bg-warm-700 text-warm-900 dark:text-warm-50 font-medium;
+    @apply sidebar-link bg-sidebar-accent text-sidebar-accent-foreground font-medium;
   }
 }
 

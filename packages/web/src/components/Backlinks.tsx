@@ -27,23 +27,23 @@ export default function Backlinks({ blockId }: BacklinksProps) {
   }, [blockId])
 
   if (loading) {
-    return <div className="text-xs text-gray-400 py-2">加载引用...</div>
+    return <div className="text-xs text-muted-foreground py-2">加载引用...</div>
   }
 
   if (backlinks.length === 0) {
-    return <div className="text-xs text-gray-400 py-2">暂无引用</div>
+    return <div className="text-xs text-muted-foreground py-2">暂无引用</div>
   }
 
   return (
     <div className="space-y-2">
-      <h4 className="text-sm font-medium text-gray-700">反向链接 ({backlinks.length})</h4>
+      <h4 className="text-sm font-medium text-foreground">反向链接 ({backlinks.length})</h4>
       {backlinks.map((bl) => (
-        <div key={bl.id} className="text-sm p-2 bg-gray-50 rounded border border-gray-100 hover:border-blue-200 transition-colors">
+        <div key={bl.id} className="text-sm p-2 bg-secondary rounded border border-border hover:border-primary/30 transition-colors">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs text-gray-400 bg-gray-200 rounded px-1.5 py-0.5">{bl.source_type}</span>
-            <span className="text-xs text-gray-400">{bl.ref_type}</span>
+            <span className="text-xs text-muted-foreground bg-accent rounded px-1.5 py-0.5">{bl.source_type}</span>
+            <span className="text-xs text-muted-foreground">{bl.ref_type}</span>
           </div>
-          <p className="text-gray-700 line-clamp-2">{bl.source_content}</p>
+          <p className="text-foreground line-clamp-2">{bl.source_content}</p>
         </div>
       ))}
     </div>

@@ -33,7 +33,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   }, [toggleSidebar, navigate])
 
   return (
-    <div className="flex h-screen overflow-hidden bg-warm-50 dark:bg-warm-900">
+    <div className="flex h-screen overflow-hidden bg-background">
       <div className={`fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:relative md:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <Sidebar collapsed={sidebarCollapsed} onToggle={mobileOpen ? toggleMobileSidebar : toggleSidebar} />
       </div>
@@ -41,8 +41,8 @@ export default function Layout({ children }: { children: ReactNode }) {
         <div className="fixed inset-0 bg-black/30 z-40 md:hidden" onClick={toggleMobileSidebar} />
       )}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div className="md:hidden flex items-center h-12 px-4 border-b border-warm-200 dark:border-warm-700 bg-white dark:bg-warm-800">
-          <button onClick={toggleMobileSidebar} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-warm-100 dark:hover:bg-warm-700 text-warm-500 dark:text-warm-300 transition-colors">
+        <div className="md:hidden flex items-center h-12 px-4 border-b border-border bg-card">
+          <button onClick={toggleMobileSidebar} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-foreground transition-colors">
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>

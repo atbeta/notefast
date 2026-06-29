@@ -17,12 +17,12 @@ export default function HomePage() {
     <div className="animate-fade-in space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-50">文档</h1>
-          <p className="text-sm text-warm-500 dark:text-warm-400 mt-1">{loading ? '加载中...' : docs.length + ' 篇文档'}</p>
+          <h1 className="text-2xl font-bold text-foreground">文档</h1>
+          <p className="text-sm text-muted-foreground mt-1">{loading ? '加载中...' : docs.length + ' 篇文档'}</p>
         </div>
         <Link
           to="/new"
-          className="flex items-center gap-1.5 px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-lg transition-colors"
         >
           <Plus className="w-4 h-4" />
           新建文档
@@ -33,10 +33,10 @@ export default function HomePage() {
           {[1,2,3].map((i) => (
             <div key={i} className="card animate-pulse p-5">
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-lg bg-warm-100 dark:bg-warm-700 shrink-0" />
+                <div className="w-10 h-10 rounded-lg bg-secondary shrink-0" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-5 bg-warm-100 dark:bg-warm-700 rounded w-1/3" />
-                  <div className="h-3.5 bg-warm-100 dark:bg-warm-700 rounded w-1/4" />
+                  <div className="h-5 bg-secondary rounded w-1/3" />
+                  <div className="h-3.5 bg-secondary rounded w-1/4" />
                 </div>
               </div>
             </div>
@@ -44,14 +44,14 @@ export default function HomePage() {
         </div>
       ) : docs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="w-20 h-20 rounded-2xl bg-warm-100 dark:bg-warm-800 flex items-center justify-center mb-6">
-            <FileText className="w-10 h-10 text-warm-300 dark:text-warm-600" />
+          <div className="w-20 h-20 rounded-2xl bg-secondary flex items-center justify-center mb-6">
+            <FileText className="w-10 h-10 text-muted-foreground/70" />
           </div>
-          <h2 className="text-xl font-semibold text-warm-700 dark:text-warm-200 mb-2">开始写作</h2>
-          <p className="text-sm text-warm-400 mb-6 max-w-sm">创建新文档或通过 MCP、API 导入 Markdown</p>
+          <h2 className="text-xl font-semibold text-foreground mb-2">开始写作</h2>
+          <p className="text-sm text-muted-foreground mb-6 max-w-sm">创建新文档或通过 MCP、API 导入 Markdown</p>
           <Link
             to="/new"
-            className="flex items-center gap-1.5 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />
             创建第一篇文档
