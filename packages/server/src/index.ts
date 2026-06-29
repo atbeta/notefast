@@ -4,12 +4,14 @@ import { serveStatic } from 'hono/bun'
 import { initDb, closeDb } from './db'
 import { authMiddleware } from './middleware/auth'
 import { createMcpTransport } from './mcp/server'
+import { startAutoExport } from './services/autoExport'
 import blocks from './api/blocks'
 import docs from './api/docs'
 import search from './api/search'
 import importRouter from './api/import'
 import refs from './api/refs'
 import notebooks from './api/notebooks'
+import sync from './api/sync'
 
 const PORT = parseInt(process.env.PORT || '3140', 10)
 const DATA_DIR = process.env.DATA_DIR || './data'
@@ -39,6 +41,7 @@ app.route('/api/v1/import', importRouter)
 app.route('/api/v1/refs', refs)
 
 app.route('/api/v1/notebooks', notebooks)
+app.route('/api/v1/sync', sync)
 
 const mcpTransport = await createMcpTransport(notebookId)
 
@@ -55,6 +58,12 @@ if (webDist) {
 console.log(`🚀 NoteFast Server running at http://localhost:${PORT}`)
 console.log(`📦 Default notebook: ${notebookId}`)
 console.log(`🔧 MCP endpoint: http://localhost:${PORT}/mcp`)
+
+const exportDir = process.env.AUTO_EXPORT_DIR || ''
+if (exportDir) {
+  startAutoExport(exportDir)
+  console.log(`📁 Auto-export: ${exportDir}`)
+}
 
 export default {
   port: PORT,
