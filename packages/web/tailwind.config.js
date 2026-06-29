@@ -19,7 +19,9 @@ export default {
         primary: {
           DEFAULT: 'rgb(var(--primary) / <alpha-value>)',
           foreground: 'rgb(var(--primary-foreground) / <alpha-value>)',
+          soft: 'rgb(var(--primary) / 0.06)',
         },
+        'primary-soft': 'var(--primary-soft)',
         secondary: {
           DEFAULT: 'rgb(var(--secondary) / <alpha-value>)',
           foreground: 'rgb(var(--secondary-foreground) / <alpha-value>)',
@@ -36,6 +38,7 @@ export default {
           DEFAULT: 'rgb(var(--destructive) / <alpha-value>)',
           foreground: 'rgb(var(--destructive-foreground) / <alpha-value>)',
         },
+        warn: 'rgb(var(--warn) / <alpha-value>)',
         border: 'rgb(var(--border) / <alpha-value>)',
         input: 'rgb(var(--input) / <alpha-value>)',
         ring: 'rgb(var(--ring) / <alpha-value>)',
@@ -72,24 +75,40 @@ export default {
           800: '#292524',
           900: '#1c1917',
         },
-        // 语义别名：方便过渡期使用
         'color-primary': 'rgb(var(--primary) / <alpha-value>)',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'ui-monospace', 'monospace'],
       },
+      fontSize: {
+        xs:   ['var(--text-xs)',   { lineHeight: '1.5' }],
+        sm:   ['var(--text-sm)',   { lineHeight: '1.5' }],
+        base: ['var(--text-base)', { lineHeight: '1.6' }],
+        md:   ['var(--text-md)',   { lineHeight: '1.6' }],
+        lg:   ['var(--text-lg)',   { lineHeight: '1.5' }],
+        xl:   ['var(--text-xl)',   { lineHeight: '1.4' }],
+        '2xl':['var(--text-2xl)',  { lineHeight: '1.3' }],
+      },
       maxWidth: {
         prose: '42rem',
+        '4xl': '56rem',
       },
       boxShadow: {
-        'card': '0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04)',
-        'card-hover': '0 4px 12px 0 rgb(0 0 0 / 0.06), 0 1px 3px 0 rgb(0 0 0 / 0.04)',
+        'card':       'var(--shadow-card)',
+        'card-hover': 'var(--shadow-card-hover)',
+        'btn':        'var(--btn-shadow)',
+        'btn-hover':  'var(--btn-shadow-hover)',
       },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+        card: 'var(--radius-card)',
+        btn:  'var(--radius-btn)',
+      },
+      transitionTimingFunction: {
+        soft: 'cubic-bezier(0.4, 0, 0.2, 1)',
       },
     },
   },

@@ -8,12 +8,14 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
   }
 }
 
 @layer components {
   .card {
-    @apply bg-card text-card-foreground rounded-xl border border-border shadow-card;
+    @apply bg-card text-card-foreground rounded-card border border-border;
+    box-shadow: var(--shadow-card);
   }
 
   .card-interactive {
@@ -21,15 +23,207 @@
   }
 
   .sidebar-link {
-    @apply flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-sidebar-foreground
-           hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
-           transition-colors duration-150;
+    @apply flex items-center gap-2.5 px-3 py-2 rounded-btn text-sm text-sidebar-foreground
+           hover:bg-primary-soft hover:text-foreground
+           transition-colors duration-200;
   }
 
   .sidebar-link-active {
-    @apply sidebar-link bg-sidebar-accent text-sidebar-accent-foreground font-medium;
+    @apply sidebar-link bg-primary-soft text-primary font-semibold;
   }
 }
+
+/* ────────────────────────────────────────────────────────────────
+   Hero / 渐变 Orb
+   - 焦点偏移到 35% 35% 制造"光从上方照下"的立体感
+   - inset 1px 白环 → 玻璃感
+   - 外发光用独立 halo 元素 + 18px blur
+   ──────────────────────────────────────────────────────────────── */
+
+.hero-orb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  border: none;
+  cursor: pointer;
+  color: #fff;
+  background: radial-gradient(circle at 35% 35%, rgb(var(--hero-from)), rgb(var(--hero-via)) 55%, rgb(var(--hero-to)));
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 8%),
+    0 8px 24px -12px rgb(var(--hero-via) / 0.45);
+  transition: transform var(--ease);
+}
+.hero-orb:hover { transform: scale(1.03); }
+.hero-orb:active { transform: scale(0.98); }
+
+/* 尺寸变体 */
+.hero-orb-lg { width: 80px;  height: 80px; }
+.hero-orb-md { width: 56px;  height: 56px; }
+.hero-orb-sm { width: 40px;  height: 40px; }
+.hero-orb-lg svg { width: 24px; height: 24px; stroke-width: 2.25; }
+.hero-orb-md svg { width: 20px; height: 20px; stroke-width: 2.25; }
+.hero-orb-sm svg { width: 16px; height: 16px; stroke-width: 2.25; }
+
+/* 浮动 + 外发光脉冲 */
+.orb-float { animation: orb-float 6s ease-in-out infinite; }
+@keyframes orb-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+.orb-halo {
+  position: absolute;
+  inset: -16px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(var(--hero-via) / 0.4), transparent 70%);
+  filter: blur(18px);
+  pointer-events: none;
+  animation: orb-pulse 3.6s ease-in-out infinite;
+  z-index: -1;
+}
+.orb-halo-sm { inset: -8px; filter: blur(12px); }
+@keyframes orb-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%      { opacity: 0.9; transform: scale(1.04); }
+}
+
+/* 小尺寸渐变方块 — 用于 logo 与表单头 */
+.gradient-mark {
+  background: linear-gradient(135deg, rgb(var(--hero-from)), rgb(var(--hero-via)) 55%, rgb(var(--hero-to)));
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 8%),
+    0 0 0 1px rgb(var(--hero-via) / 0.12);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   Primary 按钮 — 168° 三段渐变 + 1px 外环 + 内白高光
+   ──────────────────────────────────────────────────────────────── */
+
+.btn-primary-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: var(--radius-btn);
+  border: none;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  color: rgb(var(--btn-fg));
+  background: linear-gradient(
+    168deg,
+    rgb(var(--btn-from)) 0%,
+    rgb(var(--btn-mid)) 48%,
+    rgb(var(--btn-to)) 100%
+  );
+  box-shadow: var(--btn-shadow);
+  transition: box-shadow var(--ease), filter var(--ease), transform 120ms ease;
+}
+.btn-primary-custom:hover:not(:disabled) {
+  box-shadow: var(--btn-shadow-hover);
+  filter: brightness(1.06);
+}
+.btn-primary-custom:active:not(:disabled) {
+  transform: scale(0.98);
+  filter: brightness(0.98);
+}
+.btn-primary-custom:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-ghost-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: var(--radius-btn);
+  border: none;
+  background: transparent;
+  color: rgb(var(--muted-foreground));
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: color var(--ease);
+}
+.btn-ghost-custom:hover { color: rgb(var(--foreground)); }
+
+.btn-icon-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-btn);
+  border: none;
+  background: transparent;
+  color: rgb(var(--muted-foreground));
+  cursor: pointer;
+  transition: color var(--ease), background var(--ease);
+}
+.btn-icon-ghost:hover {
+  color: rgb(var(--destructive));
+  background: rgb(var(--destructive) / 0.08);
+}
+
+/* ────────────────────────────────────────────────────────────────
+   表单控件 — 下划线样式 + mono + focus ring
+   ──────────────────────────────────────────────────────────────── */
+
+.input-underline {
+  width: 100%;
+  padding: 8px 0;
+  border: none;
+  border-bottom: 1px solid rgb(var(--border));
+  background: transparent;
+  font-size: var(--text-xl);
+  font-weight: 500;
+  color: rgb(var(--foreground));
+  outline: none;
+  letter-spacing: -0.022em;
+  transition: border-color var(--ease);
+}
+.input-underline::placeholder { color: rgb(var(--muted-foreground) / 0.6); }
+.input-underline:focus { border-bottom-color: rgb(var(--ring)); }
+.input-underline.error { border-bottom-color: rgb(var(--destructive)); }
+
+.input-mono {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--radius-btn);
+  background: rgb(var(--background));
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: rgb(var(--foreground));
+  outline: none;
+  resize: vertical;
+  transition: box-shadow var(--ease), border-color var(--ease);
+}
+.input-mono::placeholder { color: rgb(var(--muted-foreground) / 0.6); }
+.input-mono:focus {
+  border-color: rgb(var(--ring));
+  box-shadow: 0 0 0 3px rgb(var(--primary) / 0.12);
+}
+
+.field-label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: rgb(var(--muted-foreground));
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   通用动画
+   ──────────────────────────────────────────────────────────────── */
 
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -37,4 +231,94 @@
 }
 .animate-fade-in {
   animation: fade-in 0.3s ease-out;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   SubNavTabs 下划线滑动指示器
+   ──────────────────────────────────────────────────────────────── */
+.subnav-underline {
+  position: absolute;
+  bottom: -1px;
+  height: 2px;
+  background: rgb(var(--primary));
+  border-radius: 2px;
+  transition: left 220ms ease, width 220ms ease;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   Doc Header — 等宽 meta 行 + warn-hint
+   ──────────────────────────────────────────────────────────────── */
+
+.meta-mono {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 8px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  color: rgb(var(--muted-foreground));
+}
+
+.warn-hint {
+  display: none;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-btn);
+  background: rgb(var(--warn) / 0.12);
+  color: rgb(var(--warn));
+  font-size: 12px;
+}
+.warn-hint.show { display: block; }
+
+/* Outline 列表 */
+.outline-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 24px;
+  border-bottom: 1px solid rgb(var(--border));
+  cursor: pointer;
+  transition: background var(--ease);
+  font-size: 14px;
+  color: rgb(var(--muted-foreground));
+}
+.outline-row:hover { background: rgb(var(--primary) / 0.04); color: rgb(var(--foreground)); }
+.outline-row:last-child { border-bottom: none; }
+.outline-row[data-depth="2"] { padding-left: 44px; }
+.outline-row[data-depth="3"] { padding-left: 64px; }
+.outline-row[data-depth="4"] { padding-left: 84px; }
+.outline-level {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  color: rgb(var(--muted-foreground));
+  width: 28px;
+  flex-shrink: 0;
+}
+
+/* 空态图标 */
+.empty-icon-tile {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+  border-radius: 12px;
+  background: rgb(var(--background));
+  border: 1px solid rgb(var(--border));
+  display: grid;
+  place-items: center;
+  color: rgb(var(--muted-foreground));
+}
+
+/* ref 卡片 */
+.ref-type-pill {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgb(var(--border));
+  color: rgb(var(--muted-foreground));
+}
+.ref-label {
+  font-size: 12px;
+  color: rgb(var(--primary));
+  font-weight: 500;
 }

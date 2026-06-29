@@ -22,7 +22,7 @@
   --popover-foreground: 28 25 23;
 
   /* 主色 */
-  --primary: 37 99 235;
+  --primary: 79 70 229;
   --primary-foreground: 255 255 255;
 
   /* 次要色 */
@@ -38,13 +38,34 @@
   --accent-foreground: 28 25 23;
 
   /* 破坏性操作 */
-  --destructive: 239 68 68;
+  --destructive: 220 38 38;
   --destructive-foreground: 255 255 255;
+  --warn: 217 119 6;
 
   /* 边框与输入框 */
   --border: 231 229 228;
   --input: 231 229 228;
-  --ring: 37 99 235;
+  --ring: 79 70 229;
+
+  /* Hero 渐变与外发光（用于首页高亮入口） */
+  --hero-from: 96 165 250;
+  --hero-via: 79 70 229;
+  --hero-to: 124 58 237;
+  --hero-glow: 99 102 241;
+
+  /* Primary 渐变按钮（168° 三段渐变 + 外环 + 内白高光） */
+  --btn-from: 67 56 202;
+  --btn-mid: 109 65 219;
+  --btn-to: 124 58 237;
+  --btn-fg: 250 250 249;
+  --btn-shadow:
+    0 1px 2px rgb(67 56 202 / 22%),
+    0 0 0 1px rgb(67 56 202 / 10%),
+    inset 0 1px 0 rgb(255 255 255 / 14%);
+  --btn-shadow-hover:
+    0 3px 10px rgb(67 56 202 / 28%),
+    0 0 0 1px rgb(79 70 229 / 14%),
+    inset 0 1px 0 rgb(255 255 255 / 18%);
 
   /* 侧边栏 */
   --sidebar-background: 255 255 255;
@@ -54,8 +75,30 @@
   --sidebar-border: 231 229 228;
   --sidebar-muted: 168 162 158;
 
-  /* 圆角基准 */
+  /* 主色柔化（侧边栏 active / hover 背景等低强调场景） */
+  --primary-soft: rgb(var(--primary) / 0.06);
+
+  /* 圆角 */
   --radius: 0.5rem;
+  --radius-card: 0.75rem;
+  --radius-btn: 0.5rem;
+
+  /* 字号 (Tailwind 默认刻度) */
+  --text-xs: 0.75rem;     /* 12px */
+  --text-sm: 0.875rem;    /* 14px */
+  --text-base: 1rem;      /* 16px */
+  --text-md: 1.125rem;    /* 18px */
+  --text-lg: 1.125rem;    /* 18px */
+  --text-xl: 1.25rem;     /* 20px */
+  --text-2xl: 1.5rem;     /* 24px */
+
+  /* 阴影 */
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 4%);
+  --shadow-card-hover: 0 4px 12px rgb(0 0 0 / 6%), 0 1px 3px rgb(0 0 0 / 4%);
+
+  /* 动效 */
+  --ease: 200ms ease;
+  --tab-ease: 220ms ease;
 }
 
 .dark {
@@ -67,7 +110,7 @@
   --popover: 41 37 36;
   --popover-foreground: 250 250 249;
 
-  --primary: 96 165 250;
+  --primary: 14 165 233;
   --primary-foreground: 28 25 23;
 
   --secondary: 45 43 40;
@@ -81,10 +124,29 @@
 
   --destructive: 239 68 68;
   --destructive-foreground: 255 255 255;
+  --warn: 217 119 6;
 
   --border: 61 58 54;
   --input: 61 58 54;
-  --ring: 96 165 250;
+  --ring: 14 165 233;
+
+  --hero-from: 56 189 248;
+  --hero-via: 129 140 248;
+  --hero-to: 232 121 249;
+  --hero-glow: 129 140 248;
+
+  --btn-from: 79 70 229;
+  --btn-mid: 124 58 237;
+  --btn-to: 168 85 247;
+  --btn-fg: 250 250 249;
+  --btn-shadow:
+    0 1px 3px rgb(0 0 0 / 35%),
+    0 0 0 1px rgb(129 140 248 / 18%),
+    inset 0 1px 0 rgb(255 255 255 / 12%);
+  --btn-shadow-hover:
+    0 4px 14px rgb(79 70 229 / 35%),
+    0 0 0 1px rgb(129 140 248 / 22%),
+    inset 0 1px 0 rgb(255 255 255 / 16%);
 
   --sidebar-background: 41 37 36;
   --sidebar-foreground: 168 162 158;
@@ -92,4 +154,9 @@
   --sidebar-accent-foreground: 250 250 249;
   --sidebar-border: 61 58 54;
   --sidebar-muted: 120 113 108;
+
+  --primary-soft: rgb(var(--primary) / 0.12);
+
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 20%);
+  --shadow-card-hover: 0 6px 18px rgb(0 0 0 / 30%), 0 1px 3px rgb(0 0 0 / 18%);
 }
