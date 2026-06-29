@@ -29,6 +29,10 @@ Thumbs.db
 # AI design docs (not for repo)
 .ai/
 
+# Playwright local output
+.playwright-mcp/
+**/.playwright-mcp/
+
 # Lockfile handled by bun
 pnpm-lock.yaml
 package-lock.json
