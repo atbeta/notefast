@@ -2,7 +2,6 @@ import { createOpenAIProvider } from '../ai/provider'
 import { createOpenAILLM } from '../ai/llm'
 import { initVectorStore } from '../ai/vector'
 import { setAiProvider, indexBlock } from '../ai/indexer'
-import { resolvePreset, listPresets } from '../ai/presets'
 import type { LLMProvider } from '@notefast/core'
 import type { PluginSystem } from '@notefast/core'
 
@@ -15,70 +14,57 @@ export function getLLMProvider(): LLMProvider | null {
 export function initAiServices(pluginSystem: PluginSystem): void {
   initVectorStore()
 
-  const apiKey = (process.env.AI_API_KEY || process.env.EMBEDDING_API_KEY || '').trim()
-  if (!apiKey) {
-    console.log('🧠 AI: not configured (set AI_API_KEY to enable)')
-    if (!process.env.NODE_ENV || process.env.NODE_ENV === 'development') {
-      console.log('   Available presets: ' + listPresets().map(p => p.key).join(', '))
-    }
-    return
-  }
-
-  const presetName = process.env.AI_PROVIDER || 'openrouter'
-  const preset = resolvePreset(presetName)
-
-  if (!preset) {
-    console.log(`🧠 AI: unknown provider '${presetName}', falling back to openrouter`)
-    const fallback = resolvePreset('openrouter')
-    if (!fallback) return
-    console.log(`🧠 AI: ${fallback.label}`)
-    setupProviders(pluginSystem, apiKey, fallback)
-    return
-  }
-
-  console.log(`🧠 AI: ${preset.label}`)
-  setupProviders(pluginSystem, apiKey, preset)
+  initEmbedding(pluginSystem)
+  initLLM()
 }
 
-function setupProviders(
-  pluginSystem: PluginSystem,
-  apiKey: string,
-  preset: ReturnType<typeof resolvePreset> & {},
-): void {
-  const { embeddingUrl, embeddingModel, chatUrl, chatModel } = preset as NonNullable<typeof preset>
+function initEmbedding(pluginSystem: PluginSystem): void {
+  const url = process.env.EMBEDDING_API_URL || 'https://openrouter.ai/api/v1/embeddings'
+  const key = (process.env.EMBEDDING_API_KEY || '').trim()
+  const model = process.env.EMBEDDING_MODEL || 'qwen/qwen3-embedding-8b'
 
-  if (embeddingUrl) {
-    const embedProvider = createOpenAIProvider({
-      EMBEDDING_API_URL: embeddingUrl,
-      EMBEDDING_API_KEY: apiKey,
-      EMBEDDING_MODEL: embeddingModel,
-    })
-    setAiProvider(embedProvider)
-
-    pluginSystem.note.afterCreate.tap('ai-indexer', async (block) => {
-      await indexBlock(block.id)
-    })
-    pluginSystem.note.afterUpdate.tap('ai-indexer', async (block) => {
-      await indexBlock(block.id)
-    })
-    pluginSystem.note.afterDelete.tap('ai-indexer', async (blockId) => {
-      const { deleteVector } = await import('../ai/vector')
-      deleteVector(blockId)
-    })
-
-    console.log(`   Embedding: ${embeddingModel} @ ${embeddingUrl}`)
-    console.log('   API: /api/v1/ai/search?q=...')
+  if (!key) {
+    console.log('🧠 Embedding: not configured (set EMBEDDING_API_KEY)')
+    return
   }
 
-  if (chatUrl) {
-    llmProvider = createOpenAILLM({
-      LLM_API_URL: chatUrl,
-      LLM_API_KEY: apiKey,
-      LLM_MODEL: chatModel,
-      EMBEDDING_API_KEY: apiKey,
-    })
+  const provider = createOpenAIProvider({
+    EMBEDDING_API_URL: url,
+    EMBEDDING_API_KEY: key,
+    EMBEDDING_MODEL: model,
+  })
+  setAiProvider(provider)
 
-    console.log(`   Chat: ${chatModel} @ ${chatUrl}`)
-    console.log('   API: POST /api/v1/ai/suggest-title')
+  pluginSystem.note.afterCreate.tap('ai-indexer', async (block) => {
+    await indexBlock(block.id)
+  })
+  pluginSystem.note.afterUpdate.tap('ai-indexer', async (block) => {
+    await indexBlock(block.id)
+  })
+  pluginSystem.note.afterDelete.tap('ai-indexer', async (blockId) => {
+    const { deleteVector } = await import('../ai/vector')
+    deleteVector(blockId)
+  })
+
+  console.log(`🧠 Embedding: ${model} @ ${url}`)
+}
+
+function initLLM(): void {
+  const url = process.env.LLM_API_URL || ''
+  const key = (process.env.LLM_API_KEY || '').trim()
+  const model = process.env.LLM_MODEL || ''
+
+  if (!url || !key || !model) {
+    console.log('💬 LLM: not configured (set LLM_API_URL + LLM_API_KEY + LLM_MODEL)')
+    return
   }
+
+  llmProvider = createOpenAILLM({
+    LLM_API_URL: url,
+    LLM_API_KEY: key,
+    LLM_MODEL: model,
+    EMBEDDING_API_KEY: key,
+  })
+
+  console.log(`💬 LLM: ${model} @ ${url}`)
 }
