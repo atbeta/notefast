@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 let db: Database
@@ -103,7 +103,38 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
     notebookId = createDefaultNotebook(db)
   }
 
+  initApiKey(dataDir)
+
   return { db, notebookId }
+}
+
+function initApiKey(dataDir: string): void {
+  const keyPath = join(dataDir, 'api.key')
+  if (existsSync(keyPath)) return
+  if (process.env.API_TOKEN) return
+
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  const key = 'nf_' + Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  writeFileSync(keyPath, key + '\n', 'utf-8')
+  process.env.API_TOKEN = key
+  console.log('')
+  console.log('  🔑 API Key: ' + key)
+  console.log('     保存位置: ' + keyPath)
+  console.log('     用于 MCP/API 鉴权: Authorization: Bearer ' + key)
+  console.log('')
+}
+
+export function getApiKey(): string {
+  const envKey = process.env.API_TOKEN?.trim()
+  if (envKey) return envKey
+
+  const dataDir = process.env.DATA_DIR || './data'
+  const keyPath = join(dataDir, 'api.key')
+  try {
+    const key = readFileSync(keyPath, 'utf-8').trim()
+    if (key) return key
+  } catch { /* ignore */ }
+  return ''
 }
 
 export function getDb(): Database {
