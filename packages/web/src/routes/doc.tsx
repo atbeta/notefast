@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import type { Block, HeadingNode } from '@notefast/core'
 import {
   ArrowLeft,
@@ -64,6 +64,7 @@ function flattenHeadings(nodes: HeadingNode[]): Array<HeadingNode & { depth: num
 export default function DocPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [doc, setDoc] = useState<Block | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -77,6 +78,8 @@ export default function DocPage() {
   const [titleDraft, setTitleDraft] = useState('')
   const titleInputRef = useRef<HTMLInputElement>(null)
 
+  const [forceEditKey, setForceEditKey] = useState(0)
+
   const [headings, setHeadings] = useState<HeadingNode[]>([])
   const [backlinks, setBacklinks] = useState<Backlink[]>([])
   const [auxLoading, setAuxLoading] = useState(false)
@@ -86,6 +89,13 @@ export default function DocPage() {
     setLoading(true); setError(null)
     api.get<Block>('/docs/' + id).then(setDoc).catch((e) => setError(e.message)).finally(() => setLoading(false))
   }, [id, refreshKey])
+
+  // 新建文档后自动进入编辑模式
+  useEffect(() => {
+    if (searchParams.get('edit') === '1' && doc && activeTab !== 'content') {
+      setActiveTab('content')
+    }
+  }, [searchParams, doc, activeTab])
 
   useEffect(() => {
     if (!id) return
@@ -176,7 +186,14 @@ export default function DocPage() {
               <span>返回</span>
             </Link>
             <span className="w-px h-4 bg-border" />
-            {id && <MarkdownEditor docId={id} onSaved={handleEditSaved} />}
+            {id && (
+              <MarkdownEditor
+                key={`editor-${id}-${forceEditKey}`}
+                docId={id}
+                onSaved={handleEditSaved}
+                autoEdit={searchParams.get('edit') === '1' || forceEditKey > 0}
+              />
+            )}
             <button
               onClick={() => setShowDelete(true)}
               className="btn-icon-ghost"
@@ -240,7 +257,13 @@ export default function DocPage() {
             </div>
 
             <div className={'warn-hint ' + (isEmpty ? 'show' : '')}>
-              文档正文为空 — 点击右上角 Edit 开始写作
+              文档正文为空 —{' '}
+              <button
+                onClick={() => setForceEditKey((k) => k + 1)}
+                className="underline underline-offset-2 font-medium hover:text-warn transition-colors"
+              >
+                点此开始写作
+              </button>
             </div>
           </div>
         </div>

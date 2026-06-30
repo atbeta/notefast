@@ -9,6 +9,7 @@ import BlockRenderer from './BlockRenderer'
 interface MarkdownEditorProps {
   docId: string
   onSaved: () => void
+  autoEdit?: boolean
 }
 
 const DRAFT_PREFIX = 'notefast-draft-'
@@ -25,8 +26,8 @@ function clearDraft(docId: string) {
   try { localStorage.removeItem(DRAFT_PREFIX + docId) } catch { /* ignore */ }
 }
 
-export default function MarkdownEditor({ docId, onSaved }: MarkdownEditorProps) {
-  const [editing, setEditing] = useState(false)
+export default function MarkdownEditor({ docId, onSaved, autoEdit = false }: MarkdownEditorProps) {
+  const [editing, setEditing] = useState(autoEdit)
 
   const handleStartEdit = useCallback(() => setEditing(true), [])
 

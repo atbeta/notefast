@@ -31,26 +31,27 @@ export default function NewDocPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!title.trim()) { setError('请输入标题'); return }
     setCreating(true)
     setError('')
+
+    const finalTitle = title.trim() || new Date().toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 
     try {
       let docId: string
       if (markdown.trim()) {
         const res = await request<{ doc: { id: string } }>('/import/markdown', {
           method: 'POST',
-          body: JSON.stringify({ notebook_id: notebookId, markdown, title }),
+          body: JSON.stringify({ notebook_id: notebookId, markdown, title: finalTitle }),
         })
         docId = res.doc.id
       } else {
         const res = await request<{ id: string }>('/docs', {
           method: 'POST',
-          body: JSON.stringify({ notebook_id: notebookId, title }),
+          body: JSON.stringify({ notebook_id: notebookId, title: finalTitle }),
         })
         docId = res.id
       }
-      navigate('/doc/' + docId)
+      navigate('/doc/' + docId + '?edit=1')
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建失败')
       setCreating(false)
