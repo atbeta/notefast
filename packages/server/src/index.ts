@@ -1,10 +1,12 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/bun'
+import { createPluginSystem } from '@notefast/core'
 import { initDb, closeDb } from './db'
 import { authMiddleware } from './middleware/auth'
 import { createMcpTransport } from './mcp/server'
 import { startAutoExport } from './services/autoExport'
+import { initAiServices } from './services/aiInit'
 import blocks from './api/blocks'
 import docs from './api/docs'
 import search from './api/search'
@@ -12,6 +14,7 @@ import importRouter from './api/import'
 import refs from './api/refs'
 import notebooks from './api/notebooks'
 import sync from './api/sync'
+import ai from './api/ai'
 
 const PORT = parseInt(process.env.PORT || '3140', 10)
 const DATA_DIR = process.env.DATA_DIR || './data'
@@ -42,6 +45,10 @@ app.route('/api/v1/refs', refs)
 
 app.route('/api/v1/notebooks', notebooks)
 app.route('/api/v1/sync', sync)
+app.route('/api/v1/ai', ai)
+
+const pluginSystem = createPluginSystem()
+initAiServices(pluginSystem)
 
 const mcpTransport = await createMcpTransport(notebookId)
 

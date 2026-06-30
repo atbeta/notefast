@@ -107,7 +107,7 @@ describe('createMcpTransport', () => {
     const msg = list.body[0] as Record<string, unknown>
     expect(msg.result).toBeDefined()
     const tools = (msg.result as Record<string, unknown>).tools as { name: string }[]
-    expect(tools.length).toBe(10)
+    expect(tools.length).toBe(11)
 
     const toolNames = tools.map((t) => t.name)
     expect(toolNames).toContain('notefast_search')

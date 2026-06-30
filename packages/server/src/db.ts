@@ -41,6 +41,15 @@ CREATE VIRTUAL TABLE IF NOT EXISTS blocks_fts USING fts5(
   tokenize='unicode61'
 );
 
+CREATE TABLE IF NOT EXISTS block_vectors (
+  block_id  TEXT PRIMARY KEY,
+  embedding TEXT NOT NULL,
+  dim       INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (block_id) REFERENCES blocks(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_block_vectors_dim ON block_vectors(dim);
+
 CREATE TABLE IF NOT EXISTS block_refs (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   source_id   TEXT NOT NULL,

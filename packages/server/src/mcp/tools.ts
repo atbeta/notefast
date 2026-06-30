@@ -382,6 +382,37 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       return { content: [toText({ doc_id, markdown })] }
     },
   )
+
+  server.registerTool(
+    'notefast_semantic_search',
+    {
+      description: '语义搜索知识库（需配置 EMBEDDING_API_KEY），用自然语言查找最相关的 block',
+      inputSchema: {
+        query: z.string().describe('自然语言查询，如 "关于 React 性能优化我写过什么"'),
+        limit: z.number().optional().default(10).describe('最大返回数量'),
+        notebook_id: z.string().optional().describe('限定笔记本 ID'),
+      },
+    },
+    async ({ query, limit, notebook_id }) => {
+      try {
+        const { getAiConfig } = await import('../ai/indexer')
+        const { semanticSearch } = await import('../ai/vector')
+
+        const config = getAiConfig()
+        if (!config.enabled || !config.provider) {
+          return {
+            content: [toText({ error: '语义搜索未启用，请配置 EMBEDDING_API_KEY 环境变量' })],
+          }
+        }
+
+        const vector = await config.provider.embedQuery(query)
+        const hits = semanticSearch(vector, limit ?? 10, notebook_id)
+        return { content: [toText({ query, results: hits.length, hits })] }
+      } catch (e) {
+        return { content: [toText({ error: String(e) })] }
+      }
+    },
+  )
 }
 
 function fetchDescendants(database: ReturnType<typeof getDb>, rootId: string): BlockRow[] {
