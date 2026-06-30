@@ -1,14 +1,3 @@
-# NoteFast v0.1.0 Docker 部署
-#
-# 快速开始：
-#   1. 复制 .env.example 为 .env，按需修改
-#   2. docker compose up -d
-#   3. 访问 http://localhost:3140
-#
-# 带 S3 备份：
-#   1. .env 中填入 S3_* 变量
-#   2. docker compose --profile backup up -d
-
 services:
   notefast:
     image: xbeta/notefast:0.1.0
@@ -16,17 +5,13 @@ services:
     ports:
       - '3140:3140'
     environment:
-      - PORT=3140
-      - DATA_DIR=/app/data
-      - AUTH_PASSWORD=${AUTH_PASSWORD:-}
-      - API_TOKEN=${API_TOKEN:-}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3140}
-      - AUTO_EXPORT_DIR=${AUTO_EXPORT_DIR:-/app/export}
-      # AI（可选，设 KEY 后启用语义搜索 + 标题生成）
-      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
+      - AI_PROVIDER=${AI_PROVIDER:-openrouter}
+      - AI_API_KEY=${AI_API_KEY:-}
+      # 模型覆盖（可选，预设已包含默认值）
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
-      - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-}
+      # 鉴权（不设则自动生成 API Key）
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-}
     volumes:
       - notefast_data:/app/data
       - notefast_export:/app/export
