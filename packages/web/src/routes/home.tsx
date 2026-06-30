@@ -26,14 +26,10 @@ export default function HomePage() {
 
   const goNew = useCallback(() => { navigate('/new') }, [navigate])
 
-  const recentDocs = (() => {
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000
-    const recent = docs.filter((d) => {
-      const ts = new Date(d.updated_at).getTime()
-      return Number.isFinite(ts) && ts >= cutoff
-    })
-    return recent.length > 0 ? recent : docs
-  })()
+  const recentDocs = docs.filter((d) => {
+    const ts = new Date(d.updated_at).getTime()
+    return Number.isFinite(ts) && ts >= Date.now() - 24 * 60 * 60 * 1000
+  })
 
   const visibleDocs = activeTab === 'recent' ? recentDocs : docs
 
