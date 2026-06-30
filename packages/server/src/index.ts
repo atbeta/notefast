@@ -6,7 +6,8 @@ import { initDb, closeDb } from './db'
 import { authMiddleware } from './middleware/auth'
 import { createMcpTransport } from './mcp/server'
 import { startAutoExport } from './services/autoExport'
-import { initAiServices } from './services/aiInit'
+import { initAiRuntime } from './services/aiRuntime'
+import { initVectorStore } from './ai/indexer'
 import blocks from './api/blocks'
 import docs from './api/docs'
 import search from './api/search'
@@ -48,7 +49,9 @@ app.route('/api/v1/sync', sync)
 app.route('/api/v1/ai', ai)
 
 const pluginSystem = createPluginSystem()
-initAiServices(pluginSystem)
+
+initVectorStore()
+initAiRuntime(pluginSystem, DATA_DIR)
 
 const mcpTransport = await createMcpTransport(notebookId)
 

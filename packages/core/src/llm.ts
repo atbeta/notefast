@@ -1,8 +1,8 @@
 /**
  * LLM Provider 接口
  *
- * 轻量聊天补全抽象。用于标题生成、摘要、改写等轻量 AI 功能。
- * 不承载长对话或复杂 Agent 逻辑。
+ * runtime.ts 提供 OpenAI 兼容的具体实现。
+ * 此文件只保留接口契约，便于未来替换为其他实现（如 transformers.js 本地推理）。
  */
 
 export interface ChatMessage {
@@ -10,16 +10,21 @@ export interface ChatMessage {
   content: string
 }
 
+/** OpenAI response_format 兼容选项 */
+export interface ResponseFormat {
+  type: 'json_object' | 'text'
+}
+
 export interface ChatCompletionOptions {
   model?: string
   temperature?: number
   maxTokens?: number
+  /** 让模型强制返回 JSON（仅 OpenAI 兼容服务支持） */
+  responseFormat?: ResponseFormat
 }
 
 export interface LLMProvider {
   readonly name: string
-
-  /** 发起一次聊天补全 */
   chat(messages: ChatMessage[], options?: ChatCompletionOptions): Promise<string>
 }
 

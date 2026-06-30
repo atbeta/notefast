@@ -8,8 +8,12 @@ import {
   blocksToMarkdown,
   parseMarkdownToBlocks,
   rowToBlock,
+  suggestTitle,
+  type LLMProvider,
 } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
+import { hasRuntime, getRuntime } from '../services/aiRuntime'
+import { semanticSearch } from '../ai/indexer'
 
 function toText(data: unknown): { type: 'text'; text: string } {
   return { type: 'text' as const, text: JSON.stringify(data, null, 2) }
@@ -386,7 +390,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
   server.registerTool(
     'notefast_semantic_search',
     {
-      description: '语义搜索知识库（需配置 EMBEDDING_API_KEY），用自然语言查找最相关的 block',
+      description: '语义搜索知识库（需配置 AI Provider），用自然语言查找最相关的 block',
       inputSchema: {
         query: z.string().describe('自然语言查询，如 "关于 React 性能优化我写过什么"'),
         limit: z.number().optional().default(10).describe('最大返回数量'),
@@ -394,22 +398,24 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       },
     },
     async ({ query, limit, notebook_id }) => {
-      try {
-        const { getAiConfig } = await import('../ai/indexer')
-        const { semanticSearch } = await import('../ai/vector')
-
-        const config = getAiConfig()
-        if (!config.enabled || !config.provider) {
-          return {
-            content: [toText({ error: '语义搜索未启用，请配置 EMBEDDING_API_KEY 环境变量' })],
-          }
+      if (!hasRuntime() || !getRuntime().hasEmbedding()) {
+        return {
+          content: [toText({
+            error: 'AI 未配置',
+            fix_hint: '请在 Web UI /settings 页面配置 Embedding 模型',
+          })],
         }
-
-        const vector = await config.provider.embedQuery(query)
+      }
+      try {
+        const r = getRuntime()
+        const vector = await r.embedQuery(query)
+        if (!vector) {
+          return { content: [toText({ error: 'embedding_failed', message: r.status().embedding.lastError })] }
+        }
         const hits = semanticSearch(vector, limit ?? 10, notebook_id)
         return { content: [toText({ query, results: hits.length, hits })] }
       } catch (e) {
-        return { content: [toText({ error: String(e) })] }
+        return { content: [toText({ error: String(e), fix_hint: '请检查 /settings 中的 Provider 配置' })] }
       }
     },
   )
@@ -423,18 +429,21 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       },
     },
     async ({ content }) => {
-      try {
-        const { getLLMProvider } = await import('../services/aiInit')
-        const { suggestTitle } = await import('../ai/suggest')
-
-        const llm = getLLMProvider()
-        if (!llm) {
-          return {
-            content: [toText({ error: 'LLM 未配置，请设置 LLM_API_KEY 或 EMBEDDING_API_KEY' })],
-          }
+      if (!hasRuntime() || !getRuntime().hasChat()) {
+        return {
+          content: [toText({
+            error: 'LLM 未配置',
+            fix_hint: '请在 Web UI /settings 页面配置 Chat 模型',
+          })],
         }
-
-        const result = await suggestTitle(llm, content)
+      }
+      try {
+        const r = getRuntime()
+        const provider: LLMProvider = {
+          name: 'notefast-runtime',
+          chat: (msgs, opts) => r.chat(msgs, opts),
+        }
+        const result = await suggestTitle(provider, content)
         return { content: [toText(result)] }
       } catch (e) {
         return { content: [toText({ error: String(e) })] }

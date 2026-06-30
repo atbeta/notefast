@@ -24,6 +24,11 @@ export class SyncHook<T extends unknown[] = []> {
     this.taps.push({ name, fn })
   }
 
+  /** 移除指定 name 的所有 tap（用于热重载） */
+  untap(name: string): void {
+    this.taps = this.taps.filter((t) => t.name !== name)
+  }
+
   call(...args: T): void {
     for (const entry of this.taps) {
       entry.fn(...args)
@@ -38,6 +43,11 @@ export class AsyncParallelHook<T extends unknown[] = []> {
     this.taps.push({ name, fn })
   }
 
+  /** 移除指定 name 的所有 tap（用于热重载） */
+  untap(name: string): void {
+    this.taps = this.taps.filter((t) => t.name !== name)
+  }
+
   async call(...args: T): Promise<void> {
     await Promise.all(this.taps.map((entry) => entry.fn(...args)))
   }
@@ -49,6 +59,11 @@ export class SyncBailHook<T extends unknown[] = [], R = unknown> {
 
   tap(name: string, fn: (...args: T) => R | undefined): void {
     this.taps.push({ name, fn })
+  }
+
+  /** 移除指定 name 的所有 tap */
+  untap(name: string): void {
+    this.taps = this.taps.filter((t) => t.name !== name)
   }
 
   call(...args: T): R | undefined {
