@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, FileText, Wand2, Check, X, Upload } from 'lucide-react'
+import { ArrowLeft, FileText, Wand2, Check, X, Upload, Sparkles, Loader2 } from 'lucide-react'
 import { request } from '../hooks/useAPI'
 import SubNavTabs from '../components/SubNavTabs'
 
@@ -17,6 +17,7 @@ export default function NewDocPage() {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'create' | 'import'>('create')
+  const [generating, setGenerating] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -59,6 +60,21 @@ export default function NewDocPage() {
   }
 
   const handleCancel = () => navigate('/')
+
+  const handleSuggestTitle = async () => {
+    const source = markdown.trim() || title.trim()
+    if (!source || generating) return
+    setGenerating(true)
+    try {
+      const res = await request<{ title: string; summary: string }>('/ai/suggest-title', {
+        method: 'POST',
+        body: JSON.stringify({ content: source }),
+      })
+      if (!title.trim()) setTitle(res.title)
+      else if (!title.trim().includes(res.title)) setTitle(res.title)
+    } catch { /* AI 服务不可用，静默失败 */ }
+    finally { setGenerating(false) }
+  }
 
   const handleFile = (file: File) => {
     const reader = new FileReader()
@@ -123,7 +139,23 @@ export default function NewDocPage() {
         {activeTab === 'create' && (
           <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
             <div>
-              <label htmlFor="doc-title" className="field-label">标题</label>
+              <div className="flex items-end justify-between mb-1.5">
+                <label htmlFor="doc-title" className="field-label mb-0">标题</label>
+                <button
+                  type="button"
+                  onClick={handleSuggestTitle}
+                  disabled={generating || (!markdown.trim() && !title.trim())}
+                  className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary disabled:opacity-40 transition-colors"
+                  title="AI 生成标题"
+                >
+                  {generating ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3 h-3" />
+                  )}
+                  {generating ? '生成中...' : 'AI 标题'}
+                </button>
+              </div>
               <input
                 id="doc-title"
                 ref={titleInputRef}

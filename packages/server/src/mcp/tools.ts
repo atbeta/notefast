@@ -413,6 +413,34 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       }
     },
   )
+
+  server.registerTool(
+    'notefast_suggest_title',
+    {
+      description: '根据笔记内容 AI 生成标题和摘要',
+      inputSchema: {
+        content: z.string().describe('笔记正文内容'),
+      },
+    },
+    async ({ content }) => {
+      try {
+        const { getLLMProvider } = await import('../services/aiInit')
+        const { suggestTitle } = await import('../ai/suggest')
+
+        const llm = getLLMProvider()
+        if (!llm) {
+          return {
+            content: [toText({ error: 'LLM 未配置，请设置 LLM_API_KEY 或 EMBEDDING_API_KEY' })],
+          }
+        }
+
+        const result = await suggestTitle(llm, content)
+        return { content: [toText(result)] }
+      } catch (e) {
+        return { content: [toText({ error: String(e) })] }
+      }
+    },
+  )
 }
 
 function fetchDescendants(database: ReturnType<typeof getDb>, rootId: string): BlockRow[] {

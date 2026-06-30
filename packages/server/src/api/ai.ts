@@ -1,6 +1,10 @@
 import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
 import { getAiConfig, indexBlock, indexAllBlocks } from '../ai/indexer'
 import { semanticSearch } from '../ai/vector'
+import { getLLMProvider } from '../services/aiInit'
+import { suggestTitle } from '../ai/suggest'
 
 const ai = new Hono()
 
@@ -63,6 +67,26 @@ ai.post('/index/:blockId', async (c) => {
     return c.json({ indexed: true })
   } catch (e) {
     return c.json({ error: 'index_error', message: String(e) }, 500)
+  }
+})
+
+const suggestTitleSchema = z.object({
+  content: z.string().min(1).max(5000),
+})
+
+ai.post('/suggest-title', zValidator('json', suggestTitleSchema), async (c) => {
+  const llm = getLLMProvider()
+  if (!llm) {
+    return c.json({ error: 'not_configured', message: '未配置 LLM API Key，请设置 LLM_API_KEY 或 EMBEDDING_API_KEY' }, 400)
+  }
+
+  const { content } = c.req.valid('json')
+
+  try {
+    const result = await suggestTitle(llm, content)
+    return c.json(result)
+  } catch (e) {
+    return c.json({ error: 'llm_error', message: String(e) }, 500)
   }
 })
 

@@ -11,6 +11,8 @@ import {
   Link2,
   Edit3,
   FileText,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
@@ -77,6 +79,7 @@ export default function DocPage() {
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const [generatingTitle, setGeneratingTitle] = useState(false)
 
   const [forceEditKey, setForceEditKey] = useState(0)
 
@@ -130,6 +133,29 @@ export default function DocPage() {
   const handleTitleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') { e.preventDefault(); saveTitle() }
     if (e.key === 'Escape') cancelTitleEdit()
+  }
+
+  const handleSuggestTitle = async () => {
+    if (!doc || generatingTitle) return
+    // 收集正文内容
+    const texts: string[] = []
+    const walk = (b: Block) => { if (b.content && b.type !== 'document') texts.push(b.content); b.children.forEach(walk) }
+    walk(doc)
+    const body = texts.join('\n')
+    if (!body.trim()) return
+
+    setGeneratingTitle(true)
+    try {
+      const res = await request<{ title: string; summary: string }>('/ai/suggest-title', {
+        method: 'POST',
+        body: JSON.stringify({ content: body.slice(0, 4000) }),
+      })
+      if (res.title && (!doc.content || doc.content === '未命名文档' || doc.content.match(/^\d+月\d+日$/))) {
+        await api.patch('/blocks/' + id, { content: res.title })
+        setRefreshKey((k) => k + 1)
+      }
+    } catch { /* silent fail */ }
+    finally { setGeneratingTitle(false) }
   }
 
   const handleDelete = async () => {
@@ -246,6 +272,19 @@ export default function DocPage() {
                   aria-label="编辑标题"
                 >
                   <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSuggestTitle}
+                  disabled={generatingTitle}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-primary hover:bg-accent rounded transition-all shrink-0"
+                  title="AI 生成标题"
+                >
+                  {generatingTitle ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5" />
+                  )}
                 </button>
               </div>
             )}
