@@ -15,6 +15,14 @@ function toText(data: unknown): { type: 'text'; text: string } {
   return { type: 'text' as const, text: JSON.stringify(data, null, 2) }
 }
 
+function validateNotebook(database: ReturnType<typeof getDb>, notebookId: string): { error: string } | null {
+  const exists = database.query('SELECT id FROM notebooks WHERE id = ?').get(notebookId)
+  if (!exists) {
+    return { error: `笔记本 ${notebookId} 不存在` }
+  }
+  return null
+}
+
 export function registerMcpTools(server: McpServer, notebookId: string): void {
   const db = getDb()
 
@@ -147,11 +155,14 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
         notebook_id: z.string().optional().describe('笔记本 ID，默认使用默认笔记本'),
         parent_id: z.string().optional().describe('父 block ID'),
         type: z.enum(['heading', 'paragraph', 'list', 'list_item', 'code', 'quote']).describe('块类型'),
-        content: z.string().describe('块内容（Markdown 格式）'),
+        content: z.string().max(500_000).describe('块内容（Markdown 格式）'),
       },
     },
     async ({ notebook_id, parent_id, type, content }) => {
       const nid = notebook_id || notebookId
+      const nbErr = validateNotebook(db, nid)
+      if (nbErr) return { content: [toText(nbErr)] }
+
       const id = crypto.randomUUID()
 
       let rootId: string
@@ -187,7 +198,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       description: '更新 block 内容',
       inputSchema: {
         block_id: z.string().describe('Block ID'),
-        content: z.string().describe('新内容（Markdown 格式）'),
+        content: z.string().max(500_000).describe('新内容（Markdown 格式）'),
       },
     },
     async ({ block_id, content }) => {
@@ -215,6 +226,8 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
     async ({ notebook_id, title, markdown }) => {
       const nid = notebook_id || notebookId
+      const nbErr = validateNotebook(db, nid)
+      if (nbErr) return { content: [toText(nbErr)] }
 
       const inputs = parseMarkdownToBlocks(markdown, nid)
       const docId = crypto.randomUUID()

@@ -171,13 +171,15 @@ blocks.patch('/:id/move', zValidator('json', moveBlockSchema), (c) => {
   ).run(input.new_parent_id, newRootId, levelDiff, input.new_sort ?? existing.sort, id)
 
   if (levelDiff !== 0) {
-    const descendants = fetchSubtree(db, id)
-    const descendantIds = descendants.map((r) => r.id)
-    if (descendantIds.length > 0) {
-      const placeholders = descendantIds.map(() => '?').join(',')
-      db.query(`UPDATE blocks SET level = level + ? WHERE id IN (${placeholders})`).run(levelDiff, ...descendantIds)
-      db.query(`UPDATE blocks SET root_id = ? WHERE id IN (${placeholders})`).run(newRootId, ...descendantIds)
-    }
+    db.transaction(() => {
+      const descendants = fetchSubtree(db, id)
+      const descendantIds = descendants.map((r) => r.id)
+      if (descendantIds.length > 0) {
+        const placeholders = descendantIds.map(() => '?').join(',')
+        db.query(`UPDATE blocks SET level = level + ? WHERE id IN (${placeholders})`).run(levelDiff, ...descendantIds)
+        db.query(`UPDATE blocks SET root_id = ? WHERE id IN (${placeholders})`).run(newRootId, ...descendantIds)
+      }
+    })()
   }
 
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
@@ -196,12 +198,13 @@ blocks.delete('/:id', (c) => {
   const childIds = fetchSubtree(db, id)
   const allIds = [id, ...childIds.map((r) => r.id)]
 
-  for (const delId of allIds) {
-    db.query('DELETE FROM block_refs WHERE source_id = ? OR target_id = ?').run(delId, delId)
-  }
-
-  const placeholders = allIds.map(() => '?').join(',')
-  db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...allIds)
+  db.transaction(() => {
+    for (const delId of allIds) {
+      db.query('DELETE FROM block_refs WHERE source_id = ? OR target_id = ?').run(delId, delId)
+    }
+    const placeholders = allIds.map(() => '?').join(',')
+    db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...allIds)
+  })()
 
   return c.json({ deleted: true, count: allIds.length })
 })

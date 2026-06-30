@@ -88,14 +88,16 @@ notebooks.delete('/:id', (c) => {
     return c.json({ error: 'not_found', message: `笔记本 ${id} 不存在` }, 404)
   }
 
-  const blockCount = db.query('SELECT count(*) as c FROM blocks WHERE notebook_id = ?').get(id) as { c: number }
-  if (blockCount.c > 0) {
-    db.query('DELETE FROM blocks WHERE notebook_id = ?').run(id)
-  }
+  const { c: blockCount } = db.query('SELECT count(*) as c FROM blocks WHERE notebook_id = ?').get(id) as { c: number }
 
-  db.query('DELETE FROM notebooks WHERE id = ?').run(id)
+  db.transaction(() => {
+    if (blockCount > 0) {
+      db.query('DELETE FROM blocks WHERE notebook_id = ?').run(id)
+    }
+    db.query('DELETE FROM notebooks WHERE id = ?').run(id)
+  })()
 
-  return c.json({ deleted: true, blocks_deleted: blockCount.c })
+  return c.json({ deleted: true, blocks_deleted: blockCount })
 })
 
 export default notebooks

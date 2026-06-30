@@ -119,8 +119,8 @@ export interface HeadingNode {
 
 /** API 请求校验 schema */
 export const createBlockSchema = z.object({
-  notebook_id: z.string().min(1),
-  parent_id: z.string().optional().nullable(),
+  notebook_id: z.string().min(1).max(200),
+  parent_id: z.string().max(200).optional().nullable(),
   type: z.enum([
     BlockType.Document,
     BlockType.Heading,
@@ -130,13 +130,13 @@ export const createBlockSchema = z.object({
     BlockType.Code,
     BlockType.Quote,
   ]),
-  content: z.string().optional().default(''),
+  content: z.string().max(500_000).optional().default(''),
   properties: z.record(z.unknown()).optional().default({}),
   sort: z.number().int().optional().default(0),
 })
 
 export const updateBlockSchema = z.object({
-  content: z.string().optional(),
+  content: z.string().max(500_000).optional(),
   properties: z.record(z.unknown()).optional(),
   type: z
     .enum([
@@ -157,17 +157,17 @@ export const moveBlockSchema = z.object({
 })
 
 export const createDocSchema = z.object({
-  notebook_id: z.string().min(1),
-  title: z.string().min(1),
+  notebook_id: z.string().min(1).max(200),
+  title: z.string().min(1).max(500),
 })
 
 export const importMarkdownSchema = z.object({
-  notebook_id: z.string().min(1),
-  markdown: z.string().min(1),
-  title: z.string().optional(),
+  notebook_id: z.string().min(1).max(200),
+  markdown: z.string().min(1).max(5_000_000),
+  title: z.string().max(500).optional(),
 })
 
 export const updateDocMarkdownSchema = z.object({
-  markdown: z.string().min(1),
-  title: z.string().min(1).optional(),
+  markdown: z.string().min(1).max(5_000_000),
+  title: z.string().min(1).max(500).optional(),
 })

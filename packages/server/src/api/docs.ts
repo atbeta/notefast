@@ -104,12 +104,13 @@ docs.delete('/:id', (c) => {
   const childIds = fetchAllDescendants(db, id)
   const allIds = [id, ...childIds.map((r) => r.id)]
 
-  for (const delId of allIds) {
-    db.query('DELETE FROM block_refs WHERE source_id = ? OR target_id = ?').run(delId, delId)
-  }
-
-  const placeholders = allIds.map(() => '?').join(',')
-  db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...allIds)
+  db.transaction(() => {
+    for (const delId of allIds) {
+      db.query('DELETE FROM block_refs WHERE source_id = ? OR target_id = ?').run(delId, delId)
+    }
+    const placeholders = allIds.map(() => '?').join(',')
+    db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...allIds)
+  })()
 
   return c.json({ deleted: true, count: allIds.length })
 })
@@ -124,46 +125,48 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
 
-  const childIds = fetchAllDescendants(db, id)
-  const allChildIds = childIds.map((r) => r.id)
-
-  for (const delId of allChildIds) {
-    db.query('DELETE FROM block_refs WHERE source_id = ? OR target_id = ?').run(delId, delId)
-  }
-  if (allChildIds.length > 0) {
-    const placeholders = allChildIds.map(() => '?').join(',')
-    db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...allChildIds)
-  }
-
-  const newTitle = title || docRow.content
-  db.query("UPDATE blocks SET content = ?, updated_at = datetime('now') WHERE id = ?").run(newTitle, id)
-
   const inputs = parseMarkdownToBlocks(markdown, docRow.notebook_id)
-  const now = new Date().toISOString()
-  const idMap = new Map<string | null, string>()
 
-  for (let i = 0; i < inputs.length; i++) {
-    const inp = inputs[i]
-    const blockId = crypto.randomUUID()
-    const parentId = inp.parent_id ? (idMap.get(inp.parent_id) ?? id) : id
-    idMap.set(inp.parent_id ?? null, blockId)
+  db.transaction(() => {
+    const childIds = fetchAllDescendants(db, id)
+    const allChildIds = childIds.map((r) => r.id)
+    for (const delId of allChildIds) {
+      db.query('DELETE FROM block_refs WHERE source_id = ? OR target_id = ?').run(delId, delId)
+    }
+    if (allChildIds.length > 0) {
+      const placeholders = allChildIds.map(() => '?').join(',')
+      db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...allChildIds)
+    }
 
-    db.query(
-      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-    ).run(
-      blockId,
-      docRow.notebook_id,
-      parentId,
-      id,
-      inp.type,
-      inp.content ?? '',
-      JSON.stringify(inp.properties || {}),
-      i,
-      now,
-      now,
-    )
-  }
+    const newTitle = title || docRow.content
+    db.query("UPDATE blocks SET content = ?, updated_at = datetime('now') WHERE id = ?").run(newTitle, id)
+
+    const now = new Date().toISOString()
+    const idMap = new Map<string, string>()
+
+    for (let i = 0; i < inputs.length; i++) {
+      const inp = inputs[i]
+      const blockId = crypto.randomUUID()
+      if (inp.id) idMap.set(inp.id, blockId)
+      const parentId = inp.parent_id ? (idMap.get(inp.parent_id) ?? id) : id
+
+      db.query(
+        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      ).run(
+        blockId,
+        docRow.notebook_id,
+        parentId,
+        id,
+        inp.type,
+        inp.content ?? '',
+        JSON.stringify(inp.properties || {}),
+        i,
+        now,
+        now,
+      )
+    }
+  })()
 
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
   const rows = fetchAllDescendants(db, id)

@@ -104,4 +104,39 @@ describe('authMiddleware', () => {
     const res = await app.fetch(new Request('http://localhost/api/v1/test'))
     expect(res.status).toBe(401)
   })
+
+  test('URL query ?token= 不再接受（避免日志泄露）', async () => {
+    process.env.API_TOKEN = 'test-token-123'
+    process.env.AUTH_PASSWORD = ''
+
+    const app = createApp()
+    const res = await app.fetch(new Request('http://localhost/api/v1/test?token=test-token-123'))
+    expect(res.status).toBe(401)
+  })
+
+  test('非法 Base64 编码不导致 500', async () => {
+    process.env.API_TOKEN = ''
+    process.env.AUTH_PASSWORD = 'mypassword'
+
+    const app = createApp()
+    const res = await app.fetch(
+      new Request('http://localhost/api/v1/test', {
+        headers: { Authorization: 'Basic !!!not-valid-base64!!!' },
+      }),
+    )
+    expect(res.status).toBe(401)
+  })
+
+  test('环境变量前后空格被 trim 掉', async () => {
+    process.env.API_TOKEN = ''
+    process.env.AUTH_PASSWORD = '  mypassword  '
+
+    const app = createApp()
+    const res = await app.fetch(
+      new Request('http://localhost/api/v1/test', {
+        headers: { Authorization: 'Basic ' + btoa('admin:mypassword') },
+      }),
+    )
+    expect(res.status).toBe(200)
+  })
 })
