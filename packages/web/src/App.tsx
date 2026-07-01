@@ -6,8 +6,8 @@ import Layout from './components/Layout'
 
 export default function App() {
   const location = useLocation()
-  const wide = location.pathname === '/' || location.pathname === '/new'
-  const contentClassName = wide ? 'max-w-4xl' : 'max-w-prose'
+  const wide = location.pathname === '/' || location.pathname === '/new' || location.pathname.startsWith('/doc/')
+  const contentClassName = wide ? 'max-w-5xl' : 'max-w-prose'
 
   return (
     <Layout contentClassName={contentClassName}>

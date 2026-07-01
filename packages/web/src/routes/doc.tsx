@@ -4,23 +4,17 @@ import type { Block, HeadingNode } from '@notefast/core'
 import {
   ArrowLeft,
   Trash2,
-  Pencil,
-  Check,
-  X,
   ListTree,
   Link2,
-  Edit3,
   FileText,
   Sparkles,
   Loader2,
+  MoreVertical,
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
 import MarkdownEditor from '../components/MarkdownEditor'
 import ConfirmDialog from '../components/ConfirmDialog'
-import SubNavTabs from '../components/SubNavTabs'
-
-type ViewTab = 'content' | 'outline' | 'refs'
 
 interface Backlink {
   id: number
@@ -71,14 +65,11 @@ export default function DocPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
-  const [activeTab, setActiveTab] = useState<ViewTab>('content')
 
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
-  const titleInputRef = useRef<HTMLInputElement>(null)
   const [generatingTitle, setGeneratingTitle] = useState(false)
 
   const [forceEditKey, setForceEditKey] = useState(0)
@@ -93,12 +84,11 @@ export default function DocPage() {
     api.get<Block>('/docs/' + id).then(setDoc).catch((e) => setError(e.message)).finally(() => setLoading(false))
   }, [id, refreshKey])
 
-  // 新建文档后自动进入编辑模式
   useEffect(() => {
-    if (searchParams.get('edit') === '1' && doc && activeTab !== 'content') {
-      setActiveTab('content')
+    if (doc) {
+      setTitleDraft(doc.content)
     }
-  }, [searchParams, doc, activeTab])
+  }, [doc])
 
   useEffect(() => {
     if (!id) return
@@ -113,31 +103,30 @@ export default function DocPage() {
 
   const handleEditSaved = useCallback(() => { setRefreshKey((k) => k + 1) }, [])
 
-  const startTitleEdit = () => {
-    if (!doc) return
-    setTitleDraft(doc.content)
-    setEditingTitle(true)
-    setTimeout(() => titleInputRef.current?.select(), 0)
-  }
-
   const saveTitle = async () => {
-    if (!id || !doc || !titleDraft.trim()) return
+    if (!id || !doc || titleDraft.trim() === doc.content) return
+    const newTitle = titleDraft.trim() || '未命名文档'
     try {
-      await api.patch('/blocks/' + id, { content: titleDraft.trim() })
-      setEditingTitle(false)
+      await api.patch('/blocks/' + id, { content: newTitle })
       setRefreshKey((k) => k + 1)
-    } catch { /* keep editing on error */ }
+    } catch {
+      setTitleDraft(doc.content) // revert on error
+    }
   }
 
-  const cancelTitleEdit = () => { setEditingTitle(false) }
-  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') { e.preventDefault(); saveTitle() }
-    if (e.key === 'Escape') cancelTitleEdit()
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') { 
+      e.preventDefault(); 
+      e.currentTarget.blur() 
+    }
+    if (e.key === 'Escape') {
+      setTitleDraft(doc?.content || '')
+      e.currentTarget.blur()
+    }
   }
 
   const handleSuggestTitle = async () => {
     if (!doc || generatingTitle) return
-    // 收集正文内容
     const texts: string[] = []
     const walk = (b: Block) => { if (b.content && b.type !== 'document') texts.push(b.content); b.children.forEach(walk) }
     walk(doc)
@@ -172,12 +161,15 @@ export default function DocPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4 animate-pulse">
-        <div className="h-9 bg-secondary rounded w-1/2" />
-        <div className="card p-6 space-y-3">
-          <div className="h-4 bg-secondary rounded w-full" />
-          <div className="h-4 bg-secondary rounded w-5/6" />
-          <div className="h-4 bg-secondary rounded w-4/6" />
+      <div className="flex gap-8 animate-pulse">
+        <div className="flex-1 space-y-4">
+          <div className="h-4 bg-secondary rounded w-24 mb-8" />
+          <div className="h-10 bg-secondary rounded w-1/2" />
+          <div className="card p-6 space-y-3 mt-6">
+            <div className="h-4 bg-secondary rounded w-full" />
+            <div className="h-4 bg-secondary rounded w-5/6" />
+            <div className="h-4 bg-secondary rounded w-4/6" />
+          </div>
         </div>
       </div>
     )
@@ -193,25 +185,20 @@ export default function DocPage() {
   const isEmpty = wordCount === 0
 
   return (
-    <div className="animate-fade-in space-y-6">
-      <SubNavTabs
-        activeKey={activeTab}
-        onChange={(k) => setActiveTab(k as ViewTab)}
-        tabs={[
-          { key: 'content', label: '内容' },
-          { key: 'outline', label: '目录', badge: headings.length > 0 ? <span className="font-mono text-[11px] text-muted-foreground/80">({headings.length})</span> : null },
-          { key: 'refs', label: '反向链接', badge: backlinks.length > 0 ? <span className="font-mono text-[11px] text-muted-foreground/80">({backlinks.length})</span> : null },
-        ]}
-        trailing={
+    <div className="flex flex-col lg:flex-row items-start gap-8 animate-fade-in pb-20">
+      {/* Main Content Area */}
+      <div className="flex-1 min-w-0 w-full">
+        {/* Top actions */}
+        <div className="flex items-center justify-between mb-8">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            返回
+          </Link>
+
           <div className="flex items-center gap-2">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>返回</span>
-            </Link>
-            <span className="w-px h-4 bg-border" />
             {id && (
               <MarkdownEditor
                 key={`editor-${id}-${forceEditKey}`}
@@ -220,108 +207,95 @@ export default function DocPage() {
                 autoEdit={searchParams.get('edit') === '1' || forceEditKey > 0}
               />
             )}
+            <div className="h-4 w-px bg-border mx-1" />
             <button
               onClick={() => setShowDelete(true)}
-              className="btn-icon-ghost"
+              className="btn-icon-ghost text-muted-foreground hover:text-destructive hover:bg-destructive/10"
               title="删除文档"
-              aria-label="删除文档"
             >
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
-        }
-      />
+        </div>
 
-      <div className="card">
-        <div className="flex items-start gap-3.5 px-5 py-4">
+        {/* Title Area */}
+        <div className="group relative mb-6">
+          <input
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={saveTitle}
+            onKeyDown={handleTitleKeyDown}
+            className="w-full bg-transparent border-none outline-none font-bold text-[28px] leading-tight tracking-[-0.02em] text-foreground focus:ring-0 px-0 placeholder:text-muted-foreground/40 transition-colors"
+            placeholder="无标题文档"
+          />
           <button
             type="button"
-            onClick={() => setActiveTab('content')}
-            className="hero-orb hero-orb-sm shrink-0 mt-0.5"
-            aria-label="返回正文"
-            title="返回正文"
+            onClick={handleSuggestTitle}
+            disabled={generatingTitle}
+            className="absolute -right-8 top-2 opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-all"
+            title="AI 生成标题"
           >
-            <Edit3 />
-          </button>
-          <div className="flex-1 min-w-0">
-            {editingTitle ? (
-              <div className="flex items-center gap-2">
-                <input
-                  ref={titleInputRef}
-                  value={titleDraft}
-                  onChange={(e) => setTitleDraft(e.target.value)}
-                  onKeyDown={handleTitleKeyDown}
-                  className="input-underline"
-                />
-                <button onClick={saveTitle} className="btn-icon-ghost" title="保存" style={{ color: 'rgb(var(--primary))' }}>
-                  <Check className="w-4 h-4" />
-                </button>
-                <button onClick={cancelTitleEdit} className="btn-icon-ghost" title="取消">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+            {generatingTitle ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <div className="flex items-start gap-2 group">
-                <h1 className="text-[17px] font-semibold text-foreground leading-tight tracking-[-0.022em] truncate" title={doc.content}>
-                  {doc.content}
-                </h1>
-                <button
-                  onClick={startTitleEdit}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-primary hover:bg-accent rounded transition-all shrink-0"
-                  title="编辑标题"
-                  aria-label="编辑标题"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSuggestTitle}
-                  disabled={generatingTitle}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-primary hover:bg-accent rounded transition-all shrink-0"
-                  title="AI 生成标题"
-                >
-                  {generatingTitle ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-3.5 h-3.5" />
-                  )}
-                </button>
-              </div>
+              <Sparkles className="w-4 h-4" />
             )}
+          </button>
+        </div>
 
-            <div className="meta-mono">
-              <span>更新于 {updatedAt || '—'}</span>
-              <span>创建于 {createdAt || '—'}</span>
-              <span>{wordCount.toLocaleString('zh-CN')} 字</span>
-            </div>
+        {/* Meta Info */}
+        <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-muted-foreground mb-8">
+          <span>{updatedAt} 更新</span>
+          <span className="w-1 h-1 rounded-full bg-border" />
+          <span>{wordCount.toLocaleString('zh-CN')} 字</span>
+        </div>
 
-            <div className={'warn-hint ' + (isEmpty ? 'show' : '')}>
-              文档正文为空 —{' '}
-              <button
-                onClick={() => setForceEditKey((k) => k + 1)}
-                className="underline underline-offset-2 font-medium hover:text-warn transition-colors"
-              >
-                点此开始写作
-              </button>
-            </div>
+        {/* Content */}
+        <div className="relative">
+          <div className={'warn-hint mb-6 ' + (isEmpty ? 'show' : '')}>
+            文档正文为空 —{' '}
+            <button
+              onClick={() => setForceEditKey((k) => k + 1)}
+              className="underline underline-offset-2 font-medium hover:text-warn transition-colors"
+            >
+              点此开始写作
+            </button>
           </div>
+
+          <article className="prose dark:prose-invert max-w-none">
+            <BlockRenderer block={doc} />
+          </article>
         </div>
       </div>
 
-      <div key={activeTab} className="animate-fade-in">
-        {activeTab === 'content' && (
-          <article className="card p-7 prose dark:prose-invert max-w-none">
-            <BlockRenderer block={doc} />
-          </article>
-        )}
+      {/* Right Sidebar (Desktop only) */}
+      <div className="hidden lg:flex flex-col w-64 shrink-0 space-y-8 sticky top-8">
+        <section>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-2">
+            大纲
+          </h3>
+          <OutlineView headings={flatHeadings} loading={auxLoading} />
+        </section>
 
-        {activeTab === 'outline' && (
-          <OutlineView headings={flatHeadings} loading={auxLoading} onJump={() => setActiveTab('content')} />
-        )}
-
-        {activeTab === 'refs' && (
+        <section>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-2">
+            反向链接
+          </h3>
           <BacklinksView backlinks={backlinks} loading={auxLoading} />
-        )}
+        </section>
+      </div>
+
+      {/* Right Sidebar (Mobile stack) */}
+      <div className="lg:hidden w-full space-y-8 mt-12 pt-8 border-t border-border">
+        <section>
+          <h3 className="text-sm font-semibold text-foreground mb-4">大纲</h3>
+          <OutlineView headings={flatHeadings} loading={auxLoading} />
+        </section>
+
+        <section>
+          <h3 className="text-sm font-semibold text-foreground mb-4">反向链接</h3>
+          <BacklinksView backlinks={backlinks} loading={auxLoading} />
+        </section>
       </div>
 
       <ConfirmDialog
@@ -338,39 +312,29 @@ export default function DocPage() {
 }
 
 function OutlineView({
-  headings, loading, onJump,
-}: { headings: Array<HeadingNode & { depth: number }>; loading: boolean; onJump: () => void }) {
+  headings, loading
+}: { headings: Array<HeadingNode & { depth: number }>; loading: boolean }) {
   if (loading) {
-    return <div className="card p-6 text-sm text-muted-foreground">加载目录...</div>
+    return <div className="px-2 text-sm text-muted-foreground">加载中...</div>
   }
   if (headings.length === 0) {
     return (
-      <div className="card py-12 px-6 text-center">
-        <div className="empty-icon-tile">
-          <ListTree className="w-5 h-5" />
-        </div>
-        <h3 className="text-base font-semibold text-foreground mb-2">暂无目录</h3>
-        <p className="text-[13px] text-muted-foreground mb-5 max-w-sm mx-auto leading-relaxed">
-          用 #、## 添加标题后会自动生成
-        </p>
-        <button onClick={onJump} className="text-sm text-primary hover:underline font-medium">
-          返回正文 →
-        </button>
+      <div className="px-2 text-sm text-muted-foreground italic">
+        暂无目录
       </div>
     )
   }
   return (
-    <div className="card overflow-hidden">
+    <div className="flex flex-col gap-1">
       {headings.map((h) => (
         <a
           key={h.id}
           href={`#${h.id}`}
-          onClick={() => onJump()}
-          className="outline-row"
-          data-depth={h.depth + 1}
+          className="px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors truncate"
+          style={{ paddingLeft: `${(h.depth * 12) + 8}px` }}
+          title={h.content}
         >
-          <span className="outline-level">H{h.depth + 1}</span>
-          <span className="truncate">{h.content}</span>
+          {h.content}
         </a>
       ))}
     </div>
@@ -379,37 +343,29 @@ function OutlineView({
 
 function BacklinksView({ backlinks, loading }: { backlinks: Backlink[]; loading: boolean }) {
   if (loading) {
-    return <div className="card p-6 text-sm text-muted-foreground">加载反向链接...</div>
+    return <div className="px-2 text-sm text-muted-foreground">加载中...</div>
   }
   if (backlinks.length === 0) {
     return (
-      <div className="card py-12 px-6 text-center">
-        <div className="empty-icon-tile">
-          <Link2 className="w-5 h-5" />
-        </div>
-        <h3 className="text-base font-semibold text-foreground mb-2">尚无反向链接</h3>
-        <p className="text-[13px] text-muted-foreground mb-5 max-w-sm mx-auto leading-relaxed">
-          使用 [[wiki 链接]] 或 [[块 ID]] 引用此文档时，引用方会出现在这里
-        </p>
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          <FileText className="w-3 h-3" /> 0 个引用
-        </span>
+      <div className="px-2 text-sm text-muted-foreground italic">
+        尚无反向链接
       </div>
     )
   }
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2">
       {backlinks.map((bl) => (
         <Link
           key={bl.id}
           to={'/doc/' + bl.source_id}
-          className="card-interactive block p-4"
+          className="group block p-3 rounded-xl border border-border bg-card hover:border-primary/30 hover:shadow-sm transition-all"
         >
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="ref-type-pill">{bl.source_type}</span>
-            <span className="ref-label">{bl.ref_type}</span>
+          <div className="text-xs font-medium text-primary mb-1">
+            {bl.ref_type}
           </div>
-          <p className="text-[13px] text-foreground line-clamp-2 leading-relaxed">{bl.source_content}</p>
+          <p className="text-[13px] text-muted-foreground group-hover:text-foreground line-clamp-2 leading-relaxed transition-colors">
+            {bl.source_content}
+          </p>
         </Link>
       ))}
     </div>
