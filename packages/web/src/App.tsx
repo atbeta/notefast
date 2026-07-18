@@ -3,6 +3,7 @@ import HomePage from './routes/home'
 import DocPage from './routes/doc'
 import NewDocPage from './routes/new'
 import SettingsPage from './routes/settings'
+import SettingsAIPage from './routes/settings-ai'
 import Layout from './components/Layout'
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="/new" element={<NewDocPage />} />
         <Route path="/doc/:id" element={<DocPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/ai" element={<SettingsAIPage />} />
       </Routes>
     </Layout>
   )

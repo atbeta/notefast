@@ -17,13 +17,18 @@ export default function SettingsPage() {
 
       <section className="space-y-3">
         <h2 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">AI 能力</h2>
-        <div className="rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
-          AI 相关配置（Embedding / Chat / Reranker / AutoLink）请访问{' '}
-          <a href="/settings/ai" className="text-primary hover:underline">
-            /settings/ai
-          </a>
-          ，或在使用 Chat / 搜索面板时通过链接前往。
-        </div>
+        <a
+          href="/settings/ai"
+          className="block rounded-xl border border-border bg-card p-5 hover:bg-accent transition-colors"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium">配置 AI Provider、Embedding、Reranker、AutoLink</div>
+              <p className="text-xs text-muted-foreground mt-1">所有 AI 能力都可以在这里独立开关</p>
+            </div>
+            <span className="text-primary text-sm">→</span>
+          </div>
+        </a>
       </section>
     </div>
   )
