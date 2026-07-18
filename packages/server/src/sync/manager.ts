@@ -25,6 +25,7 @@ import {
   publicSyncView,
 } from '@notefast/core'
 import { createLocalFsAdapter } from './localFs'
+import { createS3Adapter } from './s3'
 
 const CONFIG_FILE = 'sync.config.json'
 
@@ -175,9 +176,7 @@ function createAdapter(ac: SyncPersistedConfig['active']): SyncAdapter | null {
   if (!ac) return null
   if (!ac.enabled) return null
   if (ac.kind === 'localfs') return createLocalFsAdapter(ac)
-  if (ac.kind === 's3') {
-    throw new Error('S3 sync adapter 尚未实现（计划下一 PR）')
-  }
+  if (ac.kind === 's3') return createS3Adapter(ac)
   throw new Error(`未知 adapter kind: ${(ac as { kind?: string }).kind ?? 'undefined'}`)
 }
 

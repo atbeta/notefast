@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, FolderOpen, Loader2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Settings as SettingsIcon } from 'lucide-react'
+import { RefreshCw, FolderOpen, Cloud, Loader2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Settings as SettingsIcon, Eye, EyeOff } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 
 interface SyncRuntimeStatus {
@@ -24,29 +24,82 @@ interface AdapterInfo {
   status: 'available' | 'planned'
 }
 
+interface LocalFsCfg {
+  kind: 'localfs'
+  dir: string
+  prefix: string
+  enabled: true
+}
+
+interface S3Cfg {
+  kind: 's3'
+  bucket: string
+  region: string
+  endpoint: string
+  accessKeyId: string
+  secretAccessKey: string
+  prefix: string
+  forcePathStyle: boolean
+  enabled: true
+}
+
+type FormState =
+  | { kind: 'none' }
+  | ({ kind: 'localfs' } & LocalFsCfg)
+  | ({ kind: 's3' } & S3Cfg)
+
+const EMPTY_LOCALFS: LocalFsCfg = { kind: 'localfs', dir: '', prefix: '', enabled: true }
+const EMPTY_S3: S3Cfg = {
+  kind: 's3',
+  bucket: '',
+  region: 'us-east-1',
+  endpoint: '',
+  accessKeyId: '',
+  secretAccessKey: '',
+  prefix: '',
+  forcePathStyle: false,
+  enabled: true,
+}
+
 export default function SyncPanel() {
   const [status, setStatus] = useState<SyncRuntimeStatus | null>(null)
   const [adapters, setAdapters] = useState<AdapterInfo[]>([])
-  const [dir, setDir] = useState('')
+  const [form, setForm] = useState<FormState>({ kind: 'none' })
   const [interval, setInterval] = useState(3600)
   const [saving, setSaving] = useState(false)
   const [running, setRunning] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [info, setInfo] = useState<{ remoteDocCount: number; extra: Record<string, unknown> } | null>(null)
+  const [info, setInfo] = useState<{ remoteDocCount?: number; extra: Record<string, unknown> } | null>(null)
+  const [showS3Secret, setShowS3Secret] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
-      const res = await api.get<{ configured: boolean; status: SyncRuntimeStatus }>('/sync/config')
+      const res = await api.get<{ configured: boolean; status: SyncRuntimeStatus; config: { active: unknown } }>('/sync/config')
       setStatus(res.status)
-      setError(null)
-      // 从磁盘配置回填表单（如果存在）
-      const cfg = await api.get<{ config: { active: { dir?: string } | null } }>(`/sync/config`)
-      if (cfg.config.active && 'dir' in cfg.config.active && cfg.config.active.dir) {
-        setDir(cfg.config.active.dir)
+      setAdaptersInfo(res)
+      const active = res.config.active as { kind?: string } | null
+      if (active?.kind === 'localfs') {
+        const a = active as LocalFsCfg
+        setForm({ ...EMPTY_LOCALFS, dir: a.dir ?? '', prefix: a.prefix ?? '' })
+      } else if (active?.kind === 's3') {
+        const a = active as S3Cfg
+        setForm({ ...EMPTY_S3, ...a })
+      } else {
+        setForm({ kind: 'none' })
       }
+      setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+    }
+  }, [])
+
+  const setAdaptersInfo = useCallback(async (_res: unknown) => {
+    try {
+      const r = await api.get<{ adapters: AdapterInfo[] }>('/sync/adapters')
+      setAdapters(r.adapters)
+    } catch {
+      /* ignore */
     }
   }, [])
 
@@ -56,15 +109,15 @@ export default function SyncPanel() {
   }, [refresh])
 
   const handleSave = async () => {
-    if (!dir.trim()) {
-      setError('请填写目录路径')
+    if (form.kind === 'none') {
+      setError('请选择一种适配器')
       return
     }
     setSaving(true)
     setError(null)
     try {
       await api.put('/sync/config', {
-        active: { kind: 'localfs', dir: dir.trim(), enabled: true },
+        active: form,
         autoSyncIntervalMs: interval * 1000,
       })
       await refresh()
@@ -76,11 +129,13 @@ export default function SyncPanel() {
   }
 
   const handleDisable = async () => {
+    if (!confirm('禁用后所有同步配置都会被清空。继续？')) return
     setSaving(true)
     setError(null)
     try {
       await api.del('/sync/config')
       await refresh()
+      setForm({ kind: 'none' })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -105,7 +160,7 @@ export default function SyncPanel() {
     setError(null)
     try {
       const r = await api.get<{ remoteDocCount?: number; extra?: Record<string, unknown> }>('/sync/info')
-      setInfo({ remoteDocCount: r.remoteDocCount ?? 0, extra: r.extra || {} })
+      setInfo({ remoteDocCount: r.remoteDocCount, extra: r.extra || {} })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setInfo(null)
@@ -143,6 +198,7 @@ export default function SyncPanel() {
             </div>
           )}
 
+          {/* Adapter catalog */}
           <div className="space-y-3">
             <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">适配器</h4>
             <div className="grid gap-2 text-sm">
@@ -156,7 +212,7 @@ export default function SyncPanel() {
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <FolderOpen className="w-4 h-4" />
+                    {a.kind === 'localfs' ? <FolderOpen className="w-4 h-4" /> : <Cloud className="w-4 h-4" />}
                     <span className="font-medium">{a.label}</span>
                   </div>
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -167,31 +223,87 @@ export default function SyncPanel() {
             </div>
           </div>
 
-          {status?.configured && status.adapterName === 'localfs' && (
-            <div className="space-y-3 pt-2 border-t border-border/60">
-              <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">本地文件系统</h4>
-              <div>
-                <label className="text-xs text-muted-foreground">导出目录</label>
-                <input
-                  type="text"
-                  value={dir}
-                  onChange={(e) => setDir(e.target.value)}
-                  placeholder="/path/to/your/notes"
-                  className="mt-1 w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/30 font-mono"
-                />
+          {/* Configuration form */}
+          <div className="space-y-3 pt-2 border-t border-border/60">
+            <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">启用方式</h4>
+
+            {form.kind === 'none' && (
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...EMPTY_LOCALFS })}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-accent"
+                >
+                  <FolderOpen className="w-4 h-4" /> 本地文件
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...EMPTY_S3 })}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-accent"
+                >
+                  <Cloud className="w-4 h-4" /> S3 兼容
+                </button>
               </div>
-              <div>
-                <label className="text-xs text-muted-foreground">自动同步间隔（秒，0 = 关闭）</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={86400}
-                  value={interval}
-                  onChange={(e) => setInterval(parseInt(e.target.value, 10) || 0)}
-                  className="mt-1 w-32 px-3 py-1.5 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/30 font-mono"
-                />
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
+            )}
+
+            {form.kind === 'localfs' && (
+              <>
+                <TextField label="导出目录" value={form.dir} onChange={(v) => setForm({ ...form, dir: v })} placeholder="/path/to/your/notes" mono />
+                <TextField label="文件名前缀（可选）" value={form.prefix} onChange={(v) => setForm({ ...form, prefix: v })} placeholder="notes/" mono />
+              </>
+            )}
+
+            {form.kind === 's3' && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <TextField label="Bucket" value={form.bucket} onChange={(v) => setForm({ ...form, bucket: v })} placeholder="my-notefast-bucket" mono />
+                  <TextField label="Region" value={form.region} onChange={(v) => setForm({ ...form, region: v })} placeholder="us-east-1" mono />
+                  <TextField label="Endpoint（MinIO / R2 / OSS 必填）" value={form.endpoint} onChange={(v) => setForm({ ...form, endpoint: v })} placeholder="https://s3.amazonaws.com" mono />
+                  <TextField label="Key 前缀" value={form.prefix} onChange={(v) => setForm({ ...form, prefix: v })} placeholder="notes/" mono />
+                  <TextField label="Access Key ID" value={form.accessKeyId} onChange={(v) => setForm({ ...form, accessKeyId: v })} placeholder="AKIA..." mono />
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Secret Access Key</label>
+                    <div className="mt-1 flex items-center gap-2">
+                      <input
+                        type={showS3Secret ? 'text' : 'password'}
+                        value={form.secretAccessKey}
+                        onChange={(e) => setForm({ ...form, secretAccessKey: e.target.value })}
+                        placeholder="••••••••"
+                        className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowS3Secret((s) => !s)}
+                        className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-accent"
+                      >
+                        {showS3Secret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <label className="inline-flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.forcePathStyle}
+                    onChange={(e) => setForm({ ...form, forcePathStyle: e.target.checked })}
+                  />
+                  <span>Path-style endpoint（MinIO 必需，AWS / R2 默认关闭）</span>
+                </label>
+              </>
+            )}
+
+            {form.kind !== 'none' && (
+              <TextField
+                label="自动同步间隔（秒，0 = 关闭）"
+                value={String(interval)}
+                type="number"
+                onChange={(v) => setInterval(parseInt(v, 10) || 0)}
+                mono
+              />
+            )}
+
+            {form.kind !== 'none' && (
+              <div className="flex items-center gap-2 flex-wrap pt-1">
                 <button
                   type="button"
                   onClick={handleSave}
@@ -199,71 +311,47 @@ export default function SyncPanel() {
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                  保存
+                  {status?.configured && status.adapterName === (form.kind === 'localfs' ? 'localfs' : 's3') ? '保存' : '启用'}
                 </button>
-                <button
-                  type="button"
-                  onClick={handleRun}
-                  disabled={running}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-secondary text-secondary-foreground hover:bg-accent disabled:opacity-50"
-                >
-                  {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                  立即同步
-                </button>
-                <button
-                  type="button"
-                  onClick={handleInfo}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent"
-                >
-                  探测远端
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDisable}
-                  disabled={saving}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10"
-                >
-                  禁用
-                </button>
+                {status?.configured && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleRun}
+                      disabled={running}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-secondary text-secondary-foreground hover:bg-accent disabled:opacity-50"
+                    >
+                      {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                      立即同步
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleInfo}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent"
+                    >
+                      探测远端
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ kind: 'none' })}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent"
+                      title="切换到另一种适配器"
+                    >
+                      切换适配器
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDisable}
+                      disabled={saving}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10 ml-auto"
+                    >
+                      禁用
+                    </button>
+                  </>
+                )}
               </div>
-            </div>
-          )}
-
-          {!status?.configured && (
-            <div className="space-y-3 pt-2 border-t border-border/60">
-              <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">启用本地文件系统同步</h4>
-              <div>
-                <label className="text-xs text-muted-foreground">导出目录（每个文档渲染为独立 .md 文件）</label>
-                <input
-                  type="text"
-                  value={dir}
-                  onChange={(e) => setDir(e.target.value)}
-                  placeholder="./export"
-                  className="mt-1 w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/30 font-mono"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">自动同步间隔（秒，0 = 关闭）</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={86400}
-                  value={interval}
-                  onChange={(e) => setInterval(parseInt(e.target.value, 10) || 0)}
-                  className="mt-1 w-32 px-3 py-1.5 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/30 font-mono"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving || !dir.trim()}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
-              >
-                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                启用同步
-              </button>
-            </div>
-          )}
+            )}
+          </div>
 
           {status?.lastResult && (
             <div className="text-xs text-muted-foreground pt-2 border-t border-border/60 space-y-1">
@@ -287,17 +375,45 @@ export default function SyncPanel() {
 
           {info && (
             <div className="text-xs text-muted-foreground bg-muted/40 px-3 py-2 rounded-md space-y-0.5">
-              <div>远端 .md 文件数：<span className="font-mono">{info.remoteDocCount}</span></div>
-              {typeof info.extra.dir === 'string' && (
-                <div>目录：<span className="font-mono">{info.extra.dir}</span></div>
+              {typeof info.remoteDocCount === 'number' && (
+                <div>远端 .md 文件数：<span className="font-mono">{info.remoteDocCount}</span></div>
               )}
-              {typeof info.extra.writable === 'boolean' && (
-                <div>可写：<span className="font-mono">{String(info.extra.writable)}</span></div>
-              )}
+              {Object.entries(info.extra).map(([k, v]) => (
+                <div key={k}>{k}：<span className="font-mono">{String(v)}</span></div>
+              ))}
             </div>
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function TextField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = 'text',
+  mono,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  type?: 'text' | 'number'
+  mono?: boolean
+}) {
+  return (
+    <div>
+      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`mt-1 w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/30 ${mono ? 'font-mono' : ''}`}
+      />
     </div>
   )
 }

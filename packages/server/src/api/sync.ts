@@ -201,7 +201,7 @@ sync.get('/adapters', (c) => {
           { name: 'prefix', label: 'Key 前缀', type: 'string', required: false },
           { name: 'forcePathStyle', label: 'Path-style (MinIO)', type: 'boolean', required: false },
         ],
-        status: 'planned',
+        status: 'available',
       },
     ],
   })
