@@ -111,6 +111,7 @@ describe('PUT /api/v1/ai/config', () => {
         extraHeaders: {},
       },
       autoIndex: false,
+      reranker: null,
     }
     applyNewConfig(cfg, pluginSystem)
 
@@ -170,6 +171,7 @@ describe('GET /api/v1/ai/config', () => {
           extraHeaders: {},
         },
         autoIndex: true,
+        reranker: null,
       },
       pluginSystem,
     )
@@ -197,6 +199,7 @@ describe('POST /api/v1/ai/test', () => {
           extraHeaders: {},
         },
         autoIndex: false,
+        reranker: null,
       },
       pluginSystem,
     )
@@ -268,6 +271,7 @@ describe('POST /api/v1/ai/suggest-title', () => {
           extraHeaders: {},
         },
         autoIndex: false,
+        reranker: null,
       },
       pluginSystem,
     )

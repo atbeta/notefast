@@ -2,14 +2,16 @@
  * AI API
  *
  * 路由：
- * - GET    /api/v1/ai/status     完整状态（含 lastError / dim / usage）
- * - GET    /api/v1/ai/config     当前配置（apiKey 脱敏）
- * - PUT    /api/v1/ai/config     更新配置 + 热重载
- * - POST   /api/v1/ai/test       连通性测试（chat + embedding）
- * - GET    /api/v1/ai/search     语义搜索
- * - POST   /api/v1/ai/index      全量重建索引
- * - POST   /api/v1/ai/index/:id  索引单 block
- * - POST   /api/v1/ai/suggest-title  标题/摘要生成
+ * - GET    /api/v1/ai/status       完整状态（含 lastError / dim / usage）
+ * - GET    /api/v1/ai/config       当前配置（apiKey 脱敏）
+ * - PUT    /api/v1/ai/config       更新配置 + 热重载
+ * - GET    /api/v1/ai/capabilities 能力发现（无 key 版本）
+ * - POST   /api/v1/ai/test         连通性测试（chat + embedding + reranker）
+ * - GET    /api/v1/ai/search       检索；?mode=semantic|fts|hybrid（默认 hybrid）
+ * - POST   /api/v1/ai/index        全量重建索引
+ * - POST   /api/v1/ai/index/:id    索引单 block
+ * - POST   /api/v1/ai/suggest-title 标题/摘要生成
+ * - POST   /api/v1/ai/chat         多轮对话 + RAG（SSE 事件流）
  *
  * fix_hint 约定：所有 not_configured 错误都附带 hint，引导调用方去 /settings
  */
@@ -17,18 +19,26 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
+import { streamSSE } from 'hono/streaming'
 import {
   type AiConfig,
+  type ChatMessage,
   type LLMProvider,
   emptyConfig,
+  highlightSnippet,
   suggestTitle,
+  buildFtsQuery,
 } from '@notefast/core'
+import type { BlockRow } from '@notefast/core'
 import {
   getRuntime,
   applyNewConfigFromCurrent,
   hasRuntime,
 } from '../services/aiRuntime'
 import { indexBlock, indexAllBlocks, semanticSearch } from '../ai/indexer'
+import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
+import { runChat, runChatSync } from '../ai/chat'
+import { getDb } from '../db'
 
 const ai = new Hono()
 
@@ -67,6 +77,16 @@ const configSchema = z.object({
     })
     .nullable(),
   autoIndex: z.boolean(),
+  reranker: z
+    .object({
+      enabled: z.boolean(),
+      baseUrl: z.string().min(1),
+      apiKey: z.string(),
+      model: z.string().min(1),
+      timeoutMs: z.number().int().min(1000).max(600_000),
+    })
+    .nullable()
+    .optional(),
 })
 
 ai.put(
@@ -77,7 +97,13 @@ ai.put(
       return c.json({ error: 'internal', message: 'AI runtime 未初始化' }, 500)
     }
     const body = c.req.valid('json')
-    const cfg: AiConfig = { version: 1, active: body.active, autoIndex: body.autoIndex }
+    const reranker = body.reranker ?? null
+    const cfg: AiConfig = {
+      version: 1,
+      active: body.active,
+      autoIndex: body.autoIndex,
+      reranker: reranker && reranker.enabled ? reranker : null,
+    }
     try {
       const result = applyNewConfigFromCurrent(cfg)
       return c.json(result)
@@ -94,15 +120,21 @@ ai.post('/test', async (c) => {
     return c.json({ ok: false, message: 'AI 未初始化' }, 400)
   }
   const r = getRuntime()
-  const [chatResult, dim] = await Promise.all([
-    r.hasChat() ? r.testChat() : Promise.resolve({ ok: false, message: 'Chat 未配置' }),
-    r.hasEmbedding() ? r.probeEmbeddingDim() : Promise.resolve(null),
-  ])
+  const chatPromise = r.hasChat() ? r.testChat() : Promise.resolve({ ok: false, message: 'Chat 未配置' as string })
+  const embPromise = r.hasEmbedding() ? r.probeEmbeddingDim() : Promise.resolve(null)
+  // reranker 用一个最小 payload 试一下
+  const rerankPromise = r.hasReranker()
+    ? r.rerank({ query: 'ping', texts: ['hello'] }).then(
+        () => ({ ok: true, message: '连通正常' }),
+      ).catch((e) => ({ ok: false, message: eMsg(e) }))
+    : Promise.resolve({ ok: false, message: 'Reranker 未配置' })
+  const [chatResult, dim, rerankResult] = await Promise.all([chatPromise, embPromise, rerankPromise])
   return c.json({
     embedding: r.hasEmbedding()
       ? { ok: dim !== null, dim, lastError: r.status().embedding.lastError }
       : { ok: false, message: 'Embedding 未配置' },
     chat: chatResult,
+    reranker: rerankResult,
   })
 })
 
@@ -113,21 +145,79 @@ ai.get('/search', async (c) => {
     return c.json({ error: 'not_configured', message: 'AI 未启用', fix_hint: FIX_HINT }, 400)
   }
   const r = getRuntime()
-  if (!r.hasEmbedding()) {
-    return c.json({ error: 'not_configured', message: 'Embedding 未配置', fix_hint: FIX_HINT }, 400)
-  }
+  const mode = (c.req.query('mode') || 'hybrid').toLowerCase()
   const q = (c.req.query('q') || '').trim()
-  if (!q) return c.json([])
   const limit = Math.min(parseInt(c.req.query('limit') || '10', 10) || 10, 20)
   const notebookId = c.req.query('notebook_id') || undefined
+
+  if (!q) return c.json([])
+
   try {
-    const v = await r.embedQuery(q)
-    if (!v) return c.json({ error: 'embedding_failed', message: 'Embedding 返回为空' }, 500)
-    const hits = semanticSearch(v, limit, notebookId)
-    return c.json(hits)
+    if (mode === 'fts') {
+      const hits = ftsHits(q, notebookId, limit)
+      return c.json(hits)
+    }
+    if (mode === 'semantic') {
+      if (!r.hasEmbedding()) {
+        return c.json({ error: 'not_configured', message: 'Embedding 未配置', fix_hint: FIX_HINT }, 400)
+      }
+      const v = await r.embedQuery(q)
+      if (!v) return c.json({ error: 'embedding_failed', message: 'Embedding 返回为空' }, 500)
+      const hits = semanticSearch(v, limit, notebookId)
+      return c.json(hits)
+    }
+    // hybrid（默认）
+    const report = await hybridSearchFn({
+      query: q,
+      notebookId,
+      topK: limit,
+    })
+    return c.json(report.citations)
   } catch (e) {
-    return c.json({ error: 'embedding_error', message: eMsg(e), fix_hint: FIX_HINT }, 500)
+    return c.json({ error: 'search_error', message: eMsg(e), fix_hint: FIX_HINT }, 500)
   }
+})
+
+function ftsHits(q: string, notebookId: string | undefined, limit: number) {
+  const db = getDb()
+  const { query: ftsQuery } = buildFtsQuery(q, limit)
+  let sql = `
+    SELECT b.*, rank FROM blocks_fts f
+    JOIN blocks b ON b.id = f.id
+    WHERE blocks_fts MATCH ?`
+  const params: (string | number)[] = [ftsQuery]
+  if (notebookId) {
+    sql += ' AND b.notebook_id = ?'
+    params.push(notebookId)
+  }
+  sql += ' ORDER BY rank LIMIT ?'
+  params.push(limit)
+  const rows = db.query(sql).all(...params as [string, ...(string | number)[]]) as (BlockRow & { rank: number })[]
+  return rows.map((r) => ({
+    block_id: r.id,
+    score: r.rank,
+    content: r.content,
+    doc_id: r.root_id,
+    doc_title: '(FTS 命中)',
+    snippet: highlightSnippet(r.content, q),
+    type: r.type,
+  }))
+}
+
+// ───────────────────── capabilities ─────────────────────
+
+ai.get('/capabilities', (c) => {
+  if (!runtimeSafe()) {
+    return c.json({
+      ai_enabled: false,
+      embedding: false,
+      chat: false,
+      reranker: false,
+      hybrid_search: true,
+      external_sources: [],
+    })
+  }
+  return c.json(getRuntime().capabilities())
 })
 
 ai.post('/index', async (c) => {
@@ -165,6 +255,78 @@ const suggestSchema = z.object({
   content: z.string().min(1).max(5000),
 })
 
+// ───────────────────── chat (RAG + SSE) ─────────────────────
+
+const chatMessageSchema = z.object({
+  role: z.enum(['system', 'user', 'assistant']),
+  content: z.string().min(1).max(50_000),
+})
+
+const chatSchema = z.object({
+  messages: z.array(chatMessageSchema).min(1).max(40),
+  context_doc_id: z.string().optional(),
+  top_k: z.number().int().min(1).max(20).optional(),
+  fts_limit: z.number().int().min(1).max(50).optional(),
+  semantic_limit: z.number().int().min(1).max(50).optional(),
+  rerank_window: z.number().int().min(1).max(50).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  max_tokens: z.number().int().min(16).max(8000).optional(),
+  stream: z.boolean().optional(),
+})
+
+ai.post('/chat', zValidator('json', chatSchema), async (c) => {
+  const body = c.req.valid('json')
+  const messages: ChatMessage[] = body.messages
+  const stream = body.stream !== false // 默认 true
+
+  if (stream) {
+    return streamSSE(c, async (sse) => {
+      for await (const ev of runChat({
+        messages,
+        contextDocId: body.context_doc_id,
+        topK: body.top_k,
+        ftsLimit: body.fts_limit,
+        semanticLimit: body.semantic_limit,
+        rerankWindow: body.rerank_window,
+        temperature: body.temperature,
+        maxTokens: body.max_tokens,
+      })) {
+        if (ev.type === 'retrieval') {
+          await sse.writeSSE({ event: 'retrieval', data: JSON.stringify(ev.report) })
+        } else if (ev.type === 'token') {
+          await sse.writeSSE({ event: 'token', data: JSON.stringify({ content: ev.content }) })
+        } else if (ev.type === 'done') {
+          await sse.writeSSE({
+            event: 'done',
+            data: JSON.stringify({ citations: ev.citations, retrieval: ev.retrieval }),
+          })
+        } else if (ev.type === 'error') {
+          await sse.writeSSE({ event: 'error', data: JSON.stringify(ev.error) })
+        }
+      }
+    })
+  }
+
+  // 非流式：用于 MCP / 简单集成
+  try {
+    const result = await runChatSync({
+      messages,
+      contextDocId: body.context_doc_id,
+      topK: body.top_k,
+      ftsLimit: body.fts_limit,
+      semanticLimit: body.semantic_limit,
+      rerankWindow: body.rerank_window,
+      temperature: body.temperature,
+      maxTokens: body.max_tokens,
+    })
+    return c.json(result)
+  } catch (e) {
+    const msg = eMsg(e)
+    const code = msg.includes('[未配置]') ? 'not_configured' : 'llm_error'
+    return c.json({ error: code, message: msg, fix_hint: code === 'not_configured' ? FIX_HINT : undefined }, 500)
+  }
+})
+
 ai.post('/suggest-title', zValidator('json', suggestSchema), async (c) => {
   if (!runtimeSafe() || !getRuntime().hasChat()) {
     return c.json(
@@ -197,7 +359,15 @@ function runtimeSafe(): boolean {
 }
 
 function emptyUsage() {
-  return { embeddingCalls: 0, embeddingErrors: 0, chatCalls: 0, chatErrors: 0, lastSuccessAt: undefined }
+  return {
+    embeddingCalls: 0,
+    embeddingErrors: 0,
+    chatCalls: 0,
+    chatErrors: 0,
+    rerankCalls: 0,
+    rerankErrors: 0,
+    lastSuccessAt: undefined,
+  }
 }
 
 function eMsg(e: unknown): string {

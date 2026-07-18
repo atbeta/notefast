@@ -38,7 +38,21 @@ export interface ProviderDefinition {
   extraHeaders: Record<string, string>
 }
 
-/** 完整的 AI 配置（当前实现下只有一个 active provider） */
+/** Reranker 独立配置（与 active embedding/chat provider 解耦） */
+export interface RerankerDefinition {
+  /** 是否启用；启用时 baseUrl + model 必填 */
+  enabled: boolean
+  /** TEI /rerank 端点 base */
+  baseUrl: string
+  /** Bearer Token；本地服务可留空 */
+  apiKey: string
+  /** 模型名，如 BAAI/bge-reranker-v2-m3 */
+  model: string
+  /** 请求超时（毫秒） */
+  timeoutMs: number
+}
+
+/** 完整的 AI 配置（当前实现下只有一个 active provider + 可选 reranker） */
 export interface AiConfig {
   /** schema 版本，便于未来迁移 */
   version: 1
@@ -46,12 +60,14 @@ export interface AiConfig {
   active: ProviderDefinition | null
   /** 自动索引：新建/更新 block 后是否异步生成 embedding */
   autoIndex: boolean
+  /** Reranker 配置；null 表示未配置（hybrid search 跳过精排） */
+  reranker: RerankerDefinition | null
 }
 
 export const DEFAULT_TIMEOUT_MS = 60_000
 
 export function emptyConfig(): AiConfig {
-  return { version: 1, active: null, autoIndex: true }
+  return { version: 1, active: null, autoIndex: true, reranker: null }
 }
 
 /** 把 env 变量转换为初始 ProviderDefinition（仅在 data/ai.config.json 不存在时使用） */
@@ -78,6 +94,20 @@ export function configFromEnv(env: Record<string, string | undefined>): AiConfig
       timeoutMs: DEFAULT_TIMEOUT_MS,
       extraHeaders: {},
     },
+    reranker: rerankerFromEnv(env),
+  }
+}
+
+function rerankerFromEnv(env: Record<string, string | undefined>): RerankerDefinition | null {
+  const baseUrl = (env.RERANKER_API_URL || '').trim()
+  const model = (env.RERANKER_MODEL || '').trim()
+  if (!baseUrl || !model) return null
+  return {
+    enabled: true,
+    baseUrl,
+    apiKey: (env.RERANKER_API_KEY || '').trim(),
+    model,
+    timeoutMs: DEFAULT_TIMEOUT_MS,
   }
 }
 
@@ -85,13 +115,22 @@ export function configFromEnv(env: Record<string, string | undefined>): AiConfig
 export function validateConfig(cfg: AiConfig): string[] {
   const errs: string[] = []
   const a = cfg.active
-  if (!a) return errs
-  if (!a.baseUrl.trim()) errs.push('Provider baseUrl 不能为空')
-  if (!a.embeddingModel.trim() && !a.chatModel.trim()) {
-    errs.push('Embedding 模型和 Chat 模型至少填写一个')
+  if (a) {
+    if (!a.baseUrl.trim()) errs.push('Provider baseUrl 不能为空')
+    if (!a.embeddingModel.trim() && !a.chatModel.trim()) {
+      errs.push('Embedding 模型和 Chat 模型至少填写一个')
+    }
+    if (a.timeoutMs < 1000 || a.timeoutMs > 600_000) {
+      errs.push('timeoutMs 应在 1000-600000 之间')
+    }
   }
-  if (a.timeoutMs < 1000 || a.timeoutMs > 600_000) {
-    errs.push('timeoutMs 应在 1000-600000 之间')
+  const r = cfg.reranker
+  if (r && r.enabled) {
+    if (!r.baseUrl.trim()) errs.push('Reranker baseUrl 不能为空')
+    if (!r.model.trim()) errs.push('Reranker model 不能为空')
+    if (r.timeoutMs < 1000 || r.timeoutMs > 600_000) {
+      errs.push('Reranker timeoutMs 应在 1000-600000 之间')
+    }
   }
   return errs
 }
@@ -103,11 +142,17 @@ export function maskKey(key: string): string {
   return `${key.slice(0, 4)}••••${key.slice(-4)}`
 }
 
-/** 把 active provider 的 key 置空（用于对外序列化） */
+/** 把 active provider 与 reranker 的 key 置空（用于对外序列化） */
 export function publicView(cfg: AiConfig): AiConfig {
-  if (!cfg.active) return cfg
-  return {
-    ...cfg,
-    active: { ...cfg.active, apiKey: cfg.active.apiKey ? '***set***' : '' },
+  let next = cfg
+  if (cfg.active) {
+    next = { ...next, active: { ...cfg.active, apiKey: cfg.active.apiKey ? '***set***' : '' } }
   }
+  if (cfg.reranker && cfg.reranker.apiKey) {
+    next = {
+      ...next,
+      reranker: { ...cfg.reranker, apiKey: '***set***' },
+    }
+  }
+  return next
 }

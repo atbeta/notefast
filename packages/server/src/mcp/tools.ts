@@ -10,10 +10,12 @@ import {
   rowToBlock,
   suggestTitle,
   type LLMProvider,
+  type ChatMessage,
 } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import { hasRuntime, getRuntime } from '../services/aiRuntime'
 import { semanticSearch } from '../ai/indexer'
+import { runChatSync } from '../ai/chat'
 
 function toText(data: unknown): { type: 'text'; text: string } {
   return { type: 'text' as const, text: JSON.stringify(data, null, 2) }
@@ -447,6 +449,72 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
         return { content: [toText(result)] }
       } catch (e) {
         return { content: [toText({ error: String(e) })] }
+      }
+    },
+  )
+
+  server.registerTool(
+    'notefast_chat',
+    {
+      description:
+        '与用户知识库对话：FTS5 + 语义检索 + 可选 reranker，再交给 LLM 生成带 [n] 引用的回答。返回完整 answer、citations 列表和 retrieval 统计。',
+      inputSchema: {
+        messages: z
+          .array(
+            z.object({
+              role: z.enum(['system', 'user', 'assistant']),
+              content: z.string(),
+            }),
+          )
+          .describe('对话历史（最后一条必须是 user）'),
+        context_doc_id: z.string().optional().describe('当前查看文档 ID（hint 提升该 doc 的优先级）'),
+        top_k: z.number().int().min(1).max(20).optional().default(5).describe('返回引用数量'),
+        temperature: z.number().min(0).max(2).optional().default(0.3),
+        max_tokens: z.number().int().min(16).max(8000).optional().default(2000),
+      },
+    },
+    async ({ messages, context_doc_id, top_k, temperature, max_tokens }) => {
+      if (!hasRuntime() || !getRuntime().hasChat()) {
+        return {
+          content: [toText({
+            error: 'AI chat 未配置',
+            fix_hint: '请在 Web UI /settings 页面配置 Chat 模型',
+          })],
+        }
+      }
+      try {
+        const chatMessages: ChatMessage[] = messages as ChatMessage[]
+        const result = await runChatSync({
+          messages: chatMessages,
+          contextDocId: context_doc_id,
+          topK: top_k,
+          temperature,
+          maxTokens: max_tokens,
+        })
+        return {
+          content: [toText({
+            answer: result.answer,
+            citations: result.citations.map((c) => ({
+              block_id: c.block_id,
+              doc_id: c.doc_id,
+              doc_title: c.doc_title,
+              snippet: c.snippet,
+              score: c.score,
+            })),
+            retrieval: result.retrieval,
+          })],
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        return {
+          content: [toText({
+            error: msg.startsWith('[未配置]') ? 'not_configured' : 'llm_error',
+            message: msg,
+            fix_hint: msg.startsWith('[未配置]')
+              ? '请在 Web UI /settings 页面配置 Chat 模型'
+              : undefined,
+          })],
+        }
       }
     },
   )

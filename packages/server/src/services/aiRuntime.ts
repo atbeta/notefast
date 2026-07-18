@@ -91,11 +91,11 @@ function loadOrSeed(): AiConfig {
   const path = join(dataDir, CONFIG_FILE)
   if (existsSync(path)) {
     const fromDisk = loadConfigFromDisk()
-    if (fromDisk.active || fromDisk.version) return fromDisk
+    if (fromDisk.active || fromDisk.version || fromDisk.reranker) return fromDisk
   }
   // 首次启动：从环境变量种子
   const seeded = configFromEnv(process.env)
-  if (seeded.active) {
+  if (seeded.active || seeded.reranker) {
     saveConfigToDisk(seeded)
     console.log('🧠 AI: 已从环境变量种子初始化配置（写入 ' + path + '）')
   }

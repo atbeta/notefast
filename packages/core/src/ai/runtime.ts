@@ -8,10 +8,11 @@
  */
 
 import { maskKey, publicView, validateConfig } from './config'
-import type { AiConfig, ProviderDefinition } from './config'
+import type { AiConfig, ProviderDefinition, RerankerDefinition } from './config'
 import type { EmbeddingProvider, SemanticHit } from '../embedding'
 import type { LLMProvider } from '../llm'
 import { cosineSimilarity, truncateText } from '../embedding'
+import { createTeiReranker, type RerankerProvider } from '../reranker'
 
 /** Runtime 状态对外可序列化视图（不含原始 key） */
 export interface RuntimeStatus {
@@ -28,15 +29,33 @@ export interface RuntimeStatus {
     model?: string
     lastError?: string
   }
+  reranker: {
+    configured: boolean
+    ok: boolean
+    model?: string
+    lastError?: string
+  }
   usage: {
     embeddingCalls: number
     embeddingErrors: number
     chatCalls: number
     chatErrors: number
+    rerankCalls: number
+    rerankErrors: number
     lastSuccessAt?: string
   }
   /** 脱敏后的 provider 配置（maskKey 后的 apiKey） */
   config: AiConfig
+}
+
+/** 能力发现：UI / Agent 据此决定显示哪些入口 */
+export interface Capabilities {
+  ai_enabled: boolean
+  embedding: boolean
+  chat: boolean
+  reranker: boolean
+  hybrid_search: boolean
+  external_sources: string[]
 }
 
 export interface AiRuntimeOptions {
@@ -53,6 +72,7 @@ export class AiRuntime {
   private cfg: AiConfig
   private embeddingProvider?: EmbeddingProvider
   private chatProvider?: LLMProvider
+  private rerankerProvider?: RerankerProvider
   private embeddingDim?: number
   private fetchImpl: typeof fetch
   private batchSize: number
@@ -63,10 +83,13 @@ export class AiRuntime {
     embeddingErrors: 0,
     chatCalls: 0,
     chatErrors: 0,
+    rerankCalls: 0,
+    rerankErrors: 0,
     lastSuccessAt: undefined as string | undefined,
   }
   private embeddingLastError?: string
   private chatLastError?: string
+  private rerankLastError?: string
 
   constructor(initial: AiConfig, opts: AiRuntimeOptions = {}) {
     this.cfg = initial
@@ -81,31 +104,40 @@ export class AiRuntime {
     this.cfg = cfg
     this.embeddingProvider = undefined
     this.chatProvider = undefined
+    this.rerankerProvider = undefined
     this.embeddingDim = undefined
     this.embeddingLastError = undefined
     this.chatLastError = undefined
+    this.rerankLastError = undefined
 
-    if (!cfg.active) {
-      if (!opts.silent) console.log('🧠 AI: disabled')
-      return { ok: true, errors }
+    if (cfg.active) {
+      const p = cfg.active
+      const hasEmbedding = Boolean(p.embeddingModel.trim())
+      const hasChat = Boolean(p.chatModel.trim())
+      if (hasEmbedding) {
+        this.embeddingProvider = createEmbeddingProvider(p, this.fetchImpl, this.batchSize)
+      }
+      if (hasChat) {
+        this.chatProvider = createChatProvider(p, this.fetchImpl)
+      }
     }
 
-    const p = cfg.active
-    const hasEmbedding = Boolean(p.embeddingModel.trim())
-    const hasChat = Boolean(p.chatModel.trim())
-
-    if (hasEmbedding) {
-      this.embeddingProvider = createEmbeddingProvider(p, this.fetchImpl, this.batchSize)
-    }
-    if (hasChat) {
-      this.chatProvider = createChatProvider(p, this.fetchImpl)
+    if (cfg.reranker && cfg.reranker.enabled) {
+      this.rerankerProvider = createTeiReranker(
+        cfg.reranker.baseUrl,
+        cfg.reranker.model,
+        this.fetchImpl,
+        cfg.reranker.timeoutMs,
+        cfg.reranker.apiKey,
+      )
     }
 
     if (!opts.silent) {
       const parts: string[] = []
-      if (hasEmbedding) parts.push(`embedding=${p.embeddingModel}`)
-      if (hasChat) parts.push(`chat=${p.chatModel}`)
-      console.log(`🧠 AI: ${parts.join(', ')} @ ${p.baseUrl}`)
+      if (this.embeddingProvider) parts.push(`embedding=${cfg.active!.embeddingModel}`)
+      if (this.chatProvider) parts.push(`chat=${cfg.active!.chatModel}`)
+      if (this.rerankerProvider) parts.push(`reranker=${cfg.reranker!.model}`)
+      console.log(`🧠 AI: ${parts.length ? parts.join(', ') : 'disabled'}`)
     }
 
     return { ok: errors.length === 0, errors }
@@ -114,6 +146,7 @@ export class AiRuntime {
   /** 获取对外可序列化的状态（含脱敏 key） */
   status(): RuntimeStatus {
     const a = this.cfg.active
+    const r = this.cfg.reranker
     return {
       enabled: Boolean(a),
       embedding: {
@@ -128,8 +161,30 @@ export class AiRuntime {
         model: a?.chatModel || undefined,
         lastError: this.chatLastError,
       },
+      reranker: {
+        configured: Boolean(r && r.enabled),
+        ok: Boolean(this.rerankerProvider) && !this.rerankLastError,
+        model: r?.model || undefined,
+        lastError: this.rerankLastError,
+      },
       usage: { ...this.usage },
       config: publicView(this.cfg),
+    }
+  }
+
+  /** 获取当前能力清单（无 key 版本） */
+  capabilities(): Capabilities {
+    const hasEmb = this.hasEmbedding()
+    const hasChat = this.hasChat()
+    const hasRerank = this.hasReranker()
+    return {
+      ai_enabled: Boolean(this.cfg.active),
+      embedding: hasEmb,
+      chat: hasChat,
+      reranker: hasRerank,
+      // 至少有 embedding 或 FTS5 之一（后者始终可用）即为真；为简洁，恒 true 表示"检索可用"
+      hybrid_search: true,
+      external_sources: [],
     }
   }
 
@@ -138,12 +193,21 @@ export class AiRuntime {
     return this.cfg.active
   }
 
+  /** 暴露当前 reranker 配置（用于 UI 脱敏展示） */
+  rerankerConfig(): RerankerDefinition | null {
+    return this.cfg.reranker
+  }
+
   hasEmbedding(): boolean {
     return Boolean(this.embeddingProvider)
   }
 
   hasChat(): boolean {
     return Boolean(this.chatProvider)
+  }
+
+  hasReranker(): boolean {
+    return Boolean(this.rerankerProvider)
   }
 
   /** 替换 fetch 实现（测试和自定义代理场景使用） */
@@ -202,6 +266,112 @@ export class AiRuntime {
     } catch (e) {
       this.usage.chatErrors++
       this.chatLastError = e instanceof Error ? e.message : String(e)
+      throw e
+    }
+  }
+
+  /**
+   * 流式聊天：返回 AsyncIterable<{ content, done? }>。
+   * 内部走 OpenAI 兼容 stream=true，解析 SSE 数据帧。
+   * 注意：本方法只在 chat provider 支持 OpenAI 流式协议时使用。
+   */
+  async *streamChat(
+    messages: import('../llm').ChatMessage[],
+    options?: import('../llm').ChatCompletionOptions,
+  ): AsyncGenerator<{ content: string; done?: boolean }> {
+    if (!this.chatProvider) {
+      this.chatLastError = 'AI chat is not configured'
+      throw new Error(this.chatLastError)
+    }
+    const p = this.cfg.active
+    if (!p) {
+      this.chatLastError = 'AI provider is not configured'
+      throw new Error(this.chatLastError)
+    }
+    const url = joinUrl(p.baseUrl, '/chat/completions')
+    const headers = buildHeaders(p)
+    const model = options?.model || p.chatModel.trim()
+    const ac = new AbortController()
+    const timer = setTimeout(() => ac.abort(), p.timeoutMs)
+    try {
+      const res = await this.fetchImpl(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model,
+          messages,
+          stream: true,
+          temperature: options?.temperature ?? 0.3,
+          max_tokens: options?.maxTokens ?? 2000,
+          ...(options?.responseFormat ? { response_format: options.responseFormat } : {}),
+        }),
+        signal: ac.signal,
+      })
+      if (!res.ok || !res.body) {
+        const err = await res.text().catch(() => '')
+        throw new Error(`LLM stream ${res.status}: ${err.slice(0, 300)}`)
+      }
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        let idx: number
+        while ((idx = buf.indexOf('\n')) !== -1) {
+          const line = buf.slice(0, idx).trimEnd()
+          buf = buf.slice(idx + 1)
+          if (!line.startsWith('data:')) continue
+          const payload = line.slice(5).trim()
+          if (payload === '[DONE]') {
+            this.usage.chatCalls++
+            this.usage.lastSuccessAt = new Date().toISOString()
+            this.chatLastError = undefined
+            yield { content: '', done: true }
+            return
+          }
+          try {
+            const json = JSON.parse(payload) as {
+              choices?: Array<{ delta?: { content?: string } }>
+            }
+            const delta = json.choices?.[0]?.delta?.content
+            if (delta) yield { content: delta }
+          } catch {
+            // 忽略无法解析的行（OpenAI 偶尔会发 keep-alive 注释）
+          }
+        }
+      }
+      // 自然结束（流未显式 [DONE]）
+      this.usage.chatCalls++
+      this.usage.lastSuccessAt = new Date().toISOString()
+      this.chatLastError = undefined
+      yield { content: '', done: true }
+    } catch (e) {
+      this.usage.chatErrors++
+      this.chatLastError = e instanceof Error ? e.message : String(e)
+      throw e
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  /** 调用 reranker；未配置时抛出 */
+  async rerank(input: import('../reranker').RerankInput): Promise<import('../reranker').RerankHit[]> {
+    if (!this.rerankerProvider) {
+      const err = new Error('Reranker is not configured')
+      this.rerankLastError = err.message
+      throw err
+    }
+    try {
+      const r = await this.rerankerProvider.rerank(input)
+      this.usage.rerankCalls++
+      this.usage.lastSuccessAt = new Date().toISOString()
+      this.rerankLastError = undefined
+      return r
+    } catch (e) {
+      this.usage.rerankErrors++
+      this.rerankLastError = e instanceof Error ? e.message : String(e)
       throw e
     }
   }

@@ -25,7 +25,7 @@ function makeProvider(overrides: Partial<ProviderDefinition> = {}): ProviderDefi
 }
 
 function makeConfig(overrides: Partial<ProviderDefinition> = {}): AiConfig {
-  return { version: 1, active: makeProvider(overrides), autoIndex: true }
+  return { version: 1, active: makeProvider(overrides), autoIndex: true, reranker: null }
 }
 
 describe('maskKey', () => {

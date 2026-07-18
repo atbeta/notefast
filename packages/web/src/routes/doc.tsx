@@ -1,15 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import type { Block, HeadingNode } from '@notefast/core'
 import {
   ArrowLeft,
   Trash2,
-  ListTree,
-  Link2,
-  FileText,
   Sparkles,
   Loader2,
-  MoreVertical,
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
@@ -180,7 +176,6 @@ export default function DocPage() {
 
   const flatHeadings = flattenHeadings(headings)
   const updatedAt = formatTime(doc.updated_at)
-  const createdAt = formatTime(doc.created_at)
   const wordCount = countWords(doc)
   const isEmpty = wordCount === 0
 

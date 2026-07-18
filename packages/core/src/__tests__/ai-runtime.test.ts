@@ -39,6 +39,7 @@ describe('AiRuntime 基础状态', () => {
       version: 1,
       autoIndex: true,
       active: makeProviderLike({ chatModel: '' }),
+      reranker: null,
     })
     const s = r.status()
     expect(s.enabled).toBe(true)
@@ -53,6 +54,7 @@ describe('AiRuntime 基础状态', () => {
       version: 1,
       autoIndex: true,
       active: makeProviderLike({ apiKey: 'sk-verylongsecret1234' }),
+      reranker: null,
     })
     const s = r.status()
     expect(s.config.active).not.toBeNull()
@@ -66,9 +68,10 @@ describe('AiRuntime reload', () => {
       version: 1,
       autoIndex: true,
       active: makeProviderLike(),
+      reranker: null,
     })
     expect(r.hasEmbedding()).toBe(true)
-    r.reload({ version: 1, autoIndex: true, active: null })
+    r.reload({ version: 1, autoIndex: true, active: null, reranker: null })
     expect(r.hasEmbedding()).toBe(false)
     expect(r.status().enabled).toBe(false)
   })
@@ -76,13 +79,13 @@ describe('AiRuntime reload', () => {
   test('reload 清空旧的 lastError', () => {
     const failFetch = (async () => new Response('boom', { status: 500 })) as unknown as typeof fetch
     const r = makeRuntime(
-      { version: 1, autoIndex: true, active: makeProviderLike() },
+      { version: 1, autoIndex: true, active: makeProviderLike(), reranker: null },
       failFetch,
     )
     // 触发一次失败
     r.embedQuery('x').catch(() => {})
     // reload 后错误应清空
-    r.reload({ version: 1, autoIndex: true, active: makeProviderLike() })
+    r.reload({ version: 1, autoIndex: true, active: makeProviderLike(), reranker: null })
     expect(r.status().embedding.lastError).toBeUndefined()
   })
 })
@@ -97,7 +100,7 @@ describe('AiRuntime embedQuery', () => {
     const fakeVec = Array.from({ length: 4 }, (_, i) => i + 1)
     const fetchImpl = mockFetchJson(200, { data: [{ embedding: fakeVec }] })
     const r = makeRuntime(
-      { version: 1, autoIndex: true, active: makeProviderLike() },
+      { version: 1, autoIndex: true, active: makeProviderLike(), reranker: null },
       fetchImpl,
     )
     const v = await r.embedQuery('hi')
@@ -111,7 +114,7 @@ describe('AiRuntime embedQuery', () => {
   test('失败时 embeddingErrors +1 且 lastError 被记录', async () => {
     const fetchImpl = (async () => new Response('bad', { status: 401 })) as unknown as typeof fetch
     const r = makeRuntime(
-      { version: 1, autoIndex: true, active: makeProviderLike() },
+      { version: 1, autoIndex: true, active: makeProviderLike(), reranker: null },
       fetchImpl,
     )
     await expect(r.embedQuery('x')).rejects.toThrow()
@@ -126,6 +129,7 @@ describe('AiRuntime chat', () => {
       version: 1,
       autoIndex: true,
       active: makeProviderLike({ chatModel: '' }),
+      reranker: null,
     })
     await expect(r.chat([{ role: 'user', content: 'hi' }])).rejects.toThrow('not configured')
   })
@@ -135,7 +139,7 @@ describe('AiRuntime chat', () => {
       choices: [{ message: { content: 'pong' } }],
     })
     const r = makeRuntime(
-      { version: 1, autoIndex: true, active: makeProviderLike() },
+      { version: 1, autoIndex: true, active: makeProviderLike(), reranker: null },
       fetchImpl,
     )
     const reply = await r.chat([{ role: 'user', content: 'ping' }])
@@ -146,7 +150,7 @@ describe('AiRuntime chat', () => {
   test('失败时记录 chatLastError', async () => {
     const fetchImpl = (async () => new Response('nope', { status: 403 })) as unknown as typeof fetch
     const r = makeRuntime(
-      { version: 1, autoIndex: true, active: makeProviderLike() },
+      { version: 1, autoIndex: true, active: makeProviderLike(), reranker: null },
       fetchImpl,
     )
     await expect(r.chat([{ role: 'user', content: 'hi' }])).rejects.toThrow()
@@ -168,10 +172,153 @@ describe('AiRuntime testChat', () => {
       choices: [{ message: { content: 'pongpong' } }],
     })
     const r = makeRuntime(
-      { version: 1, autoIndex: true, active: makeProviderLike() },
+      { version: 1, autoIndex: true, active: makeProviderLike(), reranker: null },
       fetchImpl,
     )
     const res = await r.testChat()
     expect(res.ok).toBe(true)
+  })
+})
+
+describe('AiRuntime reranker slot', () => {
+  test('未配置 reranker 时 hasReranker=false 且 rerank 抛错', async () => {
+    const r = makeRuntime(emptyConfig())
+    expect(r.hasReranker()).toBe(false)
+    await expect(r.rerank({ query: 'q', texts: ['x'] })).rejects.toThrow('not configured')
+  })
+
+  test('配置后 rerank 透传到 TEI', async () => {
+    const fetchImpl = mockFetchJson(200, [{ index: 0, score: 0.7 }])
+    const r = makeRuntime(
+      {
+        version: 1,
+        autoIndex: true,
+        active: null,
+        reranker: {
+          enabled: true,
+          baseUrl: 'http://tei.local',
+          apiKey: '',
+          model: 'bge-reranker-v2-m3',
+          timeoutMs: 5000,
+        },
+      },
+      fetchImpl,
+    )
+    expect(r.hasReranker()).toBe(true)
+    const out = await r.rerank({ query: 'q', texts: ['x'] })
+    expect(out[0]).toEqual({ index: 0, score: 0.7 })
+    expect(r.status().reranker.configured).toBe(true)
+    expect(r.status().usage.rerankCalls).toBe(1)
+  })
+
+  test('rerank 失败时记录 lastError + errors+1', async () => {
+    const fetchImpl = mockFetchJson(500, { error: 'boom' })
+    const r = makeRuntime(
+      {
+        version: 1,
+        autoIndex: true,
+        active: null,
+        reranker: {
+          enabled: true,
+          baseUrl: 'http://tei.local',
+          apiKey: '',
+          model: 'bge',
+          timeoutMs: 5000,
+        },
+      },
+      fetchImpl,
+    )
+    await expect(r.rerank({ query: 'q', texts: ['x'] })).rejects.toThrow()
+    expect(r.status().usage.rerankErrors).toBe(1)
+    expect(r.status().reranker.lastError).toBeTruthy()
+  })
+})
+
+describe('AiRuntime capabilities', () => {
+  test('空配置 → 全 false 但 hybrid_search=true', () => {
+    const r = makeRuntime(emptyConfig())
+    const c = r.capabilities()
+    expect(c.ai_enabled).toBe(false)
+    expect(c.embedding).toBe(false)
+    expect(c.chat).toBe(false)
+    expect(c.reranker).toBe(false)
+    expect(c.hybrid_search).toBe(true)
+  })
+
+  test('只配 embedding 时 chat=false embedding=true', () => {
+    const r = makeRuntime({
+      version: 1,
+      autoIndex: true,
+      active: makeProviderLike({ chatModel: '' }),
+      reranker: null,
+    })
+    const c = r.capabilities()
+    expect(c.ai_enabled).toBe(true)
+    expect(c.embedding).toBe(true)
+    expect(c.chat).toBe(false)
+  })
+
+  test('只配 reranker 时 ai_enabled 由 active 决定', () => {
+    const r = makeRuntime({
+      version: 1,
+      autoIndex: true,
+      active: null,
+      reranker: {
+        enabled: true,
+        baseUrl: 'http://x',
+        apiKey: '',
+        model: 'bge',
+        timeoutMs: 5000,
+      },
+    })
+    const c = r.capabilities()
+    expect(c.ai_enabled).toBe(false)
+    expect(c.reranker).toBe(true)
+  })
+})
+
+describe('AiRuntime streamChat', () => {
+  test('未启用时抛错', async () => {
+    const r = makeRuntime(emptyConfig())
+    await expect(
+      (async () => {
+        for await (const _ of r.streamChat([{ role: 'user', content: 'hi' }])) {
+          // drain
+        }
+      })(),
+    ).rejects.toThrow('not configured')
+  })
+
+  test('解析 SSE 数据流并拼接 token', async () => {
+    const chunks: string[] = []
+    chunks.push('data: {"choices":[{"delta":{"content":"He"}}]}\n\n')
+    chunks.push('data: {"choices":[{"delta":{"content":"llo"}}]}\n\n')
+    chunks.push('data: [DONE]\n\n')
+
+    const encoder = new TextEncoder()
+    const fetchImpl = (async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            for (const c of chunks) controller.enqueue(encoder.encode(c))
+            controller.close()
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )) as unknown as typeof fetch
+
+    const r = makeRuntime(
+      { version: 1, autoIndex: true, active: makeProviderLike(), reranker: null },
+      fetchImpl,
+    )
+    const collected: string[] = []
+    let seenDone = false
+    for await (const c of r.streamChat([{ role: 'user', content: 'hi' }])) {
+      if (c.done) seenDone = true
+      else collected.push(c.content)
+    }
+    expect(collected.join('')).toBe('Hello')
+    expect(seenDone).toBe(true)
+    expect(r.status().usage.chatCalls).toBe(1)
   })
 })
