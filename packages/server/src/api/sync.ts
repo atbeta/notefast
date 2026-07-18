@@ -57,8 +57,17 @@ const s3Schema = z.object({
   enabled: z.boolean(),
 })
 
+const webdavSchema = z.object({
+  kind: z.literal('webdav'),
+  endpoint: z.string().min(1).url(),
+  username: z.string().min(1),
+  password: z.string().min(1),
+  prefix: z.string().optional(),
+  enabled: z.boolean(),
+})
+
 const configSchema = z.object({
-  active: z.union([localFsSchema, s3Schema]).nullable(),
+  active: z.union([localFsSchema, s3Schema, webdavSchema]).nullable(),
   autoSyncIntervalMs: z.number().int().min(0).max(86_400_000).optional(),
 })
 
@@ -200,6 +209,17 @@ sync.get('/adapters', (c) => {
           { name: 'secretAccessKey', label: 'Secret Access Key', type: 'string', required: true, secret: true },
           { name: 'prefix', label: 'Key 前缀', type: 'string', required: false },
           { name: 'forcePathStyle', label: 'Path-style (MinIO)', type: 'boolean', required: false },
+        ],
+        status: 'available',
+      },
+      {
+        kind: 'webdav',
+        label: 'WebDAV (NAS / NextCloud)',
+        fields: [
+          { name: 'endpoint', label: 'Endpoint URL', type: 'url', required: true, hint: '例如 https://nas.local/dav/ 或 https://dav.jianguoyun.com/dav/' },
+          { name: 'username', label: '用户名', type: 'string', required: true },
+          { name: 'password', label: '密码 / 应用专用密码', type: 'string', required: true, secret: true },
+          { name: 'prefix', label: '远端子目录前缀', type: 'string', required: false },
         ],
         status: 'available',
       },

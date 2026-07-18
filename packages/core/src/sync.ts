@@ -7,7 +7,7 @@
  * - 生命周期钩子可在 sync 前后注入自定义逻辑
  */
 
-export type SyncAdapterKind = 'localfs' | 's3'
+export type SyncAdapterKind = 'localfs' | 's3' | 'webdav'
 
 export interface LocalFsAdapterConfig {
   kind: 'localfs'
@@ -37,7 +37,20 @@ export interface S3AdapterConfig {
   enabled: boolean
 }
 
-export type SyncAdapterConfig = LocalFsAdapterConfig | S3AdapterConfig
+export interface WebDavAdapterConfig {
+  /** WebDAV 端点（绝对 URL） */
+  kind: 'webdav'
+  /** 例如：https://dav.example.com/remote.php/webdav 或 https://nas.local/dav/ */
+  endpoint: string
+  username: string
+  password: string
+  /** 远端路径前缀（可选），如 'notes' */
+  prefix?: string
+  /** 第一次推送时是否需要认证 challenge（Basic Auth 默认 true） */
+  enabled: boolean
+}
+
+export type SyncAdapterConfig = LocalFsAdapterConfig | S3AdapterConfig | WebDavAdapterConfig
 
 /** 持久化到磁盘的 sync 配置 */
 export interface SyncPersistedConfig {
@@ -112,6 +125,16 @@ export function publicSyncView(cfg: SyncPersistedConfig): SyncPersistedConfig {
         ...cfg.active,
         accessKeyId: cfg.active.accessKeyId ? '***set***' : '',
         secretAccessKey: cfg.active.secretAccessKey ? '***set***' : '',
+      },
+    }
+  }
+  if (cfg.active.kind === 'webdav') {
+    return {
+      ...cfg,
+      active: {
+        ...cfg.active,
+        username: cfg.active.username ? '***set***' : '',
+        password: cfg.active.password ? '***set***' : '',
       },
     }
   }

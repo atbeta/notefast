@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, FolderOpen, Cloud, Loader2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Settings as SettingsIcon, Eye, EyeOff } from 'lucide-react'
+import { RefreshCw, FolderOpen, Cloud, HardDrive, Loader2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Settings as SettingsIcon, Eye, EyeOff } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 
 interface SyncRuntimeStatus {
@@ -43,10 +43,20 @@ interface S3Cfg {
   enabled: true
 }
 
+interface WebDavCfg {
+  kind: 'webdav'
+  endpoint: string
+  username: string
+  password: string
+  prefix: string
+  enabled: true
+}
+
 type FormState =
   | { kind: 'none' }
   | ({ kind: 'localfs' } & LocalFsCfg)
   | ({ kind: 's3' } & S3Cfg)
+  | ({ kind: 'webdav' } & WebDavCfg)
 
 const EMPTY_LOCALFS: LocalFsCfg = { kind: 'localfs', dir: '', prefix: '', enabled: true }
 const EMPTY_S3: S3Cfg = {
@@ -58,6 +68,14 @@ const EMPTY_S3: S3Cfg = {
   secretAccessKey: '',
   prefix: '',
   forcePathStyle: false,
+  enabled: true,
+}
+const EMPTY_WEBDAV: WebDavCfg = {
+  kind: 'webdav',
+  endpoint: '',
+  username: '',
+  password: '',
+  prefix: '',
   enabled: true,
 }
 
@@ -72,6 +90,7 @@ export default function SyncPanel() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<{ remoteDocCount?: number; extra: Record<string, unknown> } | null>(null)
   const [showS3Secret, setShowS3Secret] = useState(false)
+  const [showWebDavSecret, setShowWebDavSecret] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -85,6 +104,9 @@ export default function SyncPanel() {
       } else if (active?.kind === 's3') {
         const a = active as S3Cfg
         setForm({ ...EMPTY_S3, ...a })
+      } else if (active?.kind === 'webdav') {
+        const a = active as WebDavCfg
+        setForm({ ...EMPTY_WEBDAV, endpoint: a.endpoint ?? '', username: a.username ?? '', prefix: a.prefix ?? '' })
       } else {
         setForm({ kind: 'none' })
       }
@@ -212,7 +234,13 @@ export default function SyncPanel() {
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    {a.kind === 'localfs' ? <FolderOpen className="w-4 h-4" /> : <Cloud className="w-4 h-4" />}
+                    {a.kind === 'localfs' ? (
+                      <FolderOpen className="w-4 h-4" />
+                    ) : a.kind === 'webdav' ? (
+                      <HardDrive className="w-4 h-4" />
+                    ) : (
+                      <Cloud className="w-4 h-4" />
+                    )}
                     <span className="font-medium">{a.label}</span>
                   </div>
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -242,6 +270,13 @@ export default function SyncPanel() {
                   className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-accent"
                 >
                   <Cloud className="w-4 h-4" /> S3 兼容
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...EMPTY_WEBDAV })}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-accent"
+                >
+                  <HardDrive className="w-4 h-4" /> WebDAV
                 </button>
               </div>
             )}
@@ -292,6 +327,54 @@ export default function SyncPanel() {
               </>
             )}
 
+            {form.kind === 'webdav' && (
+              <>
+                <div className="text-[10.5px] text-muted-foreground/70 leading-relaxed -mt-1">
+                  支持 NextCloud / ownCloud / 群晖 / 极空间 / 威联通 / 坚果云 WebDAV。
+                  第一次推送时前缀不存在会创建中间目录。
+                </div>
+                <TextField
+                  label="Endpoint URL"
+                  value={form.endpoint}
+                  onChange={(v) => setForm({ ...form, endpoint: v })}
+                  placeholder="https://nas.local/dav/ 或 https://dav.jianguoyun.com/dav/"
+                  mono
+                />
+                <TextField
+                  label="用户名"
+                  value={form.username}
+                  onChange={(v) => setForm({ ...form, username: v })}
+                  mono
+                />
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">密码 / 应用专用密码</label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <input
+                      type={showWebDavSecret ? 'text' : 'password'}
+                      value={form.password}
+                      onChange={(e) => setForm({ ...form, password: e.target.value })}
+                      placeholder="••••••••"
+                      className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowWebDavSecret((s) => !s)}
+                      className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-accent"
+                    >
+                      {showWebDavSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <TextField
+                  label="远端子目录前缀（可选）"
+                  value={form.prefix}
+                  onChange={(v) => setForm({ ...form, prefix: v })}
+                  placeholder="notes/"
+                  mono
+                />
+              </>
+            )}
+
             {form.kind !== 'none' && (
               <TextField
                 label="自动同步间隔（秒，0 = 关闭）"
@@ -311,7 +394,7 @@ export default function SyncPanel() {
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                  {status?.configured && status.adapterName === (form.kind === 'localfs' ? 'localfs' : 's3') ? '保存' : '启用'}
+                  {status?.configured && status.adapterName === form.kind ? '保存' : '启用'}
                 </button>
                 {status?.configured && (
                   <>
