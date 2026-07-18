@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Link2, Check, X, Sparkles, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Link2, Check, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 
 interface AutoLinkCandidate {
@@ -150,11 +150,11 @@ export default function AutoLinkPanel({ docId, currentBlockId, onClose }: AutoLi
             </div>
           )}
           {!loading && visible.length === 0 && (
-            <div className="text-center text-xs text-muted-foreground py-8">
-              <Sparkles className="w-5 h-5 mx-auto mb-2 opacity-40" />
+            <div className="text-center text-xs text-muted-foreground py-7 px-3">
+              <Link2 className="w-4 h-4 mx-auto mb-2 opacity-35" strokeWidth={1.5} />
               <p>暂无建议</p>
-              <p className="text-[10px] mt-1 text-muted-foreground/60">
-                启用 AutoLink 后，新建/编辑 block 时会自动抽取建议
+              <p className="text-[10.5px] mt-1.5 text-muted-foreground/65 leading-relaxed">
+                启用 AutoLink 后，新写或修改 block 时 AI 会建议反向链接
               </p>
             </div>
           )}

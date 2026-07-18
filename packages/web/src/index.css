@@ -72,12 +72,12 @@
   transition: background var(--ease), border-color var(--ease), transform 120ms ease;
 }
 .btn-primary-custom:hover:not(:disabled) {
-  background: rgb(56 47 179); /* primary-1 级深色 */
-  border-color: rgb(56 47 179);
+  background: rgb(63 56 178);
+  border-color: rgb(63 56 178);
 }
 .btn-primary-custom:active:not(:disabled) {
   transform: scale(0.985);
-  background: rgb(48 40 156);
+  background: rgb(54 48 154);
 }
 .btn-primary-custom:disabled { opacity: 0.4; cursor: not-allowed; }
 

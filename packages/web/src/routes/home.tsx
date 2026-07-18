@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Sparkles, Calendar, Trash2, FileText } from 'lucide-react'
+import { Plus, Calendar, Trash2, FileText } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import DocList from '../components/DocList'
@@ -65,8 +65,8 @@ export default function HomePage() {
               subtitle={heroSubtitle}
               ariaLabel="新建文档"
               chip={{
-                icon: activeTab === 'recent' ? Calendar : Sparkles,
-                label: activeTab === 'recent' ? '过去 24 小时' : '支持 Markdown · ⌘N',
+                icon: activeTab === 'recent' ? Calendar : Plus,
+                label: activeTab === 'recent' ? '过去 24 小时' : 'Markdown · ⌘N',
               }}
             />
           </div>

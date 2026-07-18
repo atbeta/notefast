@@ -20,8 +20,8 @@
 
   /* ───────────── 平面 / 表面 ───────────── */
 
-  /* 整页背景：纸面，比 #fff 暖一点点 */
-  --background: 250 249 245;
+  /* 整页背景：纸面，warm 一些 —— 之前 #FAF9F5 太冷 */
+  --background: 252 250 244;
   /* 内容卡片：纯白 */
   --card: 255 255 255;
   --card-foreground: 28 25 23;
@@ -38,10 +38,10 @@
   --secondary: 245 244 240;
   --secondary-foreground: 28 25 23;
 
-  /* ───────────── 主色：克制 indigo ───────────── */
+  /* ───────────── 主色：克制 indigo，略带温暖紫色 ───────────── */
 
   /* 用更深的 indigo，hover/active 时再叠透明层产生层次 */
-  --primary: 67 56 202;
+  --primary: 79 70 229;
   --primary-foreground: 255 255 255;
   /* soft 给 hover 背景、focus halo 等低强调场景 */
   --primary-soft: rgb(var(--primary) / 0.06);
@@ -49,15 +49,22 @@
 
   /* ───────────── 状态 ───────────── */
 
-  --destructive: 200 50 50;
+  --destructive: 195 50 50;
   --destructive-foreground: 255 255 255;
-  --warn: 192 110 24;
+  --warn: 175 96 32;                /* 温暖的琥珀 */
 
   /* ───────────── 边框 / 输入 ───────────── */
 
-  --border: 232 230 224;            /* 比 E7E5E4 更柔和 */
-  --input: 232 230 224;
+  /* 边框暖了一档，更能在背景上"读得出来" */
+  --border: 225 220 210;
+  --border-strong: 205 198 188;
+  --input: 225 220 210;
   --ring: 67 56 202;
+
+  /* ───────────── 编辑器专属 ───────────── */
+
+  --editor-bg: 254 252 247;
+  --editor-gutter-bg: 245 242 234;
 
   /* ───────────── 侧边栏 ───────────── */
 
@@ -129,16 +136,20 @@
   --destructive-foreground: 22 21 19;
   --warn: 224 152 64;
 
-  --border: 44 42 39;
-  --input: 44 42 39;
+  --border: 50 48 44;
+  --border-strong: 64 62 56;
+  --input: 50 48 44;
   --ring: 128 122 240;
 
   --sidebar-background: 26 25 22;
   --sidebar-foreground: 168 162 152;
   --sidebar-accent: 36 34 30;
   --sidebar-accent-foreground: 233 230 222;
-  --sidebar-border: 44 42 39;
+  --sidebar-border: 50 48 44;
   --sidebar-muted: 130 124 116;
+
+  --editor-bg: 26 24 22;
+  --editor-gutter-bg: 30 28 25;
 
   --shadow-card:
     0 0 0 1px rgb(255 255 255 / 3%),
@@ -151,3 +162,11 @@
     0 1px 2px rgb(0 0 0 / 22%),
     0 8px 28px rgb(0 0 0 / 36%);
 }
+
+/* ────────────────────────────────────────────────────────────────
+   主题系统基础（v0.1）
+   - 当前仅 light/dark 两套，通过 :root / .dark 提供
+   - data-theme 钩子保留，未来新增主题时拷贝 :root 块并改名为
+     例如 [data-theme="warm"] {} 或 [data-theme="high-contrast"] {}
+   - 主题切换 UI 不在此版本
+   ──────────────────────────────────────────────────────────────── */

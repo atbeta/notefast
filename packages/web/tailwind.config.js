@@ -40,8 +40,11 @@ export default {
         },
         warn: 'rgb(var(--warn) / <alpha-value>)',
         border: 'rgb(var(--border) / <alpha-value>)',
+        'border-strong': 'rgb(var(--border-strong) / <alpha-value>)',
         input: 'rgb(var(--input) / <alpha-value>)',
         ring: 'rgb(var(--ring) / <alpha-value>)',
+        'editor-bg': 'rgb(var(--editor-bg) / <alpha-value>)',
+        'editor-gutter': 'rgb(var(--editor-gutter-bg) / <alpha-value>)',
         sidebar: {
           DEFAULT: 'rgb(var(--sidebar-background) / <alpha-value>)',
           foreground: 'rgb(var(--sidebar-foreground) / <alpha-value>)',

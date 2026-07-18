@@ -264,17 +264,17 @@ export default function DocPage() {
       </div>
 
       {/* Right Sidebar (Desktop only) */}
-      <div className="hidden lg:flex flex-col w-64 shrink-0 space-y-8 sticky top-8">
+      <div className="hidden lg:flex flex-col w-64 shrink-0 space-y-6 sticky top-8">
         <section>
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-2">
-            大纲
+          <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70 mb-2 px-1 flex items-center gap-1.5">
+            <span className="w-3 h-px bg-border" /> 大纲
           </h3>
           <OutlineView headings={flatHeadings} loading={auxLoading} />
         </section>
 
         <section>
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-2">
-            反向链接
+          <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70 mb-2 px-1 flex items-center gap-1.5">
+            <span className="w-3 h-px bg-border" /> 反向链接
           </h3>
           <BacklinksView backlinks={backlinks} loading={auxLoading} />
         </section>
@@ -287,12 +287,12 @@ export default function DocPage() {
       {/* Right Sidebar (Mobile stack) */}
       <div className="lg:hidden w-full space-y-8 mt-12 pt-8 border-t border-border">
         <section>
-          <h3 className="text-sm font-semibold text-foreground mb-4">大纲</h3>
+          <h3 className="text-sm font-medium text-foreground mb-3">大纲</h3>
           <OutlineView headings={flatHeadings} loading={auxLoading} />
         </section>
 
         <section>
-          <h3 className="text-sm font-semibold text-foreground mb-4">反向链接</h3>
+          <h3 className="text-sm font-medium text-foreground mb-3">反向链接</h3>
           <BacklinksView backlinks={backlinks} loading={auxLoading} />
         </section>
 
@@ -318,23 +318,23 @@ function OutlineView({
   headings, loading
 }: { headings: Array<HeadingNode & { depth: number }>; loading: boolean }) {
   if (loading) {
-    return <div className="px-2 text-sm text-muted-foreground">加载中...</div>
+    return <div className="px-2 text-[12.5px] text-muted-foreground">加载中...</div>
   }
   if (headings.length === 0) {
     return (
-      <div className="px-2 text-sm text-muted-foreground italic">
-        暂无目录
+      <div className="px-1 py-2 text-[12px] text-muted-foreground/60 italic">
+        文档无标题章节
       </div>
     )
   }
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-0.5">
       {headings.map((h) => (
         <a
           key={h.id}
           href={`#${h.id}`}
-          className="px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors truncate"
-          style={{ paddingLeft: `${(h.depth * 12) + 8}px` }}
+          className="px-2 py-1.5 text-[12.5px] text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors truncate"
+          style={{ paddingLeft: `${(h.depth * 10) + 8}px` }}
           title={h.content}
         >
           {h.content}
@@ -346,12 +346,12 @@ function OutlineView({
 
 function BacklinksView({ backlinks, loading }: { backlinks: Backlink[]; loading: boolean }) {
   if (loading) {
-    return <div className="px-2 text-sm text-muted-foreground">加载中...</div>
+    return <div className="px-2 text-[12.5px] text-muted-foreground">加载中...</div>
   }
   if (backlinks.length === 0) {
     return (
-      <div className="px-2 text-sm text-muted-foreground italic">
-        尚无反向链接
+      <div className="px-1 py-2 text-[12px] text-muted-foreground/60 italic">
+        还没有文档引用此处
       </div>
     )
   }
