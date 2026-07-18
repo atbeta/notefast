@@ -49,10 +49,48 @@ interface Capabilities {
   hybrid_search: boolean
 }
 
-interface TestResult {
-  embedding: { ok: boolean; dim?: number; lastError?: string; message?: string }
-  chat: { ok: boolean; message: string }
-  reranker: { ok: boolean; message: string }
+interface DiagnoseResult {
+  overall: 'healthy' | 'partial' | 'degraded' | 'idle'
+  embedding: {
+    configured: boolean
+    ok: boolean
+    latencyMs?: number
+    dim?: number
+    embeddingCalls?: number
+    model?: string
+    error?: string
+    message?: string
+  }
+  chat: {
+    configured: boolean
+    ok: boolean
+    latencyMs?: number
+    model?: string
+    replySample?: string
+    error?: string
+    message?: string
+  }
+  reranker: {
+    configured: boolean
+    ok: boolean
+    latencyMs?: number
+    model?: string
+    hitCount?: number
+    error?: string
+    message?: string
+  }
+  autoLink: {
+    configured: boolean
+    enabled: boolean
+    autoApply: boolean
+    ok: boolean
+    prerequisites: {
+      chat: { configured: boolean; ok: boolean }
+      embedding: { configured: boolean; ok: boolean } | null
+    }
+  }
+  elapsedMs: number
+  ts: string
 }
 
 function emptyProvider(presetId: ProviderPresetId = 'custom'): ProviderDefinition {
@@ -74,7 +112,7 @@ export default function AISettingsPanel() {
   const [showKey, setShowKey] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<TestResult | null>(null)
+  const [diagnose, setDiagnose] = useState<DiagnoseResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -165,13 +203,12 @@ export default function AISettingsPanel() {
     }
   }
 
-  const handleTest = async () => {
+  const handleDiagnose = async () => {
     setTesting(true)
     setError(null)
-    setTestResult(null)
     try {
-      const r = await api.post<TestResult>('/ai/test', {})
-      setTestResult(r)
+      const r = await api.post<DiagnoseResult>('/ai/diagnose', {})
+      setDiagnose(r)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -214,12 +251,12 @@ export default function AISettingsPanel() {
           )}
           <button
             type="button"
-            onClick={handleTest}
-            disabled={testing || !active}
+            onClick={handleDiagnose}
+            disabled={testing}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-border bg-background hover:bg-accent disabled:opacity-50"
           >
             {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-            连通性测试
+            一键诊断
           </button>
         </div>
       </div>
@@ -236,12 +273,42 @@ export default function AISettingsPanel() {
           {success}
         </div>
       )}
-      {testResult && (
-        <div className="text-xs space-y-1 px-3 py-2 rounded-md bg-muted/40 border border-border">
-          <div className="font-medium text-foreground">连通性测试结果</div>
-          <TestRow label="Embedding" ok={testResult.embedding.ok} detail={testResult.embedding.message || `dim=${testResult.embedding.dim ?? '?'}`} />
-          <TestRow label="Chat" ok={testResult.chat.ok} detail={testResult.chat.message} />
-          <TestRow label="Reranker" ok={testResult.reranker.ok} detail={testResult.reranker.message} />
+      {diagnose && (
+        <div className="text-xs rounded-md bg-muted/40 border border-border overflow-hidden">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-background/40">
+            <div className="flex items-center gap-2">
+              <OverallDot overall={diagnose.overall} />
+              <span className="font-medium text-foreground">
+                {diagnose.overall === 'healthy'
+                  ? '一切正常'
+                  : diagnose.overall === 'partial'
+                    ? '部分能力可用'
+                    : diagnose.overall === 'degraded'
+                      ? '已配置但都不可达'
+                      : '尚未启用任何 AI 能力'}
+              </span>
+              {diagnose.elapsedMs != null && (
+                <span className="text-[10px] text-muted-foreground/70 font-mono">
+                  {diagnose.elapsedMs} ms
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setDiagnose(null)}
+              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              关闭
+            </button>
+          </div>
+          <div className="divide-y divide-border/60">
+            <DiagRow icon="↻" label="Embedding" r={diagnose.embedding} />
+            <DiagRow icon="✦" label="Chat" r={diagnose.chat} />
+            <DiagRow icon="⊕" label="Reranker" r={diagnose.reranker} />
+            {diagnose.autoLink.configured && (
+              <DiagRow icon="⌘" label="AutoLink" r={diagnose.autoLink} autoLink />
+            )}
+          </div>
         </div>
       )}
 
@@ -610,18 +677,103 @@ function CapabilityBadge({ ok, label }: { ok: boolean; label: string }) {
   )
 }
 
-function TestRow({ label, ok, detail }: { label: string; ok: boolean; detail: string }) {
+type DiagR = {
+  configured: boolean
+  ok?: boolean
+  latencyMs?: number
+  message?: string
+  error?: string
+  dim?: number
+  hitCount?: number
+  replySample?: string
+  model?: string
+  embeddingCalls?: number
+  prerequisites?: { chat: { configured: boolean; ok: boolean }; embedding: unknown }
+  autoApply?: boolean
+}
+
+function OverallDot({ overall }: { overall: 'healthy' | 'partial' | 'degraded' | 'idle' }) {
+  const tone =
+    overall === 'healthy'
+      ? 'bg-emerald-500'
+      : overall === 'partial'
+        ? 'bg-amber-500'
+        : overall === 'degraded'
+          ? 'bg-destructive'
+          : 'bg-border'
   return (
-    <div className="flex items-center gap-2">
-      <span className="font-mono text-muted-foreground w-20">{label}</span>
+    <span className={`inline-block w-2 h-2 rounded-full ${tone}`} aria-label={overall} />
+  )
+}
+
+function DiagRow({
+  icon,
+  label,
+  r,
+  autoLink,
+}: {
+  icon: string
+  label: string
+  r: DiagR
+  autoLink?: boolean
+}) {
+  if (!r.configured) {
+    return (
+      <div className="flex items-center gap-3 px-3 py-2 text-muted-foreground/70">
+        <span className="w-5 text-center text-foreground/60 text-[13px]">{icon}</span>
+        <span className="w-16 font-medium text-foreground/80">{label}</span>
+        <span className="text-[11px] italic">未配置</span>
+      </div>
+    )
+  }
+
+  const ok = r.ok === true
+  const detail = autoLink
+    ? autoLinkFormat(r)
+    : r.error
+      ? `× ${truncateError(r.error)}`
+      : r.message
+        ? r.message
+        : ''
+  const meta = describeMeta(r)
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-2">
+      <span className="w-5 text-center text-foreground/60 text-[13px]">{icon}</span>
+      <span className="w-16 font-medium text-foreground">{label}</span>
       {ok ? (
-        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
       ) : (
-        <AlertCircle className="w-3 h-3 text-destructive" />
+        <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
       )}
-      <span className="truncate">{detail}</span>
+      <span className={`flex-1 truncate ${ok ? 'text-foreground/85' : 'text-destructive'}`}>
+        {detail}
+      </span>
+      <span className="text-[10px] text-muted-foreground/65 font-mono shrink-0">{meta}</span>
     </div>
   )
+}
+
+function autoLinkFormat(r: DiagR): string {
+  const prereq = r.prerequisites?.chat
+  if (!prereq) return ''
+  return prereq.configured
+    ? prereq.ok
+      ? `依赖 Chat 已通${r.autoApply ? '（自动应用）' : '（suggest-first）'}`
+      : '依赖 Chat 不可达，建议不会触发'
+    : '需要 Chat 模型已配置'
+}
+
+function describeMeta(r: DiagR): string {
+  const parts: string[] = []
+  if (r.latencyMs != null) parts.push(`${r.latencyMs} ms`)
+  if (r.dim != null) parts.push(`dim=${r.dim}`)
+  if (r.hitCount != null) parts.push(`${r.hitCount} hits`)
+  return parts.join(' · ')
+}
+
+function truncateError(s: string, max = 80): string {
+  return s.length > max ? s.slice(0, max) + '…' : s
 }
 
 function ExtraHeadersEditor({

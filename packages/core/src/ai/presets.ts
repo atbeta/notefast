@@ -3,6 +3,18 @@
  *
  * 维护常用 OpenAI 兼容服务的「一键填入」配置。
  * 永远是 freeform + preset —— AI 服务市场变化快，硬编码 enum 一年就过时。
+ *
+ * ## Provider 矩阵（更新于 2026-07）
+ *
+ * | id         | 推荐场景                         | API key 来源                                       | 计费模式         | 默认 Embedding / Chat           |
+ * |------------|----------------------------------|----------------------------------------------------|------------------|---------------------------------|
+ * | openai     | 官方 / 代理直连                  | https://platform.openai.com/api-keys              | 按用量           | text-embedding-3-small / gpt-4o-mini |
+ * | deepseek   | 国产、纯聊天场景                 | https://platform.deepseek.com/api_keys             | 按用量，便宜     | （留空）/ deepseek-chat        |
+ * | openrouter  | 1 个 key 访问多家模型            | https://openrouter.ai/keys                        | 按用量，分模型计费 | qwen/qwen3-embedding-8b / openai/gpt-4o-mini |
+ * | ollama      | 完全本地、隐私场景                | 不需要 key，启动 `ollama serve` 即可             | 免费，仅自机器算力 | nomic-embed-text / llama3.2    |
+ * | custom      | 任意 OpenAI 兼容服务              | 自选（vLLM / LM Studio / 智谱 / 百川 / 阿里云灵积）| 自选             | 自填                            |
+ *
+ * 任何字段都可以在保存之前手动覆盖；只是 PRESETS 提供合理的初始值。
  */
 
 import type { ProviderDefinition, ProviderPresetId } from './config'

@@ -147,6 +147,146 @@ ai.post('/test', async (c) => {
   })
 })
 
+// ───────────────────── diagnose / probe ─────────────────────
+// 一次性探测所有已启用能力 —— chat / embedding / reranker 是否真实可达
+// 比 /test 详细：含延迟、维度、错误类型；给 AutoLink / Hybrid search 排查用
+
+ai.post('/diagnose', async (c) => {
+  const t0 = Date.now()
+  const runtime = hasRuntime() ? getRuntime() : null
+
+  if (!runtime) {
+    return c.json({
+      overall: 'not_configured',
+      embedding: { configured: false, ok: false, message: 'runtime 未初始化' },
+      chat: { configured: false, ok: false, message: 'runtime 未初始化' },
+      reranker: { configured: false, ok: false, message: 'runtime 未初始化' },
+      elapsedMs: Date.now() - t0,
+      ts: new Date().toISOString(),
+    })
+  }
+
+  const cfg = runtime.autoLinkConfig()
+  const status = runtime.status()
+
+  const chatPromise = (async () => {
+    if (!runtime.hasChat()) return { configured: false, ok: false, message: 'Chat 模型未配置' }
+    const t = Date.now()
+    try {
+      const reply = await runtime.chat([
+        { role: 'system', content: 'You are a connectivity probe. Reply with exactly the word "pong".' },
+        { role: 'user', content: 'ping' },
+      ], { maxTokens: 8, temperature: 0 })
+      const out = (reply || '').trim().slice(0, 64)
+      return {
+        configured: true,
+        ok: true,
+        latencyMs: Date.now() - t,
+        model: status.chat.model,
+        replySample: out,
+      }
+    } catch (e) {
+      return {
+        configured: true,
+        ok: false,
+        latencyMs: Date.now() - t,
+        model: status.chat.model,
+        error: e instanceof Error ? e.message : String(e),
+      }
+    }
+  })()
+
+  const embeddingPromise = (async () => {
+    if (!runtime.hasEmbedding()) return { configured: false, ok: false, message: 'Embedding 模型未配置' }
+    const t = Date.now()
+    try {
+      const dim = await runtime.probeEmbeddingDim()
+      if (!dim) {
+        return { configured: true, ok: false, latencyMs: Date.now() - t, error: 'embedding 返回空' }
+      }
+      return {
+        configured: true,
+        ok: true,
+        latencyMs: Date.now() - t,
+        dim,
+        embeddingCalls: status.usage.embeddingCalls,
+      }
+    } catch (e) {
+      return {
+        configured: true,
+        ok: false,
+        latencyMs: Date.now() - t,
+        error: e instanceof Error ? e.message : String(e),
+      }
+    }
+  })()
+
+  const rerankPromise = (async () => {
+    if (!runtime.hasReranker()) return { configured: false, ok: false, message: 'Reranker 未配置（hybrid search 会跳过精排步骤）' }
+    const t = Date.now()
+    try {
+      const hits = await runtime.rerank({
+        query: 'probe',
+        texts: ['文档 A', '文档 B'],
+        topN: 2,
+      })
+      return {
+        configured: true,
+        ok: hits.length === 2,
+        latencyMs: Date.now() - t,
+        model: status.reranker.model,
+        hitCount: hits.length,
+      }
+    } catch (e) {
+      return {
+        configured: true,
+        ok: false,
+        latencyMs: Date.now() - t,
+        model: status.reranker.model,
+        error: e instanceof Error ? e.message : String(e),
+      }
+    }
+  })()
+
+  const [chat, embedding, reranker] = await Promise.all([chatPromise, embeddingPromise, rerankPromise])
+
+  // AutoLink 依赖项
+  const autoLink = {
+    configured: cfg.enabled,
+    enabled: cfg.enabled,
+    autoApply: cfg.autoApply,
+    ok: cfg.enabled && chat.ok,
+    prerequisites: {
+      chat: { configured: chat.configured, ok: chat.ok },
+      // embedding 不强依赖（仅 hybrid search 受益）；标记为 warning
+      embedding: embedding.configured ? embedding.ok : null,
+    },
+  }
+
+  // 综合判定：所有 reachable 能力都 OK
+  let overall: 'healthy' | 'degraded' | 'partial' | 'idle' = 'idle'
+  const reachable = [chat, embedding, reranker].filter((r) => r.configured)
+  if (reachable.length === 0) {
+    overall = 'idle'
+  } else if (reachable.every((r) => r.ok)) {
+    overall = 'healthy'
+  } else if (reachable.some((r) => r.ok)) {
+    overall = 'partial'
+  } else {
+    overall = 'degraded'
+  }
+
+  return c.json({
+    overall,
+    embedding,
+    chat,
+    reranker,
+    autoLink,
+    elapsedMs: Date.now() - t0,
+    ts: new Date().toISOString(),
+  })
+})
+
 // ───────────────────── search / index ─────────────────────
 
 ai.get('/search', async (c) => {
