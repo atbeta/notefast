@@ -1,162 +1,153 @@
 /**
  * NoteFast Design Tokens
  *
- * 语义化颜色系统，兼容暗色模式。
- * 设计参考 shadcn/ui CSS Variables 约定。
- *
- * 原则：
- * - 组件只引用语义 token，不直接使用品牌色或灰度色
- * - 添加新主题只需复制 :root 块并调整颜色值
- * - 所有值使用空格分隔的 RGB 分量，兼容 Tailwind opacity 修饰符
+ * 设计原则（Wave 1 重构）：
+ * - 平静的纸面 + 黑墨，indigo 只在动作出现
+ * - 阅读模式引入 Source Serif 4，UI 仍走 Inter
+ * - 不用渐变、halo、orb 等"AI 标签"信号
+ * - 字号、间距、阴影用 token 收敛，不再散落 magic number
  */
 
 :root {
-  /* 基础 */
-  --background: 250 250 249;
-  --foreground: 28 25 23;
+  /* ───────────── 字体 ───────────── */
 
-  /* 卡片 / 浮层 */
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+               'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-serif: 'Source Serif 4', 'Source Serif Pro', 'Iowan Old Style', Charter,
+                 'Georgia', 'Songti SC', serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', ui-monospace, Menlo,
+                'PingFang SC', monospace;
+
+  /* ───────────── 平面 / 表面 ───────────── */
+
+  /* 整页背景：纸面，比 #fff 暖一点点 */
+  --background: 250 249 245;
+  /* 内容卡片：纯白 */
   --card: 255 255 255;
   --card-foreground: 28 25 23;
   --popover: 255 255 255;
   --popover-foreground: 28 25 23;
 
-  /* 主色 */
-  --primary: 79 70 229;
-  --primary-foreground: 255 255 255;
+  /* ───────────── 文字 ───────────── */
 
-  /* 次要色 */
-  --secondary: 245 245 244;
+  --foreground: 28 25 23;          /* 黑墨 */
+  --muted: 245 244 240;
+  --muted-foreground: 122 116 108; /* stone-500ish，比之前柔 */
+  --accent: 245 244 240;
+  --accent-foreground: 28 25 23;
+  --secondary: 245 244 240;
   --secondary-foreground: 28 25 23;
 
-  /* 柔和色（低强调元素） */
-  --muted: 245 245 244;
-  --muted-foreground: 168 162 158;
+  /* ───────────── 主色：克制 indigo ───────────── */
 
-  /* 强调色（hover/focus 等高亮态） */
-  --accent: 245 245 244;
-  --accent-foreground: 28 25 23;
-
-  /* 破坏性操作 */
-  --destructive: 220 38 38;
-  --destructive-foreground: 255 255 255;
-  --warn: 217 119 6;
-
-  /* 边框与输入框 */
-  --border: 231 229 228;
-  --input: 231 229 228;
-  --ring: 79 70 229;
-
-  /* Hero 渐变与外发光（用于首页高亮入口） */
-  --hero-from: 96 165 250;
-  --hero-via: 79 70 229;
-  --hero-to: 124 58 237;
-  --hero-glow: 99 102 241;
-
-  /* Primary 渐变按钮（168° 三段渐变 + 外环 + 内白高光） */
-  --btn-from: 67 56 202;
-  --btn-mid: 109 65 219;
-  --btn-to: 124 58 237;
-  --btn-fg: 250 250 249;
-  --btn-shadow:
-    0 1px 2px rgb(67 56 202 / 22%),
-    0 0 0 1px rgb(67 56 202 / 10%),
-    inset 0 1px 0 rgb(255 255 255 / 14%);
-  --btn-shadow-hover:
-    0 3px 10px rgb(67 56 202 / 28%),
-    0 0 0 1px rgb(79 70 229 / 14%),
-    inset 0 1px 0 rgb(255 255 255 / 18%);
-
-  /* 侧边栏 */
-  --sidebar-background: 255 255 255;
-  --sidebar-foreground: 68 64 60;
-  --sidebar-accent: 245 245 244;
-  --sidebar-accent-foreground: 28 25 23;
-  --sidebar-border: 231 229 228;
-  --sidebar-muted: 168 162 158;
-
-  /* 主色柔化（侧边栏 active / hover 背景等低强调场景） */
+  /* 用更深的 indigo，hover/active 时再叠透明层产生层次 */
+  --primary: 67 56 202;
+  --primary-foreground: 255 255 255;
+  /* soft 给 hover 背景、focus halo 等低强调场景 */
   --primary-soft: rgb(var(--primary) / 0.06);
+  --primary-softer: rgb(var(--primary) / 0.04);
 
-  /* 圆角 */
-  --radius: 0.5rem;
-  --radius-card: 0.75rem;
-  --radius-btn: 0.5rem;
+  /* ───────────── 状态 ───────────── */
 
-  /* 字号 (Tailwind 默认刻度) */
-  --text-xs: 0.75rem;     /* 12px */
-  --text-sm: 0.875rem;    /* 14px */
-  --text-base: 1rem;      /* 16px */
-  --text-md: 1.125rem;    /* 18px */
-  --text-lg: 1.125rem;    /* 18px */
-  --text-xl: 1.25rem;     /* 20px */
-  --text-2xl: 1.5rem;     /* 24px */
+  --destructive: 200 50 50;
+  --destructive-foreground: 255 255 255;
+  --warn: 192 110 24;
 
-  /* 阴影 */
-  --shadow-card: 0 1px 3px rgb(0 0 0 / 4%);
-  --shadow-card-hover: 0 4px 12px rgb(0 0 0 / 6%), 0 1px 3px rgb(0 0 0 / 4%);
+  /* ───────────── 边框 / 输入 ───────────── */
 
-  /* 动效 */
-  --ease: 200ms ease;
-  --tab-ease: 220ms ease;
+  --border: 232 230 224;            /* 比 E7E5E4 更柔和 */
+  --input: 232 230 224;
+  --ring: 67 56 202;
+
+  /* ───────────── 侧边栏 ───────────── */
+
+  --sidebar-background: 252 251 247;
+  --sidebar-foreground: 92 86 78;
+  --sidebar-accent: 244 242 236;
+  --sidebar-accent-foreground: 28 25 23;
+  --sidebar-border: 232 230 224;
+  --sidebar-muted: 158 152 142;
+
+  /* ───────────── 半径 ───────────── */
+
+  --radius: 0.375rem;
+  --radius-card: 0.625rem;
+  --radius-btn: 0.375rem;
+
+  /* ───────────── 字号（紧凑，保持可读） ───────────── */
+
+  --text-xs: 0.75rem;       /* 12 */
+  --text-sm: 0.8125rem;     /* 13 */
+  --text-base: 0.9375rem;   /* 15 */
+  --text-md: 1rem;          /* 16 */
+  --text-lg: 1.0625rem;     /* 17 */
+  --text-xl: 1.25rem;       /* 20 */
+  --text-2xl: 1.5rem;       /* 24 */
+  --text-3xl: 1.875rem;     /* 30 */
+  --text-display: 2.25rem;  /* 36 阅读页 doc title */
+
+  /* ───────────── 阴影（更克制） ───────────── */
+
+  --shadow-card:
+    0 0 0 1px rgb(0 0 0 / 2%),
+    0 1px 2px rgb(0 0 0 / 3%);
+  --shadow-card-hover:
+    0 0 0 1px rgb(0 0 0 / 3%),
+    0 4px 12px rgb(0 0 0 / 5%),
+    0 1px 3px rgb(0 0 0 / 3%);
+  --shadow-floating:
+    0 1px 2px rgb(0 0 0 / 3%),
+    0 8px 24px rgb(0 0 0 / 6%);
+
+  /* ───────────── 动效 ───────────── */
+
+  --ease: 180ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* 暗色：同思路但取深邃纸面 */
 .dark {
-  --background: 28 25 23;
-  --foreground: 250 250 249;
+  --background: 22 21 19;
+  --card: 32 30 27;
+  --card-foreground: 233 230 222;
+  --popover: 32 30 27;
+  --popover-foreground: 233 230 222;
 
-  --card: 41 37 36;
-  --card-foreground: 250 250 249;
-  --popover: 41 37 36;
-  --popover-foreground: 250 250 249;
+  --foreground: 233 230 222;
+  --muted: 38 36 33;
+  --muted-foreground: 156 150 142;
+  --accent: 38 36 33;
+  --accent-foreground: 233 230 222;
+  --secondary: 38 36 33;
+  --secondary-foreground: 233 230 222;
 
-  --primary: 14 165 233;
-  --primary-foreground: 28 25 23;
-
-  --secondary: 45 43 40;
-  --secondary-foreground: 250 250 249;
-
-  --muted: 45 43 40;
-  --muted-foreground: 168 162 158;
-
-  --accent: 45 43 40;
-  --accent-foreground: 250 250 249;
-
-  --destructive: 239 68 68;
-  --destructive-foreground: 255 255 255;
-  --warn: 217 119 6;
-
-  --border: 61 58 54;
-  --input: 61 58 54;
-  --ring: 14 165 233;
-
-  --hero-from: 56 189 248;
-  --hero-via: 129 140 248;
-  --hero-to: 232 121 249;
-  --hero-glow: 129 140 248;
-
-  --btn-from: 79 70 229;
-  --btn-mid: 124 58 237;
-  --btn-to: 168 85 247;
-  --btn-fg: 250 250 249;
-  --btn-shadow:
-    0 1px 3px rgb(0 0 0 / 35%),
-    0 0 0 1px rgb(129 140 248 / 18%),
-    inset 0 1px 0 rgb(255 255 255 / 12%);
-  --btn-shadow-hover:
-    0 4px 14px rgb(79 70 229 / 35%),
-    0 0 0 1px rgb(129 140 248 / 22%),
-    inset 0 1px 0 rgb(255 255 255 / 16%);
-
-  --sidebar-background: 41 37 36;
-  --sidebar-foreground: 168 162 158;
-  --sidebar-accent: 45 43 40;
-  --sidebar-accent-foreground: 250 250 249;
-  --sidebar-border: 61 58 54;
-  --sidebar-muted: 120 113 108;
-
+  --primary: 128 122 240;
+  --primary-foreground: 22 21 19;
   --primary-soft: rgb(var(--primary) / 0.12);
+  --primary-softer: rgb(var(--primary) / 0.07);
 
-  --shadow-card: 0 1px 3px rgb(0 0 0 / 20%);
-  --shadow-card-hover: 0 6px 18px rgb(0 0 0 / 30%), 0 1px 3px rgb(0 0 0 / 18%);
+  --destructive: 224 88 88;
+  --destructive-foreground: 22 21 19;
+  --warn: 224 152 64;
+
+  --border: 44 42 39;
+  --input: 44 42 39;
+  --ring: 128 122 240;
+
+  --sidebar-background: 26 25 22;
+  --sidebar-foreground: 168 162 152;
+  --sidebar-accent: 36 34 30;
+  --sidebar-accent-foreground: 233 230 222;
+  --sidebar-border: 44 42 39;
+  --sidebar-muted: 130 124 116;
+
+  --shadow-card:
+    0 0 0 1px rgb(255 255 255 / 3%),
+    0 1px 2px rgb(0 0 0 / 18%);
+  --shadow-card-hover:
+    0 0 0 1px rgb(255 255 255 / 4%),
+    0 6px 18px rgb(0 0 0 / 28%),
+    0 1px 3px rgb(0 0 0 / 18%);
+  --shadow-floating:
+    0 1px 2px rgb(0 0 0 / 22%),
+    0 8px 28px rgb(0 0 0 / 36%);
 }

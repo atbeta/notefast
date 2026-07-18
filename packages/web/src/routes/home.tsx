@@ -57,9 +57,9 @@ export default function HomePage() {
 
       <div key={activeTab} className="space-y-6 animate-fade-in">
         <div className="card overflow-hidden">
-          <div className="relative px-6 pt-8 pb-3 bg-gradient-to-b from-primary/[0.06] via-primary/[0.02] to-transparent">
+          <div className="relative px-6 py-6">
             <HeroAction
-              icon={activeTab === 'recent' ? Sparkles : Plus}
+              icon={activeTab === 'recent' ? Calendar : Plus}
               onPrimary={goNew}
               title={heroTitle}
               subtitle={heroSubtitle}
@@ -73,11 +73,11 @@ export default function HomePage() {
         </div>
 
         <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-xs font-medium text-muted-foreground">
               {activeTab === 'recent' ? '最近编辑' : '所有文档'}
             </h3>
-            <span className="font-mono text-xs text-muted-foreground/70">
+            <span className="text-xs text-muted-foreground/70 font-mono">
               {loading ? '加载中…' : `${visibleDocs.length} 篇`}
             </span>
           </div>

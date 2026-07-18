@@ -215,34 +215,33 @@ export default function DocPage() {
         </div>
 
         {/* Title Area */}
-        <div className="group relative mb-6">
+        <div className="group relative mb-3">
           <input
             value={titleDraft}
             onChange={(e) => setTitleDraft(e.target.value)}
             onBlur={saveTitle}
             onKeyDown={handleTitleKeyDown}
-            className="w-full bg-transparent border-none outline-none font-bold text-[28px] leading-tight tracking-[-0.02em] text-foreground focus:ring-0 px-0 placeholder:text-muted-foreground/40 transition-colors"
+            className="input-underline"
             placeholder="无标题文档"
           />
           <button
             type="button"
             onClick={handleSuggestTitle}
             disabled={generatingTitle}
-            className="absolute -right-8 top-2 opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-all"
+            className="absolute right-0 top-2 opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-foreground transition-all rounded"
             title="AI 生成标题"
           >
             {generatingTitle ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
             )}
           </button>
         </div>
 
         {/* Meta Info */}
-        <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-muted-foreground mb-8">
+        <div className="meta-mono">
           <span>{updatedAt} 更新</span>
-          <span className="w-1 h-1 rounded-full bg-border" />
           <span>{wordCount.toLocaleString('zh-CN')} 字</span>
         </div>
 
@@ -258,7 +257,7 @@ export default function DocPage() {
             </button>
           </div>
 
-          <article className="prose dark:prose-invert max-w-none">
+          <article>
             <BlockRenderer block={doc} />
           </article>
         </div>

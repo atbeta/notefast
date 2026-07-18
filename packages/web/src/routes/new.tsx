@@ -115,7 +115,7 @@ export default function NewDocPage() {
 
       <div className="card overflow-hidden">
         <div className="flex items-start gap-3 px-6 pt-5 pb-4 border-b border-border">
-          <span className="gradient-mark w-7 h-7">
+          <span className="w-7 h-7 grid place-items-center rounded-md bg-foreground text-background">
             <FileText className="w-3.5 h-3.5" strokeWidth={2.25} />
           </span>
           <div className="flex-1 min-w-0">

@@ -212,7 +212,7 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
             {loadingMd ? (
               <div className="p-5 text-muted-foreground text-sm">加载中…</div>
             ) : preview ? (
-              <article className="prose dark:prose-invert max-w-none p-5 prose-sm">
+              <article className="reading-prose p-5">
                 <BlockRenderer block={preview} />
               </article>
             ) : (
