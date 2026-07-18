@@ -2,6 +2,7 @@ import { Routes, Route, useLocation } from 'react-router-dom'
 import HomePage from './routes/home'
 import DocPage from './routes/doc'
 import NewDocPage from './routes/new'
+import SettingsPage from './routes/settings'
 import Layout from './components/Layout'
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/new" element={<NewDocPage />} />
         <Route path="/doc/:id" element={<DocPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Routes>
     </Layout>
   )

@@ -7,6 +7,7 @@ import { authMiddleware } from './middleware/auth'
 import { createMcpTransport } from './mcp/server'
 import { startAutoExport } from './services/autoExport'
 import { initAiRuntime } from './services/aiRuntime'
+import { initSyncManager } from './sync/manager'
 import { initVectorStore } from './ai/indexer'
 import blocks from './api/blocks'
 import docs from './api/docs'
@@ -53,6 +54,7 @@ app.route('/api/v1/auto-link', autoLink)
 const pluginSystem = createPluginSystem()
 
 initVectorStore()
+initSyncManager(DATA_DIR)
 initAiRuntime(pluginSystem, DATA_DIR)
 
 const mcpTransport = await createMcpTransport(notebookId)
@@ -74,7 +76,9 @@ console.log(`🔧 MCP endpoint: http://localhost:${PORT}/mcp`)
 const exportDir = process.env.AUTO_EXPORT_DIR || ''
 if (exportDir) {
   startAutoExport(exportDir)
-  console.log(`📁 Auto-export: ${exportDir}`)
+  if (!process.env.SYNC_LOCAL_DIR) {
+    console.log(`📁 Auto-export: ${exportDir}`)
+  }
 }
 
 export default {

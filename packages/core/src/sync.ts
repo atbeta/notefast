@@ -7,6 +7,46 @@
  * - 生命周期钩子可在 sync 前后注入自定义逻辑
  */
 
+export type SyncAdapterKind = 'localfs' | 's3'
+
+export interface LocalFsAdapterConfig {
+  kind: 'localfs'
+  /** 导出目录；不存在会自动创建 */
+  dir: string
+  /** 文件名前缀（可选） */
+  prefix?: string
+  /** 启用 */
+  enabled: boolean
+}
+
+export interface S3AdapterConfig {
+  kind: 's3'
+  /** 桶名 */
+  bucket: string
+  /** 区域 */
+  region: string
+  /** 自定义 endpoint（MinIO / R2 / 阿里云 OSS） */
+  endpoint?: string
+  /** 凭证 */
+  accessKeyId: string
+  secretAccessKey: string
+  /** key 前缀 */
+  prefix?: string
+  /** MinIO 自建需要 true */
+  forcePathStyle?: boolean
+  enabled: boolean
+}
+
+export type SyncAdapterConfig = LocalFsAdapterConfig | S3AdapterConfig
+
+/** 持久化到磁盘的 sync 配置 */
+export interface SyncPersistedConfig {
+  version: 1
+  active: SyncAdapterConfig | null
+  /** 自动同步间隔（毫秒）；0 或 undefined 表示关闭 */
+  autoSyncIntervalMs?: number
+}
+
 export interface SyncInfo {
   /** 远端最后同步时间 */
   lastSyncAt?: string
@@ -26,7 +66,7 @@ export interface SyncResult {
 }
 
 export interface SyncAdapter {
-  /** 适配器名称，如 's3' / 'git' / 'webdav' */
+  /** 适配器名称，如 'localfs' / 's3' / 'webdav' */
   readonly name: string
 
   /** 检查连接和远端状态 */
@@ -57,3 +97,23 @@ export interface PullOptions {
 
 /** 内建的适配器工厂签名 */
 export type SyncAdapterFactory = (config: Record<string, string>) => SyncAdapter
+
+export function emptySyncConfig(): SyncPersistedConfig {
+  return { version: 1, active: null }
+}
+
+/** 对外展示时移除密钥 */
+export function publicSyncView(cfg: SyncPersistedConfig): SyncPersistedConfig {
+  if (!cfg.active) return cfg
+  if (cfg.active.kind === 's3') {
+    return {
+      ...cfg,
+      active: {
+        ...cfg.active,
+        accessKeyId: cfg.active.accessKeyId ? '***set***' : '',
+        secretAccessKey: cfg.active.secretAccessKey ? '***set***' : '',
+      },
+    }
+  }
+  return cfg
+}
