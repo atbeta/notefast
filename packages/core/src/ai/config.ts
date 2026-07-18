@@ -52,7 +52,30 @@ export interface RerankerDefinition {
   timeoutMs: number
 }
 
-/** 完整的 AI 配置（当前实现下只有一个 active provider + 可选 reranker） */
+/** 自动反向链接：基于 Chat 模型从块内容提取实体，在已有 block_refs 里建议/写入 */
+export interface AutoLinkConfig {
+  /** 是否启用（note.afterCreate/Update 触发） */
+  enabled: boolean
+  /** true 时所有建议直接落库；false 时建议入内存 store 等用户确认 */
+  autoApply: boolean
+  /** 'all' = 任意 notebook；'same' = 同 notebook */
+  notebookScope: 'all' | 'same'
+  /** 每个块最多产出几条建议 */
+  maxPerBlock: number
+}
+
+export const DEFAULT_MAX_AUTO_LINK_PER_BLOCK = 5
+
+export function defaultAutoLinkConfig(): AutoLinkConfig {
+  return {
+    enabled: false,
+    autoApply: false,
+    notebookScope: 'all',
+    maxPerBlock: DEFAULT_MAX_AUTO_LINK_PER_BLOCK,
+  }
+}
+
+/** 完整的 AI 配置（当前实现下只有一个 active provider + 可选 reranker + 可选 autoLink） */
 export interface AiConfig {
   /** schema 版本，便于未来迁移 */
   version: 1
@@ -62,12 +85,20 @@ export interface AiConfig {
   autoIndex: boolean
   /** Reranker 配置；null 表示未配置（hybrid search 跳过精排） */
   reranker: RerankerDefinition | null
+  /** 自动反向链接配置（默认禁用；缺省时按 defaultAutoLinkConfig 处理） */
+  autoLink?: AutoLinkConfig
 }
 
 export const DEFAULT_TIMEOUT_MS = 60_000
 
 export function emptyConfig(): AiConfig {
-  return { version: 1, active: null, autoIndex: true, reranker: null }
+  return {
+    version: 1,
+    active: null,
+    autoIndex: true,
+    reranker: null,
+    autoLink: defaultAutoLinkConfig(),
+  }
 }
 
 /** 把 env 变量转换为初始 ProviderDefinition（仅在 data/ai.config.json 不存在时使用） */
@@ -95,7 +126,18 @@ export function configFromEnv(env: Record<string, string | undefined>): AiConfig
       extraHeaders: {},
     },
     reranker: rerankerFromEnv(env),
+    autoLink: autoLinkFromEnv(env),
   }
+}
+
+function autoLinkFromEnv(env: Record<string, string | undefined>): AutoLinkConfig {
+  const enabled = (env.AUTO_LINK_ENABLED || '').toLowerCase() === 'true'
+  const autoApply = (env.AUTO_LINK_AUTO_APPLY || '').toLowerCase() === 'true'
+  const scopeRaw = (env.AUTO_LINK_SCOPE || 'all').toLowerCase()
+  const scope: 'all' | 'same' = scopeRaw === 'same' ? 'same' : 'all'
+  const maxRaw = parseInt(env.AUTO_LINK_MAX_PER_BLOCK || '', 10)
+  const max = Number.isFinite(maxRaw) && maxRaw > 0 ? Math.min(maxRaw, 10) : DEFAULT_MAX_AUTO_LINK_PER_BLOCK
+  return { enabled, autoApply, notebookScope: scope, maxPerBlock: max }
 }
 
 function rerankerFromEnv(env: Record<string, string | undefined>): RerankerDefinition | null {
@@ -131,6 +173,13 @@ export function validateConfig(cfg: AiConfig): string[] {
     if (r.timeoutMs < 1000 || r.timeoutMs > 600_000) {
       errs.push('Reranker timeoutMs 应在 1000-600000 之间')
     }
+  }
+  const al = cfg.autoLink ?? defaultAutoLinkConfig()
+  if (al.enabled && cfg.active && !cfg.active.chatModel.trim()) {
+    errs.push('AutoLink 需要 Chat 模型（请填写 chatModel）')
+  }
+  if (al.maxPerBlock < 1 || al.maxPerBlock > 10) {
+    errs.push('AutoLink maxPerBlock 应在 1-10 之间')
   }
   return errs
 }

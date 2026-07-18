@@ -16,6 +16,17 @@ import type { BlockRow } from '@notefast/core'
 import { hasRuntime, getRuntime } from '../services/aiRuntime'
 import { semanticSearch } from '../ai/indexer'
 import { runChatSync } from '../ai/chat'
+import {
+  findSuggestion,
+  listSuggestionsForDoc,
+  removeSuggestionById,
+  toWire,
+} from '../ai/autoLinkStore'
+import {
+  analyzeBlock,
+  insertRef,
+  listBlockIdsForDoc,
+} from '../ai/autoLink'
 
 function toText(data: unknown): { type: 'text'; text: string } {
   return { type: 'text' as const, text: JSON.stringify(data, null, 2) }
@@ -515,6 +526,104 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
               : undefined,
           })],
         }
+      }
+    },
+  )
+
+  server.registerTool(
+    'notefast_autolink_suggestions',
+    {
+      description: '列出某文档下的 AutoLink 待确认建议（用户接受 / 拒绝）',
+      inputSchema: {
+        doc_id: z.string().describe('文档 ID（block.tree 根 ID）'),
+      },
+    },
+    async ({ doc_id }) => {
+      const blockIds = listBlockIdsForDoc(doc_id)
+      const list = listSuggestionsForDoc(doc_id, blockIds)
+      return { content: [toText({ doc_id, count: list.length, suggestions: list.map(toWire) })] }
+    },
+  )
+
+  server.registerTool(
+    'notefast_autolink_apply',
+    {
+      description: '接受一条 AutoLink 建议，写入 block_refs（ref_type=ai_link）',
+      inputSchema: {
+        suggestion_id: z.string().describe('建议 ID'),
+        candidate_index: z.number().int().min(0).max(4).optional().default(0),
+      },
+    },
+    async ({ suggestion_id, candidate_index }) => {
+      const s = findSuggestion(suggestion_id)
+      if (!s) {
+        return { content: [toText({ error: '建议不存在或已过期' })] }
+      }
+      const cand = s.candidates[candidate_index]
+      if (!cand) {
+        return { content: [toText({ error: '无效的 candidate_index' })] }
+      }
+      const ok = insertRef(s.sourceBlockId, cand.blockId, 'ai_link')
+      removeSuggestionById(suggestion_id)
+      return {
+        content: [toText({
+          applied: ok,
+          source_id: s.sourceBlockId,
+          target_id: cand.blockId,
+          ref_type: 'ai_link',
+        })],
+      }
+    },
+  )
+
+  server.registerTool(
+    'notefast_autolink_dismiss',
+    {
+      description: '拒绝一条 AutoLink 建议，从内存中移除',
+      inputSchema: {
+        suggestion_id: z.string().describe('建议 ID'),
+      },
+    },
+    async ({ suggestion_id }) => {
+      const removed = removeSuggestionById(suggestion_id)
+      return { content: [toText({ dismissed: removed })] }
+    },
+  )
+
+  server.registerTool(
+    'notefast_autolink_run',
+    {
+      description: '对单个 block 立即触发 AutoLink 分析（AI 抽取实体 + 命中候选）',
+      inputSchema: {
+        block_id: z.string().describe('Block ID'),
+      },
+    },
+    async ({ block_id }) => {
+      if (!hasRuntime() || !getRuntime().hasChat()) {
+        return { content: [toText({ error: 'not_configured', fix_hint: '请配置 Chat 模型' })] }
+      }
+      const db = getDb()
+      const row = db.query('SELECT id, content, notebook_id FROM blocks WHERE id = ?').get(block_id) as
+        | { id: string; content: string; notebook_id: string }
+        | undefined
+      if (!row) {
+        return { content: [toText({ error: `Block ${block_id} 不存在` })] }
+      }
+      const cfg = getRuntime().autoLinkConfig()
+      const r = await analyzeBlock({
+        blockId: row.id,
+        content: row.content || '',
+        notebookId: row.notebook_id,
+        notebookScope: cfg.notebookScope,
+        maxPerBlock: cfg.maxPerBlock,
+      })
+      return {
+        content: [toText({
+          analyzed: r.analyzed,
+          suggestions_added: r.suggestionsAdded,
+          applied: r.applied,
+          errors: r.errors,
+        })],
       }
     },
   )

@@ -3,14 +3,14 @@
  *
  * 启动流程：
  * 1. 检查 data/ai.config.json；若不存在则用环境变量作为种子
- * 2. 构造 AiRuntime 单例，挂上 plugin hooks（afterCreate/Update/Delete → 自动索引）
+ * 2. 构造 AiRuntime 单例，挂上 plugin hooks（afterCreate/Update/Delete → 自动索引 + 自动链接）
  * 3. 把 runtime 暴露给 api/ai、mcp/tools
  *
  * 热重载流程（PUT /api/v1/ai/config）：
  * 1. 持久化新配置到 json
- * 2. 卸载旧 plugin hook（ai-indexer）
+ * 2. 卸载旧 plugin hooks（ai-indexer / ai-linker）
  * 3. runtime.reload(cfg)
- * 4. 若新 cfg.autoIndex 且 embedding 可用，重挂 plugin hook
+ * 4. 根据新 cfg 重新挂载 hooks
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -24,9 +24,12 @@ import {
 } from '@notefast/core'
 import type { PluginSystem } from '@notefast/core'
 import { indexBlock, deleteVector } from '../ai/indexer'
+import { analyzeBlock } from '../ai/autoLink'
+import { removeSuggestionsForBlock } from '../ai/autoLinkStore'
 
 const CONFIG_FILE = 'ai.config.json'
 const HOOK_NAME = 'ai-indexer'
+const AUTOLINK_HOOK_NAME = 'ai-linker'
 
 let runtime: AiRuntime | null = null
 let dataDir = ''
@@ -41,6 +44,7 @@ export function initAiRuntime(sys: PluginSystem, dir: string): AiRuntime {
   runtime = r
   setAiRuntime(r)
   applyAutoIndex(r, sys)
+  applyAutoLink(r, sys)
   return r
 }
 
@@ -120,7 +124,11 @@ export function applyNewConfig(
   sys.note.afterCreate.untap(HOOK_NAME)
   sys.note.afterUpdate.untap(HOOK_NAME)
   sys.note.afterDelete.untap(HOOK_NAME)
+  sys.note.afterCreate.untap(AUTOLINK_HOOK_NAME)
+  sys.note.afterUpdate.untap(AUTOLINK_HOOK_NAME)
+  sys.note.afterDelete.untap(AUTOLINK_HOOK_NAME)
   applyAutoIndex(r, sys)
+  applyAutoLink(r, sys)
   return { ok: result.ok, errors: result.errors, status: r.status() }
 }
 
@@ -145,6 +153,41 @@ function applyAutoIndex(r: AiRuntime, pluginSystem: PluginSystem): void {
     deleteVector(blockId)
   })
   console.log('🧠 AI auto-index hooks attached')
+}
+
+function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
+  const cfg = r.status().config
+  if (!r.hasChat() || !cfg.autoLink?.enabled) return
+
+  const scope = cfg.autoLink.notebookScope
+  const max = cfg.autoLink.maxPerBlock
+
+  pluginSystem.note.afterCreate.tap(AUTOLINK_HOOK_NAME, async (block) => {
+    if (block.type === 'document') return // doc 头不分析
+    removeSuggestionsForBlock(block.id)
+    await analyzeBlock({
+      blockId: block.id,
+      content: block.content,
+      notebookId: block.notebook_id,
+      notebookScope: scope,
+      maxPerBlock: max,
+    }).catch((e) => console.warn('[autoLink] afterCreate:', e instanceof Error ? e.message : e))
+  })
+  pluginSystem.note.afterUpdate.tap(AUTOLINK_HOOK_NAME, async (block) => {
+    if (block.type === 'document') return
+    removeSuggestionsForBlock(block.id)
+    await analyzeBlock({
+      blockId: block.id,
+      content: block.content,
+      notebookId: block.notebook_id,
+      notebookScope: scope,
+      maxPerBlock: max,
+    }).catch((e) => console.warn('[autoLink] afterUpdate:', e instanceof Error ? e.message : e))
+  })
+  pluginSystem.note.afterDelete.tap(AUTOLINK_HOOK_NAME, async (blockId) => {
+    removeSuggestionsForBlock(blockId)
+  })
+  console.log('🧠 AI auto-link hooks attached')
 }
 
 // ───────────────────── 工具 ─────────────────────

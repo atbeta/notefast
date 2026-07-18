@@ -107,7 +107,7 @@ describe('createMcpTransport', () => {
     const msg = list.body[0] as Record<string, unknown>
     expect(msg.result).toBeDefined()
     const tools = (msg.result as Record<string, unknown>).tools as { name: string }[]
-    expect(tools.length).toBe(13)
+    expect(tools.length).toBe(17)
 
     const toolNames = tools.map((t) => t.name)
     expect(toolNames).toContain('notefast_search')
@@ -123,6 +123,10 @@ describe('createMcpTransport', () => {
     expect(toolNames).toContain('notefast_semantic_search')
     expect(toolNames).toContain('notefast_suggest_title')
     expect(toolNames).toContain('notefast_chat')
+    expect(toolNames).toContain('notefast_autolink_suggestions')
+    expect(toolNames).toContain('notefast_autolink_apply')
+    expect(toolNames).toContain('notefast_autolink_dismiss')
+    expect(toolNames).toContain('notefast_autolink_run')
 
     await transport.close()
   })

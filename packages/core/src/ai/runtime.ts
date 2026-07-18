@@ -8,7 +8,8 @@
  */
 
 import { maskKey, publicView, validateConfig } from './config'
-import type { AiConfig, ProviderDefinition, RerankerDefinition } from './config'
+import type { AiConfig, AutoLinkConfig, ProviderDefinition, RerankerDefinition } from './config'
+import { defaultAutoLinkConfig } from './config'
 import type { EmbeddingProvider, SemanticHit } from '../embedding'
 import type { LLMProvider } from '../llm'
 import { cosineSimilarity, truncateText } from '../embedding'
@@ -35,6 +36,12 @@ export interface RuntimeStatus {
     model?: string
     lastError?: string
   }
+  autoLink: {
+    configured: boolean
+    enabled: boolean
+    autoApply: boolean
+    lastError?: string
+  }
   usage: {
     embeddingCalls: number
     embeddingErrors: number
@@ -42,6 +49,8 @@ export interface RuntimeStatus {
     chatErrors: number
     rerankCalls: number
     rerankErrors: number
+    autoLinkAnalyses: number
+    autoLinkErrors: number
     lastSuccessAt?: string
   }
   /** 脱敏后的 provider 配置（maskKey 后的 apiKey） */
@@ -85,11 +94,14 @@ export class AiRuntime {
     chatErrors: 0,
     rerankCalls: 0,
     rerankErrors: 0,
+    autoLinkAnalyses: 0,
+    autoLinkErrors: 0,
     lastSuccessAt: undefined as string | undefined,
   }
   private embeddingLastError?: string
   private chatLastError?: string
   private rerankLastError?: string
+  private autoLinkLastError?: string
 
   constructor(initial: AiConfig, opts: AiRuntimeOptions = {}) {
     this.cfg = initial
@@ -166,6 +178,12 @@ export class AiRuntime {
         ok: Boolean(this.rerankerProvider) && !this.rerankLastError,
         model: r?.model || undefined,
         lastError: this.rerankLastError,
+      },
+      autoLink: {
+        configured: Boolean(this.cfg.autoLink?.enabled) && Boolean(a?.chatModel.trim()),
+        enabled: Boolean(this.cfg.autoLink?.enabled),
+        autoApply: Boolean(this.cfg.autoLink?.autoApply),
+        lastError: this.autoLinkLastError,
       },
       usage: { ...this.usage },
       config: publicView(this.cfg),
@@ -373,6 +391,23 @@ export class AiRuntime {
       this.usage.rerankErrors++
       this.rerankLastError = e instanceof Error ? e.message : String(e)
       throw e
+    }
+  }
+
+  /** 当前 AutoLink 配置（用于 UI 展示 & 测试） */
+  autoLinkConfig(): AutoLinkConfig {
+    return this.cfg.autoLink ?? defaultAutoLinkConfig()
+  }
+
+  /** 标记一次 AutoLink 分析成功/失败（由 server/ai/autoLink 调用） */
+  recordAutoLink(success: boolean, err?: string): void {
+    this.usage.autoLinkAnalyses++
+    if (success) {
+      this.autoLinkLastError = undefined
+      this.usage.lastSuccessAt = new Date().toISOString()
+    } else {
+      this.usage.autoLinkErrors++
+      this.autoLinkLastError = err
     }
   }
 

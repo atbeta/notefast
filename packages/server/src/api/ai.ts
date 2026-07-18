@@ -87,6 +87,14 @@ const configSchema = z.object({
     })
     .nullable()
     .optional(),
+  autoLink: z
+    .object({
+      enabled: z.boolean(),
+      autoApply: z.boolean(),
+      notebookScope: z.enum(['all', 'same']),
+      maxPerBlock: z.number().int().min(1).max(10),
+    })
+    .optional(),
 })
 
 ai.put(
@@ -103,6 +111,7 @@ ai.put(
       active: body.active,
       autoIndex: body.autoIndex,
       reranker: reranker && reranker.enabled ? reranker : null,
+      autoLink: body.autoLink,
     }
     try {
       const result = applyNewConfigFromCurrent(cfg)
@@ -366,6 +375,8 @@ function emptyUsage() {
     chatErrors: 0,
     rerankCalls: 0,
     rerankErrors: 0,
+    autoLinkAnalyses: 0,
+    autoLinkErrors: 0,
     lastSuccessAt: undefined,
   }
 }

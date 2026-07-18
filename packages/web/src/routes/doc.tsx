@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
+import AutoLinkPanel from '../components/AutoLinkPanel'
 import MarkdownEditor from '../components/MarkdownEditor'
 import ConfirmDialog from '../components/ConfirmDialog'
 
@@ -278,6 +279,10 @@ export default function DocPage() {
           </h3>
           <BacklinksView backlinks={backlinks} loading={auxLoading} />
         </section>
+
+        <section>
+          <AutoLinkPanel docId={id ?? null} onClose={() => undefined} />
+        </section>
       </div>
 
       {/* Right Sidebar (Mobile stack) */}
@@ -290,6 +295,10 @@ export default function DocPage() {
         <section>
           <h3 className="text-sm font-semibold text-foreground mb-4">反向链接</h3>
           <BacklinksView backlinks={backlinks} loading={auxLoading} />
+        </section>
+
+        <section>
+          <AutoLinkPanel docId={id ?? null} onClose={() => undefined} />
         </section>
       </div>
 
