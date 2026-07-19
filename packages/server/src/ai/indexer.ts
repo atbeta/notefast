@@ -131,17 +131,27 @@ export function semanticSearch(
   queryVector: Float64Array,
   limit: number = 10,
   notebookId?: string,
+  since?: string,
+  until?: string,
 ): Array<{ block_id: string; score: number; content: string; doc_id: string; doc_title: string }> {
   const db = getDb()
   let sql = `
     SELECT v.block_id, v.embedding, b.content, b.root_id
     FROM block_vectors v
     JOIN blocks b ON b.id = v.block_id
-  `
+    WHERE 1=1`
   const params: string[] = []
   if (notebookId) {
-    sql += ' WHERE b.notebook_id = ?'
+    sql += ' AND b.notebook_id = ?'
     params.push(notebookId)
+  }
+  if (since) {
+    sql += ' AND b.updated_at >= ?'
+    params.push(since)
+  }
+  if (until) {
+    sql += ' AND b.updated_at <= ?'
+    params.push(until)
   }
   const rows = db.query(sql).all(...params) as Array<{
     block_id: string

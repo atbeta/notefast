@@ -183,4 +183,121 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
     }
     expect(events).toEqual(['error'])
   })
+
+  /**
+   * Agent loop：mock LLM 第一次返回 tool_call，第二次返回 final answer。
+   * 验证：tool 事件触发 + 后续工具结果回填 + done 事件含 toolTrace。
+   */
+  test('agent loop: LLM 调用 notefast_search_more 后给出最终答案', async () => {
+    applyNewConfig(
+      {
+        version: 1,
+        chat: {
+          id: 'x',
+          label: 'x',
+          preset: 'custom',
+          baseUrl: 'http://mock',
+          apiKey: '',
+          embeddingModel: '',
+          chatModel: 'fake-chat',
+          timeoutMs: 5000,
+          extraHeaders: {},
+        },
+        embedding: null,
+        autoIndex: false,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+
+    // chatWithTools 用 JSON 响应（不走 SSE）
+    let callCount = 0
+    const fetcher: typeof fetch = (async () => {
+      callCount++
+      if (callCount === 1) {
+        // 第一轮：请求搜索更多
+        return new Response(
+          JSON.stringify({
+            choices: [{
+              message: {
+                role: 'assistant',
+                content: '',
+                tool_calls: [{
+                  id: 'call_1',
+                  type: 'function',
+                  function: {
+                    name: 'notefast_search_more',
+                    arguments: JSON.stringify({ query: 'detailed' }),
+                  },
+                }],
+              },
+              finish_reason: 'tool_calls',
+            }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ) as never
+      }
+      // 第二轮：最终答案
+      return new Response(
+        JSON.stringify({
+          choices: [{
+            message: { role: 'assistant', content: 'final answer based on deeper search' },
+            finish_reason: 'stop',
+          }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ) as never
+    }) as typeof fetch
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl(fetcher)
+
+    const events: Array<{ type: string; payload?: unknown }> = []
+    for await (const ev of runChat({ messages: [{ role: 'user', content: 'tell me about KMP' }] })) {
+      events.push({ type: ev.type, payload: ev })
+    }
+    const types = events.map((e) => e.type)
+    expect(types).toContain('retrieval')
+    expect(types).toContain('tool')
+    expect(types[types.length - 1]).toBe('done')
+    const toolEvent = events.find((e) => e.type === 'tool') as { type: string; payload?: { tool: string; resultCount: number } }
+    expect(toolEvent.payload?.tool).toBe('notefast_search_more')
+    const doneEvent = events.find((e) => e.type === 'done') as { type: string; payload?: { toolTrace: Array<{ tool: string }> } }
+    expect(doneEvent.payload?.toolTrace.length).toBeGreaterThan(0)
+    expect(doneEvent.payload?.toolTrace[0]?.tool).toBe('notefast_search_more')
+    // 至少调用过 2 次 LLM
+    expect(callCount).toBeGreaterThanOrEqual(2)
+  })
+
+  /**
+   * Time-window filter：since/until 限制返回的 blocks
+   */
+  test('hybridSearch since/until 时间窗过滤', async () => {
+    const { getDb, initDb } = await import('../db')
+    initDb(testDir)
+    const db = getDb()
+    const { hybridSearch } = await import('../ai/hybridSearch')
+
+    const docId = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(docId, 'd')
+    const old = '2020-01-01T00:00:00.000Z'
+    const recent = '2026-01-01T00:00:00.000Z'
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`,
+    ).run('old-block', docId, 'old-block', 'paragraph', 'KMP 算法（旧）', old, old)
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`,
+    ).run('new-block', docId, 'new-block', 'paragraph', 'KMP 算法（新）', recent, recent)
+    // FTS5 重建（hybridSearch 内部依赖 fts5 触发器，但显式 rebuild 更稳）
+    db.exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
+
+    const sinceReport = await hybridSearch({ query: 'KMP', since: '2025-01-01T00:00:00.000Z' })
+    expect(sinceReport.citations.every((c) => c.block_id !== 'old-block')).toBe(true)
+    expect(sinceReport.citations.some((c) => c.block_id === 'new-block')).toBe(true)
+
+    const untilReport = await hybridSearch({ query: 'KMP', until: '2021-01-01T00:00:00.000Z' })
+    expect(untilReport.citations.some((c) => c.block_id === 'old-block')).toBe(true)
+    expect(untilReport.citations.every((c) => c.block_id !== 'new-block')).toBe(true)
+  })
 })

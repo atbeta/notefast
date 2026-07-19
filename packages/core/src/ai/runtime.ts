@@ -297,6 +297,30 @@ export class AiRuntime {
   }
 
   /**
+   * 支持 tool call 的 chat（agent loop 用）。
+   * 若 provider 未实现 chatWithTools，返回 null（调用方降级为流式）。
+   */
+  async chatWithTools(
+    messages: import('../llm').ChatMessage[],
+    options?: import('../llm').ChatWithToolsOptions,
+  ): Promise<import('../llm').ChatWithToolsResult | null> {
+    if (!this.chatProvider || typeof this.chatProvider.chatWithTools !== 'function') {
+      return null
+    }
+    try {
+      const r = await this.chatProvider.chatWithTools(messages, options)
+      this.usage.chatCalls++
+      this.usage.lastSuccessAt = new Date().toISOString()
+      this.chatLastError = undefined
+      return r
+    } catch (e) {
+      this.usage.chatErrors++
+      this.chatLastError = e instanceof Error ? e.message : String(e)
+      throw e
+    }
+  }
+
+  /**
    * 流式聊天：返回 AsyncIterable<{ content, done? }>。
    * 内部走 OpenAI 兼容 stream=true，解析 SSE 数据帧。
    * 注意：本方法只在 chat provider 支持 OpenAI 流式协议时使用。
@@ -525,6 +549,61 @@ function createChatProvider(p: ProviderDefinition, fetchImpl: typeof fetch): LLM
         clearTimeout(t)
       }
     },
+    async chatWithTools(messages, options) {
+      const ac = new AbortController()
+      const t = setTimeout(() => ac.abort(), p.timeoutMs)
+      try {
+        const res = await fetchImpl(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model: options?.model || model,
+            messages,
+            temperature: options?.temperature ?? 0.3,
+            max_tokens: options?.maxTokens ?? 2000,
+            ...(options?.tools && options.tools.length > 0 ? { tools: options.tools } : {}),
+            ...(options?.responseFormat ? { response_format: options.responseFormat } : {}),
+          }),
+          signal: ac.signal,
+        })
+        if (!res.ok) {
+          const err = await res.text().catch(() => '')
+          throw new Error(`LLM API ${res.status}: ${err.slice(0, 300)}`)
+        }
+        const json = (await res.json()) as {
+          choices?: Array<{
+            message?: {
+              content?: string | null
+              tool_calls?: Array<{
+                id: string
+                type: 'function'
+                function: { name: string; arguments: string }
+              }>
+            }
+            finish_reason?: string
+          }>
+        }
+        const msg = json.choices?.[0]?.message
+        const content = msg?.content ?? ''
+        const toolCalls = (msg?.tool_calls ?? []).map((tc) => ({
+          id: tc.id,
+          name: tc.function.name,
+          args: safeJsonParse(tc.function.arguments),
+        }))
+        return { content, tool_calls: toolCalls }
+      } finally {
+        clearTimeout(t)
+      }
+    },
+  }
+}
+
+function safeJsonParse(s: string): Record<string, unknown> {
+  try {
+    const v = JSON.parse(s)
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
+  } catch {
+    return {}
   }
 }
 

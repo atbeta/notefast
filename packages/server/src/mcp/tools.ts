@@ -485,7 +485,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     'notefast_chat',
     {
       description:
-        '与用户知识库对话：FTS5 + 语义检索 + 可选 reranker，再交给 LLM 生成带 [n] 引用的回答。返回完整 answer、citations 列表和 retrieval 统计。',
+        '与用户知识库对话：FTS5 + 语义检索 + 可选 reranker，再交给 LLM 生成带 [n] 引用的回答。LLM 可在 agent loop 中调用 notefast_search_more 重新检索（最多 3 轮）。返回完整 answer、citations 列表、retrieval 统计和 tool 轨迹。',
       inputSchema: {
         messages: z
           .array(
@@ -496,12 +496,15 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
           )
           .describe('对话历史（最后一条必须是 user）'),
         context_doc_id: z.string().optional().describe('当前查看文档 ID（hint 提升该 doc 的优先级）'),
+        notebook_id: z.string().optional().describe('限定到某个 notebook'),
+        since: z.string().optional().describe('ISO 时间字符串，只返回 blocks.updated_at >= since 的块'),
+        until: z.string().optional().describe('ISO 时间字符串，只返回 blocks.updated_at <= until 的块'),
         top_k: z.number().int().min(1).max(20).optional().default(5).describe('返回引用数量'),
         temperature: z.number().min(0).max(2).optional().default(0.3),
         max_tokens: z.number().int().min(16).max(8000).optional().default(2000),
       },
     },
-    async ({ messages, context_doc_id, top_k, temperature, max_tokens }) => {
+    async ({ messages, context_doc_id, notebook_id, since, until, top_k, temperature, max_tokens }) => {
       if (!hasRuntime() || !getRuntime().hasChat()) {
         return {
           content: [toText({
@@ -515,6 +518,9 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
         const result = await runChatSync({
           messages: chatMessages,
           contextDocId: context_doc_id,
+          notebookId: notebook_id,
+          since,
+          until,
           topK: top_k,
           temperature,
           maxTokens: max_tokens,
@@ -530,6 +536,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
               score: c.score,
             })),
             retrieval: result.retrieval,
+            tool_trace: result.toolTrace,
           })],
         }
       } catch (e) {

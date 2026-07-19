@@ -29,6 +29,16 @@ export interface SearchOptions {
   rerankWindow?: number
   /** 当前文档 hint：同 doc 的 block 优先级 +0.05 */
   contextDocId?: string
+  /**
+   * 时间窗口下界（ISO 字符串）。仅返回 blocks.updated_at >= since 的块。
+   * 留空表示无下限。常用于「我上周写过什么」「近期关于 X 的笔记」。
+   */
+  since?: string
+  /**
+   * 时间窗口上界（ISO 字符串）。仅返回 blocks.updated_at <= until 的块。
+   * 留空表示无上限。
+   */
+  until?: string
 }
 
 export interface Citation {
@@ -75,13 +85,13 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
 
   const ftsPromise = (async () => {
     try {
-      return runFts(opts.query, opts.notebookId, ftsLimit)
+      return runFts(opts.query, opts.notebookId, ftsLimit, opts.since, opts.until)
     } catch (e) {
       console.warn('[hybridSearch] FTS failed:', e instanceof Error ? e.message : e)
       return [] as FtsHit[]
     }
   })()
-  const semanticPromise = runSemantic(opts.query, opts.notebookId, semanticLimit)
+  const semanticPromise = runSemantic(opts.query, opts.notebookId, semanticLimit, opts.since, opts.until)
 
   const [ftsRaw, semanticRaw] = await Promise.all([
     ftsPromise,
@@ -134,7 +144,13 @@ interface SemanticRawHit {
   rerank_text?: string
 }
 
-function runFts(query: string, notebookId: string | undefined, limit: number): FtsHit[] {
+function runFts(
+  query: string,
+  notebookId: string | undefined,
+  limit: number,
+  since?: string,
+  until?: string,
+): FtsHit[] {
   if (!query.trim()) return []
   const db = getDb()
   const { query: ftsQuery } = buildFtsQuery(query, limit)
@@ -150,6 +166,14 @@ function runFts(query: string, notebookId: string | undefined, limit: number): F
     sql += ' AND b.notebook_id = ?'
     params.push(notebookId)
   }
+  if (since) {
+    sql += ' AND b.updated_at >= ?'
+    params.push(since)
+  }
+  if (until) {
+    sql += ' AND b.updated_at <= ?'
+    params.push(until)
+  }
   sql += ' ORDER BY rank LIMIT ?'
   params.push(limit)
   const rows = db.query(sql).all(...params as [string, ...(string | number)[]]) as Array<FtsHit & { rank: number }>
@@ -160,13 +184,15 @@ async function runSemantic(
   query: string,
   notebookId: string | undefined,
   limit: number,
+  since?: string,
+  until?: string,
 ): Promise<SemanticRawHit[]> {
   if (!query.trim()) return []
   if (!hasRuntime() || !getRuntime().hasEmbedding()) return []
   const r = getRuntime()
   const vec = await r.embedQuery(query)
   if (!vec) return []
-  const hits = semanticSearch(vec, limit, notebookId)
+  const hits = semanticSearch(vec, limit, notebookId, since, until)
   return hits.map((h, i) => ({
     block_id: h.block_id,
     score: h.score,
