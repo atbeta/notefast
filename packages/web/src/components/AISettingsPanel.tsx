@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Loader2,
   CheckCircle2,
@@ -12,9 +12,15 @@ import {
   GitBranch,
   Link2,
   RefreshCw,
+  FileSearch,
+  Copy,
+  ExternalLink,
 } from 'lucide-react'
 import {
   PRESETS,
+  PRESETS_BY_REGION,
+  REGION_LABELS,
+  REGION_ORDER,
   KNOWN_EMBEDDING_MODELS,
   KNOWN_CHAT_MODELS,
   KEY_MASK,
@@ -23,8 +29,10 @@ import {
   type ProviderPresetId,
   type AutoLinkConfig,
   type RerankerDefinition,
+  type Region,
 } from '@notefast/core'
 import { api } from '../hooks/useAPI'
+import { ActionButton, useToast } from './ui'
 
 interface AIStatus {
   enabled: boolean
@@ -39,7 +47,7 @@ interface AIStatus {
     autoLinkAnalyses: number
     lastSuccessAt?: string
   }
-  config: { active: ProviderDefinition | null; reranker: RerankerDefinition | null; autoLink?: AutoLinkConfig }
+  config: { chat: ProviderDefinition | null; embedding: ProviderDefinition | null; reranker: RerankerDefinition | null; autoLink?: AutoLinkConfig }
 }
 
 interface Capabilities {
@@ -94,18 +102,116 @@ interface DiagnoseResult {
   ts: string
 }
 
-function emptyProvider(presetId: ProviderPresetId = 'custom'): ProviderDefinition {
-  return definitionFromPreset(presetId)
-}
-
 function defaultAutoLink(): AutoLinkConfig {
   return { enabled: false, autoApply: false, notebookScope: 'all', maxPerBlock: 5 }
+}
+
+/** 根据浏览器 locale 推测一个合理的默认 preset；用户可在下拉中覆盖 */
+function defaultPresetForLocale(): ProviderPresetId {
+  if (typeof navigator !== 'undefined') {
+    const lang = (navigator.language || '').toLowerCase()
+    if (lang.startsWith('zh')) return 'siliconflow'
+  }
+  return 'openrouter'
+}
+
+/** Field-level error map: 每个 ProviderDefinition 字段都可有错误 */
+type FieldErrors = Partial<Record<keyof ProviderDefinition | 'global', string>>
+type RerankerFieldErrors = Partial<Record<keyof RerankerDefinition | 'global', string>>
+
+interface FormErrors {
+  chat?: FieldErrors
+  embedding?: FieldErrors
+  reranker?: RerankerFieldErrors
+}
+
+/**
+ * 把 validateConfig 返回的字符串错误按前缀切分到具体字段
+ *  "Chat provider 必须填写 chatModel" → chat.chatModel
+ *  "Chat provider baseUrl 不能为空" → chat.baseUrl
+ *  "Embedding provider 必须填写 embeddingModel" → embedding.embeddingModel
+ *  "Embedding provider baseUrl 不能为空" → embedding.baseUrl
+ *  "Reranker baseUrl 不能为空" → reranker.baseUrl
+ *  "Reranker model 不能为空" → reranker.model
+ *  "AutoLink ..." → global（不属于上面三类）
+ */
+function errorsToFields(errors: string[]): FormErrors {
+  const out: FormErrors = {}
+  const fallback: string[] = []
+  for (const e of errors) {
+    if (e.startsWith('Chat provider 必须填写 chatModel') || e.includes('Chat provider chatModel')) {
+      ;(out.chat ??= {}).chatModel = e
+    } else if (e.includes('Chat provider baseUrl') || e === 'Chat provider baseUrl 不能为空') {
+      ;(out.chat ??= {}).baseUrl = e
+    } else if (e.includes('Chat provider timeout')) {
+      ;(out.chat ??= {}).timeoutMs = e
+    } else if (e.startsWith('Embedding provider') && e.includes('embeddingModel')) {
+      ;(out.embedding ??= {}).embeddingModel = e
+    } else if (e.startsWith('Embedding provider') && e.includes('baseUrl')) {
+      ;(out.embedding ??= {}).baseUrl = e
+    } else if (e.startsWith('Embedding provider') && e.includes('timeout')) {
+      ;(out.embedding ??= {}).timeoutMs = e
+    } else if (e.startsWith('Reranker') && e.includes('baseUrl')) {
+      ;(out.reranker ??= {}).baseUrl = e
+    } else if (e.startsWith('Reranker') && e.includes('model')) {
+      ;(out.reranker ??= {}).model = e
+    } else if (e.startsWith('Reranker') && e.includes('timeout')) {
+      ;(out.reranker ??= {}).timeoutMs = e
+    } else {
+      fallback.push(e)
+    }
+  }
+  if (fallback.length > 0) {
+    out.chat ??= {}
+    out.chat.global = fallback.join('；')
+  }
+  return out
+}
+
+/** 客户端快速校验（基于本地状态，避免不必要的网络往返） */
+function localValidate(c: {
+  chat: ProviderDefinition | null
+  embedding: ProviderDefinition | null
+  reranker: RerankerDefinition | null
+}): string[] {
+  const errs: string[] = []
+  if (c.chat) {
+    if (!c.chat.baseUrl.trim()) errs.push('Chat provider baseUrl 不能为空')
+    if (!c.chat.chatModel.trim()) errs.push('Chat provider 必须填写 chatModel')
+    if (c.chat.timeoutMs < 1000 || c.chat.timeoutMs > 600_000) {
+      errs.push('Chat provider timeoutMs 应在 1000-600000 之间')
+    }
+  }
+  if (c.embedding) {
+    if (!c.embedding.baseUrl.trim()) errs.push('Embedding provider baseUrl 不能为空')
+    if (!c.embedding.embeddingModel.trim()) {
+      errs.push('Embedding provider 必须填写 embeddingModel')
+    }
+    if (c.embedding.timeoutMs < 1000 || c.embedding.timeoutMs > 600_000) {
+      errs.push('Embedding provider timeoutMs 应在 1000-600000 之间')
+    }
+  }
+  return errs
+}
+
+/** 简略描述 Provider 配置（用于保存后的 toast） */
+function describeSaved(
+  chat: ProviderDefinition | null,
+  embedding: ProviderDefinition | null,
+  reranker: RerankerDefinition | null
+): string {
+  const bits: string[] = []
+  if (chat) bits.push(`Chat @ ${chat.baseUrl.replace(/^https?:\/\//, '')}`)
+  if (embedding) bits.push(`Embedding @ ${embedding.baseUrl.replace(/^https?:\/\//, '')}`)
+  if (reranker?.enabled) bits.push(`Reranker @ ${reranker.baseUrl.replace(/^https?:\/\//, '')}`)
+  return bits.length > 0 ? bits.join(' · ') : '已清空所有 Provider'
 }
 
 export default function AISettingsPanel() {
   const [status, setStatus] = useState<AIStatus | null>(null)
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
-  const [active, setActive] = useState<ProviderDefinition | null>(null)
+  const [chat, setChat] = useState<ProviderDefinition | null>(null)
+  const [embedding, setEmbedding] = useState<ProviderDefinition | null>(null)
   const [autoIndex, setAutoIndex] = useState(true)
   const [reranker, setReranker] = useState<RerankerDefinition | null>(null)
   const [autoLink, setAutoLink] = useState<AutoLinkConfig>(defaultAutoLink())
@@ -114,11 +220,11 @@ export default function AISettingsPanel() {
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [diagnose, setDiagnose] = useState<DiagnoseResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const toast = useToast()
+  // 字段级错误（红色内嵌到表单）+ 保存成功的最近一次描述（持久化显示在按钮旁）
+  const [formErrors, setFormErrors] = useState<FormErrors>({})
 
   const refresh = useCallback(async () => {
-    setError(null)
     try {
       const [s, c] = await Promise.all([
         api.get<AIStatus>('/ai/status'),
@@ -126,102 +232,136 @@ export default function AISettingsPanel() {
       ])
       setStatus(s)
       setCapabilities(c)
-      setActive(s.config.active ?? null)
+      setChat(s.config.chat ?? null)
+      setEmbedding(s.config.embedding ?? null)
       setReranker(s.config.reranker ?? null)
       setAutoLink(s.config.autoLink ?? defaultAutoLink())
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      toast.error({ title: '加载 AI 状态失败', description: e instanceof Error ? e.message : String(e) })
     }
-  }, [])
+  }, [toast])
 
   useEffect(() => {
     refresh()
   }, [refresh])
 
-  const preset = active?.preset ?? 'custom'
-
-  const handlePresetChange = (newPreset: ProviderPresetId) => {
-    const p = PRESETS[newPreset]
-    if (!active) {
-      setActive(definitionFromPreset(newPreset))
-      return
-    }
-    setActive({
-      ...active,
-      preset: newPreset,
-      baseUrl: p.baseUrl,
-      embeddingModel: p.embeddingModel,
-      chatModel: p.chatModel,
-      extraHeaders: { ...p.extraHeaders },
-      // 换供应商时清空 Key：避免把 A 家的 Key 发给 B 家的服务器
-      apiKey: active.preset === newPreset ? active.apiKey : '',
-    })
-  }
-
-  const updateActive = (patch: Partial<ProviderDefinition>) => {
-    if (!active) {
-      setActive({ ...emptyProvider(preset), ...patch })
-    } else {
-      setActive({ ...active, ...patch })
-    }
-  }
-
   const handleSave = async () => {
-    if (!active) {
-      setError('请先选择或填写 Provider')
+    setFormErrors({})
+
+    // 1) 客户端先校验 → 即时反馈
+    const localErrs = localValidate({ chat, embedding, reranker })
+    if (localErrs.length > 0) {
+      setFormErrors(errorsToFields(localErrs))
+      const first = localErrs[0]!
+      toast.error({
+        title: `表单校验失败（${localErrs.length} 项）`,
+        description: `${first}${localErrs.length > 1 ? `……还有 ${localErrs.length - 1} 项，见下方红字` : ''}`,
+        durationMs: 5500,
+      })
       return
     }
+
+    // 2) 真正落盘
     setSaving(true)
-    setError(null)
-    setSuccess(null)
     try {
       const r = await api.put<{ ok: boolean; status: AIStatus }>('/ai/config', {
-        active,
+        chat,
+        embedding,
         autoIndex,
         reranker: reranker?.enabled ? reranker : null,
         autoLink,
       })
       setStatus(r.status)
-      setSuccess('配置已保存并热重载')
-      setTimeout(() => setSuccess(null), 2500)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      toast.success({
+        title: '配置已保存并热重载',
+        description: describeSaved(chat, embedding, reranker),
+      })
+      refresh()
+    } catch (e: unknown) {
+      // 尝试从服务端 400 提取 errors[]
+      const anyErr = e as { errors?: string[]; message?: string }
+      const list = Array.isArray(anyErr?.errors) ? anyErr.errors : []
+      if (list.length > 0) {
+        setFormErrors(errorsToFields(list))
+        toast.error({
+          title: `服务端校验失败（${list.length} 项）`,
+          description: `${list[0]}${list.length > 1 ? `……还有 ${list.length - 1} 项，见下方红字` : ''}`,
+          durationMs: 6000,
+        })
+      } else {
+        toast.error({
+          title: '保存失败',
+          description: anyErr?.message || (e instanceof Error ? e.message : String(e)),
+          durationMs: 6000,
+        })
+      }
     } finally {
       setSaving(false)
     }
   }
 
   const handleDisable = async () => {
-    if (!confirm('禁用 AI 会清空所有配置。继续？')) return
-    setSaving(true)
+    if (!confirm('禁用 AI 会清空所有 Chat / Embedding / Reranker 配置。继续？')) return
     try {
-      await api.put('/ai/config', { active: null, autoIndex: false, reranker: null, autoLink: defaultAutoLink() })
-      await refresh()
-      setSuccess('已禁用')
-      setTimeout(() => setSuccess(null), 2500)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setSaving(false)
+      await toast.promise(
+        async () => {
+          await api.put('/ai/config', {
+            chat: null,
+            embedding: null,
+            autoIndex: false,
+            reranker: null,
+            autoLink: defaultAutoLink(),
+          })
+          await refresh()
+        },
+        {
+          loading: '正在禁用 AI…',
+          success: 'AI 已禁用',
+          error: (e) => ({
+            title: '禁用失败',
+            description: e instanceof Error ? e.message : String(e),
+          }),
+        },
+      )
+    } catch {
+      // toast 已弹
     }
   }
 
   const handleDiagnose = async () => {
     setTesting(true)
-    setError(null)
     try {
       const r = await api.post<DiagnoseResult>('/ai/diagnose', {})
       setDiagnose(r)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      toast.error({
+        title: '诊断失败',
+        description: e instanceof Error ? e.message : String(e),
+      })
     } finally {
       setTesting(false)
     }
   }
 
-  const extraHeadersEntries = useMemo(() => {
-    return Object.entries(active?.extraHeaders || {})
-  }, [active?.extraHeaders])
+  const handleEnableChat = () => setChat(definitionFromPreset(defaultPresetForLocale()))
+  const handleEnableEmbedding = () => setEmbedding(definitionFromPreset('siliconflow'))
+
+  /**
+   * 「复用 Chat」：把 Chat provider 的 baseUrl / apiKey / headers / preset 都拷到 Embedding，
+   * 但只保留 embeddingModel 字段（清空 chatModel）。场景：
+   * - 用 OpenAI 同时跑 gpt-5-mini 和 text-embedding-3-small
+   * - 用 SiliconFlow 同一 Key 跑 DeepSeek-V4-Flash + Qwen3-Embedding-8B
+   */
+  const handleCopyChatToEmbedding = () => {
+    if (!chat) return
+    setEmbedding({
+      ...chat,
+      id: crypto.randomUUID(),
+      label: `${chat.label} (Embedding)`,
+      chatModel: '', // embedding provider 不需要 chatModel
+      // 保留 embeddingModel：若 Chat provider 已有 embeddingModel 就一并用，否则清空让用户填
+    })
+  }
 
   return (
     <div className="space-y-5">
@@ -263,18 +403,6 @@ export default function AISettingsPanel() {
         </div>
       </div>
 
-      {error && (
-        <div className="text-xs text-destructive bg-destructive/10 px-3 py-2 rounded-md flex items-start gap-2">
-          <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-      {success && (
-        <div className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-md flex items-center gap-2">
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          {success}
-        </div>
-      )}
       {diagnose && (
         <div className="text-xs rounded-md bg-muted/40 border border-border overflow-hidden">
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-background/40">
@@ -314,124 +442,98 @@ export default function AISettingsPanel() {
         </div>
       )}
 
-      {/* Section 1: Active Provider */}
-      <Section icon={<Sparkles className="w-4 h-4" />} title="Active Provider" hint="OpenAI 兼容；可填第三方 / 本地模型（Ollama / LM Studio / vLLM / 智谱…）">
-        {!active && (
+      {/* Section 1: Chat Provider */}
+      <Section
+        icon={<Sparkles className="w-4 h-4" />}
+        title="Chat Provider"
+        hint="标题/摘要/对话/AutoLink 实体抽取都依赖 Chat；可选 DeepSeek / OpenAI / 智谱 / SiliconFlow 等任意 OpenAI 兼容服务"
+      >
+        {!chat && (
           <button
             type="button"
-            onClick={() => setActive(emptyProvider('openai'))}
+            onClick={handleEnableChat}
             className="w-full py-3 text-sm rounded-md border border-dashed border-border text-muted-foreground hover:bg-accent"
           >
-            + 启用 AI Provider
+            + 启用 Chat Provider
           </button>
         )}
-        {active && (
-          <div className="space-y-3">
-            <FieldRow label="预设">
-              <select
-                value={active.preset}
-                onChange={(e) => handlePresetChange(e.target.value as ProviderPresetId)}
-                className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background"
+        {chat && (
+          <ProviderForm
+            value={chat}
+            onChange={setChat}
+            mode="chat"
+            onRemove={() => setChat(null)}
+            keyShown={showKey}
+            onToggleKey={() => setShowKey((s) => !s)}
+            knownModels={KNOWN_CHAT_MODELS}
+            modelLabel="Chat 模型"
+            modelRequired={true}
+            fieldErrors={formErrors.chat}
+          />
+        )}
+      </Section>
+
+      {/* Section 2: Embedding Provider (optional, independent) */}
+      <Section
+        icon={<FileSearch className="w-4 h-4" />}
+        title="Embedding Provider"
+        hint={
+          <>
+            语义搜索依赖 Embedding。可与 Chat 共用同一服务商（OpenAI / SiliconFlow 等），
+            也可独立配 Voyage / Jina / Cohere 等专精 embedding 的服务。
+            <span className="block mt-1 text-muted-foreground/80">
+              留空 = 仅 FTS5 全文检索（仍可用，但失去「语义召回」能力）
+            </span>
+          </>
+        }
+      >
+        {!embedding && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={handleEnableEmbedding}
+              className="w-full py-3 text-sm rounded-md border border-dashed border-border text-muted-foreground hover:bg-accent"
+            >
+              + 启用 Embedding Provider
+            </button>
+            {chat && (
+              <button
+                type="button"
+                onClick={handleCopyChatToEmbedding}
+                className="w-full py-2 text-xs rounded-md border border-border text-muted-foreground hover:bg-accent inline-flex items-center justify-center gap-1.5"
               >
-                {(Object.keys(PRESETS) as ProviderPresetId[]).map((k) => (
-                  <option key={k} value={k}>
-                    {PRESETS[k].label} — {PRESETS[k].hint}
-                  </option>
-                ))}
-              </select>
-            </FieldRow>
-            <FieldRow label="API Key">
-              <div className="flex items-center gap-2">
-                <input
-                  type={showKey ? 'text' : 'password'}
-                  value={active.apiKey === KEY_MASK ? '' : active.apiKey}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    // 脱敏态下清空输入框 = 保持已保存的 Key（KEY_MASK 会由服务端保留真值）
-                    updateActive({ apiKey: v === '' && active.apiKey === KEY_MASK ? KEY_MASK : v })
-                  }}
-                  placeholder={active.apiKey === KEY_MASK ? '已保存 Key（留空保持不变，输入新 Key 替换）' : 'sk-...'}
-                  className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey((s) => !s)}
-                  className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-accent"
-                >
-                  {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </FieldRow>
-            <FieldRow label="Base URL">
-              <input
-                type="text"
-                value={active.baseUrl}
-                onChange={(e) => updateActive({ baseUrl: e.target.value })}
-                placeholder="https://api.openai.com/v1"
-                className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
-              />
-            </FieldRow>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <FieldRow label="Embedding 模型">
-                <input
-                  type="text"
-                  value={active.embeddingModel}
-                  onChange={(e) => updateActive({ embeddingModel: e.target.value })}
-                  list="known-embedding-models"
-                  placeholder="text-embedding-3-small"
-                  className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
-                />
-                <datalist id="known-embedding-models">
-                  {KNOWN_EMBEDDING_MODELS.map((m) => <option key={m} value={m} />)}
-                </datalist>
-                <p className="text-[10px] text-muted-foreground mt-1">留空表示禁用 embedding</p>
-              </FieldRow>
-              <FieldRow label="Chat 模型">
-                <input
-                  type="text"
-                  value={active.chatModel}
-                  onChange={(e) => updateActive({ chatModel: e.target.value })}
-                  list="known-chat-models"
-                  placeholder="gpt-4o-mini"
-                  className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
-                />
-                <datalist id="known-chat-models">
-                  {KNOWN_CHAT_MODELS.map((m) => <option key={m} value={m} />)}
-                </datalist>
-                <p className="text-[10px] text-muted-foreground mt-1">留空表示禁用 chat</p>
-              </FieldRow>
-            </div>
-            <FieldRow label="超时（毫秒）">
-              <input
-                type="number"
-                min={1000}
-                max={600000}
-                step={1000}
-                value={active.timeoutMs}
-                onChange={(e) => updateActive({ timeoutMs: parseInt(e.target.value, 10) || 60000 })}
-                className="w-40 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
-              />
-            </FieldRow>
-            <FieldRow label="额外 Header（OpenRouter 等需要 HTTP-Referer）">
-              <ExtraHeadersEditor
-                entries={extraHeadersEntries}
-                onChange={(entries) => updateActive({ extraHeaders: Object.fromEntries(entries) })}
-              />
-            </FieldRow>
-            <FieldRow label="Provider 显示名">
-              <input
-                type="text"
-                value={active.label}
-                onChange={(e) => updateActive({ label: e.target.value })}
-                placeholder="我的 OpenRouter"
-                className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background"
-              />
-            </FieldRow>
+                <Copy className="w-3 h-3" />
+                复用 Chat Provider 作为 Embedding（共用 baseUrl + apiKey）
+              </button>
+            )}
+          </div>
+        )}
+        {embedding && (
+          <div className="space-y-3">
+            <ProviderForm
+              value={embedding}
+              onChange={setEmbedding}
+              mode="embedding"
+              onRemove={() => setEmbedding(null)}
+              keyShown={showKey}
+              onToggleKey={() => setShowKey((s) => !s)}
+              knownModels={KNOWN_EMBEDDING_MODELS}
+              modelLabel="Embedding 模型"
+              modelRequired={true}
+              fieldErrors={formErrors.embedding}
+            />
+            <button
+              type="button"
+              onClick={() => setEmbedding(null)}
+              className="text-xs text-muted-foreground hover:text-destructive"
+            >
+              移除 Embedding（回到纯 FTS5 检索）
+            </button>
           </div>
         )}
       </Section>
 
-      {/* Section 2: Auto-index */}
+      {/* Section 3: Auto-index */}
       <Section
         icon={<Database className="w-4 h-4" />}
         title="Auto-Index"
@@ -449,8 +551,8 @@ export default function AISettingsPanel() {
         />
       </Section>
 
-      {/* Section 3: Reranker */}
-      <Section icon={<GitBranch className="w-4 h-4" />} title="Reranker（可选）" hint="基于本地 TEI 服务的精排；在 Hybrid Search 召回后做交叉注意力二次排序">
+      {/* Section 4: Reranker */}
+      <Section icon={<GitBranch className="w-4 h-4" />} title="Reranker（可选）" hint="基于本地 TEI 服务或云端 bge-reranker 的精排；在 Hybrid Search 召回后做交叉注意力二次排序">
         {!reranker && (
           <button
             type="button"
@@ -515,7 +617,7 @@ export default function AISettingsPanel() {
         )}
       </Section>
 
-      {/* Section 4: AutoLink */}
+      {/* Section 5: AutoLink */}
       <Section icon={<Link2 className="w-4 h-4" />} title="AutoLink（自动反向链接）" hint="新建 / 更新 block 时由 LLM 抽取实体并匹配现有笔记，建议建链">
         <Toggle
           checked={autoLink.enabled}
@@ -568,16 +670,22 @@ export default function AISettingsPanel() {
         )}
       </Section>
 
-      <div className="flex items-center gap-2 pt-2">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving || !active}
-          className="btn-primary-custom"
+      <div className="flex items-center gap-2 pt-2 flex-wrap">
+        <ActionButton
+          onAction={async () => {
+            if (!chat && !embedding) return
+            await handleSave()
+          }}
+          successToast={{ title: '配置已保存并热重载' }}
+          errorToast={(e) => ({
+            title: '保存失败',
+            description: e instanceof Error ? e.message : String(e),
+            durationMs: 6000,
+          })}
+          disabled={!chat && !embedding}
         >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" strokeWidth={1.75} />}
-          保存
-        </button>
+          保存配置
+        </ActionButton>
         <button
           type="button"
           onClick={refresh}
@@ -586,7 +694,7 @@ export default function AISettingsPanel() {
           <RefreshCw className="w-4 h-4" />
           刷新状态
         </button>
-        {active && (
+        {(chat || embedding) && (
           <button
             type="button"
             onClick={handleDisable}
@@ -601,6 +709,209 @@ export default function AISettingsPanel() {
   )
 }
 
+// ───────────── Provider Form（Chat 和 Embedding 共用）─────────────
+
+function ProviderForm({
+  value,
+  onChange,
+  mode,
+  onRemove,
+  keyShown,
+  onToggleKey,
+  knownModels,
+  modelLabel,
+  modelRequired,
+  fieldErrors,
+}: {
+  value: ProviderDefinition
+  onChange: (v: ProviderDefinition) => void
+  mode: 'chat' | 'embedding'
+  onRemove: () => void
+  keyShown: boolean
+  onToggleKey: () => void
+  knownModels: string[]
+  modelLabel: string
+  modelRequired: boolean
+  fieldErrors?: FieldErrors
+}) {
+  const preset = PRESETS[value.preset]
+  const errBaseUrl = fieldErrors?.baseUrl
+  const errModel = mode === 'chat' ? fieldErrors?.chatModel : fieldErrors?.embeddingModel
+  const errTimeout = fieldErrors?.timeoutMs
+  const inputErrClass = 'border-destructive focus-visible:ring-destructive/30'
+  const inputOkClass = 'border-border'
+
+  const handlePresetChange = (newPreset: ProviderPresetId) => {
+    const p = PRESETS[newPreset]
+    if (value.preset === newPreset) {
+      // 同 preset：只更新 baseUrl 之类的元数据，保留用户已填的 key/models
+      onChange({
+        ...value,
+        preset: newPreset,
+        baseUrl: p.baseUrl,
+        extraHeaders: { ...p.extraHeaders },
+      })
+      return
+    }
+    // 换供应商：清空 key（避免把 A 的 Key 发给 B），但 baseUrl + 默认模型直接套用 preset
+    onChange({
+      ...value,
+      preset: newPreset,
+      baseUrl: p.baseUrl,
+      embeddingModel: p.embeddingModel,
+      chatModel: p.chatModel,
+      extraHeaders: { ...p.extraHeaders },
+      apiKey: '',
+      label: p.label,
+    })
+  }
+
+  return (
+    <div className="space-y-3">
+      <FieldRow label="预设">
+        <div className="flex items-center gap-2">
+          <select
+            value={value.preset}
+            onChange={(e) => handlePresetChange(e.target.value as ProviderPresetId)}
+            className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background"
+          >
+            {REGION_ORDER.map((region) => (
+              <optgroup key={region} label={REGION_LABELS[region as Region]}>
+                {PRESETS_BY_REGION[region as Region].map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label} — {p.hint}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <RegionBadge region={preset.region} />
+          {preset.signupUrl && preset.region !== 'local' && (
+            <a
+              href={preset.signupUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+              title="获取 API Key"
+            >
+              <ExternalLink className="w-3 h-3" />
+              获取 Key
+            </a>
+          )}
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1">{preset.hint}</p>
+      </FieldRow>
+      <FieldRow label="API Key">
+        <div className="flex items-center gap-2">
+          <input
+            type={keyShown ? 'text' : 'password'}
+            value={value.apiKey === KEY_MASK ? '' : value.apiKey}
+            onChange={(e) => {
+              const v = e.target.value
+              onChange({ ...value, apiKey: v === '' && value.apiKey === KEY_MASK ? KEY_MASK : v })
+            }}
+            placeholder={value.apiKey === KEY_MASK ? '已保存 Key（留空保持不变，输入新 Key 替换）' : 'sk-...'}
+            className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
+          />
+          <button
+            type="button"
+            onClick={onToggleKey}
+            className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-accent"
+          >
+            {keyShown ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
+      </FieldRow>
+      <FieldRow label="Base URL" error={errBaseUrl}>
+        <input
+          type="text"
+          value={value.baseUrl}
+          onChange={(e) => onChange({ ...value, baseUrl: e.target.value })}
+          placeholder={mode === 'chat' ? 'https://api.openai.com/v1' : 'https://api.openai.com/v1'}
+          aria-invalid={!!errBaseUrl}
+          className={`w-full px-3 py-1.5 text-sm rounded-md border bg-background font-mono ${errBaseUrl ? inputErrClass : inputOkClass}`}
+        />
+      </FieldRow>
+      <FieldRow label={modelLabel} error={errModel}>
+        <input
+          type="text"
+          value={mode === 'chat' ? value.chatModel : value.embeddingModel}
+          onChange={(e) =>
+            onChange(
+              mode === 'chat'
+                ? { ...value, chatModel: e.target.value }
+                : { ...value, embeddingModel: e.target.value },
+            )
+          }
+          list={`known-${mode}-models`}
+          placeholder={mode === 'chat' ? 'gpt-5-mini / deepseek-v4-flash / glm-5' : 'text-embedding-3-small / voyage-4-large / Qwen/Qwen3-Embedding-8B'}
+          aria-invalid={!!errModel}
+          className={`w-full px-3 py-1.5 text-sm rounded-md border bg-background font-mono ${errModel ? inputErrClass : inputOkClass}`}
+        />
+        <datalist id={`known-${mode}-models`}>
+          {knownModels.map((m) => <option key={m} value={m} />)}
+        </datalist>
+        {modelRequired && (
+          <p className="text-[10px] text-muted-foreground mt-1">
+            {mode === 'chat'
+              ? 'Chat 模型必填（用于对话 / 标题 / AutoLink）'
+              : 'Embedding 模型必填（用于语义搜索）'}
+          </p>
+        )}
+      </FieldRow>
+      <FieldRow label="超时（毫秒）" error={errTimeout}>
+        <input
+          type="number"
+          min={1000}
+          max={600000}
+          step={1000}
+          value={value.timeoutMs}
+          onChange={(e) => onChange({ ...value, timeoutMs: parseInt(e.target.value, 10) || 60000 })}
+          aria-invalid={!!errTimeout}
+          className={`w-40 px-3 py-1.5 text-sm rounded-md border bg-background font-mono ${errTimeout ? inputErrClass : inputOkClass}`}
+        />
+      </FieldRow>
+      <FieldRow label="额外 Header（OpenRouter 等需要 HTTP-Referer）">
+        <ExtraHeadersEditor
+          entries={Object.entries(value.extraHeaders)}
+          onChange={(entries) => onChange({ ...value, extraHeaders: Object.fromEntries(entries) })}
+        />
+      </FieldRow>
+      <FieldRow label="Provider 显示名">
+        <input
+          type="text"
+          value={value.label}
+          onChange={(e) => onChange({ ...value, label: e.target.value })}
+          placeholder={mode === 'chat' ? '我的 OpenRouter' : '我的 Voyage Embedding'}
+          className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background"
+        />
+      </FieldRow>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="text-xs text-muted-foreground hover:text-destructive inline-flex items-center gap-1"
+      >
+        <X className="w-3 h-3" />
+        移除{mode === 'chat' ? ' Chat Provider' : ' Embedding Provider'}
+      </button>
+    </div>
+  )
+}
+
+function RegionBadge({ region }: { region: Region }) {
+  const map: Record<Region, { tone: string; short: string }> = {
+    cn: { tone: 'bg-amber-500/15 text-amber-700 dark:text-amber-300', short: '国内' },
+    global: { tone: 'bg-sky-500/15 text-sky-700 dark:text-sky-300', short: '全球' },
+    local: { tone: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', short: '本地' },
+  }
+  const v = map[region]
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${v.tone}`} title={REGION_LABELS[region]}>
+      {v.short}
+    </span>
+  )
+}
+
 function Section({
   icon,
   title,
@@ -609,7 +920,7 @@ function Section({
 }: {
   icon: React.ReactNode
   title: string
-  hint?: string
+  hint?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
@@ -619,18 +930,27 @@ function Section({
           {icon}
           <span>{title}</span>
         </div>
-        {hint && <p className="text-[11px] text-muted-foreground mt-1">{hint}</p>}
+        {hint && <div className="text-[11px] text-muted-foreground mt-1">{hint}</div>}
       </div>
       <div className="p-5">{children}</div>
     </div>
   )
 }
 
-function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+function FieldRow({ label, children, error }: { label: string; children: React.ReactNode; error?: string }) {
   return (
     <div>
       <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</label>
       <div className="mt-1">{children}</div>
+      {error && (
+        <div
+          role="alert"
+          className="mt-1 text-[11px] text-destructive flex items-start gap-1.5"
+        >
+          <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
     </div>
   )
 }

@@ -216,6 +216,43 @@
   animation: fade-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Toast 滑入：从右上角 + 渐显 */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(16px) scale(0.96); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to   { opacity: 0; transform: translateX(16px) scale(0.96); }
+}
+.animate-toast-in {
+  animation: toast-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-toast-out {
+  animation: toast-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+/* progress bar 倒计时 —— 跟 width 一起 transition */
+@keyframes toast-progress {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+/* Toast 容器：顶部 stack，hover 不暂停 */
+.toast-region {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+.toast-region > * { pointer-events: auto; }
+
 /* ────────────────────────────────────────────────────────────────
    SubNavTabs 滑动指示器
    ──────────────────────────────────────────────────────────────── */

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, FolderOpen, Cloud, HardDrive, Loader2, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Settings as SettingsIcon, Eye, EyeOff } from 'lucide-react'
+import { RefreshCw, FolderOpen, Cloud, HardDrive, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Settings as SettingsIcon, Eye, EyeOff } from 'lucide-react'
 import { api } from '../hooks/useAPI'
+import { ActionButton, useToast } from './ui'
 
 interface SyncRuntimeStatus {
   configured: boolean
@@ -84,13 +85,11 @@ export default function SyncPanel() {
   const [adapters, setAdapters] = useState<AdapterInfo[]>([])
   const [form, setForm] = useState<FormState>({ kind: 'none' })
   const [interval, setInterval] = useState(3600)
-  const [saving, setSaving] = useState(false)
-  const [running, setRunning] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<{ remoteDocCount?: number; extra: Record<string, unknown> } | null>(null)
   const [showS3Secret, setShowS3Secret] = useState(false)
   const [showWebDavSecret, setShowWebDavSecret] = useState(false)
+  const toast = useToast()
 
   const refresh = useCallback(async () => {
     try {
@@ -110,11 +109,10 @@ export default function SyncPanel() {
       } else {
         setForm({ kind: 'none' })
       }
-      setError(null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      toast.error({ title: '加载同步配置失败', description: e instanceof Error ? e.message : String(e) })
     }
-  }, [])
+  }, [toast])
 
   const setAdaptersInfo = useCallback(async (_res: unknown) => {
     try {
@@ -132,60 +130,65 @@ export default function SyncPanel() {
 
   const handleSave = async () => {
     if (form.kind === 'none') {
-      setError('请选择一种适配器')
+      toast.warning({ title: '请选择一种适配器' })
       return
     }
-    setSaving(true)
-    setError(null)
-    try {
-      await api.put('/sync/config', {
-        active: form,
-        autoSyncIntervalMs: interval * 1000,
-      })
-      await refresh()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setSaving(false)
-    }
+    await toast.promise(
+      async () => {
+        await api.put('/sync/config', {
+          active: form,
+          autoSyncIntervalMs: interval * 1000,
+        })
+        await refresh()
+      },
+      {
+        loading: '正在保存同步配置…',
+        success: '同步配置已保存',
+        error: (e) => ({ title: '保存失败', description: e instanceof Error ? e.message : String(e) }),
+      },
+    ).catch(() => undefined)
   }
 
   const handleDisable = async () => {
     if (!confirm('禁用后所有同步配置都会被清空。继续？')) return
-    setSaving(true)
-    setError(null)
-    try {
-      await api.del('/sync/config')
-      await refresh()
-      setForm({ kind: 'none' })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setSaving(false)
-    }
+    await toast.promise(
+      async () => {
+        await api.del('/sync/config')
+        await refresh()
+        setForm({ kind: 'none' })
+      },
+      {
+        loading: '正在禁用…',
+        success: '同步已禁用',
+        error: (e) => ({ title: '禁用失败', description: e instanceof Error ? e.message : String(e) }),
+      },
+    ).catch(() => undefined)
   }
 
   const handleRun = async () => {
-    setRunning(true)
-    setError(null)
-    try {
-      await api.post('/sync/run-now', {})
-      await refresh()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setRunning(false)
-    }
+    await toast.promise(
+      async () => {
+        await api.post('/sync/run-now', {})
+        await refresh()
+      },
+      {
+        loading: '正在执行同步…',
+        success: '同步完成',
+        error: (e) => ({ title: '同步失败', description: e instanceof Error ? e.message : String(e) }),
+      },
+    ).catch(() => undefined)
   }
 
   const handleInfo = async () => {
-    setError(null)
     try {
       const r = await api.get<{ remoteDocCount?: number; extra?: Record<string, unknown> }>('/sync/info')
       setInfo({ remoteDocCount: r.remoteDocCount, extra: r.extra || {} })
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
       setInfo(null)
+      toast.error({
+        title: '探测远端失败',
+        description: e instanceof Error ? e.message : String(e),
+      })
     }
   }
 
@@ -214,12 +217,6 @@ export default function SyncPanel() {
 
       {!collapsed && (
         <div className="p-5 space-y-5">
-          {error && (
-            <div className="text-xs text-destructive bg-destructive/10 px-3 py-2 rounded-md">
-              {error}
-            </div>
-          )}
-
           {/* Adapter catalog */}
           <div className="space-y-3">
             <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">适配器</h4>
@@ -387,26 +384,25 @@ export default function SyncPanel() {
 
             {form.kind !== 'none' && (
               <div className="flex items-center gap-2 flex-wrap pt-1">
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="btn-primary-custom"
+                <ActionButton
+                  onAction={handleSave}
+                  successToast={{ title: status?.configured && status.adapterName === form.kind ? '同步配置已保存' : '同步已启用' }}
+                  errorToast={(e) => ({ title: '保存失败', description: e instanceof Error ? e.message : String(e) })}
                 >
-                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
                   {status?.configured && status.adapterName === form.kind ? '保存' : '启用'}
-                </button>
+                </ActionButton>
                 {status?.configured && (
                   <>
-                    <button
-                      type="button"
-                      onClick={handleRun}
-                      disabled={running}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-secondary text-secondary-foreground hover:bg-accent disabled:opacity-50"
+                    <ActionButton
+                      variant="secondary"
+                      size="sm"
+                      onAction={handleRun}
+                      successToast={{ title: '同步完成' }}
+                      errorToast={(e) => ({ title: '同步失败', description: e instanceof Error ? e.message : String(e) })}
                     >
-                      {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                      <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
                       立即同步
-                    </button>
+                    </ActionButton>
                     <button
                       type="button"
                       onClick={handleInfo}
@@ -422,14 +418,16 @@ export default function SyncPanel() {
                     >
                       切换适配器
                     </button>
-                    <button
-                      type="button"
-                      onClick={handleDisable}
-                      disabled={saving}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10 ml-auto"
+                    <ActionButton
+                      variant="danger"
+                      size="sm"
+                      onAction={handleDisable}
+                      successToast={{ title: '同步已禁用' }}
+                      errorToast={(e) => ({ title: '禁用失败', description: e instanceof Error ? e.message : String(e) })}
+                      className="ml-auto"
                     >
                       禁用
-                    </button>
+                    </ActionButton>
                   </>
                 )}
               </div>

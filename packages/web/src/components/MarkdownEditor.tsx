@@ -15,7 +15,6 @@ import {
   Heading2,
   Heading3,
   X,
-  AlertCircle,
   Check,
   FilePlus2,
   RotateCcw,
@@ -23,6 +22,7 @@ import {
 import { parseMarkdownToBlocks, inputsToBlockTree } from '@notefast/core'
 import type { Block } from '@notefast/core'
 import { api } from '../hooks/useAPI'
+import { useToast } from './ui'
 import BlockRenderer from './BlockRenderer'
 
 interface MarkdownEditorProps {
@@ -97,6 +97,7 @@ export default function MarkdownEditor({ docId, onSaved, autoEdit = false, onAct
 type Mode = 'edit' | 'view'
 
 function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () => void; onClose: () => void }) {
+  const toast = useToast()
   const [content, setContent] = useState('')
   const [initialContent, setInitialContent] = useState('')
   const [loadedAt, setLoadedAt] = useState<Date | null>(null)
@@ -104,7 +105,6 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
   const [draftedAt, setDraftedAt] = useState<Date | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<Mode>('edit')
   const [showHelp, setShowHelp] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -168,7 +168,6 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
   const handleSave = useCallback(async () => {
     if (saving) return
     setSaving(true)
-    setError(null)
     try {
       await api.put(`/docs/${docId}/markdown`, { markdown: content })
       setInitialContent(content)
@@ -178,12 +177,16 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
       setTimeout(() => setSavedFlash(false), 1500)
       onSaved()
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      // 失败时本地草稿兜底 + 顶部 toast 报错
       saveDraft(docId, content)
+      toast.error({
+        title: '保存失败',
+        description: e instanceof Error ? e.message : String(e),
+      })
     } finally {
       setSaving(false)
     }
-  }, [saving, content, docId, onSaved])
+  }, [saving, content, docId, onSaved, toast])
 
   const handleCancel = useCallback(() => {
     saveDraft(docId, content)
@@ -497,9 +500,17 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
               onClick={handleSave}
               disabled={saving || loading}
               title={saving ? '保存中…' : '保存 (⌘S)'}
-              className="inline-flex items-center gap-1 h-7 px-3 rounded-md text-[12px] font-medium bg-ink text-ink-foreground border border-ink shadow-[var(--shadow-btn)] hover:bg-ink-hover hover:border-ink-hover active:scale-[0.97] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border transition-all active:scale-[0.97] disabled:cursor-not-allowed ${
+                savedFlash
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-[var(--shadow-btn)]'
+                  : 'bg-ink text-ink-foreground border-ink shadow-[var(--shadow-btn)] hover:bg-ink-hover hover:border-ink-hover'
+              } ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
             >
-              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : savedFlash ? <Check className="w-3 h-3" strokeWidth={2.25} /> : null}
+              {saving ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : savedFlash ? (
+                <Check className="w-3 h-3" strokeWidth={2.5} />
+              ) : null}
               {saving ? '保存中' : savedFlash ? '已保存' : '保存'}
             </button>
             <IconBtn title="退出编辑 (Esc)" onClick={handleCancel}>
@@ -508,15 +519,6 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
           </div>
         </div>
       </div>
-
-      {/* Error banner */}
-      {error && (
-        <div className="mb-3 px-3 py-2 rounded-md bg-destructive/8 text-destructive text-[12px] flex items-center gap-2">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-          <span>{error}</span>
-          <span className="ml-auto text-muted-foreground">已自动保存到本地草稿</span>
-        </div>
-      )}
 
       {/* Editor body — 与阅读态共享同一文档流宽度 */}
       {loading ? (
