@@ -63,6 +63,39 @@ CREATE TABLE IF NOT EXISTS block_refs (
 CREATE INDEX IF NOT EXISTS idx_refs_source ON block_refs(source_id);
 CREATE INDEX IF NOT EXISTS idx_refs_target ON block_refs(target_id);
 
+-- ───────────────────── AutoLink suggestions (Tier 1) ─────────────────────
+-- 双轴状态：
+--   action_status: suggested | applied | reverted | failed | superseded
+--   review_status: unreviewed | accepted | dismissed
+-- created_ref_id 精确锚定 block_refs 行，撤销时按 id 删除（不依赖 source/target 对）
+CREATE TABLE IF NOT EXISTS autolink_suggestions (
+  id                    TEXT PRIMARY KEY,
+  source_block_id       TEXT NOT NULL,
+  source_content_hash   TEXT NOT NULL,
+  source_updated_at     TEXT NOT NULL,
+  notebook_id           TEXT NOT NULL,
+  anchor                TEXT NOT NULL,
+  kind                  TEXT NOT NULL,
+  candidates            TEXT NOT NULL,
+  action_status         TEXT NOT NULL DEFAULT 'suggested',
+  review_status         TEXT NOT NULL DEFAULT 'unreviewed',
+  created_ref_id        INTEGER,
+  applied_target_id     TEXT,
+  score_kind            TEXT,
+  model                 TEXT,
+  error                 TEXT,
+  created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+  applied_at            TEXT,
+  reviewed_at           TEXT,
+  -- 不对 source_block_id 加 FK CASCADE：suggestion 是审计记录，源块被删后建议仍应保留（inbox 历史可查）
+  FOREIGN KEY (created_ref_id) REFERENCES block_refs(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_autolink_review ON autolink_suggestions(review_status);
+CREATE INDEX IF NOT EXISTS idx_autolink_action ON autolink_suggestions(action_status);
+CREATE INDEX IF NOT EXISTS idx_autolink_source ON autolink_suggestions(source_block_id);
+CREATE INDEX IF NOT EXISTS idx_autolink_hash   ON autolink_suggestions(source_block_id, source_content_hash);
+
 -- FTS 自动同步触发器
 CREATE TRIGGER IF NOT EXISTS blocks_fts_insert AFTER INSERT ON blocks
 BEGIN

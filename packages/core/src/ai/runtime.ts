@@ -39,7 +39,7 @@ export interface RuntimeStatus {
   autoLink: {
     configured: boolean
     enabled: boolean
-    autoApply: boolean
+    autoApply: 'never' | 'high_confidence'
     lastError?: string
   }
   usage: {
@@ -185,7 +185,7 @@ export class AiRuntime {
       autoLink: {
         configured: Boolean(this.cfg.autoLink?.enabled) && Boolean(c?.chatModel.trim()),
         enabled: Boolean(this.cfg.autoLink?.enabled),
-        autoApply: Boolean(this.cfg.autoLink?.autoApply),
+        autoApply: this.cfg.autoLink?.autoApply ?? 'never',
         lastError: this.autoLinkLastError,
       },
       usage: { ...this.usage },

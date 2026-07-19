@@ -17,15 +17,14 @@ import { hasRuntime, getRuntime } from '../services/aiRuntime'
 import { semanticSearch } from '../ai/indexer'
 import { runChatSync } from '../ai/chat'
 import {
-  findSuggestion,
-  listSuggestionsForDoc,
-  removeSuggestionById,
+  applySuggestion,
+  dismissSuggestion,
+  listSuggestions,
+  revertSuggestion,
   toWire,
 } from '../ai/autoLinkStore'
 import {
   analyzeBlock,
-  insertRef,
-  listBlockIdsForDoc,
 } from '../ai/autoLink'
 import { fireAfterCreate, fireAfterUpdate, fireAfterCreateMany } from '../services/hooks'
 
@@ -551,44 +550,58 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
   server.registerTool(
     'notefast_autolink_suggestions',
     {
-      description: '列出某文档下的 AutoLink 待确认建议（用户接受 / 拒绝）',
+      description: 'AutoLink Inbox 视图：默认 review_status=unreviewed，含 AI 已应用 + AI 仅建议两类。',
       inputSchema: {
-        doc_id: z.string().describe('文档 ID（block.tree 根 ID）'),
+        doc_id: z.string().optional().describe('限定文档 ID（不传则全局）'),
+        status: z.enum(['unreviewed', 'accepted', 'dismissed', 'all']).optional().default('unreviewed'),
+        limit: z.number().int().min(1).max(500).optional().default(100),
       },
     },
-    async ({ doc_id }) => {
-      const blockIds = listBlockIdsForDoc(doc_id)
-      const list = listSuggestionsForDoc(doc_id, blockIds)
-      return { content: [toText({ doc_id, count: list.length, suggestions: list.map(toWire) })] }
+    async ({ doc_id, status, limit }) => {
+      const reviewStatus = status === 'all' ? undefined : (status as 'unreviewed' | 'accepted' | 'dismissed')
+      const list = listSuggestions({
+        docId: doc_id,
+        reviewStatus,
+        limit,
+        actionStatus: ['suggested', 'applied', 'reverted'],
+      })
+      const db = getDb()
+      const items = list.map((s) => {
+        const wire = toWire(s)
+        const src = db
+          .query(
+            `SELECT b.content, b.root_id, (SELECT content FROM blocks WHERE id = b.root_id) as doc_title
+             FROM blocks b WHERE b.id = ?`,
+          )
+          .get(s.sourceBlockId) as { content: string; root_id: string; doc_title: string } | undefined
+        return {
+          ...wire,
+          source_content: src?.content?.slice(0, 200) ?? '',
+          source_doc_id: src?.root_id ?? null,
+          source_doc_title: src?.doc_title ?? '',
+        }
+      })
+      return { content: [toText({ status: status ?? 'unreviewed', count: items.length, items })] }
     },
   )
 
   server.registerTool(
     'notefast_autolink_apply',
     {
-      description: '接受一条 AutoLink 建议，写入 block_refs（ref_type=ai_link）',
+      description: '接受一条 AutoLink 建议，事务化写入 block_refs（ref_type=ai_suggested）；幂等。',
       inputSchema: {
         suggestion_id: z.string().describe('建议 ID'),
         candidate_index: z.number().int().min(0).max(4).optional().default(0),
       },
     },
     async ({ suggestion_id, candidate_index }) => {
-      const s = findSuggestion(suggestion_id)
-      if (!s) {
-        return { content: [toText({ error: '建议不存在或已过期' })] }
-      }
-      const cand = s.candidates[candidate_index]
-      if (!cand) {
-        return { content: [toText({ error: '无效的 candidate_index' })] }
-      }
-      const ok = insertRef(s.sourceBlockId, cand.blockId, 'ai_link')
-      removeSuggestionById(suggestion_id)
+      const result = applySuggestion(suggestion_id, candidate_index, 'ai_suggested')
       return {
         content: [toText({
-          applied: ok,
-          source_id: s.sourceBlockId,
-          target_id: cand.blockId,
-          ref_type: 'ai_link',
+          applied: result.applied,
+          ref_id: result.refId,
+          target_id: result.targetBlockId,
+          reason: result.reason,
         })],
       }
     },
@@ -597,14 +610,28 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
   server.registerTool(
     'notefast_autolink_dismiss',
     {
-      description: '拒绝一条 AutoLink 建议，从内存中移除',
+      description: '用户忽略一条 AutoLink 建议（review_status=dismissed，记录保留）',
       inputSchema: {
         suggestion_id: z.string().describe('建议 ID'),
       },
     },
     async ({ suggestion_id }) => {
-      const removed = removeSuggestionById(suggestion_id)
-      return { content: [toText({ dismissed: removed })] }
+      const result = dismissSuggestion(suggestion_id)
+      return { content: [toText({ dismissed: result.dismissed, reason: result.reason })] }
+    },
+  )
+
+  server.registerTool(
+    'notefast_autolink_revert',
+    {
+      description: '精确撤销一条已应用的 AutoLink 建议（按 created_ref_id 删除，可再次接受）',
+      inputSchema: {
+        suggestion_id: z.string().describe('建议 ID'),
+      },
+    },
+    async ({ suggestion_id }) => {
+      const result = revertSuggestion(suggestion_id)
+      return { content: [toText({ reverted: result.reverted, reason: result.reason })] }
     },
   )
 

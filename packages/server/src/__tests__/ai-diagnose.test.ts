@@ -187,7 +187,7 @@ describe('POST /api/v1/ai/diagnose', () => {
     const { body } = await api('POST', '/diagnose')
     expect(body.autoLink.configured).toBe(true)
     expect(body.autoLink.enabled).toBe(true)
-    expect(body.autoLink.autoApply).toBe(false)
+    expect(body.autoLink.autoApply).toBe('never')
     expect(body.autoLink.ok).toBe(true)
     expect(body.autoLink.prerequisites.chat.ok).toBe(true)
   })

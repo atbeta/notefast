@@ -19,6 +19,7 @@ import {
   AiRuntime,
   configFromEnv,
   emptyConfig,
+  migrateAutoApply,
   setAiRuntime,
   type AiConfig,
 } from '@notefast/core'
@@ -75,6 +76,11 @@ export function hasRuntime(): boolean {
  * 严格校验：必须包含新的 `chat`/`embedding` 字段，version===1。
  * 遇到旧 shape（如带 `active` 字段）→ 删除文件，返回 emptyConfig()，让用户在 UI 重新配。
  * 见 AGENTS.md：本仓库策略不保留历史配置。
+ *
+ * AutoLink 字段迁移：
+ * - `autoApply: boolean` → `'never' | 'high_confidence'`
+ * - 缺失的 `minConfidence` / `minMargin` 填默认值
+ * 迁移后的 config 立即写回磁盘，避免下次再走迁移。
  */
 export function loadConfigFromDisk(): AiConfig {
   if (!dataDir) return emptyConfig()
@@ -83,7 +89,12 @@ export function loadConfigFromDisk(): AiConfig {
   try {
     const raw = readFileSync(path, 'utf-8')
     const parsed = JSON.parse(raw) as Record<string, unknown> | null
-    if (looksLikeNewShape(parsed)) return parsed as unknown as AiConfig
+    if (looksLikeNewShape(parsed)) {
+      const migrated = migrateAutoLinkFields(parsed as unknown as AiConfig)
+      // 比较序列化结果判断是否真的发生了迁移（避免无变更写盘）
+      if (JSON.stringify(migrated) !== JSON.stringify(parsed)) saveConfigToDisk(migrated)
+      return migrated
+    }
     // 旧 shape（含 `active` 字段或缺 chat/embedding）→ 直接丢弃
     try {
       unlinkSync(path)
@@ -94,6 +105,26 @@ export function loadConfigFromDisk(): AiConfig {
     return emptyConfig()
   } catch {
     return emptyConfig()
+  }
+}
+
+/** AutoLink 字段迁移：boolean → 字符串；补全新增字段 */
+function migrateAutoLinkFields(cfg: AiConfig): AiConfig {
+  const al = cfg.autoLink
+  if (!al) return cfg
+  const needsMigrate =
+    typeof (al as { autoApply?: unknown }).autoApply === 'boolean' ||
+    (al as { minConfidence?: number }).minConfidence == null ||
+    (al as { minMargin?: number }).minMargin == null
+  if (!needsMigrate) return cfg
+  return {
+    ...cfg,
+    autoLink: {
+      ...al,
+      autoApply: migrateAutoApply((al as { autoApply?: unknown }).autoApply),
+      minConfidence: al.minConfidence ?? 0.75,
+      minMargin: al.minMargin ?? 0.1,
+    },
   }
 }
 
@@ -143,8 +174,9 @@ export function applyNewConfig(
   sys: PluginSystem,
 ): ReloadResult {
   const r = getRuntime()
-  const result = r.reload(cfg)
-  saveConfigToDisk(cfg)
+  const normalized = migrateAutoLinkFields(cfg)
+  const result = r.reload(normalized)
+  saveConfigToDisk(normalized)
   sys.note.afterCreate.untap(HOOK_NAME)
   sys.note.afterUpdate.untap(HOOK_NAME)
   sys.note.afterDelete.untap(HOOK_NAME)

@@ -115,23 +115,45 @@ export interface RerankerDefinition {
 export interface AutoLinkConfig {
   /** 是否启用（note.afterCreate/Update 触发）*/
   enabled: boolean
-  /** true 时所有建议直接落库；false 时建议入内存 store 等用户确认 */
-  autoApply: boolean
+  /**
+   * 自动应用策略（v2）：
+   * - 'never'            高可信候选也只入 Inbox，不写 ref
+   * - 'high_confidence'  满足 minConfidence + minMargin 的候选自动写 ref（ref_type='ai_auto'）
+   *
+   * 老配置文件里的 boolean 值会在 loadConfigFromDisk / applyNewConfig 时迁移。
+   */
+  autoApply: 'never' | 'high_confidence'
   /** 'all' = 任意 notebook；'same' = 同 notebook */
   notebookScope: 'all' | 'same'
   /** 每个块最多产出几条建议 */
   maxPerBlock: number
+  /** embedding cosine 阈值（仅 score_kind=embedding/hybrid 生效）；低于阈值不自动应用 */
+  minConfidence: number
+  /** top-1 与 top-2 最小差值，避免歧义候选被自动应用 */
+  minMargin: number
 }
 
 export const DEFAULT_MAX_AUTO_LINK_PER_BLOCK = 5
+export const DEFAULT_AUTO_LINK_MIN_CONFIDENCE = 0.75
+export const DEFAULT_AUTO_LINK_MIN_MARGIN = 0.1
 
 export function defaultAutoLinkConfig(): AutoLinkConfig {
   return {
     enabled: false,
-    autoApply: false,
+    autoApply: 'never',
     notebookScope: 'all',
     maxPerBlock: DEFAULT_MAX_AUTO_LINK_PER_BLOCK,
+    minConfidence: DEFAULT_AUTO_LINK_MIN_CONFIDENCE,
+    minMargin: DEFAULT_AUTO_LINK_MIN_MARGIN,
   }
+}
+
+/** 老配置文件 boolean → 新字符串 迁移（应用期调用一次） */
+export function migrateAutoApply(v: unknown): 'never' | 'high_confidence' {
+  if (v === true) return 'high_confidence'
+  if (v === false || v == null) return 'never'
+  if (v === 'never' || v === 'high_confidence') return v
+  return 'never'
 }
 
 /**
@@ -272,12 +294,25 @@ export function configFromEnv(env: Record<string, string | undefined>): AiConfig
 
 function autoLinkFromEnv(env: Record<string, string | undefined>): AutoLinkConfig {
   const enabled = (env.AUTO_LINK_ENABLED || '').toLowerCase() === 'true'
-  const autoApply = (env.AUTO_LINK_AUTO_APPLY || '').toLowerCase() === 'true'
+  const aaRaw = (env.AUTO_LINK_AUTO_APPLY || '').toLowerCase()
+  const autoApply: 'never' | 'high_confidence' = aaRaw === 'true'
+    ? 'high_confidence'
+    : aaRaw === 'high_confidence'
+      ? 'high_confidence'
+      : 'never'
   const scopeRaw = (env.AUTO_LINK_SCOPE || 'all').toLowerCase()
   const scope: 'all' | 'same' = scopeRaw === 'same' ? 'same' : 'all'
   const maxRaw = parseInt(env.AUTO_LINK_MAX_PER_BLOCK || '', 10)
   const max = Number.isFinite(maxRaw) && maxRaw > 0 ? Math.min(maxRaw, 10) : DEFAULT_MAX_AUTO_LINK_PER_BLOCK
-  return { enabled, autoApply, notebookScope: scope, maxPerBlock: max }
+  const minConfRaw = parseFloat(env.AUTO_LINK_MIN_CONFIDENCE || '')
+  const minConf = Number.isFinite(minConfRaw) && minConfRaw > 0 && minConfRaw <= 1
+    ? minConfRaw
+    : DEFAULT_AUTO_LINK_MIN_CONFIDENCE
+  const minMarginRaw = parseFloat(env.AUTO_LINK_MIN_MARGIN || '')
+  const minMargin = Number.isFinite(minMarginRaw) && minMarginRaw >= 0 && minMarginRaw < 1
+    ? minMarginRaw
+    : DEFAULT_AUTO_LINK_MIN_MARGIN
+  return { enabled, autoApply, notebookScope: scope, maxPerBlock: max, minConfidence: minConf, minMargin }
 }
 
 function rerankerFromEnv(env: Record<string, string | undefined>): RerankerDefinition | null {

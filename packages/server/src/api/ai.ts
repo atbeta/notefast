@@ -26,6 +26,7 @@ import {
   type LLMProvider,
   type ProviderPresetId,
   PROVIDER_PRESET_IDS,
+  defaultAutoLinkConfig,
   emptyConfig,
   highlightSnippet,
   suggestTitle,
@@ -96,9 +97,11 @@ const configSchema = z.object({
   autoLink: z
     .object({
       enabled: z.boolean(),
-      autoApply: z.boolean(),
+      autoApply: z.enum(['never', 'high_confidence']),
       notebookScope: z.enum(['all', 'same']),
       maxPerBlock: z.number().int().min(1).max(10),
+      minConfidence: z.number().min(0).max(1),
+      minMargin: z.number().min(0).max(1),
     })
     .optional(),
 })
@@ -130,7 +133,7 @@ ai.put(
       embedding: body.embedding,
       autoIndex: body.autoIndex,
       reranker: reranker && reranker.enabled ? reranker : null,
-      autoLink: body.autoLink,
+      autoLink: body.autoLink ?? defaultAutoLinkConfig(),
     }
     // 业务校验（chatModel / embeddingModel 必填等）→ 400
     const errors = validateConfig(cfg)
