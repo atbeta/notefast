@@ -9,6 +9,7 @@ import {
 } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import { getDb } from '../db'
+import { fireAfterCreate, fireAfterUpdate, fireAfterDelete } from '../services/hooks'
 
 const blocks = new Hono()
 
@@ -92,7 +93,9 @@ blocks.post('/', zValidator('json', createBlockSchema), (c) => {
   )
 
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
-  return c.json(rowToBlock(row), 201)
+  const block = rowToBlock(row)
+  fireAfterCreate(block)
+  return c.json(block, 201)
 })
 
 blocks.patch('/:id', zValidator('json', updateBlockSchema), (c) => {
@@ -132,7 +135,9 @@ blocks.patch('/:id', zValidator('json', updateBlockSchema), (c) => {
     .run(...params as [string, ...string[]])
 
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
-  return c.json(rowToBlock(row))
+  const block = rowToBlock(row)
+  fireAfterUpdate(block)
+  return c.json(block)
 })
 
 blocks.patch('/:id/move', zValidator('json', moveBlockSchema), (c) => {
@@ -183,7 +188,9 @@ blocks.patch('/:id/move', zValidator('json', moveBlockSchema), (c) => {
   }
 
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
-  return c.json(rowToBlock(row))
+  const block = rowToBlock(row)
+  fireAfterUpdate(block)
+  return c.json(block)
 })
 
 blocks.delete('/:id', (c) => {
@@ -206,6 +213,7 @@ blocks.delete('/:id', (c) => {
     db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...allIds)
   })()
 
+  fireAfterDelete(id)
   return c.json({ deleted: true, count: allIds.length })
 })
 

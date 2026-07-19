@@ -127,7 +127,6 @@ export function createBlockInput(
   notebookId: string,
   type: BlockType,
   parentId: string,
-  _rootId: string,
   opts?: { content?: string; properties?: Record<string, unknown>; sort?: number; level?: number },
 ): CreateBlockInput {
   return {

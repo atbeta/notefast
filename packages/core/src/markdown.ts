@@ -215,24 +215,6 @@ function blocksToCreateInputs(root: ParsedBlock, notebookId: string): CreateBloc
   const inputs: CreateBlockInput[] = []
   let docTitle = ''
 
-  const idMap = new Map<string, string>()
-
-  function assignIds(parsed: ParsedBlock) {
-    const id = crypto.randomUUID()
-    idMap.set(
-      JSON.stringify({ content: parsed.content, type: parsed.type }),
-      id,
-    )
-    for (const child of parsed.children) {
-      assignIds(child)
-    }
-  }
-
-  const tempRoot: ParsedBlock = { ...root }
-  for (const child of tempRoot.children) {
-    assignIds(child)
-  }
-
   function buildInputs(parsed: ParsedBlock, parentId: string | null): void {
     if (parsed.type === BlockType.Document) {
       for (const child of parsed.children) {
@@ -268,7 +250,7 @@ function blocksToCreateInputs(root: ParsedBlock, notebookId: string): CreateBloc
     }
   }
 
-  buildInputs(tempRoot, null)
+  buildInputs(root, null)
   return inputs
 }
 

@@ -27,6 +27,7 @@ import {
   insertRef,
   listBlockIdsForDoc,
 } from '../ai/autoLink'
+import { fireAfterCreate, fireAfterUpdate, fireAfterCreateMany } from '../services/hooks'
 
 function toText(data: unknown): { type: 'text'; text: string } {
   return { type: 'text' as const, text: JSON.stringify(data, null, 2) }
@@ -205,6 +206,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       ).run(id, nid, parent_id || null, rootId, type, content, level, now, now)
 
       const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
+      fireAfterCreate(rowToBlock(row))
       return { content: [toText({ block: rowToBlock(row) })] }
     },
   )
@@ -227,6 +229,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       db.query("UPDATE blocks SET content = ?, updated_at = datetime('now') WHERE id = ?").run(content, block_id)
 
       const row = db.query('SELECT * FROM blocks WHERE id = ?').get(block_id) as BlockRow
+      fireAfterUpdate(rowToBlock(row))
       return { content: [toText({ block: rowToBlock(row) })] }
     },
   )
@@ -249,30 +252,45 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       const inputs = parseMarkdownToBlocks(markdown, nid)
       const docId = crypto.randomUUID()
       const now = new Date().toISOString()
+      const insertedIds: string[] = []
 
-      db.query(
-        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
-         VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
-      ).run(docId, nid, docId, title, now, now)
-
-      for (const inp of inputs) {
-        const blockId = crypto.randomUUID()
-        const parentId = inp.parent_id ?? docId
-
+      db.transaction(() => {
         db.query(
-          `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)`,
-        ).run(
-          blockId,
-          nid,
-          parentId as string,
-          docId,
-          inp.type,
-          inp.content ?? '',
-          JSON.stringify(inp.properties || {}),
-          now,
-          now,
-        )
+          `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+           VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
+        ).run(docId, nid, docId, title, now, now)
+
+        for (const inp of inputs) {
+          const blockId = crypto.randomUUID()
+          const parentId = inp.parent_id ?? docId
+
+          db.query(
+            `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)`,
+          ).run(
+            blockId,
+            nid,
+            parentId as string,
+            docId,
+            inp.type,
+            inp.content ?? '',
+            JSON.stringify(inp.properties || {}),
+            now,
+            now,
+          )
+          insertedIds.push(blockId)
+        }
+      })()
+
+      // Hook 触发（fire-and-forget）：先 doc，再批量子块
+      const docRow = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
+      fireAfterCreate(rowToBlock(docRow))
+      if (insertedIds.length > 0) {
+        const placeholders = insertedIds.map(() => '?').join(',')
+        const childRows = db
+          .query(`SELECT * FROM blocks WHERE id IN (${placeholders})`)
+          .all(...insertedIds) as BlockRow[]
+        fireAfterCreateMany(childRows.map(rowToBlock))
       }
 
       return {

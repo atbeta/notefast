@@ -1,8 +1,9 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema } from '@notefast/core'
+import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, rowToBlock } from '@notefast/core'
 import type { BlockRow, DocSummary } from '@notefast/core'
 import { getDb } from '../db'
+import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany } from '../services/hooks'
 
 const docs = new Hono()
 
@@ -84,6 +85,7 @@ docs.post('/', zValidator('json', createDocSchema), (c) => {
   ).run(docId, input.notebook_id, docId, input.title, now, now)
 
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
+  fireAfterCreate(rowToBlock(row))
   return c.json({
     id: row.id,
     title: row.content,
@@ -112,6 +114,7 @@ docs.delete('/:id', (c) => {
     db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...allIds)
   })()
 
+  fireAfterDelete(id)
   return c.json({ deleted: true, count: allIds.length })
 })
 
@@ -130,15 +133,19 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
   const newTitle = title || docRow.content
   const inputs = stripTitleHeading(rawInputs, newTitle)
 
+  // 收集旧子块 ID（事务外保留引用，事务后触发 afterDelete）
+  const oldChildRows = fetchAllDescendants(db, id)
+  const oldChildIds = oldChildRows.map((r) => r.id)
+  // 收集新插入的 block rows（事务后 SELECT 拿到最终时间戳）
+  const insertedIds: string[] = []
+
   db.transaction(() => {
-    const childIds = fetchAllDescendants(db, id)
-    const allChildIds = childIds.map((r) => r.id)
-    for (const delId of allChildIds) {
+    for (const delId of oldChildIds) {
       db.query('DELETE FROM block_refs WHERE source_id = ? OR target_id = ?').run(delId, delId)
     }
-    if (allChildIds.length > 0) {
-      const placeholders = allChildIds.map(() => '?').join(',')
-      db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...allChildIds)
+    if (oldChildIds.length > 0) {
+      const placeholders = oldChildIds.map(() => '?').join(',')
+      db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...oldChildIds)
     }
 
     db.query("UPDATE blocks SET content = ?, updated_at = datetime('now') WHERE id = ?").run(newTitle, id)
@@ -167,12 +174,24 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
         now,
         now,
       )
+      insertedIds.push(blockId)
     }
   })()
 
-  const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
+  // Hook 触发（fire-and-forget）：删旧 → 增新 → 更 doc
+  fireAfterDeleteMany(oldChildIds)
+  if (insertedIds.length > 0) {
+    const placeholders = insertedIds.map(() => '?').join(',')
+    const newRows = db
+      .query(`SELECT * FROM blocks WHERE id IN (${placeholders})`)
+      .all(...insertedIds) as BlockRow[]
+    fireAfterCreateMany(newRows.map(rowToBlock))
+  }
+  const updatedDocRow = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
+  fireAfterUpdate(rowToBlock(updatedDocRow))
+
   const rows = fetchAllDescendants(db, id)
-  const tree = buildBlockTree([row, ...rows])
+  const tree = buildBlockTree([updatedDocRow, ...rows])
   return c.json({ doc: tree.length > 0 ? tree[0] : null })
 })
 
