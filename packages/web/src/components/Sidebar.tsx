@@ -9,6 +9,7 @@ import {
   Plus,
   LayoutGrid,
   MessageSquareText,
+  Inbox,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import type { DocSummary } from '@notefast/core'
@@ -47,6 +48,7 @@ export default function Sidebar({
   const location = useLocation()
   const [isMac, setIsMac] = useState(false)
   const [recentDocs, setRecentDocs] = useState<DocSummary[]>([])
+  const [inboxCount, setInboxCount] = useState(0)
 
   useEffect(() => {
     setIsMac(/Mac|iPhone|iPad/i.test(navigator.platform))
@@ -59,6 +61,19 @@ export default function Sidebar({
         .catch(() => {})
     }
   }, [collapsed, location.pathname])
+
+  // Inbox 未读计数（unreviewed = 含 AI 已执行 + 仅建议两类）
+  useEffect(() => {
+    let cancelled = false
+    const refresh = () => {
+      api.get<{ count: number }>('/auto-link/inbox?status=unreviewed&limit=1')
+        .then((r) => { if (!cancelled) setInboxCount(r.count) })
+        .catch(() => {})
+    }
+    refresh()
+    const t = setInterval(refresh, 15_000)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [location.pathname])
 
   const closeAfterNav = useCallback(() => {
     onNavigate?.()
@@ -127,6 +142,15 @@ export default function Sidebar({
         <Link to="/new" onClick={closeAfterNav} className={location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'}>
           <Plus className="w-[15px] h-[15px]" strokeWidth={1.75} />
           新建
+        </Link>
+        <Link to="/inbox" onClick={closeAfterNav} className={location.pathname === '/inbox' ? 'sidebar-link-active' : 'sidebar-link'}>
+          <Inbox className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <span className="flex-1">Inbox</span>
+          {inboxCount > 0 && (
+            <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-foreground text-background tabular-nums">
+              {inboxCount > 99 ? '99+' : inboxCount}
+            </span>
+          )}
         </Link>
 
         {recentDocs.length > 0 && (

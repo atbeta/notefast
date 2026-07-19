@@ -39,7 +39,7 @@ interface AIStatus {
   embedding: { configured: boolean; ok: boolean; dim?: number; lastError?: string }
   chat: { configured: boolean; ok: boolean; model?: string; lastError?: string }
   reranker: { configured: boolean; ok: boolean; model?: string; lastError?: string }
-  autoLink: { configured: boolean; enabled: boolean; autoApply: boolean; lastError?: string }
+  autoLink: { configured: boolean; enabled: boolean; autoApply: 'never' | 'high_confidence'; lastError?: string }
   usage: {
     embeddingCalls: number
     chatCalls: number
@@ -91,7 +91,7 @@ interface DiagnoseResult {
   autoLink: {
     configured: boolean
     enabled: boolean
-    autoApply: boolean
+    autoApply: 'never' | 'high_confidence'
     ok: boolean
     prerequisites: {
       chat: { configured: boolean; ok: boolean }
@@ -103,7 +103,7 @@ interface DiagnoseResult {
 }
 
 function defaultAutoLink(): AutoLinkConfig {
-  return { enabled: false, autoApply: false, notebookScope: 'all', maxPerBlock: 5 }
+  return { enabled: false, autoApply: 'never', notebookScope: 'all', maxPerBlock: 5, minConfidence: 0.75, minMargin: 0.1 }
 }
 
 /** 根据浏览器 locale 推测一个合理的默认 preset；用户可在下拉中覆盖 */
@@ -631,11 +631,65 @@ export default function AISettingsPanel() {
         />
         {autoLink.enabled && (
           <div className="mt-3 space-y-3 pl-4 border-l-2 border-border/60">
-            <Toggle
-              checked={autoLink.autoApply}
-              onChange={(v) => setAutoLink({ ...autoLink, autoApply: v })}
-              label={autoLink.autoApply ? '自动应用（无提示）' : 'Suggest-first（用户在面板里确认）'}
-            />
+            <div>
+              <div className="text-xs font-medium text-muted-foreground mb-1.5">自动应用策略</div>
+              <div className="flex flex-col gap-1.5">
+                <label className="flex items-start gap-2 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    className="mt-0.5"
+                    checked={autoLink.autoApply === 'never'}
+                    onChange={() => setAutoLink({ ...autoLink, autoApply: 'never' })}
+                  />
+                  <span>
+                    <span className="font-medium">仅建议</span>
+                    <span className="block text-xs text-muted-foreground">
+                      AI 抽取实体进 Inbox，但不写 block_refs；用户接受后才落地。
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    className="mt-0.5"
+                    checked={autoLink.autoApply === 'high_confidence'}
+                    onChange={() => setAutoLink({ ...autoLink, autoApply: 'high_confidence' })}
+                  />
+                  <span>
+                    <span className="font-medium">高置信自动应用</span>
+                    <span className="block text-xs text-muted-foreground">
+                      满足 minConfidence（默认 0.75）且 top-1 显著领先时自动写入，其余进 Inbox。
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 text-sm">
+              <label className="flex items-center gap-1.5">
+                minConfidence
+                <input
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  max="1"
+                  className="w-20 px-2 py-1 rounded border border-border bg-background text-sm"
+                  value={autoLink.minConfidence}
+                  onChange={(e) => setAutoLink({ ...autoLink, minConfidence: parseFloat(e.target.value) || 0 })}
+                />
+              </label>
+              <label className="flex items-center gap-1.5">
+                minMargin
+                <input
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  max="1"
+                  className="w-20 px-2 py-1 rounded border border-border bg-background text-sm"
+                  value={autoLink.minMargin}
+                  onChange={(e) => setAutoLink({ ...autoLink, minMargin: parseFloat(e.target.value) || 0 })}
+                />
+              </label>
+            </div>
             <FieldRow label="Notebook 范围">
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-1.5 text-sm">
@@ -1016,7 +1070,7 @@ type DiagR = {
   model?: string
   embeddingCalls?: number
   prerequisites?: { chat: { configured: boolean; ok: boolean }; embedding: unknown }
-  autoApply?: boolean
+  autoApply?: 'never' | 'high_confidence'
 }
 
 function OverallDot({ overall }: { overall: 'healthy' | 'partial' | 'degraded' | 'idle' }) {
@@ -1084,11 +1138,11 @@ function DiagRow({
 function autoLinkFormat(r: DiagR): string {
   const prereq = r.prerequisites?.chat
   if (!prereq) return ''
-  return prereq.configured
-    ? prereq.ok
-      ? `依赖 Chat 已通${r.autoApply ? '（自动应用）' : '（suggest-first）'}`
-      : '依赖 Chat 不可达，建议不会触发'
-    : '需要 Chat 模型已配置'
+  if (!prereq.configured) return '需要 Chat 模型已配置'
+  if (!prereq.ok) return '依赖 Chat 不可达，建议不会触发'
+  return r.autoApply === 'high_confidence'
+    ? '依赖 Chat 已通（高置信自动应用）'
+    : '依赖 Chat 已通（仅建议）'
 }
 
 function describeMeta(r: DiagR): string {

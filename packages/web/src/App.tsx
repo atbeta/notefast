@@ -4,6 +4,7 @@ import DocPage from './routes/doc'
 import NewDocPage from './routes/new'
 import SettingsPage from './routes/settings'
 import SettingsAIPage from './routes/settings-ai'
+import InboxPage from './routes/inbox'
 import Layout from './components/Layout'
 import { ToastProvider } from './components/ui'
 
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/new" element={<NewDocPage />} />
           <Route path="/doc/:id" element={<DocPage />} />
+          <Route path="/inbox" element={<InboxPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/ai" element={<SettingsAIPage />} />
         </Routes>
