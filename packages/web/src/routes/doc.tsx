@@ -170,29 +170,35 @@ export default function DocPage() {
     }
   }
 
-  if (loading) {
+  const flatHeadings = flattenHeadings(headings)
+  const updatedAt = doc ? formatTime(doc.updated_at) : ''
+  const wordCount = doc ? countWords(doc) : 0
+  const isEmpty = wordCount === 0
+  /** 正在显示的是旧文档（A），新文档（B）还在拉取中 —— stale-while-revalidate */
+  const showingStale = doc !== null && doc.id !== id
+
+  // 首屏骨架：结构与正式布局一致（header + 内容列 + 右栏），加载完成后布局零跳动
+  if (!doc && loading) {
     return (
-      <div className="flex gap-8 animate-pulse">
-        <div className="flex-1 space-y-4">
-          <div className="h-4 bg-secondary rounded w-24 mb-8" />
-          <div className="h-10 bg-secondary rounded w-1/2" />
-          <div className="card p-6 space-y-3 mt-6">
-            <div className="h-4 bg-secondary rounded w-full" />
-            <div className="h-4 bg-secondary rounded w-5/6" />
-            <div className="h-4 bg-secondary rounded w-4/6" />
+      <div className="flex flex-col lg:flex-row h-full animate-pulse">
+        <div className="flex-1 min-w-0 flex flex-col h-full border-r border-border/50">
+          <div className="h-14 shrink-0 border-b border-border/50" />
+          <div className="flex-1 overflow-hidden">
+            <div className="w-full max-w-3xl mx-auto px-8 pt-10 space-y-3">
+              <div className="h-9 bg-secondary rounded w-1/2" />
+              <div className="h-3.5 bg-secondary rounded w-28" />
+              <div className="h-4 bg-secondary rounded w-full mt-8" />
+              <div className="h-4 bg-secondary rounded w-5/6" />
+              <div className="h-4 bg-secondary rounded w-4/6" />
+            </div>
           </div>
         </div>
+        <div className="hidden lg:block w-72 shrink-0 bg-sidebar/30" />
       </div>
     )
   }
 
-  if (error) return <ErrorState message={error} />
-  if (!doc) return <ErrorState message="文档不存在" />
-
-  const flatHeadings = flattenHeadings(headings)
-  const updatedAt = formatTime(doc.updated_at)
-  const wordCount = countWords(doc)
-  const isEmpty = wordCount === 0
+  if (!doc) return <ErrorState message={error || '文档不存在'} />
 
   return (
     <div className="flex flex-col lg:flex-row h-full">
@@ -245,9 +251,11 @@ export default function DocPage() {
           </div>
         </header>
 
-        {/* Scrollable Document Body */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="w-full max-w-3xl mx-auto px-8 pt-10 pb-32 animate-fade-in">
+        {/* Scrollable Document Body — scrollbar-gutter 预留滚动条位，切换文档时内容不横移 */}
+        <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+          {/* stale-while-revalidate：切换文档时保留旧内容降透明，新文档就地替换，无闪烁 */}
+          <div className={`transition-opacity duration-200 ${showingStale ? 'opacity-40' : 'opacity-100'}`}>
+            <div className="w-full max-w-3xl mx-auto px-8 pt-10 pb-32 animate-fade-in">
             {/* Title — always editable, AI-generate on hover */}
             <div className="group relative">
               <input
@@ -255,7 +263,7 @@ export default function DocPage() {
                 onChange={(e) => setTitleDraft(e.target.value)}
                 onBlur={saveTitle}
                 onKeyDown={handleTitleKeyDown}
-                className="input-underline text-[34px] font-bold text-foreground"
+                className="input-underline font-bold text-foreground"
                 placeholder="无标题文档"
               />
               <button
@@ -307,18 +315,19 @@ export default function DocPage() {
                   </div>
                 )}
 
-                <article>
-                  <BlockRenderer block={doc} />
-                </article>
-              </div>
-            )}
+                 <article>
+                   <BlockRenderer block={doc} />
+                 </article>
+               </div>
+             )}
+           </div>
           </div>
         </div>
       </div>
 
       {/* Right Sidebar (Desktop only) — AI 聊天打开时让位，避免双栏堆叠的割裂感 */}
       {!aiChatOpen && (
-        <div className="hidden lg:flex flex-col w-72 shrink-0 bg-sidebar/30 h-full overflow-y-auto animate-fade-in">
+        <div className={`hidden lg:flex flex-col w-72 shrink-0 bg-sidebar/30 h-full overflow-y-auto transition-opacity duration-200 ${showingStale ? 'opacity-40' : 'opacity-100'}`}>
           <div className="p-6 space-y-8">
             <section>
               <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-3 flex items-center gap-2">
@@ -374,7 +383,8 @@ export default function DocPage() {
 function OutlineView({
   headings, loading
 }: { headings: Array<HeadingNode & { depth: number }>; loading: boolean }) {
-  if (loading) {
+  // 仅首次加载（无数据）时显示加载态；切换文档时保留旧大纲直至新数据到达，避免闪烁
+  if (loading && headings.length === 0) {
     return <div className="px-1 text-[12px] text-muted-foreground/70">加载中…</div>
   }
   if (headings.length === 0) {
@@ -409,7 +419,7 @@ function OutlineView({
 }
 
 function BacklinksView({ backlinks, loading }: { backlinks: Backlink[]; loading: boolean }) {
-  if (loading) {
+  if (loading && backlinks.length === 0) {
     return <div className="px-1 text-[12px] text-muted-foreground/70">加载中…</div>
   }
   if (backlinks.length === 0) {
