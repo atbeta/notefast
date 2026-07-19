@@ -190,17 +190,17 @@ export default function SyncPanel() {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
+    <div className="rounded-xl border border-border bg-card shadow-[var(--shadow-card)] overflow-hidden">
       <button
         type="button"
         onClick={() => setCollapsed((c) => !c)}
-        className="w-full flex items-center justify-between gap-2 px-5 py-3 bg-background/50 hover:bg-accent transition-colors"
+        className="w-full flex items-center justify-between gap-2 px-5 py-3.5 hover:bg-accent/60 transition-colors"
       >
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <SettingsIcon className="w-4 h-4 text-primary" />
+        <div className="flex items-center gap-2.5 text-[13.5px] font-medium text-foreground">
+          <SettingsIcon className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
           <span>数据同步 (Sync)</span>
           {status?.configured ? (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/12 text-emerald-600 dark:text-emerald-300 font-medium">
               {status.adapterName}
             </span>
           ) : (
@@ -209,7 +209,7 @@ export default function SyncPanel() {
             </span>
           )}
         </div>
-        {collapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+        {collapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} /> : <ChevronUp className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />}
       </button>
 
       {!collapsed && (
@@ -391,9 +391,9 @@ export default function SyncPanel() {
                   type="button"
                   onClick={handleSave}
                   disabled={saving}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                  className="btn-primary-custom"
                 >
-                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
                   {status?.configured && status.adapterName === form.kind ? '保存' : '启用'}
                 </button>
                 {status?.configured && (

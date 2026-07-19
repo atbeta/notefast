@@ -62,7 +62,7 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
     <>
       <div className="card-interactive px-3.5 py-3 group flex items-center gap-3.5">
         {/* Icon tile：克制色，不抢标题层级 */}
-        <div className="w-9 h-9 rounded-md bg-muted text-foreground/65 grid place-items-center shrink-0 group-hover:text-foreground transition-colors">
+        <div className="w-9 h-9 rounded-lg bg-muted/70 text-foreground/55 grid place-items-center shrink-0 group-hover:bg-muted group-hover:text-foreground/80 transition-colors">
           <FileText className="w-4 h-4" strokeWidth={1.5} />
         </div>
         <div className="min-w-0 flex-1">
@@ -85,7 +85,7 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
             </div>
           ) : (
             <Link to={'/doc/' + doc.id} className="block">
-              <h3 className="font-medium text-[14.5px] text-foreground tracking-[-0.005em] truncate group-hover:text-primary transition-colors">
+              <h3 className="font-medium text-[14.5px] text-foreground tracking-[-0.005em] truncate">
                 {doc.title || '未命名文档'}
               </h3>
             </Link>

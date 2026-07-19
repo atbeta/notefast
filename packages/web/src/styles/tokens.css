@@ -10,7 +10,8 @@
 
 :root {
   /* ───────────── 字体 ───────────── */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, 'Apple Color Emoji', Arial, sans-serif, 'Segoe UI Emoji', 'Segoe UI Symbol';
+  /* 英文/数字走 Inter，中文回落苹方（macOS/iOS）或雅黑（Windows），灰度更统一 */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei', Helvetica, 'Apple Color Emoji', Arial, sans-serif, 'Segoe UI Emoji', 'Segoe UI Symbol';
   --font-serif: 'Source Serif Pro', 'Charter', 'Georgia', serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, monospace;
 
@@ -31,10 +32,17 @@
   --secondary-foreground: 55 53 47;
 
   /* ───────────── 主色 ───────────── */
-  --primary: 35 131 226; /* Notion-like blue */
+  /* 高级感公式：界面 95% 黑白灰；主行动按钮用墨色（近黑）；
+     品牌蓝仅小面积点缀（链接、激活态、focus ring、focus 指示） */
+  --primary: 37 99 235; /* #2563EB — 比 #2383E2 更深邃一档 */
   --primary-foreground: 255 255 255;
   --primary-soft: rgb(var(--primary) / 0.08);
   --primary-softer: rgb(var(--primary) / 0.04);
+
+  /* ───────────── 墨色（主按钮 / 最强行动色） ───────────── */
+  --ink: 31 35 40;           /* #1F2328 */
+  --ink-foreground: 255 255 255;
+  --ink-hover: 58 63 70;     /* hover 提亮，不发灰蓝 */
 
   /* ───────────── 状态 ───────────── */
   --destructive: 235 87 87;
@@ -45,7 +53,7 @@
   --border: 233 233 231;
   --border-strong: 200 200 198;
   --input: 233 233 231;
-  --ring: 35 131 226;
+  --ring: 37 99 235;
 
   /* ───────────── 编辑器专属 ───────────── */
   --editor-bg: 255 255 255;
@@ -60,27 +68,30 @@
   --sidebar-muted: 145 145 142;
 
   /* ───────────── 半径 ───────────── */
-  --radius: 4px;
-  --radius-card: 6px;
-  --radius-btn: 4px;
+  --radius: 6px;
+  --radius-card: 8px;
+  --radius-btn: 6px;
 
-  /* ───────────── 字号（高密度） ───────────── */
-  --text-xs: 12px;
-  --text-sm: 13px;
-  --text-base: 14px;
-  --text-md: 15px;
-  --text-lg: 16px;
-  --text-xl: 18px;
-  --text-2xl: 22px;
-  --text-3xl: 28px;
-  --text-display: 34px;
+  /* ───────────── 字号（节奏化 scale：辅助 → 正文 → 展示） ───────────── */
+  --text-xs: 11.5px;   /* 微小标签 / 状态行 */
+  --text-sm: 12.5px;   /* 辅助信息 */
+  --text-base: 13.5px; /* UI 主文本 */
+  --text-md: 14.5px;   /* 强调列表项 */
+  --text-lg: 16px;     /* 阅读正文 */
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-display: 36px; /* 页面标题 */
 
-  /* ───────────── 阴影 ───────────── */
+  /* ───────────── 阴影（轻量、单层、克制） ───────────── */
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.02);
   --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.03);
   --shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
-  --ease: 150ms ease;
+  /* ───────────── 动效（全局统一） ───────────── */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur: 150ms;
 }
 
 .dark {
@@ -98,10 +109,14 @@
   --secondary: 47 47 47;
   --secondary-foreground: 255 255 255;
 
-  --primary: 35 131 226;
+  --primary: 59 130 246;
   --primary-foreground: 255 255 255;
   --primary-soft: rgb(var(--primary) / 0.15);
   --primary-softer: rgb(var(--primary) / 0.08);
+
+  --ink: 235 237 240;
+  --ink-foreground: 25 25 25;
+  --ink-hover: 200 203 208;
 
   --destructive: 235 87 87;
   --destructive-foreground: 255 255 255;
@@ -110,7 +125,7 @@
   --border: 60 60 60;
   --border-strong: 80 80 80;
   --input: 60 60 60;
-  --ring: 35 131 226;
+  --ring: 59 130 246;
 
   --sidebar-background: 32 32 32;
   --sidebar-foreground: 155 155 155;
@@ -125,6 +140,7 @@
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.05);
   --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
   --shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 

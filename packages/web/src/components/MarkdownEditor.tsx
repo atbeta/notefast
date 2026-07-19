@@ -16,12 +16,8 @@ import {
   Heading3,
   X,
   AlertCircle,
-  Save,
+  Check,
   FilePlus2,
-  Type,
-  Hash,
-  Clock3,
-  Undo2,
   RotateCcw,
 } from 'lucide-react'
 import { parseMarkdownToBlocks, inputsToBlockTree } from '@notefast/core'
@@ -112,7 +108,6 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
   const [mode, setMode] = useState<Mode>('edit')
   const [showHelp, setShowHelp] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const lineNumbersRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [savedFlash, setSavedFlash] = useState(false)
 
@@ -161,12 +156,13 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
     return () => clearTimeout(id)
   }, [content, docId, initialContent, loadedAt])
 
-  // 同步滚动：line numbers 跟随 textarea
-  const handleScroll = useCallback(() => {
-    if (textareaRef.current && lineNumbersRef.current) {
-      lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop
-    }
-  }, [])
+  // textarea 自动增高 — 编辑器随文档流自然延伸，不内部滚动
+  useEffect(() => {
+    const ta = textareaRef.current
+    if (!ta || mode !== 'edit') return
+    ta.style.height = 'auto'
+    ta.style.height = `${ta.scrollHeight}px`
+  }, [content, mode, loading])
 
   // ───── 保存 / 取消 ─────
   const handleSave = useCallback(async () => {
@@ -406,12 +402,27 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
   const dirty = content !== initialContent
 
   // ───── 视图（只读预览）─────
+  // inputsToBlockTree 返回顶层 block 数组；包装为 document 根节点以预览完整文档
   const previewTree: Block | null = mode === 'view' && content
     ? (() => {
         try {
           const inputs = parseMarkdownToBlocks(content, '__preview__')
-          const tree = inputsToBlockTree(inputs)
-          return tree.length > 0 ? tree[0] : null
+          const children = inputsToBlockTree(inputs)
+          if (children.length === 0) return null
+          return {
+            id: '__preview__',
+            notebook_id: '__preview__',
+            parent_id: null,
+            root_id: '__preview__',
+            type: 'document',
+            content: '',
+            properties: {},
+            sort: 0,
+            level: 0,
+            created_at: '',
+            updated_at: '',
+            children,
+          } as Block
         } catch {
           return null
         }
@@ -419,201 +430,177 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
     : null
 
   return (
-    <div className="flex flex-col rounded-xl border border-border bg-card overflow-hidden mt-6 shadow-[var(--shadow-card)] animate-fade-in">
-      {/* Toolbar — icon-first; all text labels live in tooltips */}
-      <div className="flex flex-wrap items-center gap-x-1 gap-y-2 px-3 py-1.5 border-b border-border bg-muted/40 shrink-0">
-        {/* Primary actions */}
-        <div className="flex items-center gap-1 shrink-0 pl-0.5 pr-1.5">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || loading}
-            title={saving ? '保存中…' : savedFlash ? '已保存' : '保存 (⌘S)'}
-            aria-label={saving ? '保存中' : '保存'}
-            className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-primary bg-primary text-primary-foreground hover:brightness-110 active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" strokeWidth={1.75} />}
-          </button>
-          <IconBtn title="取消 (Esc)" onClick={handleCancel}>
-            <X className="w-3.5 h-3.5" strokeWidth={1.75} />
-          </IconBtn>
-        </div>
-
-        {/* Block-type group */}
-        <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border border-border bg-background/60 flex-wrap">
+    <div className="animate-fade-in">
+      {/* Toolbar — sticky 于文档列顶部，融入页面而非浮于卡片（实色背景，滚动时正文从下方穿过） */}
+      <div className="sticky top-14 z-10 -mx-8 px-8 mb-2 bg-background">
+        <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1 py-1.5 border-b border-border/60">
+          {/* Block-type group */}
           <IconBtn title="一级标题 (#)" onClick={() => insertAtCursor('\n# ')}>
-            <Heading1 className="w-3.5 h-3.5" strokeWidth={1.75} />
+            <Heading1 className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
           <IconBtn title="二级标题 (##)" onClick={() => insertAtCursor('\n## ')}>
-            <Heading2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+            <Heading2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
           <IconBtn title="三级标题 (###)" onClick={() => insertAtCursor('\n### ')}>
-            <Heading3 className="w-3.5 h-3.5" strokeWidth={1.75} />
+            <Heading3 className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
           <ToolbarDivider />
           <IconBtn title="无序列表 (-)" onClick={() => insertAtCursor('\n- ')}>
-            <List className="w-3.5 h-3.5" strokeWidth={1.75} />
+            <List className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
           <IconBtn title="有序列表 (1.)" onClick={() => insertAtCursor('\n1. ')}>
-            <ListOrdered className="w-3.5 h-3.5" strokeWidth={1.75} />
+            <ListOrdered className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
           <IconBtn title="引用 (>)" onClick={() => insertAtCursor('\n> ')}>
-            <Quote className="w-3.5 h-3.5" strokeWidth={1.75} />
+            <Quote className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
           <IconBtn title="代码块 (```)" onClick={() => insertAtCursor('\n```\n\n```\n', { cursorOffset: 5 })}>
-            <Code className="w-3.5 h-3.5" strokeWidth={1.75} />
+            <Code className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
-        </div>
-
-        {/* Inline format group */}
-        <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border border-border bg-background/60">
+          <ToolbarDivider />
+          {/* Inline format group */}
           <IconBtn title="加粗 (⌘B)" onClick={() => wrapSelection('**')}>
-            <Bold className="w-3.5 h-3.5" strokeWidth={1.75} />
+            <Bold className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
           <IconBtn title="斜体 (⌘I)" onClick={() => wrapSelection('*')}>
-            <Italic className="w-3.5 h-3.5" strokeWidth={1.75} />
+            <Italic className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
           <IconBtn title="行内代码 (⌘E)" onClick={() => wrapSelection('`')}>
-            <Code className="w-3.5 h-3.5" strokeWidth={1.75} />
+            <Code className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
           <IconBtn title="链接 (⌘⇧K)" onClick={() => {
             const sel = content.slice(textareaRef.current?.selectionStart ?? 0, textareaRef.current?.selectionEnd ?? 0)
             const hasSel = sel.length > 0
             const linkText = hasSel ? sel : 'text'
             const ins = `[${linkText}](url)`
-            if (hasSel) wrapSelection('[', '](url)')
+            if (hasSel) wrapSelection('[', `](url)`)
             else insertAtCursor(ins, { cursorOffset: linkText.length + 3 })
           }}>
-            <Link2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+            <Link2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
-        </div>
 
-        <div className="flex items-center gap-1 text-muted-foreground shrink-0 ml-auto">
-          <IconBtn
-            title={mode === 'view' ? '返回编辑 (⌘P)' : '预览 (⌘P)'}
-            onClick={() => setMode((m) => (m === 'edit' ? 'view' : 'edit'))}
-            active={mode === 'view'}
-          >
-            {mode === 'view' ? <Edit3 className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" strokeWidth={1.75} />}
-          </IconBtn>
-          <IconBtn title="快捷键" onClick={() => setShowHelp((s) => !s)}>
-            <span className="text-[12px] font-medium leading-none">?</span>
-          </IconBtn>
+          {/* Right cluster */}
+          <div className="flex items-center gap-1 ml-auto">
+            <IconBtn
+              title={mode === 'view' ? '返回编辑 (⌘P)' : '预览 (⌘P)'}
+              onClick={() => setMode((m) => (m === 'edit' ? 'view' : 'edit'))}
+              active={mode === 'view'}
+            >
+              {mode === 'view' ? <Edit3 className="w-[15px] h-[15px]" strokeWidth={1.75} /> : <Eye className="w-[15px] h-[15px]" strokeWidth={1.75} />}
+            </IconBtn>
+            <IconBtn title="快捷键" onClick={() => setShowHelp((s) => !s)} active={showHelp}>
+              <span className="text-[12px] font-medium leading-none">?</span>
+            </IconBtn>
+            <ToolbarDivider />
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || loading}
+              title={saving ? '保存中…' : '保存 (⌘S)'}
+              className="inline-flex items-center gap-1 h-7 px-3 rounded-md text-[12px] font-medium bg-ink text-ink-foreground border border-ink shadow-[var(--shadow-btn)] hover:bg-ink-hover hover:border-ink-hover active:scale-[0.97] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : savedFlash ? <Check className="w-3 h-3" strokeWidth={2.25} /> : null}
+              {saving ? '保存中' : savedFlash ? '已保存' : '保存'}
+            </button>
+            <IconBtn title="退出编辑 (Esc)" onClick={handleCancel}>
+              <X className="w-[15px] h-[15px]" strokeWidth={1.75} />
+            </IconBtn>
+          </div>
         </div>
       </div>
 
-      {/* Editor body */}
+      {/* Error banner */}
       {error && (
-        <div className="px-4 py-2 bg-destructive/8 text-destructive text-[12px] flex items-center gap-2 border-b border-border">
-          <AlertCircle className="w-3.5 h-3.5" />
+        <div className="mb-3 px-3 py-2 rounded-md bg-destructive/8 text-destructive text-[12px] flex items-center gap-2">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span>{error}</span>
           <span className="ml-auto text-muted-foreground">已自动保存到本地草稿</span>
         </div>
       )}
 
-      <div className="flex-1 relative min-h-[420px] max-h-[75vh] bg-editor-bg">
-        {loading ? (
-          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
-            <Loader2 className="w-4 h-4 animate-spin mr-2 text-primary" />
-            加载文档…
+      {/* Editor body — 与阅读态共享同一文档流宽度 */}
+      {loading ? (
+        <div className="py-16 flex items-center justify-center text-muted-foreground text-sm">
+          <Loader2 className="w-4 h-4 animate-spin mr-2 text-primary" />
+          加载文档…
+        </div>
+      ) : mode === 'view' ? (
+        <div className="min-h-[200px]">
+          {previewTree ? (
+            <BlockRenderer block={previewTree} />
+          ) : (
+            <div className="text-sm text-muted-foreground/70 italic py-4">（空文档，无法预览）</div>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-start">
+          {/* 行号 — 极淡化，无边栏底色，像文本的自然延伸 */}
+          <div
+            aria-hidden
+            className="shrink-0 w-7 pr-3 pt-[7px] text-right font-mono text-[11px] leading-[1.75] text-muted-foreground/35 select-none tabular-nums"
+          >
+            {Array.from({ length: lines }, (_, i) => (
+              <div key={i + 1}>{i + 1}</div>
+            ))}
           </div>
-        ) : mode === 'view' ? (
-          <div className="absolute inset-0 overflow-y-auto p-6 bg-background/40">
-            {previewTree ? (
-              <article className="reading-prose max-w-[68ch] mx-auto">
-                <BlockRenderer block={previewTree} />
-              </article>
-            ) : (
-              <div className="text-sm text-muted-foreground italic">（空文档，无法预览）</div>
-            )}
-          </div>
-        ) : (
-          <div className="absolute inset-0 flex">
-            {/* 行号侧栏 */}
-            <div
-              ref={lineNumbersRef}
-              className="shrink-0 w-12 py-4 px-1 bg-editor-gutter text-right font-mono text-[11px] text-muted-foreground/55 overflow-hidden select-none border-r border-border"
-            >
-              {Array.from({ length: lines }, (_, i) => (
-                <div key={i + 1} className="leading-[1.65] tabular-nums" style={{ minHeight: '1.65em' }}>
-                  {i + 1}
-                </div>
-              ))}
-            </div>
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onScroll={handleScroll}
-              spellCheck={false}
-              className="flex-1 w-full py-4 px-5 font-mono text-[13.5px] leading-[1.65] text-foreground bg-transparent resize-none focus:outline-none placeholder:text-muted-foreground/40 selection:bg-primary/15"
-              placeholder="开始写…（⌘B 加粗 / ⌘I 斜体 / # 标题 / - 列表；⌘P 切换预览；⌘S 保存）"
-            />
-          </div>
-        )}
-      </div>
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            onKeyDown={handleKeyDown}
+            spellCheck={false}
+            rows={Math.max(lines, 5)}
+            className="flex-1 min-w-0 pt-[7px] pb-16 font-mono text-[14px] leading-[1.75] text-foreground bg-transparent resize-none overflow-hidden focus:outline-none placeholder:text-muted-foreground/40 selection:bg-primary/15"
+            placeholder="开始写…（⌘B 加粗 / ⌘I 斜体 / # 标题 / - 列表；⌘P 预览；⌘S 保存）"
+          />
+        </div>
+      )}
 
-      {/* Footer status bar — icon chips; tooltip = full info */}
-      <div className="flex items-center gap-x-1 gap-y-1 flex-wrap px-2 py-1 border-t border-border bg-muted/30 shrink-0">
-        {/* 字数 */}
-        <IconStat icon={<Type className="w-3 h-3" strokeWidth={1.75} />}
-          value={charCount} unit="字" title={`${charCount.toLocaleString('zh-CN')} 个字符`} />
-        {/* 行数 */}
-        <IconStat icon={<Hash className="w-3 h-3" strokeWidth={1.75} />}
-          value={lines} unit="行" title={`${lines.toLocaleString('zh-CN')} 行`} />
-        {/* 阅读 */}
-        <IconStat icon={<Clock3 className="w-3 h-3" strokeWidth={1.75} />}
-          value={readMin} unit="分钟" title={`预计阅读 ${readMin} 分钟`} />
+      {/* Footer — 单行极简状态 */}
+      <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground/70 tabular-nums">
+        <span>
+          {charCount.toLocaleString('zh-CN')} 字 · {lines.toLocaleString('zh-CN')} 行 · 约 {readMin} 分钟
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              savedFlash ? 'bg-emerald-500' : dirty ? 'bg-amber-500' : savedAt ? 'bg-border-strong' : 'bg-border'
+            }`}
+          />
+          {savedFlash
+            ? '已保存 · 刚刚'
+            : dirty
+              ? draftedAt
+                ? `未保存 · 草稿 ${relativeTime(draftedAt)}`
+                : '未保存'
+              : savedAt
+                ? `已保存 · ${relativeTime(savedAt)}`
+                : '未修改'}
+        </span>
 
-        {/* 保存状态 — 纯色点；时间信息全靠 tooltip */}
-        {savedFlash ? (
-          <StatusDot tone="success" title="已保存 · 刚刚" />
-        ) : dirty ? (
-          <StatusDot tone="warning" title="未保存（自动存到本地草稿）" />
-        ) : savedAt ? (
-          <StatusDot tone="idle" title={`已保存 · ${relativeTime(savedAt)}`} />
-        ) : null}
-
-        {/* 草稿 */}
-        {hasDraft(docId) && !savedFlash && (
-          <span className="inline-flex items-center gap-1 text-muted-foreground/70">
+        <span className="ml-auto flex items-center gap-1">
+          {hasDraft(docId) && !savedFlash && (
             <button
               type="button"
               onClick={() => {
                 clearDraft(docId)
                 window.location.reload()
               }}
-              title={`丢弃本地草稿（${draftedAt ? relativeTime(draftedAt) : '已保存'}）`}
-              aria-label="丢弃本地草稿"
-              className="inline-flex items-center justify-center w-6 h-6 rounded text-muted-foreground hover:text-destructive transition-colors"
+              title="丢弃本地草稿并重新加载"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-muted-foreground/80 hover:text-destructive transition-colors"
             >
               <RotateCcw className="w-3 h-3" strokeWidth={1.75} />
+              丢弃草稿
             </button>
-          </span>
-        )}
-
-        <span className="ml-auto inline-flex items-center gap-1">
+          )}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             title="追加本地 Markdown 文件 (.md)"
             aria-label="追加本地 Markdown 文件"
-            className="inline-flex items-center justify-center w-6 h-6 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="inline-flex items-center justify-center w-6 h-6 rounded text-muted-foreground/80 hover:text-foreground hover:bg-accent transition-colors"
           >
-            <FilePlus2 className="w-3 h-3" strokeWidth={1.75} />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              // 触发浏览器的原生 undo（focus 到 textarea 后用户再按 ⌘Z / Ctrl+Z）
-              textareaRef.current?.focus()
-            }}
-            title="聚焦编辑器并让浏览器原生 ⌘Z / Ctrl+Z 处理撤销"
-            aria-label="聚焦并准备撤销"
-            className="inline-flex items-center justify-center w-6 h-6 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          >
-            <Undo2 className="w-3 h-3" strokeWidth={1.75} />
+            <FilePlus2 className="w-3.5 h-3.5" strokeWidth={1.75} />
           </button>
           <input
             ref={fileInputRef}
@@ -633,14 +620,14 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
 
       {/* Keyboard help sheet */}
       {showHelp && (
-        <div className="border-t border-border bg-muted/40 p-3 text-[12px] text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-1">
+        <div className="mt-3 pt-3 border-t border-border/50 text-[11.5px] text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-1.5">
           <ShortcutsHelp kbd="⌘ S" desc="保存" />
           <ShortcutsHelp kbd="⌘ P" desc="切换 预览 / 编辑" />
           <ShortcutsHelp kbd="⌘ B / I / E" desc="加粗 / 斜体 / 行内代码" />
           <ShortcutsHelp kbd="⌘⇧ K" desc="插入链接" />
           <ShortcutsHelp kbd="# Enter" desc="自动加 heading 触发器" />
           <ShortcutsHelp kbd="- Enter" desc="自动加 list 触发器" />
-          <ShortcutsHelp kbd="Esc" desc="取消（保留草稿）" />
+          <ShortcutsHelp kbd="Esc" desc="退出（保留草稿）" />
         </div>
       )}
     </div>
@@ -666,7 +653,7 @@ function IconBtn({
       onClick={onClick}
       title={title}
       aria-label={title}
-      className={`inline-flex items-center justify-center w-7 h-7 rounded transition-colors ${
+      className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
         active
           ? 'bg-primary/10 text-primary'
           : 'text-muted-foreground hover:text-foreground hover:bg-accent'
@@ -678,58 +665,7 @@ function IconBtn({
 }
 
 function ToolbarDivider() {
-  return <span className="w-px h-4 bg-border/60 mx-0.5" />
-}
-
-/** Icon + monospaced value chip for status bar (字 / 行 / 分钟) */
-function IconStat({
-  icon,
-  value,
-  unit,
-  title,
-}: {
-  icon: React.ReactNode
-  value: number
-  unit: string
-  title: string
-}) {
-  return (
-    <span
-      title={title}
-      className="inline-flex items-center gap-1 px-1.5 h-6 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-default"
-    >
-      <span className="text-muted-foreground/80">{icon}</span>
-      <span className="font-mono text-[11px] tabular-nums text-foreground/85 leading-none">
-        {value.toLocaleString('zh-CN')}
-      </span>
-      <span className="text-[10.5px] text-muted-foreground/65 leading-none">{unit}</span>
-    </span>
-  )
-}
-
-/** Status dot (saved / dirty / idle) — single colored dot; tooltip = full info */
-function StatusDot({
-  tone,
-  title,
-}: {
-  tone: 'success' | 'warning' | 'idle'
-  title: string
-}) {
-  const dotColor =
-    tone === 'success'
-      ? 'bg-emerald-500'
-      : tone === 'warning'
-        ? 'bg-amber-500'
-        : 'bg-border'
-  return (
-    <span
-      title={title}
-      aria-label={title}
-      className="inline-flex items-center justify-center w-6 h-6 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-default"
-    >
-      <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
-    </span>
-  )
+  return <span className="w-px h-4 bg-border/80 mx-1.5" />
 }
 
 function ShortcutsHelp({ kbd, desc }: { kbd: string; desc: string }) {

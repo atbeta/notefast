@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import HomePage from './routes/home'
 import DocPage from './routes/doc'
 import NewDocPage from './routes/new'
@@ -7,7 +7,6 @@ import SettingsAIPage from './routes/settings-ai'
 import Layout from './components/Layout'
 
 export default function App() {
-  const location = useLocation()
   // 宽度策略交给各页面自己处理，Layout 负责通用的全屏框架
   const contentClassName = 'w-full h-full'
 

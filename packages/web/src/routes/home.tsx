@@ -33,7 +33,7 @@ export default function HomePage() {
   const visibleDocs = activeTab === 'recent' ? recentDocs : docs
 
   return (
-    <div className="max-w-5xl mx-auto py-8 animate-fade-in space-y-6">
+    <div className="w-full max-w-4xl mx-auto px-8 py-8 animate-fade-in space-y-6">
       <SubNavTabs
         activeKey={activeTab}
         onChange={(k) => setActiveTab(k as TabKey)}

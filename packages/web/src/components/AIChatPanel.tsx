@@ -207,7 +207,7 @@ export default function AIChatPanel({
 
   return (
     <div
-      className={`fixed top-0 right-0 h-screen bg-card border-l border-border shadow-2xl transition-all duration-300 z-40 flex flex-col
+      className={`fixed top-0 right-0 h-screen bg-card border-l border-border shadow-[var(--shadow-floating)] transition-all duration-300 z-40 flex flex-col
         ${expanded ? 'w-[600px]' : 'w-[400px]'}
       `}
     >
@@ -288,7 +288,7 @@ export default function AIChatPanel({
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                     msg.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
+                      ? 'bg-ink text-ink-foreground'
                       : 'bg-accent text-foreground'
                   }`}
                 >
@@ -298,7 +298,7 @@ export default function AIChatPanel({
                   <div
                     className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
                       msg.role === 'user'
-                        ? 'bg-primary text-primary-foreground rounded-tr-sm'
+                        ? 'bg-ink text-ink-foreground rounded-tr-sm'
                         : 'bg-muted/50 text-foreground border border-border/50 rounded-tl-sm'
                     }`}
                   >
@@ -375,7 +375,7 @@ export default function AIChatPanel({
           <button
             type="submit"
             disabled={!input.trim() || loading || configMissing}
-            className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shrink-0 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity mb-1"
+            className="w-8 h-8 rounded-lg bg-ink text-ink-foreground flex items-center justify-center shrink-0 hover:bg-ink-hover active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all mb-1"
           >
             <Send className="w-4 h-4 ml-0.5" />
           </button>

@@ -22,6 +22,11 @@ export default {
           soft: 'rgb(var(--primary) / 0.06)',
         },
         'primary-soft': 'var(--primary-soft)',
+        ink: {
+          DEFAULT: 'rgb(var(--ink) / <alpha-value>)',
+          foreground: 'rgb(var(--ink-foreground) / <alpha-value>)',
+          hover: 'rgb(var(--ink-hover) / <alpha-value>)',
+        },
         secondary: {
           DEFAULT: 'rgb(var(--secondary) / <alpha-value>)',
           foreground: 'rgb(var(--secondary-foreground) / <alpha-value>)',
@@ -103,8 +108,7 @@ export default {
       boxShadow: {
         'card':       'var(--shadow-card)',
         'card-hover': 'var(--shadow-card-hover)',
-        'btn':        'var(--btn-shadow)',
-        'btn-hover':  'var(--btn-shadow-hover)',
+        'btn':        'var(--shadow-btn)',
       },
       borderRadius: {
         lg: 'var(--radius)',

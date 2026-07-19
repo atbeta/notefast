@@ -112,7 +112,8 @@ export default function Layout({ children, contentClassName }: { children: React
           </div>
         </div>
         <main className={`flex-1 flex flex-col min-h-0 relative transition-[padding] duration-300 ${aiChatOpen ? 'md:pr-[400px] lg:pr-[600px]' : ''}`}>
-          <div className={`${contentClassName ?? 'w-full h-full'} flex flex-col`}>
+          {/* 统一滚动容器：文档页内部自管滚动（h-full 正好一屏），其余页面由此容器滚动 */}
+          <div className={`${contentClassName ?? 'w-full h-full'} flex flex-col overflow-y-auto`}>
             {children}
           </div>
         </main>

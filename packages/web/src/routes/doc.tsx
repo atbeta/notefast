@@ -196,7 +196,7 @@ export default function DocPage() {
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col h-full border-r border-border/50">
         {/* Global Sticky Header */}
-        <header className="h-14 shrink-0 flex items-center justify-between px-6 border-b border-border/50 bg-background/80 backdrop-blur-md sticky top-0 z-10">
+        <header className="h-14 shrink-0 flex items-center justify-between px-6 border-b border-border/50 bg-background sticky top-0 z-10">
           <div className="flex items-center gap-4 text-sm">
             <Link
               to="/"
@@ -209,20 +209,7 @@ export default function DocPage() {
               {doc.content || '无标题文档'}
             </span>
           </div>
-          <div className="flex items-center gap-3">
-            {!isEditing && (
-              <div className="hidden sm:flex items-center gap-3 text-[12px] text-muted-foreground/80 font-mono">
-                <span>{wordCount.toLocaleString('zh-CN')} words</span>
-                <span>updated {updatedAt}</span>
-              </div>
-            )}
-            {isEditing && (
-              <div className="text-[12px] text-muted-foreground/80 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span>编辑中 · 自动保存</span>
-              </div>
-            )}
-            <div className="w-px h-4 bg-border/50 mx-1" />
+          <div className="flex items-center gap-2">
             {!isEditing && (
               <button
                 type="button"
@@ -234,6 +221,16 @@ export default function DocPage() {
                 <span>编辑</span>
               </button>
             )}
+            {isEditing && (
+              <span
+                className="flex items-center gap-1.5 text-[12px] text-muted-foreground"
+                title="编辑内容会自动保存到本地草稿，⌘S 写入知识库"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                编辑中
+              </span>
+            )}
+            <div className="w-px h-4 bg-border/60 mx-1" />
             <button
               type="button"
               onClick={() => setShowDelete(true)}
@@ -247,9 +244,9 @@ export default function DocPage() {
 
         {/* Scrollable Document Body */}
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto px-8 py-12 pb-32 animate-fade-in">
+          <div className="w-full max-w-3xl mx-auto px-8 pt-10 pb-32 animate-fade-in">
             {/* Title — always editable, AI-generate on hover */}
-            <div className="group relative mb-8">
+            <div className="group relative">
               <input
                 value={titleDraft}
                 onChange={(e) => setTitleDraft(e.target.value)}
@@ -273,7 +270,21 @@ export default function DocPage() {
               </button>
             </div>
 
-            {/* Editor — full-width block when editing, hides during read */}
+            {/* Meta row — 阅读态展示，融入标题与正文之间 */}
+            {!isEditing && (
+              <div className="mt-2 mb-8 text-[12px] text-muted-foreground/70 tabular-nums select-none">
+                {wordCount.toLocaleString('zh-CN')} 字
+                {updatedAt && (
+                  <>
+                    <span className="mx-2 text-border-strong">·</span>
+                    更新于 {updatedAt}
+                  </>
+                )}
+              </div>
+            )}
+            {isEditing && <div className="mb-2" />}
+
+            {/* Editor — 与阅读态同宽，融入文档流 */}
             {id && isEditing && (
               <MarkdownEditor
                 key={handleEditorMountKey}
@@ -359,23 +370,23 @@ function OutlineView({
   headings, loading
 }: { headings: Array<HeadingNode & { depth: number }>; loading: boolean }) {
   if (loading) {
-    return <div className="px-2 text-[12.5px] text-muted-foreground">加载中...</div>
+    return <div className="px-1 text-[12px] text-muted-foreground/70">加载中…</div>
   }
   if (headings.length === 0) {
     return (
-      <div className="px-3 py-3 text-[11.5px] text-muted-foreground/70 italic leading-relaxed border border-dashed border-border/60 rounded-md">
-        文档无标题章节
+      <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
+        无标题章节
       </div>
     )
   }
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col">
       {headings.map((h) => (
         <a
           key={h.id}
           href={`#${h.id}`}
-          className="px-2 py-1.5 text-[12.5px] text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors truncate"
-          style={{ paddingLeft: `${(h.depth * 10) + 8}px` }}
+          className="px-1.5 -mx-1.5 py-1 text-[12.5px] text-muted-foreground hover:text-foreground rounded transition-colors truncate"
+          style={{ paddingLeft: `${(h.depth * 12) + 6}px` }}
           title={h.content}
         >
           {h.content}
@@ -387,27 +398,27 @@ function OutlineView({
 
 function BacklinksView({ backlinks, loading }: { backlinks: Backlink[]; loading: boolean }) {
   if (loading) {
-    return <div className="px-2 text-[12.5px] text-muted-foreground">加载中...</div>
+    return <div className="px-1 text-[12px] text-muted-foreground/70">加载中…</div>
   }
   if (backlinks.length === 0) {
     return (
-      <div className="px-3 py-3 text-[11.5px] text-muted-foreground/70 italic leading-relaxed border border-dashed border-border/60 rounded-md">
+      <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
         还没有文档引用此处
       </div>
     )
   }
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1.5">
       {backlinks.map((bl) => (
         <Link
           key={bl.id}
           to={'/doc/' + bl.source_id}
-          className="group block p-3 rounded-xl border border-border bg-card hover:border-primary/30 hover:shadow-sm transition-all"
+          className="group block px-2.5 py-2 -mx-1 rounded-lg hover:bg-accent transition-colors"
         >
-          <div className="text-xs font-medium text-primary mb-1">
+          <div className="text-[10.5px] font-medium uppercase tracking-[0.04em] text-primary/80 mb-0.5">
             {bl.ref_type}
           </div>
-          <p className="text-[13px] text-muted-foreground group-hover:text-foreground line-clamp-2 leading-relaxed transition-colors">
+          <p className="text-[12.5px] text-muted-foreground group-hover:text-foreground line-clamp-2 leading-relaxed transition-colors">
             {bl.source_content}
           </p>
         </Link>

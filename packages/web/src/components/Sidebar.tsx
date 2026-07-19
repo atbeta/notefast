@@ -7,7 +7,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   Plus,
-  Clock,
+  LayoutGrid,
   MessageSquareText,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
@@ -24,21 +24,13 @@ interface SidebarProps {
 /**
  * Sidebar section 分组标签
  *
- * 风格参考 Notion：每组最前面是 `—` hairline（适度宽），后跟全大写细字号 label。
- * 让分组一眼能看出"行政层次"——不是"一长串列表"。
+ * Notion 式纯文字 micro-label：无 hairline、无图标，
+ * 与下方列表项同一左 padding，基线自然对齐。
  */
-function SidebarSectionLabel({
-  label,
-  icon,
-}: {
-  label: string
-  icon?: React.ReactNode
-}) {
+function SidebarSectionLabel({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-2 px-2 mb-1.5 select-none">
-      <span className="block h-px w-3 bg-sidebar-border" />
-      {icon && <span className="text-sidebar-muted/70 shrink-0">{icon}</span>}
-      <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-sidebar-muted/75">
+    <div className="px-2.5 mb-1 select-none">
+      <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-sidebar-muted/80">
         {label}
       </span>
     </div>
@@ -127,18 +119,19 @@ export default function Sidebar({
       </div>
 
       <nav className="px-2 pt-2 pb-1 flex-1 overflow-y-auto">
-        <SidebarSectionLabel label="导航" icon={<FileText className="w-3.5 h-3.5" strokeWidth={1.75} />} />
+        <SidebarSectionLabel label="导航" />
         <Link to="/" onClick={closeAfterNav} className={location.pathname === '/' ? 'sidebar-link-active' : 'sidebar-link'}>
+          <LayoutGrid className="w-[15px] h-[15px]" strokeWidth={1.75} />
           所有文档
         </Link>
         <Link to="/new" onClick={closeAfterNav} className={location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'}>
-          <Plus className="w-[18px] h-[18px]" strokeWidth={1.75} />
+          <Plus className="w-[15px] h-[15px]" strokeWidth={1.75} />
           新建
         </Link>
 
         {recentDocs.length > 0 && (
-          <div className="mt-5 pt-3 border-t border-sidebar-border/60">
-            <SidebarSectionLabel label="最近文档" icon={<Clock className="w-3.5 h-3.5" strokeWidth={1.75} />} />
+          <div className="mt-5">
+            <SidebarSectionLabel label="最近文档" />
             <div className="flex flex-col gap-0.5">
               {recentDocs.map(doc => {
                 const isActive = location.pathname === `/doc/${doc.id}`
@@ -149,7 +142,7 @@ export default function Sidebar({
                     onClick={closeAfterNav}
                     className={`px-2.5 py-1 rounded-md text-[13px] truncate transition-colors ${
                       isActive
-                        ? 'bg-primary/8 text-primary font-medium'
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
                         : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                     }`}
                     title={doc.title}
@@ -164,32 +157,21 @@ export default function Sidebar({
       </nav>
 
       <div className="border-t border-sidebar-border shrink-0">
-        <div className="px-3 pt-3 pb-2 flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onOpenPalette}
-            className="flex-1 inline-flex items-center justify-between gap-2 px-2 py-1 rounded-md text-[12px] text-sidebar-muted hover:text-foreground hover:bg-sidebar-accent transition-colors"
-            title="搜索文档"
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <Search className="w-3.5 h-3.5" strokeWidth={1.75} />
-              搜索
-            </span>
-            <kbd className="font-mono text-[10px] px-1 py-px border border-sidebar-border rounded text-sidebar-muted">
-              {isMac ? '⌘' : 'Ctrl'}K
-            </kbd>
-          </button>
+        <div className="px-2 pt-2 pb-1 flex items-center gap-1">
           <button
             type="button"
             onClick={onOpenChat}
-            className="inline-flex items-center justify-center w-7 h-7 rounded-md text-sidebar-muted hover:text-foreground hover:bg-sidebar-accent transition-colors"
+            className="flex-1 inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[13px] text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
             title="与知识库对话（⌘J）"
-            aria-label="聊天"
           >
             <MessageSquareText className="w-3.5 h-3.5" strokeWidth={1.75} />
+            AI 对话
+            <kbd className="ml-auto font-mono text-[10px] px-1 py-px border border-sidebar-border rounded text-sidebar-muted">
+              {isMac ? '⌘' : 'Ctrl'}J
+            </kbd>
           </button>
         </div>
-        <div className="px-3 py-1.5 flex items-center justify-between gap-2">
+        <div className="px-3 pt-1 pb-2.5 flex items-center justify-between gap-2">
           <a
             href="/settings"
             className="text-[10px] text-sidebar-muted/65 hover:text-foreground transition-colors"

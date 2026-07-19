@@ -52,9 +52,9 @@ export default function SubNavTabs({ tabs, activeKey, onChange, trailing }: SubN
               ref={(el) => { itemRefs.current[tab.key] = el }}
               onClick={() => onChange(tab.key)}
               className={
-                'relative pb-3 text-sm transition-colors ' +
+                'relative pb-3 text-[13.5px] transition-colors ' +
                 (isActive
-                  ? 'font-medium text-primary'
+                  ? 'font-semibold text-foreground'
                   : 'font-medium text-muted-foreground hover:text-foreground')
               }
             >

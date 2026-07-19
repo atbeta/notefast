@@ -563,9 +563,9 @@ export default function AISettingsPanel() {
           type="button"
           onClick={handleSave}
           disabled={saving || !active}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          className="btn-primary-custom"
         >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" strokeWidth={1.75} />}
           保存
         </button>
         <button
