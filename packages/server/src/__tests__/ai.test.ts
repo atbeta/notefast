@@ -96,6 +96,62 @@ describe('PUT /api/v1/ai/config', () => {
     expect(onDisk.active.apiKey).toBe('sk-test')
   })
 
+  test('回传脱敏占位符 ***set*** 时保留磁盘上的真实 Key', async () => {
+    // 第一次保存：真实 key
+    const cfg = {
+      active: {
+        id: 'key-1',
+        label: 'Test',
+        preset: 'custom',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'sk-real-secret-key',
+        embeddingModel: '',
+        chatModel: 'some-model',
+        timeoutMs: 30_000,
+        extraHeaders: {},
+      },
+      autoIndex: true,
+    }
+    await api('PUT', '/api/v1/ai/config', cfg)
+
+    // 第二次保存：模拟 UI 原样回传脱敏值（用户只改了模型名）
+    const cfg2 = {
+      ...cfg,
+      active: { ...cfg.active, apiKey: '***set***', chatModel: 'other-model' },
+    }
+    const { status } = await api('PUT', '/api/v1/ai/config', cfg2)
+    expect(status).toBe(200)
+
+    const onDisk = JSON.parse(readFileSync(join(testDir, 'ai.config.json'), 'utf-8'))
+    expect(onDisk.active.apiKey).toBe('sk-real-secret-key')
+    expect(onDisk.active.chatModel).toBe('other-model')
+  })
+
+  test('回传真实新 Key 时使用新值；显式空串表示清除', async () => {
+    const base = {
+      id: 'key-2',
+      label: 'Test',
+      preset: 'custom',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk-first',
+      embeddingModel: '',
+      chatModel: 'm',
+      timeoutMs: 30_000,
+      extraHeaders: {},
+    }
+    await api('PUT', '/api/v1/ai/config', { active: base, autoIndex: true })
+
+    // 新 key 覆盖
+    await api('PUT', '/api/v1/ai/config', { active: { ...base, apiKey: 'sk-second' }, autoIndex: true })
+    let onDisk = JSON.parse(readFileSync(join(testDir, 'ai.config.json'), 'utf-8'))
+    expect(onDisk.active.apiKey).toBe('sk-second')
+
+    // 显式空串清除（例如切换到无需 key 的服务）
+    await api('PUT', '/api/v1/ai/config', { active: { ...base, apiKey: '' }, autoIndex: true })
+    onDisk = JSON.parse(readFileSync(join(testDir, 'ai.config.json'), 'utf-8'))
+    expect(onDisk.active.apiKey).toBe('')
+  })
+
   test('保存的配置 reload 后从磁盘恢复', () => {
     const cfg: AiConfig = {
       version: 1,

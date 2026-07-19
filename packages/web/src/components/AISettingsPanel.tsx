@@ -17,6 +17,7 @@ import {
   PRESETS,
   KNOWN_EMBEDDING_MODELS,
   KNOWN_CHAT_MODELS,
+  KEY_MASK,
   definitionFromPreset,
   type ProviderDefinition,
   type ProviderPresetId,
@@ -152,6 +153,8 @@ export default function AISettingsPanel() {
       embeddingModel: p.embeddingModel,
       chatModel: p.chatModel,
       extraHeaders: { ...p.extraHeaders },
+      // 换供应商时清空 Key：避免把 A 家的 Key 发给 B 家的服务器
+      apiKey: active.preset === newPreset ? active.apiKey : '',
     })
   }
 
@@ -341,9 +344,13 @@ export default function AISettingsPanel() {
               <div className="flex items-center gap-2">
                 <input
                   type={showKey ? 'text' : 'password'}
-                  value={active.apiKey}
-                  onChange={(e) => updateActive({ apiKey: e.target.value })}
-                  placeholder="sk-..."
+                  value={active.apiKey === KEY_MASK ? '' : active.apiKey}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    // 脱敏态下清空输入框 = 保持已保存的 Key（KEY_MASK 会由服务端保留真值）
+                    updateActive({ apiKey: v === '' && active.apiKey === KEY_MASK ? KEY_MASK : v })
+                  }}
+                  placeholder={active.apiKey === KEY_MASK ? '已保存 Key（留空保持不变，输入新 Key 替换）' : 'sk-...'}
                   className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
                 />
                 <button
@@ -468,9 +475,12 @@ export default function AISettingsPanel() {
             <FieldRow label="API Key（可选）">
               <input
                 type="password"
-                value={reranker.apiKey}
-                onChange={(e) => setReranker({ ...reranker, apiKey: e.target.value })}
-                placeholder="留空 = 无鉴权"
+                value={reranker.apiKey === KEY_MASK ? '' : reranker.apiKey}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setReranker({ ...reranker, apiKey: v === '' && reranker.apiKey === KEY_MASK ? KEY_MASK : v })
+                }}
+                placeholder={reranker.apiKey === KEY_MASK ? '已保存 Key（留空保持不变）' : '留空 = 无鉴权'}
                 className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
               />
             </FieldRow>

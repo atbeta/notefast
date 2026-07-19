@@ -28,12 +28,14 @@ import {
   highlightSnippet,
   suggestTitle,
   buildFtsQuery,
+  resolveApiKey,
 } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import {
   getRuntime,
   applyNewConfigFromCurrent,
   hasRuntime,
+  loadConfigFromDisk,
 } from '../services/aiRuntime'
 import { indexBlock, indexAllBlocks, semanticSearch } from '../ai/indexer'
 import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
@@ -105,7 +107,16 @@ ai.put(
       return c.json({ error: 'internal', message: 'AI runtime 未初始化' }, 500)
     }
     const body = c.req.valid('json')
+    // Key 保护：客户端回传脱敏占位符（***set***）时，保留磁盘上的真实 Key。
+    // 没有这个保护的话，任何一次「改别的字段再保存」都会把真实 Key 覆盖成掩码。
+    const current = loadConfigFromDisk()
+    if (body.active) {
+      body.active.apiKey = resolveApiKey(body.active.apiKey, current.active?.apiKey)
+    }
     const reranker = body.reranker ?? null
+    if (reranker) {
+      reranker.apiKey = resolveApiKey(reranker.apiKey, current.reranker?.apiKey)
+    }
     const cfg: AiConfig = {
       version: 1,
       active: body.active,

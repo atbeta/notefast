@@ -13,8 +13,26 @@ export type ProviderPresetId =
   | 'openai'
   | 'deepseek'
   | 'openrouter'
+  | 'siliconflow'
+  | 'zhipu'
+  | 'moonshot'
+  | 'dashscope'
+  | 'gemini'
   | 'ollama'
   | 'custom'
+
+/** 脱敏占位符：GET /ai/config 对外返回的 apiKey 掩码 */
+export const KEY_MASK = '***set***'
+
+/**
+ * 解析保存时的 apiKey：
+ * - incoming 为脱敏占位符（UI 未改动 key 原样回传）→ 保留 existing（磁盘上的真实 key）
+ * - 否则使用 incoming（新 key，或显式清空 ''）
+ */
+export function resolveApiKey(incoming: string | undefined, existing: string | undefined): string {
+  if (incoming === undefined || incoming === KEY_MASK) return existing ?? ''
+  return incoming.trim()
+}
 
 /** 单一 AI Provider 的完整配置 */
 export interface ProviderDefinition {
@@ -191,16 +209,16 @@ export function maskKey(key: string): string {
   return `${key.slice(0, 4)}••••${key.slice(-4)}`
 }
 
-/** 把 active provider 与 reranker 的 key 置空（用于对外序列化） */
+/** 把 active provider 与 reranker 的 key 置为脱敏占位符（用于对外序列化） */
 export function publicView(cfg: AiConfig): AiConfig {
   let next = cfg
   if (cfg.active) {
-    next = { ...next, active: { ...cfg.active, apiKey: cfg.active.apiKey ? '***set***' : '' } }
+    next = { ...next, active: { ...cfg.active, apiKey: cfg.active.apiKey ? KEY_MASK : '' } }
   }
   if (cfg.reranker && cfg.reranker.apiKey) {
     next = {
       ...next,
-      reranker: { ...cfg.reranker, apiKey: '***set***' },
+      reranker: { ...cfg.reranker, apiKey: KEY_MASK },
     }
   }
   return next
