@@ -83,5 +83,6 @@ if (exportDir) {
 
 export default {
   port: PORT,
+  host: '0.0.0.0',
   fetch: app.fetch,
 }
