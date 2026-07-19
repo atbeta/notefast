@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Sparkles, X, Loader2, Minimize2, Maximize2, ExternalLink } from 'lucide-react'
+import { Send, X, Loader2, Minimize2, Maximize2, ExternalLink, MessageSquareText } from 'lucide-react'
 import { request } from '../hooks/useAPI'
 
 interface Message {
@@ -212,10 +212,10 @@ export default function AIChatPanel({
       `}
     >
       {/* Header */}
-      <div className="h-14 flex items-center justify-between px-4 border-b border-border shrink-0 bg-background/50 backdrop-blur-sm">
-        <div className="flex items-center gap-2 text-primary font-medium">
-          <Sparkles className="w-4 h-4" />
-          <span>NoteFast AI</span>
+      <div className="h-14 flex items-center justify-between px-4 border-b border-border shrink-0 bg-background/40">
+        <div className="flex items-center gap-2 text-foreground font-medium">
+          <MessageSquareText className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
+          <span>聊天 · 知识库</span>
           {capabilities && (
             <span className="text-[10px] text-muted-foreground font-normal">
               {capabilities.embedding && '·emb'} {capabilities.reranker && '·rerank'}
@@ -253,31 +253,29 @@ export default function AIChatPanel({
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {configMissing ? (
           <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground space-y-3">
-            <Sparkles className="w-8 h-8 mb-2 opacity-60" />
-            <p className="text-sm">AI Chat 未配置</p>
+            <MessageSquareText className="w-7 h-7 mb-1 opacity-50" strokeWidth={1.25} />
+            <p className="text-sm">聊天未配置</p>
             <p className="text-xs max-w-[260px]">
-              需要在 Web UI <span className="text-primary font-medium">/settings</span> 配置 Chat 模型
+              需要在 Web UI <span className="text-primary font-medium">/settings/ai</span> 配置 Chat 模型
               （API Key + Base URL + 模型名）。
             </p>
             <a
-              href="/settings"
+              href="/settings/ai"
               className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
             >
               打开设置 <ExternalLink className="w-3 h-3" />
             </a>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground space-y-3 opacity-60">
-            <Sparkles className="w-8 h-8 mb-2" />
-            <p className="text-sm">你好！我是你的知识库 AI 助手。</p>
+          <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground space-y-3 opacity-80">
+            <MessageSquareText className="w-7 h-7 mb-1 opacity-50" strokeWidth={1.25} />
+            <p className="text-sm">准备就绪</p>
             {contextDocTitle ? (
               <p className="text-xs">
-                你正在查看 <span className="text-foreground font-medium">《{contextDocTitle}》</span>，
-                <br />
-                我会优先引用其中的内容。
+                当前文档《<span className="text-foreground font-medium">{contextDocTitle}</span>》会作为优先上下文。
               </p>
             ) : (
-              <p className="text-xs">你可以向我提问关于你知识库中的任何内容。</p>
+              <p className="text-xs">向知识库提问，引用片段会自动回链到原文。</p>
             )}
           </div>
         ) : (
@@ -294,7 +292,7 @@ export default function AIChatPanel({
                       : 'bg-accent text-foreground'
                   }`}
                 >
-                  {msg.role === 'user' ? 'U' : <Sparkles className="w-4 h-4" />}
+                  {msg.role === 'user' ? 'U' : <MessageSquareText className="w-4 h-4" strokeWidth={1.5} />}
                 </div>
                 <div className="max-w-[80%] space-y-1">
                   <div
@@ -333,7 +331,7 @@ export default function AIChatPanel({
         {loading && (
           <div className="flex gap-3">
             <div className="w-8 h-8 rounded-full bg-accent text-foreground flex items-center justify-center shrink-0">
-              <Sparkles className="w-4 h-4" />
+              <MessageSquareText className="w-4 h-4" strokeWidth={1.5} />
             </div>
             <div className="bg-muted/50 border border-border/50 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin text-primary" />

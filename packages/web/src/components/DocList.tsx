@@ -60,9 +60,10 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
 
   return (
     <>
-      <div className="card-interactive p-4 group flex items-start gap-4">
-        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-          <FileText className="w-5 h-5 text-primary" />
+      <div className="card-interactive px-3.5 py-3 group flex items-center gap-3.5">
+        {/* Icon tile：克制色，不抢标题层级 */}
+        <div className="w-9 h-9 rounded-md bg-muted text-foreground/65 grid place-items-center shrink-0 group-hover:text-foreground transition-colors">
+          <FileText className="w-4 h-4" strokeWidth={1.5} />
         </div>
         <div className="min-w-0 flex-1">
           {editing ? (
@@ -73,7 +74,7 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
                 onChange={(e) => setTitle(e.target.value)}
                 onKeyDown={handleTitleKeyDown}
                 onBlur={() => { setTitle(doc.title); setEditing(false) }}
-                className="flex-1 text-sm font-medium bg-transparent border-b border-primary text-foreground outline-none"
+                className="flex-1 text-[14.5px] font-medium bg-transparent border-b border-primary text-foreground outline-none"
               />
               <button onMouseDown={(e) => { e.preventDefault(); saveTitle() }} className="p-0.5 text-primary hover:bg-primary/10 rounded transition-colors">
                 <Check className="w-3.5 h-3.5" />
@@ -84,27 +85,31 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
             </div>
           ) : (
             <Link to={'/doc/' + doc.id} className="block">
-              <h3 className="font-medium text-sm text-foreground truncate group-hover:text-primary transition-colors">{doc.title || '未命名文档'}</h3>
+              <h3 className="font-medium text-[14.5px] text-foreground tracking-[-0.005em] truncate group-hover:text-primary transition-colors">
+                {doc.title || '未命名文档'}
+              </h3>
             </Link>
           )}
-          <p className="text-xs text-muted-foreground mt-1">更新于 {formatRelative(doc.updated_at)}</p>
+          <p className="text-[11.5px] text-muted-foreground/80 mt-0.5 font-mono tabular-nums">
+            更新于 {formatRelative(doc.updated_at)}
+          </p>
         </div>
 
         {/* Hover actions */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <button
             onClick={(e) => { e.preventDefault(); setEditing(true); setTitle(doc.title) }}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             title="重命名"
           >
-            <Pencil className="w-3.5 h-3.5" />
+            <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
           </button>
           <button
             onClick={(e) => { e.preventDefault(); setShowDelete(true) }}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+            className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
             title="删除"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
           </button>
         </div>
       </div>
@@ -126,7 +131,7 @@ export default function DocList({ docs, onRefresh }: DocListProps) {
   if (docs.length === 0) return null
 
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-1.5">
       {docs.map((doc) => (
         <DocCard key={doc.id} doc={doc} onRefresh={onRefresh} />
       ))}

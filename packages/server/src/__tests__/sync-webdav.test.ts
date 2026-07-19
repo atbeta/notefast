@@ -178,8 +178,6 @@ describe('WebDAV Adapter — 单元（stub client）', () => {
   })
 
   test('单文档 PUT 失败不会中断其他文档', async () => {
-    // 第一个 PUT 失败（status 500），其他文档应继续
-    const stub = createStubClient()
     seedDocWithBlocks({ docTitle: 'Bad', blocks: [] })
     seedDocWithBlocks({ docTitle: 'Good1', blocks: [] })
     seedDocWithBlocks({ docTitle: 'Good2', blocks: [] })

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import type { Block, HeadingNode } from '@notefast/core'
 import {
@@ -6,6 +6,7 @@ import {
   Trash2,
   Sparkles,
   Loader2,
+  Pencil,
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
@@ -69,8 +70,18 @@ export default function DocPage() {
   const [titleDraft, setTitleDraft] = useState('')
   const [generatingTitle, setGeneratingTitle] = useState(false)
 
-  const [forceEditKey, setForceEditKey] = useState(0)
-
+  /** 编辑态 — 这是唯一的 truth 来源。
+   * MarkdownEditor 的 onActiveChange 通过这条 single source 同步；
+   * 由于 docId 在 URL 里，状态在跨页面时不持久（保留为暂态）。 */
+  const [isEditing, setIsEditing] = useState(searchParams.get('edit') === '1')
+  const handleEditorActiveChange = useCallback((editing: boolean) => {
+    setIsEditing(editing)
+  }, [])
+  const handleStartEdit = useCallback(() => setIsEditing(true), [])
+  const handleEditorMountKey = useMemo(
+    () => Math.random().toString(36).slice(2, 10),
+    [id, isEditing],
+  )
   const [headings, setHeadings] = useState<HeadingNode[]>([])
   const [backlinks, setBacklinks] = useState<Backlink[]>([])
   const [auxLoading, setAuxLoading] = useState(false)
@@ -184,38 +195,27 @@ export default function DocPage() {
     <div className="flex flex-col lg:flex-row items-start gap-8 animate-fade-in pb-20">
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 w-full">
-        {/* Top actions */}
+        {/* Top actions — minimal: back link + destructive delete (no editor inline) */}
         <div className="flex items-center justify-between mb-8">
           <Link
             to="/"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            返回
+            所有文档
           </Link>
-
-          <div className="flex items-center gap-2">
-            {id && (
-              <MarkdownEditor
-                key={`editor-${id}-${forceEditKey}`}
-                docId={id}
-                onSaved={handleEditSaved}
-                autoEdit={searchParams.get('edit') === '1' || forceEditKey > 0}
-              />
-            )}
-            <div className="h-4 w-px bg-border mx-1" />
-            <button
-              onClick={() => setShowDelete(true)}
-              className="btn-icon-ghost text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-              title="删除文档"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowDelete(true)}
+            className="btn-icon-ghost text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            title="删除文档"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
 
-        {/* Title Area */}
-        <div className="group relative mb-3">
+        {/* Title — always editable, AI-generate on hover */}
+        <div className="group relative">
           <input
             value={titleDraft}
             onChange={(e) => setTitleDraft(e.target.value)}
@@ -239,28 +239,85 @@ export default function DocPage() {
           </button>
         </div>
 
-        {/* Meta Info */}
-        <div className="meta-mono">
-          <span>{updatedAt} 更新</span>
-          <span>{wordCount.toLocaleString('zh-CN')} 字</span>
-        </div>
-
-        {/* Content */}
-        <div className="relative">
-          <div className={'warn-hint mb-6 ' + (isEmpty ? 'show' : '')}>
-            文档正文为空 —{' '}
+        {/* Meta + edit trigger — single row when not editing */}
+        {!isEditing && (
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <div className="meta-mono">
+              <span>{updatedAt} 更新</span>
+              <span>{wordCount.toLocaleString('zh-CN')} 字</span>
+            </div>
             <button
-              onClick={() => setForceEditKey((k) => k + 1)}
-              className="underline underline-offset-2 font-medium hover:text-warn transition-colors"
+              type="button"
+              onClick={handleStartEdit}
+              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[12.5px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              title="进入编辑"
             >
-              点此开始写作
+              <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
+              <span>编辑</span>
             </button>
           </div>
+        )}
+        {isEditing && (
+          <div className="mt-2 text-[12px] text-muted-foreground/80">
+            <span className="text-primary">编辑中</span>
+            <span className="mx-1.5">·</span>
+            <span>失焦自动保存草稿</span>
+          </div>
+        )}
 
-          <article>
-            <BlockRenderer block={doc} />
-          </article>
-        </div>
+        {/* Editor — full-width block when editing, hides during read */}
+        {id && isEditing && (
+          <MarkdownEditor
+            key={handleEditorMountKey}
+            docId={id}
+            onSaved={handleEditSaved}
+            autoEdit={true}
+            onActiveChange={handleEditorActiveChange}
+          />
+        )}
+
+        {/* Content */}
+        {!isEditing && (
+          <div className="relative mt-2">
+            {isEmpty && (
+              <div className="warn-hint mb-6 show">
+                文档正文为空 —{' '}
+                <button
+                  type="button"
+                  onClick={handleStartEdit}
+                  className="underline underline-offset-2 font-medium hover:text-warn transition-colors"
+                >
+                  点此开始写作
+                </button>
+              </div>
+            )}
+
+            <article>
+              <BlockRenderer block={doc} />
+            </article>
+
+            {wordCount > 0 && wordCount < 80 && (
+              <div className="mt-10 p-5 rounded-xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
+                <div className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-md bg-muted flex items-center justify-center text-foreground/70 shrink-0">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-foreground font-medium mb-1">这一篇还只是标题</p>
+                    <p className="text-muted-foreground/85 leading-relaxed text-[13px]">
+                      按 <kbd className="font-mono text-[11px] px-1 py-px border border-border rounded bg-background text-foreground/80">⌘ E</kbd> 进入编辑，或点上方 <span className="inline-flex items-center gap-1 align-middle">
+                        <Pencil className="w-3 h-3" strokeWidth={1.75} />
+                        编辑
+                      </span> 开始写第一段。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Right Sidebar (Desktop only) */}
@@ -322,7 +379,7 @@ function OutlineView({
   }
   if (headings.length === 0) {
     return (
-      <div className="px-1 py-2 text-[12px] text-muted-foreground/60 italic">
+      <div className="px-3 py-3 text-[11.5px] text-muted-foreground/70 italic leading-relaxed border border-dashed border-border/60 rounded-md">
         文档无标题章节
       </div>
     )
@@ -350,7 +407,7 @@ function BacklinksView({ backlinks, loading }: { backlinks: Backlink[]; loading:
   }
   if (backlinks.length === 0) {
     return (
-      <div className="px-1 py-2 text-[12px] text-muted-foreground/60 italic">
+      <div className="px-3 py-3 text-[11.5px] text-muted-foreground/70 italic leading-relaxed border border-dashed border-border/60 rounded-md">
         还没有文档引用此处
       </div>
     )

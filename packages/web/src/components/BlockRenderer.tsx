@@ -25,12 +25,14 @@ function HeadingTag({ block, depth: _depth }: { block: Block; depth: number }) {
   const level = (block.properties.level as number) || 1
   const tagLevel = Math.min(level + 1, 6) as 2 | 3 | 4 | 5 | 6
   const id = slugify(block.content || '')
+  // 字号 + 节奏参考 Notion：h2 最大但 line-height 紧；h2 与正文之间间距大，
+  // 同行标题（h4/h5）之间间距小，体现层次而非"单位化的等距堆叠"。
   const sizes: Record<number, string> = {
-    2: 'text-[23px] mt-12 mb-2 tracking-[-0.022em] text-foreground',
-    3: 'text-[19px] mt-10 mb-1.5 tracking-[-0.02em] text-foreground',
-    4: 'text-[16px] mt-8 mb-1 text-foreground/95',
-    5: 'text-[15px] mt-7 mb-1 text-foreground/90 font-semibold',
-    6: 'text-[12.5px] mt-6 mb-1 text-muted-foreground uppercase tracking-[0.06em] font-medium',
+    2: 'text-[26px] mt-10 mb-3 leading-[1.18] tracking-[-0.025em] font-semibold text-foreground',
+    3: 'text-[20px] mt-8 mb-2 leading-[1.25] tracking-[-0.02em] font-semibold text-foreground',
+    4: 'text-[16px] mt-6 mb-1.5 leading-[1.35] tracking-[-0.015em] font-semibold text-foreground/95',
+    5: 'text-[14.5px] mt-5 mb-1 leading-[1.4] font-semibold text-foreground/90',
+    6: 'text-[12.5px] mt-5 mb-1 text-muted-foreground uppercase tracking-[0.08em] font-medium',
   }
   const tag = `h${tagLevel}`
   return createElement(

@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Calendar, Trash2, FileText } from 'lucide-react'
+import { Plus, Trash2, FileText } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import DocList from '../components/DocList'
 import SubNavTabs from '../components/SubNavTabs'
-import HeroAction from '../components/HeroAction'
 
 type TabKey = 'mine' | 'recent'
 
@@ -33,11 +32,6 @@ export default function HomePage() {
 
   const visibleDocs = activeTab === 'recent' ? recentDocs : docs
 
-  const heroTitle = activeTab === 'recent' ? '记录今日的想法' : '新建一篇文档'
-  const heroSubtitle = activeTab === 'recent'
-    ? '用 ⌘N 快速开始一个新文档'
-    : '用 ⌘N 快速创建，或拖入 Markdown 文件直接导入'
-
   return (
     <div className="animate-fade-in space-y-6">
       <SubNavTabs
@@ -55,21 +49,23 @@ export default function HomePage() {
         }
       />
 
-      <div key={activeTab} className="space-y-6 animate-fade-in">
-        <div className="card overflow-hidden">
-          <div className="relative px-6 py-6">
-            <HeroAction
-              icon={activeTab === 'recent' ? Calendar : Plus}
-              onPrimary={goNew}
-              title={heroTitle}
-              subtitle={heroSubtitle}
-              ariaLabel="新建文档"
-              chip={{
-                icon: activeTab === 'recent' ? Calendar : Plus,
-                label: activeTab === 'recent' ? '过去 24 小时' : 'Markdown · ⌘N',
-              }}
-            />
-          </div>
+      <div key={activeTab} className="space-y-5 animate-fade-in">
+        {/* 简洁的入口行：不再用 giant hero 卡片 */}
+        <div className="flex items-center gap-4 px-1">
+          <button
+            type="button"
+            onClick={goNew}
+            aria-label="新建文档"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium border border-border bg-card hover:border-foreground/30 hover:text-foreground text-foreground transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
+            {activeTab === 'recent' ? '记录今日的想法' : '新建文档'}
+          </button>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {activeTab === 'recent'
+              ? '过去 24 小时内的所有改动 · ⌘N 新建一篇'
+              : '把第一个想法写成 Markdown，⌘N 快速创建，或拖入 .md 文件直接导入。'}
+          </p>
         </div>
 
         <section className="space-y-3">
@@ -108,23 +104,34 @@ export default function HomePage() {
 }
 
 function EmptyState({ onCreate, tab }: { onCreate: () => void; tab: TabKey }) {
+  const isMineEmpty = tab === 'mine'
   return (
-    <div className="card py-12 px-6 text-center">
+    <div className="px-3 py-12 flex flex-col items-center text-center">
       <div className="empty-icon-tile">
-        {tab === 'recent' ? <Trash2 className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+        {isMineEmpty ? <FileText className="w-5 h-5" /> : <Trash2 className="w-5 h-5" />}
       </div>
-      <h3 className="text-base font-semibold text-foreground mb-2">
-        {tab === 'recent' ? '近 24 小时没有编辑过任何文档' : '开始你的第一篇文档'}
+      <h3 className="text-[15px] font-medium text-foreground mb-1.5 tracking-[-0.005em]">
+        {isMineEmpty ? '这里还没有文档' : '近 24 小时没有改动过'}
       </h3>
-      <p className="text-[13px] text-muted-foreground mb-5 max-w-sm mx-auto leading-relaxed">
-        {tab === 'recent'
-          ? '回到「我的文档」查看全部内容，或新建一篇开启今天的记录。'
-          : '创建新文档或通过 MCP、API 导入 Markdown，AI 也能直接帮你写入。'}
+      <p className="text-[13px] text-muted-foreground mb-5 max-w-[280px] leading-relaxed">
+        {isMineEmpty
+          ? '点一下下方按钮，新建你的第一篇 Markdown 文档。也可以把现有 .md 文件拖进编辑器直接导入。'
+          : '回到「我的文档」查看全部内容，或新建一篇开启今天的记录。'}
       </p>
-      <button onClick={onCreate} className="btn-primary-custom">
-        <Plus className="w-3.5 h-3.5" strokeWidth={2.25} />
+      <button
+        type="button"
+        onClick={onCreate}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-card hover:border-foreground/30 hover:text-foreground text-foreground text-sm font-medium transition-colors"
+      >
+        <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
         新建文档
       </button>
+      {isMineEmpty && (
+        <p className="mt-4 text-[11.5px] text-muted-foreground/65 leading-relaxed">
+          <kbd className="font-mono text-[10.5px] px-1 py-px border border-border rounded bg-background text-foreground/80">⌘N</kbd>
+          {' '}随时调出
+        </p>
+      )}
     </div>
   )
 }

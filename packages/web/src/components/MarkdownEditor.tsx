@@ -33,6 +33,8 @@ interface MarkdownEditorProps {
   docId: string
   onSaved: () => void
   autoEdit?: boolean
+  /** 内部 editing 状态变化时通知父组件，便于父组件同步隐藏只读视图等 */
+  onActiveChange?: (editing: boolean) => void
 }
 
 const DRAFT_PREFIX = 'notefast-draft-'
@@ -70,8 +72,12 @@ const BLOCK_TRIGGER = /^(\s*)(?:#{1,6}|>|[-+*]\s|\d+\.\s|```)\s$/
 
 // ───────────────────────── 入口 ─────────────────────────
 
-export default function MarkdownEditor({ docId, onSaved, autoEdit = false }: MarkdownEditorProps) {
+export default function MarkdownEditor({ docId, onSaved, autoEdit = false, onActiveChange }: MarkdownEditorProps) {
   const [editing, setEditing] = useState(autoEdit)
+
+  useEffect(() => {
+    onActiveChange?.(editing)
+  }, [editing, onActiveChange])
 
   const handleStartEdit = useCallback(() => setEditing(true), [])
 

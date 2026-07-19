@@ -150,12 +150,9 @@ export default function AutoLinkPanel({ docId, currentBlockId, onClose }: AutoLi
             </div>
           )}
           {!loading && visible.length === 0 && (
-            <div className="text-center text-xs text-muted-foreground py-7 px-3">
-              <Link2 className="w-4 h-4 mx-auto mb-2 opacity-35" strokeWidth={1.5} />
-              <p>暂无建议</p>
-              <p className="text-[10.5px] mt-1.5 text-muted-foreground/65 leading-relaxed">
-                启用 AutoLink 后，新写或修改 block 时 AI 会建议反向链接
-              </p>
+            <div className="px-3 py-2.5 text-[11.5px] text-muted-foreground/70 italic leading-relaxed">
+              暂无建议 · 启用 AutoLink 后，
+              新写或修改 block 时会建议反向链接。
             </div>
           )}
           {visible.map((s) => (

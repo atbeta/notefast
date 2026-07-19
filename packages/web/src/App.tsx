@@ -8,8 +8,13 @@ import Layout from './components/Layout'
 
 export default function App() {
   const location = useLocation()
-  const wide = location.pathname === '/' || location.pathname === '/new' || location.pathname.startsWith('/doc/')
-  const contentClassName = wide ? 'max-w-5xl' : 'max-w-prose'
+  // 内容宽度策略：
+  // - '/'           home/列表       56rem (5xl)
+  // - '/new'        新建表单       42rem (prose)
+  // - '/doc/:id'    doc 阅读/编辑   42rem (prose)
+  // - '/settings*'  设置页         42rem (prose)
+  const isHome = location.pathname === '/'
+  const contentClassName = isHome ? 'max-w-5xl' : 'max-w-prose'
 
   return (
     <Layout contentClassName={contentClassName}>

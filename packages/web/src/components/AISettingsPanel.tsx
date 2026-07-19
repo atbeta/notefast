@@ -225,7 +225,6 @@ export default function AISettingsPanel() {
       {/* Top status bar */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-border bg-background/40">
         <div className="flex items-center gap-2 text-sm">
-          <Sparkles className="w-4 h-4 text-primary" />
           <span className="font-medium">AI 能力</span>
           {capabilities && (
             <div className="flex items-center gap-1.5 text-[10px]">
@@ -435,13 +434,12 @@ export default function AISettingsPanel() {
           checked={autoIndex}
           onChange={setAutoIndex}
           disabled={!capabilities?.embedding}
-          label={autoIndex ? '开启' : '关闭'}
+          label={
+            capabilities?.embedding
+              ? autoIndex ? '开启' : '关闭'
+              : '需先配 Embedding'
+          }
         />
-        {!capabilities?.embedding && (
-          <p className="text-[11px] text-muted-foreground mt-2">
-            需要先配置 Embedding 模型。
-          </p>
-        )}
       </Section>
 
       {/* Section 3: Reranker */}
@@ -513,13 +511,12 @@ export default function AISettingsPanel() {
           checked={autoLink.enabled}
           onChange={(v) => setAutoLink({ ...autoLink, enabled: v })}
           disabled={!capabilities?.chat}
-          label={autoLink.enabled ? '启用' : '禁用'}
+          label={
+            capabilities?.chat
+              ? autoLink.enabled ? '启用' : '禁用'
+              : '需先配 Chat'
+          }
         />
-        {!capabilities?.chat && (
-          <p className="text-[11px] text-muted-foreground mt-2">
-            需要先配置 Chat 模型。
-          </p>
-        )}
         {autoLink.enabled && (
           <div className="mt-3 space-y-3 pl-4 border-l-2 border-border/60">
             <Toggle

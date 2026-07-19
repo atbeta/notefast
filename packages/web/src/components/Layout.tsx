@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { ReactNode } from 'react'
-import { Menu, Sparkles } from 'lucide-react'
+import { Menu, MessageSquareText } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import CommandPalette from './CommandPalette'
@@ -34,6 +34,7 @@ export default function Layout({ children, contentClassName }: { children: React
 
   const closePalette = useCallback(() => setPaletteOpen(false), [])
 
+  const openAiChat = useCallback(() => setAiChatOpen(true), [])
   const closeMobile = useCallback(() => setMobileOpen(false), [])
 
   // 全局快捷键：⌘K / Ctrl+K, ⌘N / Ctrl+N, ⌘\ / Ctrl+\, ⌘J / Ctrl+J (打开 AI Chat)
@@ -66,6 +67,7 @@ export default function Layout({ children, contentClassName }: { children: React
           collapsed={sidebarCollapsed}
           onToggle={toggleSidebar}
           onOpenPalette={openPalette}
+          onOpenChat={openAiChat}
         />
       </div>
 
@@ -78,6 +80,7 @@ export default function Layout({ children, contentClassName }: { children: React
               collapsed={false}
               onToggle={closeMobile}
               onOpenPalette={openPalette}
+              onOpenChat={openAiChat}
               onNavigate={closeMobile}
             />
           </div>
@@ -93,12 +96,13 @@ export default function Layout({ children, contentClassName }: { children: React
           <div className="ml-auto flex items-center gap-1">
             <button
               onClick={() => setAiChatOpen(!aiChatOpen)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-primary/10 text-primary transition-colors"
-              aria-label="AI 助手"
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="聊天 / 知识库问答"
             >
-              <Sparkles className="w-4 h-4" />
+              <MessageSquareText className="w-4 h-4" strokeWidth={1.75} />
             </button>
             <button
+              type="button"
               onClick={openPalette}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
               aria-label="搜索"
@@ -114,19 +118,8 @@ export default function Layout({ children, contentClassName }: { children: React
         </main>
       </div>
 
-      {/* 桌面端全局浮动 AI 按钮 */}
-      <button
-        onClick={() => setAiChatOpen(!aiChatOpen)}
-        className={`hidden md:flex fixed bottom-6 right-6 z-30 w-12 h-12 rounded-full shadow-lg items-center justify-center transition-all duration-300
-          ${aiChatOpen 
-            ? 'bg-muted text-muted-foreground hover:bg-accent rotate-12 right-[424px]' 
-            : 'bg-primary text-primary-foreground hover:scale-105 hover:shadow-xl'
-          }
-        `}
-        title="NoteFast AI (⌘J)"
-      >
-        <Sparkles className="w-5 h-5" />
-      </button>
+      {/* 桌面端 chat 入口 —— 已移入顶栏，对应 ⌘J 开 / 关 */}
+      {/* 此处保留位置供未来全局 toast 等使用 */}
 
       {/* AI Chat 面板 */}
       <AIChatPanel 
