@@ -235,7 +235,7 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
             }],
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
-        ) as never
+        ) as unknown as Response
       }
       // 第二轮：最终答案
       return new Response(
@@ -246,8 +246,8 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
           }],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ) as never
-    }) as typeof fetch
+      ) as unknown as Response
+    }) as unknown as typeof fetch
     const { getRuntime } = await import('../services/aiRuntime')
     getRuntime().setFetchImpl(fetcher)
 

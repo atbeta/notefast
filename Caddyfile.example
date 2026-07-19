@@ -1,0 +1,51 @@
+# NoteFast 反向代理配置示例
+#
+# 两个场景：
+#   A. 有公网域名（Let's Encrypt 自动签）
+#   B. 局域网自签证书（用 mkcert 生成）
+#
+# 把 Caddyfile 放到仓库根，Caddy 容器挂在 /etc/caddy/Caddyfile:ro
+
+# ─────────────────────── 场景 A：公网域名 ───────────────────────
+notefast.example.com, notes.example.com {
+    # 强制 HTTPS（HSTS 一年 + 子域名）
+    header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    # 反向代理到 NoteFast（Compose 内部网络）
+    reverse_proxy notefast:3140 {
+        # 透传客户端真实 IP（Litestream 之类不需要，但审计日志友好）
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        # 长连接友好：流式 SSE 不缓冲
+        flush_interval -1
+    }
+    # 健康检查端点不需要日志
+    log /health {
+        output discard
+    }
+    # 访问日志（可选，关掉可减少磁盘写入）
+    log {
+        output file /data/access.log {
+            roll_size 100mb
+            roll_keep 5
+        }
+    }
+}
+
+# ─────────────────────── 场景 B：局域网自签 ───────────────────────
+# 1. 安装 mkcert: brew install mkcert nss  (或 apt install mkcert)
+# 2. mkcert -install
+# 3. mkdir -p caddy/certs && cd caddy/certs
+#    mkcert 192.168.1.100 notefast.local
+#    # 生成 cert.pem 和 key.pem
+# 4. Caddyfile 用：
+#
+# https://192.168.1.100:443 {
+#     tls /etc/caddy/certs/192.168.1.100+5.pem /etc/caddy/certs/192.168.1.100+5-key.pem
+#     reverse_proxy notefast:3140 {
+#         flush_interval -1
+#     }
+# }
+# http://192.168.1.100:80 {
+#     redir https://{host}{uri} permanent
+# }

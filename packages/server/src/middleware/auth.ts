@@ -1,4 +1,5 @@
 import type { Context, Next, MiddlewareHandler } from 'hono'
+import { timingSafeEqual } from 'node:crypto'
 
 /**
  * 鉴权机制：
@@ -16,10 +17,30 @@ import type { Context, Next, MiddlewareHandler } from 'hono'
  *    - 用户名为 admin
  *
  * 两个环境变量都不设时：不做任何鉴权，所有请求直接放行（开发/内网部署模式）
+ *
+ * 安全：所有 secret 比较都用 crypto.timingSafeEqual（防 timing attack）；
+ * 长度不同时先比较长度（同样耗时）再做常量时间比较。
  */
 
 function safeTrim(s: string): string {
   return s.trim()
+}
+
+/**
+ * 长度恒定的字符串比较。
+ * - 两侧长度不同时：返回 false 但仍执行一次 dummy 比较以避免长度泄漏（虽然长度本身不是高敏感信息）
+ * - 长度相同时：用 timingSafeEqual（按字节比较，常量时间）
+ */
+function safeEquals(provided: string, expected: string): boolean {
+  const a = Buffer.from(provided, 'utf8')
+  const b = Buffer.from(expected, 'utf8')
+  if (a.length !== b.length) {
+    // 长度不等：仍执行一次同长度 dummy 比较，确保早退路径也是常量时间
+    const dummy = Buffer.alloc(Math.max(a.length, b.length))
+    timingSafeEqual(dummy, dummy)
+    return false
+  }
+  return timingSafeEqual(a, b)
 }
 
 export function isAuthEnabled(): boolean {
@@ -41,13 +62,9 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
 
   if (apiToken.length > 0) {
     const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i)
-    if (bearerMatch) {
-      const provided = bearerMatch[1]
-      // 使用标准字符串比较，无短路径优化（长度泄漏可接受，暂不引入 crypto.timingSafeEqual）
-      if (provided === apiToken) {
-        await next()
-        return
-      }
+    if (bearerMatch && safeEquals(bearerMatch[1]!, apiToken)) {
+      await next()
+      return
     }
   }
 
@@ -55,12 +72,12 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
     const basicMatch = authHeader.match(/^Basic\s+(.+)$/i)
     if (basicMatch) {
       try {
-        const decoded = atob(basicMatch[1])
+        const decoded = atob(basicMatch[1]!)
         const colonIdx = decoded.indexOf(':')
         if (colonIdx > 0) {
           const user = decoded.slice(0, colonIdx)
           const pass = decoded.slice(colonIdx + 1)
-          if (user === 'admin' && pass === authPassword) {
+          if (user === 'admin' && safeEquals(pass, authPassword)) {
             await next()
             return
           }

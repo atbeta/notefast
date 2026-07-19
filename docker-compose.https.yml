@@ -1,0 +1,99 @@
+# NoteFast + Caddy 反向代理示例
+#
+# 用法：
+#   cp docker-compose.https.yml docker-compose.https.local.yml
+#   # 编辑 .env 或本文件，设置 NOTEFAST_DOMAIN 等
+#   docker compose -f docker-compose.https.yml up -d
+#
+# 与 docker-compose.example.yml 互斥：本文件包含 Caddy + notefast，
+# 不要再同时跑 docker-compose.example.yml。
+
+services:
+  notefast:
+    image: xbeta/notefast:0.1.0
+    container_name: notefast
+    # 注意：ports 段去掉，Caddy 通过内部网络访问
+    expose:
+      - '3140'
+    environment:
+      - PORT=3140
+      - DATA_DIR=/app/data
+      - AUTO_EXPORT_DIR=/app/export
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://notefast.example.com}
+      - AI_PROVIDER=${AI_PROVIDER:-openrouter}
+      - AI_API_KEY=${AI_API_KEY:-}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
+      - LLM_MODEL=${LLM_MODEL:-}
+      # 接收代理转发的真实协议（HTTPS）
+      - TRUSTED_PROXIES=*
+    volumes:
+      - notefast_data:/app/data
+      - notefast_export:/app/export
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+    mem_limit: 512m
+    cpus: '1.0'
+    pids_limit: 200
+    healthcheck:
+      test: ['CMD', 'bun', '-e', "fetch('http://localhost:3140/health').then(r=>process.exit(r.ok?0:1))"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
+  caddy:
+    image: caddy:2
+    container_name: notefast-caddy
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      # Caddy 用 Let's Encrypt 需要 ACME 邮箱
+      - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      notefast:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  # Litestream 备份（按需启用：docker compose -f docker-compose.https.yml --profile backup up -d）
+  litestream:
+    image: litestream/litestream:latest
+    container_name: notefast-backup
+    command:
+      - replicate
+      - -config
+      - /etc/litestream/litestream.yml
+      - -exec
+      - 'true'
+    environment:
+      - S3_BUCKET=${S3_BUCKET:-}
+      - S3_ENDPOINT=${S3_ENDPOINT:-}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-}
+      - S3_REGION=${S3_REGION:-auto}
+      - S3_FORCE_PATH_STYLE=${S3_FORCE_PATH_STYLE:-false}
+    volumes:
+      - notefast_data:/data
+      - ./litestream.yml:/etc/litestream/litestream.yml:ro
+    restart: unless-stopped
+    profiles:
+      - backup
+
+volumes:
+  notefast_data:
+  notefast_export:
+  caddy_data:
+  caddy_config:
