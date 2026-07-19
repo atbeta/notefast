@@ -100,17 +100,18 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
     applyNewConfig(
       {
         version: 1,
-        active: {
+        chat: {
           id: 'x',
           label: 'x',
           preset: 'custom',
           baseUrl: 'http://mock',
           apiKey: '',
-          embeddingModel: '', // 关闭 embedding → 只走 FTS5
+          embeddingModel: '',
           chatModel: 'fake-chat',
           timeoutMs: 5000,
           extraHeaders: {},
         },
+        embedding: null,
         autoIndex: false,
         reranker: null,
       },

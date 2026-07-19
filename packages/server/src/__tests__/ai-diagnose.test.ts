@@ -53,14 +53,25 @@ function applyProvider(extra?: { autoLink?: boolean }) {
   applyNewConfig(
     {
       version: 1,
-      active: {
-        id: 'x',
+      chat: {
+        id: 'x-chat',
         label: 'x',
         preset: 'openai',
-        baseUrl: 'http://mock',
+        baseUrl: 'http://mock-chat',
+        apiKey: 'k',
+        embeddingModel: '',
+        chatModel: 'fake-chat',
+        timeoutMs: 5000,
+        extraHeaders: {},
+      },
+      embedding: {
+        id: 'x-emb',
+        label: 'x',
+        preset: 'openai',
+        baseUrl: 'http://mock-emb',
         apiKey: 'k',
         embeddingModel: 'fake-emb',
-        chatModel: 'fake-chat',
+        chatModel: '',
         timeoutMs: 5000,
         extraHeaders: {},
       },
@@ -198,7 +209,7 @@ describe('POST /api/v1/ai/diagnose', () => {
     applyNewConfig(
       {
         version: 1,
-        active: {
+        chat: {
           id: 'x',
           label: 'x',
           preset: 'openai',
@@ -209,6 +220,7 @@ describe('POST /api/v1/ai/diagnose', () => {
           timeoutMs: 5000,
           extraHeaders: {},
         },
+        embedding: null,
         autoIndex: false,
         reranker: null,
       } as never,

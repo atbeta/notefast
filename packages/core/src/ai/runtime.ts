@@ -122,15 +122,17 @@ export class AiRuntime {
     this.chatLastError = undefined
     this.rerankLastError = undefined
 
-    if (cfg.active) {
-      const p = cfg.active
-      const hasEmbedding = Boolean(p.embeddingModel.trim())
-      const hasChat = Boolean(p.chatModel.trim())
-      if (hasEmbedding) {
-        this.embeddingProvider = createEmbeddingProvider(p, this.fetchImpl, this.batchSize)
+    if (cfg.embedding) {
+      const e = cfg.embedding
+      if (e.embeddingModel.trim()) {
+        this.embeddingProvider = createEmbeddingProvider(e, this.fetchImpl, this.batchSize)
       }
-      if (hasChat) {
-        this.chatProvider = createChatProvider(p, this.fetchImpl)
+    }
+
+    if (cfg.chat) {
+      const c = cfg.chat
+      if (c.chatModel.trim()) {
+        this.chatProvider = createChatProvider(c, this.fetchImpl)
       }
     }
 
@@ -146,8 +148,8 @@ export class AiRuntime {
 
     if (!opts.silent) {
       const parts: string[] = []
-      if (this.embeddingProvider) parts.push(`embedding=${cfg.active!.embeddingModel}`)
-      if (this.chatProvider) parts.push(`chat=${cfg.active!.chatModel}`)
+      if (this.embeddingProvider) parts.push(`embedding=${cfg.embedding!.embeddingModel}@${labelOf(cfg.embedding!)}`)
+      if (this.chatProvider) parts.push(`chat=${cfg.chat!.chatModel}@${labelOf(cfg.chat!)}`)
       if (this.rerankerProvider) parts.push(`reranker=${cfg.reranker!.model}`)
       console.log(`🧠 AI: ${parts.length ? parts.join(', ') : 'disabled'}`)
     }
@@ -157,20 +159,21 @@ export class AiRuntime {
 
   /** 获取对外可序列化的状态（含脱敏 key） */
   status(): RuntimeStatus {
-    const a = this.cfg.active
+    const c = this.cfg.chat
+    const e = this.cfg.embedding
     const r = this.cfg.reranker
     return {
-      enabled: Boolean(a),
+      enabled: Boolean(c || e),
       embedding: {
-        configured: Boolean(a?.embeddingModel.trim()),
+        configured: Boolean(e?.embeddingModel.trim()),
         ok: Boolean(this.embeddingProvider) && !this.embeddingLastError,
         dim: this.embeddingDim,
         lastError: this.embeddingLastError,
       },
       chat: {
-        configured: Boolean(a?.chatModel.trim()),
+        configured: Boolean(c?.chatModel.trim()),
         ok: Boolean(this.chatProvider) && !this.chatLastError,
-        model: a?.chatModel || undefined,
+        model: c?.chatModel || undefined,
         lastError: this.chatLastError,
       },
       reranker: {
@@ -180,7 +183,7 @@ export class AiRuntime {
         lastError: this.rerankLastError,
       },
       autoLink: {
-        configured: Boolean(this.cfg.autoLink?.enabled) && Boolean(a?.chatModel.trim()),
+        configured: Boolean(this.cfg.autoLink?.enabled) && Boolean(c?.chatModel.trim()),
         enabled: Boolean(this.cfg.autoLink?.enabled),
         autoApply: Boolean(this.cfg.autoLink?.autoApply),
         lastError: this.autoLinkLastError,
@@ -196,7 +199,7 @@ export class AiRuntime {
     const hasChat = this.hasChat()
     const hasRerank = this.hasReranker()
     return {
-      ai_enabled: Boolean(this.cfg.active),
+      ai_enabled: Boolean(this.cfg.chat || this.cfg.embedding),
       embedding: hasEmb,
       chat: hasChat,
       reranker: hasRerank,
@@ -206,9 +209,14 @@ export class AiRuntime {
     }
   }
 
-  /** 暴露当前 active provider（未启用时为 null） */
-  activeProvider(): ProviderDefinition | null {
-    return this.cfg.active
+  /** 暴露当前 chat provider 配置（未启用时为 null） */
+  chatProviderDef(): ProviderDefinition | null {
+    return this.cfg.chat
+  }
+
+  /** 暴露当前 embedding provider 配置（未配置时为 null） */
+  embeddingProviderDef(): ProviderDefinition | null {
+    return this.cfg.embedding
   }
 
   /** 暴露当前 reranker 配置（用于 UI 脱敏展示） */
@@ -232,7 +240,7 @@ export class AiRuntime {
   setFetchImpl(impl: typeof fetch): void {
     this.fetchImpl = impl
     // 重建 provider，使新 fetch 生效
-    if (this.cfg.active) {
+    if (this.cfg.chat || this.cfg.embedding || this.cfg.reranker) {
       this.reload(this.cfg, { silent: true })
     }
   }
@@ -301,9 +309,9 @@ export class AiRuntime {
       this.chatLastError = 'AI chat is not configured'
       throw new Error(this.chatLastError)
     }
-    const p = this.cfg.active
+    const p = this.cfg.chat
     if (!p) {
-      this.chatLastError = 'AI provider is not configured'
+      this.chatLastError = 'AI chat provider is not configured'
       throw new Error(this.chatLastError)
     }
     const url = joinUrl(p.baseUrl, '/chat/completions')
@@ -533,6 +541,16 @@ function joinUrl(base: string, path: string): string {
   const b = base.replace(/\/+$/, '')
   const p = path.startsWith('/') ? path : '/' + path
   return b + p
+}
+
+/** 用于日志的 provider 简短标签（host 或 label） */
+function labelOf(p: ProviderDefinition): string {
+  try {
+    const u = new URL(p.baseUrl)
+    return u.host
+  } catch {
+    return p.label || p.baseUrl
+  }
 }
 
 // ───────────────────── 全局单例 ─────────────────────

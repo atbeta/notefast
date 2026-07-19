@@ -13,7 +13,7 @@
  * 4. 根据新 cfg 重新挂载 hooks
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   AiRuntime,
@@ -69,18 +69,42 @@ export function hasRuntime(): boolean {
 
 // ───────────────────── 配置持久化 ─────────────────────
 
+/**
+ * 从磁盘加载配置。
+ *
+ * 严格校验：必须包含新的 `chat`/`embedding` 字段，version===1。
+ * 遇到旧 shape（如带 `active` 字段）→ 删除文件，返回 emptyConfig()，让用户在 UI 重新配。
+ * 见 AGENTS.md：本仓库策略不保留历史配置。
+ */
 export function loadConfigFromDisk(): AiConfig {
   if (!dataDir) return emptyConfig()
   const path = join(dataDir, CONFIG_FILE)
   if (!existsSync(path)) return emptyConfig()
   try {
     const raw = readFileSync(path, 'utf-8')
-    const parsed = JSON.parse(raw) as AiConfig
-    if (parsed && parsed.version === 1) return parsed
+    const parsed = JSON.parse(raw) as Record<string, unknown> | null
+    if (looksLikeNewShape(parsed)) return parsed as unknown as AiConfig
+    // 旧 shape（含 `active` 字段或缺 chat/embedding）→ 直接丢弃
+    try {
+      unlinkSync(path)
+      console.warn('🧠 AI: 检测到旧版 ai.config.json 已删除，请重新配置')
+    } catch {
+      // ignore
+    }
     return emptyConfig()
   } catch {
     return emptyConfig()
   }
+}
+
+/** 判定是否新 schema：version===1 且同时不存在 `active`（旧字段）和缺少新字段 */
+function looksLikeNewShape(parsed: unknown): boolean {
+  if (!parsed || typeof parsed !== 'object') return false
+  const obj = parsed as Record<string, unknown>
+  if (obj.version !== 1) return false
+  if ('active' in obj) return false // 旧字段
+  if (!('chat' in obj) && !('embedding' in obj)) return false
+  return true
 }
 
 export function saveConfigToDisk(cfg: AiConfig): void {
@@ -95,11 +119,11 @@ function loadOrSeed(): AiConfig {
   const path = join(dataDir, CONFIG_FILE)
   if (existsSync(path)) {
     const fromDisk = loadConfigFromDisk()
-    if (fromDisk.active || fromDisk.version || fromDisk.reranker) return fromDisk
+    if (fromDisk.chat || fromDisk.embedding || fromDisk.reranker) return fromDisk
   }
   // 首次启动：从环境变量种子
   const seeded = configFromEnv(process.env)
-  if (seeded.active || seeded.reranker) {
+  if (seeded.chat || seeded.embedding || seeded.reranker) {
     saveConfigToDisk(seeded)
     console.log('🧠 AI: 已从环境变量种子初始化配置（写入 ' + path + '）')
   }

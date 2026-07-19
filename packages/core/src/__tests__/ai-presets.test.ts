@@ -10,6 +10,8 @@
 import { describe, test, expect } from 'bun:test'
 import {
   PRESETS,
+  PRESETS_BY_REGION,
+  REGION_ORDER,
   definitionFromPreset,
 } from '../ai/presets'
 import {
@@ -106,17 +108,35 @@ describe('PRESETS — shape contract', () => {
       expect(def.chatModel).toBe(p.chatModel)
       expect(typeof def.timeoutMs).toBe('number')
 
-      const cfg: AiConfig = {
+      // 模拟真实使用：chat 预设放 chat 槽，embedding 预设放 embedding 槽；
+      // 双能力预设两边都试一遍。
+      const cfgAsChat: AiConfig = {
         version: 1,
-        active: def,
+        chat: def,
+        embedding: null,
         autoIndex: true,
         reranker: null,
       }
-      const errs = validateConfig(cfg)
+      const cfgAsEmb: AiConfig = {
+        version: 1,
+        chat: null,
+        embedding: def,
+        autoIndex: true,
+        reranker: null,
+      }
+
       if (id === 'custom') {
-        expect(errs.length).toBeGreaterThan(0)
-      } else {
-        expect(errs, `${id} produced invalid config: ${errs.join(', ')}`).toEqual([])
+        expect(validateConfig(cfgAsChat).length).toBeGreaterThan(0)
+        expect(validateConfig(cfgAsEmb).length).toBeGreaterThan(0)
+      } else if (p.chatModel && p.embeddingModel) {
+        expect(validateConfig(cfgAsChat), `chat slot: ${id}`).toEqual([])
+        expect(validateConfig(cfgAsEmb), `emb slot: ${id}`).toEqual([])
+      } else if (p.chatModel) {
+        expect(validateConfig(cfgAsChat), `chat-only ${id}`).toEqual([])
+        expect(validateConfig(cfgAsEmb), `chat-only ${id} should fail emb slot`).not.toEqual([])
+      } else if (p.embeddingModel) {
+        expect(validateConfig(cfgAsChat), `emb-only ${id} should fail chat slot`).not.toEqual([])
+        expect(validateConfig(cfgAsEmb), `emb-only ${id}`).toEqual([])
       }
     }
   })
@@ -137,5 +157,39 @@ describe('PRESETS — shape contract', () => {
   test('每个 preset id 都唯一', () => {
     const ids = PRESET_IDS.map((id) => PRESETS[id].id)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  test('每个 preset 都有 region 字段且属于已知值', () => {
+    for (const id of PRESET_IDS) {
+      const p = preset(id)
+      expect(['cn', 'global', 'local']).toContain(p.region)
+    }
+  })
+
+  test('每个 preset 都有 signupUrl（requiresKey=true 的非本地服务）', () => {
+    for (const id of PRESET_IDS) {
+      const p = preset(id)
+      if (p.requiresKey && p.region !== 'local') {
+        expect(typeof p.signupUrl, `${id} 缺 signupUrl`).toBe('string')
+        expect(p.signupUrl!.length).toBeGreaterThan(0)
+      }
+    }
+  })
+})
+
+describe('PRESETS_BY_REGION', () => {
+  test('按区域正确分组且不重复', () => {
+    const counted: Record<string, number> = {}
+    for (const region of REGION_ORDER) {
+      for (const p of PRESETS_BY_REGION[region]) {
+        expect(p.region, `${p.id} 误分组到 ${region}`).toBe(region)
+        counted[p.id] = (counted[p.id] || 0) + 1
+        expect(counted[p.id], `${p.id} 出现在多个 region`).toBe(1)
+      }
+    }
+    // 每个 preset 都至少出现一次
+    for (const id of PRESET_IDS) {
+      expect(counted[id], `${id} 缺失`).toBeTruthy()
+    }
   })
 })

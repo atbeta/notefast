@@ -24,8 +24,14 @@ function makeProvider(overrides: Partial<ProviderDefinition> = {}): ProviderDefi
   }
 }
 
-function makeConfig(overrides: Partial<ProviderDefinition> = {}): AiConfig {
-  return { version: 1, active: makeProvider(overrides), autoIndex: true, reranker: null }
+function makeChatConfig(overrides: Partial<ProviderDefinition> = {}): AiConfig {
+  return {
+    version: 1,
+    chat: makeProvider(overrides),
+    embedding: null,
+    autoIndex: true,
+    reranker: null,
+  }
 }
 
 describe('maskKey', () => {
@@ -41,73 +47,138 @@ describe('maskKey', () => {
 })
 
 describe('publicView', () => {
-  test('掩码 apiKey，保留其他字段', () => {
-    const cfg = makeConfig({ apiKey: 'sk-verylong-secret-key-1234' })
+  test('掩码 chat 与 embedding 的 apiKey', () => {
+    const cfg: AiConfig = {
+      ...makeChatConfig({ apiKey: 'sk-verylong-secret-key-1234' }),
+      embedding: makeProvider({ apiKey: 'sk-another-secret-key-12345' }),
+    }
     const view = publicView(cfg)
-    expect(view.active).not.toBeNull()
-    expect(view.active!.apiKey).toBe('***set***')
-    expect(view.active!.baseUrl).toBe('https://api.example.com/v1')
-    expect(view.active!.chatModel).toBe('gpt-4o-mini')
+    expect(view.chat).not.toBeNull()
+    expect(view.chat!.apiKey).toBe('***set***')
+    expect(view.chat!.baseUrl).toBe('https://api.example.com/v1')
+    expect(view.chat!.chatModel).toBe('gpt-4o-mini')
+    expect(view.embedding).not.toBeNull()
+    expect(view.embedding!.apiKey).toBe('***set***')
   })
 
-  test('空 active 直接返回', () => {
+  test('空 chat 直接返回', () => {
     const cfg = emptyConfig()
     expect(publicView(cfg)).toEqual(cfg)
+  })
+
+  test('只配 chat 时 embedding=null 也正确', () => {
+    const view = publicView(makeChatConfig())
+    expect(view.chat).not.toBeNull()
+    expect(view.embedding).toBeNull()
   })
 })
 
 describe('validateConfig', () => {
-  test('空 active 通过校验（视为禁用）', () => {
+  test('空配置通过校验（视为禁用）', () => {
     expect(validateConfig(emptyConfig())).toEqual([])
   })
 
-  test('baseUrl 为空报错', () => {
-    const cfg = makeConfig({ baseUrl: '' })
-    const errs = validateConfig(cfg)
-    expect(errs.some((e) => e.includes('baseUrl'))).toBe(true)
+  test('chat baseUrl 为空报错', () => {
+    const errs = validateConfig(makeChatConfig({ baseUrl: '' }))
+    expect(errs.some((e) => e.includes('Chat provider baseUrl'))).toBe(true)
   })
 
-  test('embedding 和 chat 都为空报错', () => {
-    const cfg = makeConfig({ embeddingModel: '', chatModel: '' })
-    const errs = validateConfig(cfg)
-    expect(errs.some((e) => e.includes('至少填写一个'))).toBe(true)
+  test('chat 缺 chatModel 报错', () => {
+    const errs = validateConfig(makeChatConfig({ chatModel: '' }))
+    expect(errs.some((e) => e.includes('Chat provider 必须填写 chatModel'))).toBe(true)
   })
 
-  test('只配 chat 不报错', () => {
-    const cfg = makeConfig({ embeddingModel: '' })
+  test('chat provider 可没有 embeddingModel', () => {
+    // 旧版本要求 embedding 和 chat 至少一个；新版本已严格分离 —— chat 无需 embeddingModel
+    const errs = validateConfig(makeChatConfig({ embeddingModel: '' }))
+    expect(errs).toEqual([])
+  })
+
+  test('chat 缺 embedding 不影响 chat 通过校验', () => {
+    const errs = validateConfig({ ...makeChatConfig(), embedding: null })
+    expect(errs).toEqual([])
+  })
+
+  test('embedding provider 必须填 embeddingModel', () => {
+    const cfg: AiConfig = {
+      ...makeChatConfig(),
+      embedding: makeProvider({ embeddingModel: '' }),
+    }
+    const errs = validateConfig(cfg)
+    expect(errs.some((e) => e.includes('Embedding provider 必须填写 embeddingModel'))).toBe(true)
+  })
+
+  test('embedding provider 必须填 baseUrl', () => {
+    const cfg: AiConfig = {
+      ...makeChatConfig(),
+      embedding: makeProvider({ baseUrl: '' }),
+    }
+    const errs = validateConfig(cfg)
+    expect(errs.some((e) => e.includes('Embedding provider baseUrl'))).toBe(true)
+  })
+
+  test('embedding-only 合法（无 chat）', () => {
+    const cfg: AiConfig = {
+      version: 1,
+      chat: null,
+      embedding: makeProvider({ embeddingModel: 'bge-m3' }),
+      autoIndex: true,
+      reranker: null,
+    }
     expect(validateConfig(cfg)).toEqual([])
   })
 
-  test('只配 embedding 不报错', () => {
-    const cfg = makeConfig({ chatModel: '' })
-    expect(validateConfig(cfg)).toEqual([])
+  test('非法 chat timeoutMs 报错', () => {
+    expect(validateConfig(makeChatConfig({ timeoutMs: 100 })).length).toBeGreaterThan(0)
+    expect(validateConfig(makeChatConfig({ timeoutMs: 999_999 })).length).toBeGreaterThan(0)
   })
 
-  test('非法 timeoutMs 报错', () => {
-    expect(validateConfig(makeConfig({ timeoutMs: 100 })).length).toBeGreaterThan(0)
-    expect(validateConfig(makeConfig({ timeoutMs: 999_999 })).length).toBeGreaterThan(0)
+  test('非法 embedding timeoutMs 报错', () => {
+    const cfg: AiConfig = {
+      ...makeChatConfig(),
+      embedding: makeProvider({ timeoutMs: 100 }),
+    }
+    expect(validateConfig(cfg).length).toBeGreaterThan(0)
   })
 })
 
 describe('configFromEnv', () => {
   test('完全空 env 返回空配置', () => {
     const cfg = configFromEnv({})
-    expect(cfg.active).toBeNull()
+    expect(cfg.chat).toBeNull()
+    expect(cfg.embedding).toBeNull()
   })
 
-  test('只要有任一 env 变量就生成 provider', () => {
-    const cfg = configFromEnv({ LLM_API_KEY: 'sk-test' })
-    expect(cfg.active).not.toBeNull()
-    expect(cfg.active!.apiKey).toBe('sk-test')
+  test('AI_PROVIDER 命中预设 → 填充 baseUrl + 默认模型', () => {
+    const cfg = configFromEnv({ AI_PROVIDER: 'siliconflow' })
+    expect(cfg.chat).not.toBeNull()
+    expect(cfg.chat!.preset).toBe('siliconflow')
+    expect(cfg.chat!.baseUrl).toBe('https://api.siliconflow.cn/v1')
+    expect(cfg.chat!.apiKey).toBe('')
   })
 
-  test('LLM_API_KEY 优先于 EMBEDDING_API_KEY', () => {
-    const cfg = configFromEnv({ LLM_API_KEY: 'llm-key', EMBEDDING_API_KEY: 'emb-key' })
-    expect(cfg.active!.apiKey).toBe('llm-key')
+  test('LLM_API_KEY 单独也生效', () => {
+    const cfg = configFromEnv({ LLM_API_KEY: 'sk-test', LLM_API_URL: 'https://x/v1', LLM_MODEL: 'm' })
+    expect(cfg.chat).not.toBeNull()
+    expect(cfg.chat!.apiKey).toBe('sk-test')
   })
 
-  test('只设 EMBEDDING_API_KEY 时被采纳', () => {
+  test('EMBEDDING_API_KEY 单独生效 → 生成 embedding provider', () => {
     const cfg = configFromEnv({ EMBEDDING_API_KEY: 'emb-key' })
-    expect(cfg.active!.apiKey).toBe('emb-key')
+    expect(cfg.embedding).not.toBeNull()
+    expect(cfg.embedding!.apiKey).toBe('emb-key')
+  })
+
+  test('EMBEDDING_PROVIDER 命中预设 → 用对应 baseUrl', () => {
+    const cfg = configFromEnv({ EMBEDDING_PROVIDER: 'voyage' })
+    expect(cfg.embedding).not.toBeNull()
+    expect(cfg.embedding!.preset).toBe('voyage')
+    expect(cfg.embedding!.baseUrl).toBe('https://api.voyageai.com/v1')
+  })
+
+  test('LLM_API_KEY 同时没 EMBEDDING_* 时不会误建 embedding', () => {
+    const cfg = configFromEnv({ LLM_API_KEY: 'sk-x' })
+    expect(cfg.chat).not.toBeNull()
+    expect(cfg.embedding).toBeNull()
   })
 })

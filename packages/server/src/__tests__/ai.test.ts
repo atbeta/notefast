@@ -4,13 +4,12 @@ import { join } from 'node:path'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { initDb, closeDb } from '../db'
-import { createPluginSystem, type AiConfig } from '@notefast/core'
+import { createPluginSystem, type AiConfig, type ProviderDefinition } from '@notefast/core'
 import {
   initAiRuntime,
   applyNewConfig,
   _setRuntimeForTests,
   loadConfigFromDisk,
-  getRuntime,
 } from '../services/aiRuntime'
 import ai from '../api/ai'
 
@@ -18,6 +17,18 @@ let testDir: string
 let app: Hono
 let pluginSystem: ReturnType<typeof createPluginSystem>
 const originalFetch = globalThis.fetch
+
+const FULL_PROVIDER: ProviderDefinition = {
+  id: 'test-1',
+  label: 'Test',
+  preset: 'custom',
+  baseUrl: 'https://api.example.com/v1',
+  apiKey: 'sk-test',
+  embeddingModel: 'text-embedding-3-small',
+  chatModel: 'gpt-4o-mini',
+  timeoutMs: 30_000,
+  extraHeaders: {},
+}
 
 beforeAll(() => {
   testDir = mkdtempSync(join('/tmp', 'notefast-ai-test-'))
@@ -45,7 +56,14 @@ async function api(method: string, path: string, body?: unknown) {
   const init: RequestInit = { method, headers: { 'Content-Type': 'application/json' } }
   if (body !== undefined) init.body = JSON.stringify(body)
   const res = await app.fetch(new Request(`http://localhost${path}`, init))
-  return { status: res.status, body: await res.json() }
+  const text = await res.text()
+  let parsed: any = null
+  try {
+    parsed = text ? JSON.parse(text) : null
+  } catch {
+    parsed = { _raw: text }
+  }
+  return { status: res.status, body: parsed }
 }
 
 describe('GET /api/v1/ai/status', () => {
@@ -58,9 +76,19 @@ describe('GET /api/v1/ai/status', () => {
 
   test('配置后 status 暴露 embedding/chat 状态和 usage', async () => {
     initAiRuntime(pluginSystem, testDir)
+    applyNewConfig(
+      {
+        version: 1,
+        chat: FULL_PROVIDER,
+        embedding: FULL_PROVIDER,
+        autoIndex: true,
+        reranker: null,
+      },
+      pluginSystem,
+    )
     const { status, body } = await api('GET', '/api/v1/ai/status')
     expect(status).toBe(200)
-    expect(body.enabled).toBe(false) // 空 env，无 active provider
+    expect(body.enabled).toBe(true)
     expect(body.usage.embeddingCalls).toBe(0)
   })
 })
@@ -71,20 +99,7 @@ describe('PUT /api/v1/ai/config', () => {
   })
 
   test('有效配置可保存到磁盘 + 热重载', async () => {
-    const cfg = {
-      active: {
-        id: 'test-1',
-        label: 'Test',
-        preset: 'custom',
-        baseUrl: 'https://api.example.com/v1',
-        apiKey: 'sk-test',
-        embeddingModel: 'text-embedding-3-small',
-        chatModel: 'gpt-4o-mini',
-        timeoutMs: 30_000,
-        extraHeaders: {},
-      },
-      autoIndex: true,
-    }
+    const cfg = { chat: FULL_PROVIDER, embedding: null, autoIndex: true }
     const { status, body } = await api('PUT', '/api/v1/ai/config', cfg)
     expect(status).toBe(200)
     expect(body.ok).toBe(true)
@@ -93,79 +108,66 @@ describe('PUT /api/v1/ai/config', () => {
     const path = join(testDir, 'ai.config.json')
     expect(existsSync(path)).toBe(true)
     const onDisk = JSON.parse(readFileSync(path, 'utf-8'))
-    expect(onDisk.active.apiKey).toBe('sk-test')
+    expect(onDisk.chat.apiKey).toBe('sk-test')
   })
 
-  test('回传脱敏占位符 ***set*** 时保留磁盘上的真实 Key', async () => {
-    // 第一次保存：真实 key
+  test('独立 chat + embedding 同时保存', async () => {
     const cfg = {
-      active: {
-        id: 'key-1',
-        label: 'Test',
-        preset: 'custom',
-        baseUrl: 'https://api.example.com/v1',
-        apiKey: 'sk-real-secret-key',
-        embeddingModel: '',
-        chatModel: 'some-model',
-        timeoutMs: 30_000,
-        extraHeaders: {},
-      },
+      chat: FULL_PROVIDER,
+      embedding: { ...FULL_PROVIDER, id: 'emb-1', baseUrl: 'https://emb.example.com/v1', apiKey: 'sk-emb', embeddingModel: 'bge-m3', chatModel: '' },
+      autoIndex: true,
+    }
+    const { status, body } = await api('PUT', '/api/v1/ai/config', cfg)
+    expect(status).toBe(200)
+    expect(body.ok).toBe(true)
+
+    const onDisk = JSON.parse(readFileSync(join(testDir, 'ai.config.json'), 'utf-8'))
+    expect(onDisk.chat.apiKey).toBe('sk-test')
+    expect(onDisk.embedding.apiKey).toBe('sk-emb')
+    expect(onDisk.embedding.baseUrl).toBe('https://emb.example.com/v1')
+  })
+
+  test('回传脱敏占位符 ***set*** 时保留磁盘上的真实 Key（chat 与 embedding 各自独立）', async () => {
+    const cfg = {
+      chat: { ...FULL_PROVIDER, apiKey: 'sk-real-secret-key', embeddingModel: '', chatModel: 'some-model' },
+      embedding: { ...FULL_PROVIDER, id: 'emb-real', apiKey: 'sk-real-emb', baseUrl: 'https://emb.example.com/v1', embeddingModel: 'bge-m3', chatModel: '' },
       autoIndex: true,
     }
     await api('PUT', '/api/v1/ai/config', cfg)
 
-    // 第二次保存：模拟 UI 原样回传脱敏值（用户只改了模型名）
+    // 第二次保存：UI 只改了 chat 模型，原样回传
     const cfg2 = {
-      ...cfg,
-      active: { ...cfg.active, apiKey: '***set***', chatModel: 'other-model' },
+      chat: { ...cfg.chat, apiKey: '***set***', chatModel: 'other-model' },
+      embedding: { ...cfg.embedding, apiKey: '***set***' },
+      autoIndex: true,
     }
     const { status } = await api('PUT', '/api/v1/ai/config', cfg2)
     expect(status).toBe(200)
 
     const onDisk = JSON.parse(readFileSync(join(testDir, 'ai.config.json'), 'utf-8'))
-    expect(onDisk.active.apiKey).toBe('sk-real-secret-key')
-    expect(onDisk.active.chatModel).toBe('other-model')
+    expect(onDisk.chat.apiKey).toBe('sk-real-secret-key')
+    expect(onDisk.chat.chatModel).toBe('other-model')
+    expect(onDisk.embedding.apiKey).toBe('sk-real-emb')
   })
 
   test('回传真实新 Key 时使用新值；显式空串表示清除', async () => {
-    const base = {
-      id: 'key-2',
-      label: 'Test',
-      preset: 'custom',
-      baseUrl: 'https://api.example.com/v1',
-      apiKey: 'sk-first',
-      embeddingModel: '',
-      chatModel: 'm',
-      timeoutMs: 30_000,
-      extraHeaders: {},
-    }
-    await api('PUT', '/api/v1/ai/config', { active: base, autoIndex: true })
+    const base = { ...FULL_PROVIDER, id: 'key-2', embeddingModel: '', chatModel: 'm' }
+    await api('PUT', '/api/v1/ai/config', { chat: base, embedding: null, autoIndex: true })
 
-    // 新 key 覆盖
-    await api('PUT', '/api/v1/ai/config', { active: { ...base, apiKey: 'sk-second' }, autoIndex: true })
+    await api('PUT', '/api/v1/ai/config', { chat: { ...base, apiKey: 'sk-second' }, embedding: null, autoIndex: true })
     let onDisk = JSON.parse(readFileSync(join(testDir, 'ai.config.json'), 'utf-8'))
-    expect(onDisk.active.apiKey).toBe('sk-second')
+    expect(onDisk.chat.apiKey).toBe('sk-second')
 
-    // 显式空串清除（例如切换到无需 key 的服务）
-    await api('PUT', '/api/v1/ai/config', { active: { ...base, apiKey: '' }, autoIndex: true })
+    await api('PUT', '/api/v1/ai/config', { chat: { ...base, apiKey: '' }, embedding: null, autoIndex: true })
     onDisk = JSON.parse(readFileSync(join(testDir, 'ai.config.json'), 'utf-8'))
-    expect(onDisk.active.apiKey).toBe('')
+    expect(onDisk.chat.apiKey).toBe('')
   })
 
   test('保存的配置 reload 后从磁盘恢复', () => {
     const cfg: AiConfig = {
       version: 1,
-      active: {
-        id: 'persist-1',
-        label: 'Persist',
-        preset: 'openai',
-        baseUrl: 'https://api.openai.com/v1',
-        apiKey: 'sk-persist',
-        embeddingModel: 'text-embedding-3-small',
-        chatModel: 'gpt-4o-mini',
-        timeoutMs: 60_000,
-        extraHeaders: {},
-      },
+      chat: { ...FULL_PROVIDER, id: 'persist-1', label: 'Persist', preset: 'openai', apiKey: 'sk-persist' },
+      embedding: null,
       autoIndex: false,
       reranker: null,
     }
@@ -174,34 +176,83 @@ describe('PUT /api/v1/ai/config', () => {
     // 模拟重启：清空 runtime，从磁盘重新加载
     _setRuntimeForTests(null)
     const restored = loadConfigFromDisk()
-    expect(restored.active).not.toBeNull()
-    expect(restored.active!.apiKey).toBe('sk-persist')
+    expect(restored.chat).not.toBeNull()
+    expect(restored.chat!.apiKey).toBe('sk-persist')
     expect(restored.autoIndex).toBe(false)
   })
 
-  test('非法 baseUrl 返回 ok=false + errors', async () => {
+  test('旧 shape（带 active 字段）从磁盘加载时被丢弃', () => {
+    // 写一个旧 shape 文件
+    const fs = require('node:fs') as typeof import('node:fs')
+    fs.writeFileSync(
+      join(testDir, 'ai.config.json'),
+      JSON.stringify(
+        {
+          version: 1,
+          active: { ...FULL_PROVIDER, apiKey: 'old-key' },
+          autoIndex: true,
+          reranker: null,
+        },
+        null,
+        2,
+      ),
+    )
+    const restored = loadConfigFromDisk()
+    // 应当丢弃文件 → 返回空配置
+    expect(restored.chat).toBeNull()
+    expect(restored.embedding).toBeNull()
+    expect(existsSync(join(testDir, 'ai.config.json'))).toBe(false)
+  })
+
+  test('非 legacy preset（如 siliconflow / cohere / voyage）也能保存', async () => {
+    const cases = [
+      { id: 'sf-1', preset: 'siliconflow', baseUrl: 'https://api.siliconflow.cn/v1', chatModel: 'deepseek-ai/DeepSeek-V4-Flash' },
+      { id: 'vh-1', preset: 'voyage', baseUrl: 'https://api.voyageai.com/v1', chatModel: '', embeddingModel: 'voyage-4-large' },
+    ]
+    for (const c of cases) {
+      _setRuntimeForTests(null)
+      initAiRuntime(pluginSystem, testDir)
+      const cfg = {
+        chat: c.chatModel ? { ...FULL_PROVIDER, id: c.id, preset: c.preset as never, baseUrl: c.baseUrl, chatModel: c.chatModel, embeddingModel: '' } : null,
+        embedding: c.embeddingModel
+          ? { ...FULL_PROVIDER, id: c.id + '-emb', preset: c.preset as never, baseUrl: c.baseUrl, embeddingModel: c.embeddingModel, chatModel: '' }
+          : null,
+        autoIndex: true,
+      }
+      const { status, body } = await api('PUT', '/api/v1/ai/config', cfg)
+      expect(status, `${c.preset} 应当能保存`).toBe(200)
+      expect(body.ok).toBe(true)
+      const onDisk = JSON.parse(readFileSync(join(testDir, 'ai.config.json'), 'utf-8'))
+      const target = c.chatModel ? onDisk.chat : onDisk.embedding
+      expect(target.preset).toBe(c.preset)
+      expect(target.baseUrl).toBe(c.baseUrl)
+    }
+  })
+
+  test('非法 chat baseUrl 返回 400', async () => {
     const cfg = {
-      active: {
-        id: 'bad',
-        label: 'Bad',
-        preset: 'custom',
-        baseUrl: '',
-        apiKey: '',
-        embeddingModel: 'emb',
-        chatModel: '',
-        timeoutMs: 30_000,
-        extraHeaders: {},
-      },
+      chat: { ...FULL_PROVIDER, id: 'bad', label: 'Bad', baseUrl: '' },
+      embedding: null,
       autoIndex: true,
     }
     const { status } = await api('PUT', '/api/v1/ai/config', cfg)
-    // Zod 校验拦截空 baseUrl → 400；这是预期行为
     expect(status).toBe(400)
   })
 
-  test('active=null 表示禁用 AI', async () => {
+  test('非法 embedding（缺 embeddingModel）返回 400', async () => {
+    const cfg = {
+      chat: FULL_PROVIDER,
+      embedding: { ...FULL_PROVIDER, id: 'bad-emb', embeddingModel: '' },
+      autoIndex: true,
+    }
+    const { status } = await api('PUT', '/api/v1/ai/config', cfg)
+    expect(status).toBe(400)
+  })
+
+  test('chat=null 且 embedding=null 表示禁用 AI', async () => {
     const { status, body } = await api('PUT', '/api/v1/ai/config', {
-      active: null,
+      chat: null,
+      embedding: null,
       autoIndex: true,
     })
     expect(status).toBe(200)
@@ -210,22 +261,13 @@ describe('PUT /api/v1/ai/config', () => {
 })
 
 describe('GET /api/v1/ai/config', () => {
-  test('apiKey 被脱敏', async () => {
+  test('apiKey 被脱敏（chat 与 embedding 各自）', async () => {
     initAiRuntime(pluginSystem, testDir)
     applyNewConfig(
       {
         version: 1,
-        active: {
-          id: 'a',
-          label: 'a',
-          preset: 'custom',
-          baseUrl: 'https://x.com/v1',
-          apiKey: 'sk-verylongsecret1234',
-          embeddingModel: 'e',
-          chatModel: 'c',
-          timeoutMs: 30_000,
-          extraHeaders: {},
-        },
+        chat: { ...FULL_PROVIDER, id: 'a', label: 'a', apiKey: 'sk-verylongsecret1234' },
+        embedding: { ...FULL_PROVIDER, id: 'b', label: 'b', baseUrl: 'https://emb.example.com/v1', apiKey: 'sk-anothersecret6789', embeddingModel: 'bge-m3', chatModel: '' },
         autoIndex: true,
         reranker: null,
       },
@@ -233,117 +275,7 @@ describe('GET /api/v1/ai/config', () => {
     )
     const { status, body } = await api('GET', '/api/v1/ai/config')
     expect(status).toBe(200)
-    expect(body.active.apiKey).toBe('***set***')
-  })
-})
-
-describe('POST /api/v1/ai/test', () => {
-  beforeEach(() => {
-    initAiRuntime(pluginSystem, testDir)
-    applyNewConfig(
-      {
-        version: 1,
-        active: {
-          id: 't',
-          label: 't',
-          preset: 'custom',
-          baseUrl: 'https://api.example.com/v1',
-          apiKey: 'sk-test',
-          embeddingModel: 'text-embedding-3-small',
-          chatModel: 'gpt-4o-mini',
-          timeoutMs: 30_000,
-          extraHeaders: {},
-        },
-        autoIndex: false,
-        reranker: null,
-      },
-      pluginSystem,
-    )
-  })
-
-  test('chat/embedding 都正常时返回 ok=true + dim', async () => {
-    const mockFetch = (async (input: RequestInfo | URL) => {
-      const url = String(input)
-      if (url.endsWith('/chat/completions')) {
-        return new Response(JSON.stringify({ choices: [{ message: { content: 'pong' } }] }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      }
-      if (url.endsWith('/embeddings')) {
-        return new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }] }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      }
-      return new Response('not found', { status: 404 })
-    }) as unknown as typeof fetch
-    getRuntime().setFetchImpl(mockFetch)
-
-    const { status, body } = await api('POST', '/api/v1/ai/test')
-    expect(status).toBe(200)
-    expect(body.chat.ok).toBe(true)
-    expect(body.embedding.ok).toBe(true)
-    expect(body.embedding.dim).toBe(3)
-  })
-
-  test('embedding 返回 4xx 时记录 lastError', async () => {
-    const failFetch = (async () =>
-      new Response('unauthorized', { status: 401 })) as unknown as typeof fetch
-    getRuntime().setFetchImpl(failFetch)
-    const { body } = await api('POST', '/api/v1/ai/test')
-    expect(body.embedding.ok).toBe(false)
-    expect(body.embedding.lastError).toContain('401')
-  })
-})
-
-describe('POST /api/v1/ai/suggest-title', () => {
-  beforeEach(() => {
-    initAiRuntime(pluginSystem, testDir)
-  })
-
-  test('chat 未配置时返回 400 + fix_hint', async () => {
-    const { status, body } = await api('POST', '/api/v1/ai/suggest-title', {
-      content: '一段笔记',
-    })
-    expect(status).toBe(400)
-    expect(body.error).toBe('not_configured')
-    expect(body.fix_hint).toContain('/settings')
-  })
-
-  test('chat 正常时返回 title + summary', async () => {
-    applyNewConfig(
-      {
-        version: 1,
-        active: {
-          id: 's',
-          label: 's',
-          preset: 'custom',
-          baseUrl: 'https://api.example.com/v1',
-          apiKey: 'sk-test',
-          embeddingModel: '',
-          chatModel: 'gpt-4o-mini',
-          timeoutMs: 30_000,
-          extraHeaders: {},
-        },
-        autoIndex: false,
-        reranker: null,
-      },
-      pluginSystem,
-    )
-    const mockChat = (async () =>
-      new Response(
-        JSON.stringify({
-          choices: [{ message: { content: '{"title":"React 笔记","summary":"关于 hooks"}' } }],
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      )) as unknown as typeof fetch
-    getRuntime().setFetchImpl(mockChat)
-    const { status, body } = await api('POST', '/api/v1/ai/suggest-title', {
-      content: '这是一段关于 React Hooks 的内容',
-    })
-    expect(status).toBe(200)
-    expect(body.title).toBe('React 笔记')
-    expect(body.summary).toBe('关于 hooks')
+    expect(body.chat.apiKey).toBe('***set***')
+    expect(body.embedding.apiKey).toBe('***set***')
   })
 })

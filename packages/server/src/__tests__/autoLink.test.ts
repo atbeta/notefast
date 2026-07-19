@@ -111,7 +111,8 @@ function mockChatReturning(chatModel: string, jsonResponse: string) {
   applyNewConfig(
     {
       version: 1,
-      active: { ...makeProvider(chatModel), apiKey: 'key', baseUrl: 'http://mock' } as never,
+      chat: { ...makeProvider(chatModel), apiKey: 'key', baseUrl: 'http://mock', embeddingModel: '' } as never,
+      embedding: null,
       autoIndex: false,
       reranker: null,
       autoLink: { enabled: true, autoApply: false, notebookScope: 'all', maxPerBlock: 5 },

@@ -2,24 +2,65 @@
  * AI 配置数据模型
  *
  * 设计原则：
- * - 单 active 配置：NoteFast 是单 Notebook + 单用户，不存在多租户
- * - Provider 是统一抽象：一个 definition 同时描述 embedding + chat（OpenAI 兼容协议）
+ * - 单用户 + 单 active chat provider；embedding 是独立可选 provider（很多 LLM 没有 embedding 端点）
  * - 持久化：data/ai.config.json；环境变量仅在首次启动时作为种子
- * - API Key 落盘前不加密，但 maskKey() 用于对外脱敏（暴露最后 4 位）
+ * - API Key 落盘前不加密，但 maskKey() / publicView() 用于对外脱敏
+ *
+ * ## Chat vs Embedding 解耦
+ *
+ * 旧版本用 `active: { embeddingModel, chatModel, baseUrl, apiKey, ... }` 把两者强绑，
+ * 但很多服务只有 chat（DeepSeek / Moonshot / Groq / xAI）或只有 embedding（Voyage / Cohere embed / Jina），
+ * 所以拆成 `chat: ProviderDefinition | null` 和 `embedding: ProviderDefinition | null`。
+ * 严格分离：`embedding === null` 表示禁用语义搜索，不会回退到 chat 的 baseUrl。
  */
 
-/** 已内置的 provider 预设（按下拉顺序排序） */
+import { PRESETS } from './presets'
+
+
+export type Region = 'cn' | 'global' | 'local'
+
+/** 已内置的 provider 预设（按下拉顺序排序：CN → Global → Local → Custom）*/
 export type ProviderPresetId =
-  | 'openai'
+  | 'minimax'
   | 'deepseek'
-  | 'openrouter'
-  | 'siliconflow'
+  | 'doubao'
   | 'zhipu'
   | 'moonshot'
+  | 'siliconflow'
   | 'dashscope'
+  | 'openai'
+  | 'openrouter'
   | 'gemini'
+  | 'mistral'
+  | 'groq'
+  | 'xai'
+  | 'cohere'
+  | 'voyage'
+  | 'jina'
   | 'ollama'
   | 'custom'
+
+/** ProviderPresetId 的运行时清单：Zod schema、UI 下拉等都从这里取，避免列表漂移 */
+export const PROVIDER_PRESET_IDS: readonly ProviderPresetId[] = [
+  'minimax',
+  'deepseek',
+  'doubao',
+  'zhipu',
+  'moonshot',
+  'siliconflow',
+  'dashscope',
+  'openai',
+  'openrouter',
+  'gemini',
+  'mistral',
+  'groq',
+  'xai',
+  'cohere',
+  'voyage',
+  'jina',
+  'ollama',
+  'custom',
+]
 
 /** 脱敏占位符：GET /ai/config 对外返回的 apiKey 掩码 */
 export const KEY_MASK = '***set***'
@@ -36,27 +77,27 @@ export function resolveApiKey(incoming: string | undefined, existing: string | u
 
 /** 单一 AI Provider 的完整配置 */
 export interface ProviderDefinition {
-  /** 唯一 id（自定义 provider 时由前端生成 uuid） */
+  /** 唯一 id（前端 crypto.randomUUID() 生成）*/
   id: string
-  /** 显示名（用户可改） */
+  /** 显示名（用户可改）*/
   label: string
   /** 预设标识，自定义为 'custom' */
   preset: ProviderPresetId
-  /** OpenAI 兼容 chat/completions 端点 */
+  /** OpenAI 兼容 chat/completions & embeddings 端点 */
   baseUrl: string
-  /** API Key，留空表示纯本地（如 Ollama） */
+  /** API Key，留空表示纯本地（如 Ollama）*/
   apiKey: string
-  /** Embedding 模型名；为空则禁用 embedding */
+  /** Embedding 模型名；chat provider 此字段可留空；embedding provider 此字段必填 */
   embeddingModel: string
-  /** Chat 模型名；为空则禁用 chat */
+  /** Chat 模型名；chat provider 此字段必填；embedding-only provider 可留空 */
   chatModel: string
-  /** 自定义请求超时（毫秒） */
+  /** 自定义请求超时（毫秒）*/
   timeoutMs: number
-  /** 自定义请求头（可选，例如 OpenRouter 的 HTTP-Referer） */
+  /** 自定义请求头（可选，例如 OpenRouter 的 HTTP-Referer）*/
   extraHeaders: Record<string, string>
 }
 
-/** Reranker 独立配置（与 active embedding/chat provider 解耦） */
+/** Reranker 独立配置（与 active embedding/chat provider 完全解耦）*/
 export interface RerankerDefinition {
   /** 是否启用；启用时 baseUrl + model 必填 */
   enabled: boolean
@@ -66,13 +107,13 @@ export interface RerankerDefinition {
   apiKey: string
   /** 模型名，如 BAAI/bge-reranker-v2-m3 */
   model: string
-  /** 请求超时（毫秒） */
+  /** 请求超时（毫秒）*/
   timeoutMs: number
 }
 
 /** 自动反向链接：基于 Chat 模型从块内容提取实体，在已有 block_refs 里建议/写入 */
 export interface AutoLinkConfig {
-  /** 是否启用（note.afterCreate/Update 触发） */
+  /** 是否启用（note.afterCreate/Update 触发）*/
   enabled: boolean
   /** true 时所有建议直接落库；false 时建议入内存 store 等用户确认 */
   autoApply: boolean
@@ -93,17 +134,25 @@ export function defaultAutoLinkConfig(): AutoLinkConfig {
   }
 }
 
-/** 完整的 AI 配置（当前实现下只有一个 active provider + 可选 reranker + 可选 autoLink） */
+/**
+ * 完整的 AI 配置
+ *
+ * - `chat`：进行 chat / title / AutoLink 时使用的 provider；必填（除非完全禁用 AI）
+ * - `embedding`：语义搜索 embedding 来源；可选；为 null 时只走 FTS5
+ * - `reranker`：hybrid search 精排；可选；为 null 时跳过 rerank
+ */
 export interface AiConfig {
   /** schema 版本，便于未来迁移 */
   version: 1
-  /** 当前激活的 provider；null 表示 AI 未启用 */
-  active: ProviderDefinition | null
+  /** Chat provider（标题/摘要/对话/AutoLink 抽取使用）；null 表示 AI 完全未启用 */
+  chat: ProviderDefinition | null
+  /** Embedding provider（语义搜索使用，独立于 chat）；null 表示关闭 embedding */
+  embedding: ProviderDefinition | null
   /** 自动索引：新建/更新 block 后是否异步生成 embedding */
   autoIndex: boolean
-  /** Reranker 配置；null 表示未配置（hybrid search 跳过精排） */
+  /** Reranker 配置；null 表示未配置（hybrid search 跳过精排）*/
   reranker: RerankerDefinition | null
-  /** 自动反向链接配置（默认禁用；缺省时按 defaultAutoLinkConfig 处理） */
+  /** 自动反向链接配置（默认禁用；缺省时按 defaultAutoLinkConfig 处理）*/
   autoLink?: AutoLinkConfig
 }
 
@@ -112,37 +161,110 @@ export const DEFAULT_TIMEOUT_MS = 60_000
 export function emptyConfig(): AiConfig {
   return {
     version: 1,
-    active: null,
+    chat: null,
+    embedding: null,
     autoIndex: true,
     reranker: null,
     autoLink: defaultAutoLinkConfig(),
   }
 }
 
-/** 把 env 变量转换为初始 ProviderDefinition（仅在 data/ai.config.json 不存在时使用） */
+/**
+ * 把 env 变量转换为初始 AiConfig（仅在 data/ai.config.json 不存在时使用）
+ *
+ * 解析策略：
+ * 1. 若 AI_PROVIDER 是已知的 preset id（minimax / deepseek / openai / …）→ 用 preset 的 baseUrl + 默认模型
+ * 2. 否则回退到 LLM_API_URL / LLM_API_KEY 等通用 env 变量，按 custom 预设处理
+ * 3. EMBEDDING_PROVIDER / EMBEDDING_API_URL 控制独立 embedding 通道
+ */
 export function configFromEnv(env: Record<string, string | undefined>): AiConfig {
-  const baseUrl = (env.LLM_API_URL || '').trim()
-  const apiKey = (env.LLM_API_KEY || env.EMBEDDING_API_KEY || '').trim()
-  const chatModel = (env.LLM_MODEL || '').trim()
-  const embeddingModel = (env.EMBEDDING_MODEL || '').trim()
+  const presetEnv = (env.AI_PROVIDER || '').trim().toLowerCase()
+  const llmUrl = (env.LLM_API_URL || '').trim()
+  const llmKey = (env.LLM_API_KEY || env.EMBEDDING_API_KEY || '').trim()
+  const llmModel = (env.LLM_MODEL || '').trim()
+  const embUrl = (env.EMBEDDING_API_URL || '').trim()
+  const embKey = (env.EMBEDDING_API_KEY || '').trim()
+  const embModel = (env.EMBEDDING_MODEL || '').trim()
+  const embPreset = (env.EMBEDDING_PROVIDER || '').trim().toLowerCase()
 
-  const hasAny = Boolean(baseUrl || apiKey || chatModel || embeddingModel)
-  if (!hasAny) return emptyConfig()
+  const hasChatSignal = Boolean(presetEnv || llmUrl || llmKey || llmModel)
+  const hasEmbSignal = Boolean(embPreset || embUrl || embKey || embModel)
+  if (!hasChatSignal && !hasEmbSignal) return emptyConfig()
+
+  let chat: ProviderDefinition | null = null
+  if (hasChatSignal) {
+    let baseUrl = llmUrl
+    let chatModel = llmModel
+    let extraHeaders: Record<string, string> = {}
+    let preset: ProviderPresetId = 'custom'
+    let label = '从环境变量导入'
+
+    if (presetEnv && PRESETS[presetEnv as ProviderPresetId]) {
+      const p = PRESETS[presetEnv as ProviderPresetId]
+      if (p.id !== 'custom') {
+        preset = p.id
+        baseUrl = baseUrl || p.baseUrl
+        if (!chatModel) chatModel = p.chatModel
+        extraHeaders = { ...p.extraHeaders }
+        label = p.label
+      }
+    }
+    if (!baseUrl) baseUrl = 'https://api.openai.com/v1'
+
+    chat = {
+      id: 'env-seed-chat',
+      label,
+      preset,
+      baseUrl,
+      apiKey: llmKey,
+      embeddingModel: '', // chat provider 不再承担 embedding 职责
+      chatModel,
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+      extraHeaders,
+    }
+  }
+
+  let embedding: ProviderDefinition | null = null
+  if (hasEmbSignal) {
+    let baseUrl = embUrl
+    let embeddingModel = embModel
+    let extraHeaders: Record<string, string> = {}
+    let preset: ProviderPresetId = 'custom'
+    let label = 'Embed 从环境变量导入'
+
+    if (embPreset && PRESETS[embPreset as ProviderPresetId]) {
+      const p = PRESETS[embPreset as ProviderPresetId]
+      if (p.id !== 'custom') {
+        preset = p.id
+        baseUrl = baseUrl || p.baseUrl
+        if (!embeddingModel) embeddingModel = p.embeddingModel
+        extraHeaders = { ...p.extraHeaders }
+        label = `${p.label} (Embedding)`
+      }
+    }
+    // env-seed 时若没指定 baseUrl，则用 LLM 的；都不存在就用 OpenAI 默认
+    if (!baseUrl && chat) baseUrl = chat.baseUrl
+    if (!baseUrl) baseUrl = 'https://api.openai.com/v1'
+    if (!embeddingModel) embeddingModel = 'text-embedding-3-small'
+
+    embedding = {
+      id: 'env-seed-embedding',
+      label,
+      preset,
+      baseUrl,
+      apiKey: embKey || chat?.apiKey || '',
+      embeddingModel,
+      chatModel: '',
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+      extraHeaders,
+    }
+  }
 
   return {
     version: 1,
-    autoIndex: true,
-    active: {
-      id: 'env-seed',
-      label: '从环境变量导入',
-      preset: 'custom',
-      baseUrl: baseUrl || 'https://api.openai.com/v1',
-      apiKey,
-      embeddingModel,
-      chatModel,
-      timeoutMs: DEFAULT_TIMEOUT_MS,
-      extraHeaders: {},
-    },
+    chat,
+    embedding,
+    autoIndex: Boolean(embedding),
     reranker: rerankerFromEnv(env),
     autoLink: autoLinkFromEnv(env),
   }
@@ -174,16 +296,30 @@ function rerankerFromEnv(env: Record<string, string | undefined>): RerankerDefin
 /** 校验配置：返回错误数组；空数组表示合法 */
 export function validateConfig(cfg: AiConfig): string[] {
   const errs: string[] = []
-  const a = cfg.active
-  if (a) {
-    if (!a.baseUrl.trim()) errs.push('Provider baseUrl 不能为空')
-    if (!a.embeddingModel.trim() && !a.chatModel.trim()) {
-      errs.push('Embedding 模型和 Chat 模型至少填写一个')
-    }
-    if (a.timeoutMs < 1000 || a.timeoutMs > 600_000) {
-      errs.push('timeoutMs 应在 1000-600000 之间')
+  const chat = cfg.chat
+  const embedding = cfg.embedding
+
+  // Chat provider
+  if (chat) {
+    if (!chat.baseUrl.trim()) errs.push('Chat provider baseUrl 不能为空')
+    if (!chat.chatModel.trim()) errs.push('Chat provider 必须填写 chatModel')
+    if (chat.timeoutMs < 1000 || chat.timeoutMs > 600_000) {
+      errs.push('Chat provider timeoutMs 应在 1000-600000 之间')
     }
   }
+
+  // Embedding provider（可选；但只要存在就必须填齐）
+  if (embedding) {
+    if (!embedding.baseUrl.trim()) errs.push('Embedding provider baseUrl 不能为空')
+    if (!embedding.embeddingModel.trim()) {
+      errs.push('Embedding provider 必须填写 embeddingModel')
+    }
+    if (embedding.timeoutMs < 1000 || embedding.timeoutMs > 600_000) {
+      errs.push('Embedding provider timeoutMs 应在 1000-600000 之间')
+    }
+  }
+
+  // Reranker
   const r = cfg.reranker
   if (r && r.enabled) {
     if (!r.baseUrl.trim()) errs.push('Reranker baseUrl 不能为空')
@@ -192,13 +328,16 @@ export function validateConfig(cfg: AiConfig): string[] {
       errs.push('Reranker timeoutMs 应在 1000-600000 之间')
     }
   }
+
+  // AutoLink
   const al = cfg.autoLink ?? defaultAutoLinkConfig()
-  if (al.enabled && cfg.active && !cfg.active.chatModel.trim()) {
-    errs.push('AutoLink 需要 Chat 模型（请填写 chatModel）')
+  if (al.enabled && cfg.chat && !cfg.chat.chatModel.trim()) {
+    errs.push('AutoLink 需要 Chat provider 已配置 chatModel')
   }
   if (al.maxPerBlock < 1 || al.maxPerBlock > 10) {
     errs.push('AutoLink maxPerBlock 应在 1-10 之间')
   }
+
   return errs
 }
 
@@ -209,11 +348,26 @@ export function maskKey(key: string): string {
   return `${key.slice(0, 4)}••••${key.slice(-4)}`
 }
 
-/** 把 active provider 与 reranker 的 key 置为脱敏占位符（用于对外序列化） */
+/** 把 chat 与 embedding 的 key 置为脱敏占位符（用于对外序列化） */
 export function publicView(cfg: AiConfig): AiConfig {
   let next = cfg
-  if (cfg.active) {
-    next = { ...next, active: { ...cfg.active, apiKey: cfg.active.apiKey ? KEY_MASK : '' } }
+  if (cfg.chat) {
+    next = {
+      ...next,
+      chat: {
+        ...cfg.chat,
+        apiKey: cfg.chat.apiKey ? KEY_MASK : '',
+      },
+    }
+  }
+  if (cfg.embedding) {
+    next = {
+      ...next,
+      embedding: {
+        ...cfg.embedding,
+        apiKey: cfg.embedding.apiKey ? KEY_MASK : '',
+      },
+    }
   }
   if (cfg.reranker && cfg.reranker.apiKey) {
     next = {

@@ -88,14 +88,25 @@ describe('hybridSearch — embedding + RRF', () => {
     applyNewConfig(
       {
         version: 1,
-        active: {
+        chat: {
           id: 'x',
           label: 'x',
           preset: 'custom',
-          baseUrl: 'http://mock',
+          baseUrl: 'http://mock-chat',
+          apiKey: '',
+          embeddingModel: '',
+          chatModel: 'fake-chat',
+          timeoutMs: 5000,
+          extraHeaders: {},
+        },
+        embedding: {
+          id: 'x-emb',
+          label: 'x',
+          preset: 'custom',
+          baseUrl: 'http://mock-emb',
           apiKey: '',
           embeddingModel: 'fake-emb',
-          chatModel: 'fake-chat',
+          chatModel: '',
           timeoutMs: 5000,
           extraHeaders: {},
         },
@@ -113,14 +124,25 @@ describe('hybridSearch — embedding + RRF', () => {
     applyNewConfig(
       {
         version: 1,
-        active: {
+        chat: {
           id: 'x',
           label: 'x',
           preset: 'custom',
           baseUrl: 'http://mock',
           apiKey: '',
-          embeddingModel: 'fake-emb',
+          embeddingModel: '',
           chatModel: 'fake-chat',
+          timeoutMs: 5000,
+          extraHeaders: {},
+        },
+        embedding: {
+          id: 'x-emb',
+          label: 'x',
+          preset: 'custom',
+          baseUrl: 'http://mock',
+          apiKey: '',
+          embeddingModel: 'fake-emb',
+          chatModel: '',
           timeoutMs: 5000,
           extraHeaders: {},
         },

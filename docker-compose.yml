@@ -11,7 +11,8 @@ services:
       - AUTO_EXPORT_DIR=${AUTO_EXPORT_DIR:-/app/export}
       - AI_PROVIDER=${AI_PROVIDER:-openrouter}
       - AI_API_KEY=${AI_API_KEY:-}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-}
+      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-}
     volumes:
       - notefast_data:/app/data

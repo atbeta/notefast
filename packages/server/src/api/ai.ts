@@ -24,11 +24,14 @@ import {
   type AiConfig,
   type ChatMessage,
   type LLMProvider,
+  type ProviderPresetId,
+  PROVIDER_PRESET_IDS,
   emptyConfig,
   highlightSnippet,
   suggestTitle,
   buildFtsQuery,
   resolveApiKey,
+  validateConfig,
 } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import {
@@ -64,20 +67,21 @@ ai.get('/config', (c) => {
   return c.json(getRuntime().status().config)
 })
 
+const providerSchema = z.object({
+  id: z.string(),
+  label: z.string().min(1),
+  preset: z.enum(PROVIDER_PRESET_IDS as unknown as [ProviderPresetId, ...ProviderPresetId[]]),
+  baseUrl: z.string().min(1),
+  apiKey: z.string(),
+  embeddingModel: z.string(),
+  chatModel: z.string(),
+  timeoutMs: z.number().int().min(1000).max(600_000),
+  extraHeaders: z.record(z.string(), z.string()),
+})
+
 const configSchema = z.object({
-  active: z
-    .object({
-      id: z.string(),
-      label: z.string().min(1),
-      preset: z.enum(['openai', 'deepseek', 'openrouter', 'ollama', 'custom']),
-      baseUrl: z.string().min(1),
-      apiKey: z.string(),
-      embeddingModel: z.string(),
-      chatModel: z.string(),
-      timeoutMs: z.number().int().min(1000).max(600_000),
-      extraHeaders: z.record(z.string(), z.string()),
-    })
-    .nullable(),
+  chat: providerSchema.nullable(),
+  embedding: providerSchema.nullable(),
   autoIndex: z.boolean(),
   reranker: z
     .object({
@@ -110,8 +114,11 @@ ai.put(
     // Key 保护：客户端回传脱敏占位符（***set***）时，保留磁盘上的真实 Key。
     // 没有这个保护的话，任何一次「改别的字段再保存」都会把真实 Key 覆盖成掩码。
     const current = loadConfigFromDisk()
-    if (body.active) {
-      body.active.apiKey = resolveApiKey(body.active.apiKey, current.active?.apiKey)
+    if (body.chat) {
+      body.chat.apiKey = resolveApiKey(body.chat.apiKey, current.chat?.apiKey)
+    }
+    if (body.embedding) {
+      body.embedding.apiKey = resolveApiKey(body.embedding.apiKey, current.embedding?.apiKey)
     }
     const reranker = body.reranker ?? null
     if (reranker) {
@@ -119,10 +126,16 @@ ai.put(
     }
     const cfg: AiConfig = {
       version: 1,
-      active: body.active,
+      chat: body.chat,
+      embedding: body.embedding,
       autoIndex: body.autoIndex,
       reranker: reranker && reranker.enabled ? reranker : null,
       autoLink: body.autoLink,
+    }
+    // 业务校验（chatModel / embeddingModel 必填等）→ 400
+    const errors = validateConfig(cfg)
+    if (errors.length > 0) {
+      return c.json({ error: 'invalid_config', message: errors.join('; '), errors }, 400)
     }
     try {
       const result = applyNewConfigFromCurrent(cfg)

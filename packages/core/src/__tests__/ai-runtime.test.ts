@@ -6,7 +6,7 @@ import {
 } from '../ai/runtime'
 import { makeProviderLike } from './helpers'
 import { emptyConfig } from '../ai/config'
-import type { AiConfig } from '../ai/config'
+import type { AiConfig, ProviderDefinition } from '../ai/config'
 
 function makeRuntime(cfg: AiConfig, fetchImpl?: typeof fetch, batchSize?: number): AiRuntime {
   const opts: AiRuntimeOptions = {}
@@ -24,6 +24,27 @@ function mockFetchJson(status: number, body: unknown): typeof fetch {
   }) as unknown as typeof fetch
 }
 
+function makeFullConfig(overrides: Partial<ProviderDefinition> = {}): AiConfig {
+  return {
+    version: 1,
+    chat: { ...makeProviderLike(overrides), embeddingModel: '' },
+    embedding: { ...makeProviderLike(overrides), id: (overrides.id || 'test-provider') + '-emb', chatModel: '' },
+    autoIndex: true,
+    reranker: null,
+  }
+}
+
+function makeEmbConfig(overrides: Partial<ProviderDefinition> = {}): AiConfig {
+  // 仅 embedding provider；chat 为 null → 不会启用 chat
+  return {
+    version: 1,
+    chat: null,
+    embedding: makeProviderLike({ chatModel: '', ...overrides }),
+    autoIndex: true,
+    reranker: null,
+  }
+}
+
 describe('AiRuntime 基础状态', () => {
   test('空配置 → disabled', () => {
     resetAiRuntimeForTests()
@@ -34,58 +55,45 @@ describe('AiRuntime 基础状态', () => {
     expect(s.chat.configured).toBe(false)
   })
 
-  test('只配 embedding', () => {
-    const r = makeRuntime({
-      version: 1,
-      autoIndex: true,
-      active: makeProviderLike({ chatModel: '' }),
-      reranker: null,
-    })
+  test('只配 embedding（chat=null）', () => {
+    const r = makeRuntime(makeEmbConfig())
     const s = r.status()
-    expect(s.enabled).toBe(true)
+    expect(s.enabled).toBe(true) // 至少 embedding 配了
     expect(s.embedding.configured).toBe(true)
     expect(s.chat.configured).toBe(false)
     expect(r.hasEmbedding()).toBe(true)
     expect(r.hasChat()).toBe(false)
   })
 
-  test('status 暴露脱敏后的 apiKey', () => {
+  test('status 暴露脱敏后的 apiKey（chat + embedding 都有）', () => {
     const r = makeRuntime({
-      version: 1,
-      autoIndex: true,
-      active: makeProviderLike({ apiKey: 'sk-verylongsecret1234' }),
-      reranker: null,
+      ...makeFullConfig({ apiKey: 'sk-verylongsecret1234' }),
+      embedding: makeProviderLike({ apiKey: 'sk-anothersecret67890' }),
     })
     const s = r.status()
-    expect(s.config.active).not.toBeNull()
-    expect(s.config.active!.apiKey).toBe('***set***')
+    expect(s.config.chat).not.toBeNull()
+    expect(s.config.chat!.apiKey).toBe('***set***')
+    expect(s.config.embedding!.apiKey).toBe('***set***')
   })
 })
 
 describe('AiRuntime reload', () => {
   test('从 enabled 切换到 disabled 立即生效', () => {
-    const r = makeRuntime({
-      version: 1,
-      autoIndex: true,
-      active: makeProviderLike(),
-      reranker: null,
-    })
+    const r = makeRuntime(makeFullConfig())
     expect(r.hasEmbedding()).toBe(true)
-    r.reload({ version: 1, autoIndex: true, active: null, reranker: null })
+    r.reload(emptyConfig())
     expect(r.hasEmbedding()).toBe(false)
     expect(r.status().enabled).toBe(false)
   })
 
-  test('reload 清空旧的 lastError', () => {
+  test('reload 清空旧的 lastError', async () => {
     const failFetch = (async () => new Response('boom', { status: 500 })) as unknown as typeof fetch
-    const r = makeRuntime(
-      { version: 1, autoIndex: true, active: makeProviderLike(), reranker: null },
-      failFetch,
-    )
+    const r = makeRuntime(makeFullConfig(), failFetch)
     // 触发一次失败
     r.embedQuery('x').catch(() => {})
-    // reload 后错误应清空
-    r.reload({ version: 1, autoIndex: true, active: makeProviderLike(), reranker: null })
+    // 等待微任务
+    await new Promise((r) => setTimeout(r, 10))
+    r.reload(makeFullConfig())
     expect(r.status().embedding.lastError).toBeUndefined()
   })
 })
@@ -96,13 +104,38 @@ describe('AiRuntime embedQuery', () => {
     expect(await r.embedQuery('x')).toBeNull()
   })
 
+  test('独立 embedding provider：使用 embedding.baseUrl', async () => {
+    const fakeVec = Array.from({ length: 4 }, (_, i) => i + 1)
+    let hitUrl = ''
+    const fetchImpl: typeof fetch = (async (input: RequestInfo | URL) => {
+      hitUrl = String(input)
+      return new Response(JSON.stringify({ data: [{ embedding: fakeVec }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as unknown as typeof fetch
+    const r = makeRuntime(
+      {
+        version: 1,
+        chat: makeProviderLike({ baseUrl: 'https://chat.example.com/v1', apiKey: '' }),
+        embedding: makeProviderLike({ baseUrl: 'https://emb.example.com/v1' }),
+        autoIndex: true,
+        reranker: null,
+      },
+      fetchImpl,
+    )
+    const v = await r.embedQuery('hi')
+    expect(v).not.toBeNull()
+    expect(v!.length).toBe(4)
+    expect(hitUrl).toContain('emb.example.com')
+    expect(hitUrl).not.toContain('chat.example.com')
+    expect(r.status().usage.embeddingCalls).toBe(1)
+  })
+
   test('成功时 usage 计数 +1，dim 被记录', async () => {
     const fakeVec = Array.from({ length: 4 }, (_, i) => i + 1)
     const fetchImpl = mockFetchJson(200, { data: [{ embedding: fakeVec }] })
-    const r = makeRuntime(
-      { version: 1, autoIndex: true, active: makeProviderLike(), reranker: null },
-      fetchImpl,
-    )
+    const r = makeRuntime(makeEmbConfig(), fetchImpl)
     const v = await r.embedQuery('hi')
     expect(v).not.toBeNull()
     expect(v!.length).toBe(4)
@@ -113,10 +146,7 @@ describe('AiRuntime embedQuery', () => {
 
   test('失败时 embeddingErrors +1 且 lastError 被记录', async () => {
     const fetchImpl = (async () => new Response('bad', { status: 401 })) as unknown as typeof fetch
-    const r = makeRuntime(
-      { version: 1, autoIndex: true, active: makeProviderLike(), reranker: null },
-      fetchImpl,
-    )
+    const r = makeRuntime(makeEmbConfig(), fetchImpl)
     await expect(r.embedQuery('x')).rejects.toThrow()
     expect(r.status().usage.embeddingErrors).toBe(1)
     expect(r.status().embedding.lastError).toContain('401')
@@ -124,13 +154,8 @@ describe('AiRuntime embedQuery', () => {
 })
 
 describe('AiRuntime chat', () => {
-  test('未启用 chat 时抛错', async () => {
-    const r = makeRuntime({
-      version: 1,
-      autoIndex: true,
-      active: makeProviderLike({ chatModel: '' }),
-      reranker: null,
-    })
+  test('未启用 chat 时抛错（chat=null）', async () => {
+    const r = makeRuntime(makeEmbConfig())
     await expect(r.chat([{ role: 'user', content: 'hi' }])).rejects.toThrow('not configured')
   })
 
@@ -138,21 +163,43 @@ describe('AiRuntime chat', () => {
     const fetchImpl = mockFetchJson(200, {
       choices: [{ message: { content: 'pong' } }],
     })
-    const r = makeRuntime(
-      { version: 1, autoIndex: true, active: makeProviderLike(), reranker: null },
-      fetchImpl,
-    )
+    const r = makeRuntime(makeFullConfig(), fetchImpl)
     const reply = await r.chat([{ role: 'user', content: 'ping' }])
     expect(reply).toBe('pong')
     expect(r.status().usage.chatCalls).toBe(1)
   })
 
-  test('失败时记录 chatLastError', async () => {
-    const fetchImpl = (async () => new Response('nope', { status: 403 })) as unknown as typeof fetch
+  test('独立 chat provider：使用 chat.baseUrl（不去碰 embedding）', async () => {
+    let chatHit = 0
+    const fetchImpl: typeof fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/chat/completions')) chatHit++
+      if (url.includes('/embeddings')) {
+        return new Response(JSON.stringify({ data: [{ embedding: [1, 2] }] }), {
+          status: 200,
+        })
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
+        status: 200,
+      })
+    }) as unknown as typeof fetch
     const r = makeRuntime(
-      { version: 1, autoIndex: true, active: makeProviderLike(), reranker: null },
+      {
+        version: 1,
+        chat: makeProviderLike({ baseUrl: 'https://chat.example.com/v1' }),
+        embedding: makeProviderLike({ baseUrl: 'https://emb.example.com/v1' }),
+        autoIndex: true,
+        reranker: null,
+      },
       fetchImpl,
     )
+    await r.chat([{ role: 'user', content: 'hi' }])
+    expect(chatHit).toBe(1)
+  })
+
+  test('失败时记录 chatLastError', async () => {
+    const fetchImpl = (async () => new Response('nope', { status: 403 })) as unknown as typeof fetch
+    const r = makeRuntime(makeFullConfig(), fetchImpl)
     await expect(r.chat([{ role: 'user', content: 'hi' }])).rejects.toThrow()
     expect(r.status().chat.lastError).toContain('403')
     expect(r.status().usage.chatErrors).toBe(1)
@@ -171,10 +218,7 @@ describe('AiRuntime testChat', () => {
     const fetchImpl = mockFetchJson(200, {
       choices: [{ message: { content: 'pongpong' } }],
     })
-    const r = makeRuntime(
-      { version: 1, autoIndex: true, active: makeProviderLike(), reranker: null },
-      fetchImpl,
-    )
+    const r = makeRuntime(makeFullConfig(), fetchImpl)
     const res = await r.testChat()
     expect(res.ok).toBe(true)
   })
@@ -192,8 +236,9 @@ describe('AiRuntime reranker slot', () => {
     const r = makeRuntime(
       {
         version: 1,
+        chat: null,
+        embedding: null,
         autoIndex: true,
-        active: null,
         reranker: {
           enabled: true,
           baseUrl: 'http://tei.local',
@@ -216,8 +261,9 @@ describe('AiRuntime reranker slot', () => {
     const r = makeRuntime(
       {
         version: 1,
+        chat: null,
+        embedding: null,
         autoIndex: true,
-        active: null,
         reranker: {
           enabled: true,
           baseUrl: 'http://tei.local',
@@ -246,23 +292,33 @@ describe('AiRuntime capabilities', () => {
   })
 
   test('只配 embedding 时 chat=false embedding=true', () => {
-    const r = makeRuntime({
-      version: 1,
-      autoIndex: true,
-      active: makeProviderLike({ chatModel: '' }),
-      reranker: null,
-    })
+    const r = makeRuntime(makeEmbConfig())
     const c = r.capabilities()
     expect(c.ai_enabled).toBe(true)
     expect(c.embedding).toBe(true)
     expect(c.chat).toBe(false)
   })
 
-  test('只配 reranker 时 ai_enabled 由 active 决定', () => {
+  test('只配 chat 时 ai_enabled=true chat=true embedding=false', () => {
     const r = makeRuntime({
       version: 1,
+      chat: makeProviderLike(),
+      embedding: null,
       autoIndex: true,
-      active: null,
+      reranker: null,
+    })
+    const c = r.capabilities()
+    expect(c.ai_enabled).toBe(true)
+    expect(c.chat).toBe(true)
+    expect(c.embedding).toBe(false)
+  })
+
+  test('只配 reranker 时 ai_enabled 由 chat/embedding 决定', () => {
+    const r = makeRuntime({
+      version: 1,
+      chat: null,
+      embedding: null,
+      autoIndex: true,
       reranker: {
         enabled: true,
         baseUrl: 'http://x',
@@ -307,10 +363,7 @@ describe('AiRuntime streamChat', () => {
         { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
       )) as unknown as typeof fetch
 
-    const r = makeRuntime(
-      { version: 1, autoIndex: true, active: makeProviderLike(), reranker: null },
-      fetchImpl,
-    )
+    const r = makeRuntime(makeFullConfig(), fetchImpl)
     const collected: string[] = []
     let seenDone = false
     for await (const c of r.streamChat([{ role: 'user', content: 'hi' }])) {

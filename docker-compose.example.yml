@@ -8,7 +8,8 @@ services:
       - AI_PROVIDER=${AI_PROVIDER:-openrouter}
       - AI_API_KEY=${AI_API_KEY:-}
       # 模型覆盖（可选，预设已包含默认值）
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-}
+      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-}
       # 鉴权（不设则自动生成 API Key）
       - AUTH_PASSWORD=${AUTH_PASSWORD:-}
