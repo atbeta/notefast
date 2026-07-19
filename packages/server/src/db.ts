@@ -88,6 +88,9 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
   const dbPath = join(dataDir, 'notefast.db')
   db = new Database(dbPath)
   db.exec('PRAGMA journal_mode=WAL')
+  // WAL + synchronous=NORMAL 是 Litestream 推荐的配置：
+  // 崩溃时最多丢失 1 帧 WAL（通常 <100ms 的写入），换取显著的写入性能与 SSD 寿命。
+  db.exec('PRAGMA synchronous=NORMAL')
   db.exec('PRAGMA foreign_keys=ON')
 
   db.exec(SCHEMA_SQL)

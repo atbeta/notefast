@@ -18,6 +18,17 @@ services:
       - notefast_data:/app/data
       - notefast_export:/app/export
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+    mem_limit: 512m
+    cpus: '1.0'
+    pids_limit: 200
 
   litestream:
     image: litestream/litestream:latest

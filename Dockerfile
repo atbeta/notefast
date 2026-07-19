@@ -26,11 +26,12 @@ ENV DATA_DIR=/app/data
 ENV WEB_DIST=/app/web-dist
 ENV AUTO_EXPORT_DIR=/app/export
 
-RUN mkdir -p /app/data /app/export
+RUN mkdir -p /app/data /app/export && chown -R bun:bun /app
+USER bun
 
 EXPOSE 3140
 
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3140/health || exit 1
+  CMD bun -e "fetch('http://localhost:3140/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["bun", "run", "server-dist/index.js"]

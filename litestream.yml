@@ -15,6 +15,7 @@ dbs:
         bucket: ${S3_BUCKET}
         path: notefast
         endpoint: ${S3_ENDPOINT}
+        # YAML 插值后是字符串 "true"/"false"，litestream 配置层会用 strconv.ParseBool 转 bool
         force-path-style: ${S3_FORCE_PATH_STYLE:-false}
         access-key-id: ${S3_ACCESS_KEY_ID}
         secret-access-key: ${S3_SECRET_ACCESS_KEY}
