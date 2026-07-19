@@ -29,6 +29,9 @@ interface AIChatPanelProps {
   contextDocTitle?: string
   isOpen: boolean
   onClose: () => void
+  /** 展开状态由 Layout 提升管理，使主内容区 padding 与面板宽度一致 */
+  expanded: boolean
+  onToggleExpand: () => void
 }
 
 const API_BASE = '/api/v1'
@@ -38,13 +41,14 @@ export default function AIChatPanel({
   contextDocTitle,
   isOpen,
   onClose,
+  expanded,
+  onToggleExpand,
 }: AIChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [citations, setCitations] = useState<Citation[]>([])
   const [retrieval, setRetrieval] = useState<RetrievalInfo | null>(null)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [expanded, setExpanded] = useState(false)
   const [capabilities, setCapabilities] = useState<{ chat: boolean; reranker: boolean; embedding: boolean } | null>(null)
   const [configMissing, setConfigMissing] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -233,7 +237,7 @@ export default function AIChatPanel({
             </button>
           )}
           <button
-            onClick={() => setExpanded(!expanded)}
+            onClick={onToggleExpand}
             className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
             title={expanded ? '收起' : '展开'}
           >

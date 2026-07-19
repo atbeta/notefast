@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
 import { Menu, MessageSquareText } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -6,11 +6,18 @@ import Sidebar from './Sidebar'
 import CommandPalette from './CommandPalette'
 import AIChatPanel from './AIChatPanel'
 
+/** AI 聊天面板开关状态 — 页面（如文档页右栏）可据此避让空间 */
+const AiChatOpenContext = createContext(false)
+export const useAiChatOpen = () => useContext(AiChatOpenContext)
+
 export default function Layout({ children, contentClassName }: { children: ReactNode; contentClassName?: string }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [aiChatOpen, setAiChatOpen] = useState(false)
+  const [aiChatExpanded, setAiChatExpanded] = useState(false)
+
+  const toggleAiChatExpand = useCallback(() => setAiChatExpanded((v) => !v), [])
   
   const navigate = useNavigate()
   const location = useLocation()
@@ -111,10 +118,12 @@ export default function Layout({ children, contentClassName }: { children: React
             </button>
           </div>
         </div>
-        <main className={`flex-1 flex flex-col min-h-0 relative transition-[padding] duration-300 ${aiChatOpen ? 'md:pr-[400px] lg:pr-[600px]' : ''}`}>
+        <main className={`flex-1 flex flex-col min-h-0 relative transition-[padding] duration-300 ${aiChatOpen ? (aiChatExpanded ? 'md:pr-[600px]' : 'md:pr-[400px]') : ''}`}>
           {/* 统一滚动容器：文档页内部自管滚动（h-full 正好一屏），其余页面由此容器滚动 */}
           <div className={`${contentClassName ?? 'w-full h-full'} flex flex-col overflow-y-auto`}>
-            {children}
+            <AiChatOpenContext.Provider value={aiChatOpen}>
+              {children}
+            </AiChatOpenContext.Provider>
           </div>
         </main>
       </div>
@@ -123,10 +132,12 @@ export default function Layout({ children, contentClassName }: { children: React
       {/* 此处保留位置供未来全局 toast 等使用 */}
 
       {/* AI Chat 面板 */}
-      <AIChatPanel 
-        isOpen={aiChatOpen} 
-        onClose={() => setAiChatOpen(false)} 
+      <AIChatPanel
+        isOpen={aiChatOpen}
+        onClose={() => setAiChatOpen(false)}
         contextDocId={currentDocId}
+        expanded={aiChatExpanded}
+        onToggleExpand={toggleAiChatExpand}
       />
 
       <CommandPalette open={paletteOpen} onClose={closePalette} />

@@ -171,7 +171,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       inputSchema: {
         notebook_id: z.string().optional().describe('笔记本 ID，默认使用默认笔记本'),
         parent_id: z.string().optional().describe('父 block ID'),
-        type: z.enum(['heading', 'paragraph', 'list', 'list_item', 'code', 'quote']).describe('块类型'),
+        type: z.enum(['heading', 'paragraph', 'list', 'list_item', 'code', 'quote', 'table']).describe('块类型'),
         content: z.string().max(500_000).describe('块内容（Markdown 格式）'),
       },
     },

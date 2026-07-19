@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { importMarkdownSchema, parseMarkdownToBlocks, rowToBlock } from '@notefast/core'
+import { importMarkdownSchema, parseMarkdownToBlocks, stripTitleHeading, rowToBlock } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import { getDb } from '../db'
 
@@ -10,14 +10,15 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
   const db = getDb()
   const input = c.req.valid('json')
 
-  const inputs = parseMarkdownToBlocks(input.markdown, input.notebook_id)
-  if (inputs.length === 0) {
+  const rawInputs = parseMarkdownToBlocks(input.markdown, input.notebook_id)
+  if (rawInputs.length === 0) {
     return c.json({ error: 'bad_request', message: '无法解析 Markdown 内容' }, 400)
   }
-
   const docId = crypto.randomUUID()
   const now = new Date().toISOString()
   const title = input.title || extractTitle(input.markdown) || '未命名文档'
+  // 剥离与标题重复的首个 H1，避免标题既在 doc.content 又作为正文 heading 入库
+  const inputs = stripTitleHeading(rawInputs, title)
 
   db.query(
     `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)

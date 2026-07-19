@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, updateDocMarkdownSchema } from '@notefast/core'
+import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema } from '@notefast/core'
 import type { BlockRow, DocSummary } from '@notefast/core'
 import { getDb } from '../db'
 
@@ -125,7 +125,10 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
 
-  const inputs = parseMarkdownToBlocks(markdown, docRow.notebook_id)
+  const rawInputs = parseMarkdownToBlocks(markdown, docRow.notebook_id)
+  // 剥离与标题重复的首个 H1（导出的 markdown 首行是 `# {标题}`，直接回解析会重复入库）
+  const newTitle = title || docRow.content
+  const inputs = stripTitleHeading(rawInputs, newTitle)
 
   db.transaction(() => {
     const childIds = fetchAllDescendants(db, id)
@@ -138,7 +141,6 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
       db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...allChildIds)
     }
 
-    const newTitle = title || docRow.content
     db.query("UPDATE blocks SET content = ?, updated_at = datetime('now') WHERE id = ?").run(newTitle, id)
 
     const now = new Date().toISOString()

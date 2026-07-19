@@ -9,6 +9,7 @@ export const BlockType = {
   ListItem: 'list_item',
   Code: 'code',
   Quote: 'quote',
+  Table: 'table',
 } as const
 
 export type BlockType = (typeof BlockType)[keyof typeof BlockType]
@@ -129,6 +130,7 @@ export const createBlockSchema = z.object({
     BlockType.ListItem,
     BlockType.Code,
     BlockType.Quote,
+    BlockType.Table,
   ]),
   content: z.string().max(500_000).optional().default(''),
   properties: z.record(z.unknown()).optional().default({}),
@@ -147,6 +149,7 @@ export const updateBlockSchema = z.object({
       BlockType.ListItem,
       BlockType.Code,
       BlockType.Quote,
+      BlockType.Table,
     ])
     .optional(),
 })

@@ -21,6 +21,33 @@
     background: rgb(var(--primary) / 0.14);
     color: rgb(var(--foreground));
   }
+
+  /* ───────────── 滚动条：细、淡、近乎隐形，hover 容器时浮现 ───────────── */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--foreground) / 0.14) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(var(--foreground) / 0.12);
+    border-radius: 99px;
+    background-clip: content-box;
+    border: 2px solid transparent;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--foreground) / 0.22);
+    background-clip: content-box;
+    border: 2px solid transparent;
+  }
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
   /* 焦点环：精致的双层 ring（底色 + 主色），键盘可访问；
      文本输入类元素（input/textarea）不套用 —— 它们有自己的聚焦语义 */
   :focus-visible {
@@ -281,6 +308,8 @@
 
 /* ────────────────────────────────────────────────────────────────
    阅读视图 — Notion-like, 极简，高密度
+   注：标题样式由 BlockRenderer 的 HeadingTag 以 utility class 控制，
+   此处不再写 h1-h6 字号规则（避免特异性覆盖）。
    ──────────────────────────────────────────────────────────────── */
 
 .reading-prose {
@@ -290,21 +319,6 @@
   font-size: 16px;
 }
 .reading-prose > * + * { margin-top: 0.5em; }
-.reading-prose h1,
-.reading-prose h2,
-.reading-prose h3,
-.reading-prose h4,
-.reading-prose h5,
-.reading-prose h6 {
-  font-family: var(--font-sans);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: rgb(var(--foreground));
-  line-height: 1.3;
-}
-.reading-prose h2 { font-size: 24px; margin-top: 2em; margin-bottom: 0.5em; }
-.reading-prose h3 { font-size: 20px; margin-top: 1.5em; margin-bottom: 0.5em; }
-.reading-prose h4 { font-size: 16px; margin-top: 1em; margin-bottom: 0.25em; }
 .reading-prose blockquote {
   margin: 1em 0;
   padding: 0.25em 1em;
