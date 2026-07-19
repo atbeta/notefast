@@ -111,8 +111,8 @@ export default function Layout({ children, contentClassName }: { children: React
             </button>
           </div>
         </div>
-        <main className={`flex-1 overflow-y-auto transition-all duration-300 ${aiChatOpen ? 'md:pr-[400px]' : ''}`}>
-          <div className={(contentClassName ?? 'max-w-prose') + ' mx-auto px-6 py-8'}>
+        <main className={`flex-1 flex flex-col min-h-0 relative transition-[padding] duration-300 ${aiChatOpen ? 'md:pr-[400px] lg:pr-[600px]' : ''}`}>
+          <div className={`${contentClassName ?? 'w-full h-full'} flex flex-col`}>
             {children}
           </div>
         </main>

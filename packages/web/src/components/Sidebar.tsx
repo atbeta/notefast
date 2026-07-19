@@ -74,20 +74,24 @@ export default function Sidebar({
 
   if (collapsed) {
     return (
-      <aside className="w-14 flex flex-col items-center py-3 border-r border-sidebar-border bg-sidebar shrink-0">
-        <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors mb-4" title="展开侧边栏">
-          <PanelLeft className="w-4 h-4" strokeWidth={1.75} />
-        </button>
-        <Link to="/" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-primary transition-colors" title="文档">
-          <FileText className="w-4 h-4" strokeWidth={1.75} />
-        </Link>
+      <aside className="w-14 flex flex-col items-center py-3 border-r border-sidebar-border bg-sidebar shrink-0 h-full relative">
+        <div className="h-14 w-full flex items-center justify-center border-b border-sidebar-border shrink-0 absolute top-0 left-0 bg-sidebar">
+          <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group" title="展开侧边栏">
+            <PanelLeft className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
+          </button>
+        </div>
+        <div className="mt-14 w-full flex flex-col items-center pt-4">
+          <Link to="/" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-primary transition-colors" title="文档">
+            <FileText className="w-4 h-4" strokeWidth={1.75} />
+          </Link>
+        </div>
       </aside>
     )
   }
 
   return (
     <aside className="w-60 flex flex-col border-r border-sidebar-border bg-sidebar shrink-0 h-full">
-      <div className="h-12 flex items-center justify-between px-3 border-b border-sidebar-border shrink-0">
+      <div className="h-14 flex items-center justify-between px-3 border-b border-sidebar-border shrink-0">
         <div className="flex items-center gap-2">
           <Link to="/" onClick={closeAfterNav} className="flex items-center gap-2 font-semibold text-[15px] text-foreground hover:text-foreground/80 transition-colors tracking-[-0.01em]">
             <span className="w-7 h-7 grid place-items-center rounded-md bg-foreground text-background">
@@ -102,8 +106,8 @@ export default function Sidebar({
             Beta
           </span>
         </div>
-        <button onClick={onToggle} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors" title="折叠侧边栏">
-          <PanelLeftClose className="w-4 h-4" strokeWidth={1.75} />
+        <button onClick={onToggle} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group" title="折叠侧边栏">
+          <PanelLeftClose className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
         </button>
       </div>
 

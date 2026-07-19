@@ -28,11 +28,11 @@ function HeadingTag({ block, depth: _depth }: { block: Block; depth: number }) {
   // 字号 + 节奏参考 Notion：h2 最大但 line-height 紧；h2 与正文之间间距大，
   // 同行标题（h4/h5）之间间距小，体现层次而非"单位化的等距堆叠"。
   const sizes: Record<number, string> = {
-    2: 'text-[26px] mt-10 mb-3 leading-[1.18] tracking-[-0.025em] font-semibold text-foreground',
-    3: 'text-[20px] mt-8 mb-2 leading-[1.25] tracking-[-0.02em] font-semibold text-foreground',
-    4: 'text-[16px] mt-6 mb-1.5 leading-[1.35] tracking-[-0.015em] font-semibold text-foreground/95',
-    5: 'text-[14.5px] mt-5 mb-1 leading-[1.4] font-semibold text-foreground/90',
-    6: 'text-[12.5px] mt-5 mb-1 text-muted-foreground uppercase tracking-[0.08em] font-medium',
+    2: 'text-[30px] mt-8 mb-3 leading-[1.2] font-semibold text-foreground',
+    3: 'text-[24px] mt-6 mb-2 leading-[1.3] font-semibold text-foreground',
+    4: 'text-[20px] mt-5 mb-1.5 leading-[1.3] font-semibold text-foreground',
+    5: 'text-[16px] mt-4 mb-1 leading-[1.4] font-semibold text-foreground',
+    6: 'text-[14px] mt-4 mb-1 text-muted-foreground font-semibold',
   }
   const tag = `h${tagLevel}`
   return createElement(
@@ -59,10 +59,10 @@ function CodeBlock({ block }: { block: Block }) {
   }
 
   return (
-    <div className="my-5 rounded-lg overflow-hidden border border-border bg-card shadow-[var(--shadow-card)]">
-      <div className="flex items-center justify-between px-3.5 py-1.5 bg-muted/60 border-b border-border">
-        <span className="text-[11px] font-mono uppercase tracking-[0.04em] text-muted-foreground">
-          {lang || 'code'}
+    <div className="my-5 rounded border border-border bg-muted/30">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-muted/60 border-b border-border">
+        <span className="text-[11.5px] font-mono text-muted-foreground/80">
+          {lang || 'text'}
         </span>
         <button
           type="button"
@@ -72,18 +72,18 @@ function CodeBlock({ block }: { block: Block }) {
         >
           {copied ? (
             <>
-              <Check className="w-3 h-3" strokeWidth={2} />
+              <Check className="w-3.5 h-3.5" strokeWidth={2} />
               <span>Copied</span>
             </>
           ) : (
             <>
-              <Copy className="w-3 h-3" strokeWidth={1.75} />
+              <Copy className="w-3.5 h-3.5" strokeWidth={1.75} />
               <span>Copy</span>
             </>
           )}
         </button>
       </div>
-      <pre className="p-4 overflow-x-auto text-[13px] font-mono leading-[1.6] text-foreground/90">
+      <pre className="p-4 overflow-x-auto text-[13px] font-mono leading-[1.5] text-foreground">
         <code className={lang ? `language-${lang}` : ''}>{block.content}</code>
       </pre>
     </div>
@@ -132,8 +132,8 @@ function BlockNode({ block, depth = 0 }: BlockNodeProps) {
 
     case 'quote':
       return (
-        <blockquote className="my-5 pl-4 border-l-2 border-primary/45 text-muted-foreground italic">
-          <p className="leading-[1.72] not-italic">{block.content}</p>
+        <blockquote className="my-5 pl-4 border-l-[3px] border-foreground text-foreground">
+          <p className="leading-[1.6] text-[1.1em]">{block.content}</p>
           {block.children.map((child) => (
             <BlockNode key={child.id} block={child} depth={depth + 1} />
           ))}

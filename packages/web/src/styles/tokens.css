@@ -1,167 +1,132 @@
 /**
  * NoteFast Design Tokens
  *
- * 设计原则（Wave 1 重构）：
- * - 平静的纸面 + 黑墨，indigo 只在动作出现
- * - 阅读模式引入 Source Serif 4，UI 仍走 Inter
- * - 不用渐变、halo、orb 等"AI 标签"信号
- * - 字号、间距、阴影用 token 收敛，不再散落 magic number
+ * 设计原则（Geek & Notion-like）：
+ * - 极致极简：纯白/纯黑背景，高对比度，摒弃多余边框与投影
+ * - 高信息密度：紧凑的行高，清晰的视觉层级
+ * - 专业感：黑白灰为主，主色调收敛为克制的蓝色/灰色
+ * - 仪表盘化：悬浮、扁平，代码感
  */
 
 :root {
   /* ───────────── 字体 ───────────── */
-
-  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-               'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-  --font-serif: 'Source Serif 4', 'Source Serif Pro', 'Iowan Old Style', Charter,
-                 'Georgia', 'Songti SC', serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', ui-monospace, Menlo,
-                'PingFang SC', monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, 'Apple Color Emoji', Arial, sans-serif, 'Segoe UI Emoji', 'Segoe UI Symbol';
+  --font-serif: 'Source Serif Pro', 'Charter', 'Georgia', serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, monospace;
 
   /* ───────────── 平面 / 表面 ───────────── */
-
-  /* 整页背景：纸面，warm 一些 —— 之前 #FAF9F5 太冷 */
-  --background: 252 250 244;
-  /* 内容卡片：纯白 */
+  --background: 255 255 255;
   --card: 255 255 255;
-  --card-foreground: 28 25 23;
+  --card-foreground: 55 53 47;
   --popover: 255 255 255;
-  --popover-foreground: 28 25 23;
+  --popover-foreground: 55 53 47;
 
   /* ───────────── 文字 ───────────── */
+  --foreground: 55 53 47;
+  --muted: 241 241 239;
+  --muted-foreground: 120 119 116;
+  --accent: 235 236 237;
+  --accent-foreground: 55 53 47;
+  --secondary: 241 241 239;
+  --secondary-foreground: 55 53 47;
 
-  --foreground: 28 25 23;          /* 黑墨 */
-  --muted: 245 244 240;
-  --muted-foreground: 122 116 108; /* stone-500ish，比之前柔 */
-  --accent: 245 244 240;
-  --accent-foreground: 28 25 23;
-  --secondary: 245 244 240;
-  --secondary-foreground: 28 25 23;
-
-  /* ───────────── 主色：克制 indigo，略带温暖紫色 ───────────── */
-
-  /* 用更深的 indigo，hover/active 时再叠透明层产生层次 */
-  --primary: 79 70 229;
+  /* ───────────── 主色 ───────────── */
+  --primary: 35 131 226; /* Notion-like blue */
   --primary-foreground: 255 255 255;
-  /* soft 给 hover 背景、focus halo 等低强调场景 */
-  --primary-soft: rgb(var(--primary) / 0.06);
+  --primary-soft: rgb(var(--primary) / 0.08);
   --primary-softer: rgb(var(--primary) / 0.04);
 
   /* ───────────── 状态 ───────────── */
-
-  --destructive: 195 50 50;
+  --destructive: 235 87 87;
   --destructive-foreground: 255 255 255;
-  --warn: 175 96 32;                /* 温暖的琥珀 */
+  --warn: 217 115 13;
 
   /* ───────────── 边框 / 输入 ───────────── */
-
-  /* 边框暖了一档，更能在背景上"读得出来" */
-  --border: 225 220 210;
-  --border-strong: 205 198 188;
-  --input: 225 220 210;
-  --ring: 67 56 202;
+  --border: 233 233 231;
+  --border-strong: 200 200 198;
+  --input: 233 233 231;
+  --ring: 35 131 226;
 
   /* ───────────── 编辑器专属 ───────────── */
-
-  --editor-bg: 254 252 247;
-  --editor-gutter-bg: 245 242 234;
+  --editor-bg: 255 255 255;
+  --editor-gutter-bg: 247 247 245;
 
   /* ───────────── 侧边栏 ───────────── */
-
-  --sidebar-background: 252 251 247;
-  --sidebar-foreground: 92 86 78;
-  --sidebar-accent: 244 242 236;
-  --sidebar-accent-foreground: 28 25 23;
-  --sidebar-border: 232 230 224;
-  --sidebar-muted: 158 152 142;
+  --sidebar-background: 247 247 245;
+  --sidebar-foreground: 90 90 90;
+  --sidebar-accent: 233 233 231;
+  --sidebar-accent-foreground: 55 53 47;
+  --sidebar-border: 233 233 231;
+  --sidebar-muted: 145 145 142;
 
   /* ───────────── 半径 ───────────── */
+  --radius: 4px;
+  --radius-card: 6px;
+  --radius-btn: 4px;
 
-  --radius: 0.375rem;
-  --radius-card: 0.625rem;
-  --radius-btn: 0.375rem;
+  /* ───────────── 字号（高密度） ───────────── */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+  --text-3xl: 28px;
+  --text-display: 34px;
 
-  /* ───────────── 字号（紧凑，保持可读） ───────────── */
+  /* ───────────── 阴影 ───────────── */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.02);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.03);
+  --shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
 
-  --text-xs: 0.75rem;       /* 12 */
-  --text-sm: 0.8125rem;     /* 13 */
-  --text-base: 0.9375rem;   /* 15 */
-  --text-md: 1rem;          /* 16 */
-  --text-lg: 1.0625rem;     /* 17 */
-  --text-xl: 1.25rem;       /* 20 */
-  --text-2xl: 1.5rem;       /* 24 */
-  --text-3xl: 1.875rem;     /* 30 */
-  --text-display: 2.25rem;  /* 36 阅读页 doc title */
-
-  /* ───────────── 阴影（更克制） ───────────── */
-
-  --shadow-card:
-    0 0 0 1px rgb(0 0 0 / 2%),
-    0 1px 2px rgb(0 0 0 / 3%);
-  --shadow-card-hover:
-    0 0 0 1px rgb(0 0 0 / 3%),
-    0 4px 12px rgb(0 0 0 / 5%),
-    0 1px 3px rgb(0 0 0 / 3%);
-  --shadow-floating:
-    0 1px 2px rgb(0 0 0 / 3%),
-    0 8px 24px rgb(0 0 0 / 6%);
-
-  /* ───────────── 动效 ───────────── */
-
-  --ease: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ease: 150ms ease;
 }
 
-/* 暗色：同思路但取深邃纸面 */
 .dark {
-  --background: 22 21 19;
-  --card: 32 30 27;
-  --card-foreground: 233 230 222;
-  --popover: 32 30 27;
-  --popover-foreground: 233 230 222;
+  --background: 25 25 25;
+  --card: 32 32 32;
+  --card-foreground: 255 255 255;
+  --popover: 32 32 32;
+  --popover-foreground: 255 255 255;
 
-  --foreground: 233 230 222;
-  --muted: 38 36 33;
-  --muted-foreground: 156 150 142;
-  --accent: 38 36 33;
-  --accent-foreground: 233 230 222;
-  --secondary: 38 36 33;
-  --secondary-foreground: 233 230 222;
+  --foreground: 255 255 255;
+  --muted: 47 47 47;
+  --muted-foreground: 155 155 155;
+  --accent: 47 47 47;
+  --accent-foreground: 255 255 255;
+  --secondary: 47 47 47;
+  --secondary-foreground: 255 255 255;
 
-  --primary: 128 122 240;
-  --primary-foreground: 22 21 19;
-  --primary-soft: rgb(var(--primary) / 0.12);
-  --primary-softer: rgb(var(--primary) / 0.07);
+  --primary: 35 131 226;
+  --primary-foreground: 255 255 255;
+  --primary-soft: rgb(var(--primary) / 0.15);
+  --primary-softer: rgb(var(--primary) / 0.08);
 
-  --destructive: 224 88 88;
-  --destructive-foreground: 22 21 19;
-  --warn: 224 152 64;
+  --destructive: 235 87 87;
+  --destructive-foreground: 255 255 255;
+  --warn: 217 115 13;
 
-  --border: 50 48 44;
-  --border-strong: 64 62 56;
-  --input: 50 48 44;
-  --ring: 128 122 240;
+  --border: 60 60 60;
+  --border-strong: 80 80 80;
+  --input: 60 60 60;
+  --ring: 35 131 226;
 
-  --sidebar-background: 26 25 22;
-  --sidebar-foreground: 168 162 152;
-  --sidebar-accent: 36 34 30;
-  --sidebar-accent-foreground: 233 230 222;
-  --sidebar-border: 50 48 44;
-  --sidebar-muted: 130 124 116;
+  --sidebar-background: 32 32 32;
+  --sidebar-foreground: 155 155 155;
+  --sidebar-accent: 47 47 47;
+  --sidebar-accent-foreground: 255 255 255;
+  --sidebar-border: 47 47 47;
+  --sidebar-muted: 120 120 120;
 
-  --editor-bg: 26 24 22;
-  --editor-gutter-bg: 30 28 25;
+  --editor-bg: 25 25 25;
+  --editor-gutter-bg: 32 32 32;
 
-  --shadow-card:
-    0 0 0 1px rgb(255 255 255 / 3%),
-    0 1px 2px rgb(0 0 0 / 18%);
-  --shadow-card-hover:
-    0 0 0 1px rgb(255 255 255 / 4%),
-    0 6px 18px rgb(0 0 0 / 28%),
-    0 1px 3px rgb(0 0 0 / 18%);
-  --shadow-floating:
-    0 1px 2px rgb(0 0 0 / 22%),
-    0 8px 28px rgb(0 0 0 / 36%);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
+
 
 /* ────────────────────────────────────────────────────────────────
    主题系统基础（v0.1）

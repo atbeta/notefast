@@ -8,13 +8,8 @@ import Layout from './components/Layout'
 
 export default function App() {
   const location = useLocation()
-  // 内容宽度策略：
-  // - '/'           home/列表       56rem (5xl)
-  // - '/new'        新建表单       42rem (prose)
-  // - '/doc/:id'    doc 阅读/编辑   42rem (prose)
-  // - '/settings*'  设置页         42rem (prose)
-  const isHome = location.pathname === '/'
-  const contentClassName = isHome ? 'max-w-5xl' : 'max-w-prose'
+  // 宽度策略交给各页面自己处理，Layout 负责通用的全屏框架
+  const contentClassName = 'w-full h-full'
 
   return (
     <Layout contentClassName={contentClassName}>
