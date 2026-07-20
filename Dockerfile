@@ -25,10 +25,12 @@ ENV APP_VERSION=${VERSION}
 ENV APP_COMMIT=${COMMIT}
 ENV APP_BUILD_TIME=${BUILD_TIME}
 
-COPY --from=deps /app/node_modules node_modules
+# server-dist 是 `bun build --target=bun` 的单文件 bundle（hono/zod/aws-sdk/
+# @notefast/core 全部 inline），web-dist 是 vite 产物。两者都不依赖
+# node_modules；带 node_modules 反而会引入 devDeps 里的 esbuild linux-x64
+# 等 go binary，导致 Trivy 误报 CRITICAL CVE。
 COPY --from=builder /app/packages/server/dist ./server-dist
 COPY --from=builder /app/packages/web/dist ./web-dist
-COPY --from=deps /app/package.json ./
 
 ENV NODE_ENV=production
 ENV PORT=3140
