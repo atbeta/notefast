@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/atbeta/notefast/compare/v0.3.0...v0.4.0) (2026-07-20)
+
+
+### Features
+
+* **web:** flatten sidebar/main visual boundary + cap app at 1600px ([266b94c](https://github.com/atbeta/notefast/commit/266b94c37eea4e4ab1b75f57babffc4c6d39e934))
+
+
+### Bug Fixes
+
+* **docker:** drop node_modules from runner image to clear Trivy false-positive ([878e59e](https://github.com/atbeta/notefast/commit/878e59eb154cb11f1e24bf77dab9a6145763048f))
+* **web:** unify page container padding so navigation no longer jitters ([a93c8e1](https://github.com/atbeta/notefast/commit/a93c8e16ffe9bf6633901663f38d116252705b06))
+
 ## [0.3.0](https://github.com/atbeta/notefast/compare/v0.2.0...v0.3.0) (2026-07-20)
 
 
