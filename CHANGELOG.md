@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/atbeta/notefast/compare/v0.4.0...v0.5.0) (2026-07-20)
+
+
+### Features
+
+* **auth:** Web UI login prompt + server auth/mode endpoint ([6214ace](https://github.com/atbeta/notefast/commit/6214acef91f1c9cc158c9d6cc73303632b09b163))
+
 ## [0.4.0](https://github.com/atbeta/notefast/compare/v0.3.0...v0.4.0) (2026-07-20)
 
 
