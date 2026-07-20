@@ -1,15 +1,15 @@
 services:
   notefast:
-    build: .
+    image: ${NOTEFAST_IMAGE:-xbeta/notefast:latest}
     ports:
       - '3140:3140'
     environment:
       - PORT=3140
-      - DATA_DIR=/app/data
       - AUTH_PASSWORD=${AUTH_PASSWORD:-}
+      - API_TOKEN=${API_TOKEN:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3140}
       - AUTO_EXPORT_DIR=${AUTO_EXPORT_DIR:-/app/export}
-      - AI_PROVIDER=${AI_PROVIDER:-openrouter}
+      - AI_PROVIDER=${AI_PROVIDER:-}
       - AI_API_KEY=${AI_API_KEY:-}
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-}
       - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}

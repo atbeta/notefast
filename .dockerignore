@@ -4,6 +4,12 @@ data
 .ai
 .env
 .env.local
+.env.*.local
 .DS_Store
 *.log
 .git
+.github
+Dockerfile
+docker-compose*.yml
+README.md
+docs

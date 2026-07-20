@@ -15,6 +15,15 @@ RUN bun run build
 
 FROM base AS runner
 WORKDIR /app
+
+ARG VERSION
+ARG COMMIT
+ARG BUILD_TIME
+
+ENV APP_VERSION=${VERSION}
+ENV APP_COMMIT=${COMMIT}
+ENV APP_BUILD_TIME=${BUILD_TIME}
+
 COPY --from=deps /app/node_modules node_modules
 COPY --from=builder /app/packages/server/dist ./server-dist
 COPY --from=builder /app/packages/web/dist ./web-dist
