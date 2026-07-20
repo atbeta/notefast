@@ -10,6 +10,17 @@ export interface ChatMessage {
   content: string
   /** 对应被调用的 tool_call.id（role=tool 时必填） */
   tool_call_id?: string
+  /**
+   * assistant 消息携带的 tool_calls（agent loop 续传时必填）。
+   * 严格 OpenAI 协议要求每个 role=tool 消息的 tool_call_id
+   * 必须在它前面的 assistant 消息的 tool_calls 里出现过，
+   * 否则 provider 会报 "tool result's tool id ... not found"。
+   */
+  tool_calls?: Array<{
+    id: string
+    type: 'function'
+    function: { name: string; arguments: string }
+  }>
 }
 
 /** OpenAI response_format 兼容选项 */

@@ -236,12 +236,17 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
         }
 
         if (result.tool_calls.length > 0 && round < maxRounds) {
-          // 回填 assistant message（含 tool_calls 的 id）
+          // 回填 assistant message（含 tool_calls）
+          // 严格 OpenAI 协议要求：每个 role=tool 消息的 tool_call_id 必须出现在它前面的
+          // assistant 消息的 tool_calls 字段里（否则 provider 报 "tool result's tool id ... not found"）。
           workingMessages.push({
             role: 'assistant',
             content: result.content || '',
-            // 注：简单实现下我们不在 messages 里写 tool_calls 字段；
-            // OpenAI 协议严格模式会要求，但很多兼容服务允许省略。返回 tool 即可。
+            tool_calls: result.tool_calls.map((tc) => ({
+              id: tc.id,
+              type: 'function',
+              function: { name: tc.name, arguments: JSON.stringify(tc.args) },
+            })),
           })
 
           for (const tc of result.tool_calls) {
