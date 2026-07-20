@@ -78,8 +78,8 @@ export default function Sidebar({
 
   if (collapsed) {
     return (
-      <aside className="w-14 flex flex-col items-center py-3 border-r border-sidebar-border bg-sidebar shrink-0 h-full relative">
-        <div className="h-14 w-full flex items-center justify-center border-b border-sidebar-border shrink-0 absolute top-0 left-0 bg-sidebar">
+      <aside className="w-14 flex flex-col items-center py-3 shrink-0 h-full relative">
+        <div className="h-14 w-full flex items-center justify-center border-b border-border shrink-0 absolute top-0 left-0 bg-background">
           <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group" title="展开侧边栏">
             <PanelLeft className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
           </button>
@@ -94,8 +94,8 @@ export default function Sidebar({
   }
 
   return (
-    <aside className="w-60 flex flex-col border-r border-sidebar-border bg-sidebar shrink-0 h-full">
-      <div className="h-14 flex items-center justify-between px-3 border-b border-sidebar-border shrink-0">
+    <aside className="w-60 flex flex-col shrink-0 h-full">
+      <div className="h-14 flex items-center justify-between px-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <Link to="/" onClick={closeAfterNav} className="flex items-center gap-2 font-semibold text-[15px] text-foreground hover:text-foreground/80 transition-colors tracking-[-0.01em]">
             <span className="w-7 h-7 grid place-items-center rounded-md bg-foreground text-background">

@@ -74,7 +74,7 @@ export default function Layout({ children, contentClassName }: { children: React
   }, [toggleSidebar, navigate, paletteOpen])
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background relative">
+    <div className="flex h-screen overflow-hidden bg-background relative max-w-[1600px] w-full mx-auto">
       {/* 桌面侧边栏 */}
       <div className={`hidden md:block transition-all duration-300 z-20 relative ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
         <Sidebar
@@ -88,7 +88,7 @@ export default function Layout({ children, contentClassName }: { children: React
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={closeMobile} />
-          <div className="relative w-64 h-full bg-sidebar border-r border-sidebar-border shadow-xl animate-fade-in">
+          <div className="relative w-64 h-full bg-background shadow-xl animate-fade-in">
             <Sidebar
               collapsed={false}
               onToggle={closeMobile}
