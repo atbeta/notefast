@@ -1,12 +1,53 @@
 const API_BASE = '/api/v1'
 
+/** Web UI 登录后存到 sessionStorage 的密码（关闭浏览器自动清除） */
+const PASSWORD_KEY = 'notefast.password'
+
+/** 返回当前会话的密码（如已登录），否则 null */
+export function getStoredPassword(): string | null {
+  try {
+    return sessionStorage.getItem(PASSWORD_KEY)
+  } catch {
+    return null
+  }
+}
+
+/** 登录后写入；登出/清除时调用 */
+export function setStoredPassword(pw: string): void {
+  try {
+    sessionStorage.setItem(PASSWORD_KEY, pw)
+  } catch {
+    // ignore — 隐私模式下 sessionStorage 不可用
+  }
+}
+
+export function clearStoredPassword(): void {
+  try {
+    sessionStorage.removeItem(PASSWORD_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+/** 拼出当前会话的 Authorization header（如已登录），否则空 */
+function authHeader(): Record<string, string> {
+  const pw = getStoredPassword()
+  if (!pw) return {}
+  // 用户固定 admin（与服务端约定一致）；密码原值传给 btoa
+  return { Authorization: 'Basic ' + btoa('admin:' + pw) }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: { 'Content-Type': 'application/json', ...authHeader(), ...(options?.headers ?? {}) },
   })
   if (!res.ok) {
+    if (res.status === 401) {
+      // 密码错或没填 —— 清掉旧值让上层重新弹登录框
+      clearStoredPassword()
+    }
     const err = await res.json().catch(() => ({ message: res.statusText }))
     throw new Error(err.message || `HTTP ${res.status}`)
   }

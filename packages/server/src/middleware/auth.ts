@@ -50,6 +50,13 @@ export function isAuthEnabled(): boolean {
 }
 
 export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) => {
+  // 公开端点：Web UI 启动时探测当前实例是否需要密码 / token，
+  // 必须在鉴权前放行，否则前端拿不到状态就锁死。
+  if (c.req.path === '/api/v1/auth/mode') {
+    await next()
+    return
+  }
+
   const apiToken = safeTrim(process.env.API_TOKEN || '')
   const authPassword = safeTrim(process.env.AUTH_PASSWORD || '')
 

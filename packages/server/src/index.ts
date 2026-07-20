@@ -40,6 +40,17 @@ app.use('/api/*', authMiddleware)
 
 app.get('/health', (c) => c.json({ status: 'ok', time: new Date().toISOString() }))
 
+// 鉴权模式探测：返回当前实例是否需要密码 / token。
+// 放在 authMiddleware 之后注册路径（middleware 内部已对 /auth/mode 放行）。
+app.get('/api/v1/auth/mode', (c) => {
+  const apiToken = (process.env.API_TOKEN || '').trim()
+  const authPassword = (process.env.AUTH_PASSWORD || '').trim()
+  return c.json({
+    passwordRequired: authPassword.length > 0,
+    tokenRequired: apiToken.length > 0,
+  })
+})
+
 app.route('/api/v1/blocks', blocks)
 app.route('/api/v1/docs', docs)
 app.route('/api/v1/search', search)
