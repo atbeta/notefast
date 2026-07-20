@@ -184,7 +184,7 @@ export default function DocPage() {
         <div className="flex-1 min-w-0 flex flex-col h-full border-r border-border/50">
           <div className="h-14 shrink-0 border-b border-border/50" />
           <div className="flex-1 overflow-hidden">
-            <div className="w-full max-w-3xl mx-auto px-8 pt-10 space-y-3">
+            <div className="w-full max-w-4xl mx-auto px-8 pt-10 space-y-3">
               <div className="h-9 bg-secondary rounded w-1/2" />
               <div className="h-3.5 bg-secondary rounded w-28" />
               <div className="h-4 bg-secondary rounded w-full mt-8" />
@@ -255,7 +255,7 @@ export default function DocPage() {
         <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
           {/* stale-while-revalidate：切换文档时保留旧内容降透明，新文档就地替换，无闪烁 */}
           <div className={`transition-opacity duration-200 ${showingStale ? 'opacity-40' : 'opacity-100'}`}>
-            <div className="w-full max-w-3xl mx-auto px-8 pt-10 pb-32 animate-fade-in">
+            <div className="w-full max-w-4xl mx-auto px-8 pt-10 pb-32 animate-fade-in">
             {/* Title — always editable, AI-generate on hover */}
             <div className="group relative">
               <input

@@ -94,7 +94,7 @@ export default function NewDocPage() {
   }
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-8 py-8 animate-fade-in space-y-6">
+    <div className="w-full max-w-4xl mx-auto px-8 py-10 animate-fade-in space-y-6">
       <SubNavTabs
         activeKey={activeTab}
         onChange={(k) => setActiveTab(k as 'create' | 'import')}

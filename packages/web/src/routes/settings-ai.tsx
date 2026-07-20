@@ -2,7 +2,7 @@ import AISettingsPanel from '../components/AISettingsPanel'
 
 export default function SettingsAIPage() {
   return (
-    <div className="w-full max-w-3xl mx-auto px-8 py-10 space-y-8 animate-fade-in">
+    <div className="w-full max-w-4xl mx-auto px-8 py-10 space-y-8 animate-fade-in">
       <header className="space-y-1.5">
         <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground/80">
           <a href="/settings" className="hover:text-foreground transition-colors">设置</a>

@@ -128,7 +128,7 @@ export default function InboxPage() {
             {filter === 'unreviewed' ? '没有待审阅的 AI 活动。' : '无匹配项。'}
           </div>
         ) : (
-          <div className="max-w-3xl mx-auto space-y-3">
+          <div className="max-w-4xl mx-auto space-y-3">
             {items.map((it) => (
               <InboxRow
                 key={it.id}

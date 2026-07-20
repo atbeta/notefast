@@ -4,7 +4,7 @@ import { useTheme } from '../hooks/useTheme'
 
 export default function SettingsPage() {
   return (
-    <div className="w-full max-w-3xl mx-auto px-8 py-10 space-y-10 animate-fade-in">
+    <div className="w-full max-w-4xl mx-auto px-8 py-10 space-y-10 animate-fade-in">
       <header className="space-y-1.5">
         <h1 className="text-[28px] font-bold tracking-[-0.02em] text-foreground">设置</h1>
         <p className="text-[13px] text-muted-foreground leading-relaxed">
