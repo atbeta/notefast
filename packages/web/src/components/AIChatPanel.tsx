@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, X, Loader2, Minimize2, Maximize2, ExternalLink, MessageSquareText } from 'lucide-react'
-import { request } from '../hooks/useAPI'
+import { request, fetchWithAuth } from '../hooks/useAPI'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -33,8 +33,6 @@ interface AIChatPanelProps {
   expanded: boolean
   onToggleExpand: () => void
 }
-
-const API_BASE = '/api/v1'
 
 export default function AIChatPanel({
   contextDocId,
@@ -104,7 +102,7 @@ export default function AIChatPanel({
     abortRef.current = ac
 
     try {
-      const res = await fetch(`${API_BASE}/ai/chat`, {
+      const res = await fetchWithAuth('/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

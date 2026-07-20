@@ -30,24 +30,35 @@ export function clearStoredPassword(): void {
 }
 
 /** 拼出当前会话的 Authorization header（如已登录），否则空 */
-function authHeader(): Record<string, string> {
+export function authHeader(): Record<string, string> {
   const pw = getStoredPassword()
   if (!pw) return {}
   // 用户固定 admin（与服务端约定一致）；密码原值传给 btoa
   return { Authorization: 'Basic ' + btoa('admin:' + pw) }
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const url = `${API_BASE}${path}`
+/**
+ * 直接 fetch 但自动拼 Authorization header。给 SSE / streaming 这种
+ * 不能用 request() 的场景用。返回原生 Response，由调用方读 body。
+ *
+ * 401 时也会清掉旧密码（与 request() 行为一致）。
+ */
+export async function fetchWithAuth(path: string, options?: RequestInit): Promise<Response> {
+  const url = path.startsWith('http') ? path : `${API_BASE}${path}`
   const res = await fetch(url, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...authHeader(), ...(options?.headers ?? {}) },
+    headers: { ...authHeader(), ...(options?.headers ?? {}) },
+  })
+  if (res.status === 401) clearStoredPassword()
+  return res
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetchWithAuth(path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options?.headers ?? {}) },
   })
   if (!res.ok) {
-    if (res.status === 401) {
-      // 密码错或没填 —— 清掉旧值让上层重新弹登录框
-      clearStoredPassword()
-    }
     const err = await res.json().catch(() => ({ message: res.statusText }))
     throw new Error(err.message || `HTTP ${res.status}`)
   }
