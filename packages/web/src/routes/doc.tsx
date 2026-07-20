@@ -12,6 +12,7 @@ import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
 import AutoLinkPanel from '../components/AutoLinkPanel'
 import MarkdownEditor from '../components/MarkdownEditor'
+import TagEditor from '../components/TagEditor'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { useAiChatOpen } from '../components/Layout'
 import { scrollToElement } from '../lib/scroll'
@@ -87,6 +88,7 @@ export default function DocPage() {
   )
   const [headings, setHeadings] = useState<HeadingNode[]>([])
   const [backlinks, setBacklinks] = useState<Backlink[]>([])
+  const [tags, setTags] = useState<string[]>([])
   const [auxLoading, setAuxLoading] = useState(false)
 
   useEffect(() => {
@@ -98,6 +100,14 @@ export default function DocPage() {
   useEffect(() => {
     if (doc) {
       setTitleDraft(doc.content)
+      // 从 properties JSON 同步 tag（与后端 PropertiesTagProvider 字段对齐）
+      const raw = (doc as Block & { properties?: unknown }).properties
+      if (raw && typeof raw === 'object') {
+        const arr = (raw as Record<string, unknown>).tags
+        if (Array.isArray(arr)) {
+          setTags(arr.filter((t): t is string => typeof t === 'string').slice(0, 64))
+        }
+      }
     }
   }, [doc])
 
@@ -294,6 +304,9 @@ export default function DocPage() {
               </div>
             )}
             {isEditing && <div className="mb-2" />}
+
+            {/* Tags — 任何模式都可编辑，融入标题下方 */}
+            {id && <TagEditor docId={id} tags={tags} onChange={setTags} />}
 
             {/* Editor — 与阅读态同宽，融入文档流 */}
             {id && isEditing && (

@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Trash2, FileText } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import DocList from '../components/DocList'
 import SubNavTabs from '../components/SubNavTabs'
+import TagFilter from '../components/TagFilter'
 
 type TabKey = 'mine' | 'recent'
 
@@ -13,11 +14,18 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabKey>('mine')
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const tagFilter = searchParams.get('tag') || ''
 
   const fetchDocs = useCallback(() => {
     setLoading(true)
-    api.get<DocSummary[]>('/docs/list').then(setDocs).catch(console.error).finally(() => setLoading(false))
-  }, [])
+    const q = tagFilter ? `?tag=${encodeURIComponent(tagFilter)}` : ''
+    api
+      .get<DocSummary[]>(`/docs/list${q}`)
+      .then(setDocs)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [tagFilter])
 
   useEffect(() => { fetchDocs() }, [fetchDocs])
 
@@ -67,6 +75,9 @@ export default function HomePage() {
               : '把第一个想法写成 Markdown，⌘N 快速创建，或拖入 .md 文件直接导入。'}
           </p>
         </div>
+
+        {/* 标签筛选 — chip 单选，点击切换 URL ?tag=xxx */}
+        <TagFilter />
 
         <section className="space-y-3">
           <div className="flex items-center justify-between px-1">
