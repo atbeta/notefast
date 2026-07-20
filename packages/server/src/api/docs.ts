@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, rowToBlock } from '@notefast/core'
+import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, rowToBlock, readTagsFromProperties, getTagProvider } from '@notefast/core'
 import type { BlockRow, DocSummary } from '@notefast/core'
 import { getDb } from '../db'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany } from '../services/hooks'
@@ -10,6 +10,7 @@ const docs = new Hono()
 docs.get('/list', (c) => {
   const db = getDb()
   const notebookId = c.req.query('notebook_id') || ''
+  const tag = (c.req.query('tag') || '').trim().toLowerCase()
 
   let rows: BlockRow[]
   if (notebookId) {
@@ -20,6 +21,11 @@ docs.get('/list', (c) => {
     rows = db
       .query('SELECT * FROM blocks WHERE type = ? ORDER BY updated_at DESC')
       .all('document') as BlockRow[]
+  }
+
+  // ?tag=xxx 过滤：在 Node 端做匹配（数量小，不值得加 SQL JSON 函数）
+  if (tag) {
+    rows = rows.filter((r) => readTagsFromProperties(r.properties).includes(tag))
   }
 
   const summaries: DocSummary[] = rows.map((r) => ({
@@ -92,6 +98,35 @@ docs.post('/', zValidator('json', createDocSchema), (c) => {
     created_at: row.created_at,
     updated_at: row.updated_at,
   }, 201)
+})
+
+docs.patch('/:id/tags', async (c) => {
+  const db = getDb()
+  const id = c.req.param('id')
+  const body = (await c.req.json().catch(() => ({}))) as { tags?: unknown }
+  const rawTags = Array.isArray(body.tags) ? body.tags : []
+  const newTags = rawTags.filter((t): t is string => typeof t === 'string').slice(0, 64)
+
+  const docRow = db
+    .query("SELECT * FROM blocks WHERE id = ? AND type = 'document'")
+    .get(id) as BlockRow | undefined
+  if (!docRow) {
+    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
+  }
+
+  const provider = getTagProvider()
+  const updated = provider.setDocTags(docRow, newTags)
+  db.query(
+    "UPDATE blocks SET properties = ?, updated_at = datetime('now') WHERE id = ?",
+  ).run(updated.properties, id)
+
+  const finalTags = provider.getDocTags(updated)
+  const updatedRow = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
+  return c.json({
+    doc_id: id,
+    tags: finalTags,
+    updated_at: updatedRow.updated_at,
+  })
 })
 
 docs.delete('/:id', (c) => {

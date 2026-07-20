@@ -18,6 +18,7 @@ import notebooks from './api/notebooks'
 import sync from './api/sync'
 import ai from './api/ai'
 import autoLink from './api/autoLink'
+import tags from './api/tags'
 
 const PORT = parseInt(process.env.PORT || '3140', 10)
 const DATA_DIR = process.env.DATA_DIR || './data'
@@ -61,6 +62,7 @@ app.route('/api/v1/notebooks', notebooks)
 app.route('/api/v1/sync', sync)
 app.route('/api/v1/ai', ai)
 app.route('/api/v1/auto-link', autoLink)
+app.route('/api/v1/tags', tags)
 
 const pluginSystem = createPluginSystem()
 
