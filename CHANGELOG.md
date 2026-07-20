@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/atbeta/notefast/compare/v0.5.0...v0.6.0) (2026-07-20)
+
+
+### Features
+
+* **core:** TagProvider abstraction with PropertiesTagProvider default ([43634bc](https://github.com/atbeta/notefast/commit/43634bcd7a03de494d61a39247afc9d5c4bb72da))
+* **server:** tag API endpoints — list, filter, replace ([a61aa8d](https://github.com/atbeta/notefast/commit/a61aa8d2360642a6812c7cc6fdd295da7ebc9d5d))
+* **web:** TagEditor in doc + TagFilter chip strip on home ([a2771ac](https://github.com/atbeta/notefast/commit/a2771acac08f74b728ce5672b2765eb7d2215cfa))
+
+
+### Bug Fixes
+
+* **web:** AIChatPanel fetch bypassed auth — route via fetchWithAuth ([d45293f](https://github.com/atbeta/notefast/commit/d45293fabb13cfb13fd3fe82b6cb1b6d46eb86d9))
+
 ## [0.5.0](https://github.com/atbeta/notefast/compare/v0.4.0...v0.5.0) (2026-07-20)
 
 
