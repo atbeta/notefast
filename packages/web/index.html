@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="default">
+<html lang="zh-CN" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,6 +8,26 @@
     <meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/svg+xml" href="/favicon-dark.svg" media="(prefers-color-scheme: dark)" />
+
+    <!--
+      内联防闪烁脚本：React 挂载前同步读 localStorage + 系统偏好，把
+      <html data-theme> 设为 light/dark，避免页面先亮后暗的闪烁。
+      必须放在 <head> 内联且 module script 之前；不要 await / import。
+      同步脚本只决定 data-theme（CSS hook），实际状态管理交给 useTheme()。
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('notefast.theme');
+          var systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var resolved;
+          if (stored === 'dark') resolved = 'dark';
+          else if (stored === 'light') resolved = 'light';
+          else resolved = systemDark ? 'dark' : 'light';
+          document.documentElement.setAttribute('data-theme', resolved);
+        } catch (e) { /* ignore — fallback 到 :root 默认 light */ }
+      })();
+    </script>
 
     <!-- Variable fonts: Inter (UI), Source Serif 4 (reading), JetBrains Mono (code) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

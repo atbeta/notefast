@@ -1,0 +1,92 @@
+/**
+ * Theme hook — 三档主题（light / dark / system）+ 系统跟随
+ *
+ * 持久化：localStorage 'notefast.theme' = 'light' | 'dark' | 'system'
+ * 渲染：<html data-theme="light|dark"> 由防闪烁脚本（在 index.html 内联）
+ *       和本 hook 在系统变化时同步更新。
+ *
+ * 注意：CSS 只识别 data-theme="light|dark"，所以 'system' 在 JS 层
+ * 解析为实际 light/dark 后再写到 data-theme 上。
+ */
+
+import { useCallback, useEffect, useState } from 'react'
+
+export type ThemeChoice = 'light' | 'dark' | 'system'
+export type ResolvedTheme = 'light' | 'dark'
+
+const STORAGE_KEY = 'notefast.theme'
+const VALID_CHOICES: readonly ThemeChoice[] = ['light', 'dark', 'system']
+
+function readStoredChoice(): ThemeChoice {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY)
+    if (v && (VALID_CHOICES as readonly string[]).includes(v)) return v as ThemeChoice
+  } catch {
+    // ignore — localStorage 不可用时退到 system
+  }
+  return 'system'
+}
+
+function systemPrefersDark(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+function applyDataTheme(resolved: ResolvedTheme): void {
+  if (typeof document === 'undefined') return
+  document.documentElement.setAttribute('data-theme', resolved)
+}
+
+function resolveTheme(choice: ThemeChoice, systemDark: boolean): ResolvedTheme {
+  if (choice === 'light') return 'light'
+  if (choice === 'dark') return 'dark'
+  return systemDark ? 'dark' : 'light'
+}
+
+export interface UseThemeResult {
+  /** 用户选择（含 'system'） */
+  theme: ThemeChoice
+  /** 实际生效（永远是 'light' | 'dark'） */
+  resolvedTheme: ResolvedTheme
+  /** 切换主题；同时写 localStorage + 改 <html data-theme> */
+  setTheme: (next: ThemeChoice) => void
+}
+
+export function useTheme(): UseThemeResult {
+  const [theme, setThemeState] = useState<ThemeChoice>(() => readStoredChoice())
+  const [systemDark, setSystemDark] = useState<boolean>(() => systemPrefersDark())
+
+  // 跟踪系统偏好变化；仅在 theme === 'system' 时影响实际生效
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches)
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', handler)
+      return () => mq.removeEventListener('change', handler)
+    }
+    // 旧 API 回退（Safari < 14）
+    const legacy = mq as unknown as { addListener?: (cb: (e: MediaQueryListEvent) => void) => void; removeListener?: (cb: (e: MediaQueryListEvent) => void) => void }
+    legacy.addListener?.(handler)
+    return () => legacy.removeListener?.(handler)
+  }, [])
+
+  const resolvedTheme: ResolvedTheme = resolveTheme(theme, systemDark)
+
+  // 当前 choice 变化、或系统变化（system 模式下）时同步到 data-theme
+  useEffect(() => {
+    applyDataTheme(resolvedTheme)
+  }, [resolvedTheme])
+
+  const setTheme = useCallback((next: ThemeChoice) => {
+    setThemeState(next)
+    try {
+      localStorage.setItem(STORAGE_KEY, next)
+    } catch {
+      // ignore — 隐私模式 / 配额满时不影响 UI
+    }
+  }, [])
+
+  return { theme, resolvedTheme, setTheme }
+}
