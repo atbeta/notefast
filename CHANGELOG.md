@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0](https://github.com/atbeta/notefast/compare/v0.2.0...v0.3.0) (2026-07-20)
+
+
+### Features
+
+* **web:** three-mode theme (light/dark/system) with FOUC-free init ([ea037a8](https://github.com/atbeta/notefast/commit/ea037a8fa30c86cdc0d8101e6c2e5929a72724b2))
+
+
+### Bug Fixes
+
+* add bun install in builder stage to fix workspace linking, upgrade actions to Node 24 ([330986c](https://github.com/atbeta/notefast/commit/330986c1159b6653ce06e9207a66fdf8048d199c))
+* add bun install to builder stage for proper workspace linking ([801bf09](https://github.com/atbeta/notefast/commit/801bf094282b4e84538ed0ef8eb3f43fe4b1b803))
+* **ai-chat:** include tool_calls in assistant message for OpenAI strict mode ([f91804f](https://github.com/atbeta/notefast/commit/f91804f8389ada5ea4e3b4957ad9366815fba594))
+* **web:** prevent preset row from squeezing region badge in AI settings ([fc951d5](https://github.com/atbeta/notefast/commit/fc951d52edbd96f9bcbd66d9cac096d34b25de6f))
+
 ## [0.2.0](https://github.com/atbeta/notefast/compare/v0.1.0...v0.2.0) (2026-07-20)
 
 
