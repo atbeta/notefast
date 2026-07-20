@@ -8,7 +8,6 @@ import {
   PanelLeft,
   Plus,
   LayoutGrid,
-  MessageSquareText,
   Inbox,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
@@ -18,7 +17,6 @@ interface SidebarProps {
   collapsed: boolean
   onToggle: () => void
   onOpenPalette: () => void
-  onOpenChat?: () => void
   onNavigate?: () => void
 }
 
@@ -42,7 +40,6 @@ export default function Sidebar({
   collapsed,
   onToggle,
   onOpenPalette,
-  onOpenChat,
   onNavigate,
 }: SidebarProps) {
   const location = useLocation()
@@ -181,21 +178,7 @@ export default function Sidebar({
       </nav>
 
       <div className="border-t border-sidebar-border shrink-0">
-        <div className="px-2 pt-2 pb-1 flex items-center gap-1">
-          <button
-            type="button"
-            onClick={onOpenChat}
-            className="flex-1 inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[13px] text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-            title="与知识库对话（⌘J）"
-          >
-            <MessageSquareText className="w-3.5 h-3.5" strokeWidth={1.75} />
-            AI 对话
-            <kbd className="ml-auto font-mono text-[10px] px-1 py-px border border-sidebar-border rounded text-sidebar-muted">
-              {isMac ? '⌘' : 'Ctrl'}J
-            </kbd>
-          </button>
-        </div>
-        <div className="px-3 pt-1 pb-2.5 flex items-center justify-between gap-2">
+        <div className="px-3 pt-2 pb-2.5 flex items-center justify-between gap-2">
           <a
             href="/settings"
             className="text-[10px] text-sidebar-muted/65 hover:text-foreground transition-colors"
