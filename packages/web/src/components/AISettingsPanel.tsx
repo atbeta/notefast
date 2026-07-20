@@ -823,11 +823,11 @@ function ProviderForm({
   return (
     <div className="space-y-3">
       <FieldRow label="预设">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <select
             value={value.preset}
             onChange={(e) => handlePresetChange(e.target.value as ProviderPresetId)}
-            className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background"
+            className="flex-1 min-w-0 px-3 py-1.5 text-sm rounded-md border border-border bg-background truncate"
           >
             {REGION_ORDER.map((region) => (
               <optgroup key={region} label={REGION_LABELS[region as Region]}>
@@ -845,7 +845,7 @@ function ProviderForm({
               href={preset.signupUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+              className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
               title="获取 API Key"
             >
               <ExternalLink className="w-3 h-3" />
@@ -960,7 +960,7 @@ function RegionBadge({ region }: { region: Region }) {
   }
   const v = map[region]
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${v.tone}`} title={REGION_LABELS[region]}>
+    <span className={`shrink-0 whitespace-nowrap text-[10px] px-1.5 py-0.5 rounded font-medium ${v.tone}`} title={REGION_LABELS[region]}>
       {v.short}
     </span>
   )
