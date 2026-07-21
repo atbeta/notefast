@@ -124,6 +124,31 @@ autoLink.post('/dismiss', zValidator('json', dismissSchema), (c) => {
 })
 
 /**
+ * 批量审阅（v3）：对给定 id 列表统一接受 / 忽略
+ * - accept：逐条 applySuggestion（写 block_refs），失败的计入 failed 不中断
+ * - dismiss：逐条 dismissSuggestion
+ * 前端确认弹窗由调用方负责；此接口只做幂等执行
+ */
+const bulkReviewSchema = z.object({
+  action: z.enum(['accept', 'dismiss']),
+  ids: z.array(z.string().min(1)).min(1).max(500),
+})
+
+autoLink.post('/bulk-review', zValidator('json', bulkReviewSchema), (c) => {
+  const { action, ids } = c.req.valid('json')
+  let done = 0
+  let failed = 0
+  for (const id of ids) {
+    const r = action === 'accept'
+      ? applySuggestion(id, 0, 'ai_suggested').applied
+      : dismissSuggestion(id).dismissed
+    if (r) done++
+    else failed++
+  }
+  return c.json({ action, done, failed, total: ids.length })
+})
+
+/**
  * 精确撤销（v2）：按 created_ref_id 删除，不依赖 (source, target) 对
  */
 autoLink.post('/:suggestion_id/revert', (c) => {

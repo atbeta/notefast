@@ -801,3 +801,49 @@ describe('AutoLink — v3 精准优先', () => {
     expect(r2.analyzed).toBe(0)
   })
 })
+
+describe('AutoLink — 批量审阅', () => {
+  test('POST /bulk-review accept 全部写入 ref，dismiss 全部标记忽略', async () => {
+    mockChatReturning('gpt-4o-mini', JSON.stringify({ mentions: [] }))
+    const db = getDb()
+    const docId = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(docId, 'd')
+    const now = new Date().toISOString()
+    for (const bid of ['bk-s1', 'bk-s2', 'bk-s3', 'bk-t']) {
+      db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+         VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`).run(bid, docId, bid, 'paragraph', 'text ' + bid, now, now)
+    }
+    const mk = (id: string, src: string) => makeSuggestion({
+      id,
+      sourceBlockId: src,
+      candidates: [{ blockId: 'bk-t', docId, docTitle: 'd', snippet: 's', confidence: 0.9, scoreKind: 'hybrid' }],
+    })
+    addSuggestions([mk('bk-1', 'bk-s1'), mk('bk-2', 'bk-s2'), mk('bk-3', 'bk-s3')])
+
+    // 批量接受 2 条
+    const acc = await api('POST', '/bulk-review', { action: 'accept', ids: ['bk-1', 'bk-2'] })
+    expect(acc.status).toBe(200)
+    expect(acc.body.done).toBe(2)
+    expect(acc.body.failed).toBe(0)
+    const refCount = (db.query('SELECT count(*) as c FROM block_refs').get() as { c: number }).c
+    expect(refCount).toBe(2)
+
+    // 批量忽略 1 条
+    const dis = await api('POST', '/bulk-review', { action: 'dismiss', ids: ['bk-3'] })
+    expect(dis.status).toBe(200)
+    expect(dis.body.done).toBe(1)
+    expect(findSuggestion('bk-3')?.reviewStatus).toBe('dismissed')
+
+    // 不存在的 id 计入 failed，不中断
+    const mixed = await api('POST', '/bulk-review', { action: 'dismiss', ids: ['nonexistent'] })
+    expect(mixed.status).toBe(200)
+    expect(mixed.body.done).toBe(0)
+    expect(mixed.body.failed).toBe(1)
+  })
+
+  test('POST /bulk-review 参数校验：空 ids → 400', async () => {
+    mockChatReturning('gpt-4o-mini', JSON.stringify({ mentions: [] }))
+    const { status } = await api('POST', '/bulk-review', { action: 'accept', ids: [] })
+    expect(status).toBe(400)
+  })
+})

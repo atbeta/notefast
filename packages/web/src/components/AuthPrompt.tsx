@@ -7,7 +7,7 @@
  */
 
 import { useState } from 'react'
-import { Lock, Loader2 } from 'lucide-react'
+import { Lock, Loader2, Check } from 'lucide-react'
 import { setStoredPassword } from '../hooks/useAPI'
 
 export interface AuthPromptProps {
@@ -64,15 +64,24 @@ export default function AuthPrompt({ reason = 'password_required' }: AuthPromptP
             disabled={submitting}
             className="input-mono"
           />
-          <label className="mt-3 flex items-center gap-2 select-none cursor-pointer w-fit">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-border accent-[rgb(var(--foreground))]"
-            />
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={remember}
+            onClick={() => setRemember((v) => !v)}
+            className="mt-3 flex items-center gap-2 select-none cursor-pointer w-fit group"
+          >
+            <span
+              className={`w-4 h-4 rounded-[4px] border grid place-items-center transition-all ${
+                remember
+                  ? 'bg-foreground border-foreground text-background'
+                  : 'border-border-strong/60 bg-transparent group-hover:border-foreground/40'
+              }`}
+            >
+              {remember && <Check className="w-3 h-3" strokeWidth={3} />}
+            </span>
             <span className="text-[12px] text-foreground/80">保持登录 7 天</span>
-          </label>
+          </button>
           <p className="text-[10.5px] text-muted-foreground/70 mt-1.5 leading-relaxed">
             {remember
               ? '密码保存在本浏览器 localStorage，7 天内每次打开自动续期；公共设备请勿勾选。'

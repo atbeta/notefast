@@ -15,7 +15,6 @@ import {
   Heading2,
   Heading3,
   X,
-  Check,
   FilePlus2,
   RotateCcw,
 } from 'lucide-react'
@@ -101,7 +100,6 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
   const [content, setContent] = useState('')
   const [initialContent, setInitialContent] = useState('')
   const [loadedAt, setLoadedAt] = useState<Date | null>(null)
-  const [savedAt, setSavedAt] = useState<Date | null>(null)
   const [draftedAt, setDraftedAt] = useState<Date | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -109,7 +107,6 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
   const [showHelp, setShowHelp] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [savedFlash, setSavedFlash] = useState(false)
 
   // ───── 加载（草稿优先，否则从服务端拉 markdown）─────
   useEffect(() => {
@@ -172,21 +169,19 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
       await api.put(`/docs/${docId}/markdown`, { markdown: content })
       setInitialContent(content)
       clearDraft(docId)
-      setSavedAt(new Date())
-      setSavedFlash(true)
-      setTimeout(() => setSavedFlash(false), 1500)
       onSaved()
+      // 主动保存 = 完成本次编辑 → 回到阅读模式（参考 Notion：写完即回到阅读态）
+      onClose()
     } catch (e) {
-      // 失败时本地草稿兜底 + 顶部 toast 报错
+      // 失败时本地草稿兜底 + 顶部 toast 报错，停留在编辑态继续改
       saveDraft(docId, content)
       toast.error({
         title: '保存失败',
         description: e instanceof Error ? e.message : String(e),
       })
-    } finally {
       setSaving(false)
     }
-  }, [saving, content, docId, onSaved, toast])
+  }, [saving, content, docId, onSaved, onClose, toast])
 
   const handleCancel = useCallback(() => {
     saveDraft(docId, content)
@@ -404,6 +399,17 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
   const readMin = words <= 0 ? 0 : Math.max(1, Math.round(words / CJK_WORDS_PER_MIN))
   const dirty = content !== initialContent
 
+  // 防丢失兜底：有未保存内容时，关闭/刷新页面给原生确认（草稿机制之外的第二道保险）
+  useEffect(() => {
+    if (!dirty) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [dirty])
+
   // ───── 视图（只读预览）─────
   // inputsToBlockTree 返回顶层 block 数组；包装为 document 根节点以预览完整文档
   const previewTree: Block | null = mode === 'view' && content
@@ -499,19 +505,11 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
               type="button"
               onClick={handleSave}
               disabled={saving || loading}
-              title={saving ? '保存中…' : '保存 (⌘S)'}
-              className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border transition-all active:scale-[0.97] disabled:cursor-not-allowed ${
-                savedFlash
-                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-[var(--shadow-btn)]'
-                  : 'bg-ink text-ink-foreground border-ink shadow-[var(--shadow-btn)] hover:bg-ink-hover hover:border-ink-hover'
-              } ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
+              title={saving ? '保存中…' : '保存并返回阅读 (⌘S)'}
+              className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border transition-all active:scale-[0.97] disabled:cursor-not-allowed bg-ink text-ink-foreground border-ink shadow-[var(--shadow-btn)] hover:bg-ink-hover hover:border-ink-hover ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
             >
-              {saving ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : savedFlash ? (
-                <Check className="w-3 h-3" strokeWidth={2.5} />
-              ) : null}
-              {saving ? '保存中' : savedFlash ? '已保存' : '保存'}
+              {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+              {saving ? '保存中' : '保存'}
             </button>
             <IconBtn title="退出编辑 (Esc)" onClick={handleCancel}>
               <X className="w-[15px] h-[15px]" strokeWidth={1.75} />
@@ -565,23 +563,17 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
         </span>
         <span className="flex items-center gap-1.5">
           <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              savedFlash ? 'bg-emerald-500' : dirty ? 'bg-amber-500' : savedAt ? 'bg-border-strong' : 'bg-border'
-            }`}
+            className={`w-1.5 h-1.5 rounded-full ${dirty ? 'bg-amber-500' : 'bg-border'}`}
           />
-          {savedFlash
-            ? '已保存 · 刚刚'
-            : dirty
-              ? draftedAt
-                ? `未保存 · 草稿 ${relativeTime(draftedAt)}`
-                : '未保存'
-              : savedAt
-                ? `已保存 · ${relativeTime(savedAt)}`
-                : '未修改'}
+          {dirty
+            ? draftedAt
+              ? `未保存 · 草稿 ${relativeTime(draftedAt)}`
+              : '未保存'
+            : '未修改'}
         </span>
 
         <span className="ml-auto flex items-center gap-1">
-          {hasDraft(docId) && !savedFlash && (
+          {hasDraft(docId) && (
             <button
               type="button"
               onClick={() => {

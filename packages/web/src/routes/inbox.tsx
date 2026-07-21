@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { RotateCcw, Check, X, RefreshCw } from 'lucide-react'
+import { RotateCcw, Check, X, RefreshCw, CheckCheck, Trash2 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 interface InboxItem {
   id: string
@@ -37,6 +38,8 @@ export default function InboxPage() {
   const [filter, setFilter] = useState<FilterStatus>('unreviewed')
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState<Set<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState<'accept' | 'dismiss' | null>(null)
+  const [showAcceptAll, setShowAcceptAll] = useState(false)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -78,6 +81,23 @@ export default function InboxPage() {
     await refresh()
   })
 
+  /** 当前列表里可批量处理的条目（未审阅 + 仅建议状态） */
+  const actionableIds = items
+    .filter((it) => it.review_status === 'unreviewed' && it.action_status === 'suggested')
+    .map((it) => it.id)
+
+  const bulkReview = async (action: 'accept' | 'dismiss') => {
+    if (actionableIds.length === 0 || bulkBusy) return
+    setBulkBusy(action)
+    try {
+      await api.post('/auto-link/bulk-review', { action, ids: actionableIds })
+      await refresh()
+    } finally {
+      setBulkBusy(null)
+      setShowAcceptAll(false)
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       <div className="h-14 shrink-0 px-6 border-b border-border/50 flex items-center gap-3">
@@ -112,7 +132,29 @@ export default function InboxPage() {
             {s === 'unreviewed' ? '未审阅' : s === 'accepted' ? '已接受' : s === 'dismissed' ? '已忽略' : '全部'}
           </button>
         ))}
-        <span className="ml-auto text-muted-foreground/60 tabular-nums">
+        {actionableIds.length > 0 && (
+          <span className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setShowAcceptAll(true)}
+              disabled={bulkBusy !== null}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50 transition-colors"
+            >
+              <CheckCheck className="w-3.5 h-3.5" strokeWidth={1.75} />
+              全部接受 ({actionableIds.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => bulkReview('dismiss')}
+              disabled={bulkBusy !== null}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+              {bulkBusy === 'dismiss' ? '处理中…' : '全部忽略'}
+            </button>
+          </span>
+        )}
+        <span className={`text-muted-foreground/60 tabular-nums ${actionableIds.length > 0 ? '' : 'ml-auto'}`}>
           {items.length} 条
         </span>
       </div>
@@ -139,6 +181,15 @@ export default function InboxPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={showAcceptAll}
+        title="全部接受"
+        message={`将把当前列表中 ${actionableIds.length} 条建议全部写入反向链接。此操作会批量修改文档内容，确定继续吗？`}
+        confirmLabel={bulkBusy === 'accept' ? '处理中…' : `接受 ${actionableIds.length} 条`}
+        onConfirm={() => bulkReview('accept')}
+        onCancel={() => setShowAcceptAll(false)}
+      />
     </div>
   )
 }
@@ -215,14 +266,14 @@ function InboxRow({
           )}
         </div>
 
-        <div className="flex flex-col gap-1.5 shrink-0">
+        <div className="flex flex-col gap-1.5 shrink-0 w-[76px]">
           {item.action_status === 'suggested' && (
             <>
               <button
                 type="button"
                 onClick={onAccept}
                 disabled={busy}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-border text-foreground text-[12px] hover:bg-accent disabled:opacity-50 transition-colors"
+                className="inline-flex items-center justify-center gap-1 w-full px-2.5 py-1 rounded-md border border-border text-foreground text-[12px] hover:bg-accent disabled:opacity-50 transition-colors"
               >
                 <Check className="w-3 h-3" strokeWidth={2.5} />
                 接受
@@ -231,7 +282,7 @@ function InboxRow({
                 type="button"
                 onClick={onDismiss}
                 disabled={busy}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50 transition-colors"
+                className="inline-flex items-center justify-center gap-1 w-full px-2.5 py-1 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50 transition-colors"
               >
                 <X className="w-3 h-3" strokeWidth={2.5} />
                 忽略

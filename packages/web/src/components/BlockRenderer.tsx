@@ -64,29 +64,37 @@ function HeadingTag({ block }: { block: Block }) {
     5: 'text-[14px] mt-4 mb-1 font-semibold',
     6: 'text-[13px] mt-4 mb-1 font-semibold text-muted-foreground',
   }
-  return createElement(
-    `h${tagLevel}`,
-    {
-      // id 使用 block.id：与大纲（HeadingNode.id = block.id）一致，支持点击定位
-      id: block.id,
-      className: `group relative ${sizes[tagLevel]} leading-[1.3] tracking-[-0.01em] text-foreground scroll-mt-20`,
-    },
+  return (
     <>
-      <a
-        href={`#${block.id}`}
-        aria-label="定位到本节"
-        className="absolute -left-6 top-1/2 -translate-y-1/2 p-1 rounded text-muted-foreground/70 opacity-0 group-hover:opacity-100 hover:text-foreground transition-all"
-        onClick={(e) => {
-          e.preventDefault()
-          const el = document.getElementById(block.id)
-          if (el) scrollToElement(el)
-          history.replaceState(null, '', `#${block.id}`)
-        }}
-      >
-        <Link2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-      </a>
-      {renderInline(block.content || '', 'h')}
-    </>,
+      {createElement(
+        `h${tagLevel}`,
+        {
+          // id 使用 block.id：与大纲（HeadingNode.id = block.id）一致，支持点击定位
+          id: block.id,
+          className: `group relative ${sizes[tagLevel]} leading-[1.3] tracking-[-0.01em] text-foreground scroll-mt-20`,
+        },
+        <>
+          <a
+            href={`#${block.id}`}
+            aria-label="定位到本节"
+            className="absolute -left-6 top-1/2 -translate-y-1/2 p-1 rounded text-muted-foreground/70 opacity-0 group-hover:opacity-100 hover:text-foreground transition-all"
+            onClick={(e) => {
+              e.preventDefault()
+              const el = document.getElementById(block.id)
+              if (el) scrollToElement(el)
+              history.replaceState(null, '', `#${block.id}`)
+            }}
+          >
+            <Link2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+          </a>
+          {renderInline(block.content || '', 'h')}
+        </>,
+      )}
+      {/* 子块必须继续渲染：部分写入路径会把内容嵌在 heading 下（如代码块），不渲染就丢了 */}
+      {block.children.map((child) => (
+        <BlockNode key={child.id} block={child} />
+      ))}
+    </>
   )
 }
 
