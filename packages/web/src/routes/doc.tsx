@@ -203,7 +203,9 @@ export default function DocPage() {
             </div>
           </div>
         </div>
-        <div className="hidden lg:block w-72 shrink-0 bg-sidebar/30" />
+        <div className="hidden lg:flex lg:flex-col w-72 shrink-0 bg-sidebar/30">
+          <div className="h-14 shrink-0 border-b border-border/50" />
+        </div>
       </div>
     )
   }
@@ -340,18 +342,20 @@ export default function DocPage() {
 
       {/* Right Sidebar (Desktop only) — AI 聊天打开时让位，避免双栏堆叠的割裂感 */}
       {!aiChatOpen && (
-        <div className={`hidden lg:flex flex-col w-72 shrink-0 bg-sidebar/30 h-full overflow-y-auto transition-opacity duration-200 ${showingStale ? 'opacity-40' : 'opacity-100'}`}>
-          <div className="p-6 space-y-8">
+        <div className={`hidden lg:flex flex-col w-72 shrink-0 bg-sidebar/30 h-full transition-opacity duration-200 ${showingStale ? 'opacity-40' : 'opacity-100'}`}>
+          {/* 顶栏占位：三栏 h-14 水平基准线对齐 */}
+          <div className="h-14 shrink-0 border-b border-border/50" />
+          <div className="flex-1 overflow-y-auto p-6 space-y-8">
             <section>
-              <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-3 flex items-center gap-2">
-                <span className="w-3 h-px bg-border-strong" /> 大纲
+              <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-3">
+                大纲
               </h3>
               <OutlineView headings={flatHeadings} loading={auxLoading} />
             </section>
 
             <section>
-              <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-3 flex items-center gap-2">
-                <span className="w-3 h-px bg-border-strong" /> 反向链接
+              <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-3">
+                反向链接
               </h3>
               <BacklinksView backlinks={backlinks} loading={auxLoading} />
             </section>

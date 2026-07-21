@@ -94,25 +94,32 @@ export default function NewDocPage() {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-8 py-10 animate-fade-in space-y-6">
-      <SubNavTabs
-        activeKey={activeTab}
-        onChange={(k) => setActiveTab(k as 'create' | 'import')}
-        tabs={[
-          { key: 'create', label: '新建文档' },
-          { key: 'import', label: '导入 Markdown' },
-        ]}
-        trailing={
-          <Link
-            to="/"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>返回</span>
-          </Link>
-        }
-      />
+    <div className="animate-fade-in">
+      {/* 全局顶栏：h-14 + 底边框，与侧边栏顶栏贯通 */}
+      <header className="sticky top-0 z-10 h-14 border-b border-border/50 bg-background">
+        <div className="h-full w-full max-w-4xl mx-auto px-8">
+          <SubNavTabs
+            embedded
+            activeKey={activeTab}
+            onChange={(k) => setActiveTab(k as 'create' | 'import')}
+            tabs={[
+              { key: 'create', label: '新建文档' },
+              { key: 'import', label: '导入 Markdown' },
+            ]}
+            trailing={
+              <Link
+                to="/"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>返回</span>
+              </Link>
+            }
+          />
+        </div>
+      </header>
 
+      <div className="w-full max-w-4xl mx-auto px-8 pt-8 pb-16">
       {activeTab === 'create' && (
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
@@ -210,6 +217,7 @@ export default function NewDocPage() {
           </label>
         </div>
       )}
+      </div>
     </div>
   )
 }

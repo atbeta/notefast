@@ -41,48 +41,36 @@ export default function HomePage() {
   const visibleDocs = activeTab === 'recent' ? recentDocs : docs
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-8 py-10 animate-fade-in space-y-6">
-      <SubNavTabs
-        activeKey={activeTab}
-        onChange={(k) => setActiveTab(k as TabKey)}
-        tabs={[
-          { key: 'mine', label: '我的文档', badge: !loading ? <span className="font-mono text-[11px] text-muted-foreground/80">{docs.length}</span> : null },
-          { key: 'recent', label: '最近编辑' },
-        ]}
-        trailing={
-          <button onClick={goNew} className="btn-primary-custom">
-            <Plus className="w-3.5 h-3.5" strokeWidth={2.25} />
-            新建文档
-          </button>
-        }
-      />
-
-      <div key={activeTab} className="space-y-5 animate-fade-in">
-        {/* 简洁的入口行：不再用 giant hero 卡片 */}
-        <div className="flex items-center gap-4 px-1">
-          <button
-            type="button"
-            onClick={goNew}
-            aria-label="新建文档"
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium border border-border bg-card hover:border-foreground/30 hover:text-foreground text-foreground transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
-            {activeTab === 'recent' ? '记录今日的想法' : '新建文档'}
-          </button>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            {activeTab === 'recent'
-              ? '过去 24 小时内的所有改动 · ⌘N 新建一篇'
-              : '把第一个想法写成 Markdown，⌘N 快速创建，或拖入 .md 文件直接导入。'}
-          </p>
+    <div className="animate-fade-in">
+      {/* 全局顶栏：h-14 + 底边框，与侧边栏顶栏贯通成一条水平基准线 */}
+      <header className="sticky top-0 z-10 h-14 border-b border-border/50 bg-background">
+        <div className="h-full w-full max-w-4xl mx-auto px-8">
+          <SubNavTabs
+            embedded
+            activeKey={activeTab}
+            onChange={(k) => setActiveTab(k as TabKey)}
+            tabs={[
+              { key: 'mine', label: '我的文档', badge: !loading ? <span className="font-mono text-[11px] text-muted-foreground/80">{docs.length}</span> : null },
+              { key: 'recent', label: '最近编辑' },
+            ]}
+            trailing={
+              <button onClick={goNew} className="btn-primary-custom">
+                <Plus className="w-3.5 h-3.5" strokeWidth={2.25} />
+                新建文档
+              </button>
+            }
+          />
         </div>
+      </header>
 
+      <div key={activeTab} className="w-full max-w-4xl mx-auto px-8 pt-7 pb-16 space-y-5 animate-fade-in">
         {/* 标签筛选 — chip 单选，点击切换 URL ?tag=xxx */}
         <TagFilter />
 
         <section className="space-y-3">
           <div className="flex items-center justify-between px-1">
             <h3 className="text-xs font-medium text-muted-foreground">
-              {activeTab === 'recent' ? '最近编辑' : '所有文档'}
+              {activeTab === 'recent' ? '最近 24 小时编辑' : '所有文档'}
             </h3>
             <span className="text-xs text-muted-foreground/70 font-mono">
               {loading ? '加载中…' : `${visibleDocs.length} 篇`}

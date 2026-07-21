@@ -9,6 +9,7 @@ import {
   Plus,
   LayoutGrid,
   Inbox,
+  Sparkles,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import type { DocSummary } from '@notefast/core'
@@ -18,6 +19,9 @@ interface SidebarProps {
   onToggle: () => void
   onOpenPalette: () => void
   onNavigate?: () => void
+  /** AI 聊天面板状态与开关 — 入口收敛在侧边栏导航，替代右下角 FAB */
+  aiChatOpen?: boolean
+  onToggleAiChat?: () => void
 }
 
 /**
@@ -41,6 +45,8 @@ export default function Sidebar({
   onToggle,
   onOpenPalette,
   onNavigate,
+  aiChatOpen,
+  onToggleAiChat,
 }: SidebarProps) {
   const location = useLocation()
   const [isMac, setIsMac] = useState(false)
@@ -78,24 +84,38 @@ export default function Sidebar({
 
   if (collapsed) {
     return (
-      <aside className="w-14 flex flex-col items-center py-3 shrink-0 h-full relative">
-        <div className="h-14 w-full flex items-center justify-center border-b border-border shrink-0 absolute top-0 left-0 bg-background">
+      <aside className="w-14 flex flex-col items-center py-3 shrink-0 h-full relative bg-sidebar border-r border-border/50">
+        <div className="h-14 w-full flex items-center justify-center border-b border-border/50 shrink-0 absolute top-0 left-0">
           <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group" title="展开侧边栏">
             <PanelLeft className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
           </button>
         </div>
-        <div className="mt-14 w-full flex flex-col items-center pt-4">
+        <div className="mt-14 w-full flex flex-col items-center pt-4 gap-1">
           <Link to="/" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-primary transition-colors" title="文档">
             <FileText className="w-4 h-4" strokeWidth={1.75} />
           </Link>
+          {onToggleAiChat && (
+            <button
+              type="button"
+              onClick={onToggleAiChat}
+              className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
+                aiChatOpen
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+              }`}
+              title="AI 助手"
+            >
+              <Sparkles className="w-4 h-4" strokeWidth={1.75} />
+            </button>
+          )}
         </div>
       </aside>
     )
   }
 
   return (
-    <aside className="w-60 flex flex-col shrink-0 h-full">
-      <div className="h-14 flex items-center justify-between px-3 border-b border-border shrink-0">
+    <aside className="w-60 flex flex-col shrink-0 h-full bg-sidebar border-r border-border/50">
+      <div className="h-14 flex items-center justify-between px-3 border-b border-border/50 shrink-0">
         <div className="flex items-center gap-2">
           <Link to="/" onClick={closeAfterNav} className="flex items-center gap-2 font-semibold text-[15px] text-foreground hover:text-foreground/80 transition-colors tracking-[-0.01em]">
             <span className="w-7 h-7 grid place-items-center rounded-md bg-foreground text-background">
@@ -149,6 +169,19 @@ export default function Sidebar({
             </span>
           )}
         </Link>
+        {onToggleAiChat && (
+          <button
+            type="button"
+            onClick={onToggleAiChat}
+            className={`w-full text-left ${aiChatOpen ? 'sidebar-link-active' : 'sidebar-link'}`}
+          >
+            <Sparkles className="w-[15px] h-[15px]" strokeWidth={1.75} />
+            <span className="flex-1">AI 助手</span>
+            <kbd className="ml-auto font-mono text-[10px] text-sidebar-muted/70">
+              {isMac ? '⌘' : 'Ctrl'}J
+            </kbd>
+          </button>
+        )}
 
         {recentDocs.length > 0 && (
           <div className="mt-5">

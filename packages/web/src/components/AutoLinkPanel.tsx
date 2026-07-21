@@ -105,7 +105,6 @@ export default function AutoLinkPanel({ docId, currentBlockId }: AutoLinkPanelPr
           onClick={() => setCollapsed((c) => !c)}
           className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground transition-colors select-none"
         >
-          <span className="w-3 h-px bg-border-strong" />
           <span>链接建议</span>
           {visible.length > 0 && (
             <span className="text-[10px] px-1.5 py-px rounded-full bg-primary/10 text-primary tabular-nums">
@@ -135,7 +134,7 @@ export default function AutoLinkPanel({ docId, currentBlockId }: AutoLinkPanelPr
       </div>
 
       {!collapsed && (
-        <div className="space-y-2">
+        <div className="flex flex-col divide-y divide-border/50">
           {loading && (
             <div className="text-[12px] text-muted-foreground/70 py-3 flex items-center gap-2">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -178,7 +177,7 @@ function SuggestionCard({
   const kindClass = KIND_COLORS[suggestion.kind] || KIND_COLORS.concept
 
   return (
-    <div className="rounded-lg border border-border/60 bg-background/40 p-3 space-y-2">
+    <div className="py-3 first:pt-1 space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm font-medium text-foreground">「{suggestion.anchor}」</span>
         <span className={`text-[10px] px-1.5 py-0.5 rounded border ${kindClass}`}>{suggestion.kind}</span>
@@ -215,7 +214,7 @@ function SuggestionCard({
           type="button"
           onClick={() => onAccept(suggestion.id)}
           disabled={busy || !candidate}
-          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-ink text-ink-foreground hover:bg-ink-hover active:scale-[0.97] disabled:opacity-40 transition-all"
+          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border border-border text-foreground hover:bg-accent active:scale-[0.97] disabled:opacity-40 transition-all"
         >
           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
           应用

@@ -12,9 +12,11 @@ interface SubNavTabsProps {
   activeKey: string
   onChange: (key: string) => void
   trailing?: ReactNode
+  /** 嵌入 h-14 全局顶栏：去掉自身底边框与下 padding，与侧边栏顶栏贯通 */
+  embedded?: boolean
 }
 
-export default function SubNavTabs({ tabs, activeKey, onChange, trailing }: SubNavTabsProps) {
+export default function SubNavTabs({ tabs, activeKey, onChange, trailing, embedded }: SubNavTabsProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const [indicator, setIndicator] = useState<{ left: number; width: number }>({ left: 0, width: 0 })
@@ -42,8 +44,8 @@ export default function SubNavTabs({ tabs, activeKey, onChange, trailing }: SubN
   }, [activeKey])
 
   return (
-    <div className="relative flex items-end justify-between border-b border-border">
-      <div ref={containerRef} className="relative flex items-center gap-6">
+    <div className={`relative flex justify-between ${embedded ? 'h-full items-center' : 'items-end border-b border-border'}`}>
+      <div ref={containerRef} className="relative flex items-center gap-6 h-full">
         {tabs.map((tab) => {
           const isActive = tab.key === activeKey
           return (
@@ -52,7 +54,8 @@ export default function SubNavTabs({ tabs, activeKey, onChange, trailing }: SubN
               ref={(el) => { itemRefs.current[tab.key] = el }}
               onClick={() => onChange(tab.key)}
               className={
-                'relative pb-3 text-[13.5px] transition-colors ' +
+                'relative h-full flex items-center text-[13.5px] transition-colors ' +
+                (embedded ? '' : 'pb-3 ') +
                 (isActive
                   ? 'font-semibold text-foreground'
                   : 'font-medium text-muted-foreground hover:text-foreground')
@@ -70,7 +73,7 @@ export default function SubNavTabs({ tabs, activeKey, onChange, trailing }: SubN
           style={{ left: indicator.left, width: indicator.width }}
         />
       </div>
-      {trailing && <div className="pb-3">{trailing}</div>}
+      {trailing && <div className={embedded ? '' : 'pb-3'}>{trailing}</div>}
     </div>
   )
 }

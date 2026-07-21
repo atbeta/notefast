@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
-import { Menu, Sparkles, X } from 'lucide-react'
+import { Menu, Sparkles } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import CommandPalette from './CommandPalette'
@@ -16,11 +16,6 @@ export default function Layout({ children, contentClassName }: { children: React
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [aiChatOpen, setAiChatOpen] = useState(false)
   const [aiChatExpanded, setAiChatExpanded] = useState(false)
-  const [isMac, setIsMac] = useState(false)
-
-  useEffect(() => {
-    setIsMac(/Mac|iPhone|iPad/i.test(navigator.platform))
-  }, [])
 
   const toggleAiChatExpand = useCallback(() => setAiChatExpanded((v) => !v), [])
   
@@ -74,13 +69,15 @@ export default function Layout({ children, contentClassName }: { children: React
   }, [toggleSidebar, navigate, paletteOpen])
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background relative max-w-[1600px] w-full mx-auto">
+    <div className="flex h-screen overflow-hidden bg-background relative w-full">
       {/* 桌面侧边栏 */}
       <div className={`hidden md:block transition-all duration-300 z-20 relative ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
         <Sidebar
           collapsed={sidebarCollapsed}
           onToggle={toggleSidebar}
           onOpenPalette={openPalette}
+          aiChatOpen={aiChatOpen}
+          onToggleAiChat={toggleAiChat}
         />
       </div>
 
@@ -94,6 +91,8 @@ export default function Layout({ children, contentClassName }: { children: React
               onToggle={closeMobile}
               onOpenPalette={openPalette}
               onNavigate={closeMobile}
+              aiChatOpen={aiChatOpen}
+              onToggleAiChat={toggleAiChat}
             />
           </div>
         </div>
@@ -143,27 +142,6 @@ export default function Layout({ children, contentClassName }: { children: React
       />
 
       <CommandPalette open={paletteOpen} onClose={closePalette} />
-
-      {/* AI 对话悬浮入口（FAB） —— 始终 z-50 在面板之上；面板展开时让位避免遮挡 */}
-      <button
-        type="button"
-        onClick={toggleAiChat}
-        aria-label={aiChatOpen ? '关闭 AI 对话' : '打开 AI 对话'}
-        title={aiChatOpen ? `关闭 AI 对话（${isMac ? '⌘' : 'Ctrl'}J）` : `打开 AI 对话（${isMac ? '⌘' : 'Ctrl'}J）`}
-        className={`fixed bottom-6 z-50 w-11 h-11 rounded-full bg-foreground text-background shadow-[var(--shadow-floating)] hover:scale-105 active:scale-95 transition-all duration-300 flex items-center justify-center ${
-          aiChatOpen
-            ? aiChatExpanded
-              ? 'md:right-[616px]'
-              : 'md:right-[416px]'
-            : 'right-6'
-        } right-6`}
-      >
-        {aiChatOpen ? (
-          <X className="w-[18px] h-[18px]" strokeWidth={2} />
-        ) : (
-          <Sparkles className="w-[18px] h-[18px]" strokeWidth={1.75} />
-        )}
-      </button>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, RotateCcw, Check, X, RefreshCw } from 'lucide-react'
+import { RotateCcw, Check, X, RefreshCw } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 
 interface InboxItem {
@@ -80,11 +80,8 @@ export default function InboxPage() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
-      <div className="px-6 py-4 border-b border-border flex items-center gap-3">
-        <Link to="/" className="text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-4 h-4" strokeWidth={1.75} />
-        </Link>
-        <h1 className="text-lg font-semibold tracking-[-0.01em]">Inbox · AI Activity</h1>
+      <div className="h-14 shrink-0 px-6 border-b border-border/50 flex items-center gap-3">
+        <h1 className="text-sm font-semibold tracking-[-0.01em]">Inbox · AI Activity</h1>
         <span className="text-xs text-muted-foreground/70">
           AI 已应用 / AI 建议的链接待你审阅
         </span>
@@ -100,7 +97,7 @@ export default function InboxPage() {
         </div>
       </div>
 
-      <div className="px-6 pt-3 pb-2 border-b border-border flex items-center gap-2 text-[12px]">
+      <div className="px-6 pt-3 pb-2 border-b border-border/50 flex items-center gap-2 text-[12px]">
         {(['unreviewed', 'accepted', 'dismissed', 'all'] as FilterStatus[]).map((s) => (
           <button
             key={s}
@@ -108,7 +105,7 @@ export default function InboxPage() {
             onClick={() => setFilter(s)}
             className={`px-2.5 py-1 rounded-md transition-colors ${
               filter === s
-                ? 'bg-foreground text-background'
+                ? 'bg-accent text-foreground font-medium'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
             }`}
           >
@@ -128,7 +125,7 @@ export default function InboxPage() {
             {filter === 'unreviewed' ? '没有待审阅的 AI 活动。' : '无匹配项。'}
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto space-y-3">
+          <div className="max-w-4xl mx-auto divide-y divide-border/50">
             {items.map((it) => (
               <InboxRow
                 key={it.id}
@@ -161,7 +158,7 @@ function InboxRow({
 }) {
   const top = item.candidates[0]
   return (
-    <div className="border border-border rounded-lg p-4 bg-card hover:border-foreground/20 transition-colors">
+    <div className="py-4 first:pt-2 transition-colors">
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 text-xs mb-1.5">
@@ -225,7 +222,7 @@ function InboxRow({
                 type="button"
                 onClick={onAccept}
                 disabled={busy}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-foreground text-background text-[12px] hover:opacity-90 disabled:opacity-50 transition-opacity"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-border text-foreground text-[12px] hover:bg-accent disabled:opacity-50 transition-colors"
               >
                 <Check className="w-3 h-3" strokeWidth={2.5} />
                 接受
@@ -234,7 +231,7 @@ function InboxRow({
                 type="button"
                 onClick={onDismiss}
                 disabled={busy}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-border text-[12px] text-muted-foreground hover:text-foreground hover:border-foreground/15 disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50 transition-colors"
               >
                 <X className="w-3 h-3" strokeWidth={2.5} />
                 忽略
