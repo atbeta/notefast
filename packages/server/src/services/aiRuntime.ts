@@ -210,8 +210,12 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
   const cfg = r.status().config
   if (!r.hasChat() || !cfg.autoLink?.enabled) return
 
-  const scope = cfg.autoLink.notebookScope
-  const max = cfg.autoLink.maxPerBlock
+  const al = cfg.autoLink
+  // 打印生效中的 AutoLink 配置（磁盘配置是否被读取一目了然）
+  console.log(`🧠 AI auto-link: enabled, scope=${al.notebookScope}, maxPerBlock=${al.maxPerBlock}, minConfidence=${al.minConfidence}, minMargin=${al.minMargin}, excludeKinds=[${(al.excludeAnchorKinds ?? []).join(',')}], excludeSelfDoc=${al.excludeSelfDoc}, rateLimit=${al.rateLimitPerMinute}/min, autoApply=${al.autoApply}`)
+
+  const scope = al.notebookScope
+  const max = al.maxPerBlock
 
   pluginSystem.note.afterCreate.tap(AUTOLINK_HOOK_NAME, async (block) => {
     if (block.type === 'document') return // doc 头不分析

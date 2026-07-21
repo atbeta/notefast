@@ -800,6 +800,19 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
           embedding: cfg.embedding ? { model: cfg.embedding.embeddingModel, label: cfg.embedding.label, baseUrl: cfg.embedding.baseUrl } : null,
           reranker: cfg.reranker?.enabled ? { model: cfg.reranker.model, baseUrl: cfg.reranker.baseUrl } : null,
           autoIndex: cfg.autoIndex,
+          autoLink: cfg.autoLink
+            ? {
+                enabled: cfg.autoLink.enabled,
+                autoApply: cfg.autoLink.autoApply,
+                notebookScope: cfg.autoLink.notebookScope,
+                maxPerBlock: cfg.autoLink.maxPerBlock,
+                minConfidence: cfg.autoLink.minConfidence,
+                minMargin: cfg.autoLink.minMargin,
+                excludeAnchorKinds: cfg.autoLink.excludeAnchorKinds,
+                excludeSelfDoc: cfg.autoLink.excludeSelfDoc,
+                rateLimitPerMinute: cfg.autoLink.rateLimitPerMinute,
+              }
+            : null,
           auth: mode,
         })],
       }

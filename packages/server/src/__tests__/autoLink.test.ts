@@ -847,3 +847,72 @@ describe('AutoLink — 批量审阅', () => {
     expect(status).toBe(400)
   })
 })
+
+describe('AutoLink — 配置文件字段真实生效（Bug 14 回归）', () => {
+  /** 从 ai.config.json 磁盘加载的 excludeAnchorKinds 必须被引擎执行 */
+  test('磁盘加载的 excludeAnchorKinds 生效：concept 被过滤', async () => {
+    const { writeFileSync } = await import('node:fs')
+    const provider = {
+      id: 'x', label: 'x', preset: 'custom', baseUrl: 'http://mock',
+      apiKey: 'key', embeddingModel: '', chatModel: 'gpt-4o-mini',
+      timeoutMs: 5000, extraHeaders: {},
+    }
+    const embProvider = { ...provider, chatModel: '', embeddingModel: 'mock-emb' }
+    writeFileSync(join(testDir, 'ai.config.json'), JSON.stringify({
+      version: 1,
+      chat: provider,
+      embedding: embProvider,
+      autoIndex: false,
+      reranker: null,
+      autoLink: {
+        enabled: true,
+        autoApply: 'never',
+        notebookScope: 'all',
+        maxPerBlock: 5,
+        minConfidence: 0.85,
+        minMargin: 0.15,
+        excludeAnchorKinds: ['concept'],   // ← 自定义：连 concept 也过滤
+        excludeSelfDoc: true,
+        rateLimitPerMinute: 100,
+      },
+    }, null, 2))
+
+    _setRuntimeForTests(null)
+    initAiRuntime(pluginSystem, testDir)
+    // 确认 runtime 读到的是磁盘里的自定义值
+    const al = getRuntime().autoLinkConfig()
+    expect(al.excludeAnchorKinds).toEqual(['concept'])
+    expect(al.rateLimitPerMinute).toBe(100)
+
+    getRuntime().setFetchImpl((async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/embeddings')) {
+        return new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }), { status: 200 })
+      }
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({ mentions: [{ anchor: 'KMP', kind: 'concept' }] }) } }],
+      }), { status: 200 })
+    }) as unknown as typeof fetch)
+
+    const db = getDb()
+    const docId = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(docId, 'd')
+    const now = new Date().toISOString()
+    db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`).run('cfg-src', docId, 'cfg-src', 'paragraph', 'KMP 是高效的字符串匹配', now, now)
+    db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`).run('cfg-tgt', docId, 'cfg-tgt', 'paragraph', 'KMP 算法的 next 数组', now, now)
+    seedVector('cfg-tgt', [1, 0])
+
+    const r = await analyzeBlock({
+      blockId: 'cfg-src',
+      content: 'KMP 是高效的字符串匹配',
+      notebookId: docId,
+      notebookScope: 'all',
+      maxPerBlock: 5,
+    })
+    expect(r.errors).toEqual([])
+    // concept 也在排除清单里 → 不产生任何建议
+    expect(r.suggestionsAdded).toBe(0)
+  })
+})
