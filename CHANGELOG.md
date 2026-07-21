@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.8.0](https://github.com/atbeta/notefast/compare/v0.7.0...v0.8.0) (2026-07-21)
+
+
+### Features
+
+* **ai:** surface effective autoLink config — get_config output + startup log ([cdca723](https://github.com/atbeta/notefast/commit/cdca723d1e3e657a84799353c0c18fe80436c85f))
+* **chat:** min_score citation filtering to cut RAG citation noise ([20b472c](https://github.com/atbeta/notefast/commit/20b472c8c7703cce4b0c803dd9597ff9b8aa4449))
+* **mcp:** schema hardening, honest listChanged, and request logging ([18d736b](https://github.com/atbeta/notefast/commit/18d736bdfe44de789e5a769ae8e11c6f00f0bb36))
+* **mcp:** unify tool error semantics — isError + structured error.code ([0c8c401](https://github.com/atbeta/notefast/commit/0c8c401e3b68208abd87a7c07c5f3d476577fe15))
+
+
+### Bug Fixes
+
+* **mcp:** create_doc FK failure on nested blocks (fenced code, sublists) ([cb30aaf](https://github.com/atbeta/notefast/commit/cb30aaf8c2ce6e037b8039b9aeeea6627d14dab2))
+* render heading children (code blocks), save-to-reading flow, inbox bulk review, custom checkbox ([e07f222](https://github.com/atbeta/notefast/commit/e07f2224a4633a01a5d1fe9b4bf36e76985ea9ff))
+
 ## [0.7.0](https://github.com/atbeta/notefast/compare/v0.6.0...v0.7.0) (2026-07-21)
 
 
