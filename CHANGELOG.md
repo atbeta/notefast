@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.7.0](https://github.com/atbeta/notefast/compare/v0.6.0...v0.7.0) (2026-07-21)
+
+
+### Features
+
+* **ai:** log config source at startup; add notefast_get_config MCP tool ([8763fa9](https://github.com/atbeta/notefast/commit/8763fa97564a90a34403771b1d4485c6d33ef41d))
+* **auth:** persistent login with 7-day sliding expiry ([f59844a](https://github.com/atbeta/notefast/commit/f59844adac6e2a1c77c395c6828e60dd09bdf2c7))
+* **auth:** split READ_TOKEN / WRITE_TOKEN with backward-compatible API_TOKEN ([4225023](https://github.com/atbeta/notefast/commit/4225023227069408118dcf5c23fc12415d139554))
+* **autolink:** precision-first v3 — kill the noise flood at the source ([f7d125b](https://github.com/atbeta/notefast/commit/f7d125b99c8c73ea1a86cf5268db8863439843d0))
+* **mcp:** multi-session transport pool + no-SID auto-init ([e972747](https://github.com/atbeta/notefast/commit/e97274735a45dbc95a2ebb43fddf82db379bd6c5))
+* **ui:** sidebar settings icon + dynamic version from /api/v1/version ([a608917](https://github.com/atbeta/notefast/commit/a608917cc35959d9003c20cb63267e8291f2a55b))
+
+
+### Bug Fixes
+
+* **mcp:** address review findings — session cap, close() leak, auto-init scope ([06cf1e3](https://github.com/atbeta/notefast/commit/06cf1e3ca3ec01215bc9831ccad654a8d9e3f04f))
+* **server:** log full stacks in chat/hybridSearch catches; fix FK bug in markdown import ([cc594a4](https://github.com/atbeta/notefast/commit/cc594a440d358c21915f212ea45a55f18f3fea2d))
+* **server:** prefer APP_VERSION (docker tag) for /api/v1/version ([9bd1665](https://github.com/atbeta/notefast/commit/9bd1665be98537fda633312b3674e5131e88a8a6))
+
 ## [0.6.0](https://github.com/atbeta/notefast/compare/v0.5.0...v0.6.0) (2026-07-20)
 
 
