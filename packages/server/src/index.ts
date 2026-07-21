@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/bun'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { createPluginSystem } from '@notefast/core'
 import { initDb, closeDb } from './db'
 import { authMiddleware } from './middleware/auth'
@@ -40,6 +42,16 @@ app.use('*', cors({
 app.use('/api/*', authMiddleware)
 
 app.get('/health', (c) => c.json({ status: 'ok', time: new Date().toISOString() }))
+
+// 实例版本号：运行时读 packages/server/package.json（src 与打包后的 dist 均为其同级子目录），
+// Web 侧边栏据此动态展示，升级版本时无需改前端。
+let appVersion = '0.0.0'
+try {
+  const pkg = JSON.parse(readFileSync(join(import.meta.dir, '..', 'package.json'), 'utf8'))
+  if (typeof pkg.version === 'string' && pkg.version) appVersion = pkg.version
+} catch { /* 读取失败保持兜底值 */ }
+
+app.get('/api/v1/version', (c) => c.json({ version: appVersion }))
 
 // 鉴权模式探测：返回当前实例是否需要密码 / token。
 // 放在 authMiddleware 之后注册路径（middleware 内部已对 /auth/mode 放行）。

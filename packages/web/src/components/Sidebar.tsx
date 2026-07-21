@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   Inbox,
   Sparkles,
+  Settings,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import type { DocSummary } from '@notefast/core'
@@ -52,9 +53,17 @@ export default function Sidebar({
   const [isMac, setIsMac] = useState(false)
   const [recentDocs, setRecentDocs] = useState<DocSummary[]>([])
   const [inboxCount, setInboxCount] = useState(0)
+  /** 实例版本号（/api/v1/version），加载完成前不渲染版本位 */
+  const [version, setVersion] = useState<string | null>(null)
 
   useEffect(() => {
     setIsMac(/Mac|iPhone|iPad/i.test(navigator.platform))
+  }, [])
+
+  useEffect(() => {
+    api.get<{ version: string }>('/version')
+      .then((r) => setVersion(r.version))
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -212,13 +221,22 @@ export default function Sidebar({
 
       <div className="border-t border-sidebar-border shrink-0">
         <div className="px-3 pt-2 pb-2.5 flex items-center justify-between gap-2">
-          <a
-            href="/settings"
-            className="text-[10px] text-sidebar-muted/65 hover:text-foreground transition-colors"
+          <Link
+            to="/settings"
+            onClick={closeAfterNav}
+            title="设置"
+            aria-label="设置"
+            className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${
+              location.pathname.startsWith('/settings')
+                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                : 'text-sidebar-muted/70 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent'
+            }`}
           >
-            设置
-          </a>
-          <span className="text-[10px] font-mono tabular-nums text-sidebar-muted/55">v0.1.0</span>
+            <Settings className="w-3.5 h-3.5" strokeWidth={1.75} />
+          </Link>
+          {version && (
+            <span className="text-[10px] font-mono tabular-nums text-sidebar-muted/55">v{version}</span>
+          )}
         </div>
       </div>
     </aside>
