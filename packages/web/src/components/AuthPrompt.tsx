@@ -2,7 +2,8 @@
  * 登录弹框
  *
  * 当服务端 /api/v1/auth/mode 返回 passwordRequired=true 时显示。
- * 用户输入密码 → 写入 sessionStorage → 刷新页面让所有 API 调用带 header。
+ * 用户输入密码 → 默认写 localStorage（7 天滑动过期）→ 刷新页面让所有 API 调用带 header；
+ * 取消勾选「保持登录」则退回 sessionStorage 会话级存储。
  */
 
 import { useState } from 'react'
@@ -16,6 +17,7 @@ export interface AuthPromptProps {
 
 export default function AuthPrompt({ reason = 'password_required' }: AuthPromptProps) {
   const [password, setPassword] = useState('')
+  const [remember, setRemember] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -24,8 +26,8 @@ export default function AuthPrompt({ reason = 'password_required' }: AuthPromptP
     if (!password.trim() || submitting) return
     setSubmitting(true)
     setError(null)
-    // 写 sessionStorage 并 reload —— 让所有 hooks 重新挂载时携带新 header
-    setStoredPassword(password.trim())
+    // 写存储并 reload —— 让所有 hooks 重新挂载时携带新 header
+    setStoredPassword(password.trim(), remember)
     window.location.reload()
   }
 
@@ -62,8 +64,19 @@ export default function AuthPrompt({ reason = 'password_required' }: AuthPromptP
             disabled={submitting}
             className="input-mono"
           />
+          <label className="mt-3 flex items-center gap-2 select-none cursor-pointer w-fit">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-border accent-[rgb(var(--foreground))]"
+            />
+            <span className="text-[12px] text-foreground/80">保持登录 7 天</span>
+          </label>
           <p className="text-[10.5px] text-muted-foreground/70 mt-1.5 leading-relaxed">
-            密码仅保存在本浏览器会话（sessionStorage），关闭浏览器后自动清除。
+            {remember
+              ? '密码保存在本浏览器 localStorage，7 天内每次打开自动续期；公共设备请勿勾选。'
+              : '密码仅保存在本浏览器会话（sessionStorage），关闭浏览器后自动清除。'}
           </p>
         </div>
 

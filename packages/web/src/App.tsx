@@ -9,6 +9,7 @@ import InboxPage from './routes/inbox'
 import Layout from './components/Layout'
 import AuthPrompt from './components/AuthPrompt'
 import { ToastProvider } from './components/ui'
+import { getStoredPassword } from './hooks/useAPI'
 
 interface AuthMode {
   passwordRequired: boolean
@@ -28,8 +29,8 @@ export default function App() {
   }, [])
 
   // 探测未完成 → 不渲染内容（避免短暂闪现未鉴权页面）
-  // 探测完成 + 需要密码 + sessionStorage 没密码 → 显示登录弹框
-  const showAuthPrompt = authMode?.passwordRequired === true && !sessionStorage.getItem('notefast.password')
+  // 探测完成 + 需要密码 + 本地没有可用密码（持久化/会话级均无）→ 显示登录弹框
+  const showAuthPrompt = authMode?.passwordRequired === true && !getStoredPassword()
 
   return (
     <ToastProvider>

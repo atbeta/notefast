@@ -1,10 +1,42 @@
 const API_BASE = '/api/v1'
 
-/** Web UI 登录后存到 sessionStorage 的密码（关闭浏览器自动清除） */
+/** 会话级密码（不保持登录时）：关闭浏览器自动清除 */
 const PASSWORD_KEY = 'notefast.password'
+/** 持久化登录（localStorage）：{ pw, exp }，7 天滑动过期 —— 每次有效读取自动顺延 */
+const AUTH_KEY = 'notefast.auth'
+const AUTH_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
-/** 返回当前会话的密码（如已登录），否则 null */
+interface PersistedAuth {
+  pw: string
+  /** 过期时间戳（ms） */
+  exp: number
+}
+
+/** 读持久化登录；过期/脏数据自动清除，有效则滑动续期 7 天 */
+function readPersisted(): string | null {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY)
+    if (!raw) return null
+    const data = JSON.parse(raw) as PersistedAuth
+    if (typeof data.pw !== 'string' || !data.pw || typeof data.exp !== 'number') {
+      throw new Error('malformed auth entry')
+    }
+    if (data.exp <= Date.now()) {
+      localStorage.removeItem(AUTH_KEY)
+      return null
+    }
+    localStorage.setItem(AUTH_KEY, JSON.stringify({ pw: data.pw, exp: Date.now() + AUTH_TTL_MS }))
+    return data.pw
+  } catch {
+    try { localStorage.removeItem(AUTH_KEY) } catch { /* ignore */ }
+    return null
+  }
+}
+
+/** 返回当前可用的密码（优先持久化登录，其次会话级），否则 null */
 export function getStoredPassword(): string | null {
+  const persisted = readPersisted()
+  if (persisted) return persisted
   try {
     return sessionStorage.getItem(PASSWORD_KEY)
   } catch {
@@ -12,18 +44,35 @@ export function getStoredPassword(): string | null {
   }
 }
 
-/** 登录后写入；登出/清除时调用 */
-export function setStoredPassword(pw: string): void {
+/**
+ * 登录后写入；登出/清除时调用 clearStoredPassword()。
+ * remember=true（默认）→ localStorage 7 天滑动过期；false → sessionStorage 会话级。
+ */
+export function setStoredPassword(pw: string, remember = true): void {
+  clearStoredPassword()
+  if (remember) {
+    try {
+      localStorage.setItem(AUTH_KEY, JSON.stringify({ pw, exp: Date.now() + AUTH_TTL_MS } satisfies PersistedAuth))
+      return
+    } catch {
+      // localStorage 不可用（隐私模式等）→ 退回到会话级
+    }
+  }
   try {
     sessionStorage.setItem(PASSWORD_KEY, pw)
   } catch {
-    // ignore — 隐私模式下 sessionStorage 不可用
+    // ignore — 隐私模式下 sessionStorage 也可能不可用
   }
 }
 
 export function clearStoredPassword(): void {
   try {
     sessionStorage.removeItem(PASSWORD_KEY)
+  } catch {
+    // ignore
+  }
+  try {
+    localStorage.removeItem(AUTH_KEY)
   } catch {
     // ignore
   }
