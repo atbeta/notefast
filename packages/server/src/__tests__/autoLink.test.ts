@@ -26,6 +26,7 @@ import {
   analyzeBlock,
   insertRef,
   listBlockIdsForDoc,
+  _resetRateLimitForTests,
 } from '../ai/autoLink'
 import {
   addSuggestions,
@@ -109,9 +110,11 @@ beforeEach(() => {
   const configPath = join(testDir, 'ai.config.json')
   if (existsSync(configPath)) unlinkSync(configPath)
   initAiRuntime(pluginSystem, testDir)
+  _resetRateLimitForTests()
   getDb().query('DELETE FROM blocks').run()
   getDb().query('DELETE FROM block_refs').run()
   getDb().query('DELETE FROM autolink_suggestions').run()
+  getDb().query('DELETE FROM block_vectors').run()
   getDb().exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
 })
 
@@ -141,6 +144,22 @@ function seedDocWithBlocks(opts: {
   return docId
 }
 
+/** v3: 完整 autoLink 配置（限速放大到 1000，避免跨用例干扰；单测限速时显式覆盖） */
+function testAutoLinkConfig(overrides: Record<string, unknown> = {}) {
+  return {
+    enabled: true,
+    autoApply: 'never' as const,
+    notebookScope: 'all' as const,
+    maxPerBlock: 5,
+    minConfidence: 0.85,
+    minMargin: 0.15,
+    excludeAnchorKinds: ['tool'],
+    excludeSelfDoc: true,
+    rateLimitPerMinute: 1000,
+    ...overrides,
+  }
+}
+
 function mockChatReturning(chatModel: string, jsonResponse: string) {
   _setRuntimeForTests(null)
   initAiRuntime(pluginSystem, testDir)
@@ -151,7 +170,7 @@ function mockChatReturning(chatModel: string, jsonResponse: string) {
       embedding: null,
       autoIndex: false,
       reranker: null,
-      autoLink: { enabled: true, autoApply: 'never', notebookScope: 'all', maxPerBlock: 5, minConfidence: 0.75, minMargin: 0.1 },
+      autoLink: testAutoLinkConfig(),
     },
     pluginSystem,
   )
@@ -161,6 +180,53 @@ function mockChatReturning(chatModel: string, jsonResponse: string) {
       headers: { 'Content-Type': 'application/json' },
     })) as unknown as typeof fetch
   getRuntime().setFetchImpl(fetcher)
+}
+
+/**
+ * 同时 mock chat（抽取）与 embedding（语义重排）：
+ * embedQuery 固定返回 queryVector；候选向量需自行 INSERT 进 block_vectors。
+ */
+function mockChatAndEmbedding(chatModel: string, jsonResponse: string, queryVector: number[]) {
+  _setRuntimeForTests(null)
+  initAiRuntime(pluginSystem, testDir)
+  applyNewConfig(
+    {
+      version: 1,
+      chat: { ...makeProvider(chatModel), apiKey: 'key', baseUrl: 'http://mock', embeddingModel: '' } as never,
+      embedding: {
+        ...makeProvider(''),
+        apiKey: 'key',
+        baseUrl: 'http://mock',
+        chatModel: '',
+        embeddingModel: 'mock-emb',
+      } as never,
+      autoIndex: false,
+      reranker: null,
+      autoLink: testAutoLinkConfig(),
+    },
+    pluginSystem,
+  )
+  const fetcher = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes('/embeddings')) {
+      return new Response(JSON.stringify({ data: [{ embedding: queryVector }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    return new Response(JSON.stringify({ choices: [{ message: { content: jsonResponse } }] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }) as unknown as typeof fetch
+  getRuntime().setFetchImpl(fetcher)
+}
+
+/** 给候选 block 写入语义向量（配合 mockChatAndEmbedding） */
+function seedVector(blockId: string, vec: number[]) {
+  getDb()
+    .query('INSERT INTO block_vectors (block_id, embedding, dim) VALUES (?, ?, ?)')
+    .run(blockId, JSON.stringify(vec), vec.length)
 }
 
 async function api(method: string, path: string, body?: unknown) {
@@ -393,9 +459,9 @@ describe('AutoLink — HTTP routes', () => {
 describe('AutoLink — E2E Tier 1 scenarios', () => {
   /** 端到端：写入 → 分析 → Inbox → 接受 → block_refs 增 → 撤销 → ref 删 */
   test('write → analyze → inbox → accept → revert', async () => {
-    mockChatReturning('gpt-4o-mini', JSON.stringify({
+    mockChatAndEmbedding('gpt-4o-mini', JSON.stringify({
       mentions: [{ anchor: 'KMP', kind: 'concept' }],
-    }))
+    }), [1, 0])
     const db = getDb()
     const docId = crypto.randomUUID()
     db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(docId, 'd')
@@ -405,11 +471,12 @@ describe('AutoLink — E2E Tier 1 scenarios', () => {
       `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
        VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`,
     ).run('e2e-src', docId, 'e2e-src', 'paragraph', 'KMP 是高效的字符串匹配', now, now)
-    // 写目标块（已存在 KMP 内容）
+    // 写目标块（已存在 KMP 内容）+ 语义向量（与查询向量一致 → cosine 1.0）
     db.query(
       `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
        VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`,
     ).run('e2e-tgt', docId, 'e2e-tgt', 'paragraph', 'KMP 算法的 next 数组构造', now, now)
+    seedVector('e2e-tgt', [1, 0])
 
     // 触发分析
     const result = await analyzeBlock({
@@ -557,9 +624,9 @@ describe('AutoLink — E2E Tier 1 scenarios', () => {
 
   /** autoApply='never'（默认）即使 embedding 命中也不自动写 ref */
   test("autoApply='never' 即使 cosine 高也不自动写 ref", async () => {
-    mockChatReturning('gpt-4o-mini', JSON.stringify({
+    mockChatAndEmbedding('gpt-4o-mini', JSON.stringify({
       mentions: [{ anchor: 'KMP', kind: 'concept' }],
-    }))
+    }), [1, 0])
     const db = getDb()
     const docId = crypto.randomUUID()
     db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(docId, 'd')
@@ -568,6 +635,7 @@ describe('AutoLink — E2E Tier 1 scenarios', () => {
        VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`).run('nv-src', docId, 'nv-src', 'paragraph', 'KMP is great', now, now)
     db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
        VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`).run('nv-tgt', docId, 'nv-tgt', 'paragraph', 'KMP algorithm details', now, now)
+    seedVector('nv-tgt', [1, 0])
 
     // 当前 test config 是 autoApply='never'
     const before = (db.query('SELECT count(*) as c FROM block_refs').get() as { c: number }).c
@@ -582,5 +650,154 @@ describe('AutoLink — E2E Tier 1 scenarios', () => {
     expect(result.suggestionsAdded).toBeGreaterThan(0)
     const after = (db.query('SELECT count(*) as c FROM block_refs').get() as { c: number }).c
     expect(after).toBe(before)
+  })
+})
+
+describe('AutoLink — v3 精准优先', () => {
+  /** 无 embedding provider 时，纯 FTS 字面命中不产生建议（FTS-only 不进 Inbox） */
+  test('FTS-only 字面命中 → 不产生建议', async () => {
+    mockChatReturning('gpt-4o-mini', JSON.stringify({
+      mentions: [{ anchor: 'KMP', kind: 'concept' }],
+    }))
+    const db = getDb()
+    const docId = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(docId, 'd')
+    const now = new Date().toISOString()
+    db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`).run('fts-src', docId, 'fts-src', 'paragraph', 'KMP 是高效的字符串匹配', now, now)
+    db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`).run('fts-tgt', docId, 'fts-tgt', 'paragraph', 'KMP 算法的 next 数组', now, now)
+
+    const r = await analyzeBlock({
+      blockId: 'fts-src',
+      content: 'KMP 是高效的字符串匹配',
+      notebookId: docId,
+      notebookScope: 'all',
+      maxPerBlock: 5,
+    })
+    expect(r.errors).toEqual([])
+    expect(r.suggestionsAdded).toBe(0)
+  })
+
+  /** 语义分低于 minConfidence → 同样不产生建议 */
+  test('cosine 低于 minConfidence → 不产生建议', async () => {
+    mockChatAndEmbedding('gpt-4o-mini', JSON.stringify({
+      mentions: [{ anchor: 'KMP', kind: 'concept' }],
+    }), [1, 0])
+    const db = getDb()
+    const docId = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(docId, 'd')
+    const now = new Date().toISOString()
+    db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`).run('low-src', docId, 'low-src', 'paragraph', 'KMP 是高效的字符串匹配', now, now)
+    db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`).run('low-tgt', docId, 'low-tgt', 'paragraph', 'KMP 算法的 next 数组', now, now)
+    // 与查询向量垂直 → cosine 0，低于 0.85 门槛
+    seedVector('low-tgt', [0, 1])
+
+    const r = await analyzeBlock({
+      blockId: 'low-src',
+      content: 'KMP 是高效的字符串匹配',
+      notebookId: docId,
+      notebookScope: 'all',
+      maxPerBlock: 5,
+    })
+    expect(r.errors).toEqual([])
+    expect(r.suggestionsAdded).toBe(0)
+  })
+
+  /** kind=tool 的锚点被 excludeAnchorKinds 默认过滤 */
+  test('kind=tool 锚点被默认过滤，concept 正常通过', async () => {
+    mockChatAndEmbedding('gpt-4o-mini', JSON.stringify({
+      mentions: [
+        { anchor: 'notefast_create_doc', kind: 'tool' },
+        { anchor: 'KMP', kind: 'concept' },
+      ],
+    }), [1, 0])
+    const db = getDb()
+    const docId = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(docId, 'd')
+    const now = new Date().toISOString()
+    db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`).run('kind-src', docId, 'kind-src', 'paragraph', '调用 notefast_create_doc 创建，比如 KMP 笔记', now, now)
+    db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`).run('kind-tgt1', docId, 'kind-tgt1', 'paragraph', 'notefast_create_doc 工具说明', now, now)
+    db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`).run('kind-tgt2', docId, 'kind-tgt2', 'paragraph', 'KMP 算法详解', now, now)
+    seedVector('kind-tgt1', [1, 0])
+    seedVector('kind-tgt2', [1, 0])
+
+    const r = await analyzeBlock({
+      blockId: 'kind-src',
+      content: '调用 notefast_create_doc 创建，比如 KMP 笔记',
+      notebookId: docId,
+      notebookScope: 'all',
+      maxPerBlock: 5,
+    })
+    expect(r.errors).toEqual([])
+    // 只剩 KMP（concept）一条；tool 锚点被过滤
+    expect(r.suggestionsAdded).toBe(1)
+    expect(r.suggestions[0]!.anchor).toBe('KMP')
+  })
+
+  /** excludeSelfDoc：同一文档内的 block 不作为候选 */
+  test('excludeSelfDoc 同文档候选被过滤', async () => {
+    mockChatAndEmbedding('gpt-4o-mini', JSON.stringify({
+      mentions: [{ anchor: 'KMP', kind: 'concept' }],
+    }), [1, 0])
+    // 源块与目标块在同一个文档（root_id 相同）
+    const docId = seedDocWithBlocks({
+      docTitle: '同一文档',
+      blocks: [
+        { id: 'self-src', content: 'KMP 是高效的字符串匹配' },
+        { id: 'self-tgt', content: 'KMP 算法的 next 数组构造' },
+      ],
+    })
+    seedVector('self-tgt', [1, 0])
+
+    const r = await analyzeBlock({
+      blockId: 'self-src',
+      content: 'KMP 是高效的字符串匹配',
+      notebookId: 'T',
+      notebookScope: 'all',
+      maxPerBlock: 5,
+    })
+    expect(r.errors).toEqual([])
+    expect(r.suggestionsAdded).toBe(0)
+    void docId
+  })
+
+  /** rateLimitPerMinute：超出窗口配额的触发直接跳过 */
+  test('rateLimitPerMinute 超出后直接跳过', async () => {
+    _setRuntimeForTests(null)
+    initAiRuntime(pluginSystem, testDir)
+    applyNewConfig(
+      {
+        version: 1,
+        chat: { ...makeProvider('gpt-4o-mini'), apiKey: 'key', baseUrl: 'http://mock', embeddingModel: '' } as never,
+        embedding: null,
+        autoIndex: false,
+        reranker: null,
+        autoLink: testAutoLinkConfig({ rateLimitPerMinute: 1 }),
+      },
+      pluginSystem,
+    )
+    getRuntime().setFetchImpl((async () =>
+      new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ mentions: [] }) } }] }), {
+        status: 200,
+      })) as unknown as typeof fetch)
+    seedDocWithBlocks({
+      docTitle: '限速',
+      blocks: [
+        { id: 'rl-1', content: '第一条内容足够长用于分析' },
+        { id: 'rl-2', content: '第二条内容足够长用于分析' },
+      ],
+    })
+
+    const r1 = await analyzeBlock({ blockId: 'rl-1', content: '第一条内容足够长用于分析', notebookScope: 'all', maxPerBlock: 5 })
+    expect(r1.rateLimited).toBeFalsy()
+    const r2 = await analyzeBlock({ blockId: 'rl-2', content: '第二条内容足够长用于分析', notebookScope: 'all', maxPerBlock: 5 })
+    expect(r2.rateLimited).toBe(true)
+    expect(r2.analyzed).toBe(0)
   })
 })

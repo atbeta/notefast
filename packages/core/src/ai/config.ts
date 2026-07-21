@@ -127,15 +127,37 @@ export interface AutoLinkConfig {
   notebookScope: 'all' | 'same'
   /** 每个块最多产出几条建议 */
   maxPerBlock: number
-  /** embedding cosine 阈值（仅 score_kind=embedding/hybrid 生效）；低于阈值不自动应用 */
+  /**
+   * embedding cosine 阈值（v3 起同时作为「建议入库门槛」）：
+   * top-1 候选为 embedding/hybrid 且 confidence ≥ 该值才入 Inbox；
+   * FTS-only（纯字面匹配）一律不产生建议 —— 宁缺毋滥。
+   */
   minConfidence: number
   /** top-1 与 top-2 最小差值，避免歧义候选被自动应用 */
   minMargin: number
+  /**
+   * 抽取后要丢弃的锚点类型（默认 ['tool']）：
+   * 工具名 / API / 函数名 → 工具描述段落 是同义反复，不构成有效反向链接。
+   */
+  excludeAnchorKinds: string[]
+  /**
+   * true 时不链接到同一文档内的 block（默认 true）：
+   * 文档内导航应交给大纲/目录，同文档互链是噪音。
+   */
+  excludeSelfDoc: boolean
+  /**
+   * 全局每分钟最多触发多少次抽取（默认 10）：
+   * 批量导入/保存 burst 时超出的直接跳过（不排队），保护 chat 配额。
+   */
+  rateLimitPerMinute: number
 }
 
-export const DEFAULT_MAX_AUTO_LINK_PER_BLOCK = 5
-export const DEFAULT_AUTO_LINK_MIN_CONFIDENCE = 0.75
-export const DEFAULT_AUTO_LINK_MIN_MARGIN = 0.1
+export const DEFAULT_MAX_AUTO_LINK_PER_BLOCK = 2
+export const DEFAULT_AUTO_LINK_MIN_CONFIDENCE = 0.85
+export const DEFAULT_AUTO_LINK_MIN_MARGIN = 0.15
+export const DEFAULT_AUTO_LINK_EXCLUDE_KINDS: string[] = ['tool']
+export const DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC = true
+export const DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE = 10
 
 export function defaultAutoLinkConfig(): AutoLinkConfig {
   return {
@@ -145,6 +167,9 @@ export function defaultAutoLinkConfig(): AutoLinkConfig {
     maxPerBlock: DEFAULT_MAX_AUTO_LINK_PER_BLOCK,
     minConfidence: DEFAULT_AUTO_LINK_MIN_CONFIDENCE,
     minMargin: DEFAULT_AUTO_LINK_MIN_MARGIN,
+    excludeAnchorKinds: [...DEFAULT_AUTO_LINK_EXCLUDE_KINDS],
+    excludeSelfDoc: DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC,
+    rateLimitPerMinute: DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE,
   }
 }
 
@@ -312,7 +337,17 @@ function autoLinkFromEnv(env: Record<string, string | undefined>): AutoLinkConfi
   const minMargin = Number.isFinite(minMarginRaw) && minMarginRaw >= 0 && minMarginRaw < 1
     ? minMarginRaw
     : DEFAULT_AUTO_LINK_MIN_MARGIN
-  return { enabled, autoApply, notebookScope: scope, maxPerBlock: max, minConfidence: minConf, minMargin }
+  return {
+    enabled,
+    autoApply,
+    notebookScope: scope,
+    maxPerBlock: max,
+    minConfidence: minConf,
+    minMargin,
+    excludeAnchorKinds: [...DEFAULT_AUTO_LINK_EXCLUDE_KINDS],
+    excludeSelfDoc: DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC,
+    rateLimitPerMinute: DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE,
+  }
 }
 
 function rerankerFromEnv(env: Record<string, string | undefined>): RerankerDefinition | null {
@@ -371,6 +406,13 @@ export function validateConfig(cfg: AiConfig): string[] {
   }
   if (al.maxPerBlock < 1 || al.maxPerBlock > 10) {
     errs.push('AutoLink maxPerBlock 应在 1-10 之间')
+  }
+  const VALID_KINDS = ['concept', 'tool', 'person', 'doc']
+  if (!Array.isArray(al.excludeAnchorKinds) || al.excludeAnchorKinds.some((k) => !VALID_KINDS.includes(k))) {
+    errs.push(`AutoLink excludeAnchorKinds 只能是 ${VALID_KINDS.join('/')} 的子集`)
+  }
+  if (al.rateLimitPerMinute < 0 || al.rateLimitPerMinute > 600) {
+    errs.push('AutoLink rateLimitPerMinute 应在 0-600 之间（0 表示不限速）')
   }
 
   return errs

@@ -102,6 +102,9 @@ const configSchema = z.object({
       maxPerBlock: z.number().int().min(1).max(10),
       minConfidence: z.number().min(0).max(1),
       minMargin: z.number().min(0).max(1),
+      excludeAnchorKinds: z.array(z.enum(['concept', 'tool', 'person', 'doc'])).optional(),
+      excludeSelfDoc: z.boolean().optional(),
+      rateLimitPerMinute: z.number().int().min(0).max(600).optional(),
     })
     .optional(),
 })
@@ -127,13 +130,20 @@ ai.put(
     if (reranker) {
       reranker.apiKey = resolveApiKey(reranker.apiKey, current.reranker?.apiKey)
     }
+    // autoLink 合并策略：磁盘现有值（含 schema 外的手加字段）→ 默认值兜底 → 请求体覆盖。
+    // 防止「在 UI 改别的字段再保存」把配置文件里手加的字段物理抹掉。
+    const mergedAutoLink: AiConfig['autoLink'] = {
+      ...defaultAutoLinkConfig(),
+      ...(current.autoLink ?? {}),
+      ...(body.autoLink ?? {}),
+    }
     const cfg: AiConfig = {
       version: 1,
       chat: body.chat,
       embedding: body.embedding,
       autoIndex: body.autoIndex,
       reranker: reranker && reranker.enabled ? reranker : null,
-      autoLink: body.autoLink ?? defaultAutoLinkConfig(),
+      autoLink: mergedAutoLink,
     }
     // 业务校验（chatModel / embeddingModel 必填等）→ 400
     const errors = validateConfig(cfg)

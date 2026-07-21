@@ -1,19 +1,21 @@
 /**
- * AutoLink 引擎（v2）
+ * AutoLink 引擎（v3 —— 精准优先）
  *
  * 流程：
- *   1) LLM 从块内容里抽出 mention 列表（严格 JSON）
- *   2) 每个 mention.anchor 去命中现有 block（hybrid search）
- *   3) 根据 scoreKind + minConfidence + minMargin 决定是否自动应用
- *   4) 写入 autolink_suggestions（SQLite）；自动应用的同步写 block_refs
+ *   1) LLM 从块内容里抽出 mention 列表（严格 JSON；不抽工具/API/函数名）
+ *   2) kind 过滤（excludeAnchorKinds，默认丢 tool）
+ *   3) 每个 mention.anchor 去命中现有 block（hybrid search；excludeSelfDoc 排除同文档）
+ *   4) 建议入库门槛：top-1 必须 embedding/hybrid 且 ≥ minConfidence —— FTS-only 不进 Inbox
+ *   5) 满足 minMargin 的进一步 autoApply 写 block_refs
  *
- * 评分语义（v2 修复）：
- *   - FTS-only: confidence = 1 - rank/N，score_kind='fts_rank'，不参与 autoApply 判定
- *   - embedding: confidence = cosine，score_kind='embedding'，参与 minConfidence 阈值
- *   - hybrid: confidence = cosine（embedding 优先），score_kind='hybrid'
+ * 评分语义（v3）：
+ *   - FTS-only: confidence = 1 - rank/N，score_kind='fts_rank'，永远达不到入库门槛
+ *   - hybrid: confidence = 纯 cosine（不再与 FTS rank 分取 max，杜绝伪高置信）
+ *   - 候选缺向量：诚实地标回 'fts_rank'
  *
- * 并发保护：
+ * 并发与配额保护：
  *   - 同 block 的 analyzeBlock 请求串行化（inflight Map）
+ *   - 全局滑动窗口限速（rateLimitPerMinute，burst 时超出直接跳过）
  *   - 每次写入前用 source_content_hash 标记旧 suggestion 为 superseded
  */
 
@@ -31,12 +33,14 @@ import {
 const EXTRACT_SYSTEM_PROMPT = `你是 NoteFast 的实体抽取助手。从用户给定的笔记内容中识别可以建立反向链接的具体名词短语（"锚点"）。
 
 严格规则：
-- 输出必须是合法 JSON：{"mentions": [{"anchor":"...", "kind":"concept|tool|person|doc"} , ...]}
+- 输出必须是合法 JSON：{"mentions": [{"anchor":"...", "kind":"concept|person|doc"} , ...]}
 - anchor 必须 ≥3 字、最长 20 字，在原文里逐字出现
 - 排除：停用词、人称代词、纯数字、纯标点、连接词
+- 排除：工具名、API 名、函数名、命令行、代码标识符（如 snake_case / camelCase / 带前缀的名称）——提及工具不等于需要链接
 - 同一 anchor 在同一块内只出现一次
-- 最多输出 5 个 mentions；过短或没具体名词时返回 {"mentions": []}
-- kind 只能是 concept / tool / person / doc 之一`
+- 最多输出 3 个 mentions；过短或没具体名词时返回 {"mentions": []}
+- 拿不准就不要输出：锚点贵精不贵多
+- kind 只能是 concept / person / doc 之一`
 
 const MAX_CONTENT_CHARS = 1500
 
@@ -54,6 +58,8 @@ export interface AnalyzeResult {
   applied: number
   suggestions: AutoLinkSuggestion[]
   errors: string[]
+  /** true = 命中全局限速，本次未执行抽取（不视为错误） */
+  rateLimited?: boolean
 }
 
 // ───────────────────── 同 block 串行化 ─────────────────────
@@ -71,6 +77,32 @@ export async function analyzeBlock(opts: AnalyzeOptions): Promise<AnalyzeResult>
   return p
 }
 
+// ───────────────────── 全局限速（滑动窗口计数）─────────────────────
+// 批量导入/连续保存时每个 block 都会触发一次分析；超过 rateLimitPerMinute
+// 的直接跳过（不排队、不报错），保护 chat provider 配额。
+
+const RATE_WINDOW_MS = 60_000
+let rateWindowStart = 0
+let rateWindowCount = 0
+
+function hitRateLimit(perMinute: number): boolean {
+  if (perMinute <= 0) return false // 0 = 不限速
+  const now = Date.now()
+  if (now - rateWindowStart >= RATE_WINDOW_MS) {
+    rateWindowStart = now
+    rateWindowCount = 0
+  }
+  if (rateWindowCount >= perMinute) return true
+  rateWindowCount++
+  return false
+}
+
+/** 测试专用：重置限速窗口，避免跨用例互相影响 */
+export function _resetRateLimitForTests(): void {
+  rateWindowStart = 0
+  rateWindowCount = 0
+}
+
 // ───────────────────── 主逻辑 ─────────────────────
 
 async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
@@ -82,7 +114,13 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
   if (trimmed.length < 10) return empty()
 
   const cfg = runtime.autoLinkConfig()
-  const max = Math.max(1, Math.min(10, opts.maxPerBlock || cfg.maxPerBlock || 5))
+
+  // 全局限速：burst 时超出的直接跳过（不排队、不算错误）
+  if (hitRateLimit(cfg.rateLimitPerMinute ?? 0)) {
+    return { ...empty(), rateLimited: true }
+  }
+
+  const max = Math.max(1, Math.min(10, opts.maxPerBlock || cfg.maxPerBlock || 2))
 
   let mentions: Mention[]
   try {
@@ -91,6 +129,13 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
     runtime.recordAutoLink(false, e instanceof Error ? e.message : String(e))
     return { ...empty(), errors: [e instanceof Error ? e.message : String(e)] }
   }
+
+  // kind 过滤：默认丢弃 tool 类锚点（工具名 → 工具描述是同义反复，不构成有效链接）
+  const excludedKinds = new Set((cfg.excludeAnchorKinds ?? []).map((k) => k.toLowerCase()))
+  if (excludedKinds.size > 0) {
+    mentions = mentions.filter((m) => !excludedKinds.has(m.kind.toLowerCase()))
+  }
+
   if (mentions.length === 0) {
     runtime.recordAutoLink(true)
     return empty()
@@ -101,27 +146,33 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
   let applied = 0
   const db = getDb()
 
-  // 读源 block 的当前 updated_at（用作 source_updated_at 字段）
+  // 读源 block 的 updated_at 与所属文档（root_id 用于自指过滤）
   const blockRow = db
-    .query('SELECT updated_at FROM blocks WHERE id = ?')
-    .get(opts.blockId) as { updated_at: string } | undefined
+    .query('SELECT updated_at, root_id FROM blocks WHERE id = ?')
+    .get(opts.blockId) as { updated_at: string; root_id: string } | undefined
   const sourceUpdatedAt = blockRow?.updated_at ?? new Date().toISOString()
+  const excludeSelfDoc = cfg.excludeSelfDoc ?? true
+  const sourceDocId = excludeSelfDoc ? (blockRow?.root_id ?? null) : null
   const sourceHash = sha256(trimmed)
 
   for (const m of mentions) {
     try {
-      const ranked = await findCandidates(opts.blockId, m.anchor, opts.notebookId, opts.notebookScope)
+      const ranked = await findCandidates(opts.blockId, m.anchor, opts.notebookId, opts.notebookScope, sourceDocId)
       if (ranked.length === 0) continue
 
-      // 决策：自动应用 vs 仅建议
+      // 建议入库门槛（v3）：top-1 必须是语义命中（embedding/hybrid）且 ≥ minConfidence。
+      // FTS-only 是纯字面匹配，不构成「建议」——宁缺毋滥，避免 Inbox 噪音洪水。
       const top1 = ranked[0]!
+      const isSemantic = top1.scoreKind === 'embedding' || top1.scoreKind === 'hybrid'
+      if (!isSemantic || top1.confidence < cfg.minConfidence) continue
+
+      // 决策：自动应用 vs 仅建议（在入库门槛之上再要求 top1/top2 margin）
       const top2 = ranked[1]?.confidence ?? 0
       const margin = top1.confidence - top2
 
       const canAutoApply =
         cfg.autoApply === 'high_confidence' &&
-        (top1.scoreKind === 'embedding' || top1.scoreKind === 'hybrid') &&
-        top1.confidence >= cfg.minConfidence &&
+        isSemantic &&
         margin >= cfg.minMargin
 
       // 所有 ranked 候选都进 suggestion 表（保留 audit）；
@@ -276,6 +327,8 @@ async function findCandidates(
   anchor: string,
   notebookId: string | undefined,
   scope: 'all' | 'same',
+  /** 非 null 时排除该文档内的 block（自指过滤） */
+  sourceDocId: string | null,
 ): Promise<Candidate[]> {
   if (STOP_ANCHORS.has(anchor.toLowerCase())) return []
   const db = getDb()
@@ -293,6 +346,10 @@ async function findCandidates(
   } else {
     sql += ' AND b.id != ?'
     params.push(sourceBlockId)
+  }
+  if (sourceDocId) {
+    sql += ' AND b.root_id != ?'
+    params.push(sourceDocId)
   }
   sql += ' ORDER BY rank LIMIT 10'
 
@@ -313,11 +370,12 @@ async function findCandidates(
       root_id: string
       doc_title: string
     }>
+    if (sourceDocId) rows = rows.filter((r) => r.root_id !== sourceDocId)
   }
 
   if (rows.length === 0) return []
 
-  // ★ v2: score_kind 显式标注；FTS-only 时 top-1 confidence 不再恒为 1.0
+  // FTS-only：rank 位置分（仅用于展示排序；score_kind='fts_rank'，达不到建议入库门槛）
   const embeddingAvailable = hasRuntime() && getRuntime().hasEmbedding()
   const N = rows.length
   const ftsRanked: Candidate[] = rows.map((r, i) => ({
@@ -325,7 +383,7 @@ async function findCandidates(
     docId: r.root_id,
     docTitle: r.doc_title,
     snippet: r.content.slice(0, 120),
-    confidence: 1 - i / N,                     // ★ FTS-only：top-1 = 1 - 1/N，不再恒为 1.0
+    confidence: 1 - i / N,
     scoreKind: 'fts_rank' as ScoreKind,
   }))
 
@@ -347,8 +405,8 @@ async function findCandidates(
         .query('SELECT embedding FROM block_vectors WHERE block_id = ?')
         .get(fts.blockId) as { embedding: string } | undefined
       if (!vecRow) {
-        // 没向量：保留 FTS 候选但 score_kind 标 hybrid（说明有 FTS 命中 + 缺向量）
-        hybrid.push({ ...fts, scoreKind: 'hybrid' })
+        // 没向量：无法给出语义分 → 诚实地标回 fts_rank（不会达到建议入库门槛）
+        hybrid.push({ ...fts, scoreKind: 'fts_rank' })
         continue
       }
       try {
@@ -356,11 +414,11 @@ async function findCandidates(
         const sim = cosineSimilarity(qv, v)
         hybrid.push({
           ...fts,
-          confidence: Math.max(fts.confidence, sim),   // hybrid 取 max
+          confidence: sim,   // ★ v3：纯 cosine，不再与 FTS rank 分取 max（避免伪高置信）
           scoreKind: 'hybrid',
         })
       } catch {
-        hybrid.push({ ...fts, scoreKind: 'hybrid' })
+        hybrid.push({ ...fts, scoreKind: 'fts_rank' })
       }
     }
     hybrid.sort((a, b) => b.confidence - a.confidence)

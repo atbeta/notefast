@@ -25,6 +25,7 @@ import {
   KNOWN_CHAT_MODELS,
   KEY_MASK,
   definitionFromPreset,
+  defaultAutoLinkConfig,
   type ProviderDefinition,
   type ProviderPresetId,
   type AutoLinkConfig,
@@ -103,7 +104,7 @@ interface DiagnoseResult {
 }
 
 function defaultAutoLink(): AutoLinkConfig {
-  return { enabled: false, autoApply: 'never', notebookScope: 'all', maxPerBlock: 5, minConfidence: 0.75, minMargin: 0.1 }
+  return defaultAutoLinkConfig()
 }
 
 /** 根据浏览器 locale 推测一个合理的默认 preset；用户可在下拉中覆盖 */

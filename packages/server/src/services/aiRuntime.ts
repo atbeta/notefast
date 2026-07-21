@@ -21,6 +21,11 @@ import {
   emptyConfig,
   migrateAutoApply,
   setAiRuntime,
+  DEFAULT_AUTO_LINK_MIN_CONFIDENCE,
+  DEFAULT_AUTO_LINK_MIN_MARGIN,
+  DEFAULT_AUTO_LINK_EXCLUDE_KINDS,
+  DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC,
+  DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE,
   type AiConfig,
 } from '@notefast/core'
 import type { PluginSystem } from '@notefast/core'
@@ -117,22 +122,46 @@ export function loadConfigFromDisk(): AiConfig {
   }
 }
 
-/** AutoLink 字段迁移：boolean → 字符串；补全新增字段 */
+/** AutoLink 字段迁移：boolean → 字符串；补全 v3 新增字段 */
 function migrateAutoLinkFields(cfg: AiConfig): AiConfig {
   const al = cfg.autoLink
   if (!al) return cfg
+  const raw = al as unknown as Record<string, unknown>
+
+  // 未知字段告警：手加的字段如果不在 schema 里，大概率是拼错了或被版本不认，必须让用户知道
+  const known = new Set([
+    'enabled', 'autoApply', 'notebookScope', 'maxPerBlock', 'minConfidence', 'minMargin',
+    'excludeAnchorKinds', 'excludeSelfDoc', 'rateLimitPerMinute',
+  ])
+  const unknownKeys = Object.keys(raw).filter((k) => !known.has(k))
+  if (unknownKeys.length > 0) {
+    console.warn(`🧠 AI: ai.config.json 的 autoLink 含未知字段（将被忽略）：${unknownKeys.join(', ')}`)
+  }
+
   const needsMigrate =
-    typeof (al as { autoApply?: unknown }).autoApply === 'boolean' ||
-    (al as { minConfidence?: number }).minConfidence == null ||
-    (al as { minMargin?: number }).minMargin == null
+    typeof raw.autoApply === 'boolean' ||
+    raw.minConfidence == null ||
+    raw.minMargin == null ||
+    raw.excludeAnchorKinds == null ||
+    raw.excludeSelfDoc == null ||
+    raw.rateLimitPerMinute == null
   if (!needsMigrate) return cfg
   return {
     ...cfg,
     autoLink: {
       ...al,
-      autoApply: migrateAutoApply((al as { autoApply?: unknown }).autoApply),
-      minConfidence: al.minConfidence ?? 0.75,
-      minMargin: al.minMargin ?? 0.1,
+      autoApply: migrateAutoApply(raw.autoApply),
+      minConfidence: al.minConfidence ?? DEFAULT_AUTO_LINK_MIN_CONFIDENCE,
+      minMargin: al.minMargin ?? DEFAULT_AUTO_LINK_MIN_MARGIN,
+      excludeAnchorKinds: Array.isArray(raw.excludeAnchorKinds)
+        ? (raw.excludeAnchorKinds as string[])
+        : [...DEFAULT_AUTO_LINK_EXCLUDE_KINDS],
+      excludeSelfDoc: typeof raw.excludeSelfDoc === 'boolean'
+        ? raw.excludeSelfDoc
+        : DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC,
+      rateLimitPerMinute: typeof raw.rateLimitPerMinute === 'number'
+        ? raw.rateLimitPerMinute
+        : DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE,
     },
   }
 }
