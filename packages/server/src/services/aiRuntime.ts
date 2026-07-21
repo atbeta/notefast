@@ -40,7 +40,16 @@ let pluginSystem: PluginSystem | null = null
 export function initAiRuntime(sys: PluginSystem, dir: string): AiRuntime {
   dataDir = dir
   pluginSystem = sys
+  const path = join(dir, CONFIG_FILE)
+  const fromEnv = configFromEnv(process.env)
+  if (fromEnv.chat || fromEnv.embedding || fromEnv.reranker) {
+    console.log(`🧠 AI: 环境变量已设 — ${fromEnv.chat?.chatModel || '(无 chat)'} / ${fromEnv.embedding?.embeddingModel || '(无 embedding)'}`)
+  }
   const initial = loadOrSeed()
+  if (initial.chat || initial.embedding) {
+    const src = existsSync(path) ? path : '<env>'
+    console.log(`🧠 AI: 加载配置自 ${src}`)
+  }
   const r = new AiRuntime(initial)
   runtime = r
   setAiRuntime(r)
