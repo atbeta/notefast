@@ -16,11 +16,12 @@ import {
   Heading3,
   X,
   FilePlus2,
+  ImagePlus,
   RotateCcw,
 } from 'lucide-react'
 import { parseMarkdownToBlocks, inputsToBlockTree } from '@notefast/core'
 import type { Block } from '@notefast/core'
-import { api } from '../hooks/useAPI'
+import { api, fetchWithAuth } from '../hooks/useAPI'
 import { useToast } from './ui'
 import BlockRenderer from './BlockRenderer'
 
@@ -105,8 +106,10 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<Mode>('edit')
   const [showHelp, setShowHelp] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   // ───── 加载（草稿优先，否则从服务端拉 markdown）─────
   useEffect(() => {
@@ -234,6 +237,61 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
       })
     },
     [content],
+  )
+
+  // ───── 图片上传（AssetStore）─────
+  // 上传成功后在光标处插入 asset:<id> 稳定引用（渲染时解析为 /api/v1/assets/<id>）
+  const uploadImage = useCallback(
+    async (file: File) => {
+      if (!file.type.startsWith('image/') || uploadingImage) return
+      setUploadingImage(true)
+      try {
+        const res = await fetchWithAuth('/assets', {
+          method: 'POST',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: res.statusText }))
+          throw new Error(err.message || `HTTP ${res.status}`)
+        }
+        const data = (await res.json()) as { ref: string }
+        const alt = file.name.replace(/\.[a-z0-9]+$/i, '') || 'image'
+        insertAtCursor(`\n![${alt}](${data.ref})\n`)
+      } catch (e) {
+        toast.error({
+          title: '图片上传失败',
+          description: e instanceof Error ? e.message : String(e),
+        })
+      } finally {
+        setUploadingImage(false)
+      }
+    },
+    [uploadingImage, insertAtCursor, toast],
+  )
+
+  // 粘贴图片（截图/剪贴板文件）
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'))
+      if (file) {
+        e.preventDefault()
+        void uploadImage(file)
+      }
+    },
+    [uploadImage],
+  )
+
+  // 拖入图片文件
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLTextAreaElement>) => {
+      const file = Array.from(e.dataTransfer?.files ?? []).find((f) => f.type.startsWith('image/'))
+      if (file) {
+        e.preventDefault()
+        void uploadImage(file)
+      }
+    },
+    [uploadImage],
   )
 
   // ───── 全局键盘 ─────
@@ -487,6 +545,27 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
           }}>
             <Link2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
+          <IconBtn
+            title={uploadingImage ? '上传中…' : '插入图片（也可直接粘贴/拖入）'}
+            onClick={() => imageInputRef.current?.click()}
+          >
+            {uploadingImage ? (
+              <Loader2 className="w-[15px] h-[15px] animate-spin" strokeWidth={1.75} />
+            ) : (
+              <ImagePlus className="w-[15px] h-[15px]" strokeWidth={1.75} />
+            )}
+          </IconBtn>
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void uploadImage(f)
+              e.target.value = ''
+            }}
+          />
 
           {/* Right cluster */}
           <div className="flex items-center gap-1 ml-auto">
@@ -548,6 +627,9 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            onDrop={handleDrop}
+            onDragOver={(e) => e.preventDefault()}
             spellCheck={false}
             rows={Math.max(lines, 5)}
             className="flex-1 min-w-0 pt-[7px] pb-16 font-mono text-[14px] leading-[1.75] text-foreground bg-transparent resize-none overflow-hidden focus:outline-none placeholder:text-muted-foreground/40 selection:bg-primary/15"

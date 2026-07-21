@@ -120,6 +120,7 @@ docker compose up -d
 - **API/MCP first**：所有能力先通过 API 暴露，再补 UI
 - **Block 是原子单位**：不允许绕过 block 模型直接操作原始文件
 - **SQLite 单文件**：数据库文件存于 `data/` 目录，不引入外部数据库
+- **图片 AssetStore**：图片唯一主数据源为 `data/media/<sha256>`（内容寻址去重），`assets` 表只存元数据；Markdown 内存 `asset:<sha256>` 稳定引用；引用关系不建关联表，靠内容扫描推导；备份时 `data/media` 必须与 SQLite 一起纳入（Litestream 只覆盖 db）
 - **Markdown 行内存储**：block.content 存行内 Markdown，块级结构通过 children 表达
 - **AI 是第一公民**：AI Agent 可通过 MCP（外部）或直接调用 API（内部嵌入）操作知识库
 - **单用户 + Token 鉴权**：MVP 为单用户模式，通过 `AUTH_PASSWORD`（Web UI 密码）和 `API_TOKEN`（API/MCP Bearer Token）鉴权

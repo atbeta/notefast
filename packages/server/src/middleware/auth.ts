@@ -1,5 +1,28 @@
 import type { Context, Next, MiddlewareHandler } from 'hono'
-import { timingSafeEqual } from 'node:crypto'
+import { createHmac, timingSafeEqual } from 'node:crypto'
+
+/** 会话 cookie 名（<img> 等无法带 Authorization 头的场景使用） */
+export const SESSION_COOKIE = 'nf_sess'
+
+/**
+ * 会话 token 值：HMAC_SHA256(key=AUTH_PASSWORD, msg=固定串)。
+ * 证明「知道密码」但不包含密码本身；服务端零状态（无需存 session 表），
+ * 改密码后所有旧 cookie 自然失效。
+ */
+export function sessionTokenValue(): string {
+  const pw = safeTrim(process.env.AUTH_PASSWORD || '')
+  if (!pw) return ''
+  return createHmac('sha256', pw).update('notefast-asset-session:v1').digest('hex')
+}
+
+/** 从 Cookie 头解析 nf_sess 并校验（常量时间比较） */
+function hasValidSessionCookie(cookieHeader: string | undefined): boolean {
+  const expected = sessionTokenValue()
+  if (!expected || !cookieHeader) return false
+  const m = cookieHeader.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([0-9a-f]{64})(?:;|$)`))
+  if (!m) return false
+  return safeEquals(m[1]!, expected)
+}
 
 /**
  * 鉴权机制：
@@ -108,6 +131,12 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
       } catch {
         // atob 解码失败，丢弃请求
       }
+    }
+
+    // 会话 cookie（<img>/<video> 等无法携带 Authorization 头的读取场景，仅放行读操作）
+    if (!isWrite && hasValidSessionCookie(c.req.header('Cookie'))) {
+      await next()
+      return
     }
   }
 

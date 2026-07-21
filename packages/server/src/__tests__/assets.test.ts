@@ -1,0 +1,200 @@
+/**
+ * AssetStore 测试
+ *
+ * 覆盖：
+ * - 上传/去重（id = sha256 内容寻址）
+ * - 读取（mime、immutable 缓存、404）
+ * - 引用对账（/check 与 import 的 missing_assets）
+ * - 孤儿回收（引用扫描推导 + 宽限期）
+ * - 会话 cookie 鉴权（<img> 场景，仅放行读）
+ */
+
+import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test'
+import { mkdtempSync, rmSync, existsSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { join } from 'node:path'
+import { Hono } from 'hono'
+import { initDb, closeDb, getDb } from '../db'
+import { initAssetStore, readAsset, collectOrphanAssets, ORPHAN_GRACE_MS } from '../assets/store'
+import { authMiddleware, sessionTokenValue, SESSION_COOKIE } from '../middleware/auth'
+import assetsRouter from '../api/assets'
+import importRouter from '../api/import'
+
+let testDir: string
+let app: Hono
+
+const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4])
+
+beforeAll(() => {
+  testDir = mkdtempSync(join('/tmp', 'notefast-assets-'))
+  initDb(testDir)
+  initAssetStore(testDir)
+  app = new Hono()
+  app.route('/api/v1/assets', assetsRouter)
+  app.route('/api/v1/import', importRouter)
+})
+
+afterAll(() => {
+  closeDb()
+  rmSync(testDir, { recursive: true, force: true })
+})
+
+beforeEach(() => {
+  getDb().query('DELETE FROM assets').run()
+  getDb().query('DELETE FROM blocks').run()
+  getDb().exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
+})
+
+async function upload(buf: Buffer = PNG_BYTES, mime = 'image/png') {
+  const res = await app.fetch(new Request('http://localhost/api/v1/assets', {
+    method: 'POST',
+    headers: { 'Content-Type': mime },
+    body: new Uint8Array(buf),
+  }))
+  return { status: res.status, body: await res.json() as Record<string, unknown> }
+}
+
+describe('AssetStore — 上传与去重', () => {
+  test('上传成功：id = 内容 sha256，文件落盘 data/media', async () => {
+    const { status, body } = await upload()
+    expect(status).toBe(201)
+    const expectedId = createHash('sha256').update(PNG_BYTES).digest('hex')
+    expect(body.id).toBe(expectedId)
+    expect(body.ref).toBe(`asset:${expectedId}`)
+    expect(existsSync(join(testDir, 'media', expectedId))).toBe(true)
+    expect(readAsset(expectedId)?.meta.mime).toBe('image/png')
+  })
+
+  test('同一内容重复上传 → dedup:true，不产生第二份', async () => {
+    await upload()
+    const { status, body } = await upload()
+    expect(status).toBe(200)
+    expect(body.dedup).toBe(true)
+  })
+
+  test('非图片类型 → 400', async () => {
+    const { status } = await upload(Buffer.from('plain text'), 'text/plain')
+    expect(status).toBe(400)
+  })
+
+  test('读取：mime 正确 + immutable 缓存；不存在 → 404', async () => {
+    const { body } = await upload()
+    const res = await app.fetch(new Request(`http://localhost/api/v1/assets/${body.id}`))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')).toBe('image/png')
+    expect(res.headers.get('Cache-Control')).toContain('immutable')
+    const bytes = Buffer.from(await res.arrayBuffer())
+    expect(bytes.equals(PNG_BYTES)).toBe(true)
+
+    const missing = await app.fetch(new Request('http://localhost/api/v1/assets/' + '0'.repeat(64)))
+    expect(missing.status).toBe(404)
+  })
+})
+
+describe('AssetStore — 引用对账', () => {
+  test('/check 报告缺失的 asset id', async () => {
+    const { body } = await upload()
+    const res = await app.fetch(new Request('http://localhost/api/v1/assets/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [body.id as string, 'f'.repeat(64)] }),
+    }))
+    const data = await res.json() as { missing: string[] }
+    expect(data.missing).toEqual(['f'.repeat(64)])
+  })
+
+  test('import 含悬空 asset 引用 → 响应带 missing_assets（不阻断）', async () => {
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const res = await app.fetch(new Request('http://localhost/api/v1/import/markdown', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        notebook_id: nb.id,
+        title: 'dangling',
+        markdown: `# x\n\n![img](asset:${'e'.repeat(64)})\n`,
+      }),
+    }))
+    expect(res.status).toBe(201)
+    const data = await res.json() as { missing_assets?: string[] }
+    expect(data.missing_assets).toEqual(['e'.repeat(64)])
+  })
+})
+
+describe('AssetStore — 孤儿回收', () => {
+  test('无引用且超宽限期 → 删除；被引用 / 年轻 → 保留', async () => {
+    const db = getDb()
+    const old = new Date(Date.now() - ORPHAN_GRACE_MS - 1000).toISOString()
+
+    // 孤儿 A：老、无引用 → 应删
+    const orphanA = 'a'.repeat(64)
+    writeFileSync(join(testDir, 'media', orphanA), PNG_BYTES)
+    db.query('INSERT INTO assets (id, mime, size, created_at) VALUES (?, ?, ?, ?)').run(orphanA, 'image/png', 12, old)
+
+    // 孤儿 B：老，但被 block 引用 → 应留
+    const orphanB = 'b'.repeat(64)
+    writeFileSync(join(testDir, 'media', orphanB), PNG_BYTES)
+    db.query('INSERT INTO assets (id, mime, size, created_at) VALUES (?, ?, ?, ?)').run(orphanB, 'image/png', 12, old)
+    const now = new Date().toISOString()
+    const docId = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(docId, 'T')
+    db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+      VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`).run(docId, docId, docId, 'doc', now, now)
+    db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'paragraph', ?, 0, 1, ?, ?)`).run('p1', docId, docId, docId, `![x](asset:${orphanB})`, now, now)
+
+    // 孤儿 C：无引用但未满宽限期 → 应留
+    const { body: cBody } = await upload(Buffer.from([9, 9, 9, 9]), 'image/png')
+
+    const result = collectOrphanAssets()
+    expect(result.ids).toContain(orphanA)
+    expect(result.ids).not.toContain(orphanB)
+    expect(readAsset(orphanA)).toBeNull()
+    expect(existsSync(join(testDir, 'media', orphanA))).toBe(false)
+    expect(readAsset(orphanB)).not.toBeNull()
+    expect(readAsset(cBody.id as string)).not.toBeNull()
+  })
+})
+
+describe('AssetStore — 会话 cookie 鉴权', () => {
+  test('AUTH_PASSWORD 启用时：合法 cookie 可读图片，无凭证 401，写操作不认 cookie', async () => {
+    const prev = process.env.AUTH_PASSWORD
+    process.env.AUTH_PASSWORD = 'test-pw'
+    try {
+      const secure = new Hono()
+      secure.use('/api/*', authMiddleware)
+      secure.route('/api/v1/assets', assetsRouter)
+
+      const { body } = await upload()
+      const id = body.id as string
+      const token = sessionTokenValue()
+      expect(token.length).toBe(64)
+
+      // 无凭证 → 401
+      const noAuth = await secure.fetch(new Request(`http://localhost/api/v1/assets/${id}`))
+      expect(noAuth.status).toBe(401)
+
+      // 合法 cookie → 200（GET 放行）
+      const withCookie = await secure.fetch(new Request(`http://localhost/api/v1/assets/${id}`, {
+        headers: { Cookie: `${SESSION_COOKIE}=${token}` },
+      }))
+      expect(withCookie.status).toBe(200)
+
+      // 错误 cookie → 401
+      const badCookie = await secure.fetch(new Request(`http://localhost/api/v1/assets/${id}`, {
+        headers: { Cookie: `${SESSION_COOKIE}=${'0'.repeat(64)}` },
+      }))
+      expect(badCookie.status).toBe(401)
+
+      // cookie 不能用于写操作
+      const writeWithCookie = await secure.fetch(new Request('http://localhost/api/v1/assets', {
+        method: 'POST',
+        headers: { Cookie: `${SESSION_COOKIE}=${token}`, 'Content-Type': 'image/png' },
+        body: PNG_BYTES,
+      }))
+      expect(writeWithCookie.status).toBe(401)
+    } finally {
+      if (prev === undefined) delete process.env.AUTH_PASSWORD
+      else process.env.AUTH_PASSWORD = prev
+    }
+  })
+})

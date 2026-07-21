@@ -1,0 +1,76 @@
+/**
+ * Assets API
+ *
+ * - POST   /api/v1/assets            上传图片（body = 原始字节，Content-Type = 图片 mime）→ { id, url, dedup }
+ * - GET    /api/v1/assets/:id        读取图片（Bearer/Basic 或会话 cookie；内容寻址，强缓存）
+ * - POST   /api/v1/assets/gc         孤儿回收（无引用且超过宽限期的 asset 删除）
+ */
+
+import { Hono } from 'hono'
+import { readFileSync } from 'node:fs'
+import {
+  collectOrphanAssets,
+  findMissingAssets,
+  MAX_ASSET_BYTES,
+  readAsset,
+  saveAsset,
+} from '../assets/store'
+
+const assets = new Hono()
+
+assets.post('/', async (c) => {
+  const mime = (c.req.header('Content-Type') || '').split(';')[0].trim().toLowerCase()
+  if (!mime.startsWith('image/')) {
+    return c.json({ error: 'bad_request', message: `仅接受图片（image/*），收到 ${mime || '未知类型'}` }, 400)
+  }
+  const buf = Buffer.from(await c.req.arrayBuffer())
+  if (buf.length === 0) {
+    return c.json({ error: 'bad_request', message: '空内容' }, 400)
+  }
+  if (buf.length > MAX_ASSET_BYTES) {
+    return c.json({ error: 'too_large', message: `图片超过 ${MAX_ASSET_BYTES / 1024 / 1024}MB 上限` }, 413)
+  }
+  const { meta, dedup } = saveAsset(buf, mime)
+  return c.json(
+    {
+      id: meta.id,
+      url: `/api/v1/assets/${meta.id}`,
+      ref: `asset:${meta.id}`,
+      mime: meta.mime,
+      size: meta.size,
+      dedup,
+    },
+    dedup ? 200 : 201,
+  )
+})
+
+assets.get('/:id', (c) => {
+  const found = readAsset(c.req.param('id'))
+  if (!found) {
+    return c.json({ error: 'not_found', message: '图片不存在' }, 404)
+  }
+  const bytes = readFileSync(found.path)
+  return new Response(new Uint8Array(bytes), {
+    headers: {
+      'Content-Type': found.meta.mime,
+      'Content-Length': String(found.meta.size),
+      // 内容寻址：id 即内容哈希，永不变化，可永久缓存
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  })
+})
+
+assets.post('/gc', (c) => {
+  const result = collectOrphanAssets()
+  return c.json(result)
+})
+
+/** 对账辅助：校验一组 asset id 是否存在（编辑器/导入路径用，告警不阻断） */
+assets.post('/check', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as { ids?: unknown }
+  const ids = Array.isArray(body.ids) ? body.ids.filter((x): x is string => typeof x === 'string') : []
+  return c.json({ missing: findMissingAssets(ids.slice(0, 500)) })
+})
+
+export default assets

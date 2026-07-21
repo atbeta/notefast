@@ -5,12 +5,13 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createPluginSystem } from '@notefast/core'
 import { initDb, closeDb } from './db'
-import { authMiddleware } from './middleware/auth'
+import { authMiddleware, SESSION_COOKIE, sessionTokenValue } from './middleware/auth'
 import { handleMcpRequest } from './mcp/server'
 import { startAutoExport } from './services/autoExport'
 import { initAiRuntime } from './services/aiRuntime'
 import { initSyncManager } from './sync/manager'
 import { initVectorStore } from './ai/indexer'
+import { initAssetStore } from './assets/store'
 import blocks from './api/blocks'
 import docs from './api/docs'
 import search from './api/search'
@@ -21,6 +22,7 @@ import sync from './api/sync'
 import ai from './api/ai'
 import autoLink from './api/autoLink'
 import tags from './api/tags'
+import assets from './api/assets'
 
 const PORT = parseInt(process.env.PORT || '3140', 10)
 const DATA_DIR = process.env.DATA_DIR || './data'
@@ -57,6 +59,17 @@ if (!appVersion) {
 
 app.get('/api/v1/version', (c) => c.json({ version: appVersion }))
 
+// Web 登录后建立会话 cookie：<img> 等无法携带 Authorization 头的读取场景用它鉴权。
+// cookie 值 = HMAC(密码)，不含密码本身；remember=0 时为会话 cookie（关浏览器即失效）。
+app.post('/api/v1/auth/session', (c) => {
+  const token = sessionTokenValue()
+  if (!token) return c.json({ session: false })
+  const remember = c.req.query('remember') !== '0'
+  const maxAge = remember ? '; Max-Age=604800' : ''
+  c.header('Set-Cookie', `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax${maxAge}`)
+  return c.json({ session: true })
+})
+
 // 鉴权模式探测：返回当前实例是否需要密码 / token。
 // 放在 authMiddleware 之后注册路径（middleware 内部已对 /auth/mode 放行）。
 app.get('/api/v1/auth/mode', (c) => {
@@ -82,10 +95,12 @@ app.route('/api/v1/sync', sync)
 app.route('/api/v1/ai', ai)
 app.route('/api/v1/auto-link', autoLink)
 app.route('/api/v1/tags', tags)
+app.route('/api/v1/assets', assets)
 
 const pluginSystem = createPluginSystem()
 
 initVectorStore()
+initAssetStore(DATA_DIR)
 initSyncManager(DATA_DIR)
 initAiRuntime(pluginSystem, DATA_DIR)
 

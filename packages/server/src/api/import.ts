@@ -4,6 +4,7 @@ import { importMarkdownSchema, parseMarkdownToBlocks, stripTitleHeading, rowToBl
 import type { BlockRow } from '@notefast/core'
 import { getDb } from '../db'
 import { fireAfterCreate, fireAfterCreateMany } from '../services/hooks'
+import { extractAssetRefs, findMissingAssets } from '../assets/store'
 
 const importRouter = new Hono()
 
@@ -77,7 +78,17 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
     fireAfterCreateMany(childRows.map(rowToBlock))
   }
 
-  return c.json({ doc: rowToBlock(docRow), block_count: insertedIds.length + 1 }, 201)
+  // asset 引用对账：悬空引用不阻断导入（可能来自其他实例的导出），但如实告知调用方
+  const missingAssets = findMissingAssets(extractAssetRefs(input.markdown))
+
+  return c.json(
+    {
+      doc: rowToBlock(docRow),
+      block_count: insertedIds.length + 1,
+      ...(missingAssets.length > 0 ? { missing_assets: missingAssets } : {}),
+    },
+    201,
+  )
 })
 
 function extractTitle(markdown: string): string | null {

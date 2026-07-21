@@ -27,6 +27,7 @@ import {
   analyzeBlock,
 } from '../ai/autoLink'
 import { fireAfterCreate, fireAfterUpdate, fireAfterCreateMany } from '../services/hooks'
+import { extractAssetRefs, findMissingAssets } from '../assets/store'
 
 function toText(data: unknown): { type: 'text'; text: string } {
   return { type: 'text' as const, text: JSON.stringify(data, null, 2) }
@@ -380,6 +381,11 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
           doc_id: docId,
           title,
           block_count: inputs.length + 1,
+          // asset 引用对账：悬空引用告警（不阻断创建）
+          ...(() => {
+            const missing = findMissingAssets(extractAssetRefs(markdown))
+            return missing.length > 0 ? { missing_assets: missing } : {}
+          })(),
         })],
       }
     },

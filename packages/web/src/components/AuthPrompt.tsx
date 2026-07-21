@@ -21,13 +21,20 @@ export default function AuthPrompt({ reason = 'password_required' }: AuthPromptP
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!password.trim() || submitting) return
     setSubmitting(true)
     setError(null)
-    // 写存储并 reload —— 让所有 hooks 重新挂载时携带新 header
-    setStoredPassword(password.trim(), remember)
+    const pw = password.trim()
+    setStoredPassword(pw, remember)
+    // 建立会话 cookie（<img> 无法携带 Authorization 头，asset 图片读取走 cookie）
+    try {
+      await fetch(`/api/v1/auth/session?remember=${remember ? '1' : '0'}`, {
+        method: 'POST',
+        headers: { Authorization: 'Basic ' + btoa('admin:' + pw) },
+      })
+    } catch { /* cookie 建立失败不阻塞登录（无密码实例也不需要） */ }
     window.location.reload()
   }
 

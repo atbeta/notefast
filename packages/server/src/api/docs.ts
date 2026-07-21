@@ -4,6 +4,7 @@ import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, pa
 import type { BlockRow, DocSummary } from '@notefast/core'
 import { getDb } from '../db'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany } from '../services/hooks'
+import { extractAssetRefs, findMissingAssets } from '../assets/store'
 
 const docs = new Hono()
 
@@ -227,7 +228,12 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
 
   const rows = fetchAllDescendants(db, id)
   const tree = buildBlockTree([updatedDocRow, ...rows])
-  return c.json({ doc: tree.length > 0 ? tree[0] : null })
+  // asset 引用对账：悬空引用告警（不阻断保存）
+  const missingAssets = findMissingAssets(extractAssetRefs(markdown))
+  return c.json({
+    doc: tree.length > 0 ? tree[0] : null,
+    ...(missingAssets.length > 0 ? { missing_assets: missingAssets } : {}),
+  })
 })
 
 docs.get('/:id/export/markdown', (c) => {

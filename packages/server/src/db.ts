@@ -96,6 +96,15 @@ CREATE INDEX IF NOT EXISTS idx_autolink_action ON autolink_suggestions(action_st
 CREATE INDEX IF NOT EXISTS idx_autolink_source ON autolink_suggestions(source_block_id);
 CREATE INDEX IF NOT EXISTS idx_autolink_hash   ON autolink_suggestions(source_block_id, source_content_hash);
 
+-- ───────────────────── Assets（图片主数据）─────────────────────
+-- id = 内容 sha256（内容寻址，天然去重）；文件本体在 data/media/<id>，库内只存元数据
+CREATE TABLE IF NOT EXISTS assets (
+  id          TEXT PRIMARY KEY,
+  mime        TEXT NOT NULL,
+  size        INTEGER NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- FTS 自动同步触发器
 CREATE TRIGGER IF NOT EXISTS blocks_fts_insert AFTER INSERT ON blocks
 BEGIN

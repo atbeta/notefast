@@ -35,10 +35,13 @@ function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
     if (idx > last) nodes.push(text.slice(last, idx))
     if (m[1]) {
       const im = m[1].match(/!\[([^\]]*)\]\(([^)\s]+)\)/)!
+      // asset:<id> 是 AssetStore 的稳定引用（见 server/assets/store.ts），渲染时解析为 API 路径
+      const rawSrc = im[2]
+      const src = rawSrc.startsWith('asset:') ? `/api/v1/assets/${rawSrc.slice(6)}` : rawSrc
       nodes.push(
         <img
           key={`${keyPrefix}-${k++}`}
-          src={im[2]}
+          src={src}
           alt={im[1]}
           loading="lazy"
           className="my-3 max-w-full rounded-md border border-border/50"
