@@ -131,3 +131,44 @@ describe('createSession', () => {
     await transport.close()
   })
 })
+
+describe('notefast_create_doc — 嵌套块 FK 回归', () => {
+  /** fenced code / 嵌套 list 的 parent_id 是解析期临时 UUID，必须映射成真实 id，否则 immediate FK 失败 */
+  test('create_doc 含 fenced code block + 嵌套 list → 成功且父链正确', async () => {
+    const { getDb } = await import('../db')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { transport } = await createSession(nb.id)
+    const init = await mcpRequest(transport, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    await mcpRequest(transport, 'notifications/initialized', undefined, undefined, init.sessionId)
+
+    const markdown = '# x\n```js\nconst a=1;\n```\n\npara\n- item1\n  - item2\n'
+    const call = await mcpRequest(transport, 'tools/call', {
+      name: 'notefast_create_doc',
+      arguments: { title: 'code fk test', markdown },
+    }, 2, init.sessionId)
+
+    expect(call.status).toBe(200)
+    const msg = call.body[0] as Record<string, unknown>
+    const result = msg.result as { isError?: boolean; content: Array<{ text: string }> }
+    expect(result.isError).toBeFalsy()
+    const payload = JSON.parse(result.content[0]!.text) as { doc_id: string; block_count: number }
+    expect(payload.block_count).toBeGreaterThan(3)
+
+    // code block 的 parent 必须是真实存在的 heading block id
+    const rows = getDb().query(
+      "SELECT id, parent_id, type FROM blocks WHERE root_id = ? AND id != ?",
+    ).all(payload.doc_id, payload.doc_id) as Array<{ id: string; parent_id: string | null; type: string }>
+    const ids = new Set(rows.map((r) => r.id).concat(payload.doc_id))
+    for (const r of rows) {
+      expect(r.parent_id).not.toBeNull()
+      expect(ids.has(r.parent_id!)).toBe(true)
+    }
+    expect(rows.some((r) => r.type === 'code')).toBe(true)
+
+    await transport.close()
+  })
+})

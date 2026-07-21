@@ -252,8 +252,15 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       const docId = crypto.randomUUID()
       const now = new Date().toISOString()
       const insertedIds: string[] = []
+      // inp.id → 实际 blockId 映射表；父对子的引用必须走这条映射。
+      // 否则 inp.parent_id 指向 parseMarkdownToBlocks 产生的临时 UUID
+      // （从未 INSERT），嵌套块（代码块/子列表等）会触发 immediate FK 失败。
+      const idMap = new Map<string, string>()
 
       db.transaction(() => {
+        // 安全网：PRAGMA 作用域限本事务，提交时检查 FK，避免 immediate 阶段炸开
+        db.run('PRAGMA defer_foreign_keys = ON')
+
         db.query(
           `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
            VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
@@ -261,7 +268,11 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
 
         for (const inp of inputs) {
           const blockId = crypto.randomUUID()
-          const parentId = inp.parent_id ?? docId
+          // 父链映射：从临时 id 翻译成已经 INSERT 的实际 id
+          const parentId = inp.parent_id
+            ? (idMap.get(inp.parent_id) ?? docId)
+            : docId
+          if (inp.id) idMap.set(inp.id, blockId)
 
           db.query(
             `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
