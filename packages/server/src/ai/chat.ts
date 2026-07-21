@@ -57,6 +57,8 @@ export interface RunChatOptions {
   ftsLimit?: number
   semanticLimit?: number
   rerankWindow?: number
+  /** 引用相关性最低分（见 hybridSearch SearchOptions.minScore；默认 0 不过滤） */
+  minScore?: number
   temperature?: number
   maxTokens?: number
   /** 是否启用 agent loop（tool-call）；默认 true（若模型支持）。false 时降级为一次性检索 */
@@ -101,7 +103,7 @@ async function executeToolCall(
   name: string,
   args: Record<string, unknown>,
   fallbackQuery: string,
-  ctx: { notebookId?: string; since?: string; until?: string },
+  ctx: { notebookId?: string; since?: string; until?: string; minScore?: number },
 ): Promise<{ citations: Citation[]; retrieval: HybridSearchReport['retrieval']; resultCount: number }> {
   if (name !== 'notefast_search_more') {
     return {
@@ -122,6 +124,7 @@ async function executeToolCall(
     since,
     until,
     topK: limit,
+    minScore: ctx.minScore,
   })
   return { citations: report.citations, retrieval: report.retrieval, resultCount: report.citations.length }
 }
@@ -176,6 +179,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
       ftsLimit: opts.ftsLimit,
       semanticLimit: opts.semanticLimit,
       rerankWindow: opts.rerankWindow,
+      minScore: opts.minScore,
     })
   } catch (e) {
     initialReport = { citations: [], retrieval: { fts_hits: 0, semantic_hits: 0, reranked: false } }
@@ -254,6 +258,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
               notebookId: opts.notebookId,
               since: opts.since,
               until: opts.until,
+              minScore: opts.minScore,
             })
             toolTrace.push({
               tool: tc.name,

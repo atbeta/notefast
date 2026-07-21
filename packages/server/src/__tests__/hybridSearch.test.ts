@@ -186,3 +186,29 @@ describe('hybridSearch — embedding + RRF', () => {
     expect(report.citations[0]!.block_id).toBe('a-id')
   })
 })
+
+describe('hybridSearch — minScore 引用过滤', () => {
+  test('低于 minScore 的引用被过滤并计入 discarded_low_score', async () => {
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    seedBlock({ notebookId: nb, content: 'Tauri 窗口关闭事件处理' })
+    seedBlock({ notebookId: nb, content: 'Tauri 应用打包指南' })
+    seedBlock({ notebookId: nb, content: 'Tauri 与 Electron 对比' })
+
+    const all = await hybridSearch({ query: 'Tauri', topK: 10 })
+    expect(all.citations.length).toBeGreaterThan(0)
+    const maxScore = Math.max(...all.citations.map((c) => c.score))
+    expect(all.retrieval.discarded_low_score).toBe(0) // 不过滤时恒为 0
+
+    // 用 maxScore 作为阈值 → 只剩 top-1（RRF 下每个 rank 分值唯一）
+    const filtered = await hybridSearch({ query: 'Tauri', topK: 10, minScore: maxScore })
+    expect(filtered.citations.length).toBe(1)
+    expect(filtered.citations[0]!.score).toBe(maxScore)
+    expect(filtered.retrieval.discarded_low_score).toBe(all.citations.length - 1)
+
+    // 超高阈值 → 全部过滤（允许少于 topK，直至 0）
+    const none = await hybridSearch({ query: 'Tauri', topK: 10, minScore: 1 })
+    expect(none.citations.length).toBe(0)
+    expect(none.retrieval.discarded_low_score).toBe(all.citations.length)
+  })
+})

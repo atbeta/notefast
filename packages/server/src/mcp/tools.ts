@@ -541,12 +541,18 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
         notebook_id: z.string().optional().describe('限定到某个 notebook'),
         since: z.string().optional().describe('ISO 时间字符串，只返回 blocks.updated_at >= since 的块'),
         until: z.string().optional().describe('ISO 时间字符串，只返回 blocks.updated_at <= until 的块'),
-        top_k: z.number().int().min(1).max(20).optional().default(5).describe('返回引用数量'),
+        top_k: z.number().int().min(1).max(20).optional().default(5).describe('返回引用数量（上限；少于此数说明相关结果不足）'),
+        min_score: z
+          .number()
+          .min(0)
+          .max(1)
+          .optional()
+          .describe('引用相关性最低分：低于此分的引用被过滤（数量计入 retrieval.discarded_low_score）。注意 scale：未配 reranker 时 score 是 RRF 分（~0.016-0.033），配了是 0.5-1 归一分'),
         temperature: z.number().min(0).max(2).optional().default(0.3),
         max_tokens: z.number().int().min(16).max(8000).optional().default(2000),
       },
     },
-    async ({ messages, context_doc_id, notebook_id, since, until, top_k, temperature, max_tokens }) => {
+    async ({ messages, context_doc_id, notebook_id, since, until, top_k, min_score, temperature, max_tokens }) => {
       // 语义校验（zod 只管形状）：空 messages / 最后一条非 user → invalid_params
       if (messages.length === 0 || messages[messages.length - 1]!.role !== 'user') {
         return toolError('invalid_params', 'messages 不能为空，且最后一条必须是 role=user', { path: 'messages' })
@@ -576,6 +582,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
           since,
           until,
           topK: top_k,
+          minScore: min_score,
           temperature,
           maxTokens: max_tokens,
         })

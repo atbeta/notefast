@@ -30,6 +30,13 @@ export interface SearchOptions {
   /** 当前文档 hint：同 doc 的 block 优先级 +0.05 */
   contextDocId?: string
   /**
+   * 引用相关性最低分（按最终 score 过滤，默认 0 = 不过滤）。
+   * 注意 score 有两种 scale：未配 reranker 时是 RRF 融合分（~0.016-0.033），
+   * 配了 reranker 时是归一分（0.5-1）——阈值要按实际 scale 设置。
+   * 被过滤掉的数量会计入 retrieval.discarded_low_score。
+   */
+  minScore?: number
+  /**
    * 时间窗口下界（ISO 字符串）。仅返回 blocks.updated_at >= since 的块。
    * 留空表示无下限。常用于「我上周写过什么」「近期关于 X 的笔记」。
    */
@@ -62,6 +69,8 @@ export interface HybridSearchReport {
     semantic_hits: number
     reranked: boolean
     model?: string
+    /** 被 minScore 门槛过滤掉的引用数（0 = 没有过滤） */
+    discarded_low_score?: number
   }
 }
 
@@ -109,6 +118,15 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
   let citations = ranked.slice(0, topK).map((c) => toCitation(c, opts.query))
   citations = applyContextBoost(citations, opts.contextDocId)
 
+  // minScore 相关性门槛：低分引用直接丢弃，避免「强制 topK」造成的引用噪声
+  const minScore = opts.minScore ?? 0
+  let discardedLowScore = 0
+  if (minScore > 0) {
+    const before = citations.length
+    citations = citations.filter((c) => c.score >= minScore)
+    discardedLowScore = before - citations.length
+  }
+
   return {
     citations,
     retrieval: {
@@ -116,6 +134,7 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
       semantic_hits: semanticRaw.length,
       reranked: Boolean(reranked),
       model: reranked ? getRuntime().rerankerConfig()?.model : undefined,
+      discarded_low_score: discardedLowScore,
     },
   }
 }
