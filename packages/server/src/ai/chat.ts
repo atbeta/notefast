@@ -215,12 +215,19 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
       if (enableTools && typeof runtime.chatWithTools === 'function') {
         let result: import('@notefast/core').ChatWithToolsResult | null = null
         let toolCallFailed = false
+        const llmStart = Date.now()
         try {
           result = await runtime.chatWithTools(workingMessages, {
             temperature: opts.temperature ?? 0.3,
             maxTokens: opts.maxTokens ?? 2000,
             tools: [getSearchToolDefinition()],
           })
+          console.info(JSON.stringify({
+            event: 'llm_call',
+            round,
+            tool_calls: result?.tool_calls.length ?? 0,
+            duration_ms: Date.now() - llmStart,
+          }))
         } catch (e) {
           // chatWithTools 失败（如 mock / provider 不支持非流式 JSON 响应）→ 降级为流式
           console.error('[chat] chatWithTools failed, falling back to streamChat:', e)

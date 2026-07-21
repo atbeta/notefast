@@ -87,6 +87,7 @@ const CONTEXT_DOC_BOOST = 0.05
  * 当只有 FTS5 可用、embedding 未配置时，自动降级为纯 FTS5。
  */
 export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchReport> {
+  const start = Date.now()
   const ftsLimit = opts.ftsLimit ?? DEFAULT_FTS_LIMIT
   const semanticLimit = opts.semanticLimit ?? DEFAULT_SEMANTIC_LIMIT
   const topK = opts.topK ?? DEFAULT_TOP_K
@@ -126,6 +127,16 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
     citations = citations.filter((c) => c.score >= minScore)
     discardedLowScore = before - citations.length
   }
+
+  console.info(JSON.stringify({
+    event: 'retrieval',
+    fts_hits: ftsRaw.length,
+    semantic_hits: semanticRaw.length,
+    reranked: Boolean(reranked),
+    returned: citations.length,
+    discarded_low_score: discardedLowScore,
+    duration_ms: Date.now() - start,
+  }))
 
   return {
     citations,

@@ -76,17 +76,53 @@ function isValidIsoDate(s: string): boolean {
   return !Number.isNaN(Date.parse(s))
 }
 
+// ───────────────────── 调用日志 ─────────────────────
+// 单行 JSON，便于容器 stdout 采集：谁、调了什么、花了多久、成败。
+// 不引第三方日志库，保持依赖最小。
+
+function logJson(level: 'info' | 'error', data: Record<string, unknown>): void {
+  const line = JSON.stringify(data)
+  if (level === 'error') console.error(line)
+  else console.info(line)
+}
+
+/** 包裹 tool handler：记录 tool_call 事件（isError: true 记为 error 状态） */
+function withToolLogging<A, R>(name: string, handler: (args: A) => Promise<R>): (args: A) => Promise<R> {
+  return (async (args: A) => {
+    const start = Date.now()
+    try {
+      const result = await handler(args)
+      const isErr = typeof result === 'object' && result !== null && (result as { isError?: boolean }).isError === true
+      logJson('info', { event: 'tool_call', tool: name, duration_ms: Date.now() - start, status: isErr ? 'error' : 'ok' })
+      return result
+    } catch (e) {
+      logJson('error', {
+        event: 'tool_call',
+        tool: name,
+        duration_ms: Date.now() - start,
+        status: 'exception',
+        error: e instanceof Error ? e.message : String(e),
+      })
+      throw e
+    }
+  }) as (args: A) => Promise<R>
+}
+
 export function registerMcpTools(server: McpServer, notebookId: string): void {
   const db = getDb()
 
-  server.registerTool(
+  // 统一在注册处包一层日志，避免逐个 handler 手动包裹
+  const registerTool: typeof server.registerTool = ((name: string, config: unknown, handler: (args: never) => Promise<unknown>) =>
+    server.registerTool(name, config as never, withToolLogging(name, handler) as never)) as typeof server.registerTool
+
+  registerTool(
     'notefast_search',
     {
       description: '全文搜索知识库，返回匹配的 block 列表',
       inputSchema: {
-        query: z.string().describe('搜索关键词'),
+        query: z.string().min(1).max(1000).describe('搜索关键词'),
         notebook_id: z.string().optional().describe('限定笔记本 ID'),
-        limit: z.number().optional().default(10).describe('最大返回数量'),
+        limit: z.number().int().min(1).max(100).optional().default(10).describe('最大返回数量'),
       },
     },
     async ({ query, notebook_id, limit }) => {
@@ -120,7 +156,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_get_doc',
     {
       description: '获取文档完整内容（block 树）',
@@ -148,7 +184,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_get_block',
     {
       description: '获取单个 block 及其上下文',
@@ -200,7 +236,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_create_block',
     {
       description: '创建新 block',
@@ -246,7 +282,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_update_block',
     {
       description: '更新 block 内容',
@@ -269,7 +305,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_create_doc',
     {
       description: '从 Markdown 创建文档',
@@ -349,7 +385,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_get_backlinks',
     {
       description: '获取反向链接（引用此 block 的 block 列表）',
@@ -389,7 +425,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_list_docs',
     {
       description: '列出文档列表',
@@ -419,7 +455,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_get_doc_tree',
     {
       description: '获取文档大纲（仅 heading 层级）',
@@ -446,7 +482,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_export_markdown',
     {
       description: '导出文档为 Markdown',
@@ -469,13 +505,13 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_semantic_search',
     {
       description: '语义搜索知识库（需配置 AI Provider），用自然语言查找最相关的 block',
       inputSchema: {
-        query: z.string().describe('自然语言查询，如 "关于 React 性能优化我写过什么"'),
-        limit: z.number().optional().default(10).describe('最大返回数量'),
+        query: z.string().min(1).max(1000).describe('自然语言查询，如 "关于 React 性能优化我写过什么"'),
+        limit: z.number().int().min(1).max(100).optional().default(10).describe('最大返回数量'),
         notebook_id: z.string().optional().describe('限定笔记本 ID'),
       },
     },
@@ -497,7 +533,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_suggest_title',
     {
       description: '根据笔记内容 AI 生成标题和摘要',
@@ -523,7 +559,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_chat',
     {
       description:
@@ -608,7 +644,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_autolink_suggestions',
     {
       description: 'AutoLink Inbox 视图：默认 review_status=unreviewed，含 AI 已应用 + AI 仅建议两类。',
@@ -646,7 +682,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_autolink_apply',
     {
       description: '接受一条 AutoLink 建议，事务化写入 block_refs（ref_type=ai_suggested）；幂等。',
@@ -671,7 +707,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_autolink_dismiss',
     {
       description: '用户忽略一条 AutoLink 建议（review_status=dismissed，记录保留）',
@@ -688,7 +724,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_autolink_revert',
     {
       description: '精确撤销一条已应用的 AutoLink 建议（按 created_ref_id 删除，可再次接受）',
@@ -705,7 +741,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  server.registerTool(
+  registerTool(
     'notefast_autolink_run',
     {
       description: '对单个 block 立即触发 AutoLink 分析（AI 抽取实体 + 命中候选）',
@@ -748,7 +784,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     'notefast_get_config',
     '获取服务端当前 AI / 鉴权配置概况（脱敏）。包含 chat、embedding、reranker 的模型名和 provider 标签，以及是否启用读写分离 token、密码鉴权等。不包含 API Key。',
     {},
-    async () => {
+    withToolLogging('notefast_get_config', async () => {
       const s = getRuntime().status()
       const cfg = s.config
       const mode = {
@@ -767,7 +803,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
           auth: mode,
         })],
       }
-    },
+    }),
   )
 
   // ───────────────────── Resources ─────────────────────
@@ -805,7 +841,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     {
       suggestion_id: z.string().min(1).max(64).describe('suggestion ID'),
     },
-    async ({ suggestion_id }) => {
+    withToolLogging('notefast_get_autolink_suggestion', async ({ suggestion_id }: { suggestion_id: string }) => {
       const db = getDb()
       const row = db.query('SELECT * FROM autolink_suggestions WHERE id = ?').get(suggestion_id) as unknown as {
         id: string
@@ -841,7 +877,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
           error: row.error,
         })],
       }
-    },
+    }),
   )
 }
 

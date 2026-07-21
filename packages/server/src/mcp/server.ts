@@ -37,6 +37,15 @@ export async function createSession(notebookId: string): Promise<{
   })
   await server.connect(transport)
 
+  // 工具集在进程生命周期内是静态的（无运行时增删），如实声明 listChanged: false，
+  // 客户端按需轮询 tools/list 即可。SDK 在 connect 时会强制注册 listChanged: true
+  // （registerCapabilities 合并），只能在 connect 后把声明改回来。
+  const caps = (server as unknown as {
+    server: { _capabilities: { tools?: { listChanged?: boolean }; resources?: { listChanged?: boolean } } }
+  }).server._capabilities
+  if (caps.tools) caps.tools.listChanged = false
+  if (caps.resources) caps.resources.listChanged = false
+
   sessions.set(sid, { transport, createdAt: Date.now() })
   return { sid, transport }
 }

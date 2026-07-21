@@ -9,7 +9,8 @@ search.get('/', (c) => {
   const db = getDb()
   const q = c.req.query('q') || ''
   const notebookId = c.req.query('notebook_id') || ''
-  const limit = parseInt(c.req.query('limit') || '20', 10)
+  const limitRaw = parseInt(c.req.query('limit') || '20', 10)
+  const limit = Number.isFinite(limitRaw) ? Math.min(100, Math.max(1, limitRaw)) : 20
 
   if (!q.trim()) {
     return c.json([])

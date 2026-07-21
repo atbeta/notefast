@@ -253,3 +253,53 @@ describe('MCP 工具错误语义统一（isError + error.code）', () => {
     expect((payload.error as { code: string }).code).toBe('not_configured')
   })
 })
+
+describe('MCP schema 与 capabilities', () => {
+  test('notefast_search limit=-1 → zod 拒绝（不接受负数）', async () => {
+    const { getDb } = await import('../db')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { transport } = await createSession(nb.id)
+    const init = await mcpRequest(transport, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    await mcpRequest(transport, 'notifications/initialized', undefined, undefined, init.sessionId)
+
+    const call = await mcpRequest(transport, 'tools/call', {
+      name: 'notefast_search',
+      arguments: { query: 'test', limit: -1 },
+    }, 2, init.sessionId)
+    await transport.close()
+
+    const msg = call.body[0] as Record<string, unknown>
+    // SDK 对 zod 校验失败返回 JSON-RPC error 或 isError result，两种都不应是正常结果
+    const rpcErr = msg.error as { code?: number } | undefined
+    if (rpcErr) {
+      expect(rpcErr.code).toBe(-32602)
+    } else {
+      const result = msg.result as { isError?: boolean } | undefined
+      expect(result?.isError).toBe(true)
+    }
+  })
+
+  test('initialize 声明 listChanged: false（工具集静态，不假装推送）', async () => {
+    const { getDb } = await import('../db')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { transport } = await createSession(nb.id)
+    const init = await mcpRequest(transport, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    await transport.close()
+
+    const msg = init.body[0] as Record<string, unknown>
+    const caps = (msg.result as Record<string, unknown>).capabilities as {
+      tools?: { listChanged?: boolean }
+      resources?: { listChanged?: boolean }
+    }
+    expect(caps.tools?.listChanged).toBe(false)
+    expect(caps.resources?.listChanged).toBe(false)
+  })
+})
