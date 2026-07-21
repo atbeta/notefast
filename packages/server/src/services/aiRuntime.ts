@@ -19,13 +19,7 @@ import {
   AiRuntime,
   configFromEnv,
   emptyConfig,
-  migrateAutoApply,
   setAiRuntime,
-  DEFAULT_AUTO_LINK_MIN_CONFIDENCE,
-  DEFAULT_AUTO_LINK_MIN_MARGIN,
-  DEFAULT_AUTO_LINK_EXCLUDE_KINDS,
-  DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC,
-  DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE,
   type AiConfig,
 } from '@notefast/core'
 import type { PluginSystem } from '@notefast/core'
@@ -89,12 +83,8 @@ export function hasRuntime(): boolean {
  *
  * 严格校验：必须包含新的 `chat`/`embedding` 字段，version===1。
  * 遇到旧 shape（如带 `active` 字段）→ 删除文件，返回 emptyConfig()，让用户在 UI 重新配。
- * 见 AGENTS.md：本仓库策略不保留历史配置。
- *
- * AutoLink 字段迁移：
- * - `autoApply: boolean` → `'never' | 'high_confidence'`
- * - 缺失的 `minConfidence` / `minMargin` 填默认值
- * 迁移后的 config 立即写回磁盘，避免下次再走迁移。
+ * 见 AGENTS.md：本仓库策略不保留历史配置、不做字段级迁移。
+ * autoLink 里的未知字段会 warn 列名（手加字段拼错时不至于静默无效）。
  */
 export function loadConfigFromDisk(): AiConfig {
   if (!dataDir) return emptyConfig()
@@ -104,10 +94,8 @@ export function loadConfigFromDisk(): AiConfig {
     const raw = readFileSync(path, 'utf-8')
     const parsed = JSON.parse(raw) as Record<string, unknown> | null
     if (looksLikeNewShape(parsed)) {
-      const migrated = migrateAutoLinkFields(parsed as unknown as AiConfig)
-      // 比较序列化结果判断是否真的发生了迁移（避免无变更写盘）
-      if (JSON.stringify(migrated) !== JSON.stringify(parsed)) saveConfigToDisk(migrated)
-      return migrated
+      warnUnknownAutoLinkKeys(parsed)
+      return parsed as unknown as AiConfig
     }
     // 旧 shape（含 `active` 字段或缺 chat/embedding）→ 直接丢弃
     try {
@@ -122,47 +110,17 @@ export function loadConfigFromDisk(): AiConfig {
   }
 }
 
-/** AutoLink 字段迁移：boolean → 字符串；补全 v3 新增字段 */
-function migrateAutoLinkFields(cfg: AiConfig): AiConfig {
-  const al = cfg.autoLink
-  if (!al) return cfg
-  const raw = al as unknown as Record<string, unknown>
-
-  // 未知字段告警：手加的字段如果不在 schema 里，大概率是拼错了或被版本不认，必须让用户知道
+/** autoLink 未知字段告警：手加的字段如果不在 schema 里，大概率是拼错了，必须让用户知道 */
+function warnUnknownAutoLinkKeys(parsed: Record<string, unknown> | null): void {
+  const al = parsed?.autoLink
+  if (!al || typeof al !== 'object') return
   const known = new Set([
     'enabled', 'autoApply', 'notebookScope', 'maxPerBlock', 'minConfidence', 'minMargin',
     'excludeAnchorKinds', 'excludeSelfDoc', 'rateLimitPerMinute',
   ])
-  const unknownKeys = Object.keys(raw).filter((k) => !known.has(k))
+  const unknownKeys = Object.keys(al as Record<string, unknown>).filter((k) => !known.has(k))
   if (unknownKeys.length > 0) {
     console.warn(`🧠 AI: ai.config.json 的 autoLink 含未知字段（将被忽略）：${unknownKeys.join(', ')}`)
-  }
-
-  const needsMigrate =
-    typeof raw.autoApply === 'boolean' ||
-    raw.minConfidence == null ||
-    raw.minMargin == null ||
-    raw.excludeAnchorKinds == null ||
-    raw.excludeSelfDoc == null ||
-    raw.rateLimitPerMinute == null
-  if (!needsMigrate) return cfg
-  return {
-    ...cfg,
-    autoLink: {
-      ...al,
-      autoApply: migrateAutoApply(raw.autoApply),
-      minConfidence: al.minConfidence ?? DEFAULT_AUTO_LINK_MIN_CONFIDENCE,
-      minMargin: al.minMargin ?? DEFAULT_AUTO_LINK_MIN_MARGIN,
-      excludeAnchorKinds: Array.isArray(raw.excludeAnchorKinds)
-        ? (raw.excludeAnchorKinds as string[])
-        : [...DEFAULT_AUTO_LINK_EXCLUDE_KINDS],
-      excludeSelfDoc: typeof raw.excludeSelfDoc === 'boolean'
-        ? raw.excludeSelfDoc
-        : DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC,
-      rateLimitPerMinute: typeof raw.rateLimitPerMinute === 'number'
-        ? raw.rateLimitPerMinute
-        : DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE,
-    },
   }
 }
 
@@ -212,9 +170,8 @@ export function applyNewConfig(
   sys: PluginSystem,
 ): ReloadResult {
   const r = getRuntime()
-  const normalized = migrateAutoLinkFields(cfg)
-  const result = r.reload(normalized)
-  saveConfigToDisk(normalized)
+  const result = r.reload(cfg)
+  saveConfigToDisk(cfg)
   sys.note.afterCreate.untap(HOOK_NAME)
   sys.note.afterUpdate.untap(HOOK_NAME)
   sys.note.afterDelete.untap(HOOK_NAME)

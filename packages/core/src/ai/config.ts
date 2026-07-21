@@ -116,11 +116,9 @@ export interface AutoLinkConfig {
   /** 是否启用（note.afterCreate/Update 触发）*/
   enabled: boolean
   /**
-   * 自动应用策略（v2）：
+   * 自动应用策略：
    * - 'never'            高可信候选也只入 Inbox，不写 ref
    * - 'high_confidence'  满足 minConfidence + minMargin 的候选自动写 ref（ref_type='ai_auto'）
-   *
-   * 老配置文件里的 boolean 值会在 loadConfigFromDisk / applyNewConfig 时迁移。
    */
   autoApply: 'never' | 'high_confidence'
   /** 'all' = 任意 notebook；'same' = 同 notebook */
@@ -171,14 +169,6 @@ export function defaultAutoLinkConfig(): AutoLinkConfig {
     excludeSelfDoc: DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC,
     rateLimitPerMinute: DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE,
   }
-}
-
-/** 老配置文件 boolean → 新字符串 迁移（应用期调用一次） */
-export function migrateAutoApply(v: unknown): 'never' | 'high_confidence' {
-  if (v === true) return 'high_confidence'
-  if (v === false || v == null) return 'never'
-  if (v === 'never' || v === 'high_confidence') return v
-  return 'never'
 }
 
 /**

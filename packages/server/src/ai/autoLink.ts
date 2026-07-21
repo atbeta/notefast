@@ -20,7 +20,12 @@
  */
 
 import { createHash } from 'node:crypto'
-import type { ChatMessage } from '@notefast/core'
+import {
+  DEFAULT_AUTO_LINK_EXCLUDE_KINDS,
+  DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC,
+  DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE,
+  type ChatMessage,
+} from '@notefast/core'
 import { getDb } from '../db'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import {
@@ -116,7 +121,7 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
   const cfg = runtime.autoLinkConfig()
 
   // 全局限速：burst 时超出的直接跳过（不排队、不算错误）
-  if (hitRateLimit(cfg.rateLimitPerMinute ?? 0)) {
+  if (hitRateLimit(cfg.rateLimitPerMinute ?? DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE)) {
     return { ...empty(), rateLimited: true }
   }
 
@@ -131,7 +136,7 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
   }
 
   // kind 过滤：默认丢弃 tool 类锚点（工具名 → 工具描述是同义反复，不构成有效链接）
-  const excludedKinds = new Set((cfg.excludeAnchorKinds ?? []).map((k) => k.toLowerCase()))
+  const excludedKinds = new Set((cfg.excludeAnchorKinds ?? DEFAULT_AUTO_LINK_EXCLUDE_KINDS).map((k) => k.toLowerCase()))
   if (excludedKinds.size > 0) {
     mentions = mentions.filter((m) => !excludedKinds.has(m.kind.toLowerCase()))
   }
@@ -151,7 +156,7 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
     .query('SELECT updated_at, root_id FROM blocks WHERE id = ?')
     .get(opts.blockId) as { updated_at: string; root_id: string } | undefined
   const sourceUpdatedAt = blockRow?.updated_at ?? new Date().toISOString()
-  const excludeSelfDoc = cfg.excludeSelfDoc ?? true
+  const excludeSelfDoc = cfg.excludeSelfDoc ?? DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC
   const sourceDocId = excludeSelfDoc ? (blockRow?.root_id ?? null) : null
   const sourceHash = sha256(trimmed)
 

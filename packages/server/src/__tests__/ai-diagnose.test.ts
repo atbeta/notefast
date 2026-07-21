@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { initDb, closeDb } from '../db'
-import { createPluginSystem } from '@notefast/core'
+import { createPluginSystem, defaultAutoLinkConfig } from '@notefast/core'
 import {
   initAiRuntime,
   applyNewConfig,
@@ -83,9 +83,10 @@ function applyProvider(extra?: { autoLink?: boolean }) {
         model: 'bge',
         timeoutMs: 5000,
       },
-      autoLink: extra?.autoLink
-        ? { enabled: true, autoApply: false, notebookScope: 'all', maxPerBlock: 5 }
-        : { enabled: false, autoApply: false, notebookScope: 'all', maxPerBlock: 5 },
+      autoLink: {
+        ...defaultAutoLinkConfig(),
+        enabled: Boolean(extra?.autoLink),
+      },
     } as never,
     pluginSystem,
   )
