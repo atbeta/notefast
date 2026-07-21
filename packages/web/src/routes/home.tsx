@@ -63,11 +63,11 @@ export default function HomePage() {
         </div>
       </header>
 
-      <div key={activeTab} className="w-full max-w-4xl mx-auto px-8 pt-7 pb-16 space-y-5 animate-fade-in">
+      <div className="w-full max-w-4xl mx-auto px-8 pt-7 pb-16 space-y-5 animate-fade-in">
         {/* 标签筛选 — chip 单选，点击切换 URL ?tag=xxx */}
         <TagFilter />
 
-        <section className="space-y-3">
+        <section key={activeTab} className="space-y-3 animate-fade-in">
           <div className="flex items-center justify-between px-1">
             <h3 className="text-xs font-medium text-muted-foreground">
               {activeTab === 'recent' ? '最近 24 小时编辑' : '所有文档'}
