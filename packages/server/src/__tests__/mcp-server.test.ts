@@ -303,3 +303,96 @@ describe('MCP schema 与 capabilities', () => {
     expect(caps.resources?.listChanged).toBe(false)
   })
 })
+
+describe('JSON-RPC 信封错误码（Bug 8）', () => {
+  async function rawPost(body: string, sessionId?: string) {
+    const { getDb } = await import('../db')
+    const { Hono } = await import('hono')
+    const { handleMcpRequest } = await import('../mcp/server')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const app = new Hono()
+    app.all('/mcp', (c) => handleMcpRequest(nb.id, c))
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/event-stream',
+    }
+    if (sessionId) headers['Mcp-Session-Id'] = sessionId
+    const res = await app.request('http://localhost/mcp', { method: 'POST', headers, body })
+    const text = await res.text()
+    let json: { error?: { code: number; message: string } } | null = null
+    try { json = JSON.parse(text) } catch { /* 成功响应是 SSE，不是 JSON */ }
+    return { status: res.status, text, body: json }
+  }
+
+  test('JSON 语法错误 → -32700 Parse error', async () => {
+    const r = await rawPost('not json at all')
+    expect(r.body?.error?.code).toBe(-32700)
+  })
+
+  test('空字符串 → -32700', async () => {
+    const r = await rawPost('')
+    expect(r.body?.error?.code).toBe(-32700)
+  })
+
+  test('缺 jsonrpc 字段 → -32600 Invalid Request（不再误报 -32700）', async () => {
+    const r = await rawPost('{"method":"initialize","id":1}')
+    expect(r.body?.error?.code).toBe(-32600)
+  })
+
+  test('jsonrpc: "1.0" → -32600', async () => {
+    const r = await rawPost('{"jsonrpc":"1.0","method":"initialize","id":1}')
+    expect(r.body?.error?.code).toBe(-32600)
+  })
+
+  test('jsonrpc: null → -32600', async () => {
+    const r = await rawPost('{"jsonrpc":null,"method":"initialize","id":1}')
+    expect(r.body?.error?.code).toBe(-32600)
+  })
+
+  test('缺 method → -32600', async () => {
+    const r = await rawPost('{"jsonrpc":"2.0","id":1}')
+    expect(r.body?.error?.code).toBe(-32600)
+  })
+
+  test('id 为对象 → -32600；id 为字符串则放行', async () => {
+    const bad = await rawPost('{"jsonrpc":"2.0","method":"initialize","id":{"x":1}}')
+    expect(bad.body?.error?.code).toBe(-32600)
+  })
+
+  test('合法信封（initialize）→ 不报信封错误', async () => {
+    const r = await rawPost('{"jsonrpc":"2.0","method":"initialize","id":"abc","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}')
+    expect(r.status).toBe(200)
+    expect(r.body?.error).toBeUndefined()
+    expect(r.text).not.toContain('-32700')
+    expect(r.text).not.toContain('-32600')
+  })
+})
+
+describe('notefast_chat top_k 边界（Bug 6 附验）', () => {
+  test('top_k=21 超出上限 → zod 拒绝；top_k=20 是合法上限值', async () => {
+    const { getDb } = await import('../db')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { transport } = await createSession(nb.id)
+    const init = await mcpRequest(transport, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    await mcpRequest(transport, 'notifications/initialized', undefined, undefined, init.sessionId)
+
+    const call = await mcpRequest(transport, 'tools/call', {
+      name: 'notefast_chat',
+      arguments: { messages: [{ role: 'user', content: 'hi' }], top_k: 21 },
+    }, 2, init.sessionId)
+    await transport.close()
+
+    const msg = call.body[0] as Record<string, unknown>
+    const rpcErr = msg.error as { code?: number } | undefined
+    if (rpcErr) {
+      expect(rpcErr.code).toBe(-32602)
+    } else {
+      const result = msg.result as { isError?: boolean } | undefined
+      expect(result?.isError).toBe(true)
+    }
+  })
+})

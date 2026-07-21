@@ -212,3 +212,27 @@ describe('hybridSearch — minScore 引用过滤', () => {
     expect(none.retrieval.discarded_low_score).toBe(all.citations.length)
   })
 })
+
+describe('hybridSearch — 语义召回 cosine 下限（Bug 6）', () => {
+  test('cosine < 0.3 的语义命中在召回层被过滤（短查询噪声截断）', async () => {
+    // 配置 embedding（复用 describe 的 beforeEach 配置）
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl((async () =>
+      new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }), { status: 200 })) as unknown as typeof fetch)
+
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    // 内容与查询文本无字面重叠（FTS 不命中，隔离出纯语义通道）
+    const high = seedBlock({ id: 'hi-cos', notebookId: nb, content: 'alpha beta gamma' })
+    const low = seedBlock({ id: 'lo-cos', notebookId: nb, content: 'delta epsilon zeta' })
+    upsertVector(high.id, new Float64Array([1, 0]))   // cosine 1.0 → 保留
+    upsertVector(low.id, new Float64Array([0, 1]))    // cosine 0.0 → 过滤
+
+    const report = await hybridSearch({ query: 'zztop', topK: 10 })
+    expect(report.retrieval.fts_hits).toBe(0)
+    // 语义召回只剩高分那条
+    expect(report.retrieval.semantic_hits).toBe(1)
+    expect(report.citations.length).toBe(1)
+    expect(report.citations[0]!.block_id).toBe('hi-cos')
+  })
+})

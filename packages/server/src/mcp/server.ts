@@ -60,6 +60,30 @@ function cleanupStale(): void {
   }
 }
 
+/**
+ * JSON-RPC 2.0 信封合规校验；返回错误消息（null = 合规）。
+ * 仅查信封形状，不查 method 是否存在（那是 -32601，由 SDK Protocol 层处理）。
+ */
+function validateJsonRpcEnvelope(v: unknown): string | null {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) {
+    return 'Invalid Request: expected a single JSON-RPC object'
+  }
+  const m = v as Record<string, unknown>
+  if (m.jsonrpc !== '2.0') {
+    return `Invalid Request: jsonrpc must be "2.0", got ${JSON.stringify(m.jsonrpc ?? null)}`
+  }
+  if (!('method' in m)) {
+    return 'Invalid Request: missing method'
+  }
+  if (typeof m.method !== 'string') {
+    return 'Invalid Request: method must be a string'
+  }
+  if ('id' in m && m.id !== null && typeof m.id !== 'string' && typeof m.id !== 'number') {
+    return 'Invalid Request: id must be string, number or null'
+  }
+  return null
+}
+
 let cleanupTimer: ReturnType<typeof setInterval> | null = null
 
 function ensureCleanupTimer(): void {
@@ -97,8 +121,32 @@ export async function handleMcpRequest(notebookId: string, c: Context): Promise<
   }
 
   const bodyText = await c.req.raw.text()
-  let rpcMethod: string | null = null
-  try { rpcMethod = (JSON.parse(bodyText || '{}') as { method?: string }).method ?? null } catch { /* empty */ }
+
+  // JSON-RPC 信封预检（spec 合规）：SDK 的 transport 把所有不合规请求一律报
+  // -32700 Parse error；按 JSON-RPC 2.0 规范——只有 JSON 语法错误才是 -32700，
+  // 信封不合规（缺 jsonrpc、版本不对、method/id 类型错）应该是 -32600。
+  let rpcBody: unknown
+  let parseFailed = false
+  try {
+    rpcBody = JSON.parse(bodyText)
+  } catch {
+    parseFailed = true
+  }
+  if (parseFailed) {
+    return new Response(
+      JSON.stringify({ jsonrpc: '2.0', error: { code: -32700, message: 'Parse error: Invalid JSON' }, id: null }),
+      { status: 400, headers: { 'content-type': 'application/json' } },
+    )
+  }
+  const envelopeError = validateJsonRpcEnvelope(rpcBody)
+  if (envelopeError) {
+    return new Response(
+      JSON.stringify({ jsonrpc: '2.0', error: { code: -32600, message: envelopeError }, id: null }),
+      { status: 400, headers: { 'content-type': 'application/json' } },
+    )
+  }
+
+  const rpcMethod = (rpcBody as { method?: string }).method ?? null
 
   const autoInit = !sid && rpcMethod === 'initialize'
 

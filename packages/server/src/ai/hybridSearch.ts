@@ -83,6 +83,18 @@ const RRF_K = 60
 const CONTEXT_DOC_BOOST = 0.05
 
 /**
+ * 语义召回的 cosine 下限（默认 0.3，可用 SEMANTIC_MIN_COSINE 覆盖）：
+ * 短查询（「你好」「嗯」）会让向量库召回一堆低分命中，低于此值的直接不进融合，
+ * 从源头切断 RAG 引用噪声，而不是等上层 topK 硬塞。
+ */
+const DEFAULT_SEMANTIC_MIN_COSINE = 0.3
+
+function semanticMinCosine(): number {
+  const raw = parseFloat(process.env.SEMANTIC_MIN_COSINE ?? '')
+  return Number.isFinite(raw) && raw >= 0 && raw <= 1 ? raw : DEFAULT_SEMANTIC_MIN_COSINE
+}
+
+/**
  * 公开入口：返回精排后的 citations。
  * 当只有 FTS5 可用、embedding 未配置时，自动降级为纯 FTS5。
  */
@@ -222,7 +234,9 @@ async function runSemantic(
   const r = getRuntime()
   const vec = await r.embedQuery(query)
   if (!vec) return []
+  const minCosine = semanticMinCosine()
   const hits = semanticSearch(vec, limit, notebookId, since, until)
+    .filter((h) => h.score >= minCosine)
   return hits.map((h, i) => ({
     block_id: h.block_id,
     score: h.score,
