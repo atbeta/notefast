@@ -679,6 +679,106 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       }
     },
   )
+
+  // ───────────────────── notefast_get_config ─────────────────────
+  server.tool(
+    'notefast_get_config',
+    '获取服务端当前 AI / 鉴权配置概况（脱敏）。包含 chat、embedding、reranker 的模型名和 provider 标签，以及是否启用读写分离 token、密码鉴权等。不包含 API Key。',
+    {},
+    async () => {
+      const s = getRuntime().status()
+      const cfg = s.config
+      const mode = {
+        passwordRequired: (process.env.AUTH_PASSWORD || '').trim().length > 0,
+        readToken: (process.env.READ_TOKEN || '').trim().length > 0,
+        writeToken: (process.env.WRITE_TOKEN || '').trim().length > 0,
+        apiToken: (process.env.API_TOKEN || '').trim().length > 0,
+      }
+      return {
+        content: [toText({
+          enabled: s.enabled,
+          chat: cfg.chat ? { model: cfg.chat.chatModel, label: cfg.chat.label, baseUrl: cfg.chat.baseUrl } : null,
+          embedding: cfg.embedding ? { model: cfg.embedding.embeddingModel, label: cfg.embedding.label, baseUrl: cfg.embedding.baseUrl } : null,
+          reranker: cfg.reranker?.enabled ? { model: cfg.reranker.model, baseUrl: cfg.reranker.baseUrl } : null,
+          autoIndex: cfg.autoIndex,
+          auth: mode,
+        })],
+      }
+    },
+  )
+
+  // ───────────────────── Resources ─────────────────────
+  ;(server as any).registerResource(
+    'notefast_docs_index',
+    'notefast://docs',
+    { title: '全部文档', description: '知识库中所有文档的索引列表' },
+    async () => {
+      const rows = getDb().query("SELECT id, content FROM blocks WHERE type = 'document' ORDER BY updated_at DESC").all() as Array<{ id: string; content: string }>
+      const lines = rows.map((r, i) => `${i + 1}. ${r.content || '(无标题)'}  (${r.id.slice(0, 8)})`).join('\n')
+      return { contents: [{ text: lines || '(暂无文档)', uri: 'notefast://docs' }] }
+    },
+  )
+
+  ;(server as any).registerResource(
+    'notefast_doc',
+    { uriTemplate: 'notefast://docs/{docId}' },
+    { title: '单篇文档', description: '根据 docId 读取文档完整 Markdown 内容' },
+    async (_uri: unknown, params: Record<string, string>) => {
+      const docId = params?.docId
+      if (!docId) return { contents: [{ text: '缺少 docId', uri: '' }] }
+      const doc = getDb().query("SELECT * FROM blocks WHERE id = ? AND type = 'document'").get(docId) as BlockRow | undefined
+      if (!doc) return { contents: [{ text: `文档 ${docId} 不存在`, uri: '' }] }
+      const tree = buildBlockTree([doc, ...fetchDescendants(getDb(), docId)])
+      const md = blocksToMarkdown(tree)
+      return { contents: [{ text: md.slice(0, 50_000), uri: `notefast://docs/${docId}`, mimeType: 'text/markdown' }] }
+    },
+  )
+
+  // ───────────────────── notefast_get_autolink_suggestion ─────────────────────
+  server.tool(
+    'notefast_get_autolink_suggestion',
+    '查看一条 AutoLink 建议的完整详情（包含来源文本、候选链接、置信度等），之后可决定 apply 或 dismiss。',
+    {
+      suggestion_id: z.string().min(1).max(64).describe('suggestion ID'),
+    },
+    async ({ suggestion_id }) => {
+      const db = getDb()
+      const row = db.query('SELECT * FROM autolink_suggestions WHERE id = ?').get(suggestion_id) as unknown as {
+        id: string
+        source_block_id: string
+        source_content: string
+        source_doc_id: string | null
+        source_doc_title: string
+        anchor: string
+        kind: string
+        candidates: string // JSON
+        action_status: string
+        review_status: string
+        confidence: number | null
+        score_kind: string
+        error: string | null
+      } | undefined
+      if (!row) return { content: [toText({ error: 'suggestion not found', suggestion_id })], isError: true }
+      let candidates: unknown[] = []
+      try { candidates = JSON.parse(row.candidates) } catch { /* ignore */ }
+      return {
+        content: [toText({
+          id: row.id,
+          source_block_id: row.source_block_id,
+          source_content: row.source_content,
+          source_doc_title: row.source_doc_title,
+          anchor: row.anchor,
+          kind: row.kind,
+          confidence: row.confidence,
+          score_kind: row.score_kind,
+          action_status: row.action_status,
+          review_status: row.review_status,
+          candidates: candidates.slice(0, 10),
+          error: row.error,
+        })],
+      }
+    },
+  )
 }
 
 function fetchDescendants(database: ReturnType<typeof getDb>, rootId: string): BlockRow[] {

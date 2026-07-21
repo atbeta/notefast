@@ -4,7 +4,7 @@ import { serveStatic } from 'hono/bun'
 import { createPluginSystem } from '@notefast/core'
 import { initDb, closeDb } from './db'
 import { authMiddleware } from './middleware/auth'
-import { createMcpTransport } from './mcp/server'
+import { handleMcpRequest } from './mcp/server'
 import { startAutoExport } from './services/autoExport'
 import { initAiRuntime } from './services/aiRuntime'
 import { initSyncManager } from './sync/manager'
@@ -44,11 +44,14 @@ app.get('/health', (c) => c.json({ status: 'ok', time: new Date().toISOString() 
 // 鉴权模式探测：返回当前实例是否需要密码 / token。
 // 放在 authMiddleware 之后注册路径（middleware 内部已对 /auth/mode 放行）。
 app.get('/api/v1/auth/mode', (c) => {
-  const apiToken = (process.env.API_TOKEN || '').trim()
-  const authPassword = (process.env.AUTH_PASSWORD || '').trim()
+  const read = (process.env.READ_TOKEN || '').trim()
+  const write = (process.env.WRITE_TOKEN || '').trim()
+  const api = (process.env.API_TOKEN || '').trim()
+  const pw = (process.env.AUTH_PASSWORD || '').trim()
   return c.json({
-    passwordRequired: authPassword.length > 0,
-    tokenRequired: apiToken.length > 0,
+    passwordRequired: pw.length > 0,
+    tokenRequired: api.length > 0 || read.length > 0 || write.length > 0,
+    tokenGranularity: read.length > 0 || write.length > 0 ? 'split' : api.length > 0 ? 'single' : 'none',
   })
 })
 
@@ -70,10 +73,8 @@ initVectorStore()
 initSyncManager(DATA_DIR)
 initAiRuntime(pluginSystem, DATA_DIR)
 
-const mcpTransport = await createMcpTransport(notebookId)
-
 app.all('/mcp', authMiddleware, async (c) => {
-  return mcpTransport.handleRequest(c.req.raw)
+  return handleMcpRequest(notebookId, c)
 })
 
 const webDist = process.env.WEB_DIST || ''
