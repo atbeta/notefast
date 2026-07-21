@@ -18,12 +18,18 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
   const docId = crypto.randomUUID()
   const now = new Date().toISOString()
   const title = input.title || extractTitle(input.markdown) || '未命名文档'
-  // 剥离与标题重复的首个 H1，避免标题既在 doc.content 又作为正文 heading 入库
   const inputs = stripTitleHeading(rawInputs, title)
 
   const insertedIds: string[] = []
+  // inp.id → 实际 blockId 映射表；父对子的引用必须走这条映射。
+  // 如果不映射，inp.parent_id 指向的是 parseMarkdownToBlocks 产生的
+  // 临时 UUID（从未 INSERT），SQLite immediate FK 会报 CONSTRAINT。
+  const idMap = new Map<string, string>()
 
   db.transaction(() => {
+    // 安全网：PRAGMA 作用域限本事务，提交时检查 FK，避免 immediate 阶段炸开
+    db.run('PRAGMA defer_foreign_keys = ON')
+
     db.query(
       `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
        VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
@@ -32,7 +38,13 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
     for (let i = 0; i < inputs.length; i++) {
       const inp = inputs[i]
       const blockId = crypto.randomUUID()
-      const parentId: string | null = inp.parent_id ?? docId
+      // 父链映射：从临时 id 翻译成已经 INSERT 的实际 id
+      const parentId: string | null = inp.parent_id
+        ? (idMap.get(inp.parent_id) ?? docId)
+        : docId
+
+      // 如果有临时 id，记下映射供后面的子节点引用
+      if (inp.id) idMap.set(inp.id, blockId)
 
       db.query(
         `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
@@ -40,7 +52,7 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
       ).run(
         blockId,
         inp.notebook_id,
-        parentId as string,
+        parentId,
         docId,
         inp.type,
         inp.content ?? '',

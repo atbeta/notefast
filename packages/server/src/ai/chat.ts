@@ -179,7 +179,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
     })
   } catch (e) {
     initialReport = { citations: [], retrieval: { fts_hits: 0, semantic_hits: 0, reranked: false } }
-    console.warn('[chat] retrieval failed:', e instanceof Error ? e.message : e)
+    console.error('[chat] retrieval failed:', e)
   }
 
   if (initialReport.citations.length > 0) {
@@ -219,7 +219,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
           })
         } catch (e) {
           // chatWithTools 失败（如 mock / provider 不支持非流式 JSON 响应）→ 降级为流式
-          console.warn('[chat] chatWithTools failed, falling back to streamChat:', e instanceof Error ? e.message : e)
+          console.error('[chat] chatWithTools failed, falling back to streamChat:', e)
           toolCallFailed = true
         }
 
@@ -313,6 +313,9 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
       toolTrace,
     }
   } catch (e) {
+    // 把上游 LLM / runtime 的真实错误打满 stack，容器日志可读；
+    // 客户端只看到 sanitized message（避免泄露 API key / 内部栈）
+    console.error('[chat] agent loop failed:', e)
     const msg = e instanceof Error ? e.message : String(e)
     const code: ChatError['code'] = msg.includes('is not configured') ? 'not_configured' : 'llm_error'
     yield {

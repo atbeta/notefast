@@ -87,7 +87,7 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
     try {
       return runFts(opts.query, opts.notebookId, ftsLimit, opts.since, opts.until)
     } catch (e) {
-      console.warn('[hybridSearch] FTS failed:', e instanceof Error ? e.message : e)
+      console.error('[hybridSearch] FTS failed:', e)
       return [] as FtsHit[]
     }
   })()
@@ -96,7 +96,7 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
   const [ftsRaw, semanticRaw] = await Promise.all([
     ftsPromise,
     semanticPromise.catch((e) => {
-      console.warn('[hybridSearch] semantic failed:', e instanceof Error ? e.message : e)
+      console.error('[hybridSearch] semantic failed:', e)
       return [] as SemanticRawHit[]
     }),
   ])
@@ -278,7 +278,7 @@ async function maybeRerank(query: string, candidates: FusedCandidate[]): Promise
       score: 0.5 + ((s - min) / range) * 0.5, // 归一到 [0.5, 1]
     }))
   } catch (e) {
-    console.warn('[hybridSearch] rerank failed, fallback to RRF:', e instanceof Error ? e.message : e)
+    console.error('[hybridSearch] rerank failed, fallback to RRF:', e)
     return null
   }
 }
