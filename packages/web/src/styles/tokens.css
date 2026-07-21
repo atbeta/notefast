@@ -89,6 +89,13 @@
   --shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
   --shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
+  /* ───────────── 代码高亮（低饱和，贴合极简基调） ───────────── */
+  --code-keyword: 37 99 235;   /* blue-600 */
+  --code-string: 21 128 61;    /* green-700 */
+  --code-comment: 146 147 144; /* 灰，近 muted */
+  --code-number: 180 83 9;     /* amber-700 */
+  --code-title: 55 53 47;      /* 近前景色 */
+
   /* ───────────── 动效（全局统一） ───────────── */
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --dur: 150ms;
@@ -141,6 +148,12 @@
   --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
   --shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
   --shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+  --code-keyword: 147 197 253; /* blue-300 */
+  --code-string: 134 239 172;  /* green-300 */
+  --code-comment: 110 110 108;
+  --code-number: 252 211 77;   /* amber-300 */
+  --code-title: 240 240 240;
 }
 
 

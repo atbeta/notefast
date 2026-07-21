@@ -415,3 +415,29 @@
   transition: background var(--dur) var(--ease);
 }
 .reading-prose .block-surface:hover { background: rgb(var(--muted)); }
+
+/* ────────────────────────────────────────────────────────────────
+   代码语法高亮（hljs → 设计 token 映射，低饱和、少色相）
+   ──────────────────────────────────────────────────────────────── */
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-built_in, .hljs-type {
+  color: rgb(var(--code-keyword));
+}
+.hljs-string, .hljs-attr, .hljs-attribute, .hljs-template-string, .hljs-regexp {
+  color: rgb(var(--code-string));
+}
+.hljs-comment, .hljs-quote {
+  color: rgb(var(--code-comment));
+  font-style: italic;
+}
+.hljs-number, .hljs-symbol, .hljs-meta, .hljs-bullet {
+  color: rgb(var(--code-number));
+}
+.hljs-title, .hljs-name, .hljs-section, .hljs-title.function_ {
+  color: rgb(var(--code-title));
+}
+.hljs-deletion {
+  color: rgb(var(--destructive));
+}
+.hljs-addition {
+  color: rgb(var(--code-string));
+}

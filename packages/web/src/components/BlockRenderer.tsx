@@ -1,8 +1,9 @@
-import { useState, createElement } from 'react'
+import { useState, useEffect, createElement } from 'react'
 import type { ReactNode } from 'react'
 import { Copy, Check, Link2 } from 'lucide-react'
 import type { Block } from '@notefast/core'
 import { scrollToElement } from '../lib/scroll'
+import { highlightCode } from '../lib/highlight'
 
 interface BlockNodeProps {
   block: Block
@@ -15,10 +16,15 @@ interface BlockRendererProps {
 }
 
 // ───────────────────────── 行内 Markdown 渲染 ─────────────────────────
-// 支持：`code`、**bold**、*italic*、[text](url)
-// 单一正则扫描，非嵌套场景覆盖绝大多数笔记内容
+// 支持：![image](url)、`code`、**bold**、*italic*、~~del~~、[text](url)、裸 URL
+// 单一正则扫描，非嵌套场景覆盖绝大多数笔记内容；image 必须在 link 之前匹配
 
-const INLINE_RE = /(`[^`]+`)|(\*\*[^*\n]+\*\*)|(\*[^*\n]+\*)|(\[[^\]]+\]\([^)\s]+\))/g
+const INLINE_RE = /(!\[[^\]]*\]\([^)\s]+\))|(`[^`]+`)|(\*\*[^*\n]+\*\*)|(\*[^*\n]+\*)|(~~[^~\n]+~~)|(\[[^\]]+\]\([^)\s]+\))|(https?:\/\/[^\s<>()"]+)/g
+
+/** 裸 URL 尾部的标点不应吃进来（如「见 https://a.com/x, 」） */
+function trimUrlTail(url: string): string {
+  return url.replace(/[.,;:!?，。；：！？、\)）\]】'"]+$/, '')
+}
 
 function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
   const nodes: ReactNode[] = []
@@ -28,18 +34,40 @@ function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
     const idx = m.index ?? 0
     if (idx > last) nodes.push(text.slice(last, idx))
     if (m[1]) {
-      nodes.push(<code key={`${keyPrefix}-${k++}`}>{m[1].slice(1, -1)}</code>)
+      const im = m[1].match(/!\[([^\]]*)\]\(([^)\s]+)\)/)!
+      nodes.push(
+        <img
+          key={`${keyPrefix}-${k++}`}
+          src={im[2]}
+          alt={im[1]}
+          loading="lazy"
+          className="my-3 max-w-full rounded-md border border-border/50"
+        />,
+      )
     } else if (m[2]) {
-      nodes.push(<strong key={`${keyPrefix}-${k++}`}>{renderInline(m[2].slice(2, -2), `${keyPrefix}s${k}`)}</strong>)
+      nodes.push(<code key={`${keyPrefix}-${k++}`}>{m[2].slice(1, -1)}</code>)
     } else if (m[3]) {
-      nodes.push(<em key={`${keyPrefix}-${k++}`}>{m[3].slice(1, -1)}</em>)
+      nodes.push(<strong key={`${keyPrefix}-${k++}`}>{renderInline(m[3].slice(2, -2), `${keyPrefix}s${k}`)}</strong>)
     } else if (m[4]) {
-      const lm = m[4].match(/\[([^\]]+)\]\(([^)\s]+)\)/)!
+      nodes.push(<em key={`${keyPrefix}-${k++}`}>{m[4].slice(1, -1)}</em>)
+    } else if (m[5]) {
+      nodes.push(<del key={`${keyPrefix}-${k++}`} className="text-muted-foreground">{m[5].slice(2, -2)}</del>)
+    } else if (m[6]) {
+      const lm = m[6].match(/\[([^\]]+)\]\(([^)\s]+)\)/)!
       nodes.push(
         <a key={`${keyPrefix}-${k++}`} href={lm[2]} target="_blank" rel="noreferrer">
           {lm[1]}
         </a>,
       )
+    } else if (m[7]) {
+      const url = trimUrlTail(m[7])
+      const tail = m[7].slice(url.length)
+      nodes.push(
+        <a key={`${keyPrefix}-${k++}`} href={url} target="_blank" rel="noreferrer">
+          {url}
+        </a>,
+      )
+      if (tail) nodes.push(tail)
     }
     last = idx + m[0].length
   }
@@ -91,9 +119,7 @@ function HeadingTag({ block }: { block: Block }) {
         </>,
       )}
       {/* 子块必须继续渲染：部分写入路径会把内容嵌在 heading 下（如代码块），不渲染就丢了 */}
-      {block.children.map((child) => (
-        <BlockNode key={child.id} block={child} />
-      ))}
+      <ChildrenView children={block.children} />
     </>
   )
 }
@@ -103,6 +129,19 @@ function HeadingTag({ block }: { block: Block }) {
 function CodeBlock({ block }: { block: Block }) {
   const lang = (block.properties.language as string) || ''
   const [copied, setCopied] = useState(false)
+  const [highlighted, setHighlighted] = useState<string | null>(null)
+
+  // 语法高亮：异步懒加载 highlight.js；失败/未知语言回退纯文本
+  useEffect(() => {
+    let cancelled = false
+    setHighlighted(null)
+    if (lang && block.content) {
+      highlightCode(block.content, lang)
+        .then((html) => { if (!cancelled && html) setHighlighted(html) })
+        .catch(() => {})
+    }
+    return () => { cancelled = true }
+  }, [block.content, lang])
 
   const handleCopy = async () => {
     try {
@@ -140,7 +179,14 @@ function CodeBlock({ block }: { block: Block }) {
         </button>
       </div>
       <pre className="p-4 overflow-x-auto text-[13px] font-mono leading-[1.6] text-foreground">
-        <code className={lang ? `language-${lang}` : ''}>{block.content}</code>
+        {highlighted ? (
+          <code
+            className={`hljs language-${lang}`}
+            dangerouslySetInnerHTML={{ __html: highlighted }}
+          />
+        ) : (
+          <code className={lang ? `language-${lang}` : ''}>{block.content}</code>
+        )}
       </pre>
     </div>
   )
@@ -206,9 +252,90 @@ function TableBlock({ block }: { block: Block }) {
   )
 }
 
+// ───────────────────────── 列表（ul/ol + 任务列表）─────────────────────────
+// 持久化树里没有 List 包装节点（解析期被拍平），渲染时把连续的同级 list_item
+// 重新归并成组：ordered 标记一致的连续段为一组。
+
+function ListItemView({ block }: { block: Block }) {
+  const isTask = Boolean(block.properties.task)
+  const checked = Boolean(block.properties.checked)
+  const nestedItems = block.children.filter((c) => c.type === 'list_item')
+  const otherChildren = block.children.filter((c) => c.type !== 'list_item')
+  return (
+    <li className="leading-[1.75] text-foreground/95">
+      {isTask && (
+        <span
+          className={`mr-2 inline-flex h-3.5 w-3.5 translate-y-[2px] items-center justify-center rounded-[3px] border transition-colors ${
+            checked
+              ? 'border-foreground bg-foreground text-background'
+              : 'border-border-strong/60 bg-transparent'
+          }`}
+        >
+          {checked && <Check className="w-2.5 h-2.5" strokeWidth={3} />}
+        </span>
+      )}
+      <span className={isTask && checked ? 'line-through text-muted-foreground' : undefined}>
+        {renderInline(block.content || '', `li-${block.id}`)}
+      </span>
+      {otherChildren.map((child) => (
+        <BlockNode key={child.id} block={child} />
+      ))}
+      {nestedItems.length > 0 && (
+        <ListGroup items={nestedItems} className="pl-5 mt-1.5" />
+      )}
+    </li>
+  )
+}
+
+function ListGroup({ items, className }: { items: Block[]; className?: string }) {
+  const ordered = Boolean(items[0]?.properties.ordered)
+  const Tag = ordered ? 'ol' : 'ul'
+  return (
+    <Tag
+      className={`${ordered ? 'list-decimal' : 'list-disc'} pl-6 marker:text-muted-foreground/70 space-y-1.5 ${className ?? 'my-3'}`}
+    >
+      {items.map((item) => (
+        <ListItemView key={item.id} block={item} />
+      ))}
+    </Tag>
+  )
+}
+
+type ChildGroup =
+  | { kind: 'list'; key: string; ordered: boolean; items: Block[] }
+  | { kind: 'single'; key: string; block: Block }
+
+function ChildrenView({ children }: { children: Block[] }) {
+  const groups: ChildGroup[] = []
+  for (const child of children) {
+    if (child.type === 'list_item') {
+      const ordered = Boolean(child.properties.ordered)
+      const last = groups[groups.length - 1]
+      if (last && last.kind === 'list' && last.ordered === ordered) {
+        last.items.push(child)
+      } else {
+        groups.push({ kind: 'list', key: child.id, ordered, items: [child] })
+      }
+    } else {
+      groups.push({ kind: 'single', key: child.id, block: child })
+    }
+  }
+  return (
+    <>
+      {groups.map((g) =>
+        g.kind === 'list' ? (
+          <ListGroup key={g.key} items={g.items} />
+        ) : (
+          <BlockNode key={g.key} block={g.block} />
+        ),
+      )}
+    </>
+  )
+}
+
 // ───────────────────────── 树遍历 ─────────────────────────
 
-function BlockNode({ block, depth = 0 }: BlockNodeProps) {
+function BlockNode({ block }: BlockNodeProps) {
   switch (block.type) {
     case 'heading':
       return <HeadingTag block={block} />
@@ -225,27 +352,10 @@ function BlockNode({ block, depth = 0 }: BlockNodeProps) {
       )
 
     case 'list':
-      return (
-        <ul className="list-disc pl-6 marker:text-muted-foreground/70 space-y-1.5 my-3">
-          {block.children.map((child) => (
-            <BlockNode key={child.id} block={child} depth={depth + 1} />
-          ))}
-        </ul>
-      )
+      return <ListGroup items={block.children} />
 
     case 'list_item':
-      return (
-        <li className="leading-[1.75] text-foreground/95">
-          <span>{renderInline(block.content || '', `li-${block.id}`)}</span>
-          {block.children.length > 0 && (
-            <ul className="list-disc pl-5 mt-1.5 marker:text-muted-foreground/70">
-              {block.children.map((child) => (
-                <BlockNode key={child.id} block={child} depth={depth + 1} />
-              ))}
-            </ul>
-          )}
-        </li>
-      )
+      return <ListGroup items={[block]} />
 
     case 'code':
       return <CodeBlock block={block} />
@@ -257,9 +367,7 @@ function BlockNode({ block, depth = 0 }: BlockNodeProps) {
       return (
         <blockquote className="my-5 pl-4 border-l-[3px] border-foreground/80 text-foreground">
           <p className="leading-[1.65] text-[1.05em]">{renderInline(block.content || '', `q-${block.id}`)}</p>
-          {block.children.map((child) => (
-            <BlockNode key={child.id} block={child} depth={depth + 1} />
-          ))}
+          <ChildrenView children={block.children} />
         </blockquote>
       )
 
@@ -278,9 +386,7 @@ export default function BlockRenderer({ block, depth = 0 }: BlockRendererProps) 
   if (block.type === 'document') {
     return (
       <article className="reading-prose">
-        {block.children.map((child) => (
-          <BlockNode key={child.id} block={child} depth={depth + 1} />
-        ))}
+        <ChildrenView children={block.children} />
       </article>
     )
   }

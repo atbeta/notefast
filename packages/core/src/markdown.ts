@@ -173,19 +173,21 @@ function parseLine(line: string): Omit<ParsedBlock, 'depth' | 'children'> {
 
   const listMatch = line.match(/^(\t| {2,})*[-*+]\s+(.*)/)
   if (listMatch) {
+    const t = stripTaskPrefix(listMatch[2])
     return {
       type: BlockType.ListItem,
-      content: listMatch[2],
-      properties: {},
+      content: t.content,
+      properties: { ordered: false, ...t.taskProps },
     }
   }
 
   const orderedMatch = line.match(/^(\t| {2,})*\d+\.\s+(.*)/)
   if (orderedMatch) {
+    const t = stripTaskPrefix(orderedMatch[2])
     return {
       type: BlockType.ListItem,
-      content: orderedMatch[2],
-      properties: {},
+      content: t.content,
+      properties: { ordered: true, ...t.taskProps },
     }
   }
 
@@ -194,6 +196,13 @@ function parseLine(line: string): Omit<ParsedBlock, 'depth' | 'children'> {
     content: line.trim(),
     properties: {},
   }
+}
+
+/** 任务列表前缀：`- [ ] xxx` / `- [x] xxx`（无序/有序通用） */
+function stripTaskPrefix(raw: string): { content: string; taskProps: Record<string, unknown> } {
+  const m = raw.match(/^\[( |x|X)\]\s+(.*)/)
+  if (!m) return { content: raw, taskProps: {} }
+  return { content: m[2], taskProps: { task: true, checked: m[1].toLowerCase() === 'x' } }
 }
 
 function getLineDepth(line: string): number {
@@ -286,7 +295,12 @@ export function blocksToMarkdown(blocks: Block[]): string {
 
         case BlockType.ListItem: {
           const indent = '  '.repeat(Math.max(0, depth - 1))
-          lines.push(`${indent}- ${block.content}`)
+          // ordered 存为「1.」（CommonMark 渲染时自动重编号）；task 回写 [ ]/[x]
+          const bullet = block.properties.ordered ? '1.' : '-'
+          const task = block.properties.task
+            ? `[${block.properties.checked ? 'x' : ' '}] `
+            : ''
+          lines.push(`${indent}${bullet} ${task}${block.content}`)
           traverse(block.children, depth + 1)
           break
         }
