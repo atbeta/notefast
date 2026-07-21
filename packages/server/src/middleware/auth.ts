@@ -46,30 +46,41 @@ function safeEquals(provided: string, expected: string): boolean {
 export function isAuthEnabled(): boolean {
   const apiToken = safeTrim(process.env.API_TOKEN || '')
   const authPassword = safeTrim(process.env.AUTH_PASSWORD || '')
-  return apiToken.length > 0 || authPassword.length > 0
+  const readToken = safeTrim(process.env.READ_TOKEN || '')
+  const writeToken = safeTrim(process.env.WRITE_TOKEN || '')
+  return apiToken.length > 0 || authPassword.length > 0 || readToken.length > 0 || writeToken.length > 0
 }
 
 export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) => {
-  // 公开端点：Web UI 启动时探测当前实例是否需要密码 / token，
-  // 必须在鉴权前放行，否则前端拿不到状态就锁死。
   if (c.req.path === '/api/v1/auth/mode') {
     await next()
     return
   }
 
   const apiToken = safeTrim(process.env.API_TOKEN || '')
+  const readToken = safeTrim(process.env.READ_TOKEN || '')
+  const writeToken = safeTrim(process.env.WRITE_TOKEN || '')
   const authPassword = safeTrim(process.env.AUTH_PASSWORD || '')
 
-  if (apiToken.length === 0 && authPassword.length === 0) {
+  if (apiToken.length === 0 && readToken.length === 0 && writeToken.length === 0 && authPassword.length === 0) {
     await next()
     return
   }
 
   const authHeader = (c.req.header('Authorization') || '').trim()
 
-  if (apiToken.length > 0) {
+  // Bearer 鉴权 —— 三个 token 取优先级最高的命中：
+  //   WRITE_TOKEN → POST/PATCH/PUT/DELETE 可写（fallback: API_TOKEN → READ_TOKEN）
+  //   READ_TOKEN  → GET/HEAD 只读        （fallback: API_TOKEN）
+  //   只设 API_TOKEN → 向后兼容（所有方法同 token）
+  const isWrite = c.req.method === 'POST' || c.req.method === 'PATCH' || c.req.method === 'PUT' || c.req.method === 'DELETE'
+  const effectiveToken = isWrite
+    ? (writeToken || apiToken)
+    : (readToken || apiToken)
+
+  if (effectiveToken.length > 0) {
     const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i)
-    if (bearerMatch && safeEquals(bearerMatch[1]!, apiToken)) {
+    if (bearerMatch && safeEquals(bearerMatch[1]!, effectiveToken)) {
       await next()
       return
     }
