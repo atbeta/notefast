@@ -32,12 +32,48 @@ function toText(data: unknown): { type: 'text'; text: string } {
   return { type: 'text' as const, text: JSON.stringify(data, null, 2) }
 }
 
-function validateNotebook(database: ReturnType<typeof getDb>, notebookId: string): { error: string } | null {
+// ───────────────────── 统一错误语义 ─────────────────────
+// 所有 notefast_* 工具的错误一律：isError: true + { error: { code, message, data? } }。
+// 客户端用 isError 判断成败、error.code 判断类型，不再解析自由文本。
+// code 一览：
+//   not_found       资源不存在（doc / block / notebook / suggestion）
+//   invalid_params  参数语义非法（zod 管形状，这里管语义，如 since 格式、空 messages）
+//   not_configured  AI Provider 未配置（带 fix_hint）
+//   provider_error  LLM / embedding provider 调用失败（HTTP 错误、超时等）
+//   llm_error       LLM 返回内容层面的失败（解析失败等）
+//   internal        未预期的内部错误
+export type ToolErrorCode =
+  | 'not_found'
+  | 'invalid_params'
+  | 'not_configured'
+  | 'provider_error'
+  | 'llm_error'
+  | 'internal'
+
+function toolError(
+  code: ToolErrorCode,
+  message: string,
+  data?: Record<string, unknown>,
+): { content: Array<{ type: 'text'; text: string }>; isError: true } {
+  return {
+    content: [toText({ error: { code, message, ...(data ? { data } : {}) } })],
+    isError: true as const,
+  }
+}
+
+const NOT_CONFIGURED_HINT = '请在 Web UI /settings 页面配置 AI Provider'
+
+function validateNotebook(database: ReturnType<typeof getDb>, notebookId: string) {
   const exists = database.query('SELECT id FROM notebooks WHERE id = ?').get(notebookId)
   if (!exists) {
-    return { error: `笔记本 ${notebookId} 不存在` }
+    return toolError('not_found', `笔记本 ${notebookId} 不存在`, { notebook_id: notebookId })
   }
   return null
+}
+
+/** ISO 时间字符串语义校验；合法返回 true */
+function isValidIsoDate(s: string): boolean {
+  return !Number.isNaN(Date.parse(s))
 }
 
 export function registerMcpTools(server: McpServer, notebookId: string): void {
@@ -96,7 +132,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     async ({ doc_id, depth }) => {
       const docRow = db.query('SELECT * FROM blocks WHERE id = ? AND type = ?').get(doc_id, 'document') as BlockRow | undefined
       if (!docRow) {
-        return { content: [toText({ error: `文档 ${doc_id} 不存在` })] }
+        return toolError('not_found', `文档 ${doc_id} 不存在`, { doc_id })
       }
 
       const rows = fetchDescendants(db, doc_id)
@@ -123,7 +159,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     async ({ block_id }) => {
       const row = db.query('SELECT * FROM blocks WHERE id = ?').get(block_id) as BlockRow | undefined
       if (!row) {
-        return { content: [toText({ error: `Block ${block_id} 不存在` })] }
+        return toolError('not_found', `Block ${block_id} 不存在`, { block_id })
       }
 
       const block = rowToBlock(row)
@@ -190,7 +226,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
           | { root_id: string; level: number }
           | undefined
         if (!parent) {
-          return { content: [toText({ error: `父块 ${parent_id} 不存在` })] }
+          return toolError('not_found', `父块 ${parent_id} 不存在`, { parent_id })
         }
         rootId = parent.root_id
         level = parent.level + 1
@@ -222,7 +258,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     async ({ block_id, content }) => {
       const existing = db.query('SELECT * FROM blocks WHERE id = ?').get(block_id)
       if (!existing) {
-        return { content: [toText({ error: `Block ${block_id} 不存在` })] }
+        return toolError('not_found', `Block ${block_id} 不存在`, { block_id })
       }
 
       db.query("UPDATE blocks SET content = ?, updated_at = datetime('now') WHERE id = ?").run(content, block_id)
@@ -322,6 +358,11 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       },
     },
     async ({ block_id }) => {
+      // 目标 block 不存在时也要报 not_found，而不是返回空列表（调用方无法区分「没有反链」和「id 错了」）
+      const target = db.query('SELECT id FROM blocks WHERE id = ?').get(block_id)
+      if (!target) {
+        return toolError('not_found', `Block ${block_id} 不存在`, { block_id })
+      }
       const refs = db
         .query(
           `SELECT r.id, r.source_id, r.target_id, r.ref_type, r.created_at,
@@ -389,7 +430,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     async ({ doc_id }) => {
       const docRow = db.query('SELECT * FROM blocks WHERE id = ? AND type = ?').get(doc_id, 'document') as BlockRow | undefined
       if (!docRow) {
-        return { content: [toText({ error: `文档 ${doc_id} 不存在` })] }
+        return toolError('not_found', `文档 ${doc_id} 不存在`, { doc_id })
       }
 
       const rows = fetchDescendants(db, doc_id)
@@ -416,7 +457,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     async ({ doc_id }) => {
       const docRow = db.query('SELECT * FROM blocks WHERE id = ? AND type = ?').get(doc_id, 'document') as BlockRow | undefined
       if (!docRow) {
-        return { content: [toText({ error: `文档 ${doc_id} 不存在` })] }
+        return toolError('not_found', `文档 ${doc_id} 不存在`, { doc_id })
       }
 
       const rows = fetchDescendants(db, doc_id)
@@ -440,23 +481,18 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
     async ({ query, limit, notebook_id }) => {
       if (!hasRuntime() || !getRuntime().hasEmbedding()) {
-        return {
-          content: [toText({
-            error: 'AI 未配置',
-            fix_hint: '请在 Web UI /settings 页面配置 Embedding 模型',
-          })],
-        }
+        return toolError('not_configured', 'Embedding 模型未配置', { fix_hint: NOT_CONFIGURED_HINT })
       }
       try {
         const r = getRuntime()
         const vector = await r.embedQuery(query)
         if (!vector) {
-          return { content: [toText({ error: 'embedding_failed', message: r.status().embedding.lastError })] }
+          return toolError('provider_error', r.status().embedding.lastError || 'embedding 返回空向量')
         }
         const hits = semanticSearch(vector, limit ?? 10, notebook_id)
         return { content: [toText({ query, results: hits.length, hits })] }
       } catch (e) {
-        return { content: [toText({ error: String(e), fix_hint: '请检查 /settings 中的 Provider 配置' })] }
+        return toolError('provider_error', e instanceof Error ? e.message : String(e), { fix_hint: '请检查 /settings 中的 Provider 配置' })
       }
     },
   )
@@ -471,12 +507,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
     async ({ content }) => {
       if (!hasRuntime() || !getRuntime().hasChat()) {
-        return {
-          content: [toText({
-            error: 'LLM 未配置',
-            fix_hint: '请在 Web UI /settings 页面配置 Chat 模型',
-          })],
-        }
+        return toolError('not_configured', 'Chat 模型未配置', { fix_hint: NOT_CONFIGURED_HINT })
       }
       try {
         const r = getRuntime()
@@ -487,7 +518,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
         const result = await suggestTitle(provider, content)
         return { content: [toText(result)] }
       } catch (e) {
-        return { content: [toText({ error: String(e) })] }
+        return toolError('llm_error', e instanceof Error ? e.message : String(e))
       }
     },
   )
@@ -516,13 +547,25 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       },
     },
     async ({ messages, context_doc_id, notebook_id, since, until, top_k, temperature, max_tokens }) => {
-      if (!hasRuntime() || !getRuntime().hasChat()) {
-        return {
-          content: [toText({
-            error: 'AI chat 未配置',
-            fix_hint: '请在 Web UI /settings 页面配置 Chat 模型',
-          })],
+      // 语义校验（zod 只管形状）：空 messages / 最后一条非 user → invalid_params
+      if (messages.length === 0 || messages[messages.length - 1]!.role !== 'user') {
+        return toolError('invalid_params', 'messages 不能为空，且最后一条必须是 role=user', { path: 'messages' })
+      }
+      if (since && !isValidIsoDate(since)) {
+        return toolError('invalid_params', `since 不是合法的 ISO 时间：${since}`, { path: 'since', value: since })
+      }
+      if (until && !isValidIsoDate(until)) {
+        return toolError('invalid_params', `until 不是合法的 ISO 时间：${until}`, { path: 'until', value: until })
+      }
+      // context_doc_id 不存在时显式报错，而不是静默降级（调用方应知道 id 已失效）
+      if (context_doc_id) {
+        const ctx = db.query("SELECT id FROM blocks WHERE id = ? AND type = 'document'").get(context_doc_id)
+        if (!ctx) {
+          return toolError('not_found', `context_doc_id 指向的文档不存在：${context_doc_id}`, { context_doc_id })
         }
+      }
+      if (!hasRuntime() || !getRuntime().hasChat()) {
+        return toolError('not_configured', 'Chat 模型未配置', { fix_hint: NOT_CONFIGURED_HINT })
       }
       try {
         const chatMessages: ChatMessage[] = messages as ChatMessage[]
@@ -552,15 +595,8 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
-        return {
-          content: [toText({
-            error: msg.startsWith('[未配置]') ? 'not_configured' : 'llm_error',
-            message: msg,
-            fix_hint: msg.startsWith('[未配置]')
-              ? '请在 Web UI /settings 页面配置 Chat 模型'
-              : undefined,
-          })],
-        }
+        const notConfigured = msg.startsWith('[未配置]')
+        return toolError(notConfigured ? 'not_configured' : 'llm_error', msg, notConfigured ? { fix_hint: NOT_CONFIGURED_HINT } : undefined)
       }
     },
   )
@@ -614,6 +650,9 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
     async ({ suggestion_id, candidate_index }) => {
       const result = applySuggestion(suggestion_id, candidate_index, 'ai_suggested')
+      if (!result.applied && result.reason === 'not_found') {
+        return toolError('not_found', `建议 ${suggestion_id} 不存在`, { suggestion_id })
+      }
       return {
         content: [toText({
           applied: result.applied,
@@ -635,6 +674,9 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
     async ({ suggestion_id }) => {
       const result = dismissSuggestion(suggestion_id)
+      if (!result.dismissed && result.reason === 'not_found') {
+        return toolError('not_found', `建议 ${suggestion_id} 不存在`, { suggestion_id })
+      }
       return { content: [toText({ dismissed: result.dismissed, reason: result.reason })] }
     },
   )
@@ -649,6 +691,9 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
     async ({ suggestion_id }) => {
       const result = revertSuggestion(suggestion_id)
+      if (!result.reverted && result.reason === 'not_found') {
+        return toolError('not_found', `建议 ${suggestion_id} 不存在`, { suggestion_id })
+      }
       return { content: [toText({ reverted: result.reverted, reason: result.reason })] }
     },
   )
@@ -663,14 +708,14 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
     async ({ block_id }) => {
       if (!hasRuntime() || !getRuntime().hasChat()) {
-        return { content: [toText({ error: 'not_configured', fix_hint: '请配置 Chat 模型' })] }
+        return toolError('not_configured', 'Chat 模型未配置', { fix_hint: NOT_CONFIGURED_HINT })
       }
       const db = getDb()
       const row = db.query('SELECT id, content, notebook_id FROM blocks WHERE id = ?').get(block_id) as
         | { id: string; content: string; notebook_id: string }
         | undefined
       if (!row) {
-        return { content: [toText({ error: `Block ${block_id} 不存在` })] }
+        return toolError('not_found', `Block ${block_id} 不存在`, { block_id })
       }
       const cfg = getRuntime().autoLinkConfig()
       const r = await analyzeBlock({
@@ -770,7 +815,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
         score_kind: string
         error: string | null
       } | undefined
-      if (!row) return { content: [toText({ error: 'suggestion not found', suggestion_id })], isError: true }
+      if (!row) return toolError('not_found', `建议 ${suggestion_id} 不存在`, { suggestion_id })
       let candidates: unknown[] = []
       try { candidates = JSON.parse(row.candidates) } catch { /* ignore */ }
       return {

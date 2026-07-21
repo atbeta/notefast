@@ -172,3 +172,84 @@ describe('notefast_create_doc — 嵌套块 FK 回归', () => {
     await transport.close()
   })
 })
+
+describe('MCP 工具错误语义统一（isError + error.code）', () => {
+  async function callTool(name: string, args: Record<string, unknown>) {
+    const { getDb } = await import('../db')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { transport } = await createSession(nb.id)
+    const init = await mcpRequest(transport, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    await mcpRequest(transport, 'notifications/initialized', undefined, undefined, init.sessionId)
+    const call = await mcpRequest(transport, 'tools/call', { name, arguments: args }, 2, init.sessionId)
+    await transport.close()
+    const msg = call.body[0] as Record<string, unknown>
+    const result = msg.result as { isError?: boolean; content: Array<{ text: string }> }
+    return { result, payload: JSON.parse(result.content[0]!.text) as Record<string, unknown> }
+  }
+
+  test('get_doc 不存在 → isError + not_found + data.doc_id', async () => {
+    const { result, payload } = await callTool('notefast_get_doc', { doc_id: 'no-such-doc' })
+    expect(result.isError).toBe(true)
+    const err = payload.error as { code: string; message: string; data: { doc_id: string } }
+    expect(err.code).toBe('not_found')
+    expect(err.data.doc_id).toBe('no-such-doc')
+  })
+
+  test('get_block 不存在 → not_found', async () => {
+    const { result, payload } = await callTool('notefast_get_block', { block_id: 'nope' })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('not_found')
+  })
+
+  test('get_backlinks 目标不存在 → not_found（不再静默返回空列表）', async () => {
+    const { result, payload } = await callTool('notefast_get_backlinks', { block_id: 'ghost' })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('not_found')
+  })
+
+  test('create_block 父块不存在 → not_found', async () => {
+    const { result, payload } = await callTool('notefast_create_block', { parent_id: 'ghost-parent', type: 'paragraph', content: 'x' })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('not_found')
+  })
+
+  test('chat 空 messages → invalid_params', async () => {
+    const { result, payload } = await callTool('notefast_chat', { messages: [] })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('invalid_params')
+  })
+
+  test('chat context_doc_id 不存在 → not_found（不再静默降级）', async () => {
+    const { result, payload } = await callTool('notefast_chat', {
+      messages: [{ role: 'user', content: 'hi' }],
+      context_doc_id: 'ghost-doc',
+    })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('not_found')
+  })
+
+  test('chat since 格式错误 → invalid_params（不再静默忽略）', async () => {
+    const { result, payload } = await callTool('notefast_chat', {
+      messages: [{ role: 'user', content: 'hi' }],
+      since: 'not-a-date',
+    })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('invalid_params')
+  })
+
+  test('autolink_apply 不存在 → not_found', async () => {
+    const { result, payload } = await callTool('notefast_autolink_apply', { suggestion_id: 'ghost-sug' })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('not_found')
+  })
+
+  test('semantic_search 未配置 embedding → not_configured', async () => {
+    const { result, payload } = await callTool('notefast_semantic_search', { query: 'test' })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('not_configured')
+  })
+})
