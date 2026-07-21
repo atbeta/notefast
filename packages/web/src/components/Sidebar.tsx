@@ -205,7 +205,7 @@ export default function Sidebar({
                     onClick={closeAfterNav}
                     className={`px-2.5 py-1 rounded-md text-[13px] truncate transition-colors ${
                       isActive
-                        ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium [box-shadow:inset_2px_0_0_rgb(var(--primary)/0.65)]'
                         : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                     }`}
                     title={doc.title}

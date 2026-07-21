@@ -82,6 +82,8 @@
   }
   .sidebar-link-active {
     @apply sidebar-link bg-sidebar-accent text-sidebar-accent-foreground font-medium;
+    /* 激活态点缀：极细左侧主色条，克制但有品质感 */
+    box-shadow: inset 2px 0 0 rgb(var(--primary) / 0.65);
   }
 }
 

@@ -159,7 +159,7 @@ export default function InboxPage() {
         </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div className="flex-1 overflow-y-auto px-8 py-4">
         {loading && items.length === 0 ? (
           <div className="text-center text-muted-foreground/60 text-sm py-12">加载中…</div>
         ) : items.length === 0 ? (
@@ -209,7 +209,7 @@ function InboxRow({
 }) {
   const top = item.candidates[0]
   return (
-    <div className="py-4 first:pt-2 transition-colors">
+    <div className="py-4 px-2 -mx-2 first:pt-2 rounded-md hover:bg-accent/40 transition-colors">
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 text-xs mb-1.5">

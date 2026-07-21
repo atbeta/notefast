@@ -267,7 +267,7 @@ export default function DocPage() {
         <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
           {/* stale-while-revalidate：切换文档时保留旧内容降透明，新文档就地替换，无闪烁 */}
           <div className={`transition-opacity duration-200 ${showingStale ? 'opacity-40' : 'opacity-100'}`}>
-            <div className="w-full max-w-4xl mx-auto px-8 pt-10 pb-32 animate-fade-in">
+            <div className="w-full max-w-4xl mx-auto px-8 pt-14 pb-32 animate-fade-in">
             {/* Title — always editable, AI-generate on hover */}
             <div className="group relative">
               <input
@@ -424,7 +424,7 @@ function OutlineView({
             if (el) scrollToElement(el)
             history.replaceState(null, '', `#${h.id}`)
           }}
-          className="px-1.5 -mx-1.5 py-1 text-[12.5px] text-muted-foreground hover:text-foreground rounded transition-colors truncate"
+          className="px-1.5 -mx-1.5 py-1 text-[12px] text-muted-foreground/85 hover:text-foreground rounded transition-colors truncate"
           style={{ paddingLeft: `${(h.depth * 12) + 6}px` }}
           title={h.content}
         >
