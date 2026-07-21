@@ -43,13 +43,17 @@ app.use('/api/*', authMiddleware)
 
 app.get('/health', (c) => c.json({ status: 'ok', time: new Date().toISOString() }))
 
-// 实例版本号：运行时读 packages/server/package.json（src 与打包后的 dist 均为其同级子目录），
+// 实例版本号：Docker 部署取镜像构建时注入的 APP_VERSION（= git tag），
+// 否则回退读 packages/server/package.json（src 与打包后的 dist 均为其同级子目录）。
 // Web 侧边栏据此动态展示，升级版本时无需改前端。
-let appVersion = '0.0.0'
-try {
-  const pkg = JSON.parse(readFileSync(join(import.meta.dir, '..', 'package.json'), 'utf8'))
-  if (typeof pkg.version === 'string' && pkg.version) appVersion = pkg.version
-} catch { /* 读取失败保持兜底值 */ }
+let appVersion = (process.env.APP_VERSION || '').trim().replace(/^v/, '')
+if (!appVersion) {
+  appVersion = '0.0.0'
+  try {
+    const pkg = JSON.parse(readFileSync(join(import.meta.dir, '..', 'package.json'), 'utf8'))
+    if (typeof pkg.version === 'string' && pkg.version) appVersion = pkg.version
+  } catch { /* 读取失败保持兜底值 */ }
+}
 
 app.get('/api/v1/version', (c) => c.json({ version: appVersion }))
 
