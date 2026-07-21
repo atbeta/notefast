@@ -69,10 +69,15 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
 
   const authHeader = (c.req.header('Authorization') || '').trim()
 
-  // Bearer 鉴权 —— 三个 token 取优先级最高的命中：
-  //   WRITE_TOKEN → POST/PATCH/PUT/DELETE 可写（fallback: API_TOKEN → READ_TOKEN）
-  //   READ_TOKEN  → GET/HEAD 只读        （fallback: API_TOKEN）
-  //   只设 API_TOKEN → 向后兼容（所有方法同 token）
+  // Bearer 鉴权：
+  //   如果设了 WRITE_TOKEN/READ_TOKEN 其中一个，则按方法拆分鉴权：
+  //     POST/PATCH/PUT/DELETE → WRITE_TOKEN (仅该 token 可写)
+  //     GET/HEAD              → READ_TOKEN  (仅该 token 可读)
+  //   如果 WRITE_TOKEN 未设但 API_TOKEN 已设 → 写操作 fallback 到 API_TOKEN
+  //   如果 READ_TOKEN 未设但 API_TOKEN 已设   → 读操作 fallback 到 API_TOKEN
+  //   没有任何 token 设过 → 鉴权不启用
+  //   注意：同时设 WRITE_TOKEN + API_TOKEN 时，API_TOKEN 不再拥有写权限
+  //         （这是有意行为：切到 split 模式后旧的全能 token 必须收窄）
   const isWrite = c.req.method === 'POST' || c.req.method === 'PATCH' || c.req.method === 'PUT' || c.req.method === 'DELETE'
   const effectiveToken = isWrite
     ? (writeToken || apiToken)

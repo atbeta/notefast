@@ -4,6 +4,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { registerMcpTools } from './tools'
 
 const SESSION_TTL_MS = 30 * 60_000 // 30 分钟无活动自动清理
+const MAX_SESSIONS = 1000 // 防止 OOM DoS
 
 interface SessionEntry {
   transport: WebStandardStreamableHTTPServerTransport
@@ -16,6 +17,11 @@ export async function createSession(notebookId: string): Promise<{
   sid: string
   transport: WebStandardStreamableHTTPServerTransport
 }> {
+  cleanupStale()
+  if (sessions.size >= MAX_SESSIONS) {
+    throw new Error('Too many active MCP sessions')
+  }
+
   const serverName = process.env.MCP_SERVER_NAME || 'notefast'
   const sid = crypto.randomUUID()
 
@@ -27,6 +33,7 @@ export async function createSession(notebookId: string): Promise<{
 
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: () => sid,
+    onsessionclosed: () => { sessions.delete(sid) },
   })
   await server.connect(transport)
 
@@ -37,8 +44,24 @@ export async function createSession(notebookId: string): Promise<{
 function cleanupStale(): void {
   const now = Date.now()
   for (const [sid, entry] of sessions) {
-    if (now - entry.createdAt > SESSION_TTL_MS) sessions.delete(sid)
+    if (now - entry.createdAt > SESSION_TTL_MS) {
+      entry.transport.close().catch(() => {})
+      sessions.delete(sid)
+    }
   }
+}
+
+let cleanupTimer: ReturnType<typeof setInterval> | null = null
+
+function ensureCleanupTimer(): void {
+  if (cleanupTimer !== null) return
+  cleanupTimer = setInterval(() => {
+    cleanupStale()
+    if (sessions.size === 0 && cleanupTimer !== null) {
+      clearInterval(cleanupTimer)
+      cleanupTimer = null
+    }
+  }, 60_000)
 }
 
 export async function handleMcpRequest(notebookId: string, c: Context): Promise<Response> {
@@ -53,52 +76,39 @@ export async function handleMcpRequest(notebookId: string, c: Context): Promise<
 
   const httpMethod = c.req.method
 
-  // GET/DELETE：若无 SID 自动建，补 header 后转发
   if (httpMethod !== 'POST') {
     if (!sid) {
       const s = await createSession(notebookId)
       const h = new Headers(c.req.raw.headers)
       h.set('mcp-session-id', s.sid)
+      ensureCleanupTimer()
       return s.transport.handleRequest(new Request(c.req.raw.url, { method: httpMethod, headers: h }))
     }
     return c.json({ error: 'invalid_session' } as Record<string, unknown>, 400)
   }
 
-  // POST：读 body 区分 initialize / tools/call
   const bodyText = await c.req.raw.text()
   let rpcMethod: string | null = null
   try { rpcMethod = (JSON.parse(bodyText || '{}') as { method?: string }).method ?? null } catch { /* empty */ }
 
-  const autoInit = !sid || rpcMethod === 'initialize' || rpcMethod === 'tools/call' || !rpcMethod
+  const autoInit = !sid && rpcMethod === 'initialize'
 
   if (!autoInit) {
+    if (!sid) {
+      return new Response(
+        JSON.stringify({ jsonrpc: '2.0', error: { code: -32001, message: 'Mcp-Session-Id required. Send initialize first or include header.' }, id: null }),
+        { status: 400, headers: { 'content-type': 'application/json' } },
+      )
+    }
     return new Response(
-      JSON.stringify({ jsonrpc: '2.0', error: { code: -32001, message: 'Mcp-Session-Id required' }, id: null }),
-      { status: 400, headers: { 'content-type': 'application/json' } },
+      JSON.stringify({ jsonrpc: '2.0', error: { code: -32001, message: 'Session expired or not found' }, id: null }),
+      { status: 404, headers: { 'content-type': 'application/json' } },
     )
   }
 
   const session = await createSession(notebookId)
+  ensureCleanupTimer()
 
-  // tools/call 等非 init 请求需先隐式 initialize 一把
-  if (rpcMethod && rpcMethod !== 'initialize' && rpcMethod !== 'notifications/initialized') {
-    const initH = new Headers()
-    initH.set('content-type', 'application/json')
-    initH.set('accept', 'application/json, text/event-stream')
-    initH.set('mcp-session-id', session.sid)
-    await session.transport.handleRequest(new Request(c.req.raw.url, {
-      method: 'POST',
-      headers: initH,
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: crypto.randomUUID(),
-        method: 'initialize',
-        params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'auto-init', version: '1.0' } },
-      }),
-    }))
-  }
-
-  // SDK validateSession 要求请求头含 mcp-session-id
   const rewrapped = new Headers(c.req.raw.headers)
   rewrapped.set('mcp-session-id', session.sid)
   const response = await session.transport.handleRequest(new Request(c.req.raw.url, {

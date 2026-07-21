@@ -708,17 +708,18 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
   )
 
   // ───────────────────── Resources ─────────────────────
-  ;(server as any).registerResource(
+  server.registerResource(
     'notefast_docs_index',
     'notefast://docs',
     { title: '全部文档', description: '知识库中所有文档的索引列表' },
     async () => {
-      const rows = getDb().query("SELECT id, content FROM blocks WHERE type = 'document' ORDER BY updated_at DESC").all() as Array<{ id: string; content: string }>
+      const rows = getDb().query("SELECT id, content FROM blocks WHERE type = 'document' ORDER BY updated_at DESC LIMIT 1000").all() as Array<{ id: string; content: string }>
       const lines = rows.map((r, i) => `${i + 1}. ${r.content || '(无标题)'}  (${r.id.slice(0, 8)})`).join('\n')
-      return { contents: [{ text: lines || '(暂无文档)', uri: 'notefast://docs' }] }
+      return { contents: [{ text: (lines || '(暂无文档)').slice(0, 50_000), uri: 'notefast://docs' }] }
     },
   )
 
+  // URI template 在 SDK TS 声明中不完全，用 any 桥接类型
   ;(server as any).registerResource(
     'notefast_doc',
     { uriTemplate: 'notefast://docs/{docId}' },
@@ -765,7 +766,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
         content: [toText({
           id: row.id,
           source_block_id: row.source_block_id,
-          source_content: row.source_content,
+          source_content: row.source_content.slice(0, 2_000),
           source_doc_title: row.source_doc_title,
           anchor: row.anchor,
           kind: row.kind,
