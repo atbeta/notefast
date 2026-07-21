@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { initDb, closeDb } from '../db'
-import { createMcpTransport } from '../mcp/server'
+import { createSession } from '../mcp/server'
 
 let testDir: string
 
@@ -31,7 +31,7 @@ function parseSseText(text: string): unknown[] {
 }
 
 async function mcpRequest(
-  transport: Awaited<ReturnType<typeof createMcpTransport>>,
+  transport: Awaited<ReturnType<typeof createSession>>['transport'],
   method: string,
   params?: unknown,
   id?: number,
@@ -65,14 +65,14 @@ async function mcpRequest(
   return { status: res.status, sessionId: sid, body }
 }
 
-describe('createMcpTransport', () => {
+describe('createSession', () => {
   test('transport 可以初始化创建', async () => {
-    const transport = await createMcpTransport('test-nb-id')
+    const { transport } = await createSession('test-nb-id')
     expect(transport).toBeDefined()
   })
 
   test('initialize 返回 session 和 serverInfo', async () => {
-    const transport = await createMcpTransport('test-nb-id')
+    const { transport } = await createSession('test-nb-id')
     const init = await mcpRequest(transport, 'initialize', {
       protocolVersion: '2025-03-26',
       capabilities: {},
@@ -90,7 +90,7 @@ describe('createMcpTransport', () => {
   })
 
   test('初始化后可获取工具列表', async () => {
-    const transport = await createMcpTransport('test-nb-id')
+    const { transport } = await createSession('test-nb-id')
     const init = await mcpRequest(transport, 'initialize', {
       protocolVersion: '2025-03-26',
       capabilities: {},
@@ -107,7 +107,7 @@ describe('createMcpTransport', () => {
     const msg = list.body[0] as Record<string, unknown>
     expect(msg.result).toBeDefined()
     const tools = (msg.result as Record<string, unknown>).tools as { name: string }[]
-    expect(tools.length).toBe(18)
+    expect(tools.length).toBe(20)
 
     const toolNames = tools.map((t) => t.name)
     expect(toolNames).toContain('notefast_search')
