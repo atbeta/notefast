@@ -185,7 +185,7 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
   })
 
   /**
-   * Agent loop：mock LLM 第一次返回 tool_call，第二次返回 final answer。
+   * Agent loop：mock LLM 第一次 SSE 返回 tool_call，第二次 SSE 返回 final answer。
    * 验证：tool 事件触发 + 后续工具结果回填 + done 事件含 toolTrace。
    */
   test('agent loop: LLM 调用 notefast_search_more 后给出最终答案', async () => {
@@ -210,43 +210,32 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
       pluginSystem,
     )
 
-    // chatWithTools 用 JSON 响应（不走 SSE）
     let callCount = 0
+    const encoder = new TextEncoder()
+    const sseResponse = (chunks: string[]) =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            for (const ch of chunks) c.enqueue(encoder.encode(ch))
+            c.close()
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+
     const fetcher: typeof fetch = (async () => {
       callCount++
       if (callCount === 1) {
-        // 第一轮：请求搜索更多
-        return new Response(
-          JSON.stringify({
-            choices: [{
-              message: {
-                role: 'assistant',
-                content: '',
-                tool_calls: [{
-                  id: 'call_1',
-                  type: 'function',
-                  function: {
-                    name: 'notefast_search_more',
-                    arguments: JSON.stringify({ query: 'detailed' }),
-                  },
-                }],
-              },
-              finish_reason: 'tool_calls',
-            }],
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        ) as unknown as Response
+        return sseResponse([
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"notefast_search_more","arguments":""}}]}}]}\n\n',
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"query\\":\\"detailed\\"}"}}]}}]}\n\n',
+          'data: [DONE]\n\n',
+        ]) as unknown as Response
       }
-      // 第二轮：最终答案
-      return new Response(
-        JSON.stringify({
-          choices: [{
-            message: { role: 'assistant', content: 'final answer based on deeper search' },
-            finish_reason: 'stop',
-          }],
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ) as unknown as Response
+      return sseResponse([
+        'data: {"choices":[{"delta":{"content":"final answer based on deeper search"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ]) as unknown as Response
     }) as unknown as typeof fetch
     const { getRuntime } = await import('../services/aiRuntime')
     getRuntime().setFetchImpl(fetcher)
@@ -264,8 +253,63 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
     const doneEvent = events.find((e) => e.type === 'done') as { type: string; payload?: { toolTrace: Array<{ tool: string }> } }
     expect(doneEvent.payload?.toolTrace.length).toBeGreaterThan(0)
     expect(doneEvent.payload?.toolTrace[0]?.tool).toBe('notefast_search_more')
-    // 至少调用过 2 次 LLM
+    const tokens = events.filter((e) => e.type === 'token') as Array<{ payload?: { content: string } }>
+    expect(tokens.map((t) => t.payload?.content).join('')).toContain('final answer')
     expect(callCount).toBeGreaterThanOrEqual(2)
+  })
+
+  test('流式 reasoning 事件与 think 标签拆分', async () => {
+    applyNewConfig(
+      {
+        version: 1,
+        chat: {
+          id: 'x',
+          label: 'x',
+          preset: 'custom',
+          baseUrl: 'http://mock',
+          apiKey: '',
+          embeddingModel: '',
+          chatModel: 'fake-chat',
+          timeoutMs: 5000,
+          extraHeaders: {},
+        },
+        embedding: null,
+        autoIndex: false,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+
+    const encoder = new TextEncoder()
+    const fetcher = (async () =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            c.enqueue(encoder.encode('data: {"choices":[{"delta":{"reasoning_content":"step1"}}]}\n\n'))
+            c.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"<think>inner"}}]}\n\n'))
+            c.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"</think>\\nAnswer"}}]}\n\n'))
+            c.enqueue(encoder.encode('data: [DONE]\n\n'))
+            c.close()
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )) as unknown as typeof fetch
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl(fetcher)
+
+    const reasoning: string[] = []
+    const tokens: string[] = []
+    for await (const ev of runChat({
+      messages: [{ role: 'user', content: 'hi' }],
+      enableTools: false,
+    })) {
+      if (ev.type === 'reasoning') reasoning.push(ev.content)
+      if (ev.type === 'token') tokens.push(ev.content)
+    }
+    expect(reasoning.join('')).toContain('step1')
+    expect(reasoning.join('')).toContain('inner')
+    expect(tokens.join('')).toContain('Answer')
+    expect(tokens.join('')).not.toContain('<think>')
   })
 
   /**

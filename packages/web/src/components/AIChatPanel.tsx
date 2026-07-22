@@ -1,10 +1,23 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, X, Loader2, Minimize2, Maximize2, ExternalLink, MessageSquareText } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import {
+  Send,
+  X,
+  Loader2,
+  Minimize2,
+  Maximize2,
+  ExternalLink,
+  MessageSquareText,
+  ChevronRight,
+  Brain,
+} from 'lucide-react'
 import { request, fetchWithAuth } from '../hooks/useAPI'
+import ChatMarkdown from './ChatMarkdown'
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
+  reasoning?: string
 }
 
 export interface Citation {
@@ -45,6 +58,7 @@ export default function AIChatPanel({
   const [messages, setMessages] = useState<Message[]>([])
   const [citations, setCitations] = useState<Citation[]>([])
   const [retrieval, setRetrieval] = useState<RetrievalInfo | null>(null)
+  const [toolStatus, setToolStatus] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [capabilities, setCapabilities] = useState<{ chat: boolean; reranker: boolean; embedding: boolean } | null>(null)
@@ -56,7 +70,7 @@ export default function AIChatPanel({
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages])
+  }, [messages, toolStatus])
 
   // 拉取能力；chat 关闭时直接提示
   useEffect(() => {
@@ -85,6 +99,27 @@ export default function AIChatPanel({
 
   if (!isOpen) return null
 
+  const upsertAssistant = (patch: { content?: string; reasoning?: string }) => {
+    setMessages((prev) => {
+      const next = [...prev]
+      const last = next[next.length - 1]
+      if (last?.role === 'assistant') {
+        next[next.length - 1] = {
+          role: 'assistant',
+          content: patch.content !== undefined ? patch.content : last.content,
+          reasoning: patch.reasoning !== undefined ? patch.reasoning : last.reasoning,
+        }
+      } else {
+        next.push({
+          role: 'assistant',
+          content: patch.content ?? '',
+          reasoning: patch.reasoning,
+        })
+      }
+      return next
+    })
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || loading) return
@@ -95,6 +130,7 @@ export default function AIChatPanel({
     setMessages(newHistory)
     setCitations([])
     setRetrieval(null)
+    setToolStatus(null)
     setLoading(true)
     setConfigMissing(false)
 
@@ -123,6 +159,7 @@ export default function AIChatPanel({
       const decoder = new TextDecoder()
       let buffer = ''
       let assistantText = ''
+      let reasoningText = ''
 
       while (true) {
         const { value, done } = await reader.read()
@@ -151,25 +188,33 @@ export default function AIChatPanel({
                 model: payload.retrieval?.model,
               })
               setCitations(payload.citations || [])
+            } else if (eventName === 'tool') {
+              setToolStatus(`正在调用 ${payload.tool || '工具'}…`)
+            } else if (eventName === 'reasoning') {
+              reasoningText += payload.content || ''
+              upsertAssistant({ reasoning: reasoningText, content: assistantText })
             } else if (eventName === 'token') {
+              setToolStatus(null)
               assistantText += payload.content || ''
-              setMessages((prev) => {
-                const next = [...prev]
-                if (next.length > 0 && next[next.length - 1]!.role === 'assistant') {
-                  next[next.length - 1] = { role: 'assistant', content: assistantText }
-                } else {
-                  next.push({ role: 'assistant', content: assistantText })
-                }
-                return next
-              })
+              upsertAssistant({ content: assistantText, reasoning: reasoningText || undefined })
             } else if (eventName === 'done') {
+              setToolStatus(null)
               setCitations(payload.citations || [])
+              if (payload.retrieval) {
+                setRetrieval({
+                  fts_hits: payload.retrieval.fts_hits ?? 0,
+                  semantic_hits: payload.retrieval.semantic_hits ?? 0,
+                  reranked: payload.retrieval.reranked ?? false,
+                  model: payload.retrieval.model,
+                })
+              }
             } else if (eventName === 'error') {
               throw new Error(payload.message || 'LLM 错误')
             }
           } catch (parseErr) {
             if (parseErr instanceof Error && parseErr.message !== 'LLM 错误') {
-              // 忽略单帧解析失败
+              // 单帧解析失败：SSE keep-alive 注释行或 provider 心跳多见，warn 即可
+              console.warn('[chat-sse] drop unparseable frame:', parseErr.message)
             } else if (parseErr instanceof Error) {
               throw parseErr
             }
@@ -178,20 +223,25 @@ export default function AIChatPanel({
       }
 
       // 确保最后一条 assistant 始终存在
-      if (assistantText) {
-        setMessages((prev) => {
-          if (prev.length > 0 && prev[prev.length - 1]!.role === 'assistant') return prev
-          return [...prev, { role: 'assistant', content: assistantText }]
+      if (assistantText || reasoningText) {
+        upsertAssistant({
+          content: assistantText,
+          reasoning: reasoningText || undefined,
         })
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      setMessages((prev) => [...prev, { role: 'assistant', content: `请求失败: ${msg}` }])
-      if (msg.includes('未配置') || msg.includes('not_configured')) {
-        setConfigMissing(true)
+      if ((err as { name?: string })?.name === 'AbortError') {
+        // 用户停止：保留已生成内容
+      } else {
+        setMessages((prev) => [...prev, { role: 'assistant', content: `请求失败: ${msg}` }])
+        if (msg.includes('未配置') || msg.includes('not_configured')) {
+          setConfigMissing(true)
+        }
       }
     } finally {
       setLoading(false)
+      setToolStatus(null)
       abortRef.current = null
     }
   }
@@ -199,13 +249,17 @@ export default function AIChatPanel({
   const handleStop = () => {
     if (abortRef.current) abortRef.current.abort()
     setLoading(false)
+    setToolStatus(null)
   }
 
   const handleClear = () => {
     setMessages([])
     setCitations([])
     setRetrieval(null)
+    setToolStatus(null)
   }
+
+  const showSpinner = loading && !messages.some((m) => m.role === 'assistant' && (m.content || m.reasoning))
 
   return (
     <div
@@ -282,71 +336,112 @@ export default function AIChatPanel({
           </div>
         ) : (
           <>
-            {messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
-              >
+            {messages.map((msg, idx) => {
+              const isLastAssistant = msg.role === 'assistant' && idx === messages.length - 1
+              const reasoningOpen = Boolean(loading && isLastAssistant && msg.reasoning && !msg.content)
+              return (
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                    msg.role === 'user'
-                      ? 'bg-ink text-ink-foreground'
-                      : 'bg-accent text-foreground'
-                  }`}
+                  key={idx}
+                  className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
                 >
-                  {msg.role === 'user' ? 'U' : <MessageSquareText className="w-4 h-4" strokeWidth={1.5} />}
-                </div>
-                <div className="max-w-[80%] space-y-1">
                   <div
-                    className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                       msg.role === 'user'
-                        ? 'bg-ink text-ink-foreground rounded-tr-sm'
-                        : 'bg-muted/50 text-foreground border border-border/50 rounded-tl-sm'
+                        ? 'bg-ink text-ink-foreground'
+                        : 'bg-accent text-foreground'
                     }`}
                   >
-                    {msg.content}
+                    {msg.role === 'user' ? 'U' : <MessageSquareText className="w-4 h-4" strokeWidth={1.5} />}
                   </div>
-                  {/* 对最后一条 assistant 消息，把引用列表展示在下方 */}
-                  {msg.role === 'assistant' && idx === messages.length - 1 && citations.length > 0 && (
-                    <div className="rounded-lg border border-border/40 bg-background/40 px-3 py-2 space-y-1">
-                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                        引用 · {retrieval?.reranked ? `reranked (${retrieval.model})` : 'hybrid search'}
-                        {retrieval && ` · FTS ${retrieval.fts_hits} · semantic ${retrieval.semantic_hits}`}
+                  <div className="max-w-[85%] space-y-1.5 min-w-0">
+                    {msg.role === 'assistant' && msg.reasoning ? (
+                      <ThinkBlock
+                        text={msg.reasoning}
+                        defaultOpen={reasoningOpen}
+                        streaming={Boolean(loading && isLastAssistant && !msg.content)}
+                      />
+                    ) : null}
+                    {(msg.content || msg.role === 'user') && (
+                      <div
+                        className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                          msg.role === 'user'
+                            ? 'bg-ink text-ink-foreground rounded-tr-sm whitespace-pre-wrap'
+                            : 'bg-muted/50 text-foreground border border-border/50 rounded-tl-sm'
+                        }`}
+                      >
+                        {msg.role === 'user' ? (
+                          msg.content
+                        ) : (
+                          <ChatMarkdown content={msg.content} />
+                        )}
                       </div>
-                      <ol className="space-y-1">
-                        {citations.map((c, ci) => (
-                          <li key={c.block_id} className="text-[11px] text-muted-foreground">
-                            <span className="text-primary font-mono mr-1">[{ci + 1}]</span>
-                            <span className="text-foreground">{c.doc_title}</span>
-                            <span className="mx-1">·</span>
-                            <span className="line-clamp-1 inline">{c.snippet}</span>
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  )}
+                    )}
+                    {isLastAssistant && citations.length > 0 && (
+                      <div className="rounded-lg border border-border/40 bg-background/40 px-3 py-2 space-y-1">
+                        <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                          引用 · {retrieval?.reranked ? `reranked (${retrieval.model})` : 'hybrid search'}
+                          {retrieval && ` · FTS ${retrieval.fts_hits} · semantic ${retrieval.semantic_hits}`}
+                        </div>
+                        <ol className="space-y-1">
+                          {citations.map((c, ci) => (
+                            <li key={c.block_id} className="text-[11px] text-muted-foreground">
+                              <span className="text-primary font-mono mr-1">[{ci + 1}]</span>
+                              <Link
+                                to={`/doc/${c.doc_id}#block-${c.block_id}`}
+                                className="text-foreground hover:text-primary hover:underline"
+                              >
+                                {c.doc_title}
+                              </Link>
+                              <span className="mx-1">·</span>
+                              <span className="line-clamp-1 inline">{c.snippet}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </>
         )}
         {loading && (
           <div className="flex gap-3">
-            <div className="w-8 h-8 rounded-full bg-accent text-foreground flex items-center justify-center shrink-0">
-              <MessageSquareText className="w-4 h-4" strokeWidth={1.5} />
-            </div>
-            <div className="bg-muted/50 border border-border/50 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              <span className="text-xs text-muted-foreground">
-                {retrieval ? '生成中...' : '检索中...'}
-              </span>
+            {(showSpinner || toolStatus) && (
+              <>
+                {showSpinner && (
+                  <div className="w-8 h-8 rounded-full bg-accent text-foreground flex items-center justify-center shrink-0">
+                    <MessageSquareText className="w-4 h-4" strokeWidth={1.5} />
+                  </div>
+                )}
+                <div
+                  className={`flex items-center gap-2 ${
+                    showSpinner
+                      ? 'bg-muted/50 border border-border/50 rounded-2xl rounded-tl-sm px-4 py-3'
+                      : 'pl-11 text-xs text-muted-foreground'
+                  }`}
+                >
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
+                  <span className="text-xs text-muted-foreground">
+                    {toolStatus || (retrieval ? '生成中…' : '检索中…')}
+                  </span>
+                  <button
+                    onClick={handleStop}
+                    className="ml-1 text-[10px] text-muted-foreground hover:text-foreground"
+                  >
+                    停止
+                  </button>
+                </div>
+              </>
+            )}
+            {!showSpinner && !toolStatus && (
               <button
                 onClick={handleStop}
-                className="ml-2 text-[10px] text-muted-foreground hover:text-foreground"
+                className="ml-11 text-[10px] text-muted-foreground hover:text-foreground"
               >
-                停止
+                停止生成
               </button>
-            </div>
+            )}
           </div>
         )}
         <div ref={messagesEndRef} />
@@ -367,25 +462,53 @@ export default function AIChatPanel({
                 handleSubmit(e)
               }
             }}
-            placeholder={
-              contextDocTitle ? `询问关于《${contextDocTitle}》的问题...` : '问我任何问题...'
-            }
-            disabled={configMissing}
-            className="flex-1 max-h-32 min-h-[40px] bg-transparent border-none focus:outline-none resize-none text-sm py-2 px-2 placeholder:text-muted-foreground/50 leading-relaxed disabled:opacity-50"
+            placeholder="向知识库提问…"
             rows={1}
+            disabled={loading || configMissing}
+            className="flex-1 resize-none bg-transparent border-0 outline-none text-sm px-2 py-1.5 max-h-32 placeholder:text-muted-foreground disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={!input.trim() || loading || configMissing}
-            className="w-8 h-8 rounded-lg bg-ink text-ink-foreground flex items-center justify-center shrink-0 hover:bg-ink-hover active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all mb-1"
+            className="p-2 rounded-lg bg-ink text-ink-foreground disabled:opacity-40 hover:opacity-90 transition-opacity"
           >
-            <Send className="w-4 h-4 ml-0.5" />
+            <Send className="w-4 h-4" />
           </button>
         </form>
-        <div className="text-[10px] text-center text-muted-foreground/60 mt-2">
-          按 Enter 发送，Shift + Enter 换行
-        </div>
       </div>
+    </div>
+  )
+}
+
+function ThinkBlock({
+  text,
+  defaultOpen,
+  streaming,
+}: {
+  text: string
+  defaultOpen: boolean
+  streaming: boolean
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  useEffect(() => {
+    if (defaultOpen) setOpen(true)
+    else if (!streaming) setOpen(false)
+  }, [defaultOpen, streaming])
+
+  return (
+    <div className="chat-think">
+      <button
+        type="button"
+        className="chat-think-toggle"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <ChevronRight className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`} />
+        <Brain className="w-3 h-3 opacity-70" />
+        <span>{streaming ? '思考中…' : '思考过程'}</span>
+        {streaming && <Loader2 className="w-3 h-3 animate-spin opacity-60" />}
+      </button>
+      {open && <div className="chat-think-body whitespace-pre-wrap">{text}</div>}
     </div>
   )
 }

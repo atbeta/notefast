@@ -6,6 +6,7 @@
  *
  *   event: retrieval → 初次检索完成
  *   event: tool      → agent loop 中工具调用完成
+ *   event: reasoning → 思考链增量（可选）
  *   event: token     → 流式 token
  *   event: done      → 流结束（带 citations + toolTrace）
  *   event: error     → 出错
@@ -14,12 +15,13 @@
  *  1. hybridSearch() 拿 citations（embedding 不可用时降级到 FTS5）
  *  2. buildChatPrompt() 组装 prompt（含 tool 定义）
  *  3. agent loop（最多 N 轮）：
- *     a. runtime.chatWithTools() → { content, tool_calls }
+ *     a. runtime.streamChatWithTools() → 流式 content/reasoning + 可选 tool_calls
  *     b. 若有 tool_calls：执行 search_more → 结果回填 prompt → 下一轮
- *     c. 否则 → 流式 token 输出最终答案
+ *     c. 否则 → 答案已在流中发出
  */
 
-import type { ChatMessage, ToolDefinition } from '@notefast/core'
+import type { ChatMessage, ToolCall, ToolDefinition } from '@notefast/core'
+import { ThinkStreamParser, splitThinkContent } from '@notefast/core'
 import type { Citation } from './hybridSearch'
 import { getDb } from '../db'
 import { expandBlockContext, hybridSearch, type HybridSearchReport } from './hybridSearch'
@@ -29,6 +31,7 @@ import { getRuntime, hasRuntime } from '../services/aiRuntime'
 export type ChatEvent =
   | { type: 'retrieval'; report: HybridSearchReport }
   | { type: 'tool'; tool: string; args: Record<string, unknown>; resultCount: number }
+  | { type: 'reasoning'; content: string }
   | { type: 'token'; content: string }
   | { type: 'done'; citations: Citation[]; retrieval: HybridSearchReport['retrieval']; toolTrace: ToolTraceEntry[] }
   | { type: 'error'; error: ChatError }
@@ -129,6 +132,37 @@ async function executeToolCall(
   return { citations: report.citations, retrieval: report.retrieval, resultCount: report.citations.length }
 }
 
+/** 把流式 chunk 经 Think 标签拆分后 yield 为 reasoning / token 事件 */
+async function* emitStreamChunks(
+  source: AsyncIterable<{ content?: string; reasoning?: string; done?: boolean; tool_calls?: ToolCall[] }>,
+): AsyncGenerator<ChatEvent, ToolCall[]> {
+  const parser = new ThinkStreamParser()
+  let toolCalls: ToolCall[] = []
+  for await (const chunk of source) {
+    if (chunk.reasoning) yield { type: 'reasoning', content: chunk.reasoning }
+    if (chunk.content) {
+      const split = parser.push(chunk.content)
+      if (split.reasoning) yield { type: 'reasoning', content: split.reasoning }
+      if (split.content) yield { type: 'token', content: split.content }
+    }
+    if (chunk.done) {
+      const flushed = parser.flush()
+      if (flushed.reasoning) yield { type: 'reasoning', content: flushed.reasoning }
+      if (flushed.content) yield { type: 'token', content: flushed.content }
+      if (chunk.tool_calls && chunk.tool_calls.length > 0) toolCalls = chunk.tool_calls
+    }
+  }
+  return toolCalls
+}
+
+/** 非流式整包答案：拆 think 后按事件发出（降级路径） */
+function* emitCompleteAnswer(content: string, reasoning?: string): Generator<ChatEvent> {
+  if (reasoning) yield { type: 'reasoning', content: reasoning }
+  const split = splitThinkContent(content)
+  if (split.reasoning) yield { type: 'reasoning', content: split.reasoning }
+  if (split.content) yield { type: 'token', content: split.content }
+}
+
 /**
  * 生成完整事件流。调用方通过 for-await 消费并写入 Hono streamSSE。
  */
@@ -212,55 +246,81 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
     let finalRetrieval = initialReport.retrieval
 
     for (let round = 0; round <= maxRounds; round++) {
-      if (enableTools && typeof runtime.chatWithTools === 'function') {
-        let result: import('@notefast/core').ChatWithToolsResult | null = null
-        let toolCallFailed = false
+      if (enableTools) {
+        let toolCalls: ToolCall[] = []
+        let streamFailed = false
         const llmStart = Date.now()
         try {
-          result = await runtime.chatWithTools(workingMessages, {
-            temperature: opts.temperature ?? 0.3,
-            maxTokens: opts.maxTokens ?? 2000,
-            tools: [getSearchToolDefinition()],
-          })
+          const gen = emitStreamChunks(
+            runtime.streamChatWithTools(workingMessages, {
+              temperature: opts.temperature ?? 0.3,
+              maxTokens: opts.maxTokens ?? 2000,
+              tools: [getSearchToolDefinition()],
+            }),
+          )
+          let next = await gen.next()
+          while (!next.done) {
+            yield next.value
+            next = await gen.next()
+          }
+          toolCalls = next.value
           console.info(JSON.stringify({
             event: 'llm_call',
             round,
-            tool_calls: result?.tool_calls.length ?? 0,
+            mode: 'stream_tools',
+            tool_calls: toolCalls.length,
             duration_ms: Date.now() - llmStart,
           }))
         } catch (e) {
-          // chatWithTools 失败（如 mock / provider 不支持非流式 JSON 响应）→ 降级为流式
-          console.error('[chat] chatWithTools failed, falling back to streamChat:', e)
-          toolCallFailed = true
+          console.error('[chat] streamChatWithTools failed, falling back:', e)
+          streamFailed = true
         }
 
-        if (toolCallFailed || !result) {
-          // provider 不支持 tool-call 或失败：降级为流式
-          for await (const chunk of runtime.streamChat(workingMessages, {
-            temperature: opts.temperature ?? 0.3,
-            maxTokens: opts.maxTokens ?? 2000,
-          })) {
-            if (chunk.content) yield { type: 'token', content: chunk.content }
-            if (chunk.done) break
+        if (streamFailed) {
+          let recovered = false
+          if (typeof runtime.chatWithTools === 'function') {
+            try {
+              const result = await runtime.chatWithTools(workingMessages, {
+                temperature: opts.temperature ?? 0.3,
+                maxTokens: opts.maxTokens ?? 2000,
+                tools: [getSearchToolDefinition()],
+              })
+              if (result && result.tool_calls.length > 0 && round < maxRounds) {
+                toolCalls = result.tool_calls
+                recovered = true
+              } else if (result) {
+                yield* emitCompleteAnswer(result.content || '', result.reasoning)
+                break
+              }
+            } catch (e2) {
+              console.error('[chat] chatWithTools fallback failed:', e2)
+            }
           }
-          break
+          if (!recovered && toolCalls.length === 0) {
+            for await (const ev of emitStreamChunks(
+              runtime.streamChat(workingMessages, {
+                temperature: opts.temperature ?? 0.3,
+                maxTokens: opts.maxTokens ?? 2000,
+              }),
+            )) {
+              yield ev
+            }
+            break
+          }
         }
 
-        if (result.tool_calls.length > 0 && round < maxRounds) {
-          // 回填 assistant message（含 tool_calls）
-          // 严格 OpenAI 协议要求：每个 role=tool 消息的 tool_call_id 必须出现在它前面的
-          // assistant 消息的 tool_calls 字段里（否则 provider 报 "tool result's tool id ... not found"）。
+        if (toolCalls.length > 0 && round < maxRounds) {
           workingMessages.push({
             role: 'assistant',
-            content: result.content || '',
-            tool_calls: result.tool_calls.map((tc) => ({
+            content: '',
+            tool_calls: toolCalls.map((tc) => ({
               id: tc.id,
-              type: 'function',
+              type: 'function' as const,
               function: { name: tc.name, arguments: JSON.stringify(tc.args) },
             })),
           })
 
-          for (const tc of result.tool_calls) {
+          for (const tc of toolCalls) {
             const exec = await executeToolCall(tc.name, tc.args, lastUser.content, {
               notebookId: opts.notebookId,
               since: opts.since,
@@ -293,7 +353,6 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
               }),
             })
 
-            // 用工具调用的最新 citations 替换最终输出（如果更相关）
             if (exec.citations.length > 0) {
               finalCitations = exec.citations
               finalRetrieval = exec.retrieval
@@ -302,17 +361,17 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
           continue
         }
 
-        // 无 tool call → 输出 content 作为最终答案
-        if (result.content) yield { type: 'token', content: result.content }
+        // 无 tool call：答案已在流中发出
         break
       } else {
-        // 不支持 tool call：走流式
-        for await (const chunk of runtime.streamChat(workingMessages, {
-          temperature: opts.temperature ?? 0.3,
-          maxTokens: opts.maxTokens ?? 2000,
-        })) {
-          if (chunk.content) yield { type: 'token', content: chunk.content }
-          if (chunk.done) break
+        // 不启用 tools：纯流式
+        for await (const ev of emitStreamChunks(
+          runtime.streamChat(workingMessages, {
+            temperature: opts.temperature ?? 0.3,
+            maxTokens: opts.maxTokens ?? 2000,
+          }),
+        )) {
+          yield ev
         }
         break
       }
@@ -358,11 +417,13 @@ function lookupDocTitle(docId: string): string | undefined {
  */
 export async function runChatSync(opts: RunChatOptions): Promise<{
   answer: string
+  reasoning?: string
   citations: Citation[]
   retrieval: HybridSearchReport['retrieval']
   toolTrace: ToolTraceEntry[]
 }> {
   let answer = ''
+  let reasoning = ''
   let citations: Citation[] = []
   let retrieval: HybridSearchReport['retrieval'] = {
     fts_hits: 0,
@@ -373,6 +434,7 @@ export async function runChatSync(opts: RunChatOptions): Promise<{
 
   for await (const ev of runChat(opts)) {
     if (ev.type === 'token') answer += ev.content
+    else if (ev.type === 'reasoning') reasoning += ev.content
     else if (ev.type === 'done') {
       citations = ev.citations
       retrieval = ev.retrieval
@@ -382,5 +444,11 @@ export async function runChatSync(opts: RunChatOptions): Promise<{
       throw new Error(prefix + ev.error.message)
     }
   }
-  return { answer, citations, retrieval, toolTrace }
+  return {
+    answer,
+    ...(reasoning ? { reasoning } : {}),
+    citations,
+    retrieval,
+    toolTrace,
+  }
 }

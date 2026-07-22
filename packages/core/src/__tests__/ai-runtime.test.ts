@@ -368,10 +368,71 @@ describe('AiRuntime streamChat', () => {
     let seenDone = false
     for await (const c of r.streamChat([{ role: 'user', content: 'hi' }])) {
       if (c.done) seenDone = true
-      else collected.push(c.content)
+      else if (c.content) collected.push(c.content)
     }
     expect(collected.join('')).toBe('Hello')
     expect(seenDone).toBe(true)
     expect(r.status().usage.chatCalls).toBe(1)
+  })
+
+  test('解析 reasoning_content 增量', async () => {
+    const chunks: string[] = []
+    chunks.push('data: {"choices":[{"delta":{"reasoning_content":"think"}}]}\n\n')
+    chunks.push('data: {"choices":[{"delta":{"content":"ans"}}]}\n\n')
+    chunks.push('data: [DONE]\n\n')
+
+    const encoder = new TextEncoder()
+    const fetchImpl = (async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            for (const c of chunks) controller.enqueue(encoder.encode(c))
+            controller.close()
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )) as unknown as typeof fetch
+
+    const r = makeRuntime(makeFullConfig(), fetchImpl)
+    const reasoning: string[] = []
+    const content: string[] = []
+    for await (const c of r.streamChat([{ role: 'user', content: 'hi' }])) {
+      if (c.reasoning) reasoning.push(c.reasoning)
+      if (c.content) content.push(c.content)
+    }
+    expect(reasoning.join('')).toBe('think')
+    expect(content.join('')).toBe('ans')
+  })
+
+  test('streamChatWithTools 累计 tool_calls', async () => {
+    const chunks: string[] = []
+    chunks.push(
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"notefast_search_more","arguments":""}}]}}]}\n\n',
+    )
+    chunks.push(
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"query\\":\\"x\\"}"}}]}}]}\n\n',
+    )
+    chunks.push('data: [DONE]\n\n')
+
+    const encoder = new TextEncoder()
+    const fetchImpl = (async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            for (const c of chunks) controller.enqueue(encoder.encode(c))
+            controller.close()
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )) as unknown as typeof fetch
+
+    const r = makeRuntime(makeFullConfig(), fetchImpl)
+    let toolCalls: Array<{ name: string; args: Record<string, unknown> }> = []
+    for await (const c of r.streamChatWithTools([{ role: 'user', content: 'hi' }], { tools: [] })) {
+      if (c.done && c.tool_calls) toolCalls = c.tool_calls
+    }
+    expect(toolCalls).toHaveLength(1)
+    expect(toolCalls[0]?.name).toBe('notefast_search_more')
+    expect(toolCalls[0]?.args).toEqual({ query: 'x' })
   })
 })

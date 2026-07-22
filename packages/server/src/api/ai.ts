@@ -502,12 +502,23 @@ ai.post('/chat', zValidator('json', chatSchema), async (c) => {
       })) {
         if (ev.type === 'retrieval') {
           await sse.writeSSE({ event: 'retrieval', data: JSON.stringify(ev.report) })
+        } else if (ev.type === 'tool') {
+          await sse.writeSSE({
+            event: 'tool',
+            data: JSON.stringify({ tool: ev.tool, args: ev.args, result_count: ev.resultCount }),
+          })
+        } else if (ev.type === 'reasoning') {
+          await sse.writeSSE({ event: 'reasoning', data: JSON.stringify({ content: ev.content }) })
         } else if (ev.type === 'token') {
           await sse.writeSSE({ event: 'token', data: JSON.stringify({ content: ev.content }) })
         } else if (ev.type === 'done') {
           await sse.writeSSE({
             event: 'done',
-            data: JSON.stringify({ citations: ev.citations, retrieval: ev.retrieval }),
+            data: JSON.stringify({
+              citations: ev.citations,
+              retrieval: ev.retrieval,
+              tool_trace: ev.toolTrace,
+            }),
           })
         } else if (ev.type === 'error') {
           await sse.writeSSE({ event: 'error', data: JSON.stringify(ev.error) })

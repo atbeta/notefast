@@ -70,6 +70,17 @@ export interface ChatWithToolsResult {
   content: string
   /** LLM 请求的工具调用；空数组表示 LLM 已给出最终答案 */
   tool_calls: ToolCall[]
+  /** 可选：模型思考链（DeepSeek reasoning_content 等） */
+  reasoning?: string
+}
+
+/** 流式 chat / chatWithTools 的增量块 */
+export interface StreamChatChunk {
+  content?: string
+  reasoning?: string
+  done?: boolean
+  /** streamChatWithTools 结束时带回累计的 tool_calls */
+  tool_calls?: ToolCall[]
 }
 
 export interface LLMProvider {

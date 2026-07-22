@@ -321,14 +321,14 @@ export class AiRuntime {
   }
 
   /**
-   * 流式聊天：返回 AsyncIterable<{ content, done? }>。
+   * 流式聊天：返回 AsyncIterable<StreamChatChunk>。
    * 内部走 OpenAI 兼容 stream=true，解析 SSE 数据帧。
-   * 注意：本方法只在 chat provider 支持 OpenAI 流式协议时使用。
+   * 同时读取 content 与 reasoning（reasoning_content / reasoning / thinking）。
    */
   async *streamChat(
     messages: import('../llm').ChatMessage[],
     options?: import('../llm').ChatCompletionOptions,
-  ): AsyncGenerator<{ content: string; done?: boolean }> {
+  ): AsyncGenerator<import('../llm').StreamChatChunk> {
     if (!this.chatProvider) {
       this.chatLastError = 'AI chat is not configured'
       throw new Error(this.chatLastError)
@@ -338,11 +338,58 @@ export class AiRuntime {
       this.chatLastError = 'AI chat provider is not configured'
       throw new Error(this.chatLastError)
     }
+    yield* this.streamCompletions(messages, {
+      temperature: options?.temperature,
+      maxTokens: options?.maxTokens,
+      model: options?.model,
+      responseFormat: options?.responseFormat,
+    })
+  }
+
+  /**
+   * 流式 + tools：边收 token/reasoning，结束时带回累计 tool_calls。
+   * agent loop 用此方法实现真流式最终答案，同时保留 tool-call。
+   */
+  async *streamChatWithTools(
+    messages: import('../llm').ChatMessage[],
+    options?: import('../llm').ChatWithToolsOptions,
+  ): AsyncGenerator<import('../llm').StreamChatChunk> {
+    if (!this.chatProvider) {
+      this.chatLastError = 'AI chat is not configured'
+      throw new Error(this.chatLastError)
+    }
+    const p = this.cfg.chat
+    if (!p) {
+      this.chatLastError = 'AI chat provider is not configured'
+      throw new Error(this.chatLastError)
+    }
+    yield* this.streamCompletions(messages, {
+      temperature: options?.temperature,
+      maxTokens: options?.maxTokens,
+      model: options?.model,
+      responseFormat: options?.responseFormat,
+      tools: options?.tools,
+    })
+  }
+
+  /** 底层 SSE 解析（可选 tools） */
+  private async *streamCompletions(
+    messages: import('../llm').ChatMessage[],
+    options: {
+      temperature?: number
+      maxTokens?: number
+      model?: string
+      responseFormat?: import('../llm').ResponseFormat
+      tools?: import('../llm').ToolDefinition[]
+    },
+  ): AsyncGenerator<import('../llm').StreamChatChunk> {
+    const p = this.cfg.chat!
     const url = joinUrl(p.baseUrl, '/chat/completions')
     const headers = buildHeaders(p)
-    const model = options?.model || p.chatModel.trim()
+    const model = options.model || p.chatModel.trim()
     const ac = new AbortController()
     const timer = setTimeout(() => ac.abort(), p.timeoutMs)
+    const toolAcc = new Map<number, { id: string; name: string; arguments: string }>()
     try {
       const res = await this.fetchImpl(url, {
         method: 'POST',
@@ -351,9 +398,10 @@ export class AiRuntime {
           model,
           messages,
           stream: true,
-          temperature: options?.temperature ?? 0.3,
-          max_tokens: options?.maxTokens ?? 2000,
-          ...(options?.responseFormat ? { response_format: options.responseFormat } : {}),
+          temperature: options.temperature ?? 0.3,
+          max_tokens: options.maxTokens ?? 2000,
+          ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
+          ...(options.tools && options.tools.length > 0 ? { tools: options.tools } : {}),
         }),
         signal: ac.signal,
       })
@@ -364,6 +412,20 @@ export class AiRuntime {
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buf = ''
+      const finish = (): import('../llm').StreamChatChunk => {
+        this.usage.chatCalls++
+        this.usage.lastSuccessAt = new Date().toISOString()
+        this.chatLastError = undefined
+        const tool_calls = [...toolAcc.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .map(([, tc]) => ({
+            id: tc.id,
+            name: tc.name,
+            args: safeJsonParse(tc.arguments),
+          }))
+          .filter((tc) => tc.name)
+        return { content: '', done: true, ...(tool_calls.length > 0 ? { tool_calls } : {}) }
+      }
       while (true) {
         const { value, done } = await reader.read()
         if (done) break
@@ -375,28 +437,48 @@ export class AiRuntime {
           if (!line.startsWith('data:')) continue
           const payload = line.slice(5).trim()
           if (payload === '[DONE]') {
-            this.usage.chatCalls++
-            this.usage.lastSuccessAt = new Date().toISOString()
-            this.chatLastError = undefined
-            yield { content: '', done: true }
+            yield finish()
             return
           }
           try {
             const json = JSON.parse(payload) as {
-              choices?: Array<{ delta?: { content?: string } }>
+              choices?: Array<{
+                delta?: {
+                  content?: string | null
+                  reasoning_content?: string | null
+                  reasoning?: string | null
+                  thinking?: string | null
+                  tool_calls?: Array<{
+                    index?: number
+                    id?: string
+                    type?: string
+                    function?: { name?: string; arguments?: string }
+                  }>
+                }
+              }>
             }
-            const delta = json.choices?.[0]?.delta?.content
-            if (delta) yield { content: delta }
+            const delta = json.choices?.[0]?.delta
+            if (!delta) continue
+            const reasoning =
+              delta.reasoning_content || delta.reasoning || delta.thinking || undefined
+            if (reasoning) yield { reasoning }
+            if (delta.content) yield { content: delta.content }
+            if (delta.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const index = tc.index ?? 0
+                const prev = toolAcc.get(index) ?? { id: '', name: '', arguments: '' }
+                if (tc.id) prev.id = tc.id
+                if (tc.function?.name) prev.name = tc.function.name
+                if (tc.function?.arguments) prev.arguments += tc.function.arguments
+                toolAcc.set(index, prev)
+              }
+            }
           } catch {
             // 忽略无法解析的行（OpenAI 偶尔会发 keep-alive 注释）
           }
         }
       }
-      // 自然结束（流未显式 [DONE]）
-      this.usage.chatCalls++
-      this.usage.lastSuccessAt = new Date().toISOString()
-      this.chatLastError = undefined
-      yield { content: '', done: true }
+      yield finish()
     } catch (e) {
       this.usage.chatErrors++
       this.chatLastError = e instanceof Error ? e.message : String(e)
@@ -574,6 +656,8 @@ function createChatProvider(p: ProviderDefinition, fetchImpl: typeof fetch): LLM
           choices?: Array<{
             message?: {
               content?: string | null
+              reasoning_content?: string | null
+              reasoning?: string | null
               tool_calls?: Array<{
                 id: string
                 type: 'function'
@@ -585,12 +669,13 @@ function createChatProvider(p: ProviderDefinition, fetchImpl: typeof fetch): LLM
         }
         const msg = json.choices?.[0]?.message
         const content = msg?.content ?? ''
+        const reasoning = msg?.reasoning_content || msg?.reasoning || undefined
         const toolCalls = (msg?.tool_calls ?? []).map((tc) => ({
           id: tc.id,
           name: tc.function.name,
           args: safeJsonParse(tc.function.arguments),
         }))
-        return { content, tool_calls: toolCalls }
+        return { content, tool_calls: toolCalls, ...(reasoning ? { reasoning } : {}) }
       } finally {
         clearTimeout(t)
       }
