@@ -13,6 +13,11 @@ COPY --from=deps /app/node_modules node_modules
 COPY . .
 RUN bun install --frozen-lockfile
 RUN bun run build
+# 校验构建产物布局与 runner 一致：server-dist/native/vec0.so（无 node_modules）
+RUN mkdir -p /tmp/runtime-check/server-dist \
+  && cp -R /app/packages/server/dist/. /tmp/runtime-check/server-dist/ \
+  && test -f /tmp/runtime-check/server-dist/native/vec0.so \
+  && bun -e "import { Database } from 'bun:sqlite'; const db = new Database(':memory:'); db.loadExtension('/tmp/runtime-check/server-dist/native/vec0.so'); const row = db.query('SELECT vec_version() AS version').get(); if (!row?.version) process.exit(1); console.log('sqlite-vec ok', row.version)"
 
 FROM base AS runner
 WORKDIR /app
@@ -29,6 +34,7 @@ ENV APP_BUILD_TIME=${BUILD_TIME}
 # @notefast/core 全部 inline），web-dist 是 vite 产物。两者都不依赖
 # node_modules；带 node_modules 反而会引入 devDeps 里的 esbuild linux-x64
 # 等 go binary，导致 Trivy 误报 CRITICAL CVE。
+# sqlite-vec 动态库单独放在 server-dist/native/，由运行时显式 loadExtension。
 COPY --from=builder /app/packages/server/dist ./server-dist
 COPY --from=builder /app/packages/web/dist ./web-dist
 
@@ -37,6 +43,7 @@ ENV PORT=3140
 ENV DATA_DIR=/app/data
 ENV WEB_DIST=/app/web-dist
 ENV AUTO_EXPORT_DIR=/app/export
+ENV SQLITE_VEC_PATH=/app/server-dist/native/vec0.so
 
 RUN mkdir -p /app/data /app/export && chown -R bun:bun /app
 USER bun

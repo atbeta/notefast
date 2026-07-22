@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, readFileSync, existsSync, unlinkSync } from 'node:
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { initDb, closeDb } from '../db'
+import { initDb, closeDb, getDb } from '../db'
 import { createPluginSystem, type AiConfig, type ProviderDefinition } from '@notefast/core'
 import {
   initAiRuntime,
@@ -12,6 +12,8 @@ import {
   loadConfigFromDisk,
 } from '../services/aiRuntime'
 import ai from '../api/ai'
+import { embeddingFingerprint } from '../ai/vectorStore'
+import { initVectorStore } from '../ai/indexer'
 
 let testDir: string
 let app: Hono
@@ -30,9 +32,10 @@ const FULL_PROVIDER: ProviderDefinition = {
   extraHeaders: {},
 }
 
-beforeAll(() => {
+beforeAll(async () => {
   testDir = mkdtempSync(join('/tmp', 'notefast-ai-test-'))
   initDb(testDir)
+  await initVectorStore()
   pluginSystem = createPluginSystem()
   app = new Hono()
   app.use('*', cors({ origin: '*', allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] }))
@@ -71,6 +74,7 @@ describe('GET /api/v1/ai/status', () => {
     const { status, body } = await api('GET', '/api/v1/ai/status')
     expect(status).toBe(200)
     expect(body.enabled).toBe(false)
+    expect(body.vectorStore.backend).toBeDefined()
     expect(body.fix_hint).toContain('/settings')
   })
 
@@ -90,6 +94,45 @@ describe('GET /api/v1/ai/status', () => {
     expect(status).toBe(200)
     expect(body.enabled).toBe(true)
     expect(body.usage.embeddingCalls).toBe(0)
+  })
+})
+
+describe('向量索引状态与重建 API', () => {
+  test('GET /index/status 暴露后端与索引状态', async () => {
+    const { status, body } = await api('GET', '/api/v1/ai/index/status')
+    expect(status).toBe(200)
+    expect(body.backend).toBeDefined()
+    expect(body.status).toBeDefined()
+    expect(typeof body.count).toBe('number')
+  })
+
+  test('POST /index/rebuild 未配置 embedding 时拒绝启动', async () => {
+    const { status, body } = await api('POST', '/api/v1/ai/index/rebuild')
+    expect(status).toBe(400)
+    expect(body.error).toBe('not_configured')
+  })
+
+  test('更换 embedding 模型时自动标记现有索引 stale', async () => {
+    initAiRuntime(pluginSystem, testDir)
+    getDb().query(
+      `UPDATE vector_store_state
+       SET status = 'ready', model_fingerprint = ?, dimension = 3
+       WHERE id = 'default'`,
+    ).run(embeddingFingerprint(FULL_PROVIDER))
+    applyNewConfig(
+      {
+        version: 1,
+        chat: null,
+        embedding: { ...FULL_PROVIDER, embeddingModel: 'different-model' },
+        autoIndex: false,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+
+    const { body } = await api('GET', '/api/v1/ai/index/status')
+    expect(body.status).toBe('stale')
+    expect(body.error).toContain('模型')
   })
 })
 

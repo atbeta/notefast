@@ -38,6 +38,8 @@ import {
   toWire,
   type AutoLinkSuggestion,
 } from '../ai/autoLinkStore'
+import { contentHash, embeddingFingerprint, VECTOR_INDEX_VERSION } from '../ai/vectorStore'
+import { initVectorStore } from '../ai/indexer'
 
 let testDir: string
 let pluginSystem: ReturnType<typeof createPluginSystem>
@@ -91,9 +93,10 @@ function makeSuggestion(overrides: Partial<AutoLinkSuggestion> & {
   }
 }
 
-beforeAll(() => {
+beforeAll(async () => {
   testDir = mkdtempSync(join('/tmp', 'notefast-autolink-'))
   initDb(testDir)
+  await initVectorStore()
   pluginSystem = createPluginSystem()
   app = new Hono()
   app.use('*', cors({ origin: '*' }))
@@ -115,6 +118,12 @@ beforeEach(() => {
   getDb().query('DELETE FROM block_refs').run()
   getDb().query('DELETE FROM autolink_suggestions').run()
   getDb().query('DELETE FROM block_vectors').run()
+  getDb().query(
+    `UPDATE vector_store_state
+     SET active_backend = 'json', status = 'stale', model_fingerprint = NULL,
+         dimension = NULL, indexed_count = 0, error = NULL
+     WHERE id = 'default'`,
+  ).run()
   getDb().exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
 })
 
@@ -224,9 +233,28 @@ function mockChatAndEmbedding(chatModel: string, jsonResponse: string, queryVect
 
 /** 给候选 block 写入语义向量（配合 mockChatAndEmbedding） */
 function seedVector(blockId: string, vec: number[]) {
-  getDb()
-    .query('INSERT INTO block_vectors (block_id, embedding, dim) VALUES (?, ?, ?)')
-    .run(blockId, JSON.stringify(vec), vec.length)
+  const db = getDb()
+  const provider = getRuntime().embeddingProviderDef()!
+  const fingerprint = embeddingFingerprint(provider)
+  const block = db.query('SELECT content FROM blocks WHERE id = ?').get(blockId) as { content: string }
+  db.query(
+    `INSERT INTO block_vectors
+       (block_id, embedding, dim, embedding_model, content_hash, index_version, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+  ).run(
+    blockId,
+    JSON.stringify(vec),
+    vec.length,
+    fingerprint,
+    contentHash(block.content),
+    VECTOR_INDEX_VERSION,
+  )
+  db.query(
+    `UPDATE vector_store_state
+     SET status = 'ready', model_fingerprint = ?, dimension = ?,
+         indexed_count = (SELECT count(*) FROM block_vectors), error = NULL
+     WHERE id = 'default'`,
+  ).run(fingerprint, vec.length)
 }
 
 async function api(method: string, path: string, body?: unknown) {

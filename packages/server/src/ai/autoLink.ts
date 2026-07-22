@@ -28,6 +28,7 @@ import {
 } from '@notefast/core'
 import { getDb } from '../db'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
+import { embeddingFingerprint, getVectorStore } from './vectorStore'
 import {
   addSuggestions,
   type AutoLinkSuggestion,
@@ -402,29 +403,27 @@ async function findCandidates(
     const qv = await r.embedQuery(anchor)
     if (!qv) return ftsRanked.slice(0, 3)
 
-    const { cosineSimilarity } = await import('@notefast/core')
+    const provider = r.embeddingProviderDef()
+    if (!provider) return ftsRanked.slice(0, 3)
+    const scores = await getVectorStore().scoreCandidates(
+      qv,
+      ftsRanked.map((candidate) => candidate.blockId),
+      embeddingFingerprint(provider),
+    )
     const hybrid: Candidate[] = []
     for (let i = 0; i < ftsRanked.length; i++) {
       const fts = ftsRanked[i]!
-      const vecRow = db
-        .query('SELECT embedding FROM block_vectors WHERE block_id = ?')
-        .get(fts.blockId) as { embedding: string } | undefined
-      if (!vecRow) {
+      const score = scores.get(fts.blockId)
+      if (score === undefined) {
         // 没向量：无法给出语义分 → 诚实地标回 fts_rank（不会达到建议入库门槛）
         hybrid.push({ ...fts, scoreKind: 'fts_rank' })
         continue
       }
-      try {
-        const v = new Float64Array(JSON.parse(vecRow.embedding) as number[])
-        const sim = cosineSimilarity(qv, v)
-        hybrid.push({
-          ...fts,
-          confidence: sim,   // ★ v3：纯 cosine，不再与 FTS rank 分取 max（避免伪高置信）
-          scoreKind: 'hybrid',
-        })
-      } catch {
-        hybrid.push({ ...fts, scoreKind: 'fts_rank' })
-      }
+      hybrid.push({
+        ...fts,
+        confidence: score,   // ★ v3：纯 cosine，不再与 FTS rank 分取 max（避免伪高置信）
+        scoreKind: 'hybrid',
+      })
     }
     hybrid.sort((a, b) => b.confidence - a.confidence)
     return hybrid.slice(0, 3)

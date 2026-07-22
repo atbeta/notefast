@@ -86,3 +86,23 @@ describe('FTS 触发器', () => {
     expect(results.some((r) => r.id === id)).toBe(true)
   })
 })
+
+describe('向量索引元数据迁移', () => {
+  test('block_vectors 包含模型、内容哈希、索引版本和更新时间', () => {
+    const columns = getDb().query('PRAGMA table_info(block_vectors)').all() as Array<{ name: string }>
+    const names = columns.map((column) => column.name)
+
+    expect(names).toContain('embedding_model')
+    expect(names).toContain('content_hash')
+    expect(names).toContain('index_version')
+    expect(names).toContain('updated_at')
+  })
+
+  test('初始化向量存储状态为 legacy stale', () => {
+    const row = getDb()
+      .query("SELECT active_backend, status FROM vector_store_state WHERE id = 'default'")
+      .get() as { active_backend: string; status: string } | null
+
+    expect(row).toEqual({ active_backend: 'json', status: 'stale' })
+  })
+})

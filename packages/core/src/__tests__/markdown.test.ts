@@ -188,8 +188,8 @@ describe('列表增强（ordered / task）', () => {
   test('有序列表带 ordered=true，无序带 ordered=false', () => {
     const inputs = parseMarkdownToBlocks('- a\n- b\n\n1. first\n2. second\n', 'nb')
     const items = inputs.filter((i) => i.type === BlockType.ListItem)
-    const unordered = items.filter((i) => i.properties.ordered === false)
-    const ordered = items.filter((i) => i.properties.ordered === true)
+    const unordered = items.filter((i) => i.properties?.ordered === false)
+    const ordered = items.filter((i) => i.properties?.ordered === true)
     expect(unordered.length).toBe(2)
     expect(ordered.length).toBe(2)
     expect(ordered[0].content).toBe('first')
@@ -199,13 +199,13 @@ describe('列表增强（ordered / task）', () => {
   test('任务列表解析 task/checked 并剥离前缀', () => {
     const inputs = parseMarkdownToBlocks('- [ ] todo\n- [x] done\n- [X] done2\n- plain\n', 'nb')
     const items = inputs.filter((i) => i.type === BlockType.ListItem)
-    expect(items[0].content).toBe('todo')
-    expect(items[0].properties.task).toBe(true)
-    expect(items[0].properties.checked).toBe(false)
-    expect(items[1].properties.checked).toBe(true)
-    expect(items[2].properties.checked).toBe(true)
-    expect(items[3].properties.task).toBeUndefined()
-    expect(items[3].content).toBe('plain')
+    expect(items[0]?.content).toBe('todo')
+    expect(items[0]?.properties?.task).toBe(true)
+    expect(items[0]?.properties?.checked).toBe(false)
+    expect(items[1]?.properties?.checked).toBe(true)
+    expect(items[2]?.properties?.checked).toBe(true)
+    expect(items[3]?.properties?.task).toBeUndefined()
+    expect(items[3]?.content).toBe('plain')
   })
 
   test('导出回写：ordered → 1.，task → [ ]/[x]', () => {
@@ -217,8 +217,8 @@ describe('列表增强（ordered / task）', () => {
       parent_id: null,
       root_id: 'x',
       type: i.type,
-      content: i.content,
-      properties: i.properties,
+      content: i.content ?? '',
+      properties: i.properties ?? {},
       sort: 0,
       level: 1,
       created_at: '',
@@ -233,7 +233,7 @@ describe('列表增强（ordered / task）', () => {
     // 导出的 markdown 再解析，标记不丢失（roundtrip 闭环）
     const re = parseMarkdownToBlocks(out, 'nb')
     const reItems = re.filter((i) => i.type === BlockType.ListItem)
-    expect(reItems.filter((i) => i.properties.task).length).toBe(2)
-    expect(reItems.filter((i) => i.properties.ordered === true).length).toBe(2)
+    expect(reItems.filter((i) => i.properties?.task).length).toBe(2)
+    expect(reItems.filter((i) => i.properties?.ordered === true).length).toBe(2)
   })
 })

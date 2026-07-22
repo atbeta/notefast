@@ -12,6 +12,7 @@ import { initAiRuntime } from './services/aiRuntime'
 import { initSyncManager } from './sync/manager'
 import { initVectorStore } from './ai/indexer'
 import { initAssetStore } from './assets/store'
+import { getVectorStore } from './ai/vectorStore'
 import blocks from './api/blocks'
 import docs from './api/docs'
 import search from './api/search'
@@ -43,7 +44,11 @@ app.use('*', cors({
 
 app.use('/api/*', authMiddleware)
 
-app.get('/health', (c) => c.json({ status: 'ok', time: new Date().toISOString() }))
+app.get('/health', async (c) => c.json({
+  status: 'ok',
+  time: new Date().toISOString(),
+  vectorStore: await getVectorStore().status(),
+}))
 
 // 实例版本号：Docker 部署取镜像构建时注入的 APP_VERSION（= git tag），
 // 否则回退读 packages/server/package.json（src 与打包后的 dist 均为其同级子目录）。
@@ -99,7 +104,7 @@ app.route('/api/v1/assets', assets)
 
 const pluginSystem = createPluginSystem()
 
-initVectorStore()
+await initVectorStore()
 initAssetStore(DATA_DIR)
 initSyncManager(DATA_DIR)
 initAiRuntime(pluginSystem, DATA_DIR)

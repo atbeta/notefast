@@ -235,7 +235,7 @@ async function runSemantic(
   const vec = await r.embedQuery(query)
   if (!vec) return []
   const minCosine = semanticMinCosine()
-  const hits = semanticSearch(vec, limit, notebookId, since, until)
+  const hits = (await semanticSearch(vec, limit, notebookId, since, until))
     .filter((h) => h.score >= minCosine)
   return hits.map((h, i) => ({
     block_id: h.block_id,

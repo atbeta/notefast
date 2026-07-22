@@ -45,6 +45,8 @@ import { indexBlock, indexAllBlocks, semanticSearch } from '../ai/indexer'
 import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
 import { runChat, runChatSync } from '../ai/chat'
 import { getDb } from '../db'
+import { getVectorStore } from '../ai/vectorStore'
+import { startVectorRebuild } from '../ai/vectorRebuild'
 
 const ai = new Hono()
 
@@ -52,13 +54,14 @@ const FIX_HINT = '请在 Web UI /settings 页面配置 AI Provider（API Key + B
 
 // ───────────────────── status ─────────────────────
 
-ai.get('/status', (c) => {
+ai.get('/status', async (c) => {
+  const vectorStore = await getVectorStore().status()
   if (!runtimeSafe()) {
-    return c.json({ enabled: false, embedding: { configured: false, ok: false }, chat: { configured: false, ok: false }, usage: emptyUsage(), config: emptyConfig(), fix_hint: FIX_HINT })
+    return c.json({ enabled: false, embedding: { configured: false, ok: false }, chat: { configured: false, ok: false }, usage: emptyUsage(), config: emptyConfig(), vectorStore, fix_hint: FIX_HINT })
   }
   const r = getRuntime()
   const s = r.status()
-  return c.json({ ...s, fix_hint: s.enabled ? undefined : FIX_HINT })
+  return c.json({ ...s, vectorStore, fix_hint: s.enabled ? undefined : FIX_HINT })
 })
 
 // ───────────────────── config ─────────────────────
@@ -349,7 +352,7 @@ ai.get('/search', async (c) => {
       }
       const v = await r.embedQuery(q)
       if (!v) return c.json({ error: 'embedding_failed', message: 'Embedding 返回为空' }, 500)
-      const hits = semanticSearch(v, limit, notebookId)
+      const hits = await semanticSearch(v, limit, notebookId)
       return c.json(hits)
     }
     // hybrid（默认）
@@ -420,6 +423,20 @@ ai.post('/index', async (c) => {
   } catch (e) {
     return c.json({ error: 'index_error', message: eMsg(e) }, 500)
   }
+})
+
+ai.get('/index/status', async (c) => {
+  return c.json(await getVectorStore().status())
+})
+
+ai.post('/index/rebuild', async (c) => {
+  if (!runtimeSafe() || !getRuntime().hasEmbedding()) {
+    return c.json({ error: 'not_configured', message: 'Embedding 未配置', fix_hint: FIX_HINT }, 400)
+  }
+  const body = await c.req.json().catch(() => ({} as { notebook_id?: string }))
+  const started = startVectorRebuild({ notebookId: body.notebook_id })
+  if (!started) return c.json({ error: 'already_rebuilding', message: '向量索引正在重建' }, 409)
+  return c.json({ started: true }, 202)
 })
 
 ai.post('/index/:blockId', async (c) => {
