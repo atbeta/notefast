@@ -14,7 +14,11 @@ import {
   parseTagsQueryParam,
   parseTagMatchMode,
   parseUpdatedWithin,
+  parseDocStatusFilter,
   docMatchesTags,
+  isInboxDoc,
+  readDocStatusFromProperties,
+  setDocStatusInProperties,
   type LLMProvider,
   type ChatMessage,
   type TagMatchMode,
@@ -95,8 +99,16 @@ function filterDocRowsForMcp(rows: BlockRow[], opts: {
   tagMatch?: TagMatchMode
   untagged?: boolean
   updatedWithin?: string | null
+  /** 默认 note：排除收集箱；inbox / all 见 parseDocStatusFilter */
+  status?: 'note' | 'inbox' | 'all'
 }): BlockRow[] {
   let out = rows.filter((r) => !isDocRowAiExcluded(r))
+  const statusFilter = opts.status ?? 'note'
+  if (statusFilter === 'inbox') {
+    out = out.filter((r) => isInboxDoc(r.properties))
+  } else if (statusFilter === 'note') {
+    out = out.filter((r) => !isInboxDoc(r.properties))
+  }
   if (opts.untagged) {
     out = out.filter((r) => readTagsFromProperties(r.properties).length === 0)
   } else if (opts.tags && opts.tags.length > 0) {
@@ -372,22 +384,25 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
   )
 
-  registerTool(
+registerTool(
     'notefast_create_doc',
     {
-      description: '从 Markdown 创建文档',
+      description: '从 Markdown 创建文档（可指定 status=inbox 创建到收集箱）',
       inputSchema: {
         notebook_id: z.string().optional().describe('笔记本 ID，默认使用默认笔记本'),
         title: z.string().describe('文档标题'),
         markdown: z.string().describe('Markdown 内容'),
+        status: z.enum(['note', 'inbox']).optional().describe('inbox=收集箱；缺省 note'),
       },
     },
-    async ({ notebook_id, title, markdown }) => {
+    async ({ notebook_id, title, markdown, status }) => {
       const nid = notebook_id || notebookId
       const nbErr = validateNotebook(db, nid)
       if (nbErr) return { content: [toText(nbErr)] }
 
       const inputs = parseMarkdownToBlocks(markdown, nid)
+      const docStatus = status === 'inbox' ? 'inbox' : 'note'
+      const docProperties = setDocStatusInProperties('{}', docStatus)
       const docId = crypto.randomUUID()
       const now = new Date().toISOString()
       const insertedIds: string[] = []
@@ -401,9 +416,9 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
         db.run('PRAGMA defer_foreign_keys = ON')
 
         db.query(
-          `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
-           VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
-        ).run(docId, nid, docId, title, now, now)
+          `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
+           VALUES (?, ?, NULL, ?, 'document', ?, ?, 0, 0, ?, ?)`,
+        ).run(docId, nid, docId, title, docProperties, now, now)
 
         for (const inp of inputs) {
           const blockId = crypto.randomUUID()
@@ -513,16 +528,17 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
   registerTool(
     'notefast_list_docs',
     {
-      description: '列出文档列表（默认排除「对 AI 隐藏」的文档）；可按 tags / 未打标 / 最近更新筛选',
+      description: '列出文档列表（默认排除「对 AI 隐藏」与收集箱；status=inbox 可列收集箱）',
       inputSchema: {
         notebook_id: z.string().optional().describe('笔记本 ID，默认使用默认笔记本'),
         tags: z.string().optional().describe('逗号分隔 tags；默认同时包含全部（AND），tag_match=any 时为包含任一'),
         tag_match: z.enum(['all', 'any']).optional().describe('多 tag 匹配：all=同时包含（默认），any=包含任一'),
         untagged: z.boolean().optional().describe('仅未打标文档'),
         updated_within: z.enum(['24h', '7d']).optional().describe('仅最近更新的文档'),
+        status: z.enum(['note', 'inbox', 'all']).optional().describe('note=正式笔记（默认）；inbox=收集箱；all=全部'),
       },
     },
-    async ({ notebook_id, tags, tag_match, untagged, updated_within }) => {
+    async ({ notebook_id, tags, tag_match, untagged, updated_within, status }) => {
       const nid = notebook_id || notebookId
 
       const rows = db
@@ -534,6 +550,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
         tagMatch: parseTagMatchMode(tag_match),
         untagged: untagged === true,
         updatedWithin: updated_within ?? null,
+        status: parseDocStatusFilter(status),
       })
 
       return {
@@ -546,6 +563,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
             created_at: r.created_at,
             updated_at: r.updated_at,
             tags: readTagsFromProperties(r.properties),
+            status: readDocStatusFromProperties(r.properties),
           })),
         })],
       }
@@ -573,6 +591,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       const counts = new Map<string, number>()
       for (const r of rows) {
         if (isDocRowAiExcluded(r)) continue
+        if (isInboxDoc(r.properties)) continue
         for (const t of readTagsFromProperties(r.properties)) {
           counts.set(t, (counts.get(t) ?? 0) + 1)
         }
@@ -814,7 +833,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
   registerTool(
     'notefast_autolink_suggestions',
     {
-      description: 'AutoLink Inbox 视图：默认 review_status=unreviewed，含 AI 已应用 + AI 仅建议两类。',
+      description: 'AutoLink 链接建议视图：默认 review_status=unreviewed，含 AI 已应用 + AI 仅建议两类。',
       inputSchema: {
         doc_id: z.string().optional().describe('限定文档 ID（不传则全局）'),
         status: z.enum(['unreviewed', 'accepted', 'dismissed', 'all']).optional().default('unreviewed'),

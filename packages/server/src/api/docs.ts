@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, rowToBlock, readTagsFromProperties, readAiExcludeFromProperties, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, docMatchesTags } from '@notefast/core'
+import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, updateDocStatusSchema, rowToBlock, readTagsFromProperties, readAiExcludeFromProperties, readDocStatusFromProperties, setDocStatusInProperties, isInboxDoc, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, parseDocStatusFilter, docMatchesTags } from '@notefast/core'
 import type { BlockRow, DocSummary } from '@notefast/core'
 import { getDb } from '../db'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany } from '../services/hooks'
@@ -17,6 +17,7 @@ docs.get('/list', (c) => {
   const tagMatch = parseTagMatchMode(c.req.query('tag_match'))
   const untagged = c.req.query('untagged') === '1' || c.req.query('untagged') === 'true'
   const withinMs = parseUpdatedWithin(c.req.query('updated_within'))
+  const statusFilter = parseDocStatusFilter(c.req.query('status'))
 
   let rows: BlockRow[]
   if (notebookId) {
@@ -27,6 +28,13 @@ docs.get('/list', (c) => {
     rows = db
       .query('SELECT * FROM blocks WHERE type = ? ORDER BY updated_at DESC')
       .all('document') as BlockRow[]
+  }
+
+  // 生命周期：默认只列正式笔记；status=inbox 只列收集箱；all 不过滤
+  if (statusFilter === 'inbox') {
+    rows = rows.filter((r) => isInboxDoc(r.properties))
+  } else if (statusFilter === 'note') {
+    rows = rows.filter((r) => !isInboxDoc(r.properties))
   }
 
   // 标签 / 时间过滤在 Node 端做（文档量小，不值得加 SQL JSON 函数）
@@ -47,6 +55,7 @@ docs.get('/list', (c) => {
   const summaries: DocSummary[] = rows.map((r) => {
     const tags = readTagsFromProperties(r.properties)
     const aiExclude = readAiExcludeFromProperties(r.properties)
+    const status = readDocStatusFromProperties(r.properties)
     return {
       id: r.id,
       title: r.content,
@@ -54,6 +63,7 @@ docs.get('/list', (c) => {
       updated_at: r.updated_at,
       tags,
       ...(aiExclude ? { ai_exclude: true } : {}),
+      ...(status === 'inbox' ? { status: 'inbox' as const } : {}),
     }
   })
 
@@ -106,20 +116,87 @@ docs.post('/', zValidator('json', createDocSchema), (c) => {
   const input = c.req.valid('json')
   const docId = crypto.randomUUID()
   const now = new Date().toISOString()
+  const status = input.status === 'inbox' ? 'inbox' : 'note'
+  const properties = setDocStatusInProperties('{}', status)
 
   db.query(
-    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
-     VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
-  ).run(docId, input.notebook_id, docId, input.title, now, now)
+    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
+     VALUES (?, ?, NULL, ?, 'document', ?, ?, 0, 0, ?, ?)`,
+  ).run(docId, input.notebook_id, docId, input.title, properties, now, now)
+
+  const insertedIds: string[] = []
+  const md = (input.markdown || '').trim()
+  if (md) {
+    const rawInputs = parseMarkdownToBlocks(md, input.notebook_id)
+    const inputs = stripTitleHeading(rawInputs, input.title)
+    const idMap = new Map<string, string>()
+    for (let i = 0; i < inputs.length; i++) {
+      const inp = inputs[i]
+      const blockId = crypto.randomUUID()
+      if (inp.id) idMap.set(inp.id, blockId)
+      const parentId = inp.parent_id ? (idMap.get(inp.parent_id) ?? docId) : docId
+      db.query(
+        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      ).run(
+        blockId,
+        input.notebook_id,
+        parentId,
+        docId,
+        inp.type,
+        inp.content ?? '',
+        JSON.stringify(inp.properties || {}),
+        i,
+        now,
+        now,
+      )
+      insertedIds.push(blockId)
+    }
+  }
 
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
   fireAfterCreate(rowToBlock(row))
+  if (insertedIds.length > 0) {
+    const placeholders = insertedIds.map(() => '?').join(',')
+    const childRows = db
+      .query(`SELECT * FROM blocks WHERE id IN (${placeholders})`)
+      .all(...insertedIds) as BlockRow[]
+    fireAfterCreateMany(childRows.map(rowToBlock))
+  }
   return c.json({
     id: row.id,
     title: row.content,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    tags: [],
+    ...(status === 'inbox' ? { status: 'inbox' as const } : {}),
   }, 201)
+})
+
+docs.patch('/:id/status', zValidator('json', updateDocStatusSchema), (c) => {
+  const db = getDb()
+  const id = c.req.param('id')
+  const { status } = c.req.valid('json')
+
+  const docRow = db
+    .query("SELECT * FROM blocks WHERE id = ? AND type = 'document'")
+    .get(id) as BlockRow | undefined
+  if (!docRow) {
+    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
+  }
+
+  const properties = setDocStatusInProperties(docRow.properties, status)
+  db.query(
+    "UPDATE blocks SET properties = ?, updated_at = datetime('now') WHERE id = ?",
+  ).run(properties, id)
+
+  const updatedRow = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
+  fireAfterUpdate(rowToBlock(updatedRow))
+  return c.json({
+    doc_id: id,
+    status: readDocStatusFromProperties(updatedRow.properties),
+    updated_at: updatedRow.updated_at,
+  })
 })
 
 docs.patch('/:id/tags', async (c) => {

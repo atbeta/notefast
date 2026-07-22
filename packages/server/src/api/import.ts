@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { importMarkdownSchema, parseMarkdownToBlocks, stripTitleHeading, rowToBlock } from '@notefast/core'
+import { importMarkdownSchema, parseMarkdownToBlocks, stripTitleHeading, rowToBlock, setDocStatusInProperties } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import { getDb } from '../db'
 import { fireAfterCreate, fireAfterCreateMany } from '../services/hooks'
@@ -20,6 +20,8 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
   const now = new Date().toISOString()
   const title = input.title || extractTitle(input.markdown) || '未命名文档'
   const inputs = stripTitleHeading(rawInputs, title)
+  const status = input.status === 'inbox' ? 'inbox' : 'note'
+  const properties = setDocStatusInProperties('{}', status)
 
   const insertedIds: string[] = []
   // inp.id → 实际 blockId 映射表；父对子的引用必须走这条映射。
@@ -32,9 +34,9 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
     db.run('PRAGMA defer_foreign_keys = ON')
 
     db.query(
-      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
-       VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
-    ).run(docId, input.notebook_id, docId, title, now, now)
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', ?, ?, 0, 0, ?, ?)`,
+    ).run(docId, input.notebook_id, docId, title, properties, now, now)
 
     for (let i = 0; i < inputs.length; i++) {
       const inp = inputs[i]

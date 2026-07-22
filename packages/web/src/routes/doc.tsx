@@ -8,6 +8,7 @@ import {
   Loader2,
   Pencil,
   EyeOff,
+  Inbox,
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
@@ -92,6 +93,8 @@ export default function DocPage() {
   const [tags, setTags] = useState<string[]>([])
   const [aiExclude, setAiExclude] = useState(false)
   const [aiExcludeSaving, setAiExcludeSaving] = useState(false)
+  const [docStatus, setDocStatus] = useState<'note' | 'inbox'>('note')
+  const [statusSaving, setStatusSaving] = useState(false)
   const [auxLoading, setAuxLoading] = useState(false)
 
   useEffect(() => {
@@ -103,7 +106,7 @@ export default function DocPage() {
   useEffect(() => {
     if (doc) {
       setTitleDraft(doc.content)
-      // 从 properties JSON 同步 tag / ai_exclude
+      // 从 properties JSON 同步 tag / ai_exclude / status
       const raw = (doc as Block & { properties?: unknown }).properties
       if (raw && typeof raw === 'object') {
         const props = raw as Record<string, unknown>
@@ -114,9 +117,11 @@ export default function DocPage() {
           setTags([])
         }
         setAiExclude(props.ai_exclude === true)
+        setDocStatus(props.status === 'inbox' ? 'inbox' : 'note')
       } else {
         setTags([])
         setAiExclude(false)
+        setDocStatus('note')
       }
     }
   }, [doc])
@@ -188,6 +193,17 @@ export default function DocPage() {
       setRefreshKey((k) => k + 1)
     } catch { /* silent */ }
     finally { setAiExcludeSaving(false) }
+  }
+
+  const handlePromoteFromInbox = async () => {
+    if (!id || statusSaving || docStatus !== 'inbox') return
+    setStatusSaving(true)
+    try {
+      await api.patch(`/docs/${id}/status`, { status: 'note' })
+      setDocStatus('note')
+      setRefreshKey((k) => k + 1)
+    } catch { /* silent */ }
+    finally { setStatusSaving(false) }
   }
 
   const handleDelete = async () => {
@@ -290,6 +306,23 @@ export default function DocPage() {
           {/* stale-while-revalidate：切换文档时保留旧内容降透明，新文档就地替换，无闪烁 */}
           <div className={`transition-opacity duration-200 ${showingStale ? 'opacity-40' : 'opacity-100'}`}>
             <div className="w-full max-w-4xl mx-auto px-8 pt-14 pb-32 animate-fade-in">
+            {docStatus === 'inbox' && (
+              <div className="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
+                <Inbox className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
+                <span className="flex-1 min-w-[12rem]">此篇在收集箱中，不会出现在「所有文档」。整理好后可加入笔记。</span>
+                <button
+                  type="button"
+                  onClick={handlePromoteFromInbox}
+                  disabled={statusSaving}
+                  className="shrink-0 text-foreground underline underline-offset-2 hover:text-foreground/80"
+                >
+                  加入笔记
+                </button>
+                <Link to="/inbox" className="shrink-0 text-muted-foreground hover:text-foreground">
+                  返回收集箱
+                </Link>
+              </div>
+            )}
             {/* Title — always editable, AI-generate on hover */}
             <div className="group relative">
               <input

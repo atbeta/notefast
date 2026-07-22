@@ -13,6 +13,7 @@ import {
   Settings,
   Clock,
   Tag,
+  Link2,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import type { DocSummary } from '@notefast/core'
@@ -55,6 +56,7 @@ export default function Sidebar({
   const [isMac, setIsMac] = useState(false)
   const [recentDocs, setRecentDocs] = useState<DocSummary[]>([])
   const [inboxCount, setInboxCount] = useState(0)
+  const [autolinkCount, setAutolinkCount] = useState(0)
   /** 实例版本号（/api/v1/version），加载完成前不渲染版本位 */
   const [version, setVersion] = useState<string | null>(null)
 
@@ -76,12 +78,15 @@ export default function Sidebar({
     }
   }, [collapsed, location.pathname])
 
-  // Inbox 未读计数（unreviewed = 含 AI 已执行 + 仅建议两类）
+  // 收集箱计数 + 链接建议未读计数
   useEffect(() => {
     let cancelled = false
     const refresh = () => {
+      api.get<DocSummary[]>('/docs/list?status=inbox')
+        .then((list) => { if (!cancelled) setInboxCount(list.length) })
+        .catch(() => {})
       api.get<{ count: number }>('/auto-link/inbox?status=unreviewed&limit=1')
-        .then((r) => { if (!cancelled) setInboxCount(r.count) })
+        .then((r) => { if (!cancelled) setAutolinkCount(r.count) })
         .catch(() => {})
     }
     refresh()
@@ -173,10 +178,19 @@ export default function Sidebar({
         </Link>
         <Link to="/inbox" onClick={closeAfterNav} className={location.pathname === '/inbox' ? 'sidebar-link-active' : 'sidebar-link'}>
           <Inbox className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          <span className="flex-1">Inbox</span>
+          <span className="flex-1">收集箱</span>
           {inboxCount > 0 && (
             <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-foreground text-background tabular-nums">
               {inboxCount > 99 ? '99+' : inboxCount}
+            </span>
+          )}
+        </Link>
+        <Link to="/autolink" onClick={closeAfterNav} className={location.pathname === '/autolink' ? 'sidebar-link-active' : 'sidebar-link'}>
+          <Link2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <span className="flex-1">链接建议</span>
+          {autolinkCount > 0 && (
+            <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-foreground text-background tabular-nums">
+              {autolinkCount > 99 ? '99+' : autolinkCount}
             </span>
           )}
         </Link>

@@ -89,6 +89,8 @@ export interface DocSummary {
   tags: string[]
   /** 对 AI 隐藏：不进向量 / RAG / AutoLink / MCP */
   ai_exclude?: boolean
+  /** 生命周期：inbox=收集箱；缺省视为 note */
+  status?: 'note' | 'inbox'
 }
 
 /** 搜索结果 */
@@ -166,12 +168,21 @@ export const moveBlockSchema = z.object({
 export const createDocSchema = z.object({
   notebook_id: z.string().min(1).max(200),
   title: z.string().min(1).max(500),
+  /** inbox=收集箱；缺省为正式笔记 */
+  status: z.enum(['note', 'inbox']).optional(),
+  /** 可选正文（Markdown）；常用于快速采集到收集箱 */
+  markdown: z.string().max(5_000_000).optional(),
 })
 
 export const importMarkdownSchema = z.object({
   notebook_id: z.string().min(1).max(200),
   markdown: z.string().min(1).max(5_000_000),
   title: z.string().max(500).optional(),
+  status: z.enum(['note', 'inbox']).optional(),
+})
+
+export const updateDocStatusSchema = z.object({
+  status: z.enum(['note', 'inbox']),
 })
 
 export const updateDocMarkdownSchema = z.object({

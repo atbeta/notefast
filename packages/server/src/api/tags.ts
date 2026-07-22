@@ -5,8 +5,9 @@
  * 未来可换任意实现，endpoint 形态不变。
  *
  * 路由：
- *   GET    /api/v1/tags                              → 所有 tag + count
+ *   GET    /api/v1/tags                              → 所有 tag + count（默认不含收集箱）
  *   GET    /api/v1/tags?notebook_id=...              → 单 notebook
+ *   GET    /api/v1/tags?include_inbox=1              → 计入收集箱文档的 tag
  *
  * tag 永远小写、限长 64、字母数字+连字符（具体规则见 core/tags.ts）。
  *
@@ -20,15 +21,17 @@ import {
   type TagInfo,
   getTagProvider,
   readTagsFromProperties,
+  isInboxDoc,
 } from '@notefast/core'
 import { getDb } from '../db'
 
 const tags = new Hono()
 
-/** GET /api/v1/tags —— 列 notebook 下所有 tag + count */
+/** GET /api/v1/tags —— 列 notebook 下所有 tag + count（默认不含收集箱文档） */
 tags.get('/', (c) => {
   const db = getDb()
   const notebookId = c.req.query('notebook_id') || ''
+  const includeInbox = c.req.query('include_inbox') === '1' || c.req.query('include_inbox') === 'true'
   const providerName = getTagProvider().name
 
   let rows: BlockRow[]
@@ -40,7 +43,10 @@ tags.get('/', (c) => {
     rows = db.query("SELECT * FROM blocks WHERE type = 'document'").all() as BlockRow[]
   }
 
-  // 聚合 tag → count
+  if (!includeInbox) {
+    rows = rows.filter((r) => !isInboxDoc(r.properties))
+  }
+
   const counts = new Map<string, number>()
   for (const r of rows) {
     const ts = readTagsFromProperties(r.properties)

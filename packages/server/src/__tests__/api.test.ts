@@ -149,6 +149,34 @@ describe('Documents API', () => {
     expect(body[0].tags).toEqual([])
   })
 
+  test('GET /api/v1/docs/list 默认排除收集箱；status=inbox 可列出', async () => {
+    const { body: note } = await api('POST', '/api/v1/docs', {
+      notebook_id: notebookId,
+      title: '正式笔记xyz',
+    })
+    const { body: inbox } = await api('POST', '/api/v1/docs', {
+      notebook_id: notebookId,
+      title: '收集素材xyz',
+      status: 'inbox',
+      markdown: '一段剪藏',
+    })
+    expect(inbox.status).toBe('inbox')
+
+    const main = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}`)
+    const mainIds = (main.body as Array<{ id: string }>).map((d) => d.id)
+    expect(mainIds).toContain(note.id)
+    expect(mainIds).not.toContain(inbox.id)
+
+    const box = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}&status=inbox`)
+    const boxIds = (box.body as Array<{ id: string; status?: string }>).map((d) => d.id)
+    expect(boxIds).toContain(inbox.id)
+    expect(boxIds).not.toContain(note.id)
+
+    await api('PATCH', `/api/v1/docs/${inbox.id}/status`, { status: 'note' })
+    const after = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}`)
+    expect((after.body as Array<{ id: string }>).map((d) => d.id)).toContain(inbox.id)
+  })
+
   test('GET /api/v1/docs/list 支持 tags AND/OR / untagged / ai_exclude 字段', async () => {
     const { body: d1 } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '带标签A' })
     const { body: d2 } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '带标签B' })
