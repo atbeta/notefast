@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.13.0](https://github.com/atbeta/notefast/compare/v0.12.0...v0.13.0) (2026-07-22)
+
+
+### Features
+
+* **web:** render mermaid code fences as diagrams ([520cad2](https://github.com/atbeta/notefast/commit/520cad24d5fa43b3bd9b4a3f5d57b65412720180))
+
+
+### Bug Fixes
+
+* **autolink:** mark applied suggestions as accepted for inbox filters ([67db76b](https://github.com/atbeta/notefast/commit/67db76b67139594dce376ccb33866456dd3b0b86))
+* maintainability hardening across server, web and core ([34555fb](https://github.com/atbeta/notefast/commit/34555fb7728f97eab50d6d4121d1781d6814e2f0))
+* **ui:** restore primary button padding and CJK vertical centering ([6e20870](https://github.com/atbeta/notefast/commit/6e208708b6fc76125dc7c394f7bb29f6d8ae01bd))
+
 ## [0.12.0](https://github.com/atbeta/notefast/compare/v0.11.0...v0.12.0) (2026-07-22)
 
 
