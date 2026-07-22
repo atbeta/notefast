@@ -149,7 +149,7 @@ describe('Documents API', () => {
     expect(body[0].tags).toEqual([])
   })
 
-  test('GET /api/v1/docs/list 支持 tags OR / untagged / ai_exclude 字段', async () => {
+  test('GET /api/v1/docs/list 支持 tags AND/OR / untagged / ai_exclude 字段', async () => {
     const { body: d1 } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '带标签A' })
     const { body: d2 } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '带标签B' })
     const { body: d3 } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '无标签文档xyz' })
@@ -157,12 +157,24 @@ describe('Documents API', () => {
     await api('PATCH', `/api/v1/docs/${d1.id}/tags`, { tags: ['work', 'ai'] })
     await api('PATCH', `/api/v1/docs/${d2.id}/tags`, { tags: ['life'] })
 
-    const orRes = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}&tags=work,life`)
+    const andRes = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}&tags=work,life`)
+    expect(andRes.status).toBe(200)
+    const andIds = (andRes.body as Array<{ id: string }>).map((d) => d.id)
+    expect(andIds).not.toContain(d1.id)
+    expect(andIds).not.toContain(d2.id)
+    expect(andIds).not.toContain(d3.id)
+
+    const orRes = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}&tags=work,life&tag_match=any`)
     expect(orRes.status).toBe(200)
     const orIds = (orRes.body as Array<{ id: string }>).map((d) => d.id)
     expect(orIds).toContain(d1.id)
     expect(orIds).toContain(d2.id)
     expect(orIds).not.toContain(d3.id)
+
+    const bothRes = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}&tags=work,ai`)
+    const bothIds = (bothRes.body as Array<{ id: string }>).map((d) => d.id)
+    expect(bothIds).toContain(d1.id)
+    expect(bothIds).not.toContain(d2.id)
 
     const untagged = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}&untagged=1`)
     expect(untagged.status).toBe(200)

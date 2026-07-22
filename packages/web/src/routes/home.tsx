@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, FileText, Clock, Tag } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
+import { parseTagMatchMode } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import DocList from '../components/DocList'
 import TagFilter from '../components/TagFilter'
@@ -14,7 +15,15 @@ function viewTitle(params: URLSearchParams): string {
     return '最近 24 小时'
   }
   const tags = params.get('tags') || params.get('tag')
-  if (tags) return `标签：${tags}`
+  if (tags) {
+    const parts = tags.split(',').filter(Boolean)
+    if (parts.length >= 2) {
+      const mode = parseTagMatchMode(params.get('tag_match'))
+      const suffix = mode === 'any' ? '（任一）' : '（同时）'
+      return `标签${suffix}：${tags}`
+    }
+    return `标签：${tags}`
+  }
   return '所有文档'
 }
 
@@ -24,6 +33,9 @@ function buildListQuery(params: URLSearchParams): string {
   const tag = params.get('tag') || ''
   if (tags) q.set('tags', tags)
   else if (tag) q.set('tag', tag)
+
+  const tagMatch = params.get('tag_match')
+  if (tagMatch === 'any') q.set('tag_match', 'any')
 
   if (params.get('untagged') === '1' || params.get('view') === 'untagged') {
     q.set('untagged', '1')

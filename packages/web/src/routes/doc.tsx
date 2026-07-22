@@ -7,7 +7,7 @@ import {
   Sparkles,
   Loader2,
   Pencil,
-  Lock,
+  EyeOff,
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
@@ -329,30 +329,38 @@ export default function DocPage() {
             )}
             {isEditing && <div className="mb-2" />}
 
-            {/* Tags + 对 AI 隐藏 */}
+            {/* Tags + 对 AI 隐藏（默认可见，不展示锁图标；仅隐藏态强调） */}
             <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
               {id && <TagEditor docId={id} tags={tags} onChange={setTags} />}
-              <button
-                type="button"
-                onClick={handleToggleAiExclude}
-                disabled={aiExcludeSaving}
-                aria-pressed={aiExclude}
-                className={`inline-flex items-center gap-1.5 shrink-0 text-[11.5px] px-2 py-1 rounded-md border transition-colors ${
-                  aiExclude
-                    ? 'border-foreground/30 bg-foreground text-background'
-                    : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/25'
-                }`}
-                title="开启后不进向量索引 / RAG / AutoLink / MCP（你仍可搜索与编辑）"
-              >
-                <Lock className="w-3 h-3" strokeWidth={1.75} />
-                {aiExclude ? '对 AI 隐藏' : '对 AI 可见'}
-              </button>
+              {!aiExclude && (
+                <button
+                  type="button"
+                  onClick={handleToggleAiExclude}
+                  disabled={aiExcludeSaving}
+                  className="shrink-0 text-[11.5px] text-muted-foreground/75 hover:text-foreground transition-colors"
+                  title="隐藏后不进向量索引 / RAG / AutoLink / MCP（你仍可搜索与编辑）"
+                >
+                  对 AI 隐藏
+                </button>
+              )}
             </div>
 
             {aiExclude && (
-              <p className="mb-4 text-[12px] text-muted-foreground/80 leading-relaxed">
-                本篇已对 AI 隐藏：不会被索引、对话检索或 AutoLink；MCP 也无法读取。你仍可在 Web 中搜索与编辑。
-              </p>
+              <div className="mb-4 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground/80 leading-relaxed">
+                <span className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-foreground/80">
+                  <EyeOff className="w-3 h-3 shrink-0" strokeWidth={1.75} />
+                  已对 AI 隐藏
+                </span>
+                <span>不会被索引、对话检索或 AutoLink；MCP 也无法读取。你仍可在 Web 中搜索与编辑。</span>
+                <button
+                  type="button"
+                  onClick={handleToggleAiExclude}
+                  disabled={aiExcludeSaving}
+                  className="text-foreground/90 underline underline-offset-2 hover:text-foreground"
+                >
+                  恢复对 AI 可见
+                </button>
+              </div>
             )}
             {/* Editor — 与阅读态同宽，融入文档流 */}
             {id && isEditing && (

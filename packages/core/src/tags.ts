@@ -124,15 +124,25 @@ export function setAiExcludeInProperties(properties: unknown, aiExclude: boolean
 export type TagMatchMode = 'any' | 'all'
 
 /**
+ * 解析 tag_match 查询参数。默认 `all`（同时包含 / AND）。
+ * 接受 `any` / `or` 表示包含任一。
+ */
+export function parseTagMatchMode(raw: string | null | undefined): TagMatchMode {
+  const v = (raw || '').trim().toLowerCase()
+  if (v === 'any' || v === 'or') return 'any'
+  return 'all'
+}
+
+/**
  * 文档 tags 是否匹配筛选条件。
- * - mode `any`（默认）：命中 selected 中任一 tag（OR）
- * - mode `all`：必须包含全部 selected（AND，预留）
+ * - mode `all`（默认）：必须包含全部 selected（AND）
+ * - mode `any`：命中 selected 中任一 tag（OR）
  * selected 为空时视为不筛选（返回 true）
  */
 export function docMatchesTags(
   docTags: readonly string[],
   selected: readonly string[],
-  mode: TagMatchMode = 'any',
+  mode: TagMatchMode = 'all',
 ): boolean {
   const want = normalizeTagList([...selected])
   if (want.length === 0) return true

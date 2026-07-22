@@ -143,6 +143,9 @@ docker compose up -d
 - 向量层升级按「元数据与接口 → Docker 原生扩展验证 → sqlite-vec」推进，不以当前规模下的检索延迟为由插队
 - 备份与 Markdown 归档分轨：单向 Markdown 推送不是灾难恢复；完整灾备用应用内 SQLite→S3 快照，恢复走停服 CLI
 - 功能分支合回 `main` 默认 `--ff-only`，避免多余 merge commit
+- 笔记组织优先 tag + 智能视图，不主推多笔记本 UI；底层保留单 Notebook 即可
+- 文档默认对 AI 可见；「对 AI 隐藏」入口应低调（勿用锁图标或「对 AI 可见」易被读成需点击才可见）；已隐藏态再显式状态与恢复
+- 暂不需要「默认 AI 可见性」全局设置；少数敏感笔记用手动 opt-out 即可
 
 ## Learned Workspace Facts
 
@@ -154,3 +157,5 @@ docker compose up -d
 - 文档 markdown 导出在根写入 `# {title}` 为有意设计；编辑器加载需 strip 与标题同文的首 H1（含子块时提升其子块）
 - 数据库备份配置在 `data/backup.config.json`；恢复须停服后跑 `bun --filter @notefast/server backup:restore`
 - 旧 Litestream Compose profile 已移除（`-exec true` 会导致复制进程退出）
+- 文档组织：tag 多选默认 AND（同时包含），`tag_match=any` 为包含任一；智能视图为内置预设 + URL 参数（无自定义命名视图表）
+- `properties.ai_exclude: true` 软隔离：不进向量/RAG/AutoLink/MCP 发现与按 ID 读取；人类 Web 列表/编辑/Cmd+K 仍可用；备份与 Markdown 归档仍含全文

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { DocSummary } from '@notefast/core'
 import { Link } from 'react-router-dom'
-import { FileText, Pencil, Trash2, Check, X, Lock } from 'lucide-react'
+import { FileText, Pencil, Trash2, Check, X, EyeOff } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import ConfirmDialog from './ConfirmDialog'
 
@@ -65,7 +65,7 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
       <div className="card-interactive px-3.5 py-3 group flex items-center gap-3.5">
         <div className="w-9 h-9 rounded-lg bg-muted/70 text-foreground/55 grid place-items-center shrink-0 group-hover:bg-muted group-hover:text-foreground/80 transition-colors">
           {aiExclude
-            ? <Lock className="w-4 h-4" strokeWidth={1.5} />
+            ? <EyeOff className="w-4 h-4" strokeWidth={1.5} />
             : <FileText className="w-4 h-4" strokeWidth={1.5} />}
         </div>
         <div className="min-w-0 flex-1">

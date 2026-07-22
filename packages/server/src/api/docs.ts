@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, rowToBlock, readTagsFromProperties, readAiExcludeFromProperties, getTagProvider, parseTagsQueryParam, parseUpdatedWithin, docMatchesTags } from '@notefast/core'
+import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, rowToBlock, readTagsFromProperties, readAiExcludeFromProperties, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, docMatchesTags } from '@notefast/core'
 import type { BlockRow, DocSummary } from '@notefast/core'
 import { getDb } from '../db'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany } from '../services/hooks'
@@ -14,6 +14,7 @@ docs.get('/list', (c) => {
   const db = getDb()
   const notebookId = c.req.query('notebook_id') || ''
   const selectedTags = parseTagsQueryParam(c.req.query('tags'), c.req.query('tag'))
+  const tagMatch = parseTagMatchMode(c.req.query('tag_match'))
   const untagged = c.req.query('untagged') === '1' || c.req.query('untagged') === 'true'
   const withinMs = parseUpdatedWithin(c.req.query('updated_within'))
 
@@ -32,7 +33,7 @@ docs.get('/list', (c) => {
   if (untagged) {
     rows = rows.filter((r) => readTagsFromProperties(r.properties).length === 0)
   } else if (selectedTags.length > 0) {
-    rows = rows.filter((r) => docMatchesTags(readTagsFromProperties(r.properties), selectedTags, 'any'))
+    rows = rows.filter((r) => docMatchesTags(readTagsFromProperties(r.properties), selectedTags, tagMatch))
   }
 
   if (withinMs != null) {

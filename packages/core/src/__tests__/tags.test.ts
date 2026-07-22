@@ -4,6 +4,7 @@ import {
   normalizeTag,
   normalizeTagList,
   parseTagsQueryParam,
+  parseTagMatchMode,
   parseUpdatedWithin,
   readAiExcludeFromProperties,
   readTagsFromProperties,
@@ -17,6 +18,19 @@ describe('normalizeTag', () => {
 
   test('空串无效', () => {
     expect(normalizeTag('   ')).toBeNull()
+  })
+})
+
+describe('parseTagMatchMode', () => {
+  test('默认 AND', () => {
+    expect(parseTagMatchMode(undefined)).toBe('all')
+    expect(parseTagMatchMode('')).toBe('all')
+    expect(parseTagMatchMode('all')).toBe('all')
+  })
+
+  test('OR 别名', () => {
+    expect(parseTagMatchMode('any')).toBe('any')
+    expect(parseTagMatchMode('or')).toBe('any')
   })
 })
 

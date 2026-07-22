@@ -12,10 +12,12 @@ import {
   readTagsFromProperties,
   getTagProvider,
   parseTagsQueryParam,
+  parseTagMatchMode,
   parseUpdatedWithin,
   docMatchesTags,
   type LLMProvider,
   type ChatMessage,
+  type TagMatchMode,
 } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import { hasRuntime, getRuntime } from '../services/aiRuntime'
@@ -90,6 +92,7 @@ function denyAiExcludedBlock(blockId: string) {
 
 function filterDocRowsForMcp(rows: BlockRow[], opts: {
   tags?: string[]
+  tagMatch?: TagMatchMode
   untagged?: boolean
   updatedWithin?: string | null
 }): BlockRow[] {
@@ -97,7 +100,8 @@ function filterDocRowsForMcp(rows: BlockRow[], opts: {
   if (opts.untagged) {
     out = out.filter((r) => readTagsFromProperties(r.properties).length === 0)
   } else if (opts.tags && opts.tags.length > 0) {
-    out = out.filter((r) => docMatchesTags(readTagsFromProperties(r.properties), opts.tags!, 'any'))
+    const mode = opts.tagMatch ?? 'all'
+    out = out.filter((r) => docMatchesTags(readTagsFromProperties(r.properties), opts.tags!, mode))
   }
   const withinMs = parseUpdatedWithin(opts.updatedWithin ?? undefined)
   if (withinMs != null) {
@@ -512,12 +516,13 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       description: '列出文档列表（默认排除「对 AI 隐藏」的文档）；可按 tags / 未打标 / 最近更新筛选',
       inputSchema: {
         notebook_id: z.string().optional().describe('笔记本 ID，默认使用默认笔记本'),
-        tags: z.string().optional().describe('逗号分隔 tags，OR 匹配'),
+        tags: z.string().optional().describe('逗号分隔 tags；默认同时包含全部（AND），tag_match=any 时为包含任一'),
+        tag_match: z.enum(['all', 'any']).optional().describe('多 tag 匹配：all=同时包含（默认），any=包含任一'),
         untagged: z.boolean().optional().describe('仅未打标文档'),
         updated_within: z.enum(['24h', '7d']).optional().describe('仅最近更新的文档'),
       },
     },
-    async ({ notebook_id, tags, untagged, updated_within }) => {
+    async ({ notebook_id, tags, tag_match, untagged, updated_within }) => {
       const nid = notebook_id || notebookId
 
       const rows = db
@@ -526,6 +531,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
 
       const filtered = filterDocRowsForMcp(rows, {
         tags: parseTagsQueryParam(tags),
+        tagMatch: parseTagMatchMode(tag_match),
         untagged: untagged === true,
         updatedWithin: updated_within ?? null,
       })
