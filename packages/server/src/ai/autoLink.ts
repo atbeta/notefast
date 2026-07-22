@@ -27,6 +27,7 @@ import {
   type ChatMessage,
 } from '@notefast/core'
 import { getDb } from '../db'
+import { runFtsQuery } from '../dbQueries'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { embeddingFingerprint, getVectorStore } from './vectorStore'
 import {
@@ -35,6 +36,7 @@ import {
   type Candidate,
   type ScoreKind,
 } from './autoLinkStore'
+import { isBlockAiExcluded, loadAiExcludedDocIds } from './aiExcludeQuery'
 
 const EXTRACT_SYSTEM_PROMPT = `你是 NoteFast 的实体抽取助手。从用户给定的笔记内容中识别可以建立反向链接的具体名词短语（"锚点"）。
 
@@ -121,7 +123,6 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
   if (!runtime.hasChat()) return empty()
 
   // AI 软隔离：排除文档不分析、不送 LLM
-  const { isBlockAiExcluded } = await import('./aiExclude')
   if (isBlockAiExcluded(opts.blockId)) return empty()
 
   const trimmed = opts.content.trim().slice(0, MAX_CONTENT_CHARS)
@@ -374,35 +375,25 @@ async function findCandidates(
   if (STOP_ANCHORS.has(anchor.toLowerCase())) return []
   const db = getDb()
 
-  let sql = `
-    SELECT b.id, b.content, b.root_id, (SELECT content FROM blocks WHERE id = b.root_id) as doc_title
-    FROM blocks_fts f
-    JOIN blocks b ON b.id = f.id
-    WHERE blocks_fts MATCH ?`
-  const params: (string | number)[] = [`"${anchor.replace(/['"*()]/g, ' ').trim()}"`]
-
-  if (scope === 'same' && notebookId) {
-    sql += ' AND b.notebook_id = ? AND b.id != ?'
-    params.push(notebookId, sourceBlockId)
-  } else {
-    sql += ' AND b.id != ?'
-    params.push(sourceBlockId)
-  }
+  const extraWhere: string[] = ['AND b.id != ?']
+  const extraParams: (string | number)[] = [sourceBlockId]
   if (sourceDocId) {
-    sql += ' AND b.root_id != ?'
-    params.push(sourceDocId)
+    extraWhere.push('AND b.root_id != ?')
+    extraParams.push(sourceDocId)
   }
-  sql += ' ORDER BY rank LIMIT 10'
 
   let rows: Array<{ id: string; content: string; root_id: string; doc_title: string }>
   try {
-    rows = db.query(sql).all(...params as [string, ...(string | number)[]]) as Array<{
-      id: string
-      content: string
-      root_id: string
-      doc_title: string
-    }>
+    rows = runFtsQuery<{ id: string; content: string; root_id: string; doc_title: string }>(db, {
+      match: `"${anchor.replace(/['"*()]/g, ' ').trim()}"`,
+      notebookId: scope === 'same' ? notebookId : undefined,
+      limit: 10,
+      select: 'b.id, b.content, b.root_id, (SELECT content FROM blocks WHERE id = b.root_id) as doc_title',
+      extraWhere,
+      extraParams,
+    })
   } catch {
+    // LIKE 降级（独立语义）：FTS 表达式执行失败时退回子串匹配
     const likeSql = `SELECT b.id, b.content, b.root_id, (SELECT content FROM blocks WHERE id = b.root_id) as doc_title
                      FROM blocks b WHERE b.content LIKE ? AND b.id != ? LIMIT 10`
     rows = db.query(likeSql).all(`%${anchor}%`, sourceBlockId) as Array<{
@@ -417,7 +408,6 @@ async function findCandidates(
   if (rows.length === 0) return []
 
   // 过滤 ai_exclude 文档的候选
-  const { loadAiExcludedDocIds } = await import('./aiExclude')
   const excluded = loadAiExcludedDocIds(rows.map((r) => r.root_id))
   rows = rows.filter((r) => !excluded.has(r.root_id))
   if (rows.length === 0) return []

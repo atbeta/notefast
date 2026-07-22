@@ -2,7 +2,8 @@ import { Hono } from 'hono'
 import { buildFtsQuery, highlightSnippet, rowToBlock } from '@notefast/core'
 import type { BlockRow, SearchResult } from '@notefast/core'
 import { getDb } from '../db'
-import { loadAiExcludedDocIds } from '../ai/aiExclude'
+import { runFtsQuery } from '../dbQueries'
+import { loadAiExcludedDocIds } from '../ai/aiExcludeQuery'
 
 const search = new Hono()
 
@@ -19,21 +20,12 @@ search.get('/', (c) => {
 
   const { query } = buildFtsQuery(q, limit)
 
-  let sql = `
-    SELECT b.*, rank FROM blocks_fts f
-    JOIN blocks b ON b.id = f.id
-    WHERE blocks_fts MATCH ?`
-  const params: (string | number)[] = [query]
-
-  if (notebookId) {
-    sql += ' AND b.notebook_id = ?'
-    params.push(notebookId)
-  }
-
-  sql += ' ORDER BY rank LIMIT ?'
-  params.push(limit)
-
-  const rows = db.query(sql).all(...params as [string, ...(string | number)[]]) as (BlockRow & { rank: number })[]
+  // 人类 Web FTS 搜索不滤 ai_exclude（与 MCP/AI 通道刻意不同）
+  const rows = runFtsQuery(db, {
+    match: query,
+    notebookId: notebookId || undefined,
+    limit,
+  })
   const results: SearchResult[] = rows.map((r) => {
     const block = rowToBlock(r)
     return {

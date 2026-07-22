@@ -21,6 +21,7 @@ export interface ArchiveManifest {
 
 export function sanitizeFilename(name: string): string {
   return name
+    // oxlint-disable-next-line no-control-regex -- 有意匹配控制字符以清洗文件名
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
     .replace(/\s+/g, '-')
     .replace(/\.+/g, '.')

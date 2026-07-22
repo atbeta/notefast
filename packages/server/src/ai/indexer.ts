@@ -16,12 +16,12 @@ import {
   setVectorStore,
 } from './vectorStore'
 import { SqliteVecVectorStore } from './vectorStoreVec'
+import { isBlockAiExcluded, loadAiExcludedDocIds } from './aiExcludeQuery'
 
 export async function indexBlock(blockId: string): Promise<void> {
   const r = getRuntime()
   if (!r.hasEmbedding()) return
 
-  const { isBlockAiExcluded } = await import('./aiExclude')
   if (isBlockAiExcluded(blockId)) {
     await deleteVector(blockId)
     return
@@ -53,7 +53,6 @@ export async function indexAllBlocks(notebookId?: string): Promise<{ indexed: nu
     throw new Error('Embedding provider is not configured')
   }
 
-  const { isBlockAiExcluded } = await import('./aiExclude')
   const db = getDb()
   let sql = 'SELECT id, content FROM blocks WHERE content IS NOT NULL AND content != ?'
   const params: string[] = ['']
@@ -158,7 +157,6 @@ export async function semanticSearch(
     until,
   })
   if (raw.length === 0) return raw
-  const { loadAiExcludedDocIds } = await import('./aiExclude')
   const excluded = loadAiExcludedDocIds(raw.map((h) => h.doc_id))
   return raw.filter((h) => !excluded.has(h.doc_id)).slice(0, limit)
 }

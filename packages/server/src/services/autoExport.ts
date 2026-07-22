@@ -7,6 +7,9 @@
  *
  * 真正的"按 interval 同步"逻辑由 sync/manager.ts 的 autoSyncTimer 负责，
  * 这里仅在环境变量 AUTO_EXPORT_DIR 仍被设置但用户尚未配 sync 时回退。
+ *
+ * legacyExportMarkdown 同时是 GET /api/v1/sync/export/markdown（api/sync.ts）
+ * 的实现——全库一次性兜底导出只保留这一份。
  */
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -32,8 +35,46 @@ export function startAutoExport(dir: string): void {
   setInterval(() => { legacyExportOnce(dir) }, 60 * 60 * 1000)
 }
 
+export interface LegacyExportFileResult {
+  id: string
+  title: string
+  file: string
+  error?: string
+}
+
+export interface LegacyExportResult {
+  exported: number
+  files: LegacyExportFileResult[]
+  dir: string
+}
+
+/**
+ * AUTO_EXPORT_DIR 兜底导出：全部文档各写一个 `<slug>.md`，返回逐文档结果。
+ * 单篇失败不中断，记 error 条目（exported 计数含失败篇，与旧端点语义一致）。
+ */
+export function legacyExportMarkdown(dir: string): LegacyExportResult {
+  const db = getDb()
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  const docs = db.query("SELECT * FROM blocks WHERE type = 'document' ORDER BY updated_at ASC").all() as BlockRow[]
+  const results: LegacyExportFileResult[] = []
+  for (const doc of docs) {
+    try {
+      const tree = buildBlockTree(fetchDocBlocks(db, doc.id))
+      const markdown = blocksToMarkdown(tree)
+      const slug = sanitizeFilename(doc.content || 'untitled')
+      const filename = `${slug}.md`
+      writeFileSync(join(dir, filename), markdown, 'utf-8')
+      results.push({ id: doc.id, title: doc.content, file: filename })
+    } catch (e) {
+      results.push({ id: doc.id, title: doc.content, file: '', error: String(e) })
+    }
+  }
+  return { exported: results.length, files: results, dir }
+}
+
 function sanitizeFilename(name: string): string {
   return name
+    // oxlint-disable-next-line no-control-regex -- 有意匹配控制字符以清洗文件名
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
     .replace(/\s+/g, '-')
     .replace(/\.+/g, '.')
@@ -54,19 +95,9 @@ async function legacyExportOnce(dir: string): Promise<void> {
     return
   }
   try {
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-    const db = getDb()
-    const docs = db.query("SELECT * FROM blocks WHERE type = 'document' ORDER BY updated_at ASC").all() as BlockRow[]
-    let count = 0
-    for (const doc of docs) {
-      try {
-        const tree = buildBlockTree(fetchDocBlocks(db, doc.id))
-        const markdown = blocksToMarkdown(tree)
-        const slug = sanitizeFilename(doc.content || 'untitled')
-        writeFileSync(join(dir, `${slug}.md`), markdown, 'utf-8')
-        count++
-      } catch { /* skip */ }
-    }
+    const result = legacyExportMarkdown(dir)
+    // 与原实现一致：只统计成功写盘的篇数（失败篇带 error 条目，不计入）
+    const count = result.files.filter((f) => !f.error).length
     console.log(`📁 Auto-export (legacy): ${count} docs → ${dir}`)
   } catch (e) {
     console.error('Auto-export failed:', e instanceof Error ? e.message : e)

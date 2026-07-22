@@ -15,17 +15,10 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { getDb } from '../db'
-import { fetchDocBlocks } from '../dbQueries'
 import {
-  blocksToMarkdown,
-  buildBlockTree,
   type SyncPersistedConfig,
   type SyncAdapterConfig,
 } from '@notefast/core'
-import type { BlockRow } from '@notefast/core'
 import {
   applySyncConfig,
   getSyncPublicConfig,
@@ -34,6 +27,7 @@ import {
   syncPush,
   syncStatus,
 } from '../sync/manager'
+import { legacyExportMarkdown } from '../services/autoExport'
 
 const sync = new Hono()
 
@@ -71,6 +65,7 @@ const configSchema = z.object({
 })
 
 // ───────────────────── 兼容旧版：一次性导出 ─────────────────────
+// 实现收敛在 services/autoExport.ts（AUTO_EXPORT_DIR 兜底导出只保留一份）
 
 sync.get('/export/markdown', (c) => {
   if (!isSyncConfigured()) {
@@ -83,26 +78,6 @@ sync.get('/export/markdown', (c) => {
   // 已经有 sync adapter 配置了；优先用 sync 路径
   return c.json({ error: 'overridden', message: '请使用 POST /api/v1/sync/run' }, 400)
 })
-
-function legacyExportMarkdown(dir: string) {
-  const db = getDb()
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  const docs = db.query("SELECT * FROM blocks WHERE type = 'document' ORDER BY updated_at ASC").all() as BlockRow[]
-  const results: { id: string; title: string; file: string; error?: string }[] = []
-  for (const doc of docs) {
-    try {
-      const tree = buildBlockTree(fetchDocBlocks(db, doc.id))
-      const markdown = blocksToMarkdown(tree)
-      const slug = sanitizeFilename(doc.content || 'untitled')
-      const filename = `${slug}.md`
-      writeFileSync(join(dir, filename), markdown, 'utf-8')
-      results.push({ id: doc.id, title: doc.content, file: filename })
-    } catch (e) {
-      results.push({ id: doc.id, title: doc.content, file: '', error: String(e) })
-    }
-  }
-  return { exported: results.length, files: results, dir }
-}
 
 // ───────────────────── 标准路由 ─────────────────────
 
@@ -224,17 +199,5 @@ sync.get('/adapters', (c) => {
     ],
   })
 })
-
-// ───────────────────── helpers ─────────────────────
-
-function sanitizeFilename(name: string): string {
-  return name
-    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/\.+/g, '.')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 120) || 'untitled'
-}
 
 export default sync

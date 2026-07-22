@@ -12,10 +12,11 @@
  */
 
 import { getDb } from '../db'
+import { runFtsQuery } from '../dbQueries'
 import { buildFtsQuery, highlightSnippet } from '@notefast/core'
 import { semanticSearch } from './indexer'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
-import { loadAiExcludedDocIds } from './aiExclude'
+import { loadAiExcludedDocIds } from './aiExcludeQuery'
 
 export interface SearchOptions {
   query: string
@@ -205,29 +206,17 @@ function runFts(
   if (!query.trim()) return []
   const db = getDb()
   const { query: ftsQuery } = buildFtsQuery(query, limit)
-  let sql = `
-    SELECT b.id as block_id, b.content as content, b.type as type, b.root_id as doc_id,
+  // ai_exclude 不过取：在 hybridSearch 融合层与语义召回一起过滤
+  const rows = runFtsQuery<FtsHit>(db, {
+    match: ftsQuery,
+    notebookId,
+    since,
+    until,
+    limit,
+    select: `b.id as block_id, b.content as content, b.type as type, b.root_id as doc_id,
            (SELECT content FROM blocks WHERE id = b.root_id) as doc_title,
-           rank
-    FROM blocks_fts f
-    JOIN blocks b ON b.id = f.id
-    WHERE blocks_fts MATCH ?`
-  const params: (string | number)[] = [ftsQuery]
-  if (notebookId) {
-    sql += ' AND b.notebook_id = ?'
-    params.push(notebookId)
-  }
-  if (since) {
-    sql += ' AND b.updated_at >= ?'
-    params.push(since)
-  }
-  if (until) {
-    sql += ' AND b.updated_at <= ?'
-    params.push(until)
-  }
-  sql += ' ORDER BY rank LIMIT ?'
-  params.push(limit)
-  const rows = db.query(sql).all(...params as [string, ...(string | number)[]]) as Array<FtsHit & { rank: number }>
+           rank`,
+  })
   return rows.map((r, i) => ({ ...r, rrf_rank: i + 1 }))
 }
 

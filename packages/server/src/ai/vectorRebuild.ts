@@ -1,6 +1,6 @@
 import { getDb } from '../db'
 import { getRuntime } from '../services/aiRuntime'
-import { isBlockAiExcluded } from './aiExclude'
+import { isBlockAiExcluded } from './aiExcludeQuery'
 import {
   contentHash,
   embeddingFingerprint,

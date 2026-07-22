@@ -8,7 +8,8 @@ import { fetchDocBlocks, fetchSubtreeBlocks } from '../dbQueries'
 import { insertDocFromMarkdown } from '../services/docImport'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
-import { writeDocAiExclude, readDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
+import { writeDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
+import { readDocAiExclude } from '../ai/aiExcludeQuery'
 
 const docs = new Hono()
 

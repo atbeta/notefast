@@ -35,7 +35,6 @@ import {
   resolveApiKey,
   validateConfig,
 } from '@notefast/core'
-import type { BlockRow } from '@notefast/core'
 import {
   getRuntime,
   applyNewConfigFromCurrent,
@@ -44,9 +43,10 @@ import {
 } from '../services/aiRuntime'
 import { indexBlock, indexAllBlocks, semanticSearch } from '../ai/indexer'
 import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
-import { loadAiExcludedDocIds } from '../ai/aiExclude'
+import { loadAiExcludedDocIds } from '../ai/aiExcludeQuery'
 import { runChat, runChatSync } from '../ai/chat'
 import { getDb } from '../db'
+import { runFtsQuery } from '../dbQueries'
 import { getVectorStore } from '../ai/vectorStore'
 import { startVectorRebuild } from '../ai/vectorRebuild'
 
@@ -374,19 +374,8 @@ ai.get('/search', async (c) => {
 function ftsHits(q: string, notebookId: string | undefined, limit: number) {
   const db = getDb()
   const { query: ftsQuery } = buildFtsQuery(q, limit)
-  let sql = `
-    SELECT b.*, rank FROM blocks_fts f
-    JOIN blocks b ON b.id = f.id
-    WHERE blocks_fts MATCH ?`
-  const params: (string | number)[] = [ftsQuery]
-  if (notebookId) {
-    sql += ' AND b.notebook_id = ?'
-    params.push(notebookId)
-  }
   // 多取 3 倍，事后过滤 ai_exclude 文档后截断到 limit
-  sql += ' ORDER BY rank LIMIT ?'
-  params.push(limit * 3)
-  const rows = db.query(sql).all(...params as [string, ...(string | number)[]]) as (BlockRow & { rank: number })[]
+  const rows = runFtsQuery(db, { match: ftsQuery, notebookId, limit, overfetch: 3 })
   const excluded = loadAiExcludedDocIds(rows.map((r) => r.root_id))
   return rows
     .filter((r) => !excluded.has(r.root_id))

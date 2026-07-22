@@ -19,7 +19,6 @@ import {
   AiRuntime,
   configFromEnv,
   emptyConfig,
-  setAiRuntime,
   type AiConfig,
 } from '@notefast/core'
 import type { PluginSystem } from '@notefast/core'
@@ -30,6 +29,7 @@ import {
   embeddingFingerprint,
   markVectorStoreStaleIfModelChanged,
 } from '../ai/vectorStore'
+import { isBlockAiExcluded } from '../ai/aiExcludeQuery'
 
 const CONFIG_FILE = 'ai.config.json'
 const HOOK_NAME = 'ai-indexer'
@@ -55,7 +55,6 @@ export function initAiRuntime(sys: PluginSystem, dir: string): AiRuntime {
   }
   const r = new AiRuntime(initial)
   runtime = r
-  setAiRuntime(r)
   applyAutoIndex(r, sys)
   applyAutoLink(r, sys)
   return r
@@ -64,7 +63,6 @@ export function initAiRuntime(sys: PluginSystem, dir: string): AiRuntime {
 /** 测试用：注入 mock runtime */
 export function _setRuntimeForTests(r: AiRuntime | null): void {
   runtime = r
-  if (r) setAiRuntime(r)
 }
 
 export function getPluginSystem(): PluginSystem | null {
@@ -226,7 +224,6 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
 
   pluginSystem.note.afterCreate.tap(AUTOLINK_HOOK_NAME, async (block) => {
     if (block.type === 'document') return // doc 头不分析
-    const { isBlockAiExcluded } = await import('../ai/aiExclude')
     if (isBlockAiExcluded(block.id)) return
     removeSuggestionsForBlock(block.id)
     await analyzeBlock({
@@ -239,7 +236,6 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
   })
   pluginSystem.note.afterUpdate.tap(AUTOLINK_HOOK_NAME, async (block) => {
     if (block.type === 'document') return
-    const { isBlockAiExcluded } = await import('../ai/aiExclude')
     if (isBlockAiExcluded(block.id)) return
     removeSuggestionsForBlock(block.id)
     await analyzeBlock({
