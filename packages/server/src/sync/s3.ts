@@ -1,17 +1,16 @@
 /**
- * S3 Sync Adapter
+ * S3 Sync Adapter — Markdown 单向归档
  *
- * 把 NoteFast 数据库里的所有文档渲染成 Markdown 文件，推送到 S3 兼容对象存储。
- * 兼容：AWS S3 / Cloudflare R2 / MinIO / Backblaze B2 / 阿里云 OSS（endpoints）。
- *
- * 设计：
- * - 走 AWS SDK v3 标准签名 + 单次 PutObject（每篇笔记 KB 量级，不需要 multipart）
- * - 客户端通过 S3ClientLike 接口注入，测试可替换为 stub
- * - prefix 自动归一化（去尾部 slash）
- * - 文件名复用 localFs 的 sanitize 规则，保证跨 adapter 一致
+ * 使用真实 AWS SDK Command；文件名含 docId；维护 notefast-archive.manifest.json。
  */
 
-import { S3Client } from '@aws-sdk/client-s3'
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3'
 import {
   blocksToMarkdown,
   buildBlockTree,
@@ -23,28 +22,21 @@ import {
   type BlockRow,
 } from '@notefast/core'
 import { getDb } from '../db'
+import {
+  ARCHIVE_MANIFEST_NAME,
+  archiveFilename,
+  buildArchiveManifest,
+  isArchiveManifest,
+  staleArchiveKeys,
+  type ArchiveManifest,
+} from './archive'
 
-/**
- * 抽象出 SDK 调用接口，让测试可以注入 stub。
- * 与 @aws-sdk/client-s3 的 S3Client.send(cmd) 形状兼容。
- */
 export interface S3ClientLike {
-  send<T>(command: { constructor: { name: string }; input: Record<string, unknown> }): Promise<T>
+  send(command: unknown): Promise<unknown>
 }
 
 export interface CreateS3AdapterOptions {
-  /** 自定义 client；缺省时按 cfg 创建真实 S3Client */
   client?: S3ClientLike
-}
-
-function sanitizeFilename(name: string): string {
-  return name
-    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/\.+/g, '.')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 120) || 'untitled'
 }
 
 function fetchDescendants(database: ReturnType<typeof getDb>, rootId: string): BlockRow[] {
@@ -79,7 +71,8 @@ export function createS3Adapter(
     throw new Error('S3 accessKeyId / secretAccessKey 必填')
   }
 
-  const client: S3ClientLike = opts.client ??
+  const client: S3ClientLike =
+    opts.client ??
     new S3Client({
       region: cfg.region,
       endpoint: cfg.endpoint || undefined,
@@ -92,15 +85,29 @@ export function createS3Adapter(
   const bucket = cfg.bucket
   const prefix = normalizePrefix(cfg.prefix)
 
+  async function loadPreviousManifest(keyPrefix: string): Promise<ArchiveManifest | null> {
+    const key = `${keyPrefix}${ARCHIVE_MANIFEST_NAME}`
+    try {
+      const res = (await client.send(
+        new GetObjectCommand({ Bucket: bucket, Key: key }),
+      )) as { Body?: { transformToString: () => Promise<string> } }
+      const text = await res.Body?.transformToString()
+      if (!text) return null
+      const parsed = JSON.parse(text) as unknown
+      return isArchiveManifest(parsed) ? parsed : null
+    } catch {
+      return null
+    }
+  }
+
   return {
     name: 's3',
 
     async info(): Promise<SyncInfo> {
       try {
-        const res = await client.send({
-          constructor: { name: 'HeadBucketCommand' },
-          input: { Bucket: bucket },
-        })
+        const res = (await client.send(new HeadBucketCommand({ Bucket: bucket }))) as {
+          BucketRegion?: string
+        }
         return {
           extra: {
             bucket,
@@ -109,7 +116,7 @@ export function createS3Adapter(
             prefix,
             forcePathStyle: cfg.forcePathStyle ?? false,
             ok: true,
-            status: (res as { BucketRegion?: string }).BucketRegion ?? cfg.region,
+            status: res.BucketRegion ?? cfg.region,
           },
         }
       } catch (e) {
@@ -141,27 +148,61 @@ export function createS3Adapter(
       const docs = db.query(sql).all(...params) as BlockRow[]
 
       const result: SyncResult = { pushed: 0, pulled: 0, errors: [] }
+      const files: ArchiveManifest['files'] = []
+      const previous = await loadPreviousManifest(keyPrefix)
+
       for (const doc of docs) {
         try {
           const rows = fetchDescendants(db, doc.id)
           const tree = buildBlockTree([doc, ...rows])
           const markdown = blocksToMarkdown(tree)
-          const slug = sanitizeFilename(doc.content || 'untitled')
-          const key = `${keyPrefix}${slug}.md`
-          await client.send({
-            constructor: { name: 'PutObjectCommand' },
-            input: {
+          const filename = archiveFilename(doc.content || 'untitled', doc.id)
+          const key = `${keyPrefix}${filename}`
+          await client.send(
+            new PutObjectCommand({
               Bucket: bucket,
               Key: key,
               Body: markdown,
               ContentType: 'text/markdown; charset=utf-8',
-            },
+            }),
+          )
+          files.push({
+            docId: doc.id,
+            title: doc.content || 'untitled',
+            filename,
+            key,
           })
           result.pushed++
         } catch (e) {
           result.errors.push(`${doc.id}: ${e instanceof Error ? e.message : String(e)}`)
         }
       }
+
+      // 全量推送时才清理陈旧文件（按文档过滤时不删）
+      if (!docIds || docIds.length === 0) {
+        const manifest = buildArchiveManifest({ adapter: 's3', files })
+        const stale = staleArchiveKeys(previous, manifest)
+        for (const key of stale) {
+          try {
+            await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))
+          } catch (e) {
+            result.errors.push(`delete ${key}: ${e instanceof Error ? e.message : String(e)}`)
+          }
+        }
+        try {
+          await client.send(
+            new PutObjectCommand({
+              Bucket: bucket,
+              Key: `${keyPrefix}${ARCHIVE_MANIFEST_NAME}`,
+              Body: JSON.stringify(manifest, null, 2),
+              ContentType: 'application/json; charset=utf-8',
+            }),
+          )
+        } catch (e) {
+          result.errors.push(`manifest: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+
       return result
     },
   }

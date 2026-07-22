@@ -1,22 +1,7 @@
-# Litestream — SQLite 流式复制
-# 将 WAL 变更实时推送到 S3 兼容存储（AWS S3 / Cloudflare R2 / MinIO）
+# DEPRECATED — 请勿再使用本文件。
 #
-# 使用方式：
-#   docker compose up -d
-#   配置 .env 中的 S3_* 环境变量后重建
+# 数据库灾备已改为应用内 S3 快照（Web 设置页 → 数据库备份）。
+# 说明见 docs/backup.md。
 #
-# 恢复数据库：
-#   litestream restore -config litestream.yml /app/data/notefast.db
-
-dbs:
-  - path: /data/notefast.db
-    replicas:
-      - type: s3
-        bucket: ${S3_BUCKET}
-        path: notefast
-        endpoint: ${S3_ENDPOINT}
-        # YAML 插值后是字符串 "true"/"false"，litestream 配置层会用 strconv.ParseBool 转 bool
-        force-path-style: ${S3_FORCE_PATH_STYLE:-false}
-        access-key-id: ${S3_ACCESS_KEY_ID}
-        secret-access-key: ${S3_SECRET_ACCESS_KEY}
-        region: ${S3_REGION:-auto}
+# 历史原因：Compose 中 `litestream replicate -exec true` 会在子进程退出后
+# 结束 Litestream 自身，无法形成可用的持续复制。

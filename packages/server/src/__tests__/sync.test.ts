@@ -104,9 +104,9 @@ describe('LocalFS Adapter — 单元', () => {
     seedDocWithBlocks({ docTitle: 'Hello World', blocks: [{ content: '段落 1' }] })
     const r = await adapter.push()
     expect(r.pushed).toBe(1)
-    const files = readdirSync(exportDir)
+    const files = readdirSync(exportDir).filter((f) => f.endsWith('.md'))
     expect(files.length).toBe(1)
-    expect(files[0]!.endsWith('.md')).toBe(true)
+    expect(files[0]!).toContain('Hello-World--')
     const content = readFileSync(join(exportDir, files[0]!), 'utf-8')
     expect(content).toContain('Hello World')
   })
@@ -196,7 +196,8 @@ describe('Sync Manager — 配置持久化与热重载', () => {
     // 再跑一次，确保新 dir 生效
     const r = await syncPush()
     expect(r.pushed).toBe(1)
-    expect(existsSync(join(newDir, 'reload.md'))).toBe(true)
+    const md = readdirSync(newDir).filter((f) => f.endsWith('.md') && f.startsWith('reload--'))
+    expect(md.length).toBe(1)
   })
 
   test('applySyncConfig 把 enabled 设为 false → configured=false', async () => {

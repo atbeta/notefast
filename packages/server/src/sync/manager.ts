@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   emptySyncConfig,
+  mergeSyncConfig,
   type SyncAdapter,
   type SyncPersistedConfig,
   type SyncInfo,
@@ -49,6 +50,7 @@ let lastRunAt: string | null = null
 let lastSuccessAt: string | null = null
 let lastError: string | null = null
 let autoSyncTimer: ReturnType<typeof setInterval> | null = null
+let running = false
 
 /** 启动期初始化 */
 export function initSyncManager(dir: string, env?: Record<string, string | undefined>): void {
@@ -84,10 +86,10 @@ export function syncStatus(): SyncRuntimeStatus {
   }
 }
 
-/** 热重载：更新配置、切换适配器 */
+/** 热重载：更新配置、切换适配器（脱敏密钥沿用磁盘旧值） */
 export async function applySyncConfig(newCfg: SyncPersistedConfig): Promise<SyncRuntimeStatus> {
-  cfg = newCfg
-  saveConfigToDisk(newCfg)
+  cfg = mergeSyncConfig(newCfg, cfg)
+  saveConfigToDisk(cfg)
   rebuild()
   return syncStatus()
 }
@@ -100,11 +102,15 @@ export async function syncInfo(): Promise<SyncInfo> {
   return activeAdapter.info()
 }
 
-/** 手动 push */
+/** 手动 / 定时 push（统一走状态记录；禁止重叠） */
 export async function syncPush(opts?: PushOptions): Promise<SyncResult> {
   if (!activeAdapter) {
     throw new Error('Sync adapter 未配置')
   }
+  if (running) {
+    throw Object.assign(new Error('归档任务正在进行中'), { code: 'sync_in_progress' })
+  }
+  running = true
   lastRunAt = new Date().toISOString()
   try {
     const r = await activeAdapter.push(opts)
@@ -120,6 +126,8 @@ export async function syncPush(opts?: PushOptions): Promise<SyncResult> {
     lastError = e instanceof Error ? e.message : String(e)
     lastResult = { pushed: 0, pulled: 0, errors: [lastError] }
     throw e
+  } finally {
+    running = false
   }
 }
 
@@ -201,7 +209,8 @@ function rebuild(): void {
   }
   if (cfg.autoSyncIntervalMs && cfg.autoSyncIntervalMs > 0 && activeAdapter) {
     autoSyncTimer = setInterval(() => {
-      activeAdapter?.push().catch((err) => {
+      // 统一走 syncPush，确保 lastRunAt / lastError / lastResult 更新
+      syncPush().catch((err) => {
         console.warn('[sync] auto push failed:', err instanceof Error ? err.message : err)
       })
     }, cfg.autoSyncIntervalMs)
@@ -224,4 +233,5 @@ export function _resetForTests(): void {
   lastRunAt = null
   lastSuccessAt = null
   lastError = null
+  running = false
 }

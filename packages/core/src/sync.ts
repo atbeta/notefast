@@ -111,8 +111,45 @@ export interface PullOptions {
 /** 内建的适配器工厂签名 */
 export type SyncAdapterFactory = (config: Record<string, string>) => SyncAdapter
 
+export const SYNC_SECRET_MASK = '***set***'
+
 export function emptySyncConfig(): SyncPersistedConfig {
   return { version: 1, active: null }
+}
+
+function resolveSecret(incoming: string | undefined, existing: string | undefined): string {
+  if (incoming === undefined || incoming === SYNC_SECRET_MASK) return existing ?? ''
+  return incoming.trim()
+}
+
+/** 合并 PUT 配置与磁盘配置（脱敏密钥沿用旧值） */
+export function mergeSyncConfig(
+  incoming: SyncPersistedConfig,
+  existing: SyncPersistedConfig,
+): SyncPersistedConfig {
+  const next: SyncPersistedConfig = {
+    version: 1,
+    active: incoming.active,
+    autoSyncIntervalMs: incoming.autoSyncIntervalMs,
+  }
+  if (!next.active) return next
+  const prev = existing.active
+  if (next.active.kind === 's3') {
+    const prevS3 = prev?.kind === 's3' ? prev : null
+    next.active = {
+      ...next.active,
+      accessKeyId: resolveSecret(next.active.accessKeyId, prevS3?.accessKeyId),
+      secretAccessKey: resolveSecret(next.active.secretAccessKey, prevS3?.secretAccessKey),
+    }
+  } else if (next.active.kind === 'webdav') {
+    const prevDav = prev?.kind === 'webdav' ? prev : null
+    next.active = {
+      ...next.active,
+      username: resolveSecret(next.active.username, prevDav?.username),
+      password: resolveSecret(next.active.password, prevDav?.password),
+    }
+  }
+  return next
 }
 
 /** 对外展示时移除密钥 */
@@ -123,8 +160,8 @@ export function publicSyncView(cfg: SyncPersistedConfig): SyncPersistedConfig {
       ...cfg,
       active: {
         ...cfg.active,
-        accessKeyId: cfg.active.accessKeyId ? '***set***' : '',
-        secretAccessKey: cfg.active.secretAccessKey ? '***set***' : '',
+        accessKeyId: cfg.active.accessKeyId ? SYNC_SECRET_MASK : '',
+        secretAccessKey: cfg.active.secretAccessKey ? SYNC_SECRET_MASK : '',
       },
     }
   }
@@ -133,8 +170,8 @@ export function publicSyncView(cfg: SyncPersistedConfig): SyncPersistedConfig {
       ...cfg,
       active: {
         ...cfg.active,
-        username: cfg.active.username ? '***set***' : '',
-        password: cfg.active.password ? '***set***' : '',
+        username: cfg.active.username ? SYNC_SECRET_MASK : '',
+        password: cfg.active.password ? SYNC_SECRET_MASK : '',
       },
     }
   }

@@ -191,7 +191,7 @@ sync.get('/adapters', (c) => {
     adapters: [
       {
         kind: 'localfs',
-        label: '本地文件系统',
+        label: '本地文件系统（Markdown 归档）',
         fields: [
           { name: 'dir', label: '目录', type: 'path', required: true },
           { name: 'prefix', label: '文件名前缀', type: 'string', required: false },
@@ -200,7 +200,7 @@ sync.get('/adapters', (c) => {
       },
       {
         kind: 's3',
-        label: 'S3 兼容对象存储',
+        label: 'S3 兼容对象存储（Markdown 归档）',
         fields: [
           { name: 'bucket', label: 'Bucket', type: 'string', required: true },
           { name: 'region', label: 'Region', type: 'string', required: true },
@@ -214,7 +214,7 @@ sync.get('/adapters', (c) => {
       },
       {
         kind: 'webdav',
-        label: 'WebDAV (NAS / NextCloud)',
+        label: 'WebDAV Markdown 归档 (NAS / NextCloud)',
         fields: [
           { name: 'endpoint', label: 'Endpoint URL', type: 'url', required: true, hint: '例如 https://nas.local/dav/ 或 https://dav.jianguoyun.com/dav/' },
           { name: 'username', label: '用户名', type: 'string', required: true },

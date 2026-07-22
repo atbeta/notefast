@@ -120,7 +120,7 @@ docker compose up -d
 - **API/MCP first**：所有能力先通过 API 暴露，再补 UI
 - **Block 是原子单位**：不允许绕过 block 模型直接操作原始文件
 - **SQLite 单文件**：数据库文件存于 `data/` 目录，不引入外部数据库
-- **图片 AssetStore**：图片唯一主数据源为 `data/media/<sha256>`（内容寻址去重），`assets` 表只存元数据；Markdown 内存 `asset:<sha256>` 稳定引用；引用关系不建关联表，靠内容扫描推导；备份时 `data/media` 必须与 SQLite 一起纳入（Litestream 只覆盖 db）
+- **图片 AssetStore**：图片唯一主数据源为 `data/media/<sha256>`（内容寻址去重），`assets` 表只存元数据；Markdown 内存 `asset:<sha256>` 稳定引用；引用关系不建关联表，靠内容扫描推导；应用内 S3 快照覆盖 SQLite，`data/media` 仍需另行纳入卷/文件级备份
 - **Markdown 行内存储**：block.content 存行内 Markdown，块级结构通过 children 表达
 - **AI 是第一公民**：AI Agent 可通过 MCP（外部）或直接调用 API（内部嵌入）操作知识库
 - **单用户 + Token 鉴权**：MVP 为单用户模式，通过 `AUTH_PASSWORD`（Web UI 密码）和 `API_TOKEN`（API/MCP Bearer Token）鉴权
@@ -136,3 +136,18 @@ docker compose up -d
 3. AI Provider 集成：内部 API + 外部 MCP 双通道，AI 是第一公民 ✓
 4. 多 Notebook：单 Notebook（单人笔记）✓
 5. Web 编辑：基础 Markdown 编辑（复杂度可控时添加）✓
+
+## Learned User Preferences
+
+- 坚持 SQLite 单文件主库，不为单用户知识库引入 Qdrant/pgvector 等独立向量库作为默认依赖
+- 向量层升级按「元数据与接口 → Docker 原生扩展验证 → sqlite-vec」推进，不以当前规模下的检索延迟为由插队
+- 备份与 Markdown 归档分轨：单向 Markdown 推送不是灾难恢复；完整灾备用应用内 SQLite→S3 快照，恢复走停服 CLI
+
+## Learned Workspace Facts
+
+- 语义向量经 `VectorStore` 抽象；默认可为 JSON 后端，配置 embedding 后经索引重建切到 sqlite-vec；向量是可重建二级索引，SQLite 仍为权威数据
+- `block_vectors` 需记录 `embedding_model` / `content_hash` / `index_version`；模型或版本变化标记 stale，旧向量不参与检索
+- Docker 部署需显式打包 sqlite-vec 原生扩展（linux amd64/arm64 的 `vec0`），不能依赖完整 `node_modules`
+- Markdown 归档（LocalFS/S3/WebDAV）是单向内容副本，会丢失 ID/引用/标签等元数据；完整灾备用应用内 SQLite→S3 快照（设置页 / `docs/backup.md`）
+- 数据库备份配置在 `data/backup.config.json`；恢复须停服后跑 `bun --filter @notefast/server backup:restore`
+- 旧 Litestream Compose profile 已移除（`-exec true` 会导致复制进程退出）

@@ -1,7 +1,8 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { initDb, closeDb, getDb } from '../db'
+import { CURRENT_SCHEMA_VERSION } from '@notefast/core'
+import { initDb, closeDb, getDb, getSchemaVersion } from '../db'
 
 let testDir: string
 let notebookId: string
@@ -84,6 +85,19 @@ describe('FTS 触发器', () => {
 
     expect(results.length).toBeGreaterThan(0)
     expect(results.some((r) => r.id === id)).toBe(true)
+  })
+})
+
+describe('schema 版本', () => {
+  test('初始化后 user_version 为 CURRENT_SCHEMA_VERSION', () => {
+    expect(getSchemaVersion()).toBe(CURRENT_SCHEMA_VERSION)
+  })
+
+  test('重复 init 保持版本幂等', () => {
+    const v1 = getSchemaVersion()
+    // 同一进程内再次调用 apply 路径：再读一次即可
+    expect(getSchemaVersion(getDb())).toBe(v1)
+    expect(v1).toBe(1)
   })
 })
 

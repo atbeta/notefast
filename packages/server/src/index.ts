@@ -10,6 +10,7 @@ import { handleMcpRequest } from './mcp/server'
 import { startAutoExport } from './services/autoExport'
 import { initAiRuntime } from './services/aiRuntime'
 import { initSyncManager } from './sync/manager'
+import { initBackupManager, stopBackupManager } from './backup/manager'
 import { initVectorStore } from './ai/indexer'
 import { initAssetStore } from './assets/store'
 import { getVectorStore } from './ai/vectorStore'
@@ -20,6 +21,7 @@ import importRouter from './api/import'
 import refs from './api/refs'
 import notebooks from './api/notebooks'
 import sync from './api/sync'
+import backup from './api/backup'
 import ai from './api/ai'
 import autoLink from './api/autoLink'
 import tags from './api/tags'
@@ -30,9 +32,9 @@ const DATA_DIR = process.env.DATA_DIR || './data'
 
 const { notebookId } = initDb(DATA_DIR)
 
-process.on('exit', () => closeDb())
-process.on('SIGINT', () => { closeDb(); process.exit(0) })
-process.on('SIGTERM', () => { closeDb(); process.exit(0) })
+process.on('exit', () => { stopBackupManager(); closeDb() })
+process.on('SIGINT', () => { stopBackupManager(); closeDb(); process.exit(0) })
+process.on('SIGTERM', () => { stopBackupManager(); closeDb(); process.exit(0) })
 
 const app = new Hono()
 
@@ -97,6 +99,7 @@ app.route('/api/v1/refs', refs)
 
 app.route('/api/v1/notebooks', notebooks)
 app.route('/api/v1/sync', sync)
+app.route('/api/v1/backup', backup)
 app.route('/api/v1/ai', ai)
 app.route('/api/v1/auto-link', autoLink)
 app.route('/api/v1/tags', tags)
@@ -107,6 +110,7 @@ const pluginSystem = createPluginSystem()
 await initVectorStore()
 initAssetStore(DATA_DIR)
 initSyncManager(DATA_DIR)
+initBackupManager(DATA_DIR)
 initAiRuntime(pluginSystem, DATA_DIR)
 
 app.all('/mcp', authMiddleware, async (c) => {

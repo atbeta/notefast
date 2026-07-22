@@ -80,6 +80,8 @@ const EMPTY_WEBDAV: WebDavCfg = {
   enabled: true,
 }
 
+const SECRET_MASK = '***set***'
+
 export default function SyncPanel() {
   const [status, setStatus] = useState<SyncRuntimeStatus | null>(null)
   const [adapters, setAdapters] = useState<AdapterInfo[]>([])
@@ -102,15 +104,29 @@ export default function SyncPanel() {
         setForm({ ...EMPTY_LOCALFS, dir: a.dir ?? '', prefix: a.prefix ?? '' })
       } else if (active?.kind === 's3') {
         const a = active as S3Cfg
-        setForm({ ...EMPTY_S3, ...a })
+        setForm({
+          ...EMPTY_S3,
+          ...a,
+          accessKeyId: a.accessKeyId || SECRET_MASK,
+          secretAccessKey: a.secretAccessKey || SECRET_MASK,
+        })
       } else if (active?.kind === 'webdav') {
         const a = active as WebDavCfg
-        setForm({ ...EMPTY_WEBDAV, endpoint: a.endpoint ?? '', username: a.username ?? '', prefix: a.prefix ?? '' })
+        setForm({
+          ...EMPTY_WEBDAV,
+          endpoint: a.endpoint ?? '',
+          username: a.username || SECRET_MASK,
+          password: a.password || SECRET_MASK,
+          prefix: a.prefix ?? '',
+        })
       } else {
         setForm({ kind: 'none' })
       }
+      if (typeof res.status.autoSyncIntervalMs === 'number') {
+        setInterval(Math.round(res.status.autoSyncIntervalMs / 1000))
+      }
     } catch (e) {
-      toast.error({ title: '加载同步配置失败', description: e instanceof Error ? e.message : String(e) })
+      toast.error({ title: '加载归档配置失败', description: e instanceof Error ? e.message : String(e) })
     }
   }, [toast])
 
@@ -142,15 +158,15 @@ export default function SyncPanel() {
         await refresh()
       },
       {
-        loading: '正在保存同步配置…',
-        success: '同步配置已保存',
+        loading: '正在保存归档配置…',
+        success: '归档配置已保存',
         error: (e) => ({ title: '保存失败', description: e instanceof Error ? e.message : String(e) }),
       },
     ).catch(() => undefined)
   }
 
   const handleDisable = async () => {
-    if (!confirm('禁用后所有同步配置都会被清空。继续？')) return
+    if (!confirm('禁用后归档配置都会被清空。继续？')) return
     await toast.promise(
       async () => {
         await api.del('/sync/config')
@@ -159,7 +175,7 @@ export default function SyncPanel() {
       },
       {
         loading: '正在禁用…',
-        success: '同步已禁用',
+        success: 'Markdown 归档已禁用',
         error: (e) => ({ title: '禁用失败', description: e instanceof Error ? e.message : String(e) }),
       },
     ).catch(() => undefined)
@@ -172,9 +188,9 @@ export default function SyncPanel() {
         await refresh()
       },
       {
-        loading: '正在执行同步…',
-        success: '同步完成',
-        error: (e) => ({ title: '同步失败', description: e instanceof Error ? e.message : String(e) }),
+        loading: '正在执行归档…',
+        success: '归档完成',
+        error: (e) => ({ title: '归档失败', description: e instanceof Error ? e.message : String(e) }),
       },
     ).catch(() => undefined)
   }
@@ -201,7 +217,7 @@ export default function SyncPanel() {
       >
         <div className="flex items-center gap-2.5 text-[13.5px] font-medium text-foreground">
           <SettingsIcon className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
-          <span>数据同步 (Sync)</span>
+          <span>Markdown 归档（单向）</span>
           {status?.configured ? (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/12 text-emerald-600 dark:text-emerald-300 font-medium">
               {status.adapterName}
@@ -217,6 +233,10 @@ export default function SyncPanel() {
 
       {!collapsed && (
         <div className="p-5 space-y-5">
+          <p className="text-[12px] text-muted-foreground leading-relaxed -mt-1">
+            将文档导出为 Markdown 推送到单一远端（LocalFS / S3 / WebDAV）。这是内容归档，不是完整数据库备份；
+            不含 block ID、引用、标签与向量。同名文档使用带 ID 的文件名，删除会清理归档清单管理的陈旧文件。
+          </p>
           {/* Adapter catalog */}
           <div className="space-y-3">
             <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">适配器</h4>
@@ -386,7 +406,7 @@ export default function SyncPanel() {
               <div className="flex items-center gap-2 flex-wrap pt-1">
                 <ActionButton
                   onAction={handleSave}
-                  successToast={{ title: status?.configured && status.adapterName === form.kind ? '同步配置已保存' : '同步已启用' }}
+                  successToast={{ title: status?.configured && status.adapterName === form.kind ? '归档配置已保存' : '归档已启用' }}
                   errorToast={(e) => ({ title: '保存失败', description: e instanceof Error ? e.message : String(e) })}
                 >
                   {status?.configured && status.adapterName === form.kind ? '保存' : '启用'}
@@ -397,11 +417,11 @@ export default function SyncPanel() {
                       variant="secondary"
                       size="sm"
                       onAction={handleRun}
-                      successToast={{ title: '同步完成' }}
-                      errorToast={(e) => ({ title: '同步失败', description: e instanceof Error ? e.message : String(e) })}
+                      successToast={{ title: '归档完成' }}
+                      errorToast={(e) => ({ title: '归档失败', description: e instanceof Error ? e.message : String(e) })}
                     >
                       <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
-                      立即同步
+                      立即归档
                     </ActionButton>
                     <button
                       type="button"
@@ -422,7 +442,7 @@ export default function SyncPanel() {
                       variant="danger"
                       size="sm"
                       onAction={handleDisable}
-                      successToast={{ title: '同步已禁用' }}
+                      successToast={{ title: '归档已禁用' }}
                       errorToast={(e) => ({ title: '禁用失败', description: e instanceof Error ? e.message : String(e) })}
                       className="ml-auto"
                     >
@@ -434,22 +454,29 @@ export default function SyncPanel() {
             )}
           </div>
 
-          {status?.lastResult && (
+          {(status?.lastRunAt || status?.lastResult) && (
             <div className="text-xs text-muted-foreground pt-2 border-t border-border/60 space-y-1">
               <div>
-                上次同步：<span className="font-mono">{status.lastRunAt || '尚未运行'}</span>
+                上次归档：<span className="font-mono">{status?.lastRunAt || '尚未运行'}</span>
               </div>
-              {status.lastSuccessAt && (
+              {status?.lastSuccessAt && status.lastResult && (
                 <div className="text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" />
                   成功上传 {status.lastResult.pushed} 个文档
                 </div>
               )}
-              {status.lastError && (
-                <div className="text-destructive inline-flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  {status.lastError}
+              {status?.lastError && (
+                <div className="text-destructive inline-flex items-start gap-1">
+                  <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                  <span className="break-all">{status.lastError}</span>
                 </div>
+              )}
+              {status?.lastResult?.errors && status.lastResult.errors.length > 0 && (
+                <ul className="list-disc pl-4 space-y-0.5 text-destructive/90">
+                  {status.lastResult.errors.slice(0, 5).map((err) => (
+                    <li key={err} className="break-all">{err}</li>
+                  ))}
+                </ul>
               )}
             </div>
           )}

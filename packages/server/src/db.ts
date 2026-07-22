@@ -1,9 +1,11 @@
 import { Database } from 'bun:sqlite'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { CURRENT_SCHEMA_VERSION } from '@notefast/core'
 import { configureSqliteForExtensions } from './sqliteVec'
 
 let db: Database
+let dbPath = ''
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS notebooks (
@@ -175,16 +177,17 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
     mkdirSync(dataDir, { recursive: true })
   }
 
-  const dbPath = join(dataDir, 'notefast.db')
+  dbPath = join(dataDir, 'notefast.db')
   db = new Database(dbPath)
   db.exec('PRAGMA journal_mode=WAL')
-  // WAL + synchronous=NORMAL 是 Litestream 推荐的配置：
-  // 崩溃时最多丢失 1 帧 WAL（通常 <100ms 的写入），换取显著的写入性能与 SSD 寿命。
+  // WAL + synchronous=NORMAL：崩溃时最多丢失少量 WAL 帧，换取写入性能。
+  // 完整灾备由应用内 VACUUM INTO 快照负责，不再依赖 Litestream。
   db.exec('PRAGMA synchronous=NORMAL')
   db.exec('PRAGMA foreign_keys=ON')
 
   db.exec(SCHEMA_SQL)
   migrateVectorSchema(db)
+  applySchemaMigrations(db)
 
   const ftsCount = (db.query('SELECT count(*) as c FROM blocks_fts').get() as { c: number })?.c ?? 0
   const blocksCount = (db.query('SELECT count(*) as c FROM blocks').get() as { c: number })?.c ?? 0
@@ -218,6 +221,34 @@ function migrateVectorSchema(database: Database): void {
     }
   }
   database.exec("UPDATE block_vectors SET updated_at = created_at WHERE updated_at = ''")
+}
+
+/**
+ * 顺序 migration：以 PRAGMA user_version 为权威。
+ * v0 → v1：基线（当前 SCHEMA_SQL）；未来版本在此追加步骤。
+ */
+function applySchemaMigrations(database: Database): void {
+  const current = getSchemaVersion(database)
+  if (current > CURRENT_SCHEMA_VERSION) {
+    throw new Error(
+      `数据库 schema 版本 ${current} 高于程序支持的 ${CURRENT_SCHEMA_VERSION}，请升级 NoteFast`,
+    )
+  }
+  if (current < 1) {
+    // 现有库与新建库均已通过 CREATE IF NOT EXISTS 达到 v1 结构
+    database.exec(`PRAGMA user_version = 1`)
+  }
+  // 未来：if (getSchemaVersion(database) < 2) { ...; PRAGMA user_version = 2 }
+}
+
+export function getSchemaVersion(database: Database = getDb()): number {
+  const row = database.query('PRAGMA user_version').get() as { user_version: number } | undefined
+  return row?.user_version ?? 0
+}
+
+export function getDbPath(): string {
+  if (!dbPath) throw new Error('数据库未初始化，请先调用 initDb()')
+  return dbPath
 }
 
 function initApiKey(dataDir: string): void {

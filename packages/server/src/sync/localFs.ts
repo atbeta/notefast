@@ -1,17 +1,8 @@
 /**
- * LocalFS Sync Adapter
- *
- * 把 NoteFast 数据库里的所有文档渲染成 Markdown 文件，写入本地目录。
- * 这是最简单、零依赖的 sync 形式——直接复用 blocksToMarkdown 流水线。
- *
- * 设计：
- * - 实现 core 里的 SyncAdapter 接口
- * - 名字为 'localfs'
- * - push() 全量覆盖；与 autoExport 的差异：写入前先做一次 sanity check（mkdir）
- * - 通过 Sanitize 文件名保证跨平台可用
+ * LocalFS Sync Adapter — Markdown 单向归档
  */
 
-import { mkdirSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs'
+import { mkdirSync, writeFileSync, existsSync, readdirSync, statSync, readFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   blocksToMarkdown,
@@ -24,16 +15,14 @@ import {
   type BlockRow,
 } from '@notefast/core'
 import { getDb } from '../db'
-
-function sanitizeFilename(name: string): string {
-  return name
-    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/\.+/g, '.')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 120) || 'untitled'
-}
+import {
+  ARCHIVE_MANIFEST_NAME,
+  archiveFilename,
+  buildArchiveManifest,
+  isArchiveManifest,
+  staleArchiveKeys,
+  type ArchiveManifest,
+} from './archive'
 
 function fetchDescendants(database: ReturnType<typeof getDb>, rootId: string): BlockRow[] {
   const rows: BlockRow[] = []
@@ -70,6 +59,17 @@ function countMdFiles(dir: string): number {
 function countDocs(db: ReturnType<typeof getDb>): number {
   const row = db.query("SELECT count(*) as c FROM blocks WHERE type = 'document'").get() as { c: number }
   return row?.c ?? 0
+}
+
+function loadPreviousManifest(dir: string): ArchiveManifest | null {
+  const path = join(dir, ARCHIVE_MANIFEST_NAME)
+  if (!existsSync(path)) return null
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown
+    return isArchiveManifest(parsed) ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 export function createLocalFsAdapter(cfg: LocalFsAdapterConfig): SyncAdapter {
@@ -119,19 +119,43 @@ export function createLocalFsAdapter(cfg: LocalFsAdapterConfig): SyncAdapter {
       sql += ' ORDER BY updated_at ASC'
       const docs = db.query(sql).all(...params) as BlockRow[]
       const result: SyncResult = { pushed: 0, pulled: 0, errors: [] }
+      const files: ArchiveManifest['files'] = []
+      const previous =
+        !options?.docIds || options.docIds.length === 0 ? loadPreviousManifest(dir) : null
+
       for (const doc of docs) {
         try {
           const rows = fetchDescendants(db, doc.id)
           const tree = buildBlockTree([doc, ...rows])
           const markdown = blocksToMarkdown(tree)
-          const slug = sanitizeFilename(doc.content || 'untitled')
-          const filename = prefix ? `${prefix}${slug}.md` : `${slug}.md`
-          writeFileSync(join(dir, filename), markdown, 'utf-8')
+          const filename = archiveFilename(doc.content || 'untitled', doc.id)
+          const outName = prefix ? `${prefix}${filename}` : filename
+          writeFileSync(join(dir, outName), markdown, 'utf-8')
+          files.push({
+            docId: doc.id,
+            title: doc.content || 'untitled',
+            filename: outName,
+            key: outName,
+          })
           result.pushed++
         } catch (e) {
           result.errors.push(`${doc.id}: ${e instanceof Error ? e.message : String(e)}`)
         }
       }
+
+      if (!options?.docIds || options.docIds.length === 0) {
+        const manifest = buildArchiveManifest({ adapter: 'localfs', files })
+        const stale = staleArchiveKeys(previous, manifest)
+        for (const key of stale) {
+          try {
+            unlinkSync(join(dir, key))
+          } catch {
+            /* ignore missing */
+          }
+        }
+        writeFileSync(join(dir, ARCHIVE_MANIFEST_NAME), JSON.stringify(manifest, null, 2) + '\n', 'utf-8')
+      }
+
       return result
     },
   }

@@ -1,5 +1,6 @@
 import { ArrowRight, Sun, Moon, Monitor } from 'lucide-react'
 import SyncPanel from '../components/SyncPanel'
+import BackupPanel from '../components/BackupPanel'
 import { useTheme } from '../hooks/useTheme'
 
 export default function SettingsPage() {
@@ -8,7 +9,7 @@ export default function SettingsPage() {
       <header className="space-y-1.5">
         <h1 className="text-[28px] font-bold tracking-[-0.02em] text-foreground">设置</h1>
         <p className="text-[13px] text-muted-foreground leading-relaxed">
-          配置 NoteFast 的可选项。本地优先，AI 与同步皆为可选能力，均可关闭。
+          配置 NoteFast 的可选项。本地优先；数据库备份、Markdown 归档与 AI 均为可选能力。
         </p>
       </header>
 
@@ -23,6 +24,7 @@ export default function SettingsPage() {
         <h2 className="px-0.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80 select-none">
           数据主权
         </h2>
+        <BackupPanel />
         <SyncPanel />
       </section>
 
