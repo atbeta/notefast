@@ -277,3 +277,74 @@ const x = 1
     expect(status).toBe(404)
   })
 })
+
+describe('ai_exclude 一致性（API 路径）', () => {
+  test('PATCH /api/v1/docs/:id/ai-exclude 返回 effect 字段', async () => {
+    const { body: doc } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: 'effect 测试' })
+    const { status, body } = await api('PATCH', `/api/v1/docs/${doc.id}/ai-exclude`, { ai_exclude: true })
+    expect(status).toBe(200)
+    expect(body.ai_exclude).toBe(true)
+    expect(body.effect).toBeDefined()
+    expect(typeof body.effect.vectors).toBe('number')
+  })
+
+  test('PATCH /api/v1/blocks/:id 文档根的 ai_exclude 切换也触发 effect（与专用端点一致）', async () => {
+    const { body: doc } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: 'generic PATCH 测试' })
+    // 通过通用 PATCH 设置 ai_exclude
+    const { status, body } = await api('PATCH', `/api/v1/blocks/${doc.id}`, {
+      properties: { ai_exclude: true },
+    })
+    expect(status).toBe(200)
+    expect(body.properties.ai_exclude).toBe(true)
+    // 专用端点确认已被设置
+    const verify = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}`)
+    const row = (verify.body as Array<{ id: string; ai_exclude?: boolean }>).find((d) => d.id === doc.id)
+    expect(row?.ai_exclude).toBe(true)
+  })
+
+  test('GET /api/v1/search/refs 过滤来源属于 ai_exclude 文档的反链', async () => {
+    // 创建一个普通文档并加两个块
+    const { body: normalDoc } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: 'ref-normal' })
+    const { body: sourceA } = await api('POST', '/api/v1/blocks', {
+      notebook_id: notebookId,
+      type: 'paragraph',
+      content: 'ref-source-A',
+    })
+    const { body: sourceB } = await api('POST', '/api/v1/blocks', {
+      notebook_id: notebookId,
+      type: 'paragraph',
+      content: 'ref-source-B',
+    })
+    const { body: target } = await api('POST', '/api/v1/blocks', {
+      notebook_id: notebookId,
+      type: 'paragraph',
+      content: 'ref-target',
+    })
+    await api('POST', '/api/v1/refs', { source_id: sourceA.id, target_id: target.id })
+    await api('POST', '/api/v1/refs', { source_id: sourceB.id, target_id: target.id })
+
+    // 初始两条都该出现
+    const before = await api('GET', `/api/v1/search/refs?target_id=${target.id}`)
+    expect((before.body as unknown[]).length).toBe(2)
+
+    // 把 sourceA 移到 excluded 文档下：先创建 isolated doc、把 sourceA 通过 move 移过去，再标 exclude
+    const { body: isolatedDoc } = await api('POST', '/api/v1/docs', {
+      notebook_id: notebookId,
+      title: 'ref-isolated',
+    })
+    await api('PATCH', `/api/v1/blocks/${sourceA.id}/move`, {
+      new_parent_id: isolatedDoc.id,
+    })
+    await api('PATCH', `/api/v1/docs/${isolatedDoc.id}/ai-exclude`, { ai_exclude: true })
+
+    const after = await api('GET', `/api/v1/search/refs?target_id=${target.id}`)
+    const remaining = (after.body as Array<{ source_id: string }>).map((r) => r.source_id)
+    expect(remaining).toEqual([sourceB.id])
+
+    // 清理（可选）
+    await api('PATCH', `/api/v1/docs/${isolatedDoc.id}/ai-exclude`, { ai_exclude: false })
+    await api('PATCH', `/api/v1/blocks/${sourceA.id}/move`, {
+      new_parent_id: normalDoc.id,
+    })
+  })
+})

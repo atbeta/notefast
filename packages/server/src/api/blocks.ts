@@ -6,10 +6,12 @@ import {
   moveBlockSchema,
   rowToBlock,
   buildBlockTree,
+  readAiExcludeFromProperties,
 } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import { getDb } from '../db'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete } from '../services/hooks'
+import { applyAiExcludeChange } from '../ai/aiExclude'
 
 const blocks = new Hono()
 
@@ -98,7 +100,7 @@ blocks.post('/', zValidator('json', createBlockSchema), (c) => {
   return c.json(block, 201)
 })
 
-blocks.patch('/:id', zValidator('json', updateBlockSchema), (c) => {
+blocks.patch('/:id', zValidator('json', updateBlockSchema), async (c) => {
   const db = getDb()
   const id = c.req.param('id')
   const input = c.req.valid('json')
@@ -110,6 +112,10 @@ blocks.patch('/:id', zValidator('json', updateBlockSchema), (c) => {
 
   const updates: string[] = []
   const params: (string | number)[] = []
+
+  // 仅当写入文档根的 properties 时检测 ai_exclude 切换，确保与专用端点行为一致
+  const oldAiExclude =
+    existing.type === 'document' ? readAiExcludeFromProperties(existing.properties) : false
 
   if (input.content !== undefined) {
     updates.push('content = ?')
@@ -137,6 +143,15 @@ blocks.patch('/:id', zValidator('json', updateBlockSchema), (c) => {
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
   const block = rowToBlock(row)
   fireAfterUpdate(block)
+
+  // 通用 PATCH 路径下应用 ai_exclude 切换的副作用（与 /docs/:id/ai-exclude 等价）
+  if (existing.type === 'document' && input.properties !== undefined) {
+    const newAiExclude = readAiExcludeFromProperties(input.properties)
+    if (oldAiExclude !== newAiExclude) {
+      await applyAiExcludeChange(id, oldAiExclude, newAiExclude)
+    }
+  }
+
   return c.json(block)
 })
 

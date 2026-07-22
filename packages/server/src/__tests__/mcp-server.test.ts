@@ -256,6 +256,105 @@ describe('MCP 工具错误语义统一（isError + error.code）', () => {
   })
 })
 
+describe('MCP ai_exclude 一致性（对 AI 隐藏）', () => {
+  async function callTool(name: string, args: Record<string, unknown>) {
+    const { getDb } = await import('../db')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { transport } = await createSession(nb.id)
+    const init = await mcpRequest(transport, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    await mcpRequest(transport, 'notifications/initialized', undefined, undefined, init.sessionId)
+    const call = await mcpRequest(transport, 'tools/call', { name, arguments: args }, 2, init.sessionId)
+    await transport.close()
+    const msg = call.body[0] as Record<string, unknown>
+    const result = msg.result as { isError?: boolean; content: Array<{ text: string }> }
+    return { result, payload: JSON.parse(result.content[0]!.text) as Record<string, unknown> }
+  }
+
+  async function setupExcludedDoc(): Promise<{ excludedDocId: string; excludedChildId: string; normalDocId: string }> {
+    const { getDb, initDb } = await import('../db')
+    initDb(testDir) // 确保已初始化
+    const db = getDb()
+    const nb = db.query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const excludedDocId = crypto.randomUUID()
+    const excludedChildId = crypto.randomUUID()
+    const normalDocId = crypto.randomUUID()
+    const now = new Date().toISOString()
+
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', 'secret', 0, 0, ?, ?)`,
+    ).run(excludedDocId, nb.id, excludedDocId, now, now)
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'paragraph', 'secret-para', 0, 1, ?, ?)`,
+    ).run(excludedChildId, nb.id, excludedDocId, excludedDocId, now, now)
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', 'public', 0, 0, ?, ?)`,
+    ).run(normalDocId, nb.id, normalDocId, now, now)
+
+    // 用 REST 端点写入 properties，避免直接拼 JSON
+    const { default: docs } = await import('../api/docs')
+    const { Hono } = await import('hono')
+    const app = new Hono()
+    app.route('/api/v1/docs', docs)
+    await app.request(`http://localhost/api/v1/docs/${excludedDocId}/ai-exclude`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ai_exclude: true }),
+    })
+
+    return { excludedDocId, excludedChildId, normalDocId }
+  }
+
+  test('get_doc 对 ai_exclude 文档 → forbidden', async () => {
+    const { excludedDocId } = await setupExcludedDoc()
+    const { result, payload } = await callTool('notefast_get_doc', { doc_id: excludedDocId })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('forbidden')
+  })
+
+  test('update_block 对 ai_exclude 文档子块 → forbidden', async () => {
+    const { excludedChildId } = await setupExcludedDoc()
+    const { result, payload } = await callTool('notefast_update_block', {
+      block_id: excludedChildId,
+      content: 'tampered',
+    })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('forbidden')
+  })
+
+  test('create_block 父块属于 ai_exclude 文档 → forbidden', async () => {
+    const { excludedChildId } = await setupExcludedDoc()
+    const { result, payload } = await callTool('notefast_create_block', {
+      parent_id: excludedChildId,
+      type: 'paragraph',
+      content: 'injected',
+    })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('forbidden')
+  })
+
+  test('list_docs 不返回 ai_exclude 文档', async () => {
+    const { excludedDocId } = await setupExcludedDoc()
+    const { result, payload } = await callTool('notefast_list_docs', {})
+    expect(result.isError).toBeFalsy()
+    const ids = ((payload.docs as Array<{ id: string }>) ?? []).map((d) => d.id)
+    expect(ids).not.toContain(excludedDocId)
+  })
+
+  test('export_markdown 对 ai_exclude 文档 → forbidden', async () => {
+    const { excludedDocId } = await setupExcludedDoc()
+    const { result, payload } = await callTool('notefast_export_markdown', { doc_id: excludedDocId })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('forbidden')
+  })
+})
+
 describe('MCP schema 与 capabilities', () => {
   test('notefast_search limit=-1 → zod 拒绝（不接受负数）', async () => {
     const { getDb } = await import('../db')

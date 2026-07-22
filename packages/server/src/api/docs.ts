@@ -6,7 +6,7 @@ import type { BlockRow, DocSummary } from '@notefast/core'
 import { getDb } from '../db'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
-import { purgeAiArtifactsForDoc, writeDocAiExclude } from '../ai/aiExclude'
+import { writeDocAiExclude, readDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
 
 const docs = new Hono()
 
@@ -162,21 +162,23 @@ docs.patch('/:id/ai-exclude', async (c) => {
     return c.json({ error: 'bad_request', message: '需要 boolean 字段 ai_exclude' }, 400)
   }
 
+  const oldExclude = readDocAiExclude(id)
+  if (oldExclude === null) {
+    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
+  }
+
   const updated = writeDocAiExclude(id, parsed.data.ai_exclude)
   if (!updated) {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
 
-  let purged: { vectors: number; suggestions: number } | undefined
-  if (parsed.data.ai_exclude) {
-    purged = await purgeAiArtifactsForDoc(id)
-  }
+  const effect = await applyAiExcludeChange(id, oldExclude, parsed.data.ai_exclude)
 
   return c.json({
     doc_id: id,
     ai_exclude: readAiExcludeFromProperties(updated.properties),
     updated_at: updated.updated_at,
-    ...(purged ? { purged } : {}),
+    ...(effect ? { effect } : {}),
   })
 })
 

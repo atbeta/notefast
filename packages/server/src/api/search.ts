@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { buildFtsQuery, highlightSnippet, rowToBlock } from '@notefast/core'
 import type { BlockRow, SearchResult } from '@notefast/core'
 import { getDb } from '../db'
+import { loadAiExcludedDocIds } from '../ai/aiExclude'
 
 const search = new Hono()
 
@@ -55,15 +56,17 @@ search.get('/refs', (c) => {
 
   const refs = db
     .query(
-      `SELECT r.*, b.content as source_content, b.type as source_type
+      `SELECT r.*, b.content as source_content, b.type as source_type, b.root_id as source_root_id
        FROM block_refs r
        JOIN blocks b ON b.id = r.source_id
        WHERE r.target_id = ?
        ORDER BY r.created_at DESC`,
     )
-    .all(targetId) as (BlockRow & { source_content: string; source_type: string })[]
+    .all(targetId) as (BlockRow & { source_content: string; source_type: string; source_root_id: string })[]
 
-  return c.json(refs)
+  // 过滤来源属于 ai_exclude 文档的反链
+  const excluded = loadAiExcludedDocIds(refs.map((r) => r.source_root_id))
+  return c.json(refs.filter((r) => !excluded.has(r.source_root_id)))
 })
 
 export default search

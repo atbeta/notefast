@@ -307,6 +307,12 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       const nbErr = validateNotebook(db, nid)
       if (nbErr) return { content: [toText(nbErr)] }
 
+      // 父块属于 ai_exclude 文档时拒绝创建子块
+      if (parent_id) {
+        const denied = denyAiExcludedBlock(parent_id)
+        if (denied) return denied
+      }
+
       const id = crypto.randomUUID()
 
       let rootId: string
@@ -347,6 +353,8 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       },
     },
     async ({ block_id, content }) => {
+      const denied = denyAiExcludedBlock(block_id)
+      if (denied) return denied
       const existing = db.query('SELECT * FROM blocks WHERE id = ?').get(block_id)
       if (!existing) {
         return toolError('not_found', `Block ${block_id} 不存在`, { block_id })
@@ -677,9 +685,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
           return toolError('provider_error', r.status().embedding.lastError || 'embedding 返回空向量')
         }
         const hits = await semanticSearch(vector, limit ?? 10, notebook_id)
-        const excluded = loadAiExcludedDocIds(hits.map((h) => h.doc_id))
-        const filtered = hits.filter((h) => !excluded.has(h.doc_id))
-        return { content: [toText({ query, results: filtered.length, hits: filtered })] }
+        return { content: [toText({ query, results: hits.length, hits })] }
       } catch (e) {
         return toolError('provider_error', e instanceof Error ? e.message : String(e), { fix_hint: '请检查 /settings 中的 Provider 配置' })
       }
@@ -833,7 +839,10 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
           source_doc_title: src?.doc_title ?? '',
         }
       })
-      return { content: [toText({ status: status ?? 'unreviewed', count: items.length, items })] }
+      // 过滤来源属于 ai_exclude 文档的建议
+      const excluded = loadAiExcludedDocIds(items.map((it) => it.source_doc_id ?? ''))
+      const visible = items.filter((it) => !(it.source_doc_id && excluded.has(it.source_doc_id)))
+      return { content: [toText({ status: status ?? 'unreviewed', count: visible.length, items: visible })] }
     },
   )
 
@@ -983,10 +992,12 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
   server.registerResource(
     'notefast_docs_index',
     'notefast://docs',
-    { title: '全部文档', description: '知识库中所有文档的索引列表' },
+    { title: '全部文档', description: '知识库中所有文档的索引列表（自动排除「对 AI 隐藏」的文档）' },
     async () => {
       const rows = getDb().query("SELECT id, content FROM blocks WHERE type = 'document' ORDER BY updated_at DESC LIMIT 1000").all() as Array<{ id: string; content: string }>
-      const lines = rows.map((r, i) => `${i + 1}. ${r.content || '(无标题)'}  (${r.id.slice(0, 8)})`).join('\n')
+      const excluded = loadAiExcludedDocIds(rows.map((r) => r.id))
+      const visible = rows.filter((r) => !excluded.has(r.id))
+      const lines = visible.map((r, i) => `${i + 1}. ${r.content || '(无标题)'}  (${r.id.slice(0, 8)})`).join('\n')
       return { contents: [{ text: (lines || '(暂无文档)').slice(0, 50_000), uri: 'notefast://docs' }] }
     },
   )
@@ -995,10 +1006,13 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
   ;(server as any).registerResource(
     'notefast_doc',
     { uriTemplate: 'notefast://docs/{docId}' },
-    { title: '单篇文档', description: '根据 docId 读取文档完整 Markdown 内容' },
+    { title: '单篇文档', description: '根据 docId 读取文档完整 Markdown 内容（自动拒绝「对 AI 隐藏」的文档）' },
     async (_uri: unknown, params: Record<string, string>) => {
       const docId = params?.docId
       if (!docId) return { contents: [{ text: '缺少 docId', uri: '' }] }
+      if (isDocAiExcluded(docId)) {
+        return { contents: [{ text: `文档 ${docId} 已对 AI 隐藏，resource 不可访问`, uri: `notefast://docs/${docId}` }] }
+      }
       const doc = getDb().query("SELECT * FROM blocks WHERE id = ? AND type = 'document'").get(docId) as BlockRow | undefined
       if (!doc) return { contents: [{ text: `文档 ${docId} 不存在`, uri: '' }] }
       const tree = buildBlockTree([doc, ...fetchDescendants(getDb(), docId)])
@@ -1035,6 +1049,10 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
            FROM blocks b WHERE b.id = ?`,
         )
         .get(row.source_block_id) as { content: string; root_id: string; doc_title: string } | undefined
+      // 拒绝来源属于 ai_exclude 文档的建议
+      if (src?.root_id && isDocAiExcluded(src.root_id)) {
+        return toolError('forbidden', `该建议所属文档已对 AI 隐藏`, { suggestion_id })
+      }
       let candidates: unknown[] = []
       try { candidates = JSON.parse(row.candidates) } catch { /* ignore */ }
       const top = Array.isArray(candidates) && candidates.length > 0

@@ -143,7 +143,7 @@ export async function getVectorCount(): Promise<number> {
   return getVectorStore().count()
 }
 
-/** 语义搜索：委托当前 active VectorStore（json 或 sqlite-vec） */
+/** 语义搜索：委托当前 active VectorStore（json 或 sqlite-vec），并过滤 ai_exclude 文档 */
 export async function semanticSearch(
   queryVector: Float64Array,
   limit: number = 10,
@@ -153,11 +153,16 @@ export async function semanticSearch(
 ): Promise<Array<{ block_id: string; score: number; content: string; doc_id: string; doc_title: string }>> {
   const fingerprint = currentEmbeddingFingerprint()
   if (!fingerprint) return []
-  return getVectorStore().search(queryVector, {
-    limit,
+  // 多取 3 倍，事后过滤 ai_exclude 文档后截断
+  const raw = await getVectorStore().search(queryVector, {
+    limit: limit * 3,
     modelFingerprint: fingerprint,
     notebookId,
     since,
     until,
   })
+  if (raw.length === 0) return raw
+  const { loadAiExcludedDocIds } = await import('./aiExclude')
+  const excluded = loadAiExcludedDocIds(raw.map((h) => h.doc_id))
+  return raw.filter((h) => !excluded.has(h.doc_id)).slice(0, limit)
 }

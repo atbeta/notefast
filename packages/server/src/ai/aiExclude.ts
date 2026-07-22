@@ -13,7 +13,34 @@ import {
   type BlockRow,
 } from '@notefast/core'
 import { getDb } from '../db'
-import { deleteVector } from './indexer'
+import { deleteVector, indexBlock } from './indexer'
+
+/** 取某文档下所有 block id（含 root），用于批量 purge / reindex */
+export function loadDocBlockIds(docId: string): string[] {
+  const rows = getDb()
+    .query('SELECT id FROM blocks WHERE root_id = ? OR id = ?')
+    .all(docId, docId) as Array<{ id: string }>
+  return rows.map((r) => r.id)
+}
+
+/**
+ * 关闭 ai_exclude 后重 build 该文档下所有 block 的向量。
+ * 增量语义：content 为空或仍被排除的块不重建。
+ */
+export async function reindexDocTree(docId: string): Promise<{ reindexed: number; errors: number }> {
+  const ids = loadDocBlockIds(docId)
+  let reindexed = 0
+  let errors = 0
+  for (const id of ids) {
+    try {
+      await indexBlock(id)
+      reindexed++
+    } catch {
+      errors++
+    }
+  }
+  return { reindexed, errors }
+}
 
 /** 从 document 行判断是否 AI 排除 */
 export function isDocRowAiExcluded(docRow: BlockRow | null | undefined): boolean {
@@ -80,13 +107,10 @@ export function writeDocAiExclude(docId: string, aiExclude: boolean): BlockRow |
  * 开启排除后清理 AI 产物：该文档下所有块的向量 + AutoLink 建议。
  */
 export async function purgeAiArtifactsForDoc(docId: string): Promise<{ vectors: number; suggestions: number }> {
-  const db = getDb()
-  const blockIds = db
-    .query('SELECT id FROM blocks WHERE root_id = ? OR id = ?')
-    .all(docId, docId) as Array<{ id: string }>
+  const blockIds = loadDocBlockIds(docId)
 
   let vectors = 0
-  for (const { id } of blockIds) {
+  for (const id of blockIds) {
     try {
       await deleteVector(id)
       vectors++
@@ -96,20 +120,58 @@ export async function purgeAiArtifactsForDoc(docId: string): Promise<{ vectors: 
   }
 
   // AutoLink suggestions：按源块或候选目标所属文档清理
-  const placeholders = blockIds.map(() => '?').join(',')
-  const ids = blockIds.map((b) => b.id)
+  const ids = blockIds
+  const placeholders = ids.map(() => '?').join(',')
   let suggestions = 0
   if (ids.length > 0) {
-    const delSource = db
+    const delSource = getDb()
       .query(`DELETE FROM autolink_suggestions WHERE source_block_id IN (${placeholders})`)
       .run(...ids)
     suggestions += Number(delSource.changes ?? 0)
   }
   // 候选里指向该文档的建议（candidates JSON 存 camelCase docId）
-  const delCand = db
+  const delCand = getDb()
     .query(`DELETE FROM autolink_suggestions WHERE candidates LIKE ?`)
     .run(`%"docId":"${docId}"%`)
   suggestions += Number(delCand.changes ?? 0)
 
   return { vectors, suggestions }
+}
+
+/**
+ * 应用 ai_exclude 切换的副作用（在 properties 写入之后调用）。
+ * - 关闭 → 启用：purge 所有 AI 产物
+ * - 启用 → 关闭：重新 build 向量（AutoLink 在下一次 run 时自然重建）
+ * - 无变化：返回 undefined
+ */
+export interface AiExcludeChangeResult {
+  vectors?: number
+  suggestions?: number
+  reindexed?: number
+  errors?: number
+}
+
+export async function applyAiExcludeChange(
+  docId: string,
+  oldExcluded: boolean,
+  newExcluded: boolean,
+): Promise<AiExcludeChangeResult | undefined> {
+  if (oldExcluded === newExcluded) return undefined
+  if (newExcluded) {
+    return await purgeAiArtifactsForDoc(docId)
+  }
+  const { reindexed, errors } = await reindexDocTree(docId)
+  return { reindexed, errors }
+}
+
+/**
+ * 读取 properties.ai_exclude 的旧值（在 writeDocAiExclude 之前调用以判定切换方向）。
+ * docId 不存在时返回 null（调用方应另行处理 not_found）。
+ */
+export function readDocAiExclude(docId: string): boolean | null {
+  const row = getDb()
+    .query("SELECT properties FROM blocks WHERE id = ? AND type = 'document'")
+    .get(docId) as { properties: string } | undefined
+  if (!row) return null
+  return readAiExcludeFromProperties(row.properties)
 }

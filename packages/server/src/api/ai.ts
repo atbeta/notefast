@@ -43,6 +43,7 @@ import {
 } from '../services/aiRuntime'
 import { indexBlock, indexAllBlocks, semanticSearch } from '../ai/indexer'
 import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
+import { loadAiExcludedDocIds } from '../ai/aiExclude'
 import { runChat, runChatSync } from '../ai/chat'
 import { getDb } from '../db'
 import { getVectorStore } from '../ai/vectorStore'
@@ -379,18 +380,23 @@ function ftsHits(q: string, notebookId: string | undefined, limit: number) {
     sql += ' AND b.notebook_id = ?'
     params.push(notebookId)
   }
+  // 多取 3 倍，事后过滤 ai_exclude 文档后截断到 limit
   sql += ' ORDER BY rank LIMIT ?'
-  params.push(limit)
+  params.push(limit * 3)
   const rows = db.query(sql).all(...params as [string, ...(string | number)[]]) as (BlockRow & { rank: number })[]
-  return rows.map((r) => ({
-    block_id: r.id,
-    score: r.rank,
-    content: r.content,
-    doc_id: r.root_id,
-    doc_title: '(FTS 命中)',
-    snippet: highlightSnippet(r.content, q),
-    type: r.type,
-  }))
+  const excluded = loadAiExcludedDocIds(rows.map((r) => r.root_id))
+  return rows
+    .filter((r) => !excluded.has(r.root_id))
+    .slice(0, limit)
+    .map((r) => ({
+      block_id: r.id,
+      score: r.rank,
+      content: r.content,
+      doc_id: r.root_id,
+      doc_title: '(FTS 命中)',
+      snippet: highlightSnippet(r.content, q),
+      type: r.type,
+    }))
 }
 
 // ───────────────────── capabilities ─────────────────────
