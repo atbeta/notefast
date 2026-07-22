@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.0](https://github.com/atbeta/notefast/compare/v0.9.0...v0.10.0) (2026-07-22)
+
+
+### Features
+
+* **backup:** in-app S3 snapshots, retire Litestream ([8886024](https://github.com/atbeta/notefast/commit/8886024d979627fade741093e39f9eebdc0eadd5))
+
+
+### Bug Fixes
+
+* **autolink,markdown,ui:** MCP detail crash, low-confidence inbox, parse/export round-trip ([71a2bef](https://github.com/atbeta/notefast/commit/71a2bef501ed5f8ea152a770321e19455cbc75e2))
+
 ## [0.9.0](https://github.com/atbeta/notefast/compare/v0.8.0...v0.9.0) (2026-07-22)
 
 
