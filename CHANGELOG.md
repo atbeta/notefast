@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.0](https://github.com/atbeta/notefast/compare/v0.11.0...v0.12.0) (2026-07-22)
+
+
+### Features
+
+* **inbox:** document lifecycle status (note|inbox) + quick capture ([868d284](https://github.com/atbeta/notefast/commit/868d28490c4cd38497691b3b0c7b8e54230eb680))
+* **tags,ui:** default AND tag filter with mode toggle and hide-from-AI UX ([b300521](https://github.com/atbeta/notefast/commit/b30052131bc4179e6989aa5cdb4021c379fdfcef))
+
+
+### Bug Fixes
+
+* theme toggle in command palette and missing Ctrl+Shift+D shortcut ([b8bae40](https://github.com/atbeta/notefast/commit/b8bae40313c66b84174bb3fb06195b2f6b95f9ca))
+* **ui:** polish settings controls and replace native confirm dialogs ([9c2132c](https://github.com/atbeta/notefast/commit/9c2132cc921ab211a07cf0b8c9d43f4f82eb0798))
+
 ## [0.11.0](https://github.com/atbeta/notefast/compare/v0.10.0...v0.11.0) (2026-07-22)
 
 
