@@ -35,7 +35,7 @@ AI 编码 Agent 与人类协作者的本仓库级行为规范。
 
 改动完成前运行与变更范围匹配的检查（见下方 **命令** 章节）。若跳过，说明原因。
 
-注意：`bun lint` 目前是占位脚本（`echo 'lint ok'`），不产生真实检查信号；质量门禁以 `bun run typecheck` + `bun test` 为准，两者已由 `.github/workflows/ci.yml` 在 PR/push 时强制执行。
+质量门禁：`bun lint`（oxlint，配置见根 `.oxlintrc.json`，correctness 规则为 error）+ `bun run typecheck` + `bun test`，三者已由 `.github/workflows/ci.yml` 在 PR/push 时强制执行。
 
 ---
 

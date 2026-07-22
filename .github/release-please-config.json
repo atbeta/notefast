@@ -4,7 +4,13 @@
   "include-component-in-tag": false,
   "packages": {
     ".": {
-      "package-name": "notefast"
+      "package-name": "notefast",
+      "extra-files": [
+        { "type": "json", "path": "package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "packages/core/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "packages/server/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "packages/web/package.json", "jsonpath": "$.version" }
+      ]
     }
   }
 }

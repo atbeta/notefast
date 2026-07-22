@@ -1,6 +1,6 @@
 {
   "name": "notefast",
-  "version": "0.1.0",
+  "version": "0.12.0",
   "private": true,
   "workspaces": [
     "packages/core",
@@ -14,5 +14,8 @@
     "lint": "bun --filter '*' lint",
     "test": "bun --filter '*' test",
     "typecheck": "bun --filter '*' typecheck"
+  },
+  "devDependencies": {
+    "oxlint": "^1.75.0"
   }
 }

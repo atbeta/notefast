@@ -1,6 +1,6 @@
 {
   "name": "@notefast/server",
-  "version": "0.1.0",
+  "version": "0.12.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "build": "bun build src/index.ts --outdir=dist --target=bun && bun run scripts/copy-sqlite-vec.ts",
     "start": "bun run dist/index.js",
     "backup:restore": "bun run src/cli/restoreBackup.ts",
-    "lint": "echo 'lint ok'",
+    "lint": "oxlint src",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
