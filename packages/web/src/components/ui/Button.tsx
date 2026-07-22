@@ -32,11 +32,11 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
 const VARIANT_BASE: Record<ButtonVariant, string> = {
   primary: 'btn-primary-custom',
   secondary:
-    'inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-btn)] border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--ink))] hover:bg-accent transition-colors duration-150',
+    'inline-flex items-center justify-center gap-1.5 leading-none rounded-[var(--radius-btn)] border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--ink))] hover:bg-accent transition-colors duration-150',
   ghost:
-    'inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-btn)] border border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground transition-colors duration-150',
+    'inline-flex items-center justify-center gap-1.5 leading-none rounded-[var(--radius-btn)] border border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground transition-colors duration-150',
   danger:
-    'inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-btn)] border border-transparent bg-transparent text-destructive hover:bg-destructive/10 transition-colors duration-150',
+    'inline-flex items-center justify-center gap-1.5 leading-none rounded-[var(--radius-btn)] border border-transparent bg-transparent text-destructive hover:bg-destructive/10 transition-colors duration-150',
 }
 
 const SIZES: Record<ButtonSize, string> = {
@@ -93,7 +93,9 @@ export function Button({
       ) : icon ? (
         <span className="inline-flex items-center justify-center">{icon}</span>
       ) : null}
-      <span>{loading ? '处理中…' : justSaved ? '已完成' : children}</span>
+      <span className="inline-flex items-center gap-1.5 leading-none">
+        {loading ? '处理中…' : justSaved ? '已完成' : children}
+      </span>
     </button>
   )
 }

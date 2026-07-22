@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { ActionButton, useToast } from './ui'
+import ConfirmDialog from './ConfirmDialog'
 
 const SECRET_MASK = '***set***'
 
@@ -76,6 +77,7 @@ export default function BackupPanel() {
   const [retentionDays, setRetentionDays] = useState(30)
   const [showSecret, setShowSecret] = useState(false)
   const [points, setPoints] = useState<RestorePoint[]>([])
+  const [showDisableConfirm, setShowDisableConfirm] = useState(false)
   const toast = useToast()
 
   const refresh = useCallback(async () => {
@@ -143,7 +145,6 @@ export default function BackupPanel() {
   }
 
   const handleDisable = async () => {
-    if (!confirm('禁用后将停止自动备份（已有恢复点不会删除）。继续？')) return
     await api.del('/backup/config')
     await refresh()
   }
@@ -295,9 +296,13 @@ export default function BackupPanel() {
                   <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
                   立即备份
                 </ActionButton>
-                <ActionButton variant="danger" size="sm" onAction={handleDisable} className="ml-auto">
+                <button
+                  type="button"
+                  onClick={() => setShowDisableConfirm(true)}
+                  className="inline-flex items-center justify-center gap-1.5 h-7 px-2.5 text-[12px] font-medium leading-none rounded-[var(--radius-btn)] text-destructive hover:bg-destructive/10 ml-auto min-w-[88px]"
+                >
                   禁用
-                </ActionButton>
+                </button>
               </>
             )}
           </div>
@@ -364,6 +369,19 @@ export default function BackupPanel() {
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={showDisableConfirm}
+        title="禁用数据库备份"
+        message="禁用后将停止自动备份（已有恢复点不会删除）。继续？"
+        confirmLabel="禁用"
+        destructive
+        onCancel={() => setShowDisableConfirm(false)}
+        onConfirm={() => {
+          setShowDisableConfirm(false)
+          void handleDisable()
+        }}
+      />
     </div>
   )
 }

@@ -34,6 +34,7 @@ import {
 } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import { ActionButton, useToast } from './ui'
+import ConfirmDialog from './ConfirmDialog'
 
 interface AIStatus {
   enabled: boolean
@@ -221,6 +222,7 @@ export default function AISettingsPanel() {
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [diagnose, setDiagnose] = useState<DiagnoseResult | null>(null)
+  const [showDisableConfirm, setShowDisableConfirm] = useState(false)
   const toast = useToast()
   // 字段级错误（红色内嵌到表单）+ 保存成功的最近一次描述（持久化显示在按钮旁）
   const [formErrors, setFormErrors] = useState<FormErrors>({})
@@ -302,7 +304,6 @@ export default function AISettingsPanel() {
   }
 
   const handleDisable = async () => {
-    if (!confirm('禁用 AI 会清空所有 Chat / Embedding / Reranker 配置。继续？')) return
     try {
       await toast.promise(
         async () => {
@@ -631,95 +632,93 @@ export default function AISettingsPanel() {
           }
         />
         {autoLink.enabled && (
-          <div className="mt-3 space-y-3 pl-4 border-l-2 border-border/60">
+          <div className="mt-4 space-y-4">
             <div>
-              <div className="text-xs font-medium text-muted-foreground mb-1.5">自动应用策略</div>
-              <div className="flex flex-col gap-1.5">
-                <label className="flex items-start gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    className="mt-0.5"
-                    checked={autoLink.autoApply === 'never'}
-                    onChange={() => setAutoLink({ ...autoLink, autoApply: 'never' })}
-                  />
-                  <span>
-                    <span className="font-medium">仅建议</span>
-                    <span className="block text-xs text-muted-foreground">
-                      AI 抽取实体进 Inbox，但不写 block_refs；用户接受后才落地。
-                    </span>
-                  </span>
-                </label>
-                <label className="flex items-start gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    className="mt-0.5"
-                    checked={autoLink.autoApply === 'high_confidence'}
-                    onChange={() => setAutoLink({ ...autoLink, autoApply: 'high_confidence' })}
-                  />
-                  <span>
-                    <span className="font-medium">高置信自动应用</span>
-                    <span className="block text-xs text-muted-foreground">
-                      满足 minConfidence（默认 0.6）且 top-1 显著领先时自动写入，其余进 Inbox。
-                    </span>
-                  </span>
-                </label>
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                自动应用策略
+              </div>
+              <div className="grid gap-2" role="radiogroup" aria-label="自动应用策略">
+                <AutoLinkOption
+                  selected={autoLink.autoApply === 'never'}
+                  title="仅建议"
+                  description="AI 抽取实体进 Inbox，但不写 block_refs；用户接受后才落地。"
+                  onSelect={() => setAutoLink({ ...autoLink, autoApply: 'never' })}
+                />
+                <AutoLinkOption
+                  selected={autoLink.autoApply === 'high_confidence'}
+                  title="高置信自动应用"
+                  description="满足 minConfidence 且 top-1 显著领先时自动写入，其余进 Inbox。"
+                  onSelect={() => setAutoLink({ ...autoLink, autoApply: 'high_confidence' })}
+                />
               </div>
             </div>
-            <div className="flex items-center gap-3 text-sm">
-              <label className="flex items-center gap-1.5">
-                minConfidence
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <FieldRow label="minConfidence">
                 <input
                   type="number"
                   step="0.05"
                   min="0"
                   max="1"
-                  className="w-20 px-2 py-1 rounded border border-border bg-background text-sm"
+                  className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary/30"
                   value={autoLink.minConfidence}
                   onChange={(e) => setAutoLink({ ...autoLink, minConfidence: parseFloat(e.target.value) || 0 })}
                 />
-              </label>
-              <label className="flex items-center gap-1.5">
-                minMargin
+              </FieldRow>
+              <FieldRow label="minMargin">
                 <input
                   type="number"
                   step="0.05"
                   min="0"
                   max="1"
-                  className="w-20 px-2 py-1 rounded border border-border bg-background text-sm"
+                  className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary/30"
                   value={autoLink.minMargin}
                   onChange={(e) => setAutoLink({ ...autoLink, minMargin: parseFloat(e.target.value) || 0 })}
                 />
-              </label>
+              </FieldRow>
+              <FieldRow label="每块最大建议数">
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={autoLink.maxPerBlock}
+                  onChange={(e) => setAutoLink({ ...autoLink, maxPerBlock: Math.min(10, Math.max(1, parseInt(e.target.value, 10) || 5)) })}
+                  className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary/30"
+                />
+              </FieldRow>
             </div>
+
             <FieldRow label="Notebook 范围">
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="radio"
-                    checked={autoLink.notebookScope === 'all'}
-                    onChange={() => setAutoLink({ ...autoLink, notebookScope: 'all' })}
-                  />
+              <div
+                className="inline-flex items-center rounded-md border border-border/60 bg-muted/30 p-0.5 text-[12px]"
+                role="group"
+                aria-label="Notebook 范围"
+              >
+                <button
+                  type="button"
+                  aria-pressed={autoLink.notebookScope === 'all'}
+                  onClick={() => setAutoLink({ ...autoLink, notebookScope: 'all' })}
+                  className={`px-2.5 py-1 rounded-[5px] transition-colors ${
+                    autoLink.notebookScope === 'all'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
                   全部
-                </label>
-                <label className="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="radio"
-                    checked={autoLink.notebookScope === 'same'}
-                    onChange={() => setAutoLink({ ...autoLink, notebookScope: 'same' })}
-                  />
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={autoLink.notebookScope === 'same'}
+                  onClick={() => setAutoLink({ ...autoLink, notebookScope: 'same' })}
+                  className={`px-2.5 py-1 rounded-[5px] transition-colors ${
+                    autoLink.notebookScope === 'same'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
                   仅同 Notebook
-                </label>
+                </button>
               </div>
-            </FieldRow>
-            <FieldRow label="每块最大建议数">
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={autoLink.maxPerBlock}
-                onChange={(e) => setAutoLink({ ...autoLink, maxPerBlock: Math.min(10, Math.max(1, parseInt(e.target.value, 10) || 5)) })}
-                className="w-24 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
-              />
             </FieldRow>
           </div>
         )}
@@ -752,7 +751,7 @@ export default function AISettingsPanel() {
         {(chat || embedding) && (
           <button
             type="button"
-            onClick={handleDisable}
+            onClick={() => setShowDisableConfirm(true)}
             disabled={saving}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10 ml-auto"
           >
@@ -760,6 +759,19 @@ export default function AISettingsPanel() {
           </button>
         )}
       </div>
+
+      <ConfirmDialog
+        open={showDisableConfirm}
+        title="禁用 AI"
+        message="禁用 AI 会清空所有 Chat / Embedding / Reranker 配置。继续？"
+        confirmLabel="禁用"
+        destructive
+        onCancel={() => setShowDisableConfirm(false)}
+        onConfirm={() => {
+          setShowDisableConfirm(false)
+          void handleDisable()
+        }}
+      />
     </div>
   )
 }
@@ -989,6 +1001,47 @@ function Section({
       </div>
       <div className="p-5">{children}</div>
     </div>
+  )
+}
+
+function AutoLinkOption({
+  selected,
+  title,
+  description,
+  onSelect,
+}: {
+  selected: boolean
+  title: string
+  description: string
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className={`w-full text-left rounded-lg border px-3.5 py-3 transition-colors ${
+        selected
+          ? 'border-foreground/25 bg-foreground/[0.04]'
+          : 'border-border hover:bg-accent/40'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden
+          className={`mt-0.5 inline-grid h-4 w-4 shrink-0 place-content-center rounded-full border-[1.5px] ${
+            selected ? 'border-[rgb(var(--ink))]' : 'border-[rgb(var(--border))]'
+          }`}
+        >
+          {selected && <span className="h-2 w-2 rounded-full bg-[rgb(var(--ink))]" />}
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-medium text-foreground">{title}</span>
+          <span className="block text-xs text-muted-foreground mt-0.5 leading-relaxed">{description}</span>
+        </span>
+      </div>
+    </button>
   )
 }
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw, FolderOpen, Cloud, HardDrive, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Settings as SettingsIcon, Eye, EyeOff } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { ActionButton, useToast } from './ui'
+import ConfirmDialog from './ConfirmDialog'
 
 interface SyncRuntimeStatus {
   configured: boolean
@@ -91,6 +92,7 @@ export default function SyncPanel() {
   const [info, setInfo] = useState<{ remoteDocCount?: number; extra: Record<string, unknown> } | null>(null)
   const [showS3Secret, setShowS3Secret] = useState(false)
   const [showWebDavSecret, setShowWebDavSecret] = useState(false)
+  const [showDisableConfirm, setShowDisableConfirm] = useState(false)
   const toast = useToast()
 
   const refresh = useCallback(async () => {
@@ -166,7 +168,6 @@ export default function SyncPanel() {
   }
 
   const handleDisable = async () => {
-    if (!confirm('禁用后归档配置都会被清空。继续？')) return
     await toast.promise(
       async () => {
         await api.del('/sync/config')
@@ -438,16 +439,13 @@ export default function SyncPanel() {
                     >
                       切换适配器
                     </button>
-                    <ActionButton
-                      variant="danger"
-                      size="sm"
-                      onAction={handleDisable}
-                      successToast={{ title: '归档已禁用' }}
-                      errorToast={(e) => ({ title: '禁用失败', description: e instanceof Error ? e.message : String(e) })}
-                      className="ml-auto"
+                    <button
+                      type="button"
+                      onClick={() => setShowDisableConfirm(true)}
+                      className="inline-flex items-center justify-center gap-1.5 h-7 px-2.5 text-[12px] font-medium leading-none rounded-[var(--radius-btn)] text-destructive hover:bg-destructive/10 ml-auto min-w-[88px]"
                     >
                       禁用
-                    </ActionButton>
+                    </button>
                   </>
                 )}
               </div>
@@ -493,6 +491,19 @@ export default function SyncPanel() {
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={showDisableConfirm}
+        title="禁用 Markdown 归档"
+        message="禁用后归档配置都会被清空。继续？"
+        confirmLabel="禁用"
+        destructive
+        onCancel={() => setShowDisableConfirm(false)}
+        onConfirm={() => {
+          setShowDisableConfirm(false)
+          void handleDisable()
+        }}
+      />
     </div>
   )
 }

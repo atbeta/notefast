@@ -61,6 +61,7 @@ export function ActionButton({
   className,
   blockOnLoading = true,
   onAfter,
+  children,
 }: ActionButtonProps) {
   const toast = useToast()
   const [loading, setLoading] = useState(false)
@@ -120,7 +121,7 @@ export function ActionButton({
       onClick={handleClick}
       className={className}
     >
-      {saved ? '已保存' : '保存'}
+      {children ?? '保存'}
     </Button>
   )
 }
