@@ -14,6 +14,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import type { SearchResult } from '@notefast/core'
 import { request } from '../hooks/useAPI'
+import { useTheme } from '../hooks/useTheme'
 
 interface CommandPaletteProps {
   open: boolean
@@ -36,14 +37,11 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const [results, setResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
   const [active, setActive] = useState(0)
-  const [dark, setDark] = useState(false)
+  const { resolvedTheme, setTheme } = useTheme()
+  const dark = resolvedTheme === 'dark'
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
-
-  useEffect(() => {
-    setDark(document.documentElement.classList.contains('dark'))
-  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -78,9 +76,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   const commands: PaletteItem[] = useMemo(() => {
     const toggleDark = () => {
-      document.documentElement.classList.toggle('dark')
-      const isDark = document.documentElement.classList.contains('dark')
-      localStorage.setItem('theme', isDark ? 'dark' : 'light')
+      setTheme(dark ? 'light' : 'dark')
       onClose()
     }
     return [

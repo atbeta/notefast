@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import CommandPalette from './CommandPalette'
 import AIChatPanel from './AIChatPanel'
+import { useTheme } from '../hooks/useTheme'
 
 /** AI 聊天面板开关状态 — 页面（如文档页右栏）可据此避让空间 */
 const AiChatOpenContext = createContext(false)
@@ -46,7 +47,9 @@ export default function Layout({ children, contentClassName }: { children: React
 
   const closeMobile = useCallback(() => setMobileOpen(false), [])
 
-  // 全局快捷键：⌘K / Ctrl+K, ⌘N / Ctrl+N, ⌘\ / Ctrl+\, ⌘J / Ctrl+J (打开 AI Chat)
+  const { resolvedTheme, setTheme } = useTheme()
+
+  // 全局快捷键：⌘K / Ctrl+K, ⌘N / Ctrl+N, ⌘\ / Ctrl+\, ⌘J / Ctrl+J, ⌘⇧D / Ctrl+Shift+D
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey
@@ -62,11 +65,14 @@ export default function Layout({ children, contentClassName }: { children: React
       } else if (mod && e.key === '\\') {
         e.preventDefault()
         toggleSidebar()
+      } else if (mod && e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault()
+        setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [toggleSidebar, navigate, paletteOpen])
+  }, [toggleSidebar, navigate, paletteOpen, resolvedTheme, setTheme])
 
   return (
     <div className="flex h-screen overflow-hidden bg-background relative w-full">
