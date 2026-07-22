@@ -162,54 +162,71 @@
 
 /* ────────────────────────────────────────────────────────────────
    主按钮 — 墨色底 + 顶部内高光 + 轻投影；hover 提亮、active 下沉
-   高级感来自：克制用色 + 多层微阴影 + 精准的按压反馈
+   放在 @layer components，便于 Button 的 h-* / px-* 工具类覆盖尺寸
    ──────────────────────────────────────────────────────────────── */
 
-.btn-primary-custom {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  /* 尺寸由 Button 的 size class（h-* / px-*）控制，避免与 padding 叠加导致文字偏上 */
-  border-radius: var(--radius-btn);
-  border: 1px solid rgb(var(--ink));
-  font-weight: 500;
-  letter-spacing: -0.005em;
-  line-height: 1;
-  cursor: pointer;
-  color: rgb(var(--ink-foreground));
-  background: rgb(var(--ink));
-  box-shadow: var(--shadow-btn);
-  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease),
-              box-shadow var(--dur) var(--ease), transform 100ms var(--ease);
-}
-.btn-primary-custom:hover:not(:disabled) {
-  background: rgb(var(--ink-hover));
-  border-color: rgb(var(--ink-hover));
-}
-.btn-primary-custom:active:not(:disabled) {
-  transform: scale(0.98);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), inset 0 1px 2px rgba(0, 0, 0, 0.12);
-}
-.btn-primary-custom:disabled { opacity: 0.4; cursor: not-allowed; }
+@layer components {
+  .btn-primary-custom {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    box-sizing: border-box;
+    min-height: 32px;
+    padding: 0 14px;
+    border-radius: var(--radius-btn);
+    border: 1px solid rgb(var(--ink));
+    font-size: var(--text-base);
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    line-height: 1.2;
+    cursor: pointer;
+    color: rgb(var(--ink-foreground));
+    background: rgb(var(--ink));
+    box-shadow: var(--shadow-btn);
+    transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease),
+                box-shadow var(--dur) var(--ease), transform 100ms var(--ease);
+  }
+  .btn-primary-custom svg {
+    display: block;
+    flex-shrink: 0;
+  }
+  .btn-primary-custom:hover:not(:disabled) {
+    background: rgb(var(--ink-hover));
+    border-color: rgb(var(--ink-hover));
+  }
+  .btn-primary-custom:active:not(:disabled) {
+    transform: scale(0.98);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), inset 0 1px 2px rgba(0, 0, 0, 0.12);
+  }
+  .btn-primary-custom:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.btn-ghost-custom {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 10px;
-  border-radius: var(--radius-btn);
-  border: 1px solid transparent;
-  background: transparent;
-  color: rgb(var(--muted-foreground));
-  font-size: var(--text-sm);
-  font-weight: 500;
-  letter-spacing: -0.005em;
-  cursor: pointer;
-  transition: color var(--dur) var(--ease), background var(--dur) var(--ease), transform 100ms var(--ease);
+  .btn-ghost-custom {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    box-sizing: border-box;
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: var(--radius-btn);
+    border: 1px solid transparent;
+    background: transparent;
+    color: rgb(var(--muted-foreground));
+    font-size: var(--text-sm);
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: color var(--dur) var(--ease), background var(--dur) var(--ease), transform 100ms var(--ease);
+  }
+  .btn-ghost-custom svg {
+    display: block;
+    flex-shrink: 0;
+  }
+  .btn-ghost-custom:hover { color: rgb(var(--foreground)); background: rgb(var(--accent)); }
+  .btn-ghost-custom:active { background: rgb(var(--secondary)); transform: scale(0.98); }
 }
-.btn-ghost-custom:hover { color: rgb(var(--foreground)); background: rgb(var(--accent)); }
-.btn-ghost-custom:active { background: rgb(var(--secondary)); transform: scale(0.98); }
 
 .btn-icon-ghost {
   display: inline-flex;

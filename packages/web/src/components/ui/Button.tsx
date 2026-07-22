@@ -32,17 +32,17 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
 const VARIANT_BASE: Record<ButtonVariant, string> = {
   primary: 'btn-primary-custom',
   secondary:
-    'inline-flex items-center justify-center gap-1.5 leading-none rounded-[var(--radius-btn)] border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--ink))] hover:bg-accent transition-colors duration-150',
+    'inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-btn)] border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--ink))] hover:bg-accent transition-colors duration-150',
   ghost:
-    'inline-flex items-center justify-center gap-1.5 leading-none rounded-[var(--radius-btn)] border border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground transition-colors duration-150',
+    'inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-btn)] border border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground transition-colors duration-150',
   danger:
-    'inline-flex items-center justify-center gap-1.5 leading-none rounded-[var(--radius-btn)] border border-transparent bg-transparent text-destructive hover:bg-destructive/10 transition-colors duration-150',
+    'inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-btn)] border border-transparent bg-transparent text-destructive hover:bg-destructive/10 transition-colors duration-150',
 }
 
 const SIZES: Record<ButtonSize, string> = {
-  sm: 'h-7 px-2.5 text-[12px]',
-  md: 'h-9 px-3.5 text-sm',
-  lg: 'h-10 px-5 text-[14px]',
+  sm: 'h-7 min-h-0 px-2.5 text-[12px]',
+  md: 'h-8 min-h-0 px-3.5 text-sm',
+  lg: 'h-10 min-h-0 px-5 text-[14px]',
 }
 
 export function Button({
@@ -66,16 +66,25 @@ export function Button({
   if (showSuccessAccent) {
     visualCls = '!bg-emerald-600 !text-white !border-emerald-600 shadow-[var(--shadow-btn)]'
   } else if (loading) {
-    visualCls = variant === 'primary' ? 'opacity-70 cursor-wait' : 'opacity-70 cursor-wait'
+    visualCls = 'opacity-70 cursor-wait'
   }
 
   const baseCls =
-    `${VARIANT_BASE[variant]} ${SIZES[size]} font-medium ` +
+    `${VARIANT_BASE[variant]} ${SIZES[size]} font-medium leading-[1.2] ` +
     `transition-colors duration-150 focus-visible:outline-none ` +
     `disabled:opacity-40 disabled:cursor-not-allowed ` +
     `min-w-[88px] ` +
     (fullWidth ? 'w-full ' : '') +
     visualCls + ' ' + className
+
+  const label = loading ? '处理中…' : justSaved ? '已完成' : children
+  const leading = loading ? (
+    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+  ) : justSaved ? (
+    <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+  ) : icon ? (
+    icon
+  ) : null
 
   return (
     <button
@@ -86,16 +95,8 @@ export function Button({
       aria-live="polite"
       className={baseCls}
     >
-      {loading ? (
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-      ) : justSaved ? (
-        <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-      ) : icon ? (
-        <span className="inline-flex items-center justify-center">{icon}</span>
-      ) : null}
-      <span className="inline-flex items-center gap-1.5 leading-none">
-        {loading ? '处理中…' : justSaved ? '已完成' : children}
-      </span>
+      {leading}
+      {label}
     </button>
   )
 }

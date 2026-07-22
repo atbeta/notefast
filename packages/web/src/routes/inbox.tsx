@@ -182,10 +182,6 @@ export default function InboxPage() {
             <p className="text-[13px] text-muted-foreground mb-5 max-w-[280px] leading-relaxed">
               先快速采集一段文字或链接；整理完成后再加入正式笔记。
             </p>
-            <button type="button" onClick={() => setShowCapture(true)} className="btn-primary-custom">
-              <Plus className="w-3.5 h-3.5" strokeWidth={2.25} />
-              快速采集
-            </button>
           </div>
         ) : (
           <div className="grid gap-1.5">
