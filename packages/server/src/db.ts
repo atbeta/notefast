@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { configureSqliteForExtensions } from './sqliteVec'
 
 let db: Database
 
@@ -45,10 +46,56 @@ CREATE TABLE IF NOT EXISTS block_vectors (
   block_id  TEXT PRIMARY KEY,
   embedding TEXT NOT NULL,
   dim       INTEGER NOT NULL,
+  embedding_model TEXT,
+  content_hash TEXT,
+  index_version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (block_id) REFERENCES blocks(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_block_vectors_dim ON block_vectors(dim);
+
+CREATE TABLE IF NOT EXISTS vector_store_state (
+  id                 TEXT PRIMARY KEY CHECK (id = 'default'),
+  active_backend     TEXT NOT NULL DEFAULT 'json',
+  status             TEXT NOT NULL DEFAULT 'stale',
+  model_fingerprint  TEXT,
+  dimension          INTEGER,
+  active_generation  TEXT,
+  staging_generation TEXT,
+  indexed_count      INTEGER NOT NULL DEFAULT 0,
+  error              TEXT,
+  updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+INSERT OR IGNORE INTO vector_store_state (id) VALUES ('default');
+
+CREATE TABLE IF NOT EXISTS vector_generations (
+  id                TEXT PRIMARY KEY,
+  table_name        TEXT NOT NULL UNIQUE,
+  model_fingerprint TEXT NOT NULL,
+  dimension         INTEGER NOT NULL,
+  status            TEXT NOT NULL DEFAULT 'staging',
+  indexed_count     INTEGER NOT NULL DEFAULT 0,
+  error             TEXT,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS vector_entries (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  generation   TEXT NOT NULL,
+  block_id     TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  notebook_id  TEXT NOT NULL,
+  root_id      TEXT NOT NULL,
+  block_updated_at TEXT NOT NULL,
+  UNIQUE (generation, block_id),
+  FOREIGN KEY (generation) REFERENCES vector_generations(id) ON DELETE CASCADE,
+  FOREIGN KEY (block_id) REFERENCES blocks(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_vector_entries_generation ON vector_entries(generation);
+CREATE INDEX IF NOT EXISTS idx_vector_entries_block ON vector_entries(block_id);
 
 CREATE TABLE IF NOT EXISTS block_refs (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -123,6 +170,7 @@ END;
 `
 
 export function initDb(dataDir: string): { db: Database; notebookId: string } {
+  configureSqliteForExtensions()
   if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true })
   }
@@ -136,6 +184,7 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
   db.exec('PRAGMA foreign_keys=ON')
 
   db.exec(SCHEMA_SQL)
+  migrateVectorSchema(db)
 
   const ftsCount = (db.query('SELECT count(*) as c FROM blocks_fts').get() as { c: number })?.c ?? 0
   const blocksCount = (db.query('SELECT count(*) as c FROM blocks').get() as { c: number })?.c ?? 0
@@ -151,6 +200,24 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
   initApiKey(dataDir)
 
   return { db, notebookId }
+}
+
+function migrateVectorSchema(database: Database): void {
+  const columns = database.query('PRAGMA table_info(block_vectors)').all() as Array<{ name: string }>
+  const names = new Set(columns.map((column) => column.name))
+  const additions = [
+    ['embedding_model', 'TEXT'],
+    ['content_hash', 'TEXT'],
+    ['index_version', 'INTEGER NOT NULL DEFAULT 1'],
+    ['updated_at', "TEXT NOT NULL DEFAULT ''"],
+  ] as const
+
+  for (const [name, type] of additions) {
+    if (!names.has(name)) {
+      database.exec(`ALTER TABLE block_vectors ADD COLUMN ${name} ${type}`)
+    }
+  }
+  database.exec("UPDATE block_vectors SET updated_at = created_at WHERE updated_at = ''")
 }
 
 function initApiKey(dataDir: string): void {

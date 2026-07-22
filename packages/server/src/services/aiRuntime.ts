@@ -26,6 +26,10 @@ import type { PluginSystem } from '@notefast/core'
 import { indexBlock, deleteVector } from '../ai/indexer'
 import { analyzeBlock } from '../ai/autoLink'
 import { removeSuggestionsForBlock } from '../ai/autoLinkStore'
+import {
+  embeddingFingerprint,
+  markVectorStoreStaleIfModelChanged,
+} from '../ai/vectorStore'
 
 const CONFIG_FILE = 'ai.config.json'
 const HOOK_NAME = 'ai-indexer'
@@ -171,6 +175,9 @@ export function applyNewConfig(
 ): ReloadResult {
   const r = getRuntime()
   const result = r.reload(cfg)
+  markVectorStoreStaleIfModelChanged(
+    cfg.embedding ? embeddingFingerprint(cfg.embedding) : null,
+  )
   saveConfigToDisk(cfg)
   sys.note.afterCreate.untap(HOOK_NAME)
   sys.note.afterUpdate.untap(HOOK_NAME)
@@ -201,7 +208,7 @@ function applyAutoIndex(r: AiRuntime, pluginSystem: PluginSystem): void {
     await indexBlock(block.id)
   })
   pluginSystem.note.afterDelete.tap(HOOK_NAME, async (blockId) => {
-    deleteVector(blockId)
+    await deleteVector(blockId)
   })
   console.log('🧠 AI auto-index hooks attached')
 }

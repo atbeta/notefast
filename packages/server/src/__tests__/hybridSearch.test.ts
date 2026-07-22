@@ -23,10 +23,10 @@ import { upsertVector, initVectorStore } from '../ai/indexer'
 let testDir: string
 let pluginSystem: ReturnType<typeof createPluginSystem>
 
-beforeAll(() => {
+beforeAll(async () => {
   testDir = mkdtempSync(join('/tmp', 'notefast-hybrid-'))
   initDb(testDir)
-  initVectorStore()
+  await initVectorStore()
   pluginSystem = createPluginSystem()
   initAiRuntime(pluginSystem, testDir)
 })
@@ -41,6 +41,12 @@ beforeEach(() => {
   initAiRuntime(pluginSystem, testDir)
   getDb().query('DELETE FROM blocks').run()
   getDb().query('DELETE FROM block_vectors').run()
+  getDb().query(
+    `UPDATE vector_store_state
+     SET active_backend = 'json', status = 'stale', model_fingerprint = NULL,
+         dimension = NULL, indexed_count = 0, error = NULL
+     WHERE id = 'default'`,
+  ).run()
   getDb().exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
 })
 
@@ -171,8 +177,8 @@ describe('hybridSearch — embedding + RRF', () => {
     const b = seedBlock({ id: 'b-id', notebookId: nb, content: 'unrelated content about food' })
 
     const v = new Float64Array([0.1, 0.2, 0.3])
-    upsertVector(a.id, v)
-    upsertVector(b.id, v)
+    await upsertVector(a.id, v)
+    await upsertVector(b.id, v)
     const fetcher = (async () =>
       new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }] }), {
         status: 200,
@@ -225,8 +231,8 @@ describe('hybridSearch — 语义召回 cosine 下限（Bug 6）', () => {
     // 内容与查询文本无字面重叠（FTS 不命中，隔离出纯语义通道）
     const high = seedBlock({ id: 'hi-cos', notebookId: nb, content: 'alpha beta gamma' })
     const low = seedBlock({ id: 'lo-cos', notebookId: nb, content: 'delta epsilon zeta' })
-    upsertVector(high.id, new Float64Array([1, 0]))   // cosine 1.0 → 保留
-    upsertVector(low.id, new Float64Array([0, 1]))    // cosine 0.0 → 过滤
+    await upsertVector(high.id, new Float64Array([1, 0]))   // cosine 1.0 → 保留
+    await upsertVector(low.id, new Float64Array([0, 1]))    // cosine 0.0 → 过滤
 
     const report = await hybridSearch({ query: 'zztop', topK: 10 })
     expect(report.retrieval.fts_hits).toBe(0)

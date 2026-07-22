@@ -531,7 +531,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
         if (!vector) {
           return toolError('provider_error', r.status().embedding.lastError || 'embedding 返回空向量')
         }
-        const hits = semanticSearch(vector, limit ?? 10, notebook_id)
+        const hits = await semanticSearch(vector, limit ?? 10, notebook_id)
         return { content: [toText({ query, results: hits.length, hits })] }
       } catch (e) {
         return toolError('provider_error', e instanceof Error ? e.message : String(e), { fix_hint: '请检查 /settings 中的 Provider 配置' })
