@@ -1,9 +1,9 @@
 import { useState, useEffect, createElement, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Copy, Check } from 'lucide-react'
 import { highlightCode } from '../lib/highlight'
 import MermaidDiagram from './MermaidDiagram'
+import { CopyButton } from './ui'
 
 interface ChatMarkdownProps {
   content: string
@@ -63,7 +63,6 @@ export default function ChatMarkdown({ content, className = '' }: ChatMarkdownPr
 
 function ChatCodeBlock({ code, language }: { code: string; language: string }) {
   const [html, setHtml] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -79,23 +78,11 @@ function ChatCodeBlock({ code, language }: { code: string; language: string }) {
     }
   }, [code, language])
 
-  const onCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(code)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {
-      /* ignore */
-    }
-  }
-
   return (
     <div className="chat-code-block">
       <div className="chat-code-block-bar">
         <span className="chat-code-lang">{language || 'text'}</span>
-        <button type="button" onClick={onCopy} className="chat-code-copy" title="复制">
-          {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-        </button>
+        <CopyButton text={code} className="chat-code-copy" title="复制" iconClassName="w-3 h-3" />
       </div>
       <pre>
         {html

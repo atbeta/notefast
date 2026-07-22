@@ -1,4 +1,4 @@
-import AISettingsPanel from '../components/AISettingsPanel'
+import AISettingsPanel from '../components/ai-settings'
 
 export default function SettingsAIPage() {
   return (

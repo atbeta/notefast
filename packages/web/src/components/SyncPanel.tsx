@@ -70,7 +70,6 @@ export default function SyncPanel() {
     try {
       const res = await api.get<{ configured: boolean; status: SyncRuntimeStatus; config: { active: unknown } }>('/sync/config')
       setStatus(res.status)
-      setAdaptersInfo(res)
       const active = res.config.active as { kind?: string } | null
       if (active?.kind === 'localfs') {
         const a = active as LocalFsAdapterConfig
@@ -103,17 +102,9 @@ export default function SyncPanel() {
     }
   }, [toast])
 
-  const setAdaptersInfo = useCallback(async (_res: unknown) => {
-    try {
-      const r = await api.get<{ adapters: AdapterInfo[] }>('/sync/adapters')
-      setAdapters(r.adapters)
-    } catch {
-      /* ignore */
-    }
-  }, [])
-
   useEffect(() => {
     refresh()
+    // 适配器目录只在挂载时拉一次；refresh() 只刷主数据（/sync/config），不再重复拉取
     api.get<{ adapters: AdapterInfo[] }>('/sync/adapters').then((r) => setAdapters(r.adapters)).catch(() => undefined)
   }, [refresh])
 

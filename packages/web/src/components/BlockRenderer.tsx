@@ -1,10 +1,11 @@
 import { useState, useEffect, createElement } from 'react'
 import type { ReactNode } from 'react'
-import { Copy, Check, Link2 } from 'lucide-react'
+import { Check, Link2 } from 'lucide-react'
 import type { Block } from '@notefast/core'
 import { scrollToElement } from '../lib/scroll'
 import { highlightCode } from '../lib/highlight'
 import MermaidDiagram from './MermaidDiagram'
+import { CopyButton } from './ui'
 
 interface BlockNodeProps {
   block: Block
@@ -24,7 +25,7 @@ const INLINE_RE = /(!\[[^\]]*\]\([^)\s]+\))|(`[^`]+`)|(\*\*[^*\n]+\*\*)|(\*[^*\n
 
 /** 裸 URL 尾部的标点不应吃进来（如「见 https://a.com/x, 」） */
 function trimUrlTail(url: string): string {
-  return url.replace(/[.,;:!?，。；：！？、\)）\]】'"]+$/, '')
+  return url.replace(/[.,;:!?，。；：！？、)）\]】'"]+$/, '')
 }
 
 function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
@@ -139,7 +140,6 @@ function CodeBlock({ block }: { block: Block }) {
 }
 
 function HighlightedCodeBlock({ block, lang }: { block: Block; lang: string }) {
-  const [copied, setCopied] = useState(false)
   const [highlighted, setHighlighted] = useState<string | null>(null)
 
   // 语法高亮：异步懒加载 highlight.js；失败/未知语言回退纯文本
@@ -154,40 +154,18 @@ function HighlightedCodeBlock({ block, lang }: { block: Block; lang: string }) {
     return () => { cancelled = true }
   }, [block.content, lang])
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(block.content || '')
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {
-      /* ignore */
-    }
-  }
-
   return (
     <div className="my-5 rounded-lg border border-border bg-muted/30 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 bg-muted/60 border-b border-border">
         <span className="text-[11px] font-mono text-muted-foreground/80">
           {lang || 'text'}
         </span>
-        <button
-          type="button"
-          onClick={handleCopy}
+        <CopyButton
+          text={block.content || ''}
           className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded"
-          aria-label={copied ? 'Copied' : 'Copy code'}
-        >
-          {copied ? (
-            <>
-              <Check className="w-3.5 h-3.5" strokeWidth={2} />
-              <span>Copied</span>
-            </>
-          ) : (
-            <>
-              <Copy className="w-3.5 h-3.5" strokeWidth={1.75} />
-              <span>Copy</span>
-            </>
-          )}
-        </button>
+          ariaLabel="Copy code"
+          showText
+        />
       </div>
       <pre className="p-4 overflow-x-auto text-[13px] font-mono leading-[1.6] text-foreground">
         {highlighted ? (

@@ -12,6 +12,8 @@
  * 也可自定义实现 RerankerProvider（无第三方服务时返回 undefined 即可降级）。
  */
 
+import { buildHeaders, joinUrl, postJson } from './ai/openaiCompat'
+
 export interface RerankInput {
   /** 用户的当前查询 */
   query: string
@@ -42,43 +44,26 @@ export function createTeiReranker(
   apiKey = '',
 ): RerankerProvider {
   const url = joinUrl(baseUrl, '/rerank')
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (apiKey.trim()) headers['Authorization'] = `Bearer ${apiKey.trim()}`
+  const headers = buildHeaders(apiKey)
 
   return {
     name: `tei-rerank-${model}`,
     async rerank({ query, texts, topN }): Promise<RerankHit[]> {
       if (texts.length === 0) return []
-      const ac = new AbortController()
-      const timer = setTimeout(() => ac.abort(), timeoutMs)
-      try {
-        const res = await fetchImpl(url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            query,
-            texts,
-            top_n: topN ?? texts.length,
-            return_documents: false,
-            model,
-          }),
-          signal: ac.signal,
-        })
-        if (!res.ok) {
-          const err = await res.text().catch(() => '')
-          throw new Error(`Rerank API ${res.status}: ${err.slice(0, 300)}`)
-        }
-        const json = (await res.json()) as Array<{ index: number; score: number }>
-        return json.map((r) => ({ index: r.index, score: r.score }))
-      } finally {
-        clearTimeout(timer)
-      }
+      const json = await postJson<Array<{ index: number; score: number }>>(
+        fetchImpl,
+        url,
+        headers,
+        {
+          query,
+          texts,
+          top_n: topN ?? texts.length,
+          return_documents: false,
+          model,
+        },
+        { timeoutMs, errorLabel: 'Rerank API' },
+      )
+      return json.map((r) => ({ index: r.index, score: r.score }))
     },
   }
-}
-
-function joinUrl(base: string, path: string): string {
-  const b = base.replace(/\/+$/, '')
-  const p = path.startsWith('/') ? path : '/' + path
-  return b + p
 }

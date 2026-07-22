@@ -5,12 +5,13 @@
  * 切换「包含任一」时写入 `tag_match=any`。与 `untagged=1` 互斥。
  */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Tag as TagIcon } from 'lucide-react'
 import type { TagInfo, TagMatchMode } from '@notefast/core'
 import { parseTagMatchMode } from '@notefast/core'
 import { api } from '../hooks/useAPI'
+import { useApiQuery } from '../hooks/useApiQuery'
 
 export interface TagFilterProps {
   onChange?: (tags: string[]) => void
@@ -68,21 +69,16 @@ function TagMatchToggle({
 }
 
 export default function TagFilter({ onChange }: TagFilterProps) {
-  const [tags, setTags] = useState<TagInfo[]>([])
-  const [loading, setLoading] = useState(true)
   const [searchParams, setSearchParams] = useSearchParams()
+  const { data, loading, error } = useApiQuery(
+    () => api.get<{ provider: string; tags: TagInfo[] }>('/tags'),
+    [],
+  )
+  // 原 .catch(() => setTags([])) 语义：失败时视为无标签（组件整体不渲染）
+  const tags = error ? [] : (data?.tags ?? [])
   const selected = useMemo(() => readSelectedTags(searchParams), [searchParams])
   const tagMatch = useMemo(() => parseTagMatchMode(searchParams.get('tag_match')), [searchParams])
   const untagged = searchParams.get('untagged') === '1'
-
-  useEffect(() => {
-    setLoading(true)
-    api
-      .get<{ provider: string; tags: TagInfo[] }>('/tags')
-      .then((r) => setTags(r.tags))
-      .catch(() => setTags([]))
-      .finally(() => setLoading(false))
-  }, [])
 
   const patchParams = (fn: (prev: URLSearchParams) => void) => {
     setSearchParams(

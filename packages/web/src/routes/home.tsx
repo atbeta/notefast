@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, FileText, Clock, Tag } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
 import { parseTagMatchMode } from '@notefast/core'
 import { api } from '../hooks/useAPI'
+import { useApiQuery } from '../hooks/useApiQuery'
 import DocList from '../components/DocList'
+import PageHeader from '../components/PageHeader'
 import TagFilter from '../components/TagFilter'
 
 function viewTitle(params: URLSearchParams): string {
@@ -52,47 +54,42 @@ function buildListQuery(params: URLSearchParams): string {
 }
 
 export default function HomePage() {
-  const [docs, setDocs] = useState<DocSummary[]>([])
-  const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const listQuery = useMemo(() => buildListQuery(searchParams), [searchParams])
   const title = useMemo(() => viewTitle(searchParams), [searchParams])
 
-  const fetchDocs = useCallback(() => {
-    setLoading(true)
-    api
-      .get<DocSummary[]>(`/docs/list${listQuery}`)
-      .then(setDocs)
-      .catch(console.error)
-      .finally(() => setLoading(false))
-  }, [listQuery])
+  const { data, loading, error, refetch } = useApiQuery(
+    () => api.get<DocSummary[]>(`/docs/list${listQuery}`),
+    [listQuery],
+  )
+  const docs = data ?? []
+  // 原 .catch(console.error) 语义：失败只打日志，列表保留旧数据
+  useEffect(() => {
+    if (error) console.error(error)
+  }, [error])
 
-  useEffect(() => { fetchDocs() }, [fetchDocs])
-
-  const handleRefresh = useCallback(() => { fetchDocs() }, [fetchDocs])
+  const handleRefresh = useCallback(() => { refetch() }, [refetch])
   const goNew = useCallback(() => { navigate('/new') }, [navigate])
 
   return (
     <div className="animate-fade-in">
-      <header className="sticky top-0 z-10 h-14 border-b border-border/50 bg-background">
-        <div className="h-full w-full max-w-4xl mx-auto px-8 flex items-center justify-between gap-4">
-          <div className="min-w-0 flex items-center gap-2">
-            <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
-              {title}
-            </h1>
-            {!loading && (
-              <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
-                {docs.length}
-              </span>
-            )}
-          </div>
-          <button onClick={goNew} className="btn-primary-custom shrink-0">
-            <Plus className="w-3.5 h-3.5" strokeWidth={2.25} />
-            新建文档
-          </button>
+      <PageHeader innerClassName="flex items-center justify-between gap-4">
+        <div className="min-w-0 flex items-center gap-2">
+          <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
+            {title}
+          </h1>
+          {!loading && (
+            <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
+              {docs.length}
+            </span>
+          )}
         </div>
-      </header>
+        <button onClick={goNew} className="btn-primary-custom shrink-0">
+          <Plus className="w-3.5 h-3.5" strokeWidth={2.25} />
+          新建文档
+        </button>
+      </PageHeader>
 
       <div className="w-full max-w-4xl mx-auto px-8 pt-7 pb-16 space-y-5 animate-fade-in">
         <TagFilter />

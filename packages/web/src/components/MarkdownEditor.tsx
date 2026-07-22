@@ -23,6 +23,7 @@ import { parseMarkdownToBlocks, inputsToBlockTree, stripTitleFromMarkdown } from
 import type { Block } from '@notefast/core'
 import { api, fetchWithAuth } from '../hooks/useAPI'
 import { useToast } from './ui'
+import { relativeTime } from '../lib/time'
 import BlockRenderer from './BlockRenderer'
 
 interface MarkdownEditorProps {
@@ -52,15 +53,6 @@ function clearDraft(docId: string) {
 
 function hasDraft(docId: string): boolean {
   try { return localStorage.getItem(DRAFT_PREFIX + docId) !== null } catch { return false }
-}
-
-function relativeTime(date: Date | null): string {
-  if (!date) return '—'
-  const diff = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (diff < 5) return '刚刚'
-  if (diff < 60) return `${diff} 秒前`
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
-  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
 // ───────────────────────── Markdown 快捷键识别 ─────────────────────────

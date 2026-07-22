@@ -16,6 +16,7 @@ import {
   Link2,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
+import { useApiQuery } from '../hooks/useApiQuery'
 import type { DocSummary } from '@notefast/core'
 
 interface SidebarProps {
@@ -54,29 +55,26 @@ export default function Sidebar({
 }: SidebarProps) {
   const location = useLocation()
   const [isMac, setIsMac] = useState(false)
-  const [recentDocs, setRecentDocs] = useState<DocSummary[]>([])
   const [inboxCount, setInboxCount] = useState(0)
   const [autolinkCount, setAutolinkCount] = useState(0)
-  /** 实例版本号（/api/v1/version），加载完成前不渲染版本位 */
-  const [version, setVersion] = useState<string | null>(null)
 
   useEffect(() => {
     setIsMac(/Mac|iPhone|iPad/i.test(navigator.platform))
   }, [])
 
-  useEffect(() => {
-    api.get<{ version: string }>('/version')
-      .then((r) => setVersion(r.version))
-      .catch(() => {})
-  }, [])
+  /** 实例版本号（/api/v1/version），加载完成前不渲染版本位；失败静默 */
+  const { data: versionInfo } = useApiQuery(() => api.get<{ version: string }>('/version'), [])
+  const version = versionInfo?.version ?? null
 
-  useEffect(() => {
-    if (!collapsed) {
-      api.get<DocSummary[]>('/docs/list')
-        .then((list) => setRecentDocs(list.slice(0, 15)))
-        .catch(() => {})
-    }
-  }, [collapsed, location.pathname])
+  /**
+   * 最近文档：折叠态不展示也不发请求（挂起的 Promise 保持旧数据，重新展开时无闪烁）；
+   * 展开 / 路由变化时重拉，失败静默保留旧数据
+   */
+  const { data: docList } = useApiQuery(
+    () => (collapsed ? new Promise<DocSummary[]>(() => {}) : api.get<DocSummary[]>('/docs/list')),
+    [collapsed, location.pathname],
+  )
+  const recentDocs = (docList ?? []).slice(0, 15)
 
   // 收集箱计数 + 链接建议未读计数
   useEffect(() => {

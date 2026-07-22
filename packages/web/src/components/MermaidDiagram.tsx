@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react'
-import { Check, Copy } from 'lucide-react'
 import { nextMermaidId, renderMermaidSvg } from '../lib/mermaid'
+import { CopyButton } from './ui'
 
 interface MermaidDiagramProps {
   code: string
@@ -44,7 +44,6 @@ export default function MermaidDiagram({
   const [svg, setSvg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -81,38 +80,16 @@ export default function MermaidDiagram({
     }
   }, [code, theme, reactId])
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(code)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {
-      /* ignore */
-    }
-  }
-
   return (
     <div className={`my-5 rounded-lg border border-border bg-muted/30 overflow-hidden ${className}`.trim()}>
       <div className="flex items-center justify-between px-3 py-1.5 bg-muted/60 border-b border-border">
         <span className="text-[11px] font-mono text-muted-foreground/80">{label}</span>
-        <button
-          type="button"
-          onClick={handleCopy}
+        <CopyButton
+          text={code}
           className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded"
-          aria-label={copied ? 'Copied' : 'Copy diagram source'}
-        >
-          {copied ? (
-            <>
-              <Check className="w-3.5 h-3.5" strokeWidth={2} />
-              <span>Copied</span>
-            </>
-          ) : (
-            <>
-              <Copy className="w-3.5 h-3.5" strokeWidth={1.75} />
-              <span>Copy</span>
-            </>
-          )}
-        </button>
+          ariaLabel="Copy diagram source"
+          showText
+        />
       </div>
 
       {loading && (

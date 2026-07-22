@@ -4,31 +4,18 @@
  * 文档 status=inbox；整理升格为 note 后进入「所有文档」。
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Inbox, Plus, ArrowUpRight, Trash2, Loader2 } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
 import { api } from '../hooks/useAPI'
+import { useApiQuery } from '../hooks/useApiQuery'
+import { formatRelative } from '../lib/time'
 import ConfirmDialog from '../components/ConfirmDialog'
-
-function formatRelative(dateStr: string): string {
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMin = Math.floor(diffMs / 60000)
-  const diffHr = Math.floor(diffMs / 3600000)
-  const diffDay = Math.floor(diffMs / 86400000)
-  if (diffMin < 1) return '刚刚'
-  if (diffMin < 60) return `${diffMin} 分钟前`
-  if (diffHr < 24) return `${diffHr} 小时前`
-  if (diffDay < 7) return `${diffDay} 天前`
-  return date.toLocaleDateString('zh-CN')
-}
+import PageHeader from '../components/PageHeader'
 
 export default function InboxPage() {
   const navigate = useNavigate()
-  const [docs, setDocs] = useState<DocSummary[]>([])
-  const [loading, setLoading] = useState(true)
   const [notebookId, setNotebookId] = useState('')
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -37,23 +24,17 @@ export default function InboxPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DocSummary | null>(null)
 
-  const fetchDocs = useCallback(() => {
-    setLoading(true)
-    api
-      .get<DocSummary[]>('/docs/list?status=inbox')
-      .then(setDocs)
-      .catch(() => setDocs([]))
-      .finally(() => setLoading(false))
-  }, [])
+  const { data, loading, error, refetch } = useApiQuery(
+    () => api.get<DocSummary[]>('/docs/list?status=inbox'),
+    [],
+  )
+  // 原 .catch(() => setDocs([])) 语义：拉取失败按空列表渲染（空收集箱 UI）
+  const docs = error ? [] : (data ?? [])
 
-  useEffect(() => { fetchDocs() }, [fetchDocs])
-
+  const { data: notebooks } = useApiQuery(() => api.get<Array<{ id: string }>>('/notebooks'), [])
   useEffect(() => {
-    api
-      .get<Array<{ id: string }>>('/notebooks')
-      .then((list) => { if (list[0]) setNotebookId(list[0].id) })
-      .catch(() => {})
-  }, [])
+    if (notebooks?.[0]) setNotebookId(notebooks[0].id)
+  }, [notebooks])
 
   const handleCapture = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -72,7 +53,7 @@ export default function InboxPage() {
       setTitle('')
       setBody('')
       setShowCapture(false)
-      fetchDocs()
+      refetch()
       navigate(`/doc/${res.id}`)
     } catch {
       setCapturing(false)
@@ -83,7 +64,7 @@ export default function InboxPage() {
     setBusyId(id)
     try {
       await api.patch(`/docs/${id}/status`, { status: 'note' })
-      fetchDocs()
+      refetch()
     } finally {
       setBusyId(null)
     }
@@ -95,7 +76,7 @@ export default function InboxPage() {
     try {
       await api.del(`/docs/${deleteTarget.id}`)
       setDeleteTarget(null)
-      fetchDocs()
+      refetch()
     } finally {
       setBusyId(null)
     }
@@ -103,28 +84,26 @@ export default function InboxPage() {
 
   return (
     <div className="animate-fade-in">
-      <header className="sticky top-0 z-10 h-14 border-b border-border/50 bg-background">
-        <div className="h-full w-full max-w-4xl mx-auto px-8 flex items-center justify-between gap-4">
-          <div className="min-w-0 flex items-center gap-2">
-            <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
-              收集箱
-            </h1>
-            {!loading && (
-              <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
-                {docs.length}
-              </span>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowCapture((v) => !v)}
-            className="btn-primary-custom shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5" strokeWidth={2.25} />
-            快速采集
-          </button>
+      <PageHeader innerClassName="flex items-center justify-between gap-4">
+        <div className="min-w-0 flex items-center gap-2">
+          <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
+            收集箱
+          </h1>
+          {!loading && (
+            <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
+              {docs.length}
+            </span>
+          )}
         </div>
-      </header>
+        <button
+          type="button"
+          onClick={() => setShowCapture((v) => !v)}
+          className="btn-primary-custom shrink-0"
+        >
+          <Plus className="w-3.5 h-3.5" strokeWidth={2.25} />
+          快速采集
+        </button>
+      </PageHeader>
 
       <div className="w-full max-w-4xl mx-auto px-8 pt-7 pb-16 space-y-5">
         <p className="text-[13px] text-muted-foreground leading-relaxed px-1">

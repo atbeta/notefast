@@ -16,8 +16,10 @@ import AutoLinkPanel from '../components/AutoLinkPanel'
 import MarkdownEditor from '../components/MarkdownEditor'
 import TagEditor from '../components/TagEditor'
 import ConfirmDialog from '../components/ConfirmDialog'
+import PageHeader from '../components/PageHeader'
 import { useAiChatOpen } from '../components/Layout'
 import { scrollToElement } from '../lib/scroll'
+import { formatRelative } from '../lib/time'
 
 interface Backlink {
   id: number
@@ -25,19 +27,6 @@ interface Backlink {
   source_content: string
   source_type: string
   ref_type: string
-}
-
-function formatTime(iso: string): string {
-  const t = new Date(iso)
-  if (!Number.isFinite(t.getTime())) return ''
-  const now = Date.now()
-  const diff = now - t.getTime()
-  const min = Math.floor(diff / 60000)
-  if (min < 1) return '刚刚'
-  if (min < 60) return `${min} 分钟前`
-  if (min < 60 * 24) return `${Math.floor(min / 60)} 小时前`
-  if (min < 60 * 24 * 7) return `${Math.floor(min / (60 * 24))} 天前`
-  return t.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 function countWords(doc: Block): number {
@@ -219,7 +208,7 @@ export default function DocPage() {
   }
 
   const flatHeadings = flattenHeadings(headings)
-  const updatedAt = doc ? formatTime(doc.updated_at) : ''
+  const updatedAt = doc ? formatRelative(doc.updated_at, 'long') : ''
   const wordCount = doc ? countWords(doc) : 0
   const isEmpty = wordCount === 0
   /** 正在显示的是旧文档（A），新文档（B）还在拉取中 —— stale-while-revalidate */
@@ -255,7 +244,7 @@ export default function DocPage() {
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col h-full border-r border-border/50">
         {/* Global Sticky Header */}
-        <header className="h-14 shrink-0 flex items-center justify-between px-6 border-b border-border/50 bg-background sticky top-0 z-10">
+        <PageHeader bare className="shrink-0 flex items-center justify-between px-6">
           <div className="flex items-center gap-4 text-sm">
             <Link
               to="/"
@@ -299,7 +288,7 @@ export default function DocPage() {
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
-        </header>
+        </PageHeader>
 
         {/* Scrollable Document Body — scrollbar-gutter 预留滚动条位，切换文档时内容不横移 */}
         <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">

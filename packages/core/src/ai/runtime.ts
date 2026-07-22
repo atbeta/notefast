@@ -2,18 +2,28 @@
  * AI Runtime
  *
  * 封装整个 AI 子系统的运行时状态：embedding provider、chat provider、usage、最后一次错误。
- * 单一实例（getAiRuntime() 返回同一份），支持热重载 reload(cfg)。
+ * 实例由调用方持有（server 侧为 services/aiRuntime.ts 单例），支持热重载 reload(cfg)。
  *
- * 这是 AI-First 重构的核心抽象——所有 API / MCP / Web 调用都走 runtime，不直接读 env 或模块单例。
+ * 这是 AI-First 重构的核心抽象——所有 API / MCP / Web 调用都走 runtime，不直接读 env。
  */
 
-import { maskKey, publicView, validateConfig } from './config'
+import { defaultAutoLinkConfig, publicView, validateConfig } from './config'
 import type { AiConfig, AutoLinkConfig, ProviderDefinition, RerankerDefinition } from './config'
-import { defaultAutoLinkConfig } from './config'
-import type { EmbeddingProvider, SemanticHit } from '../embedding'
-import type { LLMProvider } from '../llm'
-import { cosineSimilarity, truncateText } from '../embedding'
-import { createTeiReranker, type RerankerProvider } from '../reranker'
+import { buildHeaders, joinUrl, postJson, streamSse } from './openaiCompat'
+import type { EmbeddingProvider } from '../embedding'
+import { truncateText } from '../embedding'
+import type {
+  ChatCompletionOptions,
+  ChatMessage,
+  ChatWithToolsOptions,
+  ChatWithToolsResult,
+  LLMProvider,
+  ResponseFormat,
+  StreamChatChunk,
+  ToolDefinition,
+} from '../llm'
+import { createTeiReranker } from '../reranker'
+import type { RerankHit, RerankInput, RerankerProvider } from '../reranker'
 
 /** Runtime 状态对外可序列化视图（不含原始 key） */
 export interface RuntimeStatus {
@@ -76,6 +86,15 @@ export interface AiRuntimeOptions {
 
 const DEFAULT_BATCH_SIZE = 20
 const DEFAULT_MAX_TOKENS = 8191
+
+/** track() 各类调用对应的 usage 计数键 */
+const USAGE_KEYS = {
+  embedding: { calls: 'embeddingCalls', errors: 'embeddingErrors' },
+  chat: { calls: 'chatCalls', errors: 'chatErrors' },
+  rerank: { calls: 'rerankCalls', errors: 'rerankErrors' },
+} as const
+
+type TrackKind = keyof typeof USAGE_KEYS
 
 export class AiRuntime {
   private cfg: AiConfig
@@ -245,55 +264,70 @@ export class AiRuntime {
     }
   }
 
-  async embedQuery(text: string): Promise<Float64Array | null> {
-    if (!this.embeddingProvider) return null
+  /** 记录某类调用的 lastError（undefined 表示清除） */
+  private setTrackError(kind: TrackKind, msg?: string): void {
+    if (kind === 'embedding') this.embeddingLastError = msg
+    else if (kind === 'chat') this.chatLastError = msg
+    else this.rerankLastError = msg
+  }
+
+  /**
+   * usage 记账：成功 calls+1 / 刷新 lastSuccessAt / 清 lastError；
+   * 失败 errors+1 / 记 lastError / 原样 rethrow。
+   * onSuccess 用于成功后提取附加状态（如 embedding 维度）。
+   */
+  private async track<T>(
+    kind: TrackKind,
+    fn: () => Promise<T>,
+    onSuccess?: (r: T) => void,
+  ): Promise<T> {
+    const keys = USAGE_KEYS[kind]
     try {
-      const v = await this.embeddingProvider.embedQuery(text)
-      this.usage.embeddingCalls++
+      const r = await fn()
+      this.usage[keys.calls]++
       this.usage.lastSuccessAt = new Date().toISOString()
-      this.embeddingLastError = undefined
-      this.embeddingDim = v.length
-      return v
+      this.setTrackError(kind, undefined)
+      onSuccess?.(r)
+      return r
     } catch (e) {
-      this.usage.embeddingErrors++
-      this.embeddingLastError = e instanceof Error ? e.message : String(e)
+      this.usage[keys.errors]++
+      this.setTrackError(kind, e instanceof Error ? e.message : String(e))
       throw e
     }
+  }
+
+  async embedQuery(text: string): Promise<Float64Array | null> {
+    const provider = this.embeddingProvider
+    if (!provider) return null
+    return this.track(
+      'embedding',
+      () => provider.embedQuery(text),
+      (v) => {
+        this.embeddingDim = v.length
+      },
+    )
   }
 
   async embedBatch(texts: string[]): Promise<Array<Float64Array>> {
-    if (!this.embeddingProvider) return []
-    try {
-      const v = await this.embeddingProvider.embedBatch(texts)
-      this.usage.embeddingCalls++
-      this.usage.lastSuccessAt = new Date().toISOString()
-      this.embeddingLastError = undefined
-      this.embeddingDim = v[0]?.length
-      return v
-    } catch (e) {
-      this.usage.embeddingErrors++
-      this.embeddingLastError = e instanceof Error ? e.message : String(e)
-      throw e
-    }
+    const provider = this.embeddingProvider
+    if (!provider) return []
+    return this.track(
+      'embedding',
+      () => provider.embedBatch(texts),
+      (v) => {
+        this.embeddingDim = v[0]?.length
+      },
+    )
   }
 
-  async chat(messages: import('../llm').ChatMessage[], options?: import('../llm').ChatCompletionOptions): Promise<string> {
-    if (!this.chatProvider) {
+  async chat(messages: ChatMessage[], options?: ChatCompletionOptions): Promise<string> {
+    const provider = this.chatProvider
+    if (!provider) {
       const err = new Error('AI chat is not configured')
       this.chatLastError = err.message
       throw err
     }
-    try {
-      const r = await this.chatProvider.chat(messages, options)
-      this.usage.chatCalls++
-      this.usage.lastSuccessAt = new Date().toISOString()
-      this.chatLastError = undefined
-      return r
-    } catch (e) {
-      this.usage.chatErrors++
-      this.chatLastError = e instanceof Error ? e.message : String(e)
-      throw e
-    }
+    return this.track('chat', () => provider.chat(messages, options))
   }
 
   /**
@@ -301,23 +335,14 @@ export class AiRuntime {
    * 若 provider 未实现 chatWithTools，返回 null（调用方降级为流式）。
    */
   async chatWithTools(
-    messages: import('../llm').ChatMessage[],
-    options?: import('../llm').ChatWithToolsOptions,
-  ): Promise<import('../llm').ChatWithToolsResult | null> {
-    if (!this.chatProvider || typeof this.chatProvider.chatWithTools !== 'function') {
+    messages: ChatMessage[],
+    options?: ChatWithToolsOptions,
+  ): Promise<ChatWithToolsResult | null> {
+    const provider = this.chatProvider
+    if (!provider || typeof provider.chatWithTools !== 'function') {
       return null
     }
-    try {
-      const r = await this.chatProvider.chatWithTools(messages, options)
-      this.usage.chatCalls++
-      this.usage.lastSuccessAt = new Date().toISOString()
-      this.chatLastError = undefined
-      return r
-    } catch (e) {
-      this.usage.chatErrors++
-      this.chatLastError = e instanceof Error ? e.message : String(e)
-      throw e
-    }
+    return this.track('chat', () => provider.chatWithTools!(messages, options))
   }
 
   /**
@@ -326,16 +351,11 @@ export class AiRuntime {
    * 同时读取 content 与 reasoning（reasoning_content / reasoning / thinking）。
    */
   async *streamChat(
-    messages: import('../llm').ChatMessage[],
-    options?: import('../llm').ChatCompletionOptions,
-  ): AsyncGenerator<import('../llm').StreamChatChunk> {
+    messages: ChatMessage[],
+    options?: ChatCompletionOptions,
+  ): AsyncGenerator<StreamChatChunk> {
     if (!this.chatProvider) {
       this.chatLastError = 'AI chat is not configured'
-      throw new Error(this.chatLastError)
-    }
-    const p = this.cfg.chat
-    if (!p) {
-      this.chatLastError = 'AI chat provider is not configured'
       throw new Error(this.chatLastError)
     }
     yield* this.streamCompletions(messages, {
@@ -351,16 +371,11 @@ export class AiRuntime {
    * agent loop 用此方法实现真流式最终答案，同时保留 tool-call。
    */
   async *streamChatWithTools(
-    messages: import('../llm').ChatMessage[],
-    options?: import('../llm').ChatWithToolsOptions,
-  ): AsyncGenerator<import('../llm').StreamChatChunk> {
+    messages: ChatMessage[],
+    options?: ChatWithToolsOptions,
+  ): AsyncGenerator<StreamChatChunk> {
     if (!this.chatProvider) {
       this.chatLastError = 'AI chat is not configured'
-      throw new Error(this.chatLastError)
-    }
-    const p = this.cfg.chat
-    if (!p) {
-      this.chatLastError = 'AI chat provider is not configured'
       throw new Error(this.chatLastError)
     }
     yield* this.streamCompletions(messages, {
@@ -374,27 +389,31 @@ export class AiRuntime {
 
   /** 底层 SSE 解析（可选 tools） */
   private async *streamCompletions(
-    messages: import('../llm').ChatMessage[],
+    messages: ChatMessage[],
     options: {
       temperature?: number
       maxTokens?: number
       model?: string
-      responseFormat?: import('../llm').ResponseFormat
-      tools?: import('../llm').ToolDefinition[]
+      responseFormat?: ResponseFormat
+      tools?: ToolDefinition[]
     },
-  ): AsyncGenerator<import('../llm').StreamChatChunk> {
-    const p = this.cfg.chat!
+  ): AsyncGenerator<StreamChatChunk> {
+    // chatProvider 存在 ⟺ cfg.chat 已配置（reload 时同步重建），此处为防御性取值
+    const p = this.cfg.chat
+    if (!p) {
+      this.chatLastError = 'AI chat is not configured'
+      throw new Error(this.chatLastError)
+    }
     const url = joinUrl(p.baseUrl, '/chat/completions')
-    const headers = buildHeaders(p)
+    const headers = buildHeaders(p.apiKey, p.extraHeaders)
     const model = options.model || p.chatModel.trim()
-    const ac = new AbortController()
-    const timer = setTimeout(() => ac.abort(), p.timeoutMs)
     const toolAcc = new Map<number, { id: string; name: string; arguments: string }>()
     try {
-      const res = await this.fetchImpl(url, {
-        method: 'POST',
+      const sse = streamSse(
+        this.fetchImpl,
+        url,
         headers,
-        body: JSON.stringify({
+        {
           model,
           messages,
           stream: true,
@@ -402,17 +421,10 @@ export class AiRuntime {
           max_tokens: options.maxTokens ?? 2000,
           ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
           ...(options.tools && options.tools.length > 0 ? { tools: options.tools } : {}),
-        }),
-        signal: ac.signal,
-      })
-      if (!res.ok || !res.body) {
-        const err = await res.text().catch(() => '')
-        throw new Error(`LLM stream ${res.status}: ${err.slice(0, 300)}`)
-      }
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buf = ''
-      const finish = (): import('../llm').StreamChatChunk => {
+        },
+        { timeoutMs: p.timeoutMs, errorLabel: 'LLM stream' },
+      )
+      const finish = (): StreamChatChunk => {
         this.usage.chatCalls++
         this.usage.lastSuccessAt = new Date().toISOString()
         this.chatLastError = undefined
@@ -426,56 +438,42 @@ export class AiRuntime {
           .filter((tc) => tc.name)
         return { content: '', done: true, ...(tool_calls.length > 0 ? { tool_calls } : {}) }
       }
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value, { stream: true })
-        let idx: number
-        while ((idx = buf.indexOf('\n')) !== -1) {
-          const line = buf.slice(0, idx).trimEnd()
-          buf = buf.slice(idx + 1)
-          if (!line.startsWith('data:')) continue
-          const payload = line.slice(5).trim()
-          if (payload === '[DONE]') {
-            yield finish()
-            return
-          }
-          try {
-            const json = JSON.parse(payload) as {
-              choices?: Array<{
-                delta?: {
-                  content?: string | null
-                  reasoning_content?: string | null
-                  reasoning?: string | null
-                  thinking?: string | null
-                  tool_calls?: Array<{
-                    index?: number
-                    id?: string
-                    type?: string
-                    function?: { name?: string; arguments?: string }
-                  }>
-                }
-              }>
-            }
-            const delta = json.choices?.[0]?.delta
-            if (!delta) continue
-            const reasoning =
-              delta.reasoning_content || delta.reasoning || delta.thinking || undefined
-            if (reasoning) yield { reasoning }
-            if (delta.content) yield { content: delta.content }
-            if (delta.tool_calls) {
-              for (const tc of delta.tool_calls) {
-                const index = tc.index ?? 0
-                const prev = toolAcc.get(index) ?? { id: '', name: '', arguments: '' }
-                if (tc.id) prev.id = tc.id
-                if (tc.function?.name) prev.name = tc.function.name
-                if (tc.function?.arguments) prev.arguments += tc.function.arguments
-                toolAcc.set(index, prev)
+      for await (const payload of sse) {
+        try {
+          const json = JSON.parse(payload) as {
+            choices?: Array<{
+              delta?: {
+                content?: string | null
+                reasoning_content?: string | null
+                reasoning?: string | null
+                thinking?: string | null
+                tool_calls?: Array<{
+                  index?: number
+                  id?: string
+                  type?: string
+                  function?: { name?: string; arguments?: string }
+                }>
               }
-            }
-          } catch {
-            // 忽略无法解析的行（OpenAI 偶尔会发 keep-alive 注释）
+            }>
           }
+          const delta = json.choices?.[0]?.delta
+          if (!delta) continue
+          const reasoning =
+            delta.reasoning_content || delta.reasoning || delta.thinking || undefined
+          if (reasoning) yield { reasoning }
+          if (delta.content) yield { content: delta.content }
+          if (delta.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const index = tc.index ?? 0
+              const prev = toolAcc.get(index) ?? { id: '', name: '', arguments: '' }
+              if (tc.id) prev.id = tc.id
+              if (tc.function?.name) prev.name = tc.function.name
+              if (tc.function?.arguments) prev.arguments += tc.function.arguments
+              toolAcc.set(index, prev)
+            }
+          }
+        } catch {
+          // 忽略无法解析的行（OpenAI 偶尔会发 keep-alive 注释）
         }
       }
       yield finish()
@@ -483,29 +481,18 @@ export class AiRuntime {
       this.usage.chatErrors++
       this.chatLastError = e instanceof Error ? e.message : String(e)
       throw e
-    } finally {
-      clearTimeout(timer)
     }
   }
 
   /** 调用 reranker；未配置时抛出 */
-  async rerank(input: import('../reranker').RerankInput): Promise<import('../reranker').RerankHit[]> {
-    if (!this.rerankerProvider) {
+  async rerank(input: RerankInput): Promise<RerankHit[]> {
+    const provider = this.rerankerProvider
+    if (!provider) {
       const err = new Error('Reranker is not configured')
       this.rerankLastError = err.message
       throw err
     }
-    try {
-      const r = await this.rerankerProvider.rerank(input)
-      this.usage.rerankCalls++
-      this.usage.lastSuccessAt = new Date().toISOString()
-      this.rerankLastError = undefined
-      return r
-    } catch (e) {
-      this.usage.rerankErrors++
-      this.rerankLastError = e instanceof Error ? e.message : String(e)
-      throw e
-    }
+    return this.track('rerank', () => provider.rerank(input))
   }
 
   /** 当前 AutoLink 配置（用于 UI 展示 & 测试） */
@@ -566,7 +553,7 @@ function createEmbeddingProvider(
   batchSize: number,
 ): EmbeddingProvider {
   const url = joinUrl(p.baseUrl, '/embeddings')
-  const headers = buildHeaders(p)
+  const headers = buildHeaders(p.apiKey, p.extraHeaders)
   const model = p.embeddingModel.trim()
   const maxTokens = DEFAULT_MAX_TOKENS
 
@@ -576,16 +563,14 @@ function createEmbeddingProvider(
     maxTokens,
     async embedBatch(texts: string[]): Promise<Array<Float64Array>> {
       const truncated = texts.map((t) => truncateText(t, maxTokens))
-      const res = await fetchImpl(url, {
-        method: 'POST',
+      // embedding 请求历史上不带超时，保持现状
+      const json = await postJson<{ data: Array<{ embedding: number[] }> }>(
+        fetchImpl,
+        url,
         headers,
-        body: JSON.stringify({ model, input: truncated }),
-      })
-      if (!res.ok) {
-        const err = await res.text().catch(() => '')
-        throw new Error(`Embedding API ${res.status}: ${err.slice(0, 300)}`)
-      }
-      const json = (await res.json()) as { data: Array<{ embedding: number[] }> }
+        { model, input: truncated },
+        { errorLabel: 'Embedding API' },
+      )
       return json.data.map((item) => new Float64Array(item.embedding))
     },
     async embedQuery(text: string): Promise<Float64Array> {
@@ -596,89 +581,64 @@ function createEmbeddingProvider(
   }
 }
 
+/** chat/completions 响应中的 message 结构（content 可空，tool_calls 增量协议见 streamCompletions） */
+interface ChatCompletionMessage {
+  content?: string | null
+  reasoning_content?: string | null
+  reasoning?: string | null
+  tool_calls?: Array<{
+    id: string
+    type: 'function'
+    function: { name: string; arguments: string }
+  }>
+}
+
 function createChatProvider(p: ProviderDefinition, fetchImpl: typeof fetch): LLMProvider {
   const url = joinUrl(p.baseUrl, '/chat/completions')
-  const headers = buildHeaders(p)
+  const headers = buildHeaders(p.apiKey, p.extraHeaders)
   const model = p.chatModel.trim()
+
+  /**
+   * chat / chatWithTools 的统一实现：
+   * tools 非空时随请求转发；maxTokens 默认值由入口决定（chat=200 / chatWithTools=2000，保持现状）。
+   */
+  async function complete(
+    messages: ChatMessage[],
+    options: ChatWithToolsOptions | undefined,
+    defaultMaxTokens: number,
+  ): Promise<ChatWithToolsResult> {
+    const json = await postJson<{ choices?: Array<{ message?: ChatCompletionMessage }> }>(
+      fetchImpl,
+      url,
+      headers,
+      {
+        model: options?.model || model,
+        messages,
+        temperature: options?.temperature ?? 0.3,
+        max_tokens: options?.maxTokens ?? defaultMaxTokens,
+        ...(options?.responseFormat ? { response_format: options.responseFormat } : {}),
+        ...(options?.tools && options.tools.length > 0 ? { tools: options.tools } : {}),
+      },
+      { timeoutMs: p.timeoutMs, errorLabel: 'LLM API' },
+    )
+    const msg = json.choices?.[0]?.message
+    const content = msg?.content ?? ''
+    const reasoning = msg?.reasoning_content || msg?.reasoning || undefined
+    const toolCalls = (msg?.tool_calls ?? []).map((tc) => ({
+      id: tc.id,
+      name: tc.function.name,
+      args: safeJsonParse(tc.function.arguments),
+    }))
+    return { content, tool_calls: toolCalls, ...(reasoning ? { reasoning } : {}) }
+  }
 
   return {
     name: 'openai-chat-' + model,
     async chat(messages, options) {
-      const ac = new AbortController()
-      const t = setTimeout(() => ac.abort(), p.timeoutMs)
-      try {
-        const res = await fetchImpl(url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model: options?.model || model,
-            messages,
-            temperature: options?.temperature ?? 0.3,
-            max_tokens: options?.maxTokens ?? 200,
-            ...(options?.responseFormat ? { response_format: options.responseFormat } : {}),
-          }),
-          signal: ac.signal,
-        })
-        if (!res.ok) {
-          const err = await res.text().catch(() => '')
-          throw new Error(`LLM API ${res.status}: ${err.slice(0, 300)}`)
-        }
-        const json = (await res.json()) as {
-          choices?: Array<{ message?: { content?: string } }>
-        }
-        return json.choices?.[0]?.message?.content || ''
-      } finally {
-        clearTimeout(t)
-      }
+      return (await complete(messages, options, 200)).content
     },
     async chatWithTools(messages, options) {
-      const ac = new AbortController()
-      const t = setTimeout(() => ac.abort(), p.timeoutMs)
-      try {
-        const res = await fetchImpl(url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model: options?.model || model,
-            messages,
-            temperature: options?.temperature ?? 0.3,
-            max_tokens: options?.maxTokens ?? 2000,
-            ...(options?.tools && options.tools.length > 0 ? { tools: options.tools } : {}),
-            ...(options?.responseFormat ? { response_format: options.responseFormat } : {}),
-          }),
-          signal: ac.signal,
-        })
-        if (!res.ok) {
-          const err = await res.text().catch(() => '')
-          throw new Error(`LLM API ${res.status}: ${err.slice(0, 300)}`)
-        }
-        const json = (await res.json()) as {
-          choices?: Array<{
-            message?: {
-              content?: string | null
-              reasoning_content?: string | null
-              reasoning?: string | null
-              tool_calls?: Array<{
-                id: string
-                type: 'function'
-                function: { name: string; arguments: string }
-              }>
-            }
-            finish_reason?: string
-          }>
-        }
-        const msg = json.choices?.[0]?.message
-        const content = msg?.content ?? ''
-        const reasoning = msg?.reasoning_content || msg?.reasoning || undefined
-        const toolCalls = (msg?.tool_calls ?? []).map((tc) => ({
-          id: tc.id,
-          name: tc.function.name,
-          args: safeJsonParse(tc.function.arguments),
-        }))
-        return { content, tool_calls: toolCalls, ...(reasoning ? { reasoning } : {}) }
-      } finally {
-        clearTimeout(t)
-      }
+      return complete(messages, options, 2000)
     },
   }
 }
@@ -692,21 +652,6 @@ function safeJsonParse(s: string): Record<string, unknown> {
   }
 }
 
-function buildHeaders(p: ProviderDefinition): Record<string, string> {
-  const h: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (p.apiKey.trim()) h['Authorization'] = `Bearer ${p.apiKey.trim()}`
-  for (const [k, v] of Object.entries(p.extraHeaders)) {
-    if (k && v) h[k] = v
-  }
-  return h
-}
-
-function joinUrl(base: string, path: string): string {
-  const b = base.replace(/\/+$/, '')
-  const p = path.startsWith('/') ? path : '/' + path
-  return b + p
-}
-
 /** 用于日志的 provider 简短标签（host 或 label） */
 function labelOf(p: ProviderDefinition): string {
   try {
@@ -716,28 +661,3 @@ function labelOf(p: ProviderDefinition): string {
     return p.label || p.baseUrl
   }
 }
-
-// ───────────────────── 全局单例 ─────────────────────
-
-let runtime: AiRuntime | null = null
-
-export function setAiRuntime(r: AiRuntime): void {
-  runtime = r
-}
-
-export function getAiRuntime(): AiRuntime {
-  if (!runtime) throw new Error('AiRuntime 未初始化')
-  return runtime
-}
-
-export function hasAiRuntime(): boolean {
-  return runtime !== null
-}
-
-export function resetAiRuntimeForTests(): void {
-  runtime = null
-}
-
-// 重导出方便外部使用
-export { cosineSimilarity, truncateText, maskKey }
-export type { SemanticHit }

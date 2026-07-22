@@ -1,7 +1,6 @@
 import { describe, test, expect } from 'bun:test'
 import {
   AiRuntime,
-  resetAiRuntimeForTests,
   type AiRuntimeOptions,
 } from '../ai/runtime'
 import { makeProviderLike } from './helpers'
@@ -47,7 +46,6 @@ function makeEmbConfig(overrides: Partial<ProviderDefinition> = {}): AiConfig {
 
 describe('AiRuntime 基础状态', () => {
   test('空配置 → disabled', () => {
-    resetAiRuntimeForTests()
     const r = makeRuntime(emptyConfig())
     const s = r.status()
     expect(s.enabled).toBe(false)
