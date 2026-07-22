@@ -3,13 +3,14 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Copy, Check } from 'lucide-react'
 import { highlightCode } from '../lib/highlight'
+import MermaidDiagram from './MermaidDiagram'
 
 interface ChatMarkdownProps {
   content: string
   className?: string
 }
 
-/** 聊天气泡内的 Markdown 渲染（GFM + 代码高亮） */
+/** 聊天气泡内的 Markdown 渲染（GFM + 代码高亮 + Mermaid） */
 export default function ChatMarkdown({ content, className = '' }: ChatMarkdownProps) {
   if (!content) return null
   return (
@@ -32,7 +33,11 @@ export default function ChatMarkdown({ content, className = '' }: ChatMarkdownPr
                 </code>
               )
             }
-            return <ChatCodeBlock code={text} language={match?.[1] || ''} />
+            const language = match?.[1] || ''
+            if (language.toLowerCase() === 'mermaid') {
+              return <MermaidDiagram code={text} className="my-3" />
+            }
+            return <ChatCodeBlock code={text} language={language} />
           },
           a({ href, children }) {
             return (

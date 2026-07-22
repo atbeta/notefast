@@ -4,6 +4,7 @@ import { Copy, Check, Link2 } from 'lucide-react'
 import type { Block } from '@notefast/core'
 import { scrollToElement } from '../lib/scroll'
 import { highlightCode } from '../lib/highlight'
+import MermaidDiagram from './MermaidDiagram'
 
 interface BlockNodeProps {
   block: Block
@@ -131,6 +132,13 @@ function HeadingTag({ block }: { block: Block }) {
 
 function CodeBlock({ block }: { block: Block }) {
   const lang = (block.properties.language as string) || ''
+  if (lang.trim().toLowerCase() === 'mermaid') {
+    return <MermaidDiagram code={block.content || ''} />
+  }
+  return <HighlightedCodeBlock block={block} lang={lang} />
+}
+
+function HighlightedCodeBlock({ block, lang }: { block: Block; lang: string }) {
   const [copied, setCopied] = useState(false)
   const [highlighted, setHighlighted] = useState<string | null>(null)
 
