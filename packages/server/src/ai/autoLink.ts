@@ -120,6 +120,10 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
   const runtime = getRuntime()
   if (!runtime.hasChat()) return empty()
 
+  // AI 软隔离：排除文档不分析、不送 LLM
+  const { isBlockAiExcluded } = await import('./aiExclude')
+  if (isBlockAiExcluded(opts.blockId)) return empty()
+
   const trimmed = opts.content.trim().slice(0, MAX_CONTENT_CHARS)
   if (trimmed.length < 10) return empty()
 
@@ -409,6 +413,12 @@ async function findCandidates(
     if (sourceDocId) rows = rows.filter((r) => r.root_id !== sourceDocId)
   }
 
+  if (rows.length === 0) return []
+
+  // 过滤 ai_exclude 文档的候选
+  const { loadAiExcludedDocIds } = await import('./aiExclude')
+  const excluded = loadAiExcludedDocIds(rows.map((r) => r.root_id))
+  rows = rows.filter((r) => !excluded.has(r.root_id))
   if (rows.length === 0) return []
 
   // FTS-only：rank 位置分（仅用于展示排序；score_kind='fts_rank'，达不到建议入库门槛）

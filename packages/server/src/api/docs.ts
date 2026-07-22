@@ -1,17 +1,21 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, rowToBlock, readTagsFromProperties, getTagProvider } from '@notefast/core'
+import { z } from 'zod'
+import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, rowToBlock, readTagsFromProperties, readAiExcludeFromProperties, getTagProvider, parseTagsQueryParam, parseUpdatedWithin, docMatchesTags } from '@notefast/core'
 import type { BlockRow, DocSummary } from '@notefast/core'
 import { getDb } from '../db'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
+import { purgeAiArtifactsForDoc, writeDocAiExclude } from '../ai/aiExclude'
 
 const docs = new Hono()
 
 docs.get('/list', (c) => {
   const db = getDb()
   const notebookId = c.req.query('notebook_id') || ''
-  const tag = (c.req.query('tag') || '').trim().toLowerCase()
+  const selectedTags = parseTagsQueryParam(c.req.query('tags'), c.req.query('tag'))
+  const untagged = c.req.query('untagged') === '1' || c.req.query('untagged') === 'true'
+  const withinMs = parseUpdatedWithin(c.req.query('updated_within'))
 
   let rows: BlockRow[]
   if (notebookId) {
@@ -24,17 +28,33 @@ docs.get('/list', (c) => {
       .all('document') as BlockRow[]
   }
 
-  // ?tag=xxx 过滤：在 Node 端做匹配（数量小，不值得加 SQL JSON 函数）
-  if (tag) {
-    rows = rows.filter((r) => readTagsFromProperties(r.properties).includes(tag))
+  // 标签 / 时间过滤在 Node 端做（文档量小，不值得加 SQL JSON 函数）
+  if (untagged) {
+    rows = rows.filter((r) => readTagsFromProperties(r.properties).length === 0)
+  } else if (selectedTags.length > 0) {
+    rows = rows.filter((r) => docMatchesTags(readTagsFromProperties(r.properties), selectedTags, 'any'))
   }
 
-  const summaries: DocSummary[] = rows.map((r) => ({
-    id: r.id,
-    title: r.content,
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-  }))
+  if (withinMs != null) {
+    const cutoff = Date.now() - withinMs
+    rows = rows.filter((r) => {
+      const ts = new Date(r.updated_at).getTime()
+      return Number.isFinite(ts) && ts >= cutoff
+    })
+  }
+
+  const summaries: DocSummary[] = rows.map((r) => {
+    const tags = readTagsFromProperties(r.properties)
+    const aiExclude = readAiExcludeFromProperties(r.properties)
+    return {
+      id: r.id,
+      title: r.content,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+      tags,
+      ...(aiExclude ? { ai_exclude: true } : {}),
+    }
+  })
 
   return c.json(summaries)
 })
@@ -127,6 +147,36 @@ docs.patch('/:id/tags', async (c) => {
     doc_id: id,
     tags: finalTags,
     updated_at: updatedRow.updated_at,
+  })
+})
+
+const aiExcludeSchema = z.object({
+  ai_exclude: z.boolean(),
+})
+
+docs.patch('/:id/ai-exclude', async (c) => {
+  const id = c.req.param('id')
+  const body = await c.req.json().catch(() => ({}))
+  const parsed = aiExcludeSchema.safeParse(body)
+  if (!parsed.success) {
+    return c.json({ error: 'bad_request', message: '需要 boolean 字段 ai_exclude' }, 400)
+  }
+
+  const updated = writeDocAiExclude(id, parsed.data.ai_exclude)
+  if (!updated) {
+    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
+  }
+
+  let purged: { vectors: number; suggestions: number } | undefined
+  if (parsed.data.ai_exclude) {
+    purged = await purgeAiArtifactsForDoc(id)
+  }
+
+  return c.json({
+    doc_id: id,
+    ai_exclude: readAiExcludeFromProperties(updated.properties),
+    updated_at: updated.updated_at,
+    ...(purged ? { purged } : {}),
   })
 })
 

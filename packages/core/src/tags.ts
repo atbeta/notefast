@@ -69,25 +69,94 @@ export function normalizeTagList(tags: readonly string[]): Tag[] {
 }
 
 /**
+ * 解析 properties 为对象（容错：字符串 / 对象 / null）
+ */
+export function parsePropertiesObject(properties: unknown): Record<string, unknown> {
+  if (!properties) return {}
+  if (typeof properties === 'string') {
+    try {
+      const obj = JSON.parse(properties) as unknown
+      if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+        return obj as Record<string, unknown>
+      }
+      return {}
+    } catch {
+      return {}
+    }
+  }
+  if (typeof properties === 'object' && !Array.isArray(properties)) {
+    return { ...(properties as Record<string, unknown>) }
+  }
+  return {}
+}
+
+/**
  * 从 doc.properties 读 tags（容错：properties 可能是字符串 / 对象 / null）
  */
 export function readTagsFromProperties(properties: unknown): Tag[] {
-  if (!properties) return []
-  let obj: Record<string, unknown>
-  if (typeof properties === 'string') {
-    try {
-      obj = JSON.parse(properties) as Record<string, unknown>
-    } catch {
-      return []
-    }
-  } else if (typeof properties === 'object') {
-    obj = properties as Record<string, unknown>
-  } else {
-    return []
-  }
+  const obj = parsePropertiesObject(properties)
   const raw = obj.tags
   if (!Array.isArray(raw)) return []
   return normalizeTagList(raw.filter((x): x is string => typeof x === 'string'))
+}
+
+/**
+ * 从 doc.properties 读 ai_exclude（仅 true 时为排除）
+ */
+export function readAiExcludeFromProperties(properties: unknown): boolean {
+  const obj = parsePropertiesObject(properties)
+  return obj.ai_exclude === true
+}
+
+/**
+ * 写入 / 清除 properties.ai_exclude，返回新的 properties JSON 字符串
+ */
+export function setAiExcludeInProperties(properties: unknown, aiExclude: boolean): string {
+  const props = parsePropertiesObject(properties)
+  if (aiExclude) {
+    props.ai_exclude = true
+  } else {
+    delete props.ai_exclude
+  }
+  return JSON.stringify(props)
+}
+
+export type TagMatchMode = 'any' | 'all'
+
+/**
+ * 文档 tags 是否匹配筛选条件。
+ * - mode `any`（默认）：命中 selected 中任一 tag（OR）
+ * - mode `all`：必须包含全部 selected（AND，预留）
+ * selected 为空时视为不筛选（返回 true）
+ */
+export function docMatchesTags(
+  docTags: readonly string[],
+  selected: readonly string[],
+  mode: TagMatchMode = 'any',
+): boolean {
+  const want = normalizeTagList([...selected])
+  if (want.length === 0) return true
+  const have = new Set(normalizeTagList([...docTags]))
+  if (mode === 'all') return want.every((t) => have.has(t))
+  return want.some((t) => have.has(t))
+}
+
+/** 解析 `tags=a,b` 或单个 `tag` 查询串为 normalize 后的列表 */
+export function parseTagsQueryParam(tagsParam: string | null | undefined, tagParam?: string | null): Tag[] {
+  const parts: string[] = []
+  if (tagsParam) {
+    for (const p of tagsParam.split(',')) parts.push(p)
+  }
+  if (tagParam) parts.push(tagParam)
+  return normalizeTagList(parts)
+}
+
+/** 解析 updated_within：仅支持 24h / 7d，其它返回 null */
+export function parseUpdatedWithin(raw: string | null | undefined): number | null {
+  const v = (raw || '').trim().toLowerCase()
+  if (v === '24h') return 24 * 60 * 60 * 1000
+  if (v === '7d') return 7 * 24 * 60 * 60 * 1000
+  return null
 }
 
 // ───────────────────── 默认实现 ─────────────────────
@@ -124,18 +193,7 @@ export class PropertiesTagProvider implements TagProvider {
 
   setDocTags(docRow: BlockRow, tags: Tag[]): BlockRow {
     const normalized = normalizeTagList(tags)
-    let props: Record<string, unknown> = {}
-    if (docRow.properties) {
-      if (typeof docRow.properties === 'string') {
-        try {
-          props = JSON.parse(docRow.properties) as Record<string, unknown>
-        } catch {
-          props = {}
-        }
-      } else if (typeof docRow.properties === 'object') {
-        props = { ...(docRow.properties as Record<string, unknown>) }
-      }
-    }
+    const props = parsePropertiesObject(docRow.properties)
     if (normalized.length === 0) {
       delete props.tags
     } else {

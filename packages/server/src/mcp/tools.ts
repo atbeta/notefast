@@ -9,6 +9,11 @@ import {
   parseMarkdownToBlocks,
   rowToBlock,
   suggestTitle,
+  readTagsFromProperties,
+  getTagProvider,
+  parseTagsQueryParam,
+  parseUpdatedWithin,
+  docMatchesTags,
   type LLMProvider,
   type ChatMessage,
 } from '@notefast/core'
@@ -28,6 +33,12 @@ import {
 } from '../ai/autoLink'
 import { fireAfterCreate, fireAfterUpdate, fireAfterCreateMany } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
+import {
+  isBlockAiExcluded,
+  isDocAiExcluded,
+  isDocRowAiExcluded,
+  loadAiExcludedDocIds,
+} from '../ai/aiExclude'
 
 function toText(data: unknown): { type: 'text'; text: string } {
   return { type: 'text' as const, text: JSON.stringify(data, null, 2) }
@@ -49,6 +60,7 @@ export type ToolErrorCode =
   | 'not_configured'
   | 'provider_error'
   | 'llm_error'
+  | 'forbidden'
   | 'internal'
 
 function toolError(
@@ -60,6 +72,42 @@ function toolError(
     content: [toText({ error: { code, message, ...(data ? { data } : {}) } })],
     isError: true as const,
   }
+}
+
+function denyAiExcludedDoc(docId: string) {
+  if (isDocAiExcluded(docId)) {
+    return toolError('forbidden', `文档 ${docId} 已对 AI 隐藏，MCP 不可访问`, { doc_id: docId })
+  }
+  return null
+}
+
+function denyAiExcludedBlock(blockId: string) {
+  if (isBlockAiExcluded(blockId)) {
+    return toolError('forbidden', `该内容所属文档已对 AI 隐藏，MCP 不可访问`, { block_id: blockId })
+  }
+  return null
+}
+
+function filterDocRowsForMcp(rows: BlockRow[], opts: {
+  tags?: string[]
+  untagged?: boolean
+  updatedWithin?: string | null
+}): BlockRow[] {
+  let out = rows.filter((r) => !isDocRowAiExcluded(r))
+  if (opts.untagged) {
+    out = out.filter((r) => readTagsFromProperties(r.properties).length === 0)
+  } else if (opts.tags && opts.tags.length > 0) {
+    out = out.filter((r) => docMatchesTags(readTagsFromProperties(r.properties), opts.tags!, 'any'))
+  }
+  const withinMs = parseUpdatedWithin(opts.updatedWithin ?? undefined)
+  if (withinMs != null) {
+    const cutoff = Date.now() - withinMs
+    out = out.filter((r) => {
+      const ts = new Date(r.updated_at).getTime()
+      return Number.isFinite(ts) && ts >= cutoff
+    })
+  }
+  return out
 }
 
 const NOT_CONFIGURED_HINT = '请在 Web UI /settings 页面配置 AI Provider'
@@ -141,12 +189,14 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       }
 
       sql += ' ORDER BY rank LIMIT ?'
-      params.push(limit as number)
+      params.push((limit as number) * 3) // 多取一些，过滤 ai_exclude 后截断
 
       const rows = db.query(sql).all(...params as [string, ...(string | number)[]]) as (BlockRow & { rank: number })[]
+      const excluded = loadAiExcludedDocIds(rows.map((r) => r.root_id))
+      const filtered = rows.filter((r) => !excluded.has(r.root_id)).slice(0, limit as number)
 
       return {
-        content: [toText(rows.map((r) => ({
+        content: [toText(filtered.map((r) => ({
           block_id: r.id,
           type: r.type,
           content: r.content,
@@ -167,6 +217,8 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       },
     },
     async ({ doc_id, depth }) => {
+      const denied = denyAiExcludedDoc(doc_id)
+      if (denied) return denied
       const docRow = db.query('SELECT * FROM blocks WHERE id = ? AND type = ?').get(doc_id, 'document') as BlockRow | undefined
       if (!docRow) {
         return toolError('not_found', `文档 ${doc_id} 不存在`, { doc_id })
@@ -194,6 +246,8 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       },
     },
     async ({ block_id }) => {
+      const denied = denyAiExcludedBlock(block_id)
+      if (denied) return denied
       const row = db.query('SELECT * FROM blocks WHERE id = ?').get(block_id) as BlockRow | undefined
       if (!row) {
         return toolError('not_found', `Block ${block_id} 不存在`, { block_id })
@@ -400,6 +454,8 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       },
     },
     async ({ block_id }) => {
+      const denied = denyAiExcludedBlock(block_id)
+      if (denied) return denied
       // 目标 block 不存在时也要报 not_found，而不是返回空列表（调用方无法区分「没有反链」和「id 错了」）
       const target = db.query('SELECT id FROM blocks WHERE id = ?').get(block_id)
       if (!target) {
@@ -408,19 +464,30 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       const refs = db
         .query(
           `SELECT r.id, r.source_id, r.target_id, r.ref_type, r.created_at,
-                  b.content as source_content, b.type as source_type
+                  b.content as source_content, b.type as source_type, b.root_id as source_root_id
            FROM block_refs r
            JOIN blocks b ON b.id = r.source_id
            WHERE r.target_id = ?
            ORDER BY r.created_at DESC`,
         )
-        .all(block_id) as { id: number; source_id: string; target_id: string; ref_type: string; created_at: string; source_content: string; source_type: string }[]
+        .all(block_id) as Array<{
+        id: number
+        source_id: string
+        target_id: string
+        ref_type: string
+        created_at: string
+        source_content: string
+        source_type: string
+        source_root_id: string
+      }>
+      const excluded = loadAiExcludedDocIds(refs.map((r) => r.source_root_id))
+      const visible = refs.filter((r) => !excluded.has(r.source_root_id))
 
       return {
         content: [toText({
           target_id: block_id,
-          backlinks_count: refs.length,
-          backlinks: refs.map((r) => ({
+          backlinks_count: visible.length,
+          backlinks: visible.map((r) => ({
             source_id: r.source_id,
             source_content: r.source_content,
             source_type: r.source_type,
@@ -434,29 +501,103 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
   registerTool(
     'notefast_list_docs',
     {
-      description: '列出文档列表',
+      description: '列出文档列表（默认排除「对 AI 隐藏」的文档）；可按 tags / 未打标 / 最近更新筛选',
       inputSchema: {
         notebook_id: z.string().optional().describe('笔记本 ID，默认使用默认笔记本'),
+        tags: z.string().optional().describe('逗号分隔 tags，OR 匹配'),
+        untagged: z.boolean().optional().describe('仅未打标文档'),
+        updated_within: z.enum(['24h', '7d']).optional().describe('仅最近更新的文档'),
       },
     },
-    async ({ notebook_id }) => {
+    async ({ notebook_id, tags, untagged, updated_within }) => {
       const nid = notebook_id || notebookId
 
       const rows = db
         .query('SELECT * FROM blocks WHERE type = ? AND notebook_id = ? ORDER BY updated_at DESC')
         .all('document', nid) as BlockRow[]
 
+      const filtered = filterDocRowsForMcp(rows, {
+        tags: parseTagsQueryParam(tags),
+        untagged: untagged === true,
+        updatedWithin: updated_within ?? null,
+      })
+
       return {
         content: [toText({
           notebook_id: nid,
-          doc_count: rows.length,
-          docs: rows.map((r) => ({
+          doc_count: filtered.length,
+          docs: filtered.map((r) => ({
             id: r.id,
             title: r.content,
             created_at: r.created_at,
             updated_at: r.updated_at,
+            tags: readTagsFromProperties(r.properties),
           })),
         })],
+      }
+    },
+  )
+
+  registerTool(
+    'notefast_list_tags',
+    {
+      description: '列出知识库中使用过的标签及文档计数',
+      inputSchema: {
+        notebook_id: z.string().optional().describe('限定笔记本 ID'),
+      },
+    },
+    async ({ notebook_id }) => {
+      const nid = notebook_id || notebookId
+      let rows: BlockRow[]
+      if (notebook_id) {
+        rows = db
+          .query("SELECT * FROM blocks WHERE type = 'document' AND notebook_id = ?")
+          .all(nid) as BlockRow[]
+      } else {
+        rows = db.query("SELECT * FROM blocks WHERE type = 'document'").all() as BlockRow[]
+      }
+      const counts = new Map<string, number>()
+      for (const r of rows) {
+        if (isDocRowAiExcluded(r)) continue
+        for (const t of readTagsFromProperties(r.properties)) {
+          counts.set(t, (counts.get(t) ?? 0) + 1)
+        }
+      }
+      const tags = Array.from(counts.entries())
+        .map(([tag, count]) => ({ tag, count }))
+        .sort((a, b) => (b.count - a.count) || a.tag.localeCompare(b.tag))
+      return {
+        content: [toText({ provider: getTagProvider().name, tags })],
+      }
+    },
+  )
+
+  registerTool(
+    'notefast_set_doc_tags',
+    {
+      description: '设置文档标签（全量替换）',
+      inputSchema: {
+        doc_id: z.string().describe('文档 ID'),
+        tags: z.array(z.string()).describe('标签列表（全量替换）'),
+      },
+    },
+    async ({ doc_id, tags }) => {
+      const denied = denyAiExcludedDoc(doc_id)
+      if (denied) return denied
+      const docRow = db
+        .query("SELECT * FROM blocks WHERE id = ? AND type = 'document'")
+        .get(doc_id) as BlockRow | undefined
+      if (!docRow) {
+        return toolError('not_found', `文档 ${doc_id} 不存在`, { doc_id })
+      }
+      const provider = getTagProvider()
+      const updated = provider.setDocTags(docRow, tags)
+      db.query(
+        "UPDATE blocks SET properties = ?, updated_at = datetime('now') WHERE id = ?",
+      ).run(updated.properties, doc_id)
+      const finalTags = provider.getDocTags(updated)
+      return {
+        content: [toText({ doc_id, tags: finalTags })],
       }
     },
   )
@@ -470,6 +611,8 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       },
     },
     async ({ doc_id }) => {
+      const denied = denyAiExcludedDoc(doc_id)
+      if (denied) return denied
       const docRow = db.query('SELECT * FROM blocks WHERE id = ? AND type = ?').get(doc_id, 'document') as BlockRow | undefined
       if (!docRow) {
         return toolError('not_found', `文档 ${doc_id} 不存在`, { doc_id })
@@ -497,6 +640,8 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       },
     },
     async ({ doc_id }) => {
+      const denied = denyAiExcludedDoc(doc_id)
+      if (denied) return denied
       const docRow = db.query('SELECT * FROM blocks WHERE id = ? AND type = ?').get(doc_id, 'document') as BlockRow | undefined
       if (!docRow) {
         return toolError('not_found', `文档 ${doc_id} 不存在`, { doc_id })
@@ -532,7 +677,9 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
           return toolError('provider_error', r.status().embedding.lastError || 'embedding 返回空向量')
         }
         const hits = await semanticSearch(vector, limit ?? 10, notebook_id)
-        return { content: [toText({ query, results: hits.length, hits })] }
+        const excluded = loadAiExcludedDocIds(hits.map((h) => h.doc_id))
+        const filtered = hits.filter((h) => !excluded.has(h.doc_id))
+        return { content: [toText({ query, results: filtered.length, hits: filtered })] }
       } catch (e) {
         return toolError('provider_error', e instanceof Error ? e.message : String(e), { fix_hint: '请检查 /settings 中的 Provider 配置' })
       }
@@ -607,6 +754,8 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       }
       // context_doc_id 不存在时显式报错，而不是静默降级（调用方应知道 id 已失效）
       if (context_doc_id) {
+        const denied = denyAiExcludedDoc(context_doc_id)
+        if (denied) return denied
         const ctx = db.query("SELECT id FROM blocks WHERE id = ? AND type = 'document'").get(context_doc_id)
         if (!ctx) {
           return toolError('not_found', `context_doc_id 指向的文档不存在：${context_doc_id}`, { context_doc_id })
@@ -759,6 +908,8 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
       if (!hasRuntime() || !getRuntime().hasChat()) {
         return toolError('not_configured', 'Chat 模型未配置', { fix_hint: NOT_CONFIGURED_HINT })
       }
+      const denied = denyAiExcludedBlock(block_id)
+      if (denied) return denied
       const db = getDb()
       const row = db.query('SELECT id, content, notebook_id FROM blocks WHERE id = ?').get(block_id) as
         | { id: string; content: string; notebook_id: string }

@@ -107,7 +107,7 @@ describe('createSession', () => {
     const msg = list.body[0] as Record<string, unknown>
     expect(msg.result).toBeDefined()
     const tools = (msg.result as Record<string, unknown>).tools as { name: string }[]
-    expect(tools.length).toBe(20)
+    expect(tools.length).toBe(22)
 
     const toolNames = tools.map((t) => t.name)
     expect(toolNames).toContain('notefast_search')
@@ -118,6 +118,8 @@ describe('createSession', () => {
     expect(toolNames).toContain('notefast_create_doc')
     expect(toolNames).toContain('notefast_get_backlinks')
     expect(toolNames).toContain('notefast_list_docs')
+    expect(toolNames).toContain('notefast_list_tags')
+    expect(toolNames).toContain('notefast_set_doc_tags')
     expect(toolNames).toContain('notefast_get_doc_tree')
     expect(toolNames).toContain('notefast_export_markdown')
     expect(toolNames).toContain('notefast_semantic_search')

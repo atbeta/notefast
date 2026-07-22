@@ -85,6 +85,10 @@ export interface DocSummary {
   title: string
   created_at: string
   updated_at: string
+  /** 文档级 tags（已 normalize） */
+  tags: string[]
+  /** 对 AI 隐藏：不进向量 / RAG / AutoLink / MCP */
+  ai_exclude?: boolean
 }
 
 /** 搜索结果 */

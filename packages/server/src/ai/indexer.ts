@@ -21,6 +21,12 @@ export async function indexBlock(blockId: string): Promise<void> {
   const r = getRuntime()
   if (!r.hasEmbedding()) return
 
+  const { isBlockAiExcluded } = await import('./aiExclude')
+  if (isBlockAiExcluded(blockId)) {
+    await deleteVector(blockId)
+    return
+  }
+
   const db = getDb()
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(blockId) as BlockRow | undefined
   if (!row) return
@@ -47,6 +53,7 @@ export async function indexAllBlocks(notebookId?: string): Promise<{ indexed: nu
     throw new Error('Embedding provider is not configured')
   }
 
+  const { isBlockAiExcluded } = await import('./aiExclude')
   const db = getDb()
   let sql = 'SELECT id, content FROM blocks WHERE content IS NOT NULL AND content != ?'
   const params: string[] = ['']
@@ -55,7 +62,8 @@ export async function indexAllBlocks(notebookId?: string): Promise<{ indexed: nu
     params.push(notebookId)
   }
 
-  const rows = db.query(sql).all(...params) as Array<{ id: string; content: string }>
+  const rows = (db.query(sql).all(...params) as Array<{ id: string; content: string }>)
+    .filter((row) => !isBlockAiExcluded(row.id))
   if (rows.length === 0) return { indexed: 0, errors: 0 }
 
   let indexed = 0

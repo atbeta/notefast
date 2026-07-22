@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { DocSummary } from '@notefast/core'
 import { Link } from 'react-router-dom'
-import { FileText, Pencil, Trash2, Check, X } from 'lucide-react'
+import { FileText, Pencil, Trash2, Check, X, Lock } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import ConfirmDialog from './ConfirmDialog'
 
@@ -30,6 +30,8 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const tags = doc.tags ?? []
+  const aiExclude = doc.ai_exclude === true
 
   useEffect(() => {
     if (editing) inputRef.current?.focus()
@@ -61,9 +63,10 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
   return (
     <>
       <div className="card-interactive px-3.5 py-3 group flex items-center gap-3.5">
-        {/* Icon tile：克制色，不抢标题层级 */}
         <div className="w-9 h-9 rounded-lg bg-muted/70 text-foreground/55 grid place-items-center shrink-0 group-hover:bg-muted group-hover:text-foreground/80 transition-colors">
-          <FileText className="w-4 h-4" strokeWidth={1.5} />
+          {aiExclude
+            ? <Lock className="w-4 h-4" strokeWidth={1.5} />
+            : <FileText className="w-4 h-4" strokeWidth={1.5} />}
         </div>
         <div className="min-w-0 flex-1">
           {editing ? (
@@ -85,17 +88,39 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
             </div>
           ) : (
             <Link to={'/doc/' + doc.id} className="block">
-              <h3 className="font-medium text-[14.5px] text-foreground tracking-[-0.005em] truncate">
-                {doc.title || '未命名文档'}
+              <h3 className="font-medium text-[14.5px] text-foreground tracking-[-0.005em] truncate flex items-center gap-1.5">
+                <span className="truncate">{doc.title || '未命名文档'}</span>
+                {aiExclude && (
+                  <span className="shrink-0 text-[10px] font-medium px-1.5 py-px rounded border border-border/70 text-muted-foreground">
+                    AI 隐藏
+                  </span>
+                )}
               </h3>
             </Link>
           )}
-          <p className="text-[11.5px] text-muted-foreground/80 mt-0.5 font-mono tabular-nums">
-            更新于 {formatRelative(doc.updated_at)}
-          </p>
+          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+            <p className="text-[11.5px] text-muted-foreground/80 font-mono tabular-nums">
+              更新于 {formatRelative(doc.updated_at)}
+            </p>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {tags.slice(0, 4).map((t) => (
+                  <Link
+                    key={t}
+                    to={`/?tags=${encodeURIComponent(t)}`}
+                    className="text-[10.5px] font-mono px-1.5 py-px rounded-full bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    {t}
+                  </Link>
+                ))}
+                {tags.length > 4 && (
+                  <span className="text-[10.5px] text-muted-foreground/60 font-mono">+{tags.length - 4}</span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Hover actions */}
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <button
             onClick={(e) => { e.preventDefault(); setEditing(true); setTitle(doc.title) }}

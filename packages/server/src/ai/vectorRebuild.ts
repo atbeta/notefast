@@ -1,5 +1,6 @@
 import { getDb } from '../db'
 import { getRuntime } from '../services/aiRuntime'
+import { isBlockAiExcluded } from './aiExclude'
 import {
   contentHash,
   embeddingFingerprint,
@@ -98,7 +99,8 @@ export async function runVectorRebuild(
       params.push(options.notebookId)
     }
     sql += ' ORDER BY id'
-    const rows = db.query(sql).all(...params) as Array<{ id: string; content: string }>
+    const rows = (db.query(sql).all(...params) as Array<{ id: string; content: string }>)
+      .filter((row) => !isBlockAiExcluded(row.id))
     if (rows.length === 0) throw new Error('没有可建立向量索引的 block')
 
     const firstBatch = rows.slice(0, 20)

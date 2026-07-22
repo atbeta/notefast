@@ -11,6 +11,8 @@ import {
   Inbox,
   Sparkles,
   Settings,
+  Clock,
+  Tag,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import type { DocSummary } from '@notefast/core'
@@ -161,7 +163,7 @@ export default function Sidebar({
 
       <nav className="px-2 pt-2 pb-1 flex-1 overflow-y-auto">
         <SidebarSectionLabel label="导航" />
-        <Link to="/" onClick={closeAfterNav} className={location.pathname === '/' ? 'sidebar-link-active' : 'sidebar-link'}>
+        <Link to="/" onClick={closeAfterNav} className={location.pathname === '/' && !location.search ? 'sidebar-link-active' : 'sidebar-link'}>
           <LayoutGrid className="w-[15px] h-[15px]" strokeWidth={1.75} />
           所有文档
         </Link>
@@ -191,6 +193,34 @@ export default function Sidebar({
             </kbd>
           </button>
         )}
+
+        <div className="mt-5">
+          <SidebarSectionLabel label="智能视图" />
+          <Link
+            to="/?view=recent&within=24h"
+            onClick={closeAfterNav}
+            className={location.search.includes('within=24h') ? 'sidebar-link-active' : 'sidebar-link'}
+          >
+            <Clock className="w-[15px] h-[15px]" strokeWidth={1.75} />
+            最近 24 小时
+          </Link>
+          <Link
+            to="/?view=recent&within=7d"
+            onClick={closeAfterNav}
+            className={location.search.includes('within=7d') ? 'sidebar-link-active' : 'sidebar-link'}
+          >
+            <Clock className="w-[15px] h-[15px]" strokeWidth={1.75} />
+            最近 7 天
+          </Link>
+          <Link
+            to="/?view=untagged"
+            onClick={closeAfterNav}
+            className={location.search.includes('untagged') || location.search.includes('view=untagged') ? 'sidebar-link-active' : 'sidebar-link'}
+          >
+            <Tag className="w-[15px] h-[15px]" strokeWidth={1.75} />
+            未打标
+          </Link>
+        </div>
 
         {recentDocs.length > 0 && (
           <div className="mt-5">

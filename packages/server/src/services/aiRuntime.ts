@@ -226,6 +226,8 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
 
   pluginSystem.note.afterCreate.tap(AUTOLINK_HOOK_NAME, async (block) => {
     if (block.type === 'document') return // doc 头不分析
+    const { isBlockAiExcluded } = await import('../ai/aiExclude')
+    if (isBlockAiExcluded(block.id)) return
     removeSuggestionsForBlock(block.id)
     await analyzeBlock({
       blockId: block.id,
@@ -237,6 +239,8 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
   })
   pluginSystem.note.afterUpdate.tap(AUTOLINK_HOOK_NAME, async (block) => {
     if (block.type === 'document') return
+    const { isBlockAiExcluded } = await import('../ai/aiExclude')
+    if (isBlockAiExcluded(block.id)) return
     removeSuggestionsForBlock(block.id)
     await analyzeBlock({
       blockId: block.id,

@@ -7,6 +7,7 @@ import {
   Sparkles,
   Loader2,
   Pencil,
+  Lock,
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
@@ -89,6 +90,8 @@ export default function DocPage() {
   const [headings, setHeadings] = useState<HeadingNode[]>([])
   const [backlinks, setBacklinks] = useState<Backlink[]>([])
   const [tags, setTags] = useState<string[]>([])
+  const [aiExclude, setAiExclude] = useState(false)
+  const [aiExcludeSaving, setAiExcludeSaving] = useState(false)
   const [auxLoading, setAuxLoading] = useState(false)
 
   useEffect(() => {
@@ -100,13 +103,20 @@ export default function DocPage() {
   useEffect(() => {
     if (doc) {
       setTitleDraft(doc.content)
-      // 从 properties JSON 同步 tag（与后端 PropertiesTagProvider 字段对齐）
+      // 从 properties JSON 同步 tag / ai_exclude
       const raw = (doc as Block & { properties?: unknown }).properties
       if (raw && typeof raw === 'object') {
-        const arr = (raw as Record<string, unknown>).tags
+        const props = raw as Record<string, unknown>
+        const arr = props.tags
         if (Array.isArray(arr)) {
           setTags(arr.filter((t): t is string => typeof t === 'string').slice(0, 64))
+        } else {
+          setTags([])
         }
+        setAiExclude(props.ai_exclude === true)
+      } else {
+        setTags([])
+        setAiExclude(false)
       }
     }
   }, [doc])
@@ -147,7 +157,7 @@ export default function DocPage() {
   }
 
   const handleSuggestTitle = async () => {
-    if (!doc || generatingTitle) return
+    if (!doc || generatingTitle || aiExclude) return
     const texts: string[] = []
     const walk = (b: Block) => { if (b.content && b.type !== 'document') texts.push(b.content); b.children.forEach(walk) }
     walk(doc)
@@ -166,6 +176,18 @@ export default function DocPage() {
       }
     } catch { /* silent fail */ }
     finally { setGeneratingTitle(false) }
+  }
+
+  const handleToggleAiExclude = async () => {
+    if (!id || aiExcludeSaving) return
+    setAiExcludeSaving(true)
+    try {
+      const next = !aiExclude
+      await api.patch(`/docs/${id}/ai-exclude`, { ai_exclude: next })
+      setAiExclude(next)
+      setRefreshKey((k) => k + 1)
+    } catch { /* silent */ }
+    finally { setAiExcludeSaving(false) }
   }
 
   const handleDelete = async () => {
@@ -281,9 +303,9 @@ export default function DocPage() {
               <button
                 type="button"
                 onClick={handleSuggestTitle}
-                disabled={generatingTitle}
-                className="absolute -right-8 top-3 opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-foreground transition-all rounded"
-                title="AI 生成标题"
+                disabled={generatingTitle || aiExclude}
+                className="absolute -right-8 top-3 opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-foreground transition-all rounded disabled:opacity-30"
+                title={aiExclude ? '已对 AI 隐藏，无法生成标题' : 'AI 生成标题'}
               >
                 {generatingTitle ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -307,9 +329,31 @@ export default function DocPage() {
             )}
             {isEditing && <div className="mb-2" />}
 
-            {/* Tags — 任何模式都可编辑，融入标题下方 */}
-            {id && <TagEditor docId={id} tags={tags} onChange={setTags} />}
+            {/* Tags + 对 AI 隐藏 */}
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+              {id && <TagEditor docId={id} tags={tags} onChange={setTags} />}
+              <button
+                type="button"
+                onClick={handleToggleAiExclude}
+                disabled={aiExcludeSaving}
+                aria-pressed={aiExclude}
+                className={`inline-flex items-center gap-1.5 shrink-0 text-[11.5px] px-2 py-1 rounded-md border transition-colors ${
+                  aiExclude
+                    ? 'border-foreground/30 bg-foreground text-background'
+                    : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/25'
+                }`}
+                title="开启后不进向量索引 / RAG / AutoLink / MCP（你仍可搜索与编辑）"
+              >
+                <Lock className="w-3 h-3" strokeWidth={1.75} />
+                {aiExclude ? '对 AI 隐藏' : '对 AI 可见'}
+              </button>
+            </div>
 
+            {aiExclude && (
+              <p className="mb-4 text-[12px] text-muted-foreground/80 leading-relaxed">
+                本篇已对 AI 隐藏：不会被索引、对话检索或 AutoLink；MCP 也无法读取。你仍可在 Web 中搜索与编辑。
+              </p>
+            )}
             {/* Editor — 与阅读态同宽，融入文档流 */}
             {id && isEditing && (
               <MarkdownEditor
@@ -362,7 +406,16 @@ export default function DocPage() {
             </section>
 
             <section>
-              <AutoLinkPanel docId={id ?? null} onClose={() => undefined} />
+              {aiExclude ? (
+                <div className="text-[12px] text-muted-foreground leading-relaxed">
+                  <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
+                    AutoLink
+                  </h3>
+                  本篇已对 AI 隐藏，不会生成或展示自动链接建议。
+                </div>
+              ) : (
+                <AutoLinkPanel docId={id ?? null} onClose={() => undefined} />
+              )}
             </section>
           </div>
         </div>
@@ -381,7 +434,14 @@ export default function DocPage() {
         </section>
 
         <section>
-          <AutoLinkPanel docId={id ?? null} onClose={() => undefined} />
+          {aiExclude ? (
+            <div className="text-[12px] text-muted-foreground leading-relaxed">
+              <h3 className="text-sm font-medium text-foreground mb-2">AutoLink</h3>
+              本篇已对 AI 隐藏，不会生成或展示自动链接建议。
+            </div>
+          ) : (
+            <AutoLinkPanel docId={id ?? null} onClose={() => undefined} />
+          )}
         </section>
       </div>
 

@@ -15,6 +15,7 @@ import { getDb } from '../db'
 import { buildFtsQuery, highlightSnippet } from '@notefast/core'
 import { semanticSearch } from './indexer'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
+import { loadAiExcludedDocIds } from './aiExclude'
 
 export interface SearchOptions {
   query: string
@@ -115,13 +116,21 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
   })()
   const semanticPromise = runSemantic(opts.query, opts.notebookId, semanticLimit, opts.since, opts.until)
 
-  const [ftsRaw, semanticRaw] = await Promise.all([
+  const [ftsRaw0, semanticRaw0] = await Promise.all([
     ftsPromise,
     semanticPromise.catch((e) => {
       console.error('[hybridSearch] semantic failed:', e)
       return [] as SemanticRawHit[]
     }),
   ])
+
+  // AI 软隔离：过滤 ai_exclude 文档
+  const excluded = loadAiExcludedDocIds([
+    ...ftsRaw0.map((h) => h.doc_id),
+    ...semanticRaw0.map((h) => h.doc_id),
+  ])
+  const ftsRaw = ftsRaw0.filter((h) => !excluded.has(h.doc_id))
+  const semanticRaw = semanticRaw0.filter((h) => !excluded.has(h.doc_id))
 
   const fused = rrfMerge(ftsRaw, semanticRaw)
   const rerankCandidates = fused.slice(0, rerankWindow)

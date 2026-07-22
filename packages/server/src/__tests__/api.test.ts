@@ -146,6 +146,35 @@ describe('Documents API', () => {
     expect(status).toBe(200)
     expect(Array.isArray(body)).toBe(true)
     expect(body.length).toBeGreaterThanOrEqual(2)
+    expect(body[0].tags).toEqual([])
+  })
+
+  test('GET /api/v1/docs/list 支持 tags OR / untagged / ai_exclude 字段', async () => {
+    const { body: d1 } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '带标签A' })
+    const { body: d2 } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '带标签B' })
+    const { body: d3 } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '无标签文档xyz' })
+
+    await api('PATCH', `/api/v1/docs/${d1.id}/tags`, { tags: ['work', 'ai'] })
+    await api('PATCH', `/api/v1/docs/${d2.id}/tags`, { tags: ['life'] })
+
+    const orRes = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}&tags=work,life`)
+    expect(orRes.status).toBe(200)
+    const orIds = (orRes.body as Array<{ id: string }>).map((d) => d.id)
+    expect(orIds).toContain(d1.id)
+    expect(orIds).toContain(d2.id)
+    expect(orIds).not.toContain(d3.id)
+
+    const untagged = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}&untagged=1`)
+    expect(untagged.status).toBe(200)
+    const unIds = (untagged.body as Array<{ id: string; tags: string[] }>).map((d) => d.id)
+    expect(unIds).toContain(d3.id)
+    expect(unIds).not.toContain(d1.id)
+
+    await api('PATCH', `/api/v1/docs/${d1.id}/ai-exclude`, { ai_exclude: true })
+    const list = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}&tags=work`)
+    const row = (list.body as Array<{ id: string; ai_exclude?: boolean; tags: string[] }>).find((d) => d.id === d1.id)
+    expect(row?.ai_exclude).toBe(true)
+    expect(row?.tags).toContain('work')
   })
 })
 
