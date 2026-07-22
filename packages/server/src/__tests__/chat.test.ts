@@ -36,6 +36,8 @@ beforeAll(() => {
 })
 
 afterAll(() => {
+  // 不泄漏带 mock fetch 的 AI runtime 给其他测试文件（bun 跨文件共享模块状态）
+  _setRuntimeForTests(null)
   closeDb()
   rmSync(testDir, { recursive: true, force: true })
 })

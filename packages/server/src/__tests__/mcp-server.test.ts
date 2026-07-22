@@ -3,12 +3,16 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { initDb, closeDb } from '../db'
 import { createSession } from '../mcp/server'
+import { _setRuntimeForTests } from '../services/aiRuntime'
 
 let testDir: string
 
 beforeAll(() => {
   testDir = mkdtempSync(join('/tmp', 'notefast-mcp-test-'))
   initDb(testDir)
+  // 隔离：bun 跨测试文件共享模块状态且文件执行顺序随平台变化，
+  // 其他文件可能残留带 mock fetch 的 AI runtime，导致 not_configured 断言被污染
+  _setRuntimeForTests(null)
 })
 
 afterAll(() => {
