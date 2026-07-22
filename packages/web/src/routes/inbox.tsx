@@ -294,7 +294,7 @@ function InboxRow({
               type="button"
               onClick={onRevert}
               disabled={busy}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-amber-500/40 text-amber-700 text-[12px] hover:bg-amber-500/10 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center justify-center gap-1 w-full px-2.5 py-1 rounded-md border border-amber-500/40 text-amber-700 dark:text-amber-300 text-[12px] hover:bg-amber-500/10 disabled:opacity-50 transition-colors"
               title="按 created_ref_id 精确撤销，不影响其他 ref"
             >
               <RotateCcw className="w-3 h-3" strokeWidth={2} />

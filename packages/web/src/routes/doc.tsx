@@ -315,6 +315,7 @@ export default function DocPage() {
               <MarkdownEditor
                 key={handleEditorMountKey}
                 docId={id}
+                title={doc.content}
                 onSaved={handleEditSaved}
                 autoEdit={true}
                 onActiveChange={handleEditorActiveChange}

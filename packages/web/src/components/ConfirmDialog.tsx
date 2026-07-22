@@ -39,33 +39,35 @@ export default function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/40" onClick={onCancel} />
-      <div className="relative bg-card border border-border rounded-xl shadow-lg max-w-sm w-full mx-4 p-6 animate-fade-in">
-        <div className="flex items-start gap-3 mb-4">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity" onClick={onCancel} />
+      {/* 移除粗重边框，依靠阴影和色阶差异建立纵深；增加内边距带来呼吸感 */}
+      <div className="relative bg-card rounded-xl shadow-2xl shadow-black/40 max-w-sm w-full mx-4 p-6 sm:p-7 animate-fade-in">
+        <div className="flex items-start gap-3.5 mb-6">
           {destructive && (
-            <div className="w-9 h-9 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
-              <AlertTriangle className="w-5 h-5 text-destructive" />
+            <div className="w-8 h-8 rounded-md bg-destructive/10 flex items-center justify-center shrink-0 mt-0.5">
+              <AlertTriangle className="w-4 h-4 text-destructive/90" strokeWidth={2} />
             </div>
           )}
           <div>
-            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-            <p className="text-sm text-muted-foreground mt-1">{message}</p>
+            <h3 className="text-[15px] font-medium text-foreground tracking-tight">{title}</h3>
+            <p className="text-[13.5px] text-muted-foreground/80 mt-1.5 leading-relaxed">{message}</p>
           </div>
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2.5">
+          {/* 取消按钮使用幽灵按钮样式，降低视觉噪音 */}
           <button
             ref={cancelRef}
             onClick={onCancel}
-            className="px-3 py-1.5 text-sm font-medium text-foreground bg-secondary hover:bg-accent rounded-lg transition-colors"
+            className="px-3.5 py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-secondary/60 rounded-md transition-colors"
           >
             取消
           </button>
           <button
             onClick={onConfirm}
-            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all active:scale-[0.98] ${
+            className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all active:scale-[0.98] ${
               destructive
-                ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
-                : 'bg-ink text-ink-foreground border border-ink hover:bg-ink-hover hover:border-ink-hover'
+                ? 'bg-destructive/90 text-destructive-foreground hover:bg-destructive shadow-sm'
+                : 'bg-foreground text-background shadow-sm hover:bg-foreground/90'
             }`}
           >
             {confirmLabel}

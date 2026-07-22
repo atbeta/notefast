@@ -9,6 +9,15 @@ export interface ParsedBlock {
   properties: Record<string, unknown>
 }
 
+/** 可容纳子块并保留在解析栈上的容器类型（叶子块不入栈，避免后续兄弟被错误嵌套） */
+const CONTAINER_TYPES = new Set<BlockType>([
+  BlockType.Document,
+  BlockType.Heading,
+  BlockType.List,
+  BlockType.ListItem,
+  BlockType.Quote,
+])
+
 export function parseMarkdownToBlocks(markdown: string, notebookId: string): CreateBlockInput[] {
   const lines = markdown.split('\n')
   const root: ParsedBlock = {
@@ -28,7 +37,8 @@ export function parseMarkdownToBlocks(markdown: string, notebookId: string): Cre
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
 
-    if (line.startsWith('```')) {
+    const trimmedStart = line.trimStart()
+    if (trimmedStart.startsWith('```')) {
       if (inCodeBlock) {
         const codeBlock: ParsedBlock = {
           type: BlockType.Code,
@@ -42,8 +52,10 @@ export function parseMarkdownToBlocks(markdown: string, notebookId: string): Cre
         codeContent = ''
         codeLang = ''
       } else {
+        // fenced code 按缩进弹栈，避免挂到 paragraph / 未缩进 list_item 下
+        popStackToDepth(stack, root, getLineDepth(line))
         inCodeBlock = true
-        codeLang = line.slice(3).trim()
+        codeLang = trimmedStart.slice(3).trim()
       }
       continue
     }
@@ -70,17 +82,7 @@ export function parseMarkdownToBlocks(markdown: string, notebookId: string): Cre
         j++
       }
       const parsedDepth = getLineDepth(line)
-      while (stack.length > 0) {
-        const topDepth = stack[stack.length - 1].depth
-        if (parsedDepth <= topDepth) {
-          stack.pop()
-        } else {
-          break
-        }
-      }
-      if (stack.length === 0) {
-        stack.push(root)
-      }
+      popStackToDepth(stack, root, parsedDepth)
       const tableBlock: ParsedBlock = {
         type: BlockType.Table,
         content: tableLines.join('\n'),
@@ -97,25 +99,15 @@ export function parseMarkdownToBlocks(markdown: string, notebookId: string): Cre
     const parsed = parseLine(line)
     const parsedDepth = getLineDepth(line)
 
-    while (stack.length > 0) {
-      const topDepth = stack[stack.length - 1].depth
-      if (parsedDepth <= topDepth) {
-        stack.pop()
-      } else {
-        break
-      }
-    }
-
-    if (stack.length === 0) {
-      stack.push(root)
-    }
+    popStackToDepth(stack, root, parsedDepth)
 
     const parent = stack[stack.length - 1]
     const expectedDepth = parent.depth + 1
 
-    if (parsedDepth > expectedDepth) {
+    // 仅列表项允许用 wrapper 填补深度；段落等不再造空 paragraph 壳（否则导出会丢子内容）
+    if (parsedDepth > expectedDepth && parsed.type === BlockType.ListItem) {
       const wrapper: ParsedBlock = {
-        type: parsed.type === BlockType.ListItem ? BlockType.List : parsed.type,
+        type: BlockType.List,
         content: '',
         depth: expectedDepth,
         children: [],
@@ -131,10 +123,28 @@ export function parseMarkdownToBlocks(markdown: string, notebookId: string): Cre
       children: [],
     }
     stack[stack.length - 1].children.push(block)
-    stack.push(block)
+    // 叶子块不入栈：后续 fenced code / 段落应成为兄弟，而非嵌套子块
+    if (CONTAINER_TYPES.has(block.type)) {
+      stack.push(block)
+    }
   }
 
   return blocksToCreateInputs(root, notebookId)
+}
+
+/** 弹栈至可容纳 depth 的父节点（depth 对应行的缩进层级） */
+function popStackToDepth(stack: ParsedBlock[], root: ParsedBlock, depth: number): void {
+  while (stack.length > 0) {
+    const topDepth = stack[stack.length - 1].depth
+    if (depth <= topDepth) {
+      stack.pop()
+    } else {
+      break
+    }
+  }
+  if (stack.length === 0) {
+    stack.push(root)
+  }
 }
 
 /** 表格行：行内含 | 且非空白 */
@@ -212,6 +222,15 @@ function getLineDepth(line: string): number {
   if (/^>\s/.test(line)) {
     return 0
   }
+  // fenced code 开闭行：按可见缩进算 depth
+  if (/^\s*```/.test(line)) {
+    const match = line.match(/^(\t| {2,})*/)!
+    if (!match[0]) return 0
+    const indent = match[0]
+    const tabCount = (indent.match(/\t/g) || []).length
+    const spaceCount = indent.replace(/\t/g, '').length
+    return tabCount + Math.floor(spaceCount / 2)
+  }
   const match = line.match(/^(\t| {2,})*/)
   if (!match || !match[0]) return 0
   const indent = match[0]
@@ -269,12 +288,29 @@ export function blocksToMarkdown(blocks: Block[]): string {
   function traverse(children: Block[], depth: number) {
     for (const block of children) {
       switch (block.type) {
-        case BlockType.Document:
-          if (block.content && depth === 0) {
-            lines.push(`# ${block.content}`)
+        case BlockType.Document: {
+          const title = (block.content || '').trim()
+          if (title && depth === 0) {
+            lines.push(`# ${title}`)
           }
-          traverse(block.children, depth)
+          // 若首个子块是与文档标题同文的 H1，跳过该行（仍导出其子内容），
+          // 避免 `# title` + `# title` 双行（strip 因有子块未剥、或 API 直写同名 H1）
+          let kids = block.children
+          if (depth === 0 && title && kids.length > 0) {
+            const first = kids[0]
+            const level = (first.properties?.headingLevel as number) || 1
+            if (
+              first.type === BlockType.Heading &&
+              level === 1 &&
+              (first.content || '').trim() === title
+            ) {
+              traverse(first.children, depth + 1)
+              kids = kids.slice(1)
+            }
+          }
+          traverse(kids, depth)
           break
+        }
 
         case BlockType.Heading: {
           const level = (block.properties.headingLevel as number) || 1
@@ -284,7 +320,13 @@ export function blocksToMarkdown(blocks: Block[]): string {
         }
 
         case BlockType.Paragraph:
-          lines.push(block.content)
+          if (block.content) {
+            lines.push(block.content)
+          }
+          // 兼容历史错误嵌套：旧解析可能把 code 等塞进 paragraph children
+          if (block.children.length > 0) {
+            traverse(block.children, depth)
+          }
           break
 
         case BlockType.List: {
@@ -310,6 +352,9 @@ export function blocksToMarkdown(blocks: Block[]): string {
           lines.push('```' + lang)
           lines.push(block.content)
           lines.push('```')
+          if (block.children.length > 0) {
+            traverse(block.children, depth)
+          }
           break
         }
 
@@ -345,8 +390,7 @@ export function blocksToMarkdown(blocks: Block[]): string {
  * 若不加处理地回解析，该标题会作为普通 heading block 入库，
  * 导致每保存一次正文中就多一个与标题重复的 heading（大纲重复、正文重复）。
  *
- * 仅当首个 block 是一级标题、内容与标题一致、且无子块时剥离，
- * 避免误删用户有意书写的内容。
+ * 若该 H1 下挂有子块，将子块提升为文档直属后仍剥离 H1（避免导出双行 `# title`）。
  */
 export function stripTitleHeading(inputs: CreateBlockInput[], title: string): CreateBlockInput[] {
   const first = inputs[0]
@@ -354,7 +398,23 @@ export function stripTitleHeading(inputs: CreateBlockInput[], title: string): Cr
   const level = (first.properties?.headingLevel as number) || 1
   if (level !== 1) return inputs
   if ((first.content ?? '').trim() !== title.trim()) return inputs
-  const hasChildren = inputs.some((inp) => inp.parent_id === first.id)
-  if (hasChildren) return inputs
-  return inputs.slice(1)
+  // 去掉首 H1，并将其直接子块提升到文档根（parent_id = null）
+  return inputs
+    .filter((inp) => inp.id !== first.id)
+    .map((inp) => (inp.parent_id === first.id ? { ...inp, parent_id: null } : inp))
+}
+
+/**
+ * 从导出的 Markdown 文本中剥离与文档标题重复的首行 `# {title}`。
+ * 供 Web 编辑器加载时使用，避免标题框与 textarea 双重显示。
+ */
+export function stripTitleFromMarkdown(markdown: string, title: string): string {
+  const t = title.trim()
+  if (!t || !markdown) return markdown
+  const lines = markdown.split('\n')
+  const first = lines[0]?.trim() ?? ''
+  if (first !== `# ${t}`) return markdown
+  let start = 1
+  if (lines[1] === '') start = 2
+  return lines.slice(start).join('\n')
 }

@@ -659,7 +659,7 @@ export default function AISettingsPanel() {
                   <span>
                     <span className="font-medium">高置信自动应用</span>
                     <span className="block text-xs text-muted-foreground">
-                      满足 minConfidence（默认 0.75）且 top-1 显著领先时自动写入，其余进 Inbox。
+                      满足 minConfidence（默认 0.6）且 top-1 显著领先时自动写入，其余进 Inbox。
                     </span>
                   </span>
                 </label>

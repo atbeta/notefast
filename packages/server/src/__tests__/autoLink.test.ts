@@ -705,6 +705,8 @@ describe('AutoLink — v3 精准优先', () => {
     })
     expect(r.errors).toEqual([])
     expect(r.suggestionsAdded).toBe(0)
+    expect(r.skippedLowConfidence).toBeGreaterThan(0)
+    expect(r.skippedAnchors?.some((s) => s.reason === 'fts_only')).toBe(true)
   })
 
   /** 语义分低于 minConfidence → 同样不产生建议 */
@@ -720,7 +722,7 @@ describe('AutoLink — v3 精准优先', () => {
        VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`).run('low-src', docId, 'low-src', 'paragraph', 'KMP 是高效的字符串匹配', now, now)
     db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
        VALUES (?, ?, NULL, ?, ?, ?, 0, 0, ?, ?)`).run('low-tgt', docId, 'low-tgt', 'paragraph', 'KMP 算法的 next 数组', now, now)
-    // 与查询向量垂直 → cosine 0，低于 0.85 门槛
+    // 与查询向量垂直 → cosine 0，低于门槛
     seedVector('low-tgt', [0, 1])
 
     const r = await analyzeBlock({
@@ -732,6 +734,9 @@ describe('AutoLink — v3 精准优先', () => {
     })
     expect(r.errors).toEqual([])
     expect(r.suggestionsAdded).toBe(0)
+    expect(r.analyzed).toBe(1)
+    expect(r.skippedLowConfidence).toBe(1)
+    expect(r.skippedAnchors?.[0]?.reason).toBe('low_confidence')
   })
 
   /** kind=tool 的锚点被 excludeAnchorKinds 默认过滤 */

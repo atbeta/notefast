@@ -19,7 +19,7 @@ import {
   ImagePlus,
   RotateCcw,
 } from 'lucide-react'
-import { parseMarkdownToBlocks, inputsToBlockTree } from '@notefast/core'
+import { parseMarkdownToBlocks, inputsToBlockTree, stripTitleFromMarkdown } from '@notefast/core'
 import type { Block } from '@notefast/core'
 import { api, fetchWithAuth } from '../hooks/useAPI'
 import { useToast } from './ui'
@@ -27,6 +27,8 @@ import BlockRenderer from './BlockRenderer'
 
 interface MarkdownEditorProps {
   docId: string
+  /** 文档标题：加载导出 markdown 时剥离首行重复的 `# {title}`，避免与标题框双重显示 */
+  title?: string
   onSaved: () => void
   autoEdit?: boolean
   /** 内部 editing 状态变化时通知父组件，便于父组件同步隐藏只读视图等 */
@@ -68,7 +70,7 @@ const BLOCK_TRIGGER = /^(\s*)(?:#{1,6}|>|[-+*]\s|\d+\.\s|```)\s$/
 
 // ───────────────────────── 入口 ─────────────────────────
 
-export default function MarkdownEditor({ docId, onSaved, autoEdit = false, onActiveChange }: MarkdownEditorProps) {
+export default function MarkdownEditor({ docId, title, onSaved, autoEdit = false, onActiveChange }: MarkdownEditorProps) {
   const [editing, setEditing] = useState(autoEdit)
 
   useEffect(() => {
@@ -89,14 +91,14 @@ export default function MarkdownEditor({ docId, onSaved, autoEdit = false, onAct
     )
   }
 
-  return <EditorInline docId={docId} onSaved={onSaved} onClose={() => setEditing(false)} />
+  return <EditorInline docId={docId} title={title} onSaved={onSaved} onClose={() => setEditing(false)} />
 }
 
 // ───────────────────────── 编辑器主体 ─────────────────────────
 
 type Mode = 'edit' | 'view'
 
-function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () => void; onClose: () => void }) {
+function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title?: string; onSaved: () => void; onClose: () => void }) {
   const toast = useToast()
   const [content, setContent] = useState('')
   const [initialContent, setInitialContent] = useState('')
@@ -127,14 +129,17 @@ function EditorInline({ docId, onSaved, onClose }: { docId: string; onSaved: () 
     api.get<{ markdown: string }>(`/docs/${docId}/export/markdown`)
       .then((r) => {
         if (cancelled) return
-        setContent(r.markdown || '')
-        setInitialContent(r.markdown || '')
+        // 剥离导出时自动 prepend 的 `# {title}`，避免与页面标题框重复
+        const raw = r.markdown || ''
+        const md = title ? stripTitleFromMarkdown(raw, title) : raw
+        setContent(md)
+        setInitialContent(md)
         setLoadedAt(new Date())
       })
       .catch(() => { if (!cancelled) setContent('') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [docId])
+  }, [docId, title])
 
   // 进入编辑后立刻定位到末尾
   useEffect(() => {

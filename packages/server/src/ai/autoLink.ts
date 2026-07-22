@@ -66,6 +66,10 @@ export interface AnalyzeResult {
   errors: string[]
   /** true = 命中全局限速，本次未执行抽取（不视为错误） */
   rateLimited?: boolean
+  /** 抽到锚点但因低于 minConfidence / 非语义命中而未入库的数量 */
+  skippedLowConfidence?: number
+  /** 被门槛过滤的锚点摘要（最多 10 条，便于调用方理解「为何 Inbox 为空」） */
+  skippedAnchors?: Array<{ anchor: string; reason: string; confidence?: number }>
 }
 
 // ───────────────────── 同 block 串行化 ─────────────────────
@@ -149,6 +153,7 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
 
   const suggestions: AutoLinkSuggestion[] = []
   const errors: string[] = []
+  const skippedAnchors: NonNullable<AnalyzeResult['skippedAnchors']> = []
   let applied = 0
   const db = getDb()
 
@@ -164,13 +169,27 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
   for (const m of mentions) {
     try {
       const ranked = await findCandidates(opts.blockId, m.anchor, opts.notebookId, opts.notebookScope, sourceDocId)
-      if (ranked.length === 0) continue
+      if (ranked.length === 0) {
+        if (skippedAnchors.length < 10) {
+          skippedAnchors.push({ anchor: m.anchor, reason: 'no_candidates' })
+        }
+        continue
+      }
 
       // 建议入库门槛（v3）：top-1 必须是语义命中（embedding/hybrid）且 ≥ minConfidence。
       // FTS-only 是纯字面匹配，不构成「建议」——宁缺毋滥，避免 Inbox 噪音洪水。
       const top1 = ranked[0]!
       const isSemantic = top1.scoreKind === 'embedding' || top1.scoreKind === 'hybrid'
-      if (!isSemantic || top1.confidence < cfg.minConfidence) continue
+      if (!isSemantic || top1.confidence < cfg.minConfidence) {
+        if (skippedAnchors.length < 10) {
+          skippedAnchors.push({
+            anchor: m.anchor,
+            reason: !isSemantic ? 'fts_only' : 'low_confidence',
+            confidence: top1.confidence,
+          })
+        }
+        continue
+      }
 
       // 决策：自动应用 vs 仅建议（在入库门槛之上再要求 top1/top2 margin）
       const top2 = ranked[1]?.confidence ?? 0
@@ -258,7 +277,18 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
   }
 
   runtime.recordAutoLink(errors.length === 0, errors[0])
-  return { analyzed: 1, suggestionsAdded: suggestions.length, suggestions, applied, errors }
+  const skippedLowConfidence = skippedAnchors.filter(
+    (s) => s.reason === 'low_confidence' || s.reason === 'fts_only',
+  ).length
+  return {
+    analyzed: 1,
+    suggestionsAdded: suggestions.length,
+    suggestions,
+    applied,
+    errors,
+    skippedLowConfidence,
+    skippedAnchors: skippedAnchors.length > 0 ? skippedAnchors : undefined,
+  }
 }
 
 function empty(): AnalyzeResult {

@@ -780,6 +780,9 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
           suggestions_added: r.suggestionsAdded,
           applied: r.applied,
           errors: r.errors,
+          rate_limited: r.rateLimited === true,
+          skipped_low_confidence: r.skippedLowConfidence ?? 0,
+          skipped_anchors: r.skippedAnchors ?? [],
         })],
       }
     },
@@ -862,33 +865,40 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     },
     withToolLogging('notefast_get_autolink_suggestion', async ({ suggestion_id }: { suggestion_id: string }) => {
       const db = getDb()
+      // autolink_suggestions 表无 source_content / source_doc_title，需 join blocks 补全（与 list 接口一致）
       const row = db.query('SELECT * FROM autolink_suggestions WHERE id = ?').get(suggestion_id) as unknown as {
         id: string
         source_block_id: string
-        source_content: string
-        source_doc_id: string | null
-        source_doc_title: string
         anchor: string
         kind: string
         candidates: string // JSON
         action_status: string
         review_status: string
-        confidence: number | null
-        score_kind: string
+        score_kind: string | null
         error: string | null
       } | undefined
       if (!row) return toolError('not_found', `建议 ${suggestion_id} 不存在`, { suggestion_id })
+      const src = db
+        .query(
+          `SELECT b.content, b.root_id, (SELECT content FROM blocks WHERE id = b.root_id) as doc_title
+           FROM blocks b WHERE b.id = ?`,
+        )
+        .get(row.source_block_id) as { content: string; root_id: string; doc_title: string } | undefined
       let candidates: unknown[] = []
       try { candidates = JSON.parse(row.candidates) } catch { /* ignore */ }
+      const top = Array.isArray(candidates) && candidates.length > 0
+        ? (candidates[0] as { confidence?: number } | undefined)
+        : undefined
       return {
         content: [toText({
           id: row.id,
           source_block_id: row.source_block_id,
-          source_content: row.source_content.slice(0, 2_000),
-          source_doc_title: row.source_doc_title,
+          source_content: (src?.content ?? '').slice(0, 2_000),
+          source_doc_id: src?.root_id ?? null,
+          source_doc_title: src?.doc_title ?? '',
           anchor: row.anchor,
           kind: row.kind,
-          confidence: row.confidence,
+          confidence: top?.confidence ?? null,
           score_kind: row.score_kind,
           action_status: row.action_status,
           review_status: row.review_status,

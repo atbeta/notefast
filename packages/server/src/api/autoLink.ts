@@ -187,6 +187,9 @@ autoLink.post('/run', zValidator('json', runSchema), async (c) => {
     suggestions_added: result.suggestionsAdded,
     applied: result.applied,
     errors: result.errors,
+    rate_limited: result.rateLimited === true,
+    skipped_low_confidence: result.skippedLowConfidence ?? 0,
+    skipped_anchors: result.skippedAnchors ?? [],
   })
 })
 

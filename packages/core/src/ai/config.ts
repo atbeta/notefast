@@ -151,7 +151,8 @@ export interface AutoLinkConfig {
 }
 
 export const DEFAULT_MAX_AUTO_LINK_PER_BLOCK = 2
-export const DEFAULT_AUTO_LINK_MIN_CONFIDENCE = 0.85
+/** 默认 0.6：embedding 常见命中约 0.55–0.75；0.85 会导致 Inbox 几乎永远为空 */
+export const DEFAULT_AUTO_LINK_MIN_CONFIDENCE = 0.6
 export const DEFAULT_AUTO_LINK_MIN_MARGIN = 0.15
 export const DEFAULT_AUTO_LINK_EXCLUDE_KINDS: string[] = ['tool']
 export const DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC = true

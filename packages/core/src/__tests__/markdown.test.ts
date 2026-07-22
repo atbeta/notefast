@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test'
-import { parseMarkdownToBlocks, blocksToMarkdown, stripTitleHeading } from '../markdown'
+import { parseMarkdownToBlocks, blocksToMarkdown, stripTitleHeading, stripTitleFromMarkdown } from '../markdown'
 import { BlockType } from '../types'
 
 describe('parseMarkdownToBlocks', () => {
@@ -93,6 +93,84 @@ console.log(x)
     const inputs = parseMarkdownToBlocks(markdown, 'nb1')
     expect(inputs.filter((i) => i.type === BlockType.Table).length).toBe(0)
   })
+
+  test('段落后的多个 fenced code 为兄弟块（Bug 21）', () => {
+    const inputs = parseMarkdownToBlocks('intro\n\n```\nA\n```\n\n```\nB\n```\n', 'nb1')
+    const codes = inputs.filter((i) => i.type === BlockType.Code)
+    expect(codes.length).toBe(2)
+    expect(codes[0].content).toBe('A')
+    expect(codes[1].content).toBe('B')
+    expect(codes[0].parent_id == null).toBe(true)
+    expect(codes[1].parent_id == null).toBe(true)
+  })
+
+  test('列表后未缩进的 fenced code 不嵌套进 list_item（Bug 29）', () => {
+    const inputs = parseMarkdownToBlocks('- item 3\n```python\ncode\n```\n', 'nb1')
+    const item = inputs.find((i) => i.type === BlockType.ListItem)
+    const code = inputs.find((i) => i.type === BlockType.Code)
+    expect(item?.content).toBe('item 3')
+    expect(code?.content).toBe('code')
+    expect(code?.parent_id == null).toBe(true)
+  })
+
+  test('缩进段落导出不丢内容（Bug 20）', () => {
+    const md = '# title\n\n    indented\n    more\n'
+    const inputs = parseMarkdownToBlocks(md, 'nb1')
+    const byId = new Map<string, any>()
+    const roots: any[] = []
+    for (const i of inputs) {
+      byId.set(i.id!, {
+        id: i.id!,
+        notebook_id: 'nb1',
+        parent_id: i.parent_id ?? null,
+        root_id: 'doc',
+        type: i.type,
+        content: i.content ?? '',
+        properties: i.properties ?? {},
+        sort: 0,
+        level: 1,
+        created_at: '',
+        updated_at: '',
+        children: [] as any[],
+      })
+    }
+    for (const i of inputs) {
+      const node = byId.get(i.id!)!
+      if (i.parent_id && byId.has(i.parent_id)) byId.get(i.parent_id)!.children.push(node)
+      else roots.push(node)
+    }
+    const out = blocksToMarkdown(roots)
+    expect(out).toContain('indented')
+    expect(out).toContain('more')
+  })
+
+  test('历史错误嵌套：paragraph 下的 code 仍能导出', () => {
+    const blocks = [
+      {
+        id: 'doc', notebook_id: 'nb1', parent_id: null, root_id: 'doc',
+        type: 'document', content: 't', properties: {}, sort: 0, level: 0,
+        created_at: '', updated_at: '',
+        children: [
+          {
+            id: 'p', notebook_id: 'nb1', parent_id: 'doc', root_id: 'doc',
+            type: 'paragraph', content: 'intro', properties: {}, sort: 0, level: 1,
+            created_at: '', updated_at: '',
+            children: [
+              {
+                id: 'c', notebook_id: 'nb1', parent_id: 'p', root_id: 'doc',
+                type: 'code', content: 'A', properties: {}, sort: 0, level: 2,
+                created_at: '', updated_at: '', children: [],
+              },
+            ],
+          },
+        ],
+      },
+    ]
+    const out = blocksToMarkdown(blocks as any)
+    expect(out).toContain('intro')
+    expect(out).toContain('```')
+    expect(out).toContain('A')
+  })
 })
 
 describe('stripTitleHeading', () => {
@@ -109,10 +187,24 @@ describe('stripTitleHeading', () => {
     expect(stripped.length).toBe(inputs.length)
   })
 
-  test('一级标题有子块时不剥离', () => {
+  test('一级标题有子块时提升子块并剥离', () => {
     const inputs = parseMarkdownToBlocks('# 测试\n\n  缩进内容', 'nb1')
     const stripped = stripTitleHeading(inputs, '测试')
-    expect(stripped.length).toBe(inputs.length)
+    expect(stripped.filter((i) => i.type === BlockType.Heading).length).toBe(0)
+    const paras = stripped.filter((i) => i.type === BlockType.Paragraph)
+    expect(paras.length).toBe(1)
+    expect(paras[0].content).toBe('缩进内容')
+    expect(paras[0].parent_id == null).toBe(true)
+  })
+})
+
+describe('stripTitleFromMarkdown', () => {
+  test('剥离导出首行重复标题', () => {
+    expect(stripTitleFromMarkdown('# 我的文档\n\n正文\n', '我的文档')).toBe('正文\n')
+  })
+
+  test('标题不一致时不剥离', () => {
+    expect(stripTitleFromMarkdown('# 别的\n\n正文\n', '我的文档')).toBe('# 别的\n\n正文\n')
   })
 })
 
@@ -138,6 +230,28 @@ describe('blocksToMarkdown', () => {
     expect(md).toContain('# 测试文档')
     expect(md).toContain('## 标题')
     expect(md).toContain('段落内容')
+  })
+
+  test('文档标题与同名首 H1 不重复输出', () => {
+    const blocks = [
+      makeBlock('doc', 'document', '标题', null, [
+        makeBlock('h1', 'heading', '标题', 'doc', [
+          makeBlock('p1', 'paragraph', '正文', 'h1'),
+        ], { headingLevel: 1 }),
+      ]),
+    ]
+    const md = blocksToMarkdown(blocks)
+    expect(md).toBe('# 标题\n正文\n')
+  })
+
+  test('文档标题与不同文首 H1 都保留', () => {
+    const blocks = [
+      makeBlock('doc', 'document', '文档名', null, [
+        makeBlock('h1', 'heading', '章节', 'doc', [], { headingLevel: 1 }),
+      ]),
+    ]
+    const md = blocksToMarkdown(blocks)
+    expect(md).toBe('# 文档名\n# 章节\n')
   })
 
   test('导出代码块', () => {
