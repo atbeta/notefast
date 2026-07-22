@@ -103,7 +103,7 @@ export default function AutolinkPage() {
       <div className="h-14 shrink-0 px-6 border-b border-border/50 flex items-center gap-3">
         <h1 className="text-sm font-semibold tracking-[-0.01em]">链接建议</h1>
         <span className="text-xs text-muted-foreground/70">
-          AI 已应用 / AI 建议的链接待你审阅
+          待处理的链接建议；已应用的在「已接受」
         </span>
         <div className="ml-auto flex items-center gap-2">
           <button
@@ -227,16 +227,18 @@ function AutolinkRow({
             </span>
           </div>
 
-          {item.source_doc_id && (
+          {item.source_doc_id ? (
             <Link
               to={`/doc/${item.source_doc_id}#block-${item.source_block_id}`}
               className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
             >
               {item.source_doc_title} →
             </Link>
+          ) : (
+            <span className="text-xs text-muted-foreground/55">{item.source_doc_title || '（源文档已删除）'}</span>
           )}
           <div className="mt-1 text-[13px] text-foreground/90 line-clamp-2">
-            {item.source_content || '(空内容)'}
+            {item.source_content || '（无预览）'}
           </div>
 
           <div className="mt-2 text-[11px] text-muted-foreground/60 flex items-center gap-2">

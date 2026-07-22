@@ -616,8 +616,8 @@ describe('AutoLink — E2E Tier 1 scenarios', () => {
     expect(rev.reason).toBe('not_applied')
   })
 
-  /** Inbox 默认查询同时返回 AI 已应用 + AI 仅建议 */
-  test('Inbox review_status=unreviewed 同时含 suggested + applied', async () => {
+  /** Inbox：接受/自动应用后进入 accepted，不再留在 unreviewed */
+  test('Inbox：apply 后离开 unreviewed，进入 accepted', async () => {
     mockChatReturning('gpt-4o-mini', JSON.stringify({ mentions: [] }))
     const db = getDb()
     const docId = crypto.randomUUID()
@@ -644,10 +644,15 @@ describe('AutoLink — E2E Tier 1 scenarios', () => {
     })])
     applySuggestion('ib-s-applied', 0, 'ai_suggested')
 
-    const inbox = await api('GET', '/inbox?status=unreviewed')
-    const ids = inbox.body.items.map((i: { id: string }) => i.id)
-    expect(ids).toContain('ib-s-suggested')
-    expect(ids).toContain('ib-s-applied')
+    const unreviewed = await api('GET', '/inbox?status=unreviewed')
+    const unreviewedIds = unreviewed.body.items.map((i: { id: string }) => i.id)
+    expect(unreviewedIds).toContain('ib-s-suggested')
+    expect(unreviewedIds).not.toContain('ib-s-applied')
+
+    const accepted = await api('GET', '/inbox?status=accepted')
+    const acceptedIds = accepted.body.items.map((i: { id: string }) => i.id)
+    expect(acceptedIds).toContain('ib-s-applied')
+    expect(findSuggestion('ib-s-applied')?.reviewStatus).toBe('accepted')
   })
 
   /** autoApply='never'（默认）即使 embedding 命中也不自动写 ref */

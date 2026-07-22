@@ -201,8 +201,16 @@ export function applySuggestion(
     if (!row) return { applied: false, reason: 'not_found' }
     const s = rowToSuggestion(row)
 
-    // 幂等：已 applied → 返回原 ref_id
+    // 幂等：已 applied → 返回原 ref_id；顺带把遗留的 unreviewed 提升为 accepted
     if (s.actionStatus === 'applied' && s.createdRefId != null) {
+      if (s.reviewStatus !== 'accepted') {
+        db.query(
+          `UPDATE autolink_suggestions
+           SET review_status='accepted',
+               reviewed_at=COALESCE(reviewed_at, applied_at, datetime('now'))
+           WHERE id=?`,
+        ).run(suggestionId)
+      }
       return { applied: false, refId: s.createdRefId, reason: 'already_applied', targetBlockId: s.appliedTargetId ?? undefined }
     }
 
@@ -229,7 +237,9 @@ export function applySuggestion(
       // 关联到已存在的 ref，不重复 INSERT
       db.query(
         `UPDATE autolink_suggestions
-         SET action_status='applied', created_ref_id=?, applied_target_id=?, applied_at=datetime('now')
+         SET action_status='applied', review_status='accepted',
+             created_ref_id=?, applied_target_id=?,
+             applied_at=datetime('now'), reviewed_at=datetime('now')
          WHERE id=?`,
       ).run(dup.id, cand.blockId, suggestionId)
       return { applied: false, refId: dup.id, reason: 'ref_already_exists', targetBlockId: cand.blockId }
@@ -245,7 +255,9 @@ export function applySuggestion(
 
     db.query(
       `UPDATE autolink_suggestions
-       SET action_status='applied', created_ref_id=?, applied_target_id=?, applied_at=datetime('now')
+       SET action_status='applied', review_status='accepted',
+           created_ref_id=?, applied_target_id=?,
+           applied_at=datetime('now'), reviewed_at=datetime('now')
        WHERE id=?`,
     ).run(inserted.id, cand.blockId, suggestionId)
 

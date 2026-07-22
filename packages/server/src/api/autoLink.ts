@@ -55,7 +55,11 @@ autoLink.get('/suggestions', (c) => {
 
 /**
  * 全局 Inbox（v2）
- * 默认 review_status=unreviewed，包含 AI 已执行 + AI 仅建议两类
+ * status 对应 review_status：
+ * - unreviewed：待人工处理（仅 suggested / reverted）
+ * - accepted：已接受（含手动接受与高置信自动应用）
+ * - dismissed：已忽略
+ * - all：全部
  */
 autoLink.get('/inbox', (c) => {
   const status = c.req.query('status') || 'unreviewed'
@@ -74,15 +78,27 @@ autoLink.get('/inbox', (c) => {
     const wire = toWire(s)
     const srcRow = db
       .query(
-        `SELECT b.content, b.root_id, (SELECT content FROM blocks WHERE id = b.root_id) as doc_title
+        `SELECT b.content, b.root_id,
+                (SELECT content FROM blocks WHERE id = b.root_id) as doc_title
          FROM blocks b WHERE b.id = ?`,
       )
-      .get(s.sourceBlockId) as { content: string; root_id: string; doc_title: string } | undefined
+      .get(s.sourceBlockId) as
+      | { content: string; root_id: string; doc_title: string }
+      | undefined
+    const raw = (srcRow?.content || '').trim()
+    // 源块已删 / 空内容：用锚点或候选摘要兜底，避免 UI 只显示「(空内容)」
+    let sourceContent = raw.slice(0, 200)
+    if (!sourceContent) {
+      if (s.anchor) sourceContent = `「${s.anchor}」`
+      else if (s.candidates[0]?.snippet) sourceContent = s.candidates[0].snippet.slice(0, 200)
+      else if (!srcRow) sourceContent = '（源内容已删除）'
+    }
     return {
       ...wire,
-      source_content: srcRow?.content?.slice(0, 200) ?? '',
+      source_content: sourceContent,
       source_doc_id: srcRow?.root_id ?? null,
-      source_doc_title: srcRow?.doc_title ?? '未命名文档',
+      source_doc_title: srcRow?.doc_title || (srcRow ? '未命名文档' : '（源文档已删除）'),
+      source_missing: !srcRow,
     }
   })
 

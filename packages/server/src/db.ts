@@ -225,7 +225,8 @@ function migrateVectorSchema(database: Database): void {
 
 /**
  * 顺序 migration：以 PRAGMA user_version 为权威。
- * v0 → v1：基线（当前 SCHEMA_SQL）；未来版本在此追加步骤。
+ * v0 → v1：基线（当前 SCHEMA_SQL）
+ * v1 → v2：已应用的 AutoLink 建议补齐 review_status=accepted（此前只改 action_status）
  */
 function applySchemaMigrations(database: Database): void {
   const current = getSchemaVersion(database)
@@ -238,7 +239,17 @@ function applySchemaMigrations(database: Database): void {
     // 现有库与新建库均已通过 CREATE IF NOT EXISTS 达到 v1 结构
     database.exec(`PRAGMA user_version = 1`)
   }
-  // 未来：if (getSchemaVersion(database) < 2) { ...; PRAGMA user_version = 2 }
+  if (getSchemaVersion(database) < 2) {
+    // 修复：applied 却仍停在 unreviewed，导致「未审阅」被已应用项占满、「已接受」永远为空
+    database.exec(`
+      UPDATE autolink_suggestions
+      SET review_status = 'accepted',
+          reviewed_at = COALESCE(reviewed_at, applied_at, datetime('now'))
+      WHERE action_status = 'applied'
+        AND review_status = 'unreviewed'
+    `)
+    database.exec(`PRAGMA user_version = 2`)
+  }
 }
 
 export function getSchemaVersion(database: Database = getDb()): number {

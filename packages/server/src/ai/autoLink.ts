@@ -249,9 +249,8 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
 
   if (suggestions.length > 0) {
     addSuggestions(suggestions)
-    // 注意：autoApply 的 ref 已由 insertRef 写入；但 suggestion 表里的 action_status 还是 'suggested'，
-    // created_ref_id 为 null。这是为了让 Inbox 能看到「AI 刚做了什么」并允许精确撤销。
-    // 修复策略：在 autoApply 路径上，把每个被应用的 suggestion 直接 UPDATE 一下。
+    // 注意：autoApply 的 ref 已由 insertRef 写入；但 suggestion 表里的 action_status 还是 'suggested'。
+    // 修复策略：在 autoApply 路径上，把每个被应用的 suggestion 标为 applied + accepted。
     if (cfg.autoApply === 'high_confidence' && applied > 0) {
       // 重新查最近一次插入的 suggestions，对 top-1 命中的做精确 mark
       for (const s of suggestions) {
@@ -271,7 +270,9 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
           if (refRow) {
             db.query(
               `UPDATE autolink_suggestions
-               SET action_status='applied', created_ref_id=?, applied_target_id=?, applied_at=datetime('now')
+               SET action_status='applied', review_status='accepted',
+                   created_ref_id=?, applied_target_id=?,
+                   applied_at=datetime('now'), reviewed_at=datetime('now')
                WHERE id=?`,
             ).run(refRow.id, top.blockId, s.id)
           }

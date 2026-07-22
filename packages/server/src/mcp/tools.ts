@@ -833,7 +833,7 @@ registerTool(
   registerTool(
     'notefast_autolink_suggestions',
     {
-      description: 'AutoLink 链接建议视图：默认 review_status=unreviewed，含 AI 已应用 + AI 仅建议两类。',
+      description: 'AutoLink 链接建议视图。status=unreviewed 仅待处理建议；accepted=已接受（含自动应用）；dismissed=已忽略；all=全部。',
       inputSchema: {
         doc_id: z.string().optional().describe('限定文档 ID（不传则全局）'),
         status: z.enum(['unreviewed', 'accepted', 'dismissed', 'all']).optional().default('unreviewed'),
@@ -857,11 +857,18 @@ registerTool(
              FROM blocks b WHERE b.id = ?`,
           )
           .get(s.sourceBlockId) as { content: string; root_id: string; doc_title: string } | undefined
+        const raw = (src?.content || '').trim()
+        let sourceContent = raw.slice(0, 200)
+        if (!sourceContent) {
+          if (s.anchor) sourceContent = `「${s.anchor}」`
+          else if (s.candidates[0]?.snippet) sourceContent = s.candidates[0].snippet.slice(0, 200)
+          else if (!src) sourceContent = '（源内容已删除）'
+        }
         return {
           ...wire,
-          source_content: src?.content?.slice(0, 200) ?? '',
+          source_content: sourceContent,
           source_doc_id: src?.root_id ?? null,
-          source_doc_title: src?.doc_title ?? '',
+          source_doc_title: src?.doc_title || (src ? '未命名文档' : '（源文档已删除）'),
         }
       })
       // 过滤来源属于 ai_exclude 文档的建议
