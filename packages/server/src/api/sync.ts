@@ -18,6 +18,7 @@ import { z } from 'zod'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getDb } from '../db'
+import { fetchDocBlocks } from '../dbQueries'
 import {
   blocksToMarkdown,
   buildBlockTree,
@@ -29,8 +30,6 @@ import {
   applySyncConfig,
   getSyncPublicConfig,
   isSyncConfigured,
-  loadConfigFromDisk,
-  saveConfigToDisk,
   syncInfo,
   syncPush,
   syncStatus,
@@ -92,8 +91,7 @@ function legacyExportMarkdown(dir: string) {
   const results: { id: string; title: string; file: string; error?: string }[] = []
   for (const doc of docs) {
     try {
-      const rows = fetchDescendants(db, doc.id)
-      const tree = buildBlockTree([doc, ...rows])
+      const tree = buildBlockTree(fetchDocBlocks(db, doc.id))
       const markdown = blocksToMarkdown(tree)
       const slug = sanitizeFilename(doc.content || 'untitled')
       const filename = `${slug}.md`
@@ -229,22 +227,6 @@ sync.get('/adapters', (c) => {
 
 // ───────────────────── helpers ─────────────────────
 
-function fetchDescendants(database: ReturnType<typeof getDb>, rootId: string): BlockRow[] {
-  const rows: BlockRow[] = []
-  const stack = [rootId]
-  while (stack.length > 0) {
-    const currentId = stack.pop()!
-    const children = database
-      .query('SELECT * FROM blocks WHERE parent_id = ? ORDER BY sort ASC')
-      .all(currentId) as BlockRow[]
-    for (const child of children) {
-      rows.push(child)
-      stack.push(child.id)
-    }
-  }
-  return rows
-}
-
 function sanitizeFilename(name: string): string {
   return name
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
@@ -255,5 +237,4 @@ function sanitizeFilename(name: string): string {
     .slice(0, 120) || 'untitled'
 }
 
-export { loadConfigFromDisk, saveConfigToDisk }
 export default sync

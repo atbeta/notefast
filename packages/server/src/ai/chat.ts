@@ -24,7 +24,7 @@ import type { ChatMessage, ToolCall, ToolDefinition } from '@notefast/core'
 import { ThinkStreamParser, splitThinkContent } from '@notefast/core'
 import type { Citation } from './hybridSearch'
 import { getDb } from '../db'
-import { expandBlockContext, hybridSearch, type HybridSearchReport } from './hybridSearch'
+import { hybridSearch, type HybridSearchReport } from './hybridSearch'
 import { buildChatPrompt } from './prompt'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 
@@ -218,10 +218,6 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
   } catch (e) {
     initialReport = { citations: [], retrieval: { fts_hits: 0, semantic_hits: 0, reranked: false } }
     console.error('[chat] retrieval failed:', e)
-  }
-
-  if (initialReport.citations.length > 0) {
-    expandBlockContext(initialReport.citations.map((c) => c.block_id))
   }
 
   const currentDocTitle = opts.contextDocId ? lookupDocTitle(opts.contextDocId) : undefined

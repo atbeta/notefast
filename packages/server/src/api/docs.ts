@@ -4,6 +4,8 @@ import { z } from 'zod'
 import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, updateDocStatusSchema, rowToBlock, readTagsFromProperties, readAiExcludeFromProperties, readDocStatusFromProperties, setDocStatusInProperties, isInboxDoc, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, parseDocStatusFilter, docMatchesTags } from '@notefast/core'
 import type { BlockRow, DocSummary } from '@notefast/core'
 import { getDb } from '../db'
+import { fetchDocBlocks, fetchSubtreeBlocks } from '../dbQueries'
+import { insertDocFromMarkdown } from '../services/docImport'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { writeDocAiExclude, readDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
@@ -83,9 +85,7 @@ docs.get('/tree', (c) => {
     return c.json({ error: 'not_found', message: `文档 ${docId} 不存在` }, 404)
   }
 
-  const rows = fetchAllDescendants(db, docId)
-  const allRows = [docRow, ...rows]
-  const tree = buildBlockTree(allRows)
+  const tree = buildBlockTree(fetchDocBlocks(db, docId))
 
   if (tree.length === 0) {
     return c.json([])
@@ -104,9 +104,7 @@ docs.get('/:id', (c) => {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
 
-  const rows = fetchAllDescendants(db, id)
-  const allRows = [docRow, ...rows]
-  const tree = buildBlockTree(allRows)
+  const tree = buildBlockTree(fetchDocBlocks(db, id))
 
   return c.json(tree.length > 0 ? tree[0] : null)
 })
@@ -114,53 +112,21 @@ docs.get('/:id', (c) => {
 docs.post('/', zValidator('json', createDocSchema), (c) => {
   const db = getDb()
   const input = c.req.valid('json')
-  const docId = crypto.randomUUID()
-  const now = new Date().toISOString()
   const status = input.status === 'inbox' ? 'inbox' : 'note'
-  const properties = setDocStatusInProperties('{}', status)
-
-  db.query(
-    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
-     VALUES (?, ?, NULL, ?, 'document', ?, ?, 0, 0, ?, ?)`,
-  ).run(docId, input.notebook_id, docId, input.title, properties, now, now)
-
-  const insertedIds: string[] = []
-  const md = (input.markdown || '').trim()
-  if (md) {
-    const rawInputs = parseMarkdownToBlocks(md, input.notebook_id)
-    const inputs = stripTitleHeading(rawInputs, input.title)
-    const idMap = new Map<string, string>()
-    for (let i = 0; i < inputs.length; i++) {
-      const inp = inputs[i]
-      const blockId = crypto.randomUUID()
-      if (inp.id) idMap.set(inp.id, blockId)
-      const parentId = inp.parent_id ? (idMap.get(inp.parent_id) ?? docId) : docId
-      db.query(
-        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-      ).run(
-        blockId,
-        input.notebook_id,
-        parentId,
-        docId,
-        inp.type,
-        inp.content ?? '',
-        JSON.stringify(inp.properties || {}),
-        i,
-        now,
-        now,
-      )
-      insertedIds.push(blockId)
-    }
-  }
+  const { docId, blockIds } = insertDocFromMarkdown(db, {
+    notebookId: input.notebook_id,
+    title: input.title,
+    markdown: input.markdown || '',
+    status,
+  })
 
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
   fireAfterCreate(rowToBlock(row))
-  if (insertedIds.length > 0) {
-    const placeholders = insertedIds.map(() => '?').join(',')
+  if (blockIds.length > 0) {
+    const placeholders = blockIds.map(() => '?').join(',')
     const childRows = db
       .query(`SELECT * FROM blocks WHERE id IN (${placeholders})`)
-      .all(...insertedIds) as BlockRow[]
+      .all(...blockIds) as BlockRow[]
     fireAfterCreateMany(childRows.map(rowToBlock))
   }
   return c.json({
@@ -269,7 +235,7 @@ docs.delete('/:id', (c) => {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
 
-  const childIds = fetchAllDescendants(db, id)
+  const childIds = fetchSubtreeBlocks(db, id)
   const allIds = [id, ...childIds.map((r) => r.id)]
 
   db.transaction(() => {
@@ -300,7 +266,7 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
   const inputs = stripTitleHeading(rawInputs, newTitle)
 
   // 收集旧子块 ID（事务外保留引用，事务后触发 afterDelete）
-  const oldChildRows = fetchAllDescendants(db, id)
+  const oldChildRows = fetchSubtreeBlocks(db, id)
   const oldChildIds = oldChildRows.map((r) => r.id)
   // 收集新插入的 block rows（事务后 SELECT 拿到最终时间戳）
   const insertedIds: string[] = []
@@ -356,8 +322,7 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
   const updatedDocRow = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
   fireAfterUpdate(rowToBlock(updatedDocRow))
 
-  const rows = fetchAllDescendants(db, id)
-  const tree = buildBlockTree([updatedDocRow, ...rows])
+  const tree = buildBlockTree(fetchDocBlocks(db, id))
   // asset 引用对账：悬空引用告警（不阻断保存）
   const missingAssets = findMissingAssets(extractAssetRefs(markdown))
   return c.json({
@@ -375,30 +340,10 @@ docs.get('/:id/export/markdown', (c) => {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
 
-  const rows = fetchAllDescendants(db, id)
-  const allRows = [docRow, ...rows]
-  const tree = buildBlockTree(allRows)
+  const tree = buildBlockTree(fetchDocBlocks(db, id))
 
   const markdown = blocksToMarkdown(tree)
   return c.json({ markdown })
 })
-
-function fetchAllDescendants(database: ReturnType<typeof getDb>, rootId: string): BlockRow[] {
-  const rows: BlockRow[] = []
-  const stack = [rootId]
-
-  while (stack.length > 0) {
-    const currentId = stack.pop()!
-    const children = database
-      .query('SELECT * FROM blocks WHERE parent_id = ? ORDER BY sort ASC')
-      .all(currentId) as BlockRow[]
-    for (const child of children) {
-      rows.push(child)
-      stack.push(child.id)
-    }
-  }
-
-  return rows
-}
 
 export default docs

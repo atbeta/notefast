@@ -12,30 +12,9 @@ import {
   Plug,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
+import { BACKUP_SECRET_MASK, type BackupRuntimeStatus, type BackupRestorePoint } from '@notefast/core'
 import { ActionButton, useToast } from './ui'
 import ConfirmDialog from './ConfirmDialog'
-
-const SECRET_MASK = '***set***'
-
-interface BackupStatus {
-  configured: boolean
-  enabled: boolean
-  running: boolean
-  phase: string
-  lastRunAt?: string
-  lastSuccessAt?: string
-  lastError?: string
-  lastResult?: {
-    ok: boolean
-    objectKey?: string
-    sizeBytes?: number
-    sha256?: string
-    error?: string
-  } | null
-  intervalMs: number
-  retentionDays: number
-  nextRunAt?: string
-}
 
 interface BackupConfig {
   enabled: boolean
@@ -52,18 +31,8 @@ interface BackupConfig {
   } | null
 }
 
-interface RestorePoint {
-  objectKey: string
-  manifestKey: string
-  createdAt: string
-  sizeBytes: number
-  sha256: string
-  schemaVersion: number
-  appVersion?: string
-}
-
 export default function BackupPanel() {
-  const [status, setStatus] = useState<BackupStatus | null>(null)
+  const [status, setStatus] = useState<BackupRuntimeStatus | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const [enabled, setEnabled] = useState(false)
   const [bucket, setBucket] = useState('')
@@ -76,12 +45,12 @@ export default function BackupPanel() {
   const [intervalHours, setIntervalHours] = useState(1)
   const [retentionDays, setRetentionDays] = useState(30)
   const [showSecret, setShowSecret] = useState(false)
-  const [points, setPoints] = useState<RestorePoint[]>([])
+  const [points, setPoints] = useState<BackupRestorePoint[]>([])
   const [showDisableConfirm, setShowDisableConfirm] = useState(false)
   const toast = useToast()
 
   const refresh = useCallback(async () => {
-    const res = await api.get<{ configured: boolean; status: BackupStatus; config: BackupConfig }>(
+    const res = await api.get<{ configured: boolean; status: BackupRuntimeStatus; config: BackupConfig }>(
       '/backup/config',
     )
     setStatus(res.status)
@@ -99,7 +68,7 @@ export default function BackupPanel() {
     }
     if (res.configured) {
       try {
-        const list = await api.get<{ points: RestorePoint[] }>('/backup/restore-points?limit=20')
+        const list = await api.get<{ points: BackupRestorePoint[] }>('/backup/restore-points?limit=20')
         setPoints(list.points)
       } catch {
         setPoints([])
@@ -238,7 +207,7 @@ export default function BackupPanel() {
               value={accessKeyId}
               onChange={setAccessKeyId}
               mono
-              placeholder={SECRET_MASK}
+              placeholder={BACKUP_SECRET_MASK}
             />
             <div>
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -249,7 +218,7 @@ export default function BackupPanel() {
                   type={showSecret ? 'text' : 'password'}
                   value={secretAccessKey}
                   onChange={(e) => setSecretAccessKey(e.target.value)}
-                  placeholder={SECRET_MASK}
+                  placeholder={BACKUP_SECRET_MASK}
                   className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
                 />
                 <button

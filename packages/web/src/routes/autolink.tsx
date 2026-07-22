@@ -1,40 +1,14 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { RotateCcw, Check, X, RefreshCw, CheckCheck, Trash2 } from 'lucide-react'
+import type { AutolinkSuggestionWire } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import ConfirmDialog from '../components/ConfirmDialog'
-
-interface AutolinkItem {
-  id: string
-  source_block_id: string
-  source_content: string
-  source_doc_id: string | null
-  source_doc_title: string
-  anchor: string
-  kind: string
-  candidates: Array<{
-    block_id: string
-    doc_id: string
-    doc_title: string
-    snippet: string
-    confidence: number
-    score_kind: 'fts_rank' | 'embedding' | 'hybrid'
-  }>
-  action_status: 'suggested' | 'applied' | 'reverted' | 'failed' | 'superseded'
-  review_status: 'unreviewed' | 'accepted' | 'dismissed'
-  applied_target_id: string | null
-  created_ref_id: number | null
-  score_kind: string
-  error: string | null
-  created_at: string
-  applied_at: string | null
-  reviewed_at: string | null
-}
 
 type FilterStatus = 'unreviewed' | 'accepted' | 'dismissed' | 'all'
 
 export default function AutolinkPage() {
-  const [items, setItems] = useState<AutolinkItem[]>([])
+  const [items, setItems] = useState<AutolinkSuggestionWire[]>([])
   const [filter, setFilter] = useState<FilterStatus>('unreviewed')
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState<Set<string>>(new Set())
@@ -44,7 +18,7 @@ export default function AutolinkPage() {
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await api.get<{ count: number; items: AutolinkItem[] }>(`/auto-link/inbox?status=${filter}&limit=200`)
+      const r = await api.get<{ count: number; items: AutolinkSuggestionWire[] }>(`/auto-link/inbox?status=${filter}&limit=200`)
       setItems(r.items)
     } catch {
       setItems([])
@@ -201,7 +175,7 @@ function AutolinkRow({
   onDismiss,
   onRevert,
 }: {
-  item: AutolinkItem
+  item: AutolinkSuggestionWire
   busy: boolean
   onAccept: () => void
   onDismiss: () => void
@@ -318,8 +292,8 @@ function AutolinkRow({
   )
 }
 
-function StatusBadge({ action }: { action: AutolinkItem['action_status'] }) {
-  const map: Record<AutolinkItem['action_status'], { label: string; cls: string }> = {
+function StatusBadge({ action }: { action: AutolinkSuggestionWire['action_status'] }) {
+  const map: Record<AutolinkSuggestionWire['action_status'], { label: string; cls: string }> = {
     suggested: { label: '建议', cls: 'bg-blue-500/15 text-blue-700 dark:text-blue-300' },
     applied: { label: '已应用', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' },
     reverted: { label: '已撤销', cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300' },

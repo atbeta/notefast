@@ -18,6 +18,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
+import type { AutolinkSuggestionWire } from '@notefast/core'
 import { getDb } from '../db'
 import {
   analyzeBlock,
@@ -27,6 +28,7 @@ import {
 import {
   applySuggestion,
   dismissSuggestion,
+  enrichSuggestions,
   listSuggestions,
   listSuggestionsForBlock,
   listSuggestionsForDoc,
@@ -72,35 +74,14 @@ autoLink.get('/inbox', (c) => {
     actionStatus: ['suggested', 'applied', 'reverted'] as ActionStatus[],
   })
 
-  // 补 source content / doc title（Inbox UI 需要）
-  const db = getDb()
-  const items = suggestions.map((s) => {
-    const wire = toWire(s)
-    const srcRow = db
-      .query(
-        `SELECT b.content, b.root_id,
-                (SELECT content FROM blocks WHERE id = b.root_id) as doc_title
-         FROM blocks b WHERE b.id = ?`,
-      )
-      .get(s.sourceBlockId) as
-      | { content: string; root_id: string; doc_title: string }
-      | undefined
-    const raw = (srcRow?.content || '').trim()
-    // 源块已删 / 空内容：用锚点或候选摘要兜底，避免 UI 只显示「(空内容)」
-    let sourceContent = raw.slice(0, 200)
-    if (!sourceContent) {
-      if (s.anchor) sourceContent = `「${s.anchor}」`
-      else if (s.candidates[0]?.snippet) sourceContent = s.candidates[0].snippet.slice(0, 200)
-      else if (!srcRow) sourceContent = '（源内容已删除）'
-    }
-    return {
-      ...wire,
-      source_content: sourceContent,
-      source_doc_id: srcRow?.root_id ?? null,
-      source_doc_title: srcRow?.doc_title || (srcRow ? '未命名文档' : '（源文档已删除）'),
-      source_missing: !srcRow,
-    }
-  })
+  // 补 source content / doc title（Inbox UI 需要；一次 IN 查询批量补全）
+  const items: AutolinkSuggestionWire[] = enrichSuggestions(getDb(), suggestions).map(({ wire, source }) => ({
+    ...wire,
+    source_content: source.content,
+    source_doc_id: source.docId,
+    source_doc_title: source.docTitle,
+    source_missing: source.missing,
+  }))
 
   return c.json({ status, count: items.length, items })
 })

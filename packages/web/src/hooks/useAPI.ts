@@ -79,7 +79,7 @@ export function clearStoredPassword(): void {
 }
 
 /** 拼出当前会话的 Authorization header（如已登录），否则空 */
-export function authHeader(): Record<string, string> {
+function authHeader(): Record<string, string> {
   const pw = getStoredPassword()
   if (!pw) return {}
   // 用户固定 admin（与服务端约定一致）；密码原值传给 btoa
@@ -102,29 +102,33 @@ export async function fetchWithAuth(path: string, options?: RequestInit): Promis
   return res
 }
 
+/**
+ * API 请求失败错误：在 message 之外保留 HTTP 状态码与已解析的响应体，
+ * 供消费方读取服务端结构化错误（如 PUT /ai/config 400 的 errors[] 字段级校验）。
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public body: unknown,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetchWithAuth(path, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...(options?.headers ?? {}) },
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: res.statusText }))
-    throw new Error(err.message || `HTTP ${res.status}`)
+    // 响应体解析失败时 body 为 null，message 退回 statusText
+    const body: unknown = await res.json().catch(() => null)
+    const message = (body as { message?: string } | null)?.message || res.statusText || `HTTP ${res.status}`
+    throw new ApiError(message, res.status, body)
   }
   return res.json()
-}
-
-export function useAPI() {
-  return {
-    get: <T>(path: string) => request<T>(path),
-    post: <T>(path: string, body: unknown) =>
-      request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
-    patch: <T>(path: string, body: unknown) =>
-      request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
-    put: <T>(path: string, body: unknown) =>
-      request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
-    delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
-  }
 }
 
 export const api = {

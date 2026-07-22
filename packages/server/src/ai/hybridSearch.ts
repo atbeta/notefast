@@ -362,39 +362,3 @@ function applyContextBoost(citations: Citation[], contextDocId?: string): Citati
     .sort((a, b) => b.score - a.score)
 }
 
-/** 拉取给定 block 的相邻兄弟 + 直系父，扩展上下文以便 prompt 拼装更连贯 */
-export function expandBlockContext(blockIds: string[]): Map<string, { doc_title: string; parent: string | null; neighbors: string }> {
-  const out = new Map<string, { doc_title: string; parent: string | null; neighbors: string }>()
-  if (blockIds.length === 0) return out
-  const db = getDb()
-  const placeholders = blockIds.map(() => '?').join(',')
-  const rows = db
-    .query(
-      `SELECT b.id, b.content, b.parent_id, b.root_id,
-              (SELECT content FROM blocks WHERE id = b.root_id) as doc_title
-       FROM blocks b
-       WHERE b.id IN (${placeholders})`,
-    )
-    .all(...blockIds) as Array<{ id: string; content: string; parent_id: string | null; root_id: string; doc_title: string }>
-
-  for (const row of rows) {
-    let parentContent: string | null = null
-    let neighbors = ''
-    if (row.parent_id) {
-      const parent = db
-        .query('SELECT content FROM blocks WHERE id = ?')
-        .get(row.parent_id) as { content: string } | undefined
-      parentContent = parent?.content ?? null
-      const sibRows = db
-        .query('SELECT content FROM blocks WHERE parent_id = ? ORDER BY sort ASC LIMIT 3')
-        .all(row.parent_id) as Array<{ content: string }>
-      neighbors = sibRows.map((s) => s.content.slice(0, 80)).join(' / ')
-    }
-    out.set(row.id, {
-      doc_title: row.doc_title,
-      parent: parentContent,
-      neighbors,
-    })
-  }
-  return out
-}

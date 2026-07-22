@@ -450,6 +450,73 @@ export function clearAllSuggestions(): void {
   // intentional no-op
 }
 
+// ───────────────────── 建议来源补全（Inbox / MCP 共用） ─────────────────────
+
+/** enrichSuggestions 的单条结果：toWire 线格式 + 源块 / 源文档信息 */
+export interface EnrichedSuggestion {
+  wire: ReturnType<typeof toWire>
+  source: {
+    /** 源块原始内容（源块已删除为 null；未 trim、未截断） */
+    rawContent: string | null
+    /** 列表用 200 字截断 + 兜底文案（「anchor」→ 候选 snippet → （源内容已删除）） */
+    content: string
+    /** 源文档 id（源块已删除为 null） */
+    docId: string | null
+    /** 源文档原始标题（源块已删除为 null） */
+    rawDocTitle: string | null
+    /** 列表用标题（空标题→未命名文档；源块已删除→（源文档已删除）） */
+    docTitle: string
+    /** 源块是否已删除 */
+    missing: boolean
+  }
+}
+
+/**
+ * 批量补全建议的来源信息：收集所有 source_block_id，一次 IN (...) 查询
+ * 补齐 content / root_id / doc_title（原先逐条 SELECT，limit 500 时就是 500 次查询）。
+ */
+export function enrichSuggestions(
+  db: ReturnType<typeof getDb>,
+  suggestions: AutoLinkSuggestion[],
+): EnrichedSuggestion[] {
+  const ids = [...new Set(suggestions.map((s) => s.sourceBlockId))]
+  const srcById = new Map<string, { content: string; root_id: string; doc_title: string | null }>()
+  if (ids.length > 0) {
+    const placeholders = ids.map(() => '?').join(',')
+    const rows = db
+      .query(
+        `SELECT b.id, b.content, b.root_id,
+                (SELECT content FROM blocks WHERE id = b.root_id) as doc_title
+         FROM blocks b WHERE b.id IN (${placeholders})`,
+      )
+      .all(...ids) as Array<{ id: string; content: string; root_id: string; doc_title: string | null }>
+    for (const r of rows) srcById.set(r.id, r)
+  }
+
+  return suggestions.map((s) => {
+    const src = srcById.get(s.sourceBlockId)
+    const raw = (src?.content || '').trim()
+    // 源块已删 / 空内容：用锚点或候选摘要兜底，避免 UI 只显示「(空内容)」
+    let content = raw.slice(0, 200)
+    if (!content) {
+      if (s.anchor) content = `「${s.anchor}」`
+      else if (s.candidates[0]?.snippet) content = s.candidates[0].snippet.slice(0, 200)
+      else if (!src) content = '（源内容已删除）'
+    }
+    return {
+      wire: toWire(s),
+      source: {
+        rawContent: src?.content ?? null,
+        content,
+        docId: src?.root_id ?? null,
+        rawDocTitle: src?.doc_title ?? null,
+        docTitle: src?.doc_title || (src ? '未命名文档' : '（源文档已删除）'),
+        missing: !src,
+      },
+    }
+  })
+}
+
 // 兼容旧导出类型
 export type { Citation } from './hybridSearch'
 

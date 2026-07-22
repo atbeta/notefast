@@ -33,8 +33,6 @@ export interface RerankerProvider {
   rerank(input: RerankInput): Promise<RerankHit[]>
 }
 
-export type RerankerProviderFactory = (config: Record<string, string>) => RerankerProvider
-
 /** TEI /rerank 端点的标准实现 */
 export function createTeiReranker(
   baseUrl: string,

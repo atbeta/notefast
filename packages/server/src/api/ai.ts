@@ -22,6 +22,7 @@ import { z } from 'zod'
 import { streamSSE } from 'hono/streaming'
 import {
   type AiConfig,
+  type AiDiagnoseResult,
   type ChatMessage,
   type LLMProvider,
   type ProviderPresetId,
@@ -197,14 +198,15 @@ ai.post('/diagnose', async (c) => {
   const runtime = hasRuntime() ? getRuntime() : null
 
   if (!runtime) {
-    return c.json({
+    const payload: AiDiagnoseResult = {
       overall: 'not_configured',
       embedding: { configured: false, ok: false, message: 'runtime 未初始化' },
       chat: { configured: false, ok: false, message: 'runtime 未初始化' },
       reranker: { configured: false, ok: false, message: 'runtime 未初始化' },
       elapsedMs: Date.now() - t0,
       ts: new Date().toISOString(),
-    })
+    }
+    return c.json(payload)
   }
 
   const cfg = runtime.autoLinkConfig()
@@ -317,7 +319,7 @@ ai.post('/diagnose', async (c) => {
     overall = 'degraded'
   }
 
-  return c.json({
+  const payload: AiDiagnoseResult = {
     overall,
     embedding,
     chat,
@@ -325,7 +327,8 @@ ai.post('/diagnose', async (c) => {
     autoLink,
     elapsedMs: Date.now() - t0,
     ts: new Date().toISOString(),
-  })
+  }
+  return c.json(payload)
 })
 
 // ───────────────────── search / index ─────────────────────

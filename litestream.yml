@@ -1,7 +1,0 @@
-# DEPRECATED — 请勿再使用本文件。
-#
-# 数据库灾备已改为应用内 S3 快照（Web 设置页 → 数据库备份）。
-# 说明见 docs/backup.md。
-#
-# 历史原因：Compose 中 `litestream replicate -exec true` 会在子进程退出后
-# 结束 Litestream 自身，无法形成可用的持续复制。

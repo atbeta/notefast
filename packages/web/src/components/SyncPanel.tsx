@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw, FolderOpen, Cloud, HardDrive, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Settings as SettingsIcon, Eye, EyeOff } from 'lucide-react'
 import { api } from '../hooks/useAPI'
+import { SYNC_SECRET_MASK, type LocalFsAdapterConfig, type S3AdapterConfig, type WebDavAdapterConfig } from '@notefast/core'
 import { ActionButton, useToast } from './ui'
 import ConfirmDialog from './ConfirmDialog'
 
@@ -26,42 +27,14 @@ interface AdapterInfo {
   status: 'available' | 'planned'
 }
 
-interface LocalFsCfg {
-  kind: 'localfs'
-  dir: string
-  prefix: string
-  enabled: true
-}
-
-interface S3Cfg {
-  kind: 's3'
-  bucket: string
-  region: string
-  endpoint: string
-  accessKeyId: string
-  secretAccessKey: string
-  prefix: string
-  forcePathStyle: boolean
-  enabled: true
-}
-
-interface WebDavCfg {
-  kind: 'webdav'
-  endpoint: string
-  username: string
-  password: string
-  prefix: string
-  enabled: true
-}
-
 type FormState =
   | { kind: 'none' }
-  | ({ kind: 'localfs' } & LocalFsCfg)
-  | ({ kind: 's3' } & S3Cfg)
-  | ({ kind: 'webdav' } & WebDavCfg)
+  | LocalFsAdapterConfig
+  | S3AdapterConfig
+  | WebDavAdapterConfig
 
-const EMPTY_LOCALFS: LocalFsCfg = { kind: 'localfs', dir: '', prefix: '', enabled: true }
-const EMPTY_S3: S3Cfg = {
+const EMPTY_LOCALFS: LocalFsAdapterConfig = { kind: 'localfs', dir: '', prefix: '', enabled: true }
+const EMPTY_S3: S3AdapterConfig = {
   kind: 's3',
   bucket: '',
   region: 'us-east-1',
@@ -72,7 +45,7 @@ const EMPTY_S3: S3Cfg = {
   forcePathStyle: false,
   enabled: true,
 }
-const EMPTY_WEBDAV: WebDavCfg = {
+const EMPTY_WEBDAV: WebDavAdapterConfig = {
   kind: 'webdav',
   endpoint: '',
   username: '',
@@ -80,8 +53,6 @@ const EMPTY_WEBDAV: WebDavCfg = {
   prefix: '',
   enabled: true,
 }
-
-const SECRET_MASK = '***set***'
 
 export default function SyncPanel() {
   const [status, setStatus] = useState<SyncRuntimeStatus | null>(null)
@@ -102,23 +73,23 @@ export default function SyncPanel() {
       setAdaptersInfo(res)
       const active = res.config.active as { kind?: string } | null
       if (active?.kind === 'localfs') {
-        const a = active as LocalFsCfg
+        const a = active as LocalFsAdapterConfig
         setForm({ ...EMPTY_LOCALFS, dir: a.dir ?? '', prefix: a.prefix ?? '' })
       } else if (active?.kind === 's3') {
-        const a = active as S3Cfg
+        const a = active as S3AdapterConfig
         setForm({
           ...EMPTY_S3,
           ...a,
-          accessKeyId: a.accessKeyId || SECRET_MASK,
-          secretAccessKey: a.secretAccessKey || SECRET_MASK,
+          accessKeyId: a.accessKeyId || SYNC_SECRET_MASK,
+          secretAccessKey: a.secretAccessKey || SYNC_SECRET_MASK,
         })
       } else if (active?.kind === 'webdav') {
-        const a = active as WebDavCfg
+        const a = active as WebDavAdapterConfig
         setForm({
           ...EMPTY_WEBDAV,
           endpoint: a.endpoint ?? '',
-          username: a.username || SECRET_MASK,
-          password: a.password || SECRET_MASK,
+          username: a.username || SYNC_SECRET_MASK,
+          password: a.password || SYNC_SECRET_MASK,
           prefix: a.prefix ?? '',
         })
       } else {
@@ -302,7 +273,7 @@ export default function SyncPanel() {
             {form.kind === 'localfs' && (
               <>
                 <TextField label="导出目录" value={form.dir} onChange={(v) => setForm({ ...form, dir: v })} placeholder="/path/to/your/notes" mono />
-                <TextField label="文件名前缀（可选）" value={form.prefix} onChange={(v) => setForm({ ...form, prefix: v })} placeholder="notes/" mono />
+                <TextField label="文件名前缀（可选）" value={form.prefix ?? ''} onChange={(v) => setForm({ ...form, prefix: v })} placeholder="notes/" mono />
               </>
             )}
 
@@ -311,8 +282,8 @@ export default function SyncPanel() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <TextField label="Bucket" value={form.bucket} onChange={(v) => setForm({ ...form, bucket: v })} placeholder="my-notefast-bucket" mono />
                   <TextField label="Region" value={form.region} onChange={(v) => setForm({ ...form, region: v })} placeholder="us-east-1" mono />
-                  <TextField label="Endpoint（MinIO / R2 / OSS 必填）" value={form.endpoint} onChange={(v) => setForm({ ...form, endpoint: v })} placeholder="https://s3.amazonaws.com" mono />
-                  <TextField label="Key 前缀" value={form.prefix} onChange={(v) => setForm({ ...form, prefix: v })} placeholder="notes/" mono />
+                  <TextField label="Endpoint（MinIO / R2 / OSS 必填）" value={form.endpoint ?? ''} onChange={(v) => setForm({ ...form, endpoint: v })} placeholder="https://s3.amazonaws.com" mono />
+                  <TextField label="Key 前缀" value={form.prefix ?? ''} onChange={(v) => setForm({ ...form, prefix: v })} placeholder="notes/" mono />
                   <TextField label="Access Key ID" value={form.accessKeyId} onChange={(v) => setForm({ ...form, accessKeyId: v })} placeholder="AKIA..." mono />
                   <div>
                     <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Secret Access Key</label>
@@ -385,7 +356,7 @@ export default function SyncPanel() {
                 </div>
                 <TextField
                   label="远端子目录前缀（可选）"
-                  value={form.prefix}
+                  value={form.prefix ?? ''}
                   onChange={(v) => setForm({ ...form, prefix: v })}
                   placeholder="notes/"
                   mono

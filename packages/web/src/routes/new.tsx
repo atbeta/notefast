@@ -1,13 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, Check, X, Upload, Sparkles, Loader2 } from 'lucide-react'
+import type { Notebook } from '@notefast/core'
 import { request } from '../hooks/useAPI'
 import SubNavTabs from '../components/SubNavTabs'
-
-interface Notebook {
-  id: string
-  name: string
-}
 
 export default function NewDocPage() {
   const navigate = useNavigate()

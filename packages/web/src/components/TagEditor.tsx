@@ -4,7 +4,7 @@
  * 纯展示 + 行内编辑：
  * - 点击 chip 的 × 删除 tag（乐观更新）
  * - 输入框敲 Enter / 失焦提交新 tag（自动 normalize）
- * - 用 api.useAPI → 自动带 Authorization header
+ * - 用 api 请求 → 自动带 Authorization header
  */
 
 import { useState } from 'react'

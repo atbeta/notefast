@@ -388,3 +388,35 @@ describe('ai_exclude 一致性（API 路径）', () => {
     })
   })
 })
+
+describe('Blocks move 传播', () => {
+  test('跨文档同层移动（levelDiff=0）后代 root_id 同步更新', async () => {
+    const { body: docA } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: 'move-root-a' })
+    const { body: docB } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: 'move-root-b' })
+    const { body: heading } = await api('POST', '/api/v1/blocks', {
+      notebook_id: notebookId,
+      parent_id: docA.id,
+      type: 'heading',
+      content: 'h',
+    })
+    const { body: child } = await api('POST', '/api/v1/blocks', {
+      notebook_id: notebookId,
+      parent_id: heading.id,
+      type: 'paragraph',
+      content: 'c',
+    })
+    expect(child.root_id).toBe(docA.id)
+
+    // heading 从 docA 顶层移到 docB 顶层：level 不变（1→1），root 变（A→B）
+    const { status } = await api('PATCH', `/api/v1/blocks/${heading.id}/move`, {
+      new_parent_id: docB.id,
+    })
+    expect(status).toBe(200)
+
+    const { body: movedHeading } = await api('GET', `/api/v1/blocks/${heading.id}`)
+    expect(movedHeading.root_id).toBe(docB.id)
+    const { body: movedChild } = await api('GET', `/api/v1/blocks/${child.id}`)
+    expect(movedChild.root_id).toBe(docB.id)
+    expect(movedChild.level).toBe(2)
+  })
+})

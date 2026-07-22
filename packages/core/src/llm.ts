@@ -91,5 +91,3 @@ export interface LLMProvider {
    */
   chatWithTools?(messages: ChatMessage[], options?: ChatWithToolsOptions): Promise<ChatWithToolsResult>
 }
-
-export type LLMProviderFactory = (config: Record<string, string>) => LLMProvider

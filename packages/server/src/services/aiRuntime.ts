@@ -255,9 +255,3 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
   })
   console.log('🧠 AI auto-link hooks attached')
 }
-
-// ───────────────────── 工具 ─────────────────────
-
-export function configFilePath(): string {
-  return join(dataDir, CONFIG_FILE)
-}

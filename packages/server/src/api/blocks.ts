@@ -10,6 +10,7 @@ import {
 } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import { getDb } from '../db'
+import { fetchSubtreeBlocks } from '../dbQueries'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete } from '../services/hooks'
 import { applyAiExcludeChange } from '../ai/aiExclude'
 
@@ -27,7 +28,7 @@ blocks.get('/:id', (c) => {
   }
 
   const block = rowToBlock(row)
-  const rows = fetchSubtree(db, id)
+  const rows = fetchSubtreeBlocks(db, id)
 
   if (rows.length > 0) {
     const children = limitDepth(buildBlockTree(rows), maxDepth, 0)
@@ -46,7 +47,7 @@ blocks.get('/:id/tree', (c) => {
     return c.json({ error: 'not_found', message: `Block ${id} 不存在` }, 404)
   }
 
-  const rows = fetchSubtree(db, id)
+  const rows = fetchSubtreeBlocks(db, id)
   const block = rowToBlock(row)
   const allRows = [row, ...rows]
   const tree = buildBlockTree(allRows)
@@ -183,6 +184,7 @@ blocks.patch('/:id/move', zValidator('json', moveBlockSchema), (c) => {
   }
 
   const levelDiff = newLevel - existing.level
+  const rootChanged = newRootId !== existing.root_id
 
   db.query(
     `UPDATE blocks SET parent_id = ?, root_id = ?, level = level + ?,
@@ -190,14 +192,19 @@ blocks.patch('/:id/move', zValidator('json', moveBlockSchema), (c) => {
      WHERE id = ?`,
   ).run(input.new_parent_id, newRootId, levelDiff, input.new_sort ?? existing.sort, id)
 
-  if (levelDiff !== 0) {
+  // level 与 root_id 传播相互独立：跨文档同层移动时 levelDiff 为 0，但后代 root_id 仍须跟随
+  if (levelDiff !== 0 || rootChanged) {
     db.transaction(() => {
-      const descendants = fetchSubtree(db, id)
+      const descendants = fetchSubtreeBlocks(db, id)
       const descendantIds = descendants.map((r) => r.id)
       if (descendantIds.length > 0) {
         const placeholders = descendantIds.map(() => '?').join(',')
-        db.query(`UPDATE blocks SET level = level + ? WHERE id IN (${placeholders})`).run(levelDiff, ...descendantIds)
-        db.query(`UPDATE blocks SET root_id = ? WHERE id IN (${placeholders})`).run(newRootId, ...descendantIds)
+        if (levelDiff !== 0) {
+          db.query(`UPDATE blocks SET level = level + ? WHERE id IN (${placeholders})`).run(levelDiff, ...descendantIds)
+        }
+        if (rootChanged) {
+          db.query(`UPDATE blocks SET root_id = ? WHERE id IN (${placeholders})`).run(newRootId, ...descendantIds)
+        }
       }
     })()
   }
@@ -217,7 +224,7 @@ blocks.delete('/:id', (c) => {
     return c.json({ error: 'not_found', message: `Block ${id} 不存在` }, 404)
   }
 
-  const childIds = fetchSubtree(db, id)
+  const childIds = fetchSubtreeBlocks(db, id)
   const allIds = [id, ...childIds.map((r) => r.id)]
 
   db.transaction(() => {
@@ -231,24 +238,6 @@ blocks.delete('/:id', (c) => {
   fireAfterDelete(id)
   return c.json({ deleted: true, count: allIds.length })
 })
-
-function fetchSubtree(database: ReturnType<typeof getDb>, rootId: string): BlockRow[] {
-  const rows: BlockRow[] = []
-  const stack = [rootId]
-
-  while (stack.length > 0) {
-    const currentId = stack.pop()!
-    const children = database
-      .query('SELECT * FROM blocks WHERE parent_id = ? ORDER BY sort ASC')
-      .all(currentId) as BlockRow[]
-    for (const child of children) {
-      rows.push(child)
-      stack.push(child.id)
-    }
-  }
-
-  return rows
-}
 
 function limitDepth(blocks: import('@notefast/core').Block[], maxDepth: number, current: number): import('@notefast/core').Block[] {
   if (current >= maxDepth) {

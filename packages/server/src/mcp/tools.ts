@@ -6,7 +6,6 @@ import {
   buildFtsQuery,
   highlightSnippet,
   blocksToMarkdown,
-  parseMarkdownToBlocks,
   rowToBlock,
   suggestTitle,
   readTagsFromProperties,
@@ -18,21 +17,23 @@ import {
   docMatchesTags,
   isInboxDoc,
   readDocStatusFromProperties,
-  setDocStatusInProperties,
   type LLMProvider,
   type ChatMessage,
   type TagMatchMode,
 } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import { hasRuntime, getRuntime } from '../services/aiRuntime'
+import { fetchDocBlocks } from '../dbQueries'
+import { insertDocFromMarkdown } from '../services/docImport'
 import { semanticSearch } from '../ai/indexer'
 import { runChatSync } from '../ai/chat'
 import {
   applySuggestion,
   dismissSuggestion,
+  enrichSuggestions,
+  findSuggestion,
   listSuggestions,
   revertSuggestion,
-  toWire,
 } from '../ai/autoLinkStore'
 import {
   analyzeBlock,
@@ -240,8 +241,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
         return toolError('not_found', `文档 ${doc_id} 不存在`, { doc_id })
       }
 
-      const rows = fetchDescendants(db, doc_id)
-      const allRows = [docRow, ...rows]
+      const allRows = fetchDocBlocks(db, doc_id)
       const tree = buildBlockTree(allRows)
 
       return {
@@ -321,7 +321,7 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
     async ({ notebook_id, parent_id, type, content }) => {
       const nid = notebook_id || notebookId
       const nbErr = validateNotebook(db, nid)
-      if (nbErr) return { content: [toText(nbErr)] }
+      if (nbErr) return nbErr
 
       // 父块属于 ai_exclude 文档时拒绝创建子块
       if (parent_id) {
@@ -398,62 +398,23 @@ registerTool(
     async ({ notebook_id, title, markdown, status }) => {
       const nid = notebook_id || notebookId
       const nbErr = validateNotebook(db, nid)
-      if (nbErr) return { content: [toText(nbErr)] }
+      if (nbErr) return nbErr
 
-      const inputs = parseMarkdownToBlocks(markdown, nid)
-      const docStatus = status === 'inbox' ? 'inbox' : 'note'
-      const docProperties = setDocStatusInProperties('{}', docStatus)
-      const docId = crypto.randomUUID()
-      const now = new Date().toISOString()
-      const insertedIds: string[] = []
-      // inp.id → 实际 blockId 映射表；父对子的引用必须走这条映射。
-      // 否则 inp.parent_id 指向 parseMarkdownToBlocks 产生的临时 UUID
-      // （从未 INSERT），嵌套块（代码块/子列表等）会触发 immediate FK 失败。
-      const idMap = new Map<string, string>()
-
-      db.transaction(() => {
-        // 安全网：PRAGMA 作用域限本事务，提交时检查 FK，避免 immediate 阶段炸开
-        db.run('PRAGMA defer_foreign_keys = ON')
-
-        db.query(
-          `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
-           VALUES (?, ?, NULL, ?, 'document', ?, ?, 0, 0, ?, ?)`,
-        ).run(docId, nid, docId, title, docProperties, now, now)
-
-        for (const inp of inputs) {
-          const blockId = crypto.randomUUID()
-          // 父链映射：从临时 id 翻译成已经 INSERT 的实际 id
-          const parentId = inp.parent_id
-            ? (idMap.get(inp.parent_id) ?? docId)
-            : docId
-          if (inp.id) idMap.set(inp.id, blockId)
-
-          db.query(
-            `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)`,
-          ).run(
-            blockId,
-            nid,
-            parentId as string,
-            docId,
-            inp.type,
-            inp.content ?? '',
-            JSON.stringify(inp.properties || {}),
-            now,
-            now,
-          )
-          insertedIds.push(blockId)
-        }
-      })()
+      const { docId, blockIds, parsedCount } = insertDocFromMarkdown(db, {
+        notebookId: nid,
+        title,
+        markdown,
+        status,
+      })
 
       // Hook 触发（fire-and-forget）：先 doc，再批量子块
       const docRow = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
       fireAfterCreate(rowToBlock(docRow))
-      if (insertedIds.length > 0) {
-        const placeholders = insertedIds.map(() => '?').join(',')
+      if (blockIds.length > 0) {
+        const placeholders = blockIds.map(() => '?').join(',')
         const childRows = db
           .query(`SELECT * FROM blocks WHERE id IN (${placeholders})`)
-          .all(...insertedIds) as BlockRow[]
+          .all(...blockIds) as BlockRow[]
         fireAfterCreateMany(childRows.map(rowToBlock))
       }
 
@@ -461,7 +422,7 @@ registerTool(
         content: [toText({
           doc_id: docId,
           title,
-          block_count: inputs.length + 1,
+          block_count: parsedCount + 1,
           // asset 引用对账：悬空引用告警（不阻断创建）
           ...(() => {
             const missing = findMissingAssets(extractAssetRefs(markdown))
@@ -651,8 +612,7 @@ registerTool(
         return toolError('not_found', `文档 ${doc_id} 不存在`, { doc_id })
       }
 
-      const rows = fetchDescendants(db, doc_id)
-      const headings = extractHeadings([docRow, ...rows])
+      const headings = extractHeadings(fetchDocBlocks(db, doc_id))
 
       return {
         content: [toText({
@@ -680,8 +640,7 @@ registerTool(
         return toolError('not_found', `文档 ${doc_id} 不存在`, { doc_id })
       }
 
-      const rows = fetchDescendants(db, doc_id)
-      const allRows = [docRow, ...rows]
+      const allRows = fetchDocBlocks(db, doc_id)
       const tree = buildBlockTree(allRows)
       const markdown = blocksToMarkdown(tree)
 
@@ -849,28 +808,12 @@ registerTool(
         actionStatus: ['suggested', 'applied', 'reverted'],
       })
       const db = getDb()
-      const items = list.map((s) => {
-        const wire = toWire(s)
-        const src = db
-          .query(
-            `SELECT b.content, b.root_id, (SELECT content FROM blocks WHERE id = b.root_id) as doc_title
-             FROM blocks b WHERE b.id = ?`,
-          )
-          .get(s.sourceBlockId) as { content: string; root_id: string; doc_title: string } | undefined
-        const raw = (src?.content || '').trim()
-        let sourceContent = raw.slice(0, 200)
-        if (!sourceContent) {
-          if (s.anchor) sourceContent = `「${s.anchor}」`
-          else if (s.candidates[0]?.snippet) sourceContent = s.candidates[0].snippet.slice(0, 200)
-          else if (!src) sourceContent = '（源内容已删除）'
-        }
-        return {
-          ...wire,
-          source_content: sourceContent,
-          source_doc_id: src?.root_id ?? null,
-          source_doc_title: src?.doc_title || (src ? '未命名文档' : '（源文档已删除）'),
-        }
-      })
+      const items = enrichSuggestions(db, list).map(({ wire, source }) => ({
+        ...wire,
+        source_content: source.content,
+        source_doc_id: source.docId,
+        source_doc_title: source.docTitle,
+      }))
       // 过滤来源属于 ai_exclude 文档的建议
       const excluded = loadAiExcludedDocIds(items.map((it) => it.source_doc_id ?? ''))
       const visible = items.filter((it) => !(it.source_doc_id && excluded.has(it.source_doc_id)))
@@ -1047,7 +990,7 @@ registerTool(
       }
       const doc = getDb().query("SELECT * FROM blocks WHERE id = ? AND type = 'document'").get(docId) as BlockRow | undefined
       if (!doc) return { contents: [{ text: `文档 ${docId} 不存在`, uri: '' }] }
-      const tree = buildBlockTree([doc, ...fetchDescendants(getDb(), docId)])
+      const tree = buildBlockTree(fetchDocBlocks(getDb(), docId))
       const md = blocksToMarkdown(tree)
       return { contents: [{ text: md.slice(0, 50_000), uri: `notefast://docs/${docId}`, mimeType: 'text/markdown' }] }
     },
@@ -1063,70 +1006,33 @@ registerTool(
     withToolLogging('notefast_get_autolink_suggestion', async ({ suggestion_id }: { suggestion_id: string }) => {
       const db = getDb()
       // autolink_suggestions 表无 source_content / source_doc_title，需 join blocks 补全（与 list 接口一致）
-      const row = db.query('SELECT * FROM autolink_suggestions WHERE id = ?').get(suggestion_id) as unknown as {
-        id: string
-        source_block_id: string
-        anchor: string
-        kind: string
-        candidates: string // JSON
-        action_status: string
-        review_status: string
-        score_kind: string | null
-        error: string | null
-      } | undefined
-      if (!row) return toolError('not_found', `建议 ${suggestion_id} 不存在`, { suggestion_id })
-      const src = db
-        .query(
-          `SELECT b.content, b.root_id, (SELECT content FROM blocks WHERE id = b.root_id) as doc_title
-           FROM blocks b WHERE b.id = ?`,
-        )
-        .get(row.source_block_id) as { content: string; root_id: string; doc_title: string } | undefined
+      const s = findSuggestion(suggestion_id)
+      if (!s) return toolError('not_found', `建议 ${suggestion_id} 不存在`, { suggestion_id })
+      const enriched = enrichSuggestions(db, [s])[0]!
       // 拒绝来源属于 ai_exclude 文档的建议
-      if (src?.root_id && isDocAiExcluded(src.root_id)) {
+      if (enriched.source.docId && isDocAiExcluded(enriched.source.docId)) {
         return toolError('forbidden', `该建议所属文档已对 AI 隐藏`, { suggestion_id })
       }
-      let candidates: unknown[] = []
-      try { candidates = JSON.parse(row.candidates) } catch { /* ignore */ }
-      const top = Array.isArray(candidates) && candidates.length > 0
-        ? (candidates[0] as { confidence?: number } | undefined)
-        : undefined
+      const top = s.candidates[0] as { confidence?: number } | undefined
       return {
         content: [toText({
-          id: row.id,
-          source_block_id: row.source_block_id,
-          source_content: (src?.content ?? '').slice(0, 2_000),
-          source_doc_id: src?.root_id ?? null,
-          source_doc_title: src?.doc_title ?? '',
-          anchor: row.anchor,
-          kind: row.kind,
+          id: s.id,
+          source_block_id: s.sourceBlockId,
+          source_content: (enriched.source.rawContent ?? '').slice(0, 2_000),
+          source_doc_id: enriched.source.docId,
+          source_doc_title: enriched.source.rawDocTitle ?? '',
+          anchor: s.anchor,
+          kind: s.kind,
           confidence: top?.confidence ?? null,
-          score_kind: row.score_kind,
-          action_status: row.action_status,
-          review_status: row.review_status,
-          candidates: candidates.slice(0, 10),
-          error: row.error,
+          score_kind: s.scoreKind,
+          action_status: s.actionStatus,
+          review_status: s.reviewStatus,
+          candidates: s.candidates.slice(0, 10),
+          error: s.error,
         })],
       }
     }),
   )
-}
-
-function fetchDescendants(database: ReturnType<typeof getDb>, rootId: string): BlockRow[] {
-  const rows: BlockRow[] = []
-  const stack = [rootId]
-
-  while (stack.length > 0) {
-    const currentId = stack.pop()!
-    const children = database
-      .query('SELECT * FROM blocks WHERE parent_id = ? ORDER BY sort ASC')
-      .all(currentId) as BlockRow[]
-    for (const child of children) {
-      rows.push(child)
-      stack.push(child.id)
-    }
-  }
-
-  return rows
 }
 
 function limitTreeDepth(block: import('@notefast/core').Block, maxDepth: number): import('@notefast/core').Block {

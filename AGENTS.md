@@ -35,6 +35,8 @@ AI 编码 Agent 与人类协作者的本仓库级行为规范。
 
 改动完成前运行与变更范围匹配的检查（见下方 **命令** 章节）。若跳过，说明原因。
 
+注意：`bun lint` 目前是占位脚本（`echo 'lint ok'`），不产生真实检查信号；质量门禁以 `bun run typecheck` + `bun test` 为准，两者已由 `.github/workflows/ci.yml` 在 PR/push 时强制执行。
+
 ---
 
 ## 技术栈：TypeScript（Bun）
@@ -69,27 +71,37 @@ AI-first 知识库 — block 级 API + MCP，AI 负责写入与理解，人类�
 ```
 notefast/
 ├── packages/
-│   ├── core/                # 共享类型与数据模型
+│   ├── core/                # 共享类型与数据模型（纯库，无运行时依赖）
 │   │   └── src/
-│   │       ├── types.ts     # Block, Document, Notebook, Workspace 等类型
+│   │       ├── types.ts     # Block、Notebook、API 契约与线格式类型
 │   │       ├── model.ts     # Block 树操作（CRUD、移动、排序）
 │   │       ├── markdown.ts  # Markdown ↔ Block 树互转
-│   │       └── search.ts    # FTS5 查询构建
+│   │       ├── search.ts    # FTS5 查询构建
+│   │       ├── sync.ts / backup.ts / tags.ts / docStatus.ts / plugin.ts
+│   │       ├── embedding.ts / llm.ts / reranker.ts   # Provider 接口
+│   │       └── ai/          # config / presets / runtime / suggest / thinkSplit
 │   │
 │   ├── server/              # REST API + MCP Server
 │   │   └── src/
 │   │       ├── index.ts     # 入口，Hono 应用创建
 │   │       ├── db.ts        # SQLite 初始化、migrations
-│   │       ├── api/         # REST 路由（blocks, docs, search, refs, import）
-│   │       ├── mcp/         # MCP Tool 定义
-│   │       └── middleware/  # 可选鉴权
+│   │       ├── dbQueries.ts # 共享 block 查询（fetchDocBlocks / fetchSubtreeBlocks）
+│   │       ├── api/         # REST 路由（blocks, docs, search, refs, import, ai, sync, backup, autolink…）
+│   │       ├── mcp/         # MCP Server 与 Tool 定义
+│   │       ├── ai/          # indexer / chat / hybridSearch / autoLink / vectorStore / aiExclude
+│   │       ├── sync/        # Markdown 归档适配器（LocalFS / S3 / WebDAV）
+│   │       ├── backup/      # SQLite→S3 快照备份
+│   │       ├── services/    # aiRuntime / docImport / autoExport / hooks
+│   │       ├── assets/      # 图片 AssetStore
+│   │       ├── cli/         # backup:restore 等停服命令
+│   │       └── middleware/  # 鉴权
 │   │
 │   └── web/                 # React Web 阅读器
 │       └── src/
 │           ├── App.tsx
-│           ├── routes/      # 页面路由（home, notebook, doc）
-│           ├── components/  # BlockRenderer, DocTree, SearchBar 等
-│           └── hooks/       # useAPI 等
+│           ├── routes/      # home, doc, new, inbox, autolink, settings, settings-ai
+│           ├── components/  # BlockRenderer, MarkdownEditor, Sidebar, 设置面板等
+│           └── hooks/       # useAPI（api 客户端 + ApiError）, useTheme
 │
 ├── docker-compose.yml
 ├── Dockerfile
@@ -146,6 +158,7 @@ docker compose up -d
 - 笔记组织优先 tag + 智能视图，不主推多笔记本 UI；底层保留单 Notebook 即可
 - 文档默认对 AI 可见；「对 AI 隐藏」入口应低调（勿用锁图标或「对 AI 可见」易被读成需点击才可见）；已隐藏态再显式状态与恢复
 - 暂不需要「默认 AI 可见性」全局设置；少数敏感笔记用手动 opt-out 即可
+- Markdown 富渲染优先接入 Mermaid；LaTeX/公式后续再做
 
 ## Learned Workspace Facts
 
@@ -156,7 +169,8 @@ docker compose up -d
 - Markdown 归档远端文件名为 `<slug>--<docId>.md`，并由 `notefast-archive.manifest.json` 跟踪与清理陈旧文件；S3 与 WebDAV 同步适配器同时只能启用一个，且仅为单向 push
 - 文档 markdown 导出在根写入 `# {title}` 为有意设计；编辑器加载需 strip 与标题同文的首 H1（含子块时提升其子块）
 - 数据库备份配置在 `data/backup.config.json`；恢复须停服后跑 `bun --filter @notefast/server backup:restore`
-- 旧 Litestream Compose profile 已移除（`-exec true` 会导致复制进程退出）
+- 旧 Litestream Compose profile 与根目录 `litestream.yml` 均已移除（`-exec true` 会导致复制进程退出）；灾备统一走应用内 SQLite→S3 快照
 - 文档组织：tag 多选默认 AND（同时包含），`tag_match=any` 为包含任一；智能视图为内置预设 + URL 参数（无自定义命名视图表）
 - `properties.ai_exclude: true` 软隔离：不进向量/RAG/AutoLink/MCP 发现与按 ID 读取；人类 Web 列表/编辑/Cmd+K 仍可用；备份与 Markdown 归档仍含全文
 - 收集箱：`properties.status: 'inbox'`；主列表 / tags 聚合 / MCP `list_docs` 默认排除；`GET /docs/list?status=inbox` 与侧栏「收集箱」；升格 `PATCH /docs/:id/status` → `note`；原 AutoLink Inbox 改名为「链接建议」（`/autolink`）
+- 文档阅读/编辑预览用自定义 `BlockRenderer`，AI 聊天用 `react-markdown` + `remark-gfm`；mermaid 代码围栏经懒加载组件渲染并跟随 `data-theme`

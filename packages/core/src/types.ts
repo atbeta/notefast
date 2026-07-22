@@ -124,6 +124,88 @@ export interface HeadingNode {
   children: HeadingNode[]
 }
 
+// ───────────────────── API 线格式（server ↔ web 共享，字段以 server 实际返回为准） ─────────────────────
+
+/** AutoLink 候选链接（线格式） */
+export interface AutolinkCandidateWire {
+  block_id: string
+  doc_id: string
+  doc_title: string
+  snippet: string
+  confidence: number
+  score_kind: 'fts_rank' | 'embedding' | 'hybrid'
+}
+
+/** AutoLink 建议（GET /auto-link/inbox 的 items 线格式，含来源补全） */
+export interface AutolinkSuggestionWire {
+  id: string
+  source_block_id: string
+  source_doc_id: string | null
+  source_doc_title: string
+  source_content: string
+  /** 源块是否已删除 */
+  source_missing: boolean
+  anchor: string
+  kind: string
+  candidates: AutolinkCandidateWire[]
+  action_status: 'suggested' | 'applied' | 'reverted' | 'failed' | 'superseded'
+  review_status: 'unreviewed' | 'accepted' | 'dismissed'
+  applied_target_id: string | null
+  created_ref_id: number | null
+  score_kind: 'fts_rank' | 'embedding' | 'hybrid'
+  error: string | null
+  created_at: string
+  applied_at: string | null
+  reviewed_at: string | null
+}
+
+/** /ai/diagnose 单项能力探测结果（公共字段） */
+export interface AiDiagnoseProbe {
+  configured: boolean
+  ok: boolean
+  latencyMs?: number
+  model?: string
+  error?: string
+  message?: string
+}
+
+/** /ai/diagnose — embedding 探测 */
+export interface AiDiagnoseEmbedding extends AiDiagnoseProbe {
+  dim?: number
+  embeddingCalls?: number
+}
+
+/** /ai/diagnose — chat 探测 */
+export interface AiDiagnoseChat extends AiDiagnoseProbe {
+  replySample?: string
+}
+
+/** /ai/diagnose — reranker 探测 */
+export interface AiDiagnoseReranker extends AiDiagnoseProbe {
+  hitCount?: number
+}
+
+/** /ai/diagnose 响应（autoLink 仅在 runtime 已初始化时返回） */
+export interface AiDiagnoseResult {
+  overall: 'healthy' | 'partial' | 'degraded' | 'idle' | 'not_configured'
+  embedding: AiDiagnoseEmbedding
+  chat: AiDiagnoseChat
+  reranker: AiDiagnoseReranker
+  autoLink?: {
+    configured: boolean
+    enabled: boolean
+    autoApply: 'never' | 'high_confidence'
+    ok: boolean
+    prerequisites: {
+      chat: { configured: boolean; ok: boolean }
+      /** embedding 非强依赖：已配置时为 ok 布尔值，未配置为 null */
+      embedding: boolean | null
+    }
+  }
+  elapsedMs: number
+  ts: string
+}
+
 /** API 请求校验 schema */
 export const createBlockSchema = z.object({
   notebook_id: z.string().min(1).max(200),

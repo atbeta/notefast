@@ -26,82 +26,27 @@ import {
   KEY_MASK,
   definitionFromPreset,
   defaultAutoLinkConfig,
+  type AiDiagnoseResult,
   type ProviderDefinition,
   type ProviderPresetId,
   type AutoLinkConfig,
   type RerankerDefinition,
   type Region,
+  type RuntimeStatus,
+  type Capabilities,
 } from '@notefast/core'
-import { api } from '../hooks/useAPI'
+import { api, ApiError } from '../hooks/useAPI'
 import { ActionButton, useToast } from './ui'
 import ConfirmDialog from './ConfirmDialog'
 
-interface AIStatus {
-  enabled: boolean
-  embedding: { configured: boolean; ok: boolean; dim?: number; lastError?: string }
-  chat: { configured: boolean; ok: boolean; model?: string; lastError?: string }
-  reranker: { configured: boolean; ok: boolean; model?: string; lastError?: string }
-  autoLink: { configured: boolean; enabled: boolean; autoApply: 'never' | 'high_confidence'; lastError?: string }
-  usage: {
-    embeddingCalls: number
-    chatCalls: number
-    rerankCalls: number
-    autoLinkAnalyses: number
-    lastSuccessAt?: string
-  }
-  config: { chat: ProviderDefinition | null; embedding: ProviderDefinition | null; reranker: RerankerDefinition | null; autoLink?: AutoLinkConfig }
-}
-
-interface Capabilities {
-  ai_enabled: boolean
-  embedding: boolean
-  chat: boolean
-  reranker: boolean
-  hybrid_search: boolean
-}
-
-interface DiagnoseResult {
-  overall: 'healthy' | 'partial' | 'degraded' | 'idle'
-  embedding: {
-    configured: boolean
-    ok: boolean
-    latencyMs?: number
-    dim?: number
-    embeddingCalls?: number
-    model?: string
-    error?: string
-    message?: string
-  }
-  chat: {
-    configured: boolean
-    ok: boolean
-    latencyMs?: number
-    model?: string
-    replySample?: string
-    error?: string
-    message?: string
-  }
-  reranker: {
-    configured: boolean
-    ok: boolean
-    latencyMs?: number
-    model?: string
-    hitCount?: number
-    error?: string
-    message?: string
-  }
-  autoLink: {
-    configured: boolean
-    enabled: boolean
-    autoApply: 'never' | 'high_confidence'
-    ok: boolean
-    prerequisites: {
-      chat: { configured: boolean; ok: boolean }
-      embedding: { configured: boolean; ok: boolean } | null
-    }
-  }
-  elapsedMs: number
-  ts: string
+/**
+ * /ai/status 响应 = core RuntimeStatus + 服务端附加字段。
+ * vectorStore / fix_hint 是 server 私有类型（core 未建模），web 暂不消费，
+ * 以交叉类型保留字段，避免丢失。
+ */
+type AIStatus = RuntimeStatus & {
+  vectorStore?: unknown
+  fix_hint?: string
 }
 
 function defaultAutoLink(): AutoLinkConfig {
@@ -170,6 +115,13 @@ function errorsToFields(errors: string[]): FormErrors {
   return out
 }
 
+/** 从 ApiError 提取服务端 errors[]（类型守卫：body 为对象且 errors 是 string 数组） */
+function serverValidationErrors(e: unknown): string[] {
+  if (!(e instanceof ApiError) || !e.body || typeof e.body !== 'object') return []
+  const errors = (e.body as { errors?: unknown }).errors
+  return Array.isArray(errors) ? errors.filter((x): x is string => typeof x === 'string') : []
+}
+
 /** 客户端快速校验（基于本地状态，避免不必要的网络往返） */
 function localValidate(c: {
   chat: ProviderDefinition | null
@@ -221,7 +173,7 @@ export default function AISettingsPanel() {
   const [showKey, setShowKey] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
-  const [diagnose, setDiagnose] = useState<DiagnoseResult | null>(null)
+  const [diagnose, setDiagnose] = useState<AiDiagnoseResult | null>(null)
   const [showDisableConfirm, setShowDisableConfirm] = useState(false)
   const toast = useToast()
   // 字段级错误（红色内嵌到表单）+ 保存成功的最近一次描述（持久化显示在按钮旁）
@@ -281,9 +233,8 @@ export default function AISettingsPanel() {
       })
       refresh()
     } catch (e: unknown) {
-      // 尝试从服务端 400 提取 errors[]
-      const anyErr = e as { errors?: string[]; message?: string }
-      const list = Array.isArray(anyErr?.errors) ? anyErr.errors : []
+      // 服务端 400：ApiError.body 带 { error, message, errors[] }，拆成字段级红字
+      const list = serverValidationErrors(e)
       if (list.length > 0) {
         setFormErrors(errorsToFields(list))
         toast.error({
@@ -294,7 +245,7 @@ export default function AISettingsPanel() {
       } else {
         toast.error({
           title: '保存失败',
-          description: anyErr?.message || (e instanceof Error ? e.message : String(e)),
+          description: e instanceof Error ? e.message : String(e),
           durationMs: 6000,
         })
       }
@@ -333,7 +284,7 @@ export default function AISettingsPanel() {
   const handleDiagnose = async () => {
     setTesting(true)
     try {
-      const r = await api.post<DiagnoseResult>('/ai/diagnose', {})
+      const r = await api.post<AiDiagnoseResult>('/ai/diagnose', {})
       setDiagnose(r)
     } catch (e) {
       toast.error({
@@ -437,7 +388,7 @@ export default function AISettingsPanel() {
             <DiagRow icon="↻" label="Embedding" r={diagnose.embedding} />
             <DiagRow icon="✦" label="Chat" r={diagnose.chat} />
             <DiagRow icon="⊕" label="Reranker" r={diagnose.reranker} />
-            {diagnose.autoLink.configured && (
+            {diagnose.autoLink?.configured && (
               <DiagRow icon="⌘" label="AutoLink" r={diagnose.autoLink} autoLink />
             )}
           </div>
@@ -1127,7 +1078,7 @@ type DiagR = {
   autoApply?: 'never' | 'high_confidence'
 }
 
-function OverallDot({ overall }: { overall: 'healthy' | 'partial' | 'degraded' | 'idle' }) {
+function OverallDot({ overall }: { overall: AiDiagnoseResult['overall'] }) {
   const tone =
     overall === 'healthy'
       ? 'bg-emerald-500'

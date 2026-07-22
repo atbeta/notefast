@@ -97,7 +97,7 @@ describe('schema 版本', () => {
     const v1 = getSchemaVersion()
     // 同一进程内再次调用 apply 路径：再读一次即可
     expect(getSchemaVersion(getDb())).toBe(v1)
-    expect(v1).toBe(1)
+    expect(v1).toBe(CURRENT_SCHEMA_VERSION)
   })
 })
 

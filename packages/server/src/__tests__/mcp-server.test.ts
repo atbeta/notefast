@@ -219,6 +219,26 @@ describe('MCP 工具错误语义统一（isError + error.code）', () => {
     expect((payload.error as { code: string }).code).toBe('not_found')
   })
 
+  test('create_block notebook 不存在 → isError + not_found（不再被二次包装成成功）', async () => {
+    const { result, payload } = await callTool('notefast_create_block', {
+      notebook_id: 'ghost-nb',
+      type: 'paragraph',
+      content: 'x',
+    })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('not_found')
+  })
+
+  test('create_doc notebook 不存在 → isError + not_found（不再被二次包装成成功）', async () => {
+    const { result, payload } = await callTool('notefast_create_doc', {
+      notebook_id: 'ghost-nb',
+      title: 't',
+      markdown: 'hello',
+    })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('not_found')
+  })
+
   test('chat 空 messages → invalid_params', async () => {
     const { result, payload } = await callTool('notefast_chat', { messages: [] })
     expect(result.isError).toBe(true)

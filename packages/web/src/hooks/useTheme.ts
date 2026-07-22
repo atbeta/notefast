@@ -9,7 +9,7 @@
  * 解析为实际 light/dark 后再写到 data-theme 上。
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
@@ -44,6 +44,69 @@ function resolveTheme(choice: ThemeChoice, systemDark: boolean): ResolvedTheme {
   return systemDark ? 'dark' : 'light'
 }
 
+// ───────────── 模块级单一 store ─────────────
+// 旧实现每个 useTheme() 调用是独立 useState，实例间互不同步
+// （命令面板切主题后 Layout 的 resolvedTheme 仍是旧值）。
+// 改为模块级 store + useSyncExternalStore，所有实例共享同一份状态。
+
+interface ThemeState {
+  choice: ThemeChoice
+  systemDark: boolean
+}
+
+let state: ThemeState = {
+  choice: readStoredChoice(),
+  systemDark: systemPrefersDark(),
+}
+
+const listeners = new Set<() => void>()
+
+/** 更新 store：同步 <html data-theme> 并通知所有订阅者 */
+function setState(patch: Partial<ThemeState>): void {
+  state = { ...state, ...patch }
+  applyDataTheme(resolveTheme(state.choice, state.systemDark))
+  for (const l of listeners) l()
+}
+
+/** 切换主题：写 localStorage（唯一一份持久化逻辑）+ 更新 store */
+function setThemeChoice(next: ThemeChoice): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, next)
+  } catch {
+    // ignore — 隐私模式 / 配额满时不影响 UI
+  }
+  setState({ choice: next })
+}
+
+// 系统偏好监听：首个订阅者出现时挂一次，存活期与模块一致
+let mediaListenerAttached = false
+function ensureMediaListener(): void {
+  if (mediaListenerAttached) return
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+  mediaListenerAttached = true
+  const mq = window.matchMedia('(prefers-color-scheme: dark)')
+  const handler = (e: MediaQueryListEvent) => setState({ systemDark: e.matches })
+  if (typeof mq.addEventListener === 'function') {
+    mq.addEventListener('change', handler)
+  } else {
+    // 旧 API 回退（Safari < 14）
+    const legacy = mq as unknown as { addListener?: (cb: (e: MediaQueryListEvent) => void) => void }
+    legacy.addListener?.(handler)
+  }
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener)
+  ensureMediaListener()
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+function getSnapshot(): ThemeState {
+  return state
+}
+
 export interface UseThemeResult {
   /** 用户选择（含 'system'） */
   theme: ThemeChoice
@@ -54,39 +117,6 @@ export interface UseThemeResult {
 }
 
 export function useTheme(): UseThemeResult {
-  const [theme, setThemeState] = useState<ThemeChoice>(() => readStoredChoice())
-  const [systemDark, setSystemDark] = useState<boolean>(() => systemPrefersDark())
-
-  // 跟踪系统偏好变化；仅在 theme === 'system' 时影响实际生效
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches)
-    if (typeof mq.addEventListener === 'function') {
-      mq.addEventListener('change', handler)
-      return () => mq.removeEventListener('change', handler)
-    }
-    // 旧 API 回退（Safari < 14）
-    const legacy = mq as unknown as { addListener?: (cb: (e: MediaQueryListEvent) => void) => void; removeListener?: (cb: (e: MediaQueryListEvent) => void) => void }
-    legacy.addListener?.(handler)
-    return () => legacy.removeListener?.(handler)
-  }, [])
-
-  const resolvedTheme: ResolvedTheme = resolveTheme(theme, systemDark)
-
-  // 当前 choice 变化、或系统变化（system 模式下）时同步到 data-theme
-  useEffect(() => {
-    applyDataTheme(resolvedTheme)
-  }, [resolvedTheme])
-
-  const setTheme = useCallback((next: ThemeChoice) => {
-    setThemeState(next)
-    try {
-      localStorage.setItem(STORAGE_KEY, next)
-    } catch {
-      // ignore — 隐私模式 / 配额满时不影响 UI
-    }
-  }, [])
-
-  return { theme, resolvedTheme, setTheme }
+  const { choice, systemDark } = useSyncExternalStore(subscribe, getSnapshot)
+  return { theme: choice, resolvedTheme: resolveTheme(choice, systemDark), setTheme: setThemeChoice }
 }

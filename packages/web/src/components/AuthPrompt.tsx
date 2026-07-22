@@ -10,22 +10,15 @@ import { useState } from 'react'
 import { Lock, Loader2, Check } from 'lucide-react'
 import { setStoredPassword } from '../hooks/useAPI'
 
-export interface AuthPromptProps {
-  /** 探测失败时（如 fetch 抛错）也用这个 fallback 显示密码框 */
-  reason?: 'password_required' | 'wrong_password' | 'unknown'
-}
-
-export default function AuthPrompt({ reason = 'password_required' }: AuthPromptProps) {
+export default function AuthPrompt() {
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!password.trim() || submitting) return
     setSubmitting(true)
-    setError(null)
     const pw = password.trim()
     setStoredPassword(pw, remember)
     // 建立会话 cookie（<img> 无法携带 Authorization 头，asset 图片读取走 cookie）
@@ -51,9 +44,7 @@ export default function AuthPrompt({ reason = 'password_required' }: AuthPromptP
           <div>
             <h1 className="text-[15px] font-semibold tracking-[-0.01em]">NoteFast 登录</h1>
             <p className="text-[11.5px] text-muted-foreground mt-0.5">
-              {reason === 'wrong_password'
-                ? '密码不正确，请重试'
-                : '此实例已开启访问密码'}
+              此实例已开启访问密码
             </p>
           </div>
         </div>
@@ -95,10 +86,6 @@ export default function AuthPrompt({ reason = 'password_required' }: AuthPromptP
               : '密码仅保存在本浏览器会话（sessionStorage），关闭浏览器后自动清除。'}
           </p>
         </div>
-
-        {error && (
-          <p className="text-xs text-destructive">{error}</p>
-        )}
 
         <button
           type="submit"

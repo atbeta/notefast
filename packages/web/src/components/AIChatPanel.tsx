@@ -20,7 +20,7 @@ interface Message {
   reasoning?: string
 }
 
-export interface Citation {
+interface Citation {
   block_id: string
   doc_id: string
   doc_title: string
@@ -38,8 +38,6 @@ interface RetrievalInfo {
 
 interface AIChatPanelProps {
   contextDocId?: string
-  contextContent?: string
-  contextDocTitle?: string
   isOpen: boolean
   onClose: () => void
   /** 展开状态由 Layout 提升管理，使主内容区 padding 与面板宽度一致 */
@@ -49,7 +47,6 @@ interface AIChatPanelProps {
 
 export default function AIChatPanel({
   contextDocId,
-  contextDocTitle,
   isOpen,
   onClose,
   expanded,
@@ -326,13 +323,7 @@ export default function AIChatPanel({
           <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground space-y-3 opacity-80">
             <MessageSquareText className="w-7 h-7 mb-1 opacity-50" strokeWidth={1.25} />
             <p className="text-sm">准备就绪</p>
-            {contextDocTitle ? (
-              <p className="text-xs">
-                当前文档《<span className="text-foreground font-medium">{contextDocTitle}</span>》会作为优先上下文。
-              </p>
-            ) : (
-              <p className="text-xs">向知识库提问，引用片段会自动回链到原文。</p>
-            )}
+            <p className="text-xs">向知识库提问，引用片段会自动回链到原文。</p>
           </div>
         ) : (
           <>

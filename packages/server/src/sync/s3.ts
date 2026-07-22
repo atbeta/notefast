@@ -22,6 +22,7 @@ import {
   type BlockRow,
 } from '@notefast/core'
 import { getDb } from '../db'
+import { fetchDocBlocks } from '../dbQueries'
 import {
   ARCHIVE_MANIFEST_NAME,
   archiveFilename,
@@ -37,22 +38,6 @@ export interface S3ClientLike {
 
 export interface CreateS3AdapterOptions {
   client?: S3ClientLike
-}
-
-function fetchDescendants(database: ReturnType<typeof getDb>, rootId: string): BlockRow[] {
-  const rows: BlockRow[] = []
-  const stack = [rootId]
-  while (stack.length > 0) {
-    const currentId = stack.pop()!
-    const children = database
-      .query('SELECT * FROM blocks WHERE parent_id = ? ORDER BY sort ASC')
-      .all(currentId) as BlockRow[]
-    for (const child of children) {
-      rows.push(child)
-      stack.push(child.id)
-    }
-  }
-  return rows
 }
 
 function normalizePrefix(prefix?: string): string {
@@ -153,8 +138,7 @@ export function createS3Adapter(
 
       for (const doc of docs) {
         try {
-          const rows = fetchDescendants(db, doc.id)
-          const tree = buildBlockTree([doc, ...rows])
+          const tree = buildBlockTree(fetchDocBlocks(db, doc.id))
           const markdown = blocksToMarkdown(tree)
           const filename = archiveFilename(doc.content || 'untitled', doc.id)
           const key = `${keyPrefix}${filename}`

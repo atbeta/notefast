@@ -139,10 +139,6 @@ export async function deleteVector(blockId: string): Promise<void> {
   await getVectorStore().delete(blockId)
 }
 
-export async function getVectorCount(): Promise<number> {
-  return getVectorStore().count()
-}
-
 /** 语义搜索：委托当前 active VectorStore（json 或 sqlite-vec），并过滤 ai_exclude 文档 */
 export async function semanticSearch(
   queryVector: Float64Array,

@@ -12,8 +12,6 @@ export interface EmbeddingProvider {
   embedQuery(text: string): Promise<Float64Array>
 }
 
-export type EmbeddingProviderFactory = (config: Record<string, string>) => EmbeddingProvider
-
 export interface VectorRow {
   block_id: string
   embedding: string // JSON 序列化的 f64[]
@@ -44,9 +42,18 @@ export function cosineSimilarity(a: Float64Array | number[], b: Float64Array | n
   return denom === 0 ? 0 : dot / denom
 }
 
-/** 粗略 token 截断（中文字按字，英文按空格分词） */
+/**
+ * 粗略 token 截断：
+ * - 英文按空白分词，超限时按词截断（不切断单词）；
+ * - 中文等无空格文本按空白分词恒为 1 个 token，按词数永不超限，
+ *   此时退化为按字符截断（CJK 场景一个字符近似一个 token）。
+ */
 export function truncateText(text: string, maxTokens: number): string {
   const tokens = text.replace(/\s+/g, ' ').trim().split(/(?<=\S)\s(?=\S)/)
-  if (tokens.length <= maxTokens) return text
-  return tokens.slice(0, maxTokens).join(' ')
+  if (tokens.length > maxTokens) return tokens.slice(0, maxTokens).join(' ')
+  // 按词数未超限：若存在长度超过 maxTokens 的单个“词”（典型为无空格的中文长文），
+  // 截断到该词的前 maxTokens 个字符
+  const longWord = tokens.find((t) => t.length > maxTokens)
+  if (!longWord) return text
+  return text.slice(0, text.indexOf(longWord) + maxTokens)
 }

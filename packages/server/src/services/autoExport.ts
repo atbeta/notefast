@@ -18,6 +18,7 @@ import {
 } from '@notefast/core'
 import { isSyncConfigured, syncPush } from '../sync/manager'
 import { getDb } from '../db'
+import { fetchDocBlocks } from '../dbQueries'
 
 /** 老入口：保留 API 形态；底层逻辑已切到 sync manager */
 export function startAutoExport(dir: string): void {
@@ -31,11 +32,6 @@ export function startAutoExport(dir: string): void {
   setInterval(() => { legacyExportOnce(dir) }, 60 * 60 * 1000)
 }
 
-/** 手动 push 入口 */
-export async function triggerOnce(): Promise<void> {
-  await syncPush()
-}
-
 function sanitizeFilename(name: string): string {
   return name
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
@@ -44,22 +40,6 @@ function sanitizeFilename(name: string): string {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 120) || 'untitled'
-}
-
-function fetchDescendants(database: ReturnType<typeof getDb>, rootId: string): BlockRow[] {
-  const rows: BlockRow[] = []
-  const stack = [rootId]
-  while (stack.length > 0) {
-    const currentId = stack.pop()!
-    const children = database
-      .query('SELECT * FROM blocks WHERE parent_id = ? ORDER BY sort ASC')
-      .all(currentId) as BlockRow[]
-    for (const child of children) {
-      rows.push(child)
-      stack.push(child.id)
-    }
-  }
-  return rows
 }
 
 /** 兜底循环：如果 sync adapter 没配，跑原导出逻辑 */
@@ -80,8 +60,7 @@ async function legacyExportOnce(dir: string): Promise<void> {
     let count = 0
     for (const doc of docs) {
       try {
-        const rows = fetchDescendants(db, doc.id)
-        const tree = buildBlockTree([doc, ...rows])
+        const tree = buildBlockTree(fetchDocBlocks(db, doc.id))
         const markdown = blocksToMarkdown(tree)
         const slug = sanitizeFilename(doc.content || 'untitled')
         writeFileSync(join(dir, `${slug}.md`), markdown, 'utf-8')
