@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.0](https://github.com/atbeta/notefast/compare/v0.8.0...v0.9.0) (2026-07-22)
+
+
+### Features
+
+* **ai:** normalize vector storage with metadata, VectorStore, and sqlite-vec ([ec55cb0](https://github.com/atbeta/notefast/commit/ec55cb086668843f51c5a605c3fc8c85471f826e))
+* **assets:** local AssetStore for images — content-addressed, deduped, auth-aware ([1ad9cd1](https://github.com/atbeta/notefast/commit/1ad9cd196058eda859cddab7c10c6819626b7f2d))
+* **web:** full markdown reading experience — syntax highlighting, ol/task lists, rich inline ([e78b592](https://github.com/atbeta/notefast/commit/e78b592e2ac9a4ed7502ff099a5c459426b04364))
+
+
+### Bug Fixes
+
+* **mcp,chat:** JSON-RPC envelope error codes + semantic recall cosine floor ([aa686b1](https://github.com/atbeta/notefast/commit/aa686b1f3382518e23f45697205f0f8cf81be338))
+
 ## [0.8.0](https://github.com/atbeta/notefast/compare/v0.7.0...v0.8.0) (2026-07-21)
 
 
