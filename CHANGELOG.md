@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/atbeta/notefast/compare/v0.10.0...v0.11.0) (2026-07-22)
+
+
+### Features
+
+* **chat:** streamed reasoning with collapsible ThinkBlock ([3424916](https://github.com/atbeta/notefast/commit/3424916626723e584f83f7db5ce13e0e5d4bb2ab))
+* **tags,views,ai:** multi-tag filters, smart views, and hide-from-AI ([74014e8](https://github.com/atbeta/notefast/commit/74014e893a0d58cda8a4b06c384b047da607de46))
+
 ## [0.10.0](https://github.com/atbeta/notefast/compare/v0.9.0...v0.10.0) (2026-07-22)
 
 
