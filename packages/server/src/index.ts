@@ -7,6 +7,8 @@ import { createPluginSystem } from '@notefast/core'
 import { initDb, closeDb } from './db'
 import { authMiddleware, SESSION_COOKIE, sessionTokenValue } from './middleware/auth'
 import { createRateLimit } from './middleware/rateLimit'
+import { eventContextMiddleware } from './middleware/eventContext'
+import { emitAppEvent } from './events'
 import { handleMcpRequest } from './mcp/server'
 import { startAutoExport } from './services/autoExport'
 import { initAiRuntime } from './services/aiRuntime'
@@ -48,13 +50,26 @@ app.use('*', cors({
 const rateLimit = createRateLimit()
 if (rateLimit) app.use('*', rateLimit)
 
+app.use('/api/*', eventContextMiddleware)
+
 app.use('/api/*', authMiddleware)
 
-app.get('/health', async (c) => c.json({
-  status: 'ok',
-  time: new Date().toISOString(),
-  vectorStore: await getVectorStore().status(),
-}))
+app.get('/health', async (c) => {
+  const status = await getVectorStore().status()
+  emitAppEvent({
+    source: 'web',
+    actor: 'system',
+    action: 'health.check',
+    outcome: 'success',
+    durationMs: undefined,
+    target: undefined,
+  })
+  return c.json({
+    status: 'ok',
+    time: new Date().toISOString(),
+    vectorStore: status,
+  })
+})
 
 // 实例版本号：Docker 部署取镜像构建时注入的 APP_VERSION（= git tag），
 // 否则回退读 packages/server/package.json（src 与打包后的 dist 均为其同级子目录）。
