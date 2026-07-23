@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/atbeta/notefast/compare/v0.14.0...v0.14.1) (2026-07-23)
+
+
+### Bug Fixes
+
+* tone down toast, remove inline edit button, merge tags sources ([38211e1](https://github.com/atbeta/notefast/commit/38211e12b193ef2bf517b332d4c375d4cef0ee1b))
+
 ## [0.14.0](https://github.com/atbeta/notefast/compare/v0.13.0...v0.14.0) (2026-07-23)
 
 
