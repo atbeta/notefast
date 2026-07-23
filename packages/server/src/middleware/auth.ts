@@ -1,8 +1,15 @@
 import type { Context, Next, MiddlewareHandler } from 'hono'
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { verifyToken, updateLastUsed } from '../services/apiTokens'
 
 /** 会话 cookie 名（<img> 等无法带 Authorization 头的场景使用） */
 export const SESSION_COOKIE = 'nf_sess'
+
+declare module 'hono' {
+  interface ContextVariableMap {
+    authScopes: string[]
+  }
+}
 
 /**
  * 会话 token 值：HMAC_SHA256(key=AUTH_PASSWORD, msg=固定串)。
@@ -86,6 +93,7 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
   const authPassword = safeTrim(process.env.AUTH_PASSWORD || '')
 
   if (apiToken.length === 0 && readToken.length === 0 && writeToken.length === 0 && authPassword.length === 0) {
+    c.set('authScopes', ['admin'])
     await next()
     return
   }
@@ -109,8 +117,24 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
   if (effectiveToken.length > 0) {
     const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i)
     if (bearerMatch && safeEquals(bearerMatch[1]!, effectiveToken)) {
+      c.set('authScopes', ['admin'])
       await next()
       return
+    }
+  }
+
+  // 非 env token：查 api_tokens 表
+  if (apiToken.length > 0 || readToken.length > 0 || writeToken.length > 0 || authPassword.length > 0) {
+    const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i)
+    if (bearerMatch) {
+      const record = verifyToken(bearerMatch[1]!)
+      if (record) {
+        c.set('authScopes', JSON.parse(record.scopes) as string[])
+        // fire-and-forget 更新 last_used_at
+        try { updateLastUsed(record.token_id) } catch { /* ignore */ }
+        await next()
+        return
+      }
     }
   }
 
@@ -124,6 +148,7 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
           const user = decoded.slice(0, colonIdx)
           const pass = decoded.slice(colonIdx + 1)
           if (user === 'admin' && safeEquals(pass, authPassword)) {
+            c.set('authScopes', ['admin'])
             await next()
             return
           }
@@ -135,6 +160,7 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
 
     // 会话 cookie（<img>/<video> 等无法携带 Authorization 头的读取场景，仅放行读操作）
     if (!isWrite && hasValidSessionCookie(c.req.header('Cookie'))) {
+      c.set('authScopes', ['admin'])
       await next()
       return
     }
@@ -148,4 +174,12 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
     },
     401,
   )
+}
+
+export function readScopes(c: Context): string[] {
+  return c.get('authScopes') ?? []
+}
+
+export function requireScope(c: Context, scope: string): boolean {
+  return readScopes(c).includes(scope) || readScopes(c).includes('admin')
 }

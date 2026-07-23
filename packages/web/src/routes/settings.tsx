@@ -1,6 +1,7 @@
 import { ArrowRight, Sun, Moon, Monitor } from 'lucide-react'
 import SyncPanel from '../components/SyncPanel'
 import BackupPanel from '../components/BackupPanel'
+import ApiTokensPanel from '../components/ApiTokensPanel'
 import { useTheme } from '../hooks/useTheme'
 
 export default function SettingsPage() {
@@ -24,6 +25,7 @@ export default function SettingsPage() {
         <h2 className="px-0.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80 select-none">
           数据主权
         </h2>
+        <ApiTokensPanel />
         <BackupPanel />
         <SyncPanel />
       </section>
