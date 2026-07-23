@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, updateDocStatusSchema, rowToBlock, readTags, readAiExclude, readDocStatus, isDocInbox, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, parseDocStatusFilter, docMatchesTags } from '@notefast/core'
+import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, updateDocStatusSchema, rowToBlock, readTags, readAiExclude, readDocStatus, isDocInbox, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, parseDocStatusFilter, docMatchesTags, parseCreatedWithin, parseStaleWithin } from '@notefast/core'
 import type { BlockRow, DocSummary } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks, fetchSubtreeBlocks } from '../dbQueries'
@@ -55,6 +55,28 @@ docs.get('/list', (c) => {
       const ts = new Date(r.updated_at).getTime()
       return Number.isFinite(ts) && ts >= cutoff
     })
+  }
+
+  const createdMs = parseCreatedWithin(c.req.query('created_within'))
+  if (createdMs != null) {
+    const cutoff = Date.now() - createdMs
+    rows = rows.filter((r) => {
+      const ts = new Date(r.created_at).getTime()
+      return Number.isFinite(ts) && ts >= cutoff
+    })
+  }
+
+  const staleMs = parseStaleWithin(c.req.query('stale_within'))
+  if (staleMs != null) {
+    const cutoff = Date.now() - staleMs
+    rows = rows.filter((r) => {
+      const ts = new Date(r.updated_at).getTime()
+      return Number.isFinite(ts) && ts <= cutoff
+    })
+  }
+
+  if (c.req.query('ai_exclude') === '1') {
+    rows = rows.filter((r) => readAiExclude(r))
   }
 
   const summaries: DocSummary[] = rows.map((r) => {

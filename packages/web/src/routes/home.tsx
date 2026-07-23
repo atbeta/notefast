@@ -15,8 +15,18 @@ function viewTitle(params: URLSearchParams): string {
   const within = params.get('within') || params.get('updated_within') || ''
   if (params.get('view') === 'recent' || within) {
     if (within === '7d') return '最近 7 天'
+    if (within === '30d') return '最近 30 天'
     return '最近 24 小时'
   }
+  if (params.get('created_within')) {
+    const v = params.get('created_within')!
+    return `新建于 ${v} 内`
+  }
+  if (params.get('stale_within')) {
+    const v = params.get('stale_within')!
+    return `${v}天未更新`
+  }
+  if (params.get('ai_exclude') === '1') return '对 AI 隐藏'
   const tags = params.get('tags') || params.get('tag')
   if (tags) {
     const parts = tags.split(',').filter(Boolean)
@@ -47,8 +57,16 @@ function buildListQuery(params: URLSearchParams): string {
   }
 
   const within = params.get('within') || params.get('updated_within') || ''
-  if (within === '24h' || within === '7d') q.set('updated_within', within)
+  if (within === '24h' || within === '7d' || within === '30d') q.set('updated_within', within)
   else if (params.get('view') === 'recent') q.set('updated_within', '24h')
+
+  const created = params.get('created_within') || ''
+  if (created === '24h' || created === '7d' || created === '30d') q.set('created_within', created)
+
+  const stale = params.get('stale_within') || ''
+  if (stale === '30d' || stale === '90d') q.set('stale_within', stale)
+
+  if (params.get('ai_exclude') === '1') q.set('ai_exclude', '1')
 
   const s = q.toString()
   return s ? `?${s}` : ''

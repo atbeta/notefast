@@ -11,7 +11,6 @@ import {
   Inbox,
   Sparkles,
   Settings,
-  Clock,
   Tag,
   Link2,
   Star,
@@ -212,22 +211,6 @@ export default function Sidebar({
 
         <div className="mt-5">
           <SidebarSectionLabel label="智能视图" />
-          <Link
-            to="/?view=recent&within=24h"
-            onClick={closeAfterNav}
-            className={location.search.includes('within=24h') ? 'sidebar-link-active' : 'sidebar-link'}
-          >
-            <Clock className="w-[15px] h-[15px]" strokeWidth={1.75} />
-            最近 24 小时
-          </Link>
-          <Link
-            to="/?view=recent&within=7d"
-            onClick={closeAfterNav}
-            className={location.search.includes('within=7d') ? 'sidebar-link-active' : 'sidebar-link'}
-          >
-            <Clock className="w-[15px] h-[15px]" strokeWidth={1.75} />
-            最近 7 天
-          </Link>
           <Link
             to="/?view=untagged"
             onClick={closeAfterNav}

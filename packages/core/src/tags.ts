@@ -185,11 +185,29 @@ export function parseTagsQueryParam(tagsParam: string | null | undefined, tagPar
   return normalizeTagList(parts)
 }
 
-/** 解析 updated_within：仅支持 24h / 7d，其它返回 null */
+/** 解析 updated_within：支持 24h / 7d / 30d，其它返回 null */
 export function parseUpdatedWithin(raw: string | null | undefined): number | null {
   const v = (raw || '').trim().toLowerCase()
   if (v === '24h') return 24 * 60 * 60 * 1000
   if (v === '7d') return 7 * 24 * 60 * 60 * 1000
+  if (v === '30d') return 30 * 24 * 60 * 60 * 1000
+  return null
+}
+
+/** 解析 created_within：24h / 7d / 30d */
+export function parseCreatedWithin(raw: string | null | undefined): number | null {
+  const v = (raw || '').trim().toLowerCase()
+  if (v === '24h') return 24 * 60 * 60 * 1000
+  if (v === '7d') return 7 * 24 * 60 * 60 * 1000
+  if (v === '30d') return 30 * 24 * 60 * 60 * 1000
+  return null
+}
+
+/** 解析 stale_within：30d / 90d（updated_at 比 cutoff 更老） */
+export function parseStaleWithin(raw: string | null | undefined): number | null {
+  const v = (raw || '').trim().toLowerCase()
+  if (v === '30d') return 30 * 24 * 60 * 60 * 1000
+  if (v === '90d') return 90 * 24 * 60 * 60 * 1000
   return null
 }
 
