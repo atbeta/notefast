@@ -1,5 +1,6 @@
 import type { Database } from 'bun:sqlite'
 import * as m001 from './001_initial'
+import * as m003 from './003_properties_columns'
 
 interface Migration {
   id: string
@@ -8,7 +9,7 @@ interface Migration {
   down?: (db: Database) => void
 }
 
-const MIGRATIONS: Migration[] = [m001]
+const MIGRATIONS: Migration[] = [m001, m003]
 
 export function runMigrations(db: Database): { applied: string[]; skipped: string[] } {
   db.exec(`
@@ -48,6 +49,8 @@ export function listMigrations(db: Database): Array<{ id: string; description: s
     SELECT m.id, m.description, s.applied_at
     FROM (
       SELECT '001_initial' AS id, 'Initial schema: notebooks, blocks, FTS, block_vectors, assets, autolink, triggers' AS description
+      UNION ALL
+      SELECT '003_properties_columns' AS id, 'Extract tags/status/ai_exclude from properties JSON into explicit columns' AS description
     ) m
     LEFT JOIN schema_migrations s ON m.id = s.id
     ORDER BY m.id

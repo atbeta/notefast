@@ -92,6 +92,7 @@ export function parsePropertiesObject(properties: unknown): Record<string, unkno
 
 /**
  * 从 doc.properties 读 tags（容错：properties 可能是字符串 / 对象 / null）
+ * @deprecated 使用 readTags(row) 从显式列读取
  */
 export function readTagsFromProperties(properties: unknown): Tag[] {
   const obj = parsePropertiesObject(properties)
@@ -100,16 +101,39 @@ export function readTagsFromProperties(properties: unknown): Tag[] {
   return normalizeTagList(raw.filter((x): x is string => typeof x === 'string'))
 }
 
+/** 从 BlockRow 显式 tags 列读取标签 */
+export function readTags(row: BlockRow): Tag[] {
+  try {
+    const parsed = JSON.parse(row.tags ?? '[]')
+    if (!Array.isArray(parsed)) return []
+    return normalizeTagList(parsed.filter((x): x is string => typeof x === 'string'))
+  } catch {
+    return []
+  }
+}
+
+/** 将标签数组序列化为 JSON 字符串（用于写入 tags 列） */
+export function writeTags(tags: Tag[]): string {
+  return JSON.stringify(normalizeTagList(tags))
+}
+
 /**
  * 从 doc.properties 读 ai_exclude（仅 true 时为排除）
+ * @deprecated 使用 readAiExclude(row) 从显式列读取
  */
 export function readAiExcludeFromProperties(properties: unknown): boolean {
   const obj = parsePropertiesObject(properties)
   return obj.ai_exclude === true
 }
 
+/** 从 BlockRow 显式 ai_exclude 列读取 */
+export function readAiExclude(row: BlockRow): boolean {
+  return row.ai_exclude === 1
+}
+
 /**
  * 写入 / 清除 properties.ai_exclude，返回新的 properties JSON 字符串
+ * @deprecated 直接写 blocks.ai_exclude 列
  */
 export function setAiExcludeInProperties(properties: unknown, aiExclude: boolean): string {
   const props = parsePropertiesObject(properties)
@@ -198,18 +222,12 @@ export class PropertiesTagProvider implements TagProvider {
   }
 
   getDocTags(docRow: BlockRow): Tag[] {
-    return readTagsFromProperties(docRow.properties)
+    return readTags(docRow)
   }
 
   setDocTags(docRow: BlockRow, tags: Tag[]): BlockRow {
     const normalized = normalizeTagList(tags)
-    const props = parsePropertiesObject(docRow.properties)
-    if (normalized.length === 0) {
-      delete props.tags
-    } else {
-      props.tags = normalized
-    }
-    return { ...docRow, properties: JSON.stringify(props) }
+    return { ...docRow, tags: writeTags(normalized) }
   }
 }
 

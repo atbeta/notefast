@@ -20,8 +20,8 @@ import {
   type BlockRow,
   type TagInfo,
   getTagProvider,
-  readTagsFromProperties,
-  isInboxDoc,
+  readTags,
+  isDocInbox,
 } from '@notefast/core'
 import { getDb } from '../db'
 
@@ -44,12 +44,12 @@ tags.get('/', (c) => {
   }
 
   if (!includeInbox) {
-    rows = rows.filter((r) => !isInboxDoc(r.properties))
+    rows = rows.filter((r) => !isDocInbox(r))
   }
 
   const counts = new Map<string, number>()
   for (const r of rows) {
-    const ts = readTagsFromProperties(r.properties)
+    const ts = readTags(r)
     for (const t of ts) counts.set(t, (counts.get(t) ?? 0) + 1)
   }
 

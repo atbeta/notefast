@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, updateDocStatusSchema, rowToBlock, readTagsFromProperties, readAiExcludeFromProperties, readDocStatusFromProperties, setDocStatusInProperties, isInboxDoc, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, parseDocStatusFilter, docMatchesTags } from '@notefast/core'
+import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, updateDocStatusSchema, rowToBlock, readTags, readAiExclude, readDocStatus, isDocInbox, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, parseDocStatusFilter, docMatchesTags } from '@notefast/core'
 import type { BlockRow, DocSummary } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks, fetchSubtreeBlocks } from '../dbQueries'
@@ -36,16 +36,16 @@ docs.get('/list', (c) => {
 
   // 生命周期：默认只列正式笔记；status=inbox 只列收集箱；all 不过滤
   if (statusFilter === 'inbox') {
-    rows = rows.filter((r) => isInboxDoc(r.properties))
+    rows = rows.filter((r) => isDocInbox(r))
   } else if (statusFilter === 'note') {
-    rows = rows.filter((r) => !isInboxDoc(r.properties))
+    rows = rows.filter((r) => !isDocInbox(r))
   }
 
   // 标签 / 时间过滤在 Node 端做（文档量小，不值得加 SQL JSON 函数）
   if (untagged) {
-    rows = rows.filter((r) => readTagsFromProperties(r.properties).length === 0)
+    rows = rows.filter((r) => readTags(r).length === 0)
   } else if (selectedTags.length > 0) {
-    rows = rows.filter((r) => docMatchesTags(readTagsFromProperties(r.properties), selectedTags, tagMatch))
+    rows = rows.filter((r) => docMatchesTags(readTags(r), selectedTags, tagMatch))
   }
 
   if (withinMs != null) {
@@ -57,9 +57,9 @@ docs.get('/list', (c) => {
   }
 
   const summaries: DocSummary[] = rows.map((r) => {
-    const tags = readTagsFromProperties(r.properties)
-    const aiExclude = readAiExcludeFromProperties(r.properties)
-    const status = readDocStatusFromProperties(r.properties)
+    const tags = readTags(r)
+    const aiExclude = readAiExclude(r)
+    const status = readDocStatus(r)
     return {
       id: r.id,
       title: r.content,
@@ -155,16 +155,15 @@ docs.patch('/:id/status', zValidator('json', updateDocStatusSchema), (c) => {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
 
-  const properties = setDocStatusInProperties(docRow.properties, status)
   db.query(
-    "UPDATE blocks SET properties = ?, updated_at = datetime('now') WHERE id = ?",
-  ).run(properties, id)
+    "UPDATE blocks SET status = ?, updated_at = datetime('now') WHERE id = ?",
+  ).run(status, id)
 
   const updatedRow = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
   fireAfterUpdate(rowToBlock(updatedRow))
   return c.json({
     doc_id: id,
-    status: readDocStatusFromProperties(updatedRow.properties),
+    status: readDocStatus(updatedRow),
     updated_at: updatedRow.updated_at,
   })
 })
@@ -186,8 +185,8 @@ docs.patch('/:id/tags', async (c) => {
   const provider = getTagProvider()
   const updated = provider.setDocTags(docRow, newTags)
   db.query(
-    "UPDATE blocks SET properties = ?, updated_at = datetime('now') WHERE id = ?",
-  ).run(updated.properties, id)
+    "UPDATE blocks SET tags = ?, updated_at = datetime('now') WHERE id = ?",
+  ).run(updated.tags, id)
 
   const finalTags = provider.getDocTags(updated)
   const updatedRow = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
@@ -224,7 +223,7 @@ docs.patch('/:id/ai-exclude', async (c) => {
 
   return c.json({
     doc_id: id,
-    ai_exclude: readAiExcludeFromProperties(updated.properties),
+    ai_exclude: readAiExclude(updated),
     updated_at: updated.updated_at,
     ...(effect ? { effect } : {}),
   })
@@ -296,8 +295,8 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
       const parentId = inp.parent_id ? (idMap.get(inp.parent_id) ?? id) : id
 
       db.query(
-        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 'note', 0, ?, 1, ?, ?)`,
       ).run(
         blockId,
         docRow.notebook_id,

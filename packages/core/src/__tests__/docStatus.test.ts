@@ -1,23 +1,31 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  isInboxDoc,
+  isDocInbox,
   parseDocStatusFilter,
-  readDocStatusFromProperties,
-  setDocStatusInProperties,
+  readDocStatus,
 } from '../docStatus'
+import type { BlockRow } from '../types'
+
+function makeRow(status: string = 'note'): BlockRow {
+  return {
+    id: 'x', notebook_id: 'nb1', parent_id: null, root_id: 'x',
+    type: 'document', content: '', properties: '{}',
+    tags: '[]', status, ai_exclude: 0,
+    sort: 0, level: 0, created_at: '', updated_at: '',
+  }
+}
 
 describe('docStatus', () => {
   test('缺省为 note', () => {
-    expect(readDocStatusFromProperties('{}')).toBe('note')
-    expect(isInboxDoc('{}')).toBe(false)
+    const row = makeRow()
+    expect(readDocStatus(row)).toBe('note')
+    expect(isDocInbox(row)).toBe(false)
   })
 
   test('读写 inbox', () => {
-    const on = setDocStatusInProperties('{"tags":["a"]}', 'inbox')
-    expect(JSON.parse(on)).toEqual({ tags: ['a'], status: 'inbox' })
-    expect(isInboxDoc(on)).toBe(true)
-    const off = setDocStatusInProperties(on, 'note')
-    expect(JSON.parse(off)).toEqual({ tags: ['a'] })
+    const row = makeRow('inbox')
+    expect(readDocStatus(row)).toBe('inbox')
+    expect(isDocInbox(row)).toBe(true)
   })
 
   test('parseDocStatusFilter 默认 note', () => {

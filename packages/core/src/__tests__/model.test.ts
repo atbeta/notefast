@@ -13,6 +13,9 @@ describe('rowToBlock', () => {
       type: 'document',
       content: '我的文档',
       properties: '{}',
+      tags: '[]',
+      status: 'note',
+      ai_exclude: 0,
       sort: 0,
       level: 0,
       created_at: '2026-01-01',
@@ -35,6 +38,9 @@ describe('rowToBlock', () => {
       type: 'heading',
       content: '标题',
       properties: '{"headingLevel":2,"tag":"重要"}',
+      tags: '[]',
+      status: 'note',
+      ai_exclude: 0,
       sort: 0,
       level: 0,
       created_at: '2026-01-01',
@@ -54,6 +60,9 @@ describe('rowToBlock', () => {
       type: 'paragraph',
       content: 'text',
       properties: 'invalid json',
+      tags: '[]',
+      status: 'note',
+      ai_exclude: 0,
       sort: 0,
       level: 0,
       created_at: '2026-01-01',
@@ -69,7 +78,8 @@ describe('buildBlockTree', () => {
   function makeRow(id: string, parentId: string | null, obj: Partial<BlockRow> = {}): BlockRow {
     return {
       id, notebook_id: 'nb1', parent_id: parentId, root_id: 'doc', type: 'paragraph', content: '',
-      properties: '{}', sort: 0, level: parentId ? 1 : 0, created_at: '', updated_at: '', ...obj,
+      properties: '{}', tags: '[]', status: 'note', ai_exclude: 0, sort: 0, level: parentId ? 1 : 0,
+      created_at: '', updated_at: '', ...obj,
     }
   }
 
@@ -108,8 +118,8 @@ describe('buildHeadingTree', () => {
   function makeBlock(id: string, content: string, headingLevel: number, children: any[] = []): any {
     return {
       id, notebook_id: '', parent_id: null, root_id: '', type: 'heading',
-      content, properties: { headingLevel }, sort: 0, level: 0,
-      created_at: '', updated_at: '', children,
+      content, properties: { headingLevel }, tags: [], status: 'note' as const, ai_exclude: false,
+      sort: 0, level: 0, created_at: '', updated_at: '', children,
     }
   }
 

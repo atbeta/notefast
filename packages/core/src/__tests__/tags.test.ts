@@ -6,10 +6,11 @@ import {
   parseTagsQueryParam,
   parseTagMatchMode,
   parseUpdatedWithin,
-  readAiExcludeFromProperties,
-  readTagsFromProperties,
-  setAiExcludeInProperties,
+  readAiExclude,
+  readTags,
+  writeTags,
 } from '../tags'
+import type { BlockRow } from '../types'
 
 describe('normalizeTag', () => {
   test('小写、空格转连字符', () => {
@@ -68,18 +69,32 @@ describe('parseUpdatedWithin', () => {
   })
 })
 
-describe('ai_exclude properties', () => {
-  test('读写 ai_exclude', () => {
-    expect(readAiExcludeFromProperties('{}')).toBe(false)
-    const on = setAiExcludeInProperties('{"tags":["a"]}', true)
-    expect(JSON.parse(on)).toEqual({ tags: ['a'], ai_exclude: true })
-    expect(readAiExcludeFromProperties(on)).toBe(true)
-    const off = setAiExcludeInProperties(on, false)
-    expect(JSON.parse(off)).toEqual({ tags: ['a'] })
+describe('ai_exclude 显式列', () => {
+  test('读写 ai_exclude 列', () => {
+    const row: BlockRow = {
+      id: 'x', notebook_id: 'nb1', parent_id: null, root_id: 'x',
+      type: 'document', content: '', properties: '{}',
+      tags: '[]', status: 'note', ai_exclude: 0,
+      sort: 0, level: 0, created_at: '', updated_at: '',
+    }
+    expect(readAiExclude(row)).toBe(false)
+    const excluded: BlockRow = { ...row, ai_exclude: 1 }
+    expect(readAiExclude(excluded)).toBe(true)
   })
 
-  test('readTags 不受 ai_exclude 影响', () => {
-    expect(readTagsFromProperties('{"tags":["x"],"ai_exclude":true}')).toEqual(['x'])
+  test('readTags 读 tags 列', () => {
+    const row: BlockRow = {
+      id: 'x', notebook_id: 'nb1', parent_id: null, root_id: 'x',
+      type: 'document', content: '', properties: '{}',
+      tags: '["x","y"]', status: 'note', ai_exclude: 0,
+      sort: 0, level: 0, created_at: '', updated_at: '',
+    }
+    expect(readTags(row)).toEqual(['x', 'y'])
+  })
+
+  test('writeTags 序列化', () => {
+    expect(writeTags(['B', 'a'])).toBe('["a","b"]')
+    expect(writeTags([])).toBe('[]')
   })
 })
 

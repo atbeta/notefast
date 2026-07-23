@@ -6,7 +6,7 @@ import {
   moveBlockSchema,
   rowToBlock,
   buildBlockTree,
-  readAiExcludeFromProperties,
+  readAiExclude,
 } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import { getDb } from '../db'
@@ -79,8 +79,8 @@ blocks.post('/', zValidator('json', createBlockSchema), (c) => {
 
   const now = new Date().toISOString()
   db.query(
-    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 'note', 0, ?, ?, ?, ?)`,
   ).run(
     id,
     input.notebook_id,
@@ -116,7 +116,7 @@ blocks.patch('/:id', zValidator('json', updateBlockSchema), async (c) => {
 
   // 仅当写入文档根的 properties 时检测 ai_exclude 切换，确保与专用端点行为一致
   const oldAiExclude =
-    existing.type === 'document' ? readAiExcludeFromProperties(existing.properties) : false
+    existing.type === 'document' ? readAiExclude(existing) : false
 
   if (input.content !== undefined) {
     updates.push('content = ?')
@@ -125,6 +125,11 @@ blocks.patch('/:id', zValidator('json', updateBlockSchema), async (c) => {
   if (input.properties !== undefined) {
     updates.push('properties = ?')
     params.push(JSON.stringify(input.properties))
+    const inputAiExclude = (input.properties as Record<string, unknown>).ai_exclude
+    if (inputAiExclude !== undefined) {
+      updates.push('ai_exclude = ?')
+      params.push(inputAiExclude ? 1 : 0)
+    }
   }
   if (input.type !== undefined) {
     updates.push('type = ?')
@@ -147,9 +152,9 @@ blocks.patch('/:id', zValidator('json', updateBlockSchema), async (c) => {
 
   // 通用 PATCH 路径下应用 ai_exclude 切换的副作用（与 /docs/:id/ai-exclude 等价）
   if (existing.type === 'document' && input.properties !== undefined) {
-    const newAiExclude = readAiExcludeFromProperties(input.properties)
-    if (oldAiExclude !== newAiExclude) {
-      await applyAiExcludeChange(id, oldAiExclude, newAiExclude)
+    const inputAiExclude = (input.properties as Record<string, unknown>).ai_exclude === true
+    if (oldAiExclude !== inputAiExclude) {
+      await applyAiExcludeChange(id, oldAiExclude, inputAiExclude)
     }
   }
 

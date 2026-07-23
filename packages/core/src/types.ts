@@ -23,6 +23,9 @@ export interface Block {
   type: BlockType
   content: string
   properties: Record<string, unknown>
+  tags: string[]
+  status: 'note' | 'inbox'
+  ai_exclude: boolean
   sort: number
   level: number
   created_at: string
@@ -39,6 +42,9 @@ export interface BlockRow {
   type: string
   content: string
   properties: string
+  tags: string
+  status: string
+  ai_exclude: number
   sort: number
   level: number
   created_at: string

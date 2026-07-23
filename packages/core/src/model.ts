@@ -1,5 +1,7 @@
 import type { BlockRow, Block, CreateBlockInput, UpdateBlockInput, MoveBlockInput, DocSummary, HeadingNode } from './types'
 import { BlockType } from './types'
+import { readTags } from './tags'
+import { readDocStatus } from './docStatus'
 
 const BLOCK_TYPE_VALUES = Object.values(BlockType)
 
@@ -19,6 +21,9 @@ export function rowToBlock(row: BlockRow): Block {
     type: row.type as BlockType,
     content: row.content,
     properties,
+    tags: readTags(row),
+    status: readDocStatus(row),
+    ai_exclude: row.ai_exclude === 1,
     sort: row.sort,
     level: row.level,
     created_at: row.created_at,
@@ -154,6 +159,9 @@ export function inputsToBlockTree(inputs: CreateBlockInput[]): Block[] {
     type: inp.type,
     content: inp.content ?? '',
     properties: JSON.stringify(inp.properties ?? {}),
+    tags: '[]',
+    status: 'note',
+    ai_exclude: 0,
     sort: inp.sort ?? 0,
     level: 0,
     created_at: '',

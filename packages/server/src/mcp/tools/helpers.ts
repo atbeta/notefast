@@ -9,9 +9,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   docMatchesTags,
-  isInboxDoc,
+  isDocInbox,
   parseUpdatedWithin,
-  readTagsFromProperties,
+  readTags,
   type Block,
   type BlockRow,
   type TagMatchMode,
@@ -84,15 +84,15 @@ export function filterDocRowsForMcp(rows: BlockRow[], opts: {
   let out = rows.filter((r) => !isDocRowAiExcluded(r))
   const statusFilter = opts.status ?? 'note'
   if (statusFilter === 'inbox') {
-    out = out.filter((r) => isInboxDoc(r.properties))
+    out = out.filter((r) => isDocInbox(r))
   } else if (statusFilter === 'note') {
-    out = out.filter((r) => !isInboxDoc(r.properties))
+    out = out.filter((r) => !isDocInbox(r))
   }
   if (opts.untagged) {
-    out = out.filter((r) => readTagsFromProperties(r.properties).length === 0)
+    out = out.filter((r) => readTags(r).length === 0)
   } else if (opts.tags && opts.tags.length > 0) {
     const mode = opts.tagMatch ?? 'all'
-    out = out.filter((r) => docMatchesTags(readTagsFromProperties(r.properties), opts.tags!, mode))
+    out = out.filter((r) => docMatchesTags(readTags(r), opts.tags!, mode))
   }
   const withinMs = parseUpdatedWithin(opts.updatedWithin ?? undefined)
   if (withinMs != null) {

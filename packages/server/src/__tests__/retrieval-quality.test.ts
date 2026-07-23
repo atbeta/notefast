@@ -6,7 +6,7 @@ import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:tes
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { initDb, closeDb, getDb } from '../db'
-import { createPluginSystem, setDocStatusInProperties } from '@notefast/core'
+import { createPluginSystem } from '@notefast/core'
 import {
   initAiRuntime,
   applyNewConfig,
@@ -70,14 +70,14 @@ function seedDoc(opts: {
   const docId = crypto.randomUUID()
   const blockId = opts.blockId ?? crypto.randomUUID()
   const now = new Date().toISOString()
-  const props = setDocStatusInProperties('{}', opts.status ?? 'note')
+  const docStatus = opts.status === 'inbox' ? 'inbox' : 'note'
   db.query(
-    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
-     VALUES (?, ?, NULL, ?, 'document', ?, ?, 0, 0, ?, ?)`,
-  ).run(docId, opts.notebookId, docId, opts.title, props, now, now)
+    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
+     VALUES (?, ?, NULL, ?, 'document', ?, '{}', '[]', ?, 0, 0, 0, ?, ?)`,
+  ).run(docId, opts.notebookId, docId, opts.title, docStatus, now, now)
   db.query(
-    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'paragraph', ?, 0, 1, ?, ?)`,
+    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, tags, status, ai_exclude, sort, level, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'paragraph', ?, '[]', 'note', 0, 0, 1, ?, ?)`,
   ).run(blockId, opts.notebookId, docId, docId, opts.content, now, now)
   return { docId, blockId }
 }

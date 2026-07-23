@@ -7,13 +7,13 @@
  * 写 / purge / reindex 等副作用仍在 aiExclude.ts。
  */
 
-import { isInboxDoc, readAiExcludeFromProperties, type BlockRow } from '@notefast/core'
+import { readAiExclude, type BlockRow } from '@notefast/core'
 import { getDb } from '../db'
 
 /** 从 document 行判断是否 AI 排除 */
 export function isDocRowAiExcluded(docRow: BlockRow | null | undefined): boolean {
   if (!docRow || docRow.type !== 'document') return false
-  return readAiExcludeFromProperties(docRow.properties)
+  return readAiExclude(docRow)
 }
 
 /** 按文档 ID（root）判断是否 AI 排除 */
@@ -32,10 +32,10 @@ export function isDocAiExcluded(docId: string): boolean {
 export function isBlockAiExcluded(blockId: string): boolean {
   const db = getDb()
   const row = db
-    .query('SELECT id, type, root_id, properties FROM blocks WHERE id = ?')
-    .get(blockId) as Pick<BlockRow, 'id' | 'type' | 'root_id' | 'properties'> | undefined
+    .query('SELECT id, type, root_id, ai_exclude FROM blocks WHERE id = ?')
+    .get(blockId) as Pick<BlockRow, 'id' | 'type' | 'root_id' | 'ai_exclude'> | undefined
   if (!row) return false
-  if (row.type === 'document') return readAiExcludeFromProperties(row.properties)
+  if (row.type === 'document') return row.ai_exclude === 1
   return isDocAiExcluded(row.root_id)
 }
 
@@ -47,10 +47,10 @@ export function loadAiExcludedDocIds(docIds: Iterable<string>): Set<string> {
   const db = getDb()
   const placeholders = ids.map(() => '?').join(',')
   const rows = db
-    .query(`SELECT id, properties FROM blocks WHERE type = 'document' AND id IN (${placeholders})`)
-    .all(...ids) as Array<{ id: string; properties: string }>
+    .query(`SELECT id, ai_exclude FROM blocks WHERE type = 'document' AND id IN (${placeholders})`)
+    .all(...ids) as Array<{ id: string; ai_exclude: number }>
   for (const r of rows) {
-    if (readAiExcludeFromProperties(r.properties)) excluded.add(r.id)
+    if (r.ai_exclude === 1) excluded.add(r.id)
   }
   return excluded
 }
@@ -63,10 +63,10 @@ export function loadInboxDocIds(docIds: Iterable<string>): Set<string> {
   const db = getDb()
   const placeholders = ids.map(() => '?').join(',')
   const rows = db
-    .query(`SELECT id, properties FROM blocks WHERE type = 'document' AND id IN (${placeholders})`)
-    .all(...ids) as Array<{ id: string; properties: string }>
+    .query(`SELECT id, status FROM blocks WHERE type = 'document' AND id IN (${placeholders})`)
+    .all(...ids) as Array<{ id: string; status: string }>
   for (const r of rows) {
-    if (isInboxDoc(r.properties)) inbox.add(r.id)
+    if (r.status === 'inbox') inbox.add(r.id)
   }
   return inbox
 }
@@ -80,13 +80,13 @@ export function loadDocBlockIds(docId: string): string[] {
 }
 
 /**
- * 读取 properties.ai_exclude 的旧值（在 writeDocAiExclude 之前调用以判定切换方向）。
+ * 读取 ai_exclude 的旧值（在 writeDocAiExclude 之前调用以判定切换方向）。
  * docId 不存在时返回 null（调用方应另行处理 not_found）。
  */
 export function readDocAiExclude(docId: string): boolean | null {
   const row = getDb()
-    .query("SELECT properties FROM blocks WHERE id = ? AND type = 'document'")
-    .get(docId) as { properties: string } | undefined
+    .query("SELECT ai_exclude FROM blocks WHERE id = ? AND type = 'document'")
+    .get(docId) as { ai_exclude: number } | undefined
   if (!row) return null
-  return readAiExcludeFromProperties(row.properties)
+  return row.ai_exclude === 1
 }

@@ -11,7 +11,7 @@
  * 并 re-export 查询函数以保持既有 import 路径可用。
  */
 
-import { setAiExcludeInProperties, type BlockRow } from '@notefast/core'
+import { type BlockRow } from '@notefast/core'
 import { getDb } from '../db'
 import { deleteVector, indexBlock } from './indexer'
 import { loadDocBlockIds } from './aiExcludeQuery'
@@ -44,7 +44,7 @@ export async function reindexDocTree(docId: string): Promise<{ reindexed: number
   return { reindexed, errors }
 }
 
-/** 写入 ai_exclude 到文档 properties，返回更新后的 row */
+/** 写入 ai_exclude 到 blocks 显式列，返回更新后的 row */
 export function writeDocAiExclude(docId: string, aiExclude: boolean): BlockRow | null {
   const db = getDb()
   const docRow = db
@@ -52,10 +52,9 @@ export function writeDocAiExclude(docId: string, aiExclude: boolean): BlockRow |
     .get(docId) as BlockRow | undefined
   if (!docRow) return null
 
-  const properties = setAiExcludeInProperties(docRow.properties, aiExclude)
   db.query(
-    "UPDATE blocks SET properties = ?, updated_at = datetime('now') WHERE id = ?",
-  ).run(properties, docId)
+    "UPDATE blocks SET ai_exclude = ?, updated_at = datetime('now') WHERE id = ?",
+  ).run(aiExclude ? 1 : 0, docId)
 
   return db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
 }

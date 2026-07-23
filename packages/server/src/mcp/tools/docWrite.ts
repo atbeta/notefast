@@ -8,12 +8,12 @@
 import { z } from 'zod'
 import {
   getTagProvider,
-  isInboxDoc,
+  isDocInbox,
   parseDocStatusFilter,
   parseTagMatchMode,
   parseTagsQueryParam,
-  readDocStatusFromProperties,
-  readTagsFromProperties,
+  readDocStatus,
+  readTags,
   rowToBlock,
   type BlockRow,
 } from '@notefast/core'
@@ -200,8 +200,8 @@ export function registerDocWriteTools(ctx: ToolContext): void {
             title: r.content,
             created_at: r.created_at,
             updated_at: r.updated_at,
-            tags: readTagsFromProperties(r.properties),
-            status: readDocStatusFromProperties(r.properties),
+            tags: readTags(r),
+            status: readDocStatus(r),
           })),
         })],
       }
@@ -229,8 +229,8 @@ export function registerDocWriteTools(ctx: ToolContext): void {
       const counts = new Map<string, number>()
       for (const r of rows) {
         if (isDocRowAiExcluded(r)) continue
-        if (isInboxDoc(r.properties)) continue
-        for (const t of readTagsFromProperties(r.properties)) {
+        if (isDocInbox(r)) continue
+        for (const t of readTags(r)) {
           counts.set(t, (counts.get(t) ?? 0) + 1)
         }
       }
@@ -264,8 +264,8 @@ export function registerDocWriteTools(ctx: ToolContext): void {
       const provider = getTagProvider()
       const updated = provider.setDocTags(docRow, tags)
       db.query(
-        "UPDATE blocks SET properties = ?, updated_at = datetime('now') WHERE id = ?",
-      ).run(updated.properties, doc_id)
+        "UPDATE blocks SET tags = ?, updated_at = datetime('now') WHERE id = ?",
+      ).run(updated.tags, doc_id)
       const finalTags = provider.getDocTags(updated)
       return {
         content: [toText({ doc_id, tags: finalTags })],

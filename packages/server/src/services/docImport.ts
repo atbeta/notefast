@@ -14,7 +14,7 @@
  * - 子块 level 按父链深度计算（文档根 = 0，顶层子块 = 1，逐层 +1）
  */
 
-import { parseMarkdownToBlocks, stripTitleHeading, setDocStatusInProperties } from '@notefast/core'
+import { parseMarkdownToBlocks, stripTitleHeading } from '@notefast/core'
 import type { CreateBlockInput } from '@notefast/core'
 import type { getDb } from '../db'
 
@@ -53,7 +53,6 @@ export function insertDocFromMarkdown(
   const inputs = stripTitleHeading(rawInputs, opts.title)
 
   const docStatus = opts.status === 'inbox' ? 'inbox' : 'note'
-  const docProperties = setDocStatusInProperties('{}', docStatus)
   const docId = crypto.randomUUID()
   const now = new Date().toISOString()
   const blockIds: string[] = []
@@ -85,9 +84,9 @@ export function insertDocFromMarkdown(
     db.run('PRAGMA defer_foreign_keys = ON')
 
     db.query(
-      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
-       VALUES (?, ?, NULL, ?, 'document', ?, ?, 0, 0, ?, ?)`,
-    ).run(docId, opts.notebookId, docId, opts.title, docProperties, now, now)
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', ?, '{}', '[]', ?, 0, 0, 0, ?, ?)`,
+    ).run(docId, opts.notebookId, docId, opts.title, docStatus, now, now)
 
     for (let i = 0; i < inputs.length; i++) {
       const inp = inputs[i]
@@ -99,8 +98,8 @@ export function insertDocFromMarkdown(
         : docId
 
       db.query(
-        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, sort, level, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 'note', 0, ?, ?, ?, ?)`,
       ).run(
         blockId,
         opts.notebookId,
