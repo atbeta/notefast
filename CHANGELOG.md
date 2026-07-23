@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.3](https://github.com/atbeta/notefast/compare/v0.14.2...v0.14.3) (2026-07-23)
+
+
+### Bug Fixes
+
+* read API response directly instead of extracting .body wrapper in ApiTokensPanel ([2e4a4bc](https://github.com/atbeta/notefast/commit/2e4a4bcb549a0e4c2de577899ea87b496e1c5c0c))
+
 ## [0.14.2](https://github.com/atbeta/notefast/compare/v0.14.1...v0.14.2) (2026-07-23)
 
 
