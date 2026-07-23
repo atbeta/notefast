@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { createPluginSystem } from '@notefast/core'
 import { initDb, closeDb } from './db'
 import { authMiddleware, SESSION_COOKIE, sessionTokenValue } from './middleware/auth'
+import { createRateLimit } from './middleware/rateLimit'
 import { handleMcpRequest } from './mcp/server'
 import { startAutoExport } from './services/autoExport'
 import { initAiRuntime } from './services/aiRuntime'
@@ -43,6 +44,9 @@ app.use('*', cors({
   allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
 }))
+
+const rateLimit = createRateLimit()
+if (rateLimit) app.use('*', rateLimit)
 
 app.use('/api/*', authMiddleware)
 
