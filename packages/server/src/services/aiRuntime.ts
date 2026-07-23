@@ -23,6 +23,7 @@ import {
 } from '@notefast/core'
 import type { PluginSystem } from '@notefast/core'
 import { indexBlock, deleteVector } from '../ai/indexer'
+import { getLatestIndexJobForDoc } from '../ai/indexJobs'
 import { analyzeBlock } from '../ai/autoLink'
 import { removeSuggestionsForBlock } from '../ai/autoLinkStore'
 import {
@@ -200,6 +201,10 @@ function applyAutoIndex(r: AiRuntime, pluginSystem: PluginSystem): void {
   if (!r.hasEmbedding() || !cfg.autoIndex) return
 
   pluginSystem.note.afterCreate.tap(HOOK_NAME, async (block) => {
+    // 文档级索引作业进行中时跳过：由 indexJobs 批处理，避免双重 embed
+    const docId = block.type === 'document' ? block.id : block.root_id
+    const job = getLatestIndexJobForDoc(docId)
+    if (job && (job.state === 'pending' || job.state === 'running')) return
     await indexBlock(block.id)
   })
   pluginSystem.note.afterUpdate.tap(HOOK_NAME, async (block) => {

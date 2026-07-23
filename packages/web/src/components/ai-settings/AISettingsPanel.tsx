@@ -33,11 +33,27 @@ import { errorsToFields, localValidate, serverValidationErrors, type FormErrors 
 
 /**
  * /ai/status 响应 = core RuntimeStatus + 服务端附加字段。
- * vectorStore / fix_hint 是 server 私有类型（core 未建模），web 暂不消费，
- * 以交叉类型保留字段，避免丢失。
  */
+type VectorStoreStatus = {
+  backend: string
+  status: 'ready' | 'stale' | 'rebuilding' | 'failed'
+  modelFingerprint: string | null
+  dimension: number | null
+  count: number
+  activeGeneration: string | null
+  stagingGeneration: string | null
+  error: string | null
+  rebuild?: {
+    processed: number
+    total: number
+    started_at: string
+    elapsed_ms: number
+    eta_ms: number | null
+  }
+}
+
 type AIStatus = RuntimeStatus & {
-  vectorStore?: unknown
+  vectorStore?: VectorStoreStatus
   fix_hint?: string
 }
 
@@ -81,6 +97,7 @@ export default function AISettingsPanel() {
   const [testing, setTesting] = useState(false)
   const [diagnose, setDiagnose] = useState<AiDiagnoseResult | null>(null)
   const [showDisableConfirm, setShowDisableConfirm] = useState(false)
+  const [rebuilding, setRebuilding] = useState(false)
   const toast = useToast()
   // 字段级错误（红色内嵌到表单）+ 保存成功的最近一次描述（持久化显示在按钮旁）
   const [formErrors, setFormErrors] = useState<FormErrors>({})
@@ -97,6 +114,7 @@ export default function AISettingsPanel() {
       setEmbedding(s.config.embedding ?? null)
       setReranker(s.config.reranker ?? null)
       setAutoLink(s.config.autoLink ?? defaultAutoLink())
+      setAutoIndex(s.config.autoIndex ?? true)
     } catch (e) {
       toast.error({ title: '加载 AI 状态失败', description: e instanceof Error ? e.message : String(e) })
     }
@@ -105,6 +123,33 @@ export default function AISettingsPanel() {
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  // 重建中轮询 index/status
+  useEffect(() => {
+    const vs = status?.vectorStore
+    if (!vs || vs.status !== 'rebuilding') return
+    const t = setInterval(() => {
+      void refresh()
+    }, 800)
+    return () => clearInterval(t)
+  }, [status?.vectorStore?.status, refresh])
+
+  const handleRebuild = async () => {
+    if (rebuilding) return
+    setRebuilding(true)
+    try {
+      await api.post('/ai/index/rebuild', {})
+      toast.info({ title: '已开始重建向量索引' })
+      await refresh()
+    } catch (e) {
+      toast.error({
+        title: '重建失败',
+        description: e instanceof Error ? e.message : String(e),
+      })
+    } finally {
+      setRebuilding(false)
+    }
+  }
 
   const handleSave = async () => {
     setFormErrors({})
@@ -357,7 +402,7 @@ export default function AISettingsPanel() {
         )}
       </Section>
 
-      {/* Section 3: Auto-index */}
+      {/* Section 3: Auto-index + 向量库状态 */}
       <Section
         icon={<Database className="w-4 h-4" />}
         title="Auto-Index"
@@ -373,6 +418,60 @@ export default function AISettingsPanel() {
               : '需先配 Embedding'
           }
         />
+        {status?.vectorStore && (
+          <div className="mt-3 rounded-md border border-border/70 bg-muted/20 px-3 py-2.5 space-y-2 text-[12.5px]">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="font-medium text-foreground">
+                {status.vectorStore.status === 'ready' && '就绪'}
+                {status.vectorStore.status === 'stale' && '需重建'}
+                {status.vectorStore.status === 'rebuilding' && '重建中'}
+                {status.vectorStore.status === 'failed' && '失败'}
+              </span>
+              <span className="text-muted-foreground">
+                · {status.vectorStore.count.toLocaleString()} 向量 · {status.vectorStore.backend}
+              </span>
+            </div>
+            {status.vectorStore.status === 'stale' && (
+              <p className="text-amber-700 dark:text-amber-400">
+                模型已变 · 旧向量未参与检索 · 请重建
+              </p>
+            )}
+            {status.vectorStore.error && status.vectorStore.status !== 'ready' && (
+              <p className="text-destructive/90 break-words">{status.vectorStore.error}</p>
+            )}
+            {status.vectorStore.rebuild && (
+              <p className="tabular-nums text-muted-foreground">
+                {status.vectorStore.rebuild.processed}/{status.vectorStore.rebuild.total}
+                {' · '}
+                {(status.vectorStore.rebuild.elapsed_ms / 1000).toFixed(1)}s
+                {status.vectorStore.rebuild.eta_ms != null && status.vectorStore.rebuild.eta_ms > 0
+                  ? ` · 约 ${(status.vectorStore.rebuild.eta_ms / 1000).toFixed(1)}s`
+                  : ''}
+              </p>
+            )}
+            <div className="flex gap-2 pt-0.5">
+              <button
+                type="button"
+                onClick={handleRebuild}
+                disabled={!capabilities?.embedding || rebuilding || status.vectorStore.status === 'rebuilding'}
+                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-border hover:bg-accent disabled:opacity-50"
+              >
+                {(rebuilding || status.vectorStore.status === 'rebuilding') && (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                )}
+                重建索引
+              </button>
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md text-muted-foreground hover:text-foreground"
+              >
+                <RefreshCw className="w-3 h-3" />
+                刷新
+              </button>
+            </div>
+          </div>
+        )}
       </Section>
 
       {/* Section 4: Reranker */}

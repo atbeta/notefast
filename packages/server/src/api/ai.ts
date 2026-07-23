@@ -42,13 +42,15 @@ import {
   loadConfigFromDisk,
 } from '../services/aiRuntime'
 import { indexBlock, indexAllBlocks, semanticSearch } from '../ai/indexer'
+import { getVectorStore } from '../ai/vectorStore'
+import { startVectorRebuild } from '../ai/vectorRebuild'
+import { getRebuildProgress } from '../ai/rebuildProgress'
+import { getIndexJob, getLatestIndexJobForDoc } from '../ai/indexJobs'
 import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
 import { loadAiExcludedDocIds } from '../ai/aiExcludeQuery'
 import { runChat, runChatSync } from '../ai/chat'
 import { getDb } from '../db'
 import { runFtsQuery } from '../dbQueries'
-import { getVectorStore } from '../ai/vectorStore'
-import { startVectorRebuild } from '../ai/vectorRebuild'
 
 const ai = new Hono()
 
@@ -57,7 +59,9 @@ const FIX_HINT = '请在 Web UI /settings 页面配置 AI Provider（API Key + B
 // ───────────────────── status ─────────────────────
 
 ai.get('/status', async (c) => {
-  const vectorStore = await getVectorStore().status()
+  const base = await getVectorStore().status()
+  const rebuild = getRebuildProgress()
+  const vectorStore = rebuild ? { ...base, rebuild } : base
   if (!runtimeSafe()) {
     return c.json({ enabled: false, embedding: { configured: false, ok: false }, chat: { configured: false, ok: false }, usage: emptyUsage(), config: emptyConfig(), vectorStore, fix_hint: FIX_HINT })
   }
@@ -365,6 +369,9 @@ ai.get('/search', async (c) => {
       notebookId,
       topK: limit,
     })
+    if (c.req.query('with_retrieval') === '1' || c.req.query('with_retrieval') === 'true') {
+      return c.json(report)
+    }
     return c.json(report.citations)
   } catch (e) {
     return c.json({ error: 'search_error', message: eMsg(e), fix_hint: FIX_HINT }, 500)
@@ -424,7 +431,23 @@ ai.post('/index', async (c) => {
 })
 
 ai.get('/index/status', async (c) => {
-  return c.json(await getVectorStore().status())
+  const status = await getVectorStore().status()
+  const rebuild = getRebuildProgress()
+  return c.json(rebuild ? { ...status, rebuild } : status)
+})
+
+ai.get('/index/jobs/:jobId', (c) => {
+  const job = getIndexJob(c.req.param('jobId'))
+  if (!job) return c.json({ error: 'not_found', message: '索引作业不存在' }, 404)
+  return c.json(job)
+})
+
+ai.get('/index/jobs', (c) => {
+  const docId = c.req.query('doc_id')
+  if (!docId) return c.json({ error: 'bad_request', message: '需要 doc_id' }, 400)
+  const job = getLatestIndexJobForDoc(docId)
+  if (!job) return c.json({ error: 'not_found', message: '该文档暂无索引作业' }, 404)
+  return c.json(job)
 })
 
 ai.post('/index/rebuild', async (c) => {

@@ -9,6 +9,7 @@
  * - 每条路线都可单独关闭：FTS5 总是可用；语义召回需要 embedding；rerank 需要 reranker
  * - 任何一层失败都不让整个流程崩——降级到下一层
  * - 返回统一的 Citation 对象，方便前端展示和 prompt 拼装
+ * - 分阶段 timing（fts / embed_query / semantic / rerank / total）可量化 Fast
  */
 
 import { getDb } from '../db'
@@ -16,7 +17,7 @@ import { runFtsQuery } from '../dbQueries'
 import { buildFtsQuery, highlightSnippet } from '@notefast/core'
 import { semanticSearch } from './indexer'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
-import { loadAiExcludedDocIds } from './aiExcludeQuery'
+import { loadAiExcludedDocIds, loadInboxDocIds } from './aiExcludeQuery'
 
 export interface SearchOptions {
   query: string
@@ -48,6 +49,10 @@ export interface SearchOptions {
    * 留空表示无上限。
    */
   until?: string
+  /**
+   * 是否包含收集箱文档（默认 false：RAG 与主列表一致，排除 inbox）。
+   */
+  includeInbox?: boolean
 }
 
 export interface Citation {
@@ -64,6 +69,15 @@ export interface Citation {
   score: number
 }
 
+/** 检索各阶段耗时（毫秒）；未跑的阶段为 0 */
+export interface RetrievalTiming {
+  fts_ms: number
+  embed_query_ms: number
+  semantic_ms: number
+  rerank_ms: number
+  total_ms: number
+}
+
 export interface HybridSearchReport {
   citations: Citation[]
   retrieval: {
@@ -73,6 +87,8 @@ export interface HybridSearchReport {
     model?: string
     /** 被 minScore 门槛过滤掉的引用数（0 = 没有过滤） */
     discarded_low_score?: number
+    /** 分阶段耗时（NoteFast：可量化） */
+    timing: RetrievalTiming
   }
 }
 
@@ -106,36 +122,52 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
   const semanticLimit = opts.semanticLimit ?? DEFAULT_SEMANTIC_LIMIT
   const topK = opts.topK ?? DEFAULT_TOP_K
   const rerankWindow = opts.rerankWindow ?? DEFAULT_RERANK_WINDOW
+  const includeInbox = opts.includeInbox === true
 
-  const ftsPromise = (async () => {
+  const ftsPromise = (async (): Promise<{ hits: FtsHit[]; fts_ms: number }> => {
+    const t0 = Date.now()
     try {
-      return runFts(opts.query, opts.notebookId, ftsLimit, opts.since, opts.until)
+      const hits = runFts(opts.query, opts.notebookId, ftsLimit, opts.since, opts.until)
+      return { hits, fts_ms: Date.now() - t0 }
     } catch (e) {
       console.error('[hybridSearch] FTS failed:', e)
-      return [] as FtsHit[]
+      return { hits: [], fts_ms: Date.now() - t0 }
     }
   })()
+
   const semanticPromise = runSemantic(opts.query, opts.notebookId, semanticLimit, opts.since, opts.until)
 
-  const [ftsRaw0, semanticRaw0] = await Promise.all([
+  const [ftsResult, semanticResult] = await Promise.all([
     ftsPromise,
     semanticPromise.catch((e) => {
       console.error('[hybridSearch] semantic failed:', e)
-      return [] as SemanticRawHit[]
+      return { hits: [] as SemanticRawHit[], embed_query_ms: 0, semantic_ms: 0 }
     }),
   ])
 
-  // AI 软隔离：过滤 ai_exclude 文档
+  const ftsRaw0 = ftsResult.hits
+  const semanticRaw0 = semanticResult.hits
+
+  // AI 软隔离 + 收集箱：过滤 ai_exclude；默认也过滤 inbox
   const excluded = loadAiExcludedDocIds([
     ...ftsRaw0.map((h) => h.doc_id),
     ...semanticRaw0.map((h) => h.doc_id),
   ])
-  const ftsRaw = ftsRaw0.filter((h) => !excluded.has(h.doc_id))
-  const semanticRaw = semanticRaw0.filter((h) => !excluded.has(h.doc_id))
+  const inboxIds = includeInbox
+    ? new Set<string>()
+    : loadInboxDocIds([
+        ...ftsRaw0.map((h) => h.doc_id),
+        ...semanticRaw0.map((h) => h.doc_id),
+      ])
+  const drop = (docId: string) => excluded.has(docId) || inboxIds.has(docId)
+  const ftsRaw = ftsRaw0.filter((h) => !drop(h.doc_id))
+  const semanticRaw = semanticRaw0.filter((h) => !drop(h.doc_id))
 
   const fused = rrfMerge(ftsRaw, semanticRaw)
   const rerankCandidates = fused.slice(0, rerankWindow)
+  const rerankT0 = Date.now()
   const reranked = await maybeRerank(opts.query, rerankCandidates)
+  const rerank_ms = reranked ? Date.now() - rerankT0 : 0
   const ranked = reranked ?? rerankCandidates
 
   let citations = ranked.slice(0, topK).map((c) => toCitation(c, opts.query))
@@ -150,6 +182,14 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
     discardedLowScore = before - citations.length
   }
 
+  const timing: RetrievalTiming = {
+    fts_ms: ftsResult.fts_ms,
+    embed_query_ms: semanticResult.embed_query_ms,
+    semantic_ms: semanticResult.semantic_ms,
+    rerank_ms,
+    total_ms: Date.now() - start,
+  }
+
   console.info(JSON.stringify({
     event: 'retrieval',
     fts_hits: ftsRaw.length,
@@ -157,7 +197,8 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
     reranked: Boolean(reranked),
     returned: citations.length,
     discarded_low_score: discardedLowScore,
-    duration_ms: Date.now() - start,
+    ...timing,
+    duration_ms: timing.total_ms,
   }))
 
   return {
@@ -168,6 +209,7 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
       reranked: Boolean(reranked),
       model: reranked ? getRuntime().rerankerConfig()?.model : undefined,
       discarded_low_score: discardedLowScore,
+      timing,
     },
   }
 }
@@ -206,7 +248,7 @@ function runFts(
   if (!query.trim()) return []
   const db = getDb()
   const { query: ftsQuery } = buildFtsQuery(query, limit)
-  // ai_exclude 不过取：在 hybridSearch 融合层与语义召回一起过滤
+  // ai_exclude / inbox 不过取：在 hybridSearch 融合层与语义召回一起过滤
   const rows = runFtsQuery<FtsHit>(db, {
     match: ftsQuery,
     notebookId,
@@ -226,24 +268,36 @@ async function runSemantic(
   limit: number,
   since?: string,
   until?: string,
-): Promise<SemanticRawHit[]> {
-  if (!query.trim()) return []
-  if (!hasRuntime() || !getRuntime().hasEmbedding()) return []
+): Promise<{ hits: SemanticRawHit[]; embed_query_ms: number; semantic_ms: number }> {
+  if (!query.trim()) return { hits: [], embed_query_ms: 0, semantic_ms: 0 }
+  if (!hasRuntime() || !getRuntime().hasEmbedding()) {
+    return { hits: [], embed_query_ms: 0, semantic_ms: 0 }
+  }
   const r = getRuntime()
+  const embedT0 = Date.now()
   const vec = await r.embedQuery(query)
-  if (!vec) return []
+  const embed_query_ms = Date.now() - embedT0
+  if (!vec) return { hits: [], embed_query_ms, semantic_ms: 0 }
+
+  const searchT0 = Date.now()
   const minCosine = semanticMinCosine()
   const hits = (await semanticSearch(vec, limit, notebookId, since, until))
     .filter((h) => h.score >= minCosine)
-  return hits.map((h, i) => ({
-    block_id: h.block_id,
-    score: h.score,
-    content: h.content,
-    doc_id: h.doc_id,
-    doc_title: h.doc_title,
-    rrf_rank: i + 1,
-    rerank_text: snippet(h.content, 600),
-  }))
+  const semantic_ms = Date.now() - searchT0
+
+  return {
+    embed_query_ms,
+    semantic_ms,
+    hits: hits.map((h, i) => ({
+      block_id: h.block_id,
+      score: h.score,
+      content: h.content,
+      doc_id: h.doc_id,
+      doc_title: h.doc_title,
+      rrf_rank: i + 1,
+      rerank_text: snippet(h.content, 600),
+    })),
+  }
 }
 
 // ───────────────────── RRF 融合 ─────────────────────
@@ -350,4 +404,3 @@ function applyContextBoost(citations: Citation[], contextDocId?: string): Citati
     .map((c) => (c.doc_id === contextDocId ? { ...c, score: c.score + CONTEXT_DOC_BOOST } : c))
     .sort((a, b) => b.score - a.score)
 }
-

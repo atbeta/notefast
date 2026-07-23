@@ -34,6 +34,13 @@ interface RetrievalInfo {
   semantic_hits: number
   reranked: boolean
   model?: string
+  timing?: {
+    fts_ms: number
+    embed_query_ms: number
+    semantic_ms: number
+    rerank_ms: number
+    total_ms: number
+  }
 }
 
 interface AIChatPanelProps {
@@ -183,6 +190,7 @@ export default function AIChatPanel({
                 semantic_hits: payload.retrieval?.semantic_hits ?? 0,
                 reranked: payload.retrieval?.reranked ?? false,
                 model: payload.retrieval?.model,
+                timing: payload.retrieval?.timing,
               })
               setCitations(payload.citations || [])
             } else if (eventName === 'tool') {
@@ -203,6 +211,7 @@ export default function AIChatPanel({
                   semantic_hits: payload.retrieval.semantic_hits ?? 0,
                   reranked: payload.retrieval.reranked ?? false,
                   model: payload.retrieval.model,
+                  timing: payload.retrieval.timing,
                 })
               }
             } else if (eventName === 'error') {
@@ -372,6 +381,15 @@ export default function AIChatPanel({
                         <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
                           引用 · {retrieval?.reranked ? `reranked (${retrieval.model})` : 'hybrid search'}
                           {retrieval && ` · FTS ${retrieval.fts_hits} · semantic ${retrieval.semantic_hits}`}
+                          {retrieval?.timing && (
+                            <span className="tabular-nums text-muted-foreground/80">
+                              {` · 检索 ${retrieval.timing.total_ms}ms`}
+                              {retrieval.timing.fts_ms > 0 && ` · FTS ${retrieval.timing.fts_ms}`}
+                              {retrieval.timing.embed_query_ms > 0 && ` · emb ${retrieval.timing.embed_query_ms}`}
+                              {retrieval.timing.semantic_ms > 0 && ` · 语义 ${retrieval.timing.semantic_ms}`}
+                              {retrieval.timing.rerank_ms > 0 && ` · 精排 ${retrieval.timing.rerank_ms}`}
+                            </span>
+                          )}
                         </div>
                         <ol className="space-y-1">
                           {citations.map((c, ci) => (

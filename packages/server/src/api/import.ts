@@ -6,6 +6,7 @@ import { getDb } from '../db'
 import { fireAfterCreate, fireAfterCreateMany } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { EmptyMarkdownError, insertDocFromMarkdown, type InsertDocFromMarkdownResult } from '../services/docImport'
+import { scheduleDocIndex } from '../ai/indexJobs'
 
 const importRouter = new Hono()
 
@@ -31,8 +32,9 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
   }
   const { docId, blockIds } = result
 
-  // Hook 触发（fire-and-forget）：先 doc，再批量子块
+  // Hook 触发（fire-and-forget）：先 doc，再批量子块；大文档索引进度走 scheduleDocIndex
   const docRow = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
+  const indexJob = scheduleDocIndex(docId, blockIds)
   fireAfterCreate(rowToBlock(docRow))
   if (blockIds.length > 0) {
     const placeholders = blockIds.map(() => '?').join(',')
@@ -49,6 +51,7 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
     {
       doc: rowToBlock(docRow),
       block_count: blockIds.length + 1,
+      ...(indexJob ? { index_job: indexJob } : {}),
       ...(missingAssets.length > 0 ? { missing_assets: missingAssets } : {}),
     },
     201,

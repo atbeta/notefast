@@ -7,7 +7,7 @@
  * 写 / purge / reindex 等副作用仍在 aiExclude.ts。
  */
 
-import { readAiExcludeFromProperties, type BlockRow } from '@notefast/core'
+import { isInboxDoc, readAiExcludeFromProperties, type BlockRow } from '@notefast/core'
 import { getDb } from '../db'
 
 /** 从 document 行判断是否 AI 排除 */
@@ -53,6 +53,22 @@ export function loadAiExcludedDocIds(docIds: Iterable<string>): Set<string> {
     if (readAiExcludeFromProperties(r.properties)) excluded.add(r.id)
   }
   return excluded
+}
+
+/** 批量：哪些 root_id 是收集箱（RAG 默认排除，与主列表一致） */
+export function loadInboxDocIds(docIds: Iterable<string>): Set<string> {
+  const ids = [...new Set([...docIds].filter(Boolean))]
+  const inbox = new Set<string>()
+  if (ids.length === 0) return inbox
+  const db = getDb()
+  const placeholders = ids.map(() => '?').join(',')
+  const rows = db
+    .query(`SELECT id, properties FROM blocks WHERE type = 'document' AND id IN (${placeholders})`)
+    .all(...ids) as Array<{ id: string; properties: string }>
+  for (const r of rows) {
+    if (isInboxDoc(r.properties)) inbox.add(r.id)
+  }
+  return inbox
 }
 
 /** 取某文档下所有 block id（含 root），用于批量 purge / reindex */

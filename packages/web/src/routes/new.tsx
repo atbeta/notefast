@@ -36,20 +36,25 @@ export default function NewDocPage() {
 
     try {
       let docId: string
+      let indexJobId: string | undefined
       if (markdown.trim()) {
-        const res = await request<{ doc: { id: string } }>('/import/markdown', {
+        const res = await request<{ doc: { id: string }; index_job?: { id: string } }>('/import/markdown', {
           method: 'POST',
           body: JSON.stringify({ notebook_id: notebookId, markdown, title: finalTitle }),
         })
         docId = res.doc.id
+        indexJobId = res.index_job?.id
       } else {
-        const res = await request<{ id: string }>('/docs', {
+        const res = await request<{ id: string; index_job?: { id: string } }>('/docs', {
           method: 'POST',
           body: JSON.stringify({ notebook_id: notebookId, title: finalTitle }),
         })
         docId = res.id
+        indexJobId = res.index_job?.id
       }
-      navigate('/doc/' + docId + '?edit=1')
+      const q = new URLSearchParams({ edit: '1' })
+      if (indexJobId) q.set('index_job', indexJobId)
+      navigate('/doc/' + docId + '?' + q.toString())
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建失败')
       setCreating(false)

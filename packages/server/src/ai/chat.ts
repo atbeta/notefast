@@ -111,7 +111,12 @@ async function executeToolCall(
   if (name !== 'notefast_search_more') {
     return {
       citations: [],
-      retrieval: { fts_hits: 0, semantic_hits: 0, reranked: false },
+      retrieval: {
+        fts_hits: 0,
+        semantic_hits: 0,
+        reranked: false,
+        timing: { fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
+      },
       resultCount: 0,
     }
   }
@@ -216,7 +221,15 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
       minScore: opts.minScore,
     })
   } catch (e) {
-    initialReport = { citations: [], retrieval: { fts_hits: 0, semantic_hits: 0, reranked: false } }
+    initialReport = {
+      citations: [],
+      retrieval: {
+        fts_hits: 0,
+        semantic_hits: 0,
+        reranked: false,
+        timing: { fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
+      },
+    }
     console.error('[chat] retrieval failed:', e)
   }
 
@@ -425,6 +438,7 @@ export async function runChatSync(opts: RunChatOptions): Promise<{
     fts_hits: 0,
     semantic_hits: 0,
     reranked: false,
+    timing: { fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
   }
   let toolTrace: ToolTraceEntry[] = []
 

@@ -20,6 +20,8 @@ import PageHeader from '../components/PageHeader'
 import { useAiChatOpen } from '../components/Layout'
 import { scrollToElement } from '../lib/scroll'
 import { formatRelative } from '../lib/time'
+import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
+import { useToast } from '../components/ui'
 
 interface Backlink {
   id: number
@@ -52,8 +54,9 @@ function flattenHeadings(nodes: HeadingNode[]): Array<HeadingNode & { depth: num
 export default function DocPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const aiChatOpen = useAiChatOpen()
+  const toast = useToast()
   const [doc, setDoc] = useState<Block | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -85,12 +88,44 @@ export default function DocPage() {
   const [docStatus, setDocStatus] = useState<'note' | 'inbox'>('note')
   const [statusSaving, setStatusSaving] = useState(false)
   const [auxLoading, setAuxLoading] = useState(false)
+  const [indexJob, setIndexJob] = useState<IndexJob | null>(null)
 
   useEffect(() => {
     if (!id) return
     setLoading(true); setError(null)
     api.get<Block>('/docs/' + id).then(setDoc).catch((e) => setError(e.message)).finally(() => setLoading(false))
   }, [id, refreshKey])
+
+  // 创建/导入后的向量化进度（?index_job=）
+  useEffect(() => {
+    const jobId = searchParams.get('index_job')
+    if (!jobId) {
+      setIndexJob(null)
+      return
+    }
+    const ac = new AbortController()
+    void pollIndexJob(jobId, {
+      signal: ac.signal,
+      onUpdate: setIndexJob,
+    }).then((final) => {
+      if (ac.signal.aborted) return
+      setIndexJob(final)
+      if (final.state === 'ready') {
+        toast.success({ title: formatIndexProgress(final) })
+      } else if (final.state === 'partial') {
+        toast.warning({ title: formatIndexProgress(final) })
+      } else if (final.state === 'failed') {
+        toast.error({ title: formatIndexProgress(final) })
+      }
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('index_job')
+        return next
+      }, { replace: true })
+      setIndexJob(null)
+    }).catch(() => {})
+    return () => ac.abort()
+  }, [id, searchParams, setSearchParams, toast])
 
   useEffect(() => {
     if (doc) {
@@ -295,6 +330,15 @@ export default function DocPage() {
           {/* stale-while-revalidate：切换文档时保留旧内容降透明，新文档就地替换，无闪烁 */}
           <div className={`transition-opacity duration-200 ${showingStale ? 'opacity-40' : 'opacity-100'}`}>
             <div className="w-full max-w-4xl mx-auto px-8 pt-14 pb-32 animate-fade-in">
+            {indexJob && (indexJob.state === 'pending' || indexJob.state === 'running') && (
+              <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
+                <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" strokeWidth={1.75} />
+                <span className="flex-1">{formatIndexProgress(indexJob)}</span>
+                <span className="tabular-nums text-[11px]">
+                  {(indexJob.elapsed_ms / 1000).toFixed(1)}s
+                </span>
+              </div>
+            )}
             {docStatus === 'inbox' && (
               <div className="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
                 <Inbox className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />

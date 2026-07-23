@@ -19,6 +19,7 @@ import {
 } from '@notefast/core'
 import { insertDocFromMarkdown } from '../../services/docImport'
 import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate } from '../../services/hooks'
+import { scheduleDocIndex } from '../../ai/indexJobs'
 import { extractAssetRefs, findMissingAssets } from '../../assets/store'
 import { isDocRowAiExcluded } from '../../ai/aiExcludeQuery'
 import {
@@ -134,8 +135,9 @@ export function registerDocWriteTools(ctx: ToolContext): void {
         status,
       })
 
-      // Hook 触发（fire-and-forget）：先 doc，再批量子块
+      // Hook 触发（fire-and-forget）：先 doc，再批量子块；索引进度走 scheduleDocIndex
       const docRow = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
+      const indexJob = scheduleDocIndex(docId, blockIds)
       fireAfterCreate(rowToBlock(docRow))
       if (blockIds.length > 0) {
         const placeholders = blockIds.map(() => '?').join(',')
@@ -150,6 +152,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
           doc_id: docId,
           title,
           block_count: parsedCount + 1,
+          ...(indexJob ? { index_job: indexJob } : {}),
           // asset 引用对账：悬空引用告警（不阻断创建）
           ...(() => {
             const missing = findMissingAssets(extractAssetRefs(markdown))

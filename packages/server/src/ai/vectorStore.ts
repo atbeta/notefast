@@ -28,6 +28,14 @@ export interface VectorStoreStatus {
   activeGeneration: string | null
   stagingGeneration: string | null
   error: string | null
+  /** 重建进度（仅 status=rebuilding 时有值） */
+  rebuild?: {
+    processed: number
+    total: number
+    started_at: string
+    elapsed_ms: number
+    eta_ms: number | null
+  }
 }
 
 export interface VectorStore {

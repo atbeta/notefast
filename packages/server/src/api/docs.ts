@@ -10,6 +10,7 @@ import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany,
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { writeDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
 import { readDocAiExclude } from '../ai/aiExcludeQuery'
+import { scheduleDocIndex } from '../ai/indexJobs'
 
 const docs = new Hono()
 
@@ -122,6 +123,7 @@ docs.post('/', zValidator('json', createDocSchema), (c) => {
   })
 
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
+  const indexJob = scheduleDocIndex(docId, blockIds)
   fireAfterCreate(rowToBlock(row))
   if (blockIds.length > 0) {
     const placeholders = blockIds.map(() => '?').join(',')
@@ -137,6 +139,7 @@ docs.post('/', zValidator('json', createDocSchema), (c) => {
     updated_at: row.updated_at,
     tags: [],
     ...(status === 'inbox' ? { status: 'inbox' as const } : {}),
+    ...(indexJob ? { index_job: indexJob } : {}),
   }, 201)
 })
 
@@ -311,8 +314,9 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
     }
   })()
 
-  // Hook 触发（fire-and-forget）：删旧 → 增新 → 更 doc
+  // Hook 触发（fire-and-forget）：删旧 → 文档级索引作业 → 增新 hooks → 更 doc
   fireAfterDeleteMany(oldChildIds)
+  const indexJob = scheduleDocIndex(id, insertedIds)
   if (insertedIds.length > 0) {
     const placeholders = insertedIds.map(() => '?').join(',')
     const newRows = db
@@ -328,6 +332,7 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
   const missingAssets = findMissingAssets(extractAssetRefs(markdown))
   return c.json({
     doc: tree.length > 0 ? tree[0] : null,
+    ...(indexJob ? { index_job: indexJob } : {}),
     ...(missingAssets.length > 0 ? { missing_assets: missingAssets } : {}),
   })
 })

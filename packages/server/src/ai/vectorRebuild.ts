@@ -12,6 +12,11 @@ import {
   type VectorStoreStatus,
 } from './vectorStore'
 import { SqliteVecVectorStore } from './vectorStoreVec'
+import {
+  beginRebuildProgress,
+  bumpRebuildProgress,
+  endRebuildProgress,
+} from './rebuildProgress'
 
 export interface RebuildEmbeddingProvider {
   fingerprint: string
@@ -103,6 +108,8 @@ export async function runVectorRebuild(
       .filter((row) => !isBlockAiExcluded(row.id))
     if (rows.length === 0) throw new Error('没有可建立向量索引的 block')
 
+    beginRebuildProgress(rows.length)
+
     const firstBatch = rows.slice(0, 20)
     const firstVectors = await provider.embedBatch(firstBatch.map((row) => row.content))
     const dimension = firstVectors[0]?.length
@@ -134,10 +141,12 @@ export async function runVectorRebuild(
       }
     }
     await writeBatch(firstBatch, firstVectors)
+    bumpRebuildProgress(Math.min(20, rows.length))
     for (let offset = 20; offset < rows.length; offset += 20) {
       const batch = rows.slice(offset, offset + 20)
       const vectors = await provider.embedBatch(batch.map((row) => row.content))
       await writeBatch(batch, vectors)
+      bumpRebuildProgress(Math.min(offset + batch.length, rows.length))
     }
 
     await staging.activateGeneration(generation)
@@ -162,6 +171,7 @@ export async function runVectorRebuild(
     setVectorStore(previousStore)
     throw error
   } finally {
+    endRebuildProgress()
     rebuilding = false
   }
 }

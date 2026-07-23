@@ -3,6 +3,7 @@
  *
  * 负责 embedding 批处理；存储与检索委托 VectorStore（json / sqlite-vec）。
  * Plugin hook 由 services/aiRuntime.ts 负责挂载和卸载。
+ * content_hash 未变时跳过重新 embed；大文档索引走 indexJobs 批处理限流。
  */
 
 import type { BlockRow } from '@notefast/core'
@@ -14,37 +15,144 @@ import {
   embeddingFingerprint,
   getVectorStore,
   setVectorStore,
+  VECTOR_INDEX_VERSION,
 } from './vectorStore'
 import { SqliteVecVectorStore } from './vectorStoreVec'
-import { isBlockAiExcluded, loadAiExcludedDocIds } from './aiExcludeQuery'
+import { isBlockAiExcluded, loadAiExcludedDocIds, loadInboxDocIds } from './aiExcludeQuery'
 
-export async function indexBlock(blockId: string): Promise<void> {
+export type IndexBlockResult = 'indexed' | 'skipped' | 'deleted' | 'error' | 'noop'
+
+/** 当前指纹下，块是否已有相同 content_hash 的向量（可跳过 embed） */
+export function hasFreshVector(blockId: string, content: string): boolean {
+  const fingerprint = currentEmbeddingFingerprint()
+  if (!fingerprint) return false
+  const hash = contentHash(content)
+  const db = getDb()
+  // json 后端：block_vectors；sqlite-vec：meta 表按 active generation
+  const jsonRow = db
+    .query(
+      `SELECT 1 FROM block_vectors
+       WHERE block_id = ? AND embedding_model = ? AND content_hash = ? AND index_version = ?`,
+    )
+    .get(blockId, fingerprint, hash, VECTOR_INDEX_VERSION)
+  if (jsonRow) return true
+
+  const state = db
+    .query("SELECT active_backend, active_generation FROM vector_store_state WHERE id = 'default'")
+    .get() as { active_backend: string; active_generation: string | null } | undefined
+  if (state?.active_backend === 'sqlite-vec' && state.active_generation) {
+    const meta = db
+      .query(
+        `SELECT 1 FROM vector_entries
+         WHERE generation = ? AND block_id = ? AND content_hash = ?`,
+      )
+      .get(state.active_generation, blockId, hash)
+    if (meta) return true
+  }
+  return false
+}
+
+export async function indexBlock(blockId: string): Promise<IndexBlockResult> {
   const r = getRuntime()
-  if (!r.hasEmbedding()) return
+  if (!r.hasEmbedding()) return 'noop'
 
   if (isBlockAiExcluded(blockId)) {
     await deleteVector(blockId)
-    return
+    return 'deleted'
   }
 
   const db = getDb()
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(blockId) as BlockRow | undefined
-  if (!row) return
+  if (!row) return 'noop'
 
   const text = (row.content || '').trim()
   if (!text) {
     await deleteVector(blockId)
-    return
+    return 'deleted'
+  }
+
+  if (hasFreshVector(blockId, row.content)) {
+    return 'skipped'
   }
 
   try {
     const vectors = await r.embedBatch([text])
     if (vectors.length > 0 && vectors[0]) {
       await upsertVector(blockId, vectors[0], row.content)
+      return 'indexed'
     }
+    return 'error'
   } catch (e) {
     console.error(`[ai-indexer] Failed to index ${blockId}:`, e instanceof Error ? e.message : e)
+    return 'error'
   }
+}
+
+/** 批量 embed 一批块（供 indexJobs / 全量重建使用）；跳过已新鲜向量 */
+export async function indexBlockBatch(
+  blockIds: string[],
+): Promise<{ indexed: number; skipped: number; errors: number }> {
+  const r = getRuntime()
+  if (!r.hasEmbedding()) return { indexed: 0, skipped: 0, errors: 0 }
+
+  const db = getDb()
+  const toEmbed: Array<{ id: string; content: string }> = []
+  let skipped = 0
+  let errors = 0
+
+  for (const id of blockIds) {
+    if (isBlockAiExcluded(id)) {
+      try {
+        await deleteVector(id)
+      } catch {
+        errors++
+      }
+      continue
+    }
+    const row = db.query('SELECT id, content FROM blocks WHERE id = ?').get(id) as
+      | { id: string; content: string }
+      | undefined
+    if (!row) continue
+    const text = (row.content || '').trim()
+    if (!text) {
+      try {
+        await deleteVector(id)
+      } catch {
+        errors++
+      }
+      continue
+    }
+    if (hasFreshVector(id, row.content)) {
+      skipped++
+      continue
+    }
+    toEmbed.push({ id: row.id, content: row.content })
+  }
+
+  if (toEmbed.length === 0) return { indexed: 0, skipped, errors }
+
+  let indexed = 0
+  try {
+    const vectors = await r.embedBatch(toEmbed.map((b) => b.content.trim()))
+    for (let j = 0; j < toEmbed.length; j++) {
+      const vec = vectors[j]
+      if (!vec) {
+        errors++
+        continue
+      }
+      try {
+        await upsertVector(toEmbed[j]!.id, vec, toEmbed[j]!.content)
+        indexed++
+      } catch {
+        errors++
+      }
+    }
+  } catch (e) {
+    console.error('[ai-indexer] Batch error:', e instanceof Error ? e.message : e)
+    errors += toEmbed.length
+  }
+
+  return { indexed, skipped, errors }
 }
 
 export async function indexAllBlocks(notebookId?: string): Promise<{ indexed: number; errors: number }> {
@@ -67,21 +175,12 @@ export async function indexAllBlocks(notebookId?: string): Promise<{ indexed: nu
 
   let indexed = 0
   let errors = 0
-  // 按 batchSize 分批（runtime 不暴露 batchSize，直接 20 一批）
   const BATCH = 20
   for (let i = 0; i < rows.length; i += BATCH) {
-    const batch = rows.slice(i, i + BATCH).filter((r2) => r2.content.trim().length > 0)
-    if (batch.length === 0) continue
-    try {
-      const vectors = await r.embedBatch(batch.map((b) => b.content))
-      for (let j = 0; j < batch.length && j < vectors.length; j++) {
-        if (vectors[j]) await upsertVector(batch[j].id, vectors[j], batch[j].content)
-        indexed++
-      }
-    } catch (e) {
-      console.error('[ai-indexer] Batch error:', e instanceof Error ? e.message : e)
-      errors += batch.length
-    }
+    const batchIds = rows.slice(i, i + BATCH).map((r2) => r2.id)
+    const result = await indexBlockBatch(batchIds)
+    indexed += result.indexed
+    errors += result.errors
   }
 
   return { indexed, errors }
@@ -138,17 +237,20 @@ export async function deleteVector(blockId: string): Promise<void> {
   await getVectorStore().delete(blockId)
 }
 
-/** 语义搜索：委托当前 active VectorStore（json 或 sqlite-vec），并过滤 ai_exclude 文档 */
+/**
+ * 语义搜索：委托当前 active VectorStore，过滤 ai_exclude 与 inbox 文档。
+ */
 export async function semanticSearch(
   queryVector: Float64Array,
   limit: number = 10,
   notebookId?: string,
   since?: string,
   until?: string,
+  options?: { includeInbox?: boolean },
 ): Promise<Array<{ block_id: string; score: number; content: string; doc_id: string; doc_title: string }>> {
   const fingerprint = currentEmbeddingFingerprint()
   if (!fingerprint) return []
-  // 多取 3 倍，事后过滤 ai_exclude 文档后截断
+  // 多取 3 倍，事后过滤后截断
   const raw = await getVectorStore().search(queryVector, {
     limit: limit * 3,
     modelFingerprint: fingerprint,
@@ -158,5 +260,10 @@ export async function semanticSearch(
   })
   if (raw.length === 0) return raw
   const excluded = loadAiExcludedDocIds(raw.map((h) => h.doc_id))
-  return raw.filter((h) => !excluded.has(h.doc_id)).slice(0, limit)
+  const inbox = options?.includeInbox
+    ? new Set<string>()
+    : loadInboxDocIds(raw.map((h) => h.doc_id))
+  return raw
+    .filter((h) => !excluded.has(h.doc_id) && !inbox.has(h.doc_id))
+    .slice(0, limit)
 }
