@@ -499,6 +499,7 @@ const chatSchema = z.object({
 })
 
 ai.post('/chat', zValidator('json', chatSchema), async (c) => {
+  if (!hasRuntime()) return c.json({ error: 'ai_not_configured', message: '请先在设置中配置 AI provider', hint: FIX_HINT }, 503)
   const body = c.req.valid('json')
   const messages: ChatMessage[] = body.messages
   const stream = body.stream !== false // 默认 true
