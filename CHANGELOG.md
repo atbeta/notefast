@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.14.0](https://github.com/atbeta/notefast/compare/v0.13.0...v0.14.0) (2026-07-23)
+
+
+### Features
+
+* **ai:** quantify retrieval latency and surface indexing progress ([a502592](https://github.com/atbeta/notefast/commit/a502592e13aecdb50046e41c6495995206dc0d0d))
+* **api:** add in-memory sliding-window rate limit middleware ([91f74bc](https://github.com/atbeta/notefast/commit/91f74bc2fb92a445c274fad12df465ec86bb1302))
+* **auth:** add multi-token api_tokens table with scopes and Settings UI ([4a4a043](https://github.com/atbeta/notefast/commit/4a4a0433da04ee065b5ae5bc511784feda21ead8))
+* **db:** add content_hash column to blocks for SHA-256 content dedup ([93f78c7](https://github.com/atbeta/notefast/commit/93f78c7a96e07e5d2110eefb43dca9cd2f011a08))
+* **db:** add entity_changes audit log with SQLite triggers ([468be1d](https://github.com/atbeta/notefast/commit/468be1d4c57b7cccf837749cc22529c0f129b3b9))
+* **db:** soft-delete blocks with is_deleted/delete_id, restore API, and MCP tools ([2ce11ca](https://github.com/atbeta/notefast/commit/2ce11cac96127e0443531399a6a75508a236a90c))
+* **observability:** add structured AppEvent schema, safeLog-emitter, and event context middleware ([2230e52](https://github.com/atbeta/notefast/commit/2230e52239a5fbd0ff8a7bf9f3f8bf569cec17e7))
+* **ui:** add server-side pinned views with sidebar integration ([13684d3](https://github.com/atbeta/notefast/commit/13684d370c379eb2a3f2be28297a8f74a7baac95))
+* **ux:** add first-run onboarding modal, AI graceful degradation, and status endpoint ([9bf94dc](https://github.com/atbeta/notefast/commit/9bf94dc40fed268e4a255365285e1cdfe95ef69a))
+
+
+### Bug Fixes
+
+* crypto.getRandomValues for tokens, unify migration registry ([614edfa](https://github.com/atbeta/notefast/commit/614edfa9b2ce75c5767ffa81e1965ccc0a70bd79))
+* new doc tags, UTC timezone parsing, date format consistency, edit button placement ([6e4079e](https://github.com/atbeta/notefast/commit/6e4079e954477eea9d994260b528d06ae9255bff))
+
+
+### Performance Improvements
+
+* eliminate redundant /docs/tree fetch, memoize BlockNode ([b64f7b2](https://github.com/atbeta/notefast/commit/b64f7b28d0b4e785b2494a7bb68fad482bf7c32d))
+
 ## [0.13.0](https://github.com/atbeta/notefast/compare/v0.12.0...v0.13.0) (2026-07-22)
 
 
