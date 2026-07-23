@@ -24,7 +24,7 @@ export default function ApiTokensPanel() {
 
   const loadTokens = useCallback(async () => {
     try {
-      const res = await api.get<ApiTokenView[]>('/api/v1/api-tokens')
+      const res = await api.get<ApiTokenView[]>('/api-tokens')
       const data = (res as { body?: ApiTokenView[] }).body
       if (Array.isArray(data)) setTokens(data)
     } catch {
@@ -46,7 +46,7 @@ export default function ApiTokensPanel() {
       return
     }
     try {
-      const res = await api.post<{ token: string }>('/api/v1/api-tokens', { name: name.trim(), scopes })
+      const res = await api.post<{ token: string }>('/api-tokens', { name: name.trim(), scopes })
       const data = (res as { body?: { token: string } }).body
       if (data?.token) {
         setNewToken(data.token)
@@ -63,7 +63,7 @@ export default function ApiTokensPanel() {
 
   async function handleRevoke(tokenId: string) {
     try {
-      await api.del(`/api/v1/api-tokens/${tokenId}`)
+      await api.del(`/api-tokens/${tokenId}`)
       loadTokens()
     } catch {
       toast.error({ title: '撤销失败' })
