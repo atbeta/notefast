@@ -1,7 +1,8 @@
 import type { Database } from 'bun:sqlite'
+import { CURRENT_SCHEMA_VERSION } from '@notefast/core'
 
 export const id = '001_initial'
-export const description = 'Initial schema: notebooks, blocks, FTS, block_vectors, assets, autolink, triggers'
+export const description = 'Baseline schema (squashed from 001–010)'
 
 export function up(db: Database): void {
   db.exec(`
@@ -15,17 +16,23 @@ export function up(db: Database): void {
     );
 
     CREATE TABLE IF NOT EXISTS blocks (
-      id          TEXT PRIMARY KEY,
-      notebook_id TEXT NOT NULL,
-      parent_id   TEXT,
-      root_id     TEXT NOT NULL,
-      type        TEXT NOT NULL,
-      content     TEXT DEFAULT '',
-      properties  TEXT DEFAULT '{}',
-      sort        INTEGER DEFAULT 0,
-      level       INTEGER DEFAULT 0,
-      created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      id            TEXT PRIMARY KEY,
+      notebook_id   TEXT NOT NULL,
+      parent_id     TEXT,
+      root_id       TEXT NOT NULL,
+      type          TEXT NOT NULL,
+      content       TEXT DEFAULT '',
+      content_hash  TEXT,
+      properties    TEXT DEFAULT '{}',
+      tags          TEXT NOT NULL DEFAULT '[]',
+      status        TEXT NOT NULL DEFAULT 'note',
+      ai_exclude    INTEGER NOT NULL DEFAULT 0,
+      is_deleted    INTEGER NOT NULL DEFAULT 0,
+      delete_id     TEXT,
+      sort          INTEGER DEFAULT 0,
+      level         INTEGER DEFAULT 0,
+      created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (parent_id) REFERENCES blocks(id) ON DELETE CASCADE,
       FOREIGN KEY (root_id) REFERENCES blocks(id) ON DELETE CASCADE
     );
@@ -34,6 +41,11 @@ export function up(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_blocks_root ON blocks(root_id);
     CREATE INDEX IF NOT EXISTS idx_blocks_notebook ON blocks(notebook_id);
     CREATE INDEX IF NOT EXISTS idx_blocks_type ON blocks(type);
+    CREATE INDEX IF NOT EXISTS idx_blocks_status ON blocks(status);
+    CREATE INDEX IF NOT EXISTS idx_blocks_ai_exclude ON blocks(ai_exclude);
+    CREATE INDEX IF NOT EXISTS idx_blocks_content_hash ON blocks(content_hash);
+    CREATE INDEX IF NOT EXISTS idx_blocks_is_deleted ON blocks(is_deleted);
+    CREATE INDEX IF NOT EXISTS idx_blocks_is_deleted_date ON blocks(is_deleted, updated_at DESC);
 
     CREATE VIRTUAL TABLE IF NOT EXISTS blocks_fts USING fts5(
       id UNINDEXED,
@@ -66,7 +78,6 @@ export function up(db: Database): void {
       error              TEXT,
       updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
     );
-
     INSERT OR IGNORE INTO vector_store_state (id) VALUES ('default');
 
     CREATE TABLE IF NOT EXISTS vector_generations (
@@ -82,12 +93,12 @@ export function up(db: Database): void {
     );
 
     CREATE TABLE IF NOT EXISTS vector_entries (
-      id           INTEGER PRIMARY KEY AUTOINCREMENT,
-      generation   TEXT NOT NULL,
-      block_id     TEXT NOT NULL,
-      content_hash TEXT NOT NULL,
-      notebook_id  TEXT NOT NULL,
-      root_id      TEXT NOT NULL,
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      generation       TEXT NOT NULL,
+      block_id         TEXT NOT NULL,
+      content_hash     TEXT NOT NULL,
+      notebook_id      TEXT NOT NULL,
+      root_id          TEXT NOT NULL,
       block_updated_at TEXT NOT NULL,
       UNIQUE (generation, block_id),
       FOREIGN KEY (generation) REFERENCES vector_generations(id) ON DELETE CASCADE,
@@ -105,7 +116,6 @@ export function up(db: Database): void {
       FOREIGN KEY (source_id) REFERENCES blocks(id) ON DELETE CASCADE,
       FOREIGN KEY (target_id) REFERENCES blocks(id) ON DELETE CASCADE
     );
-
     CREATE INDEX IF NOT EXISTS idx_refs_source ON block_refs(source_id);
     CREATE INDEX IF NOT EXISTS idx_refs_target ON block_refs(target_id);
 
@@ -130,11 +140,29 @@ export function up(db: Database): void {
       reviewed_at           TEXT,
       FOREIGN KEY (created_ref_id) REFERENCES block_refs(id) ON DELETE SET NULL
     );
-
     CREATE INDEX IF NOT EXISTS idx_autolink_review ON autolink_suggestions(review_status);
     CREATE INDEX IF NOT EXISTS idx_autolink_action ON autolink_suggestions(action_status);
     CREATE INDEX IF NOT EXISTS idx_autolink_source ON autolink_suggestions(source_block_id);
     CREATE INDEX IF NOT EXISTS idx_autolink_hash   ON autolink_suggestions(source_block_id, source_content_hash);
+
+    CREATE TABLE IF NOT EXISTS api_tokens (
+      token_id     TEXT PRIMARY KEY,
+      name         TEXT NOT NULL,
+      token_hash   TEXT NOT NULL,
+      scopes       TEXT NOT NULL DEFAULT '["read","write"]',
+      created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      last_used_at TEXT,
+      revoked      INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
+    CREATE INDEX IF NOT EXISTS idx_api_tokens_revoked ON api_tokens(revoked);
+
+    CREATE TABLE IF NOT EXISTS pinned_views (
+      id         TEXT PRIMARY KEY,
+      name       TEXT NOT NULL,
+      query      TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
 
     CREATE TABLE IF NOT EXISTS assets (
       id          TEXT PRIMARY KEY,
@@ -143,6 +171,26 @@ export function up(db: Database): void {
       created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS entity_changes (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity_name      TEXT NOT NULL,
+      entity_id        TEXT NOT NULL,
+      hash             TEXT NOT NULL DEFAULT '',
+      is_erased        INTEGER NOT NULL DEFAULT 0,
+      is_synced        INTEGER NOT NULL DEFAULT 0,
+      change_id        TEXT NOT NULL,
+      component_id     TEXT NOT NULL DEFAULT 'system',
+      actor            TEXT NOT NULL DEFAULT 'system',
+      utc_date_changed TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_entity_changes_entity ON entity_changes(entity_name, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_entity_changes_synced ON entity_changes(is_synced, id);
+    CREATE INDEX IF NOT EXISTS idx_entity_changes_date ON entity_changes(utc_date_changed DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_changes_change_id ON entity_changes(change_id);
+  `)
+
+  // triggers
+  db.exec(`
     CREATE TRIGGER IF NOT EXISTS blocks_fts_insert AFTER INSERT ON blocks
     BEGIN
       INSERT INTO blocks_fts (id, content) VALUES (NEW.id, NEW.content);
@@ -157,32 +205,36 @@ export function up(db: Database): void {
     BEGIN
       DELETE FROM blocks_fts WHERE id = OLD.id;
     END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_blocks_ai AFTER INSERT ON blocks
+    BEGIN
+      INSERT INTO entity_changes (entity_name, entity_id, change_id, component_id, actor)
+      VALUES ('block', NEW.id, lower(hex(randomblob(16))), 'system', 'system');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_blocks_au AFTER UPDATE ON blocks
+    BEGIN
+      INSERT INTO entity_changes (entity_name, entity_id, is_erased, change_id, component_id, actor)
+      VALUES ('block', NEW.id,
+        CASE WHEN OLD.is_deleted = 0 AND NEW.is_deleted = 1 THEN 1 ELSE 0 END,
+        lower(hex(randomblob(16))), 'system', 'system');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_blocks_ad AFTER DELETE ON blocks
+    BEGIN
+      INSERT INTO entity_changes (entity_name, entity_id, is_erased, change_id, component_id, actor)
+      VALUES ('block', OLD.id, 1, lower(hex(randomblob(16))), 'system', 'system');
+    END;
   `)
 
   migrateVectorColumns(db)
-}
 
-export function down(db: Database): void {
-  db.exec(`
-    DROP TRIGGER IF EXISTS blocks_fts_insert;
-    DROP TRIGGER IF EXISTS blocks_fts_update;
-    DROP TRIGGER IF EXISTS blocks_fts_delete;
-    DROP TABLE IF EXISTS autolink_suggestions;
-    DROP TABLE IF EXISTS block_refs;
-    DROP TABLE IF EXISTS vector_entries;
-    DROP TABLE IF EXISTS vector_generations;
-    DROP TABLE IF EXISTS vector_store_state;
-    DROP TABLE IF EXISTS block_vectors;
-    DROP TABLE IF EXISTS blocks_fts;
-    DROP TABLE IF EXISTS blocks;
-    DROP TABLE IF EXISTS assets;
-    DROP TABLE IF EXISTS notebooks;
-  `)
+  db.exec(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`)
 }
 
 function migrateVectorColumns(database: Database): void {
   const columns = database.query('PRAGMA table_info(block_vectors)').all() as Array<{ name: string }>
-  const names = new Set(columns.map((column) => column.name))
+  const names = new Set(columns.map((c) => c.name))
   const additions = [
     ['embedding_model', 'TEXT'],
     ['content_hash', 'TEXT'],
