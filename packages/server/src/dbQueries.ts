@@ -18,7 +18,7 @@ type Db = ReturnType<typeof getDb>
 /** 文档级拉取：root_id 下全部 block（含文档根本身），按 level, sort 排序 */
 export function fetchDocBlocks(db: Db, rootId: string): BlockRow[] {
   return db
-    .query('SELECT * FROM blocks WHERE root_id = ? ORDER BY level, sort')
+    .query('SELECT * FROM blocks WHERE root_id = ? AND is_deleted = 0 ORDER BY level, sort')
     .all(rootId) as BlockRow[]
 }
 
@@ -27,9 +27,9 @@ export function fetchSubtreeBlocks(db: Db, blockId: string): BlockRow[] {
   return db
     .query(
       `WITH RECURSIVE subtree(id) AS (
-         SELECT id FROM blocks WHERE parent_id = ?
+         SELECT id FROM blocks WHERE parent_id = ? AND is_deleted = 0
          UNION
-         SELECT b.id FROM blocks b JOIN subtree s ON b.parent_id = s.id
+         SELECT b.id FROM blocks b JOIN subtree s ON b.parent_id = s.id WHERE b.is_deleted = 0
        )
        SELECT b.* FROM blocks b JOIN subtree s ON b.id = s.id
        ORDER BY b.level, b.sort`,
@@ -77,7 +77,7 @@ export function runFtsQuery<T = FtsBaseHit>(db: Db, opts: RunFtsQueryOptions): T
   let sql = `
     SELECT ${opts.select ?? 'b.*, rank'} FROM blocks_fts f
     JOIN blocks b ON b.id = f.id
-    WHERE blocks_fts MATCH ?`
+    WHERE blocks_fts MATCH ? AND b.is_deleted = 0`
   const params: (string | number)[] = [opts.match]
 
   if (opts.notebookId) {

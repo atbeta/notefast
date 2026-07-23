@@ -27,11 +27,11 @@ docs.get('/list', (c) => {
   let rows: BlockRow[]
   if (notebookId) {
     rows = db
-      .query('SELECT * FROM blocks WHERE type = ? AND notebook_id = ? ORDER BY updated_at DESC')
+      .query('SELECT * FROM blocks WHERE type = ? AND notebook_id = ? AND is_deleted = 0 ORDER BY updated_at DESC')
       .all('document', notebookId) as BlockRow[]
   } else {
     rows = db
-      .query('SELECT * FROM blocks WHERE type = ? ORDER BY updated_at DESC')
+      .query('SELECT * FROM blocks WHERE type = ? AND is_deleted = 0 ORDER BY updated_at DESC')
       .all('document') as BlockRow[]
   }
 
@@ -234,7 +234,7 @@ docs.delete('/:id', (c) => {
   const db = getDb()
   const id = c.req.param('id')
 
-  const docRow = db.query('SELECT * FROM blocks WHERE id = ? AND type = ?').get(id, 'document') as BlockRow | undefined
+  const docRow = db.query('SELECT * FROM blocks WHERE id = ? AND type = ? AND is_deleted = 0').get(id, 'document') as BlockRow | undefined
   if (!docRow) {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
@@ -247,7 +247,7 @@ docs.delete('/:id', (c) => {
       db.query('DELETE FROM block_refs WHERE source_id = ? OR target_id = ?').run(delId, delId)
     }
     const placeholders = allIds.map(() => '?').join(',')
-    db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...allIds)
+    db.query(`UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = datetime('now') WHERE id IN (${placeholders}) AND is_deleted = 0`).run(...allIds)
   })()
 
   fireAfterDelete(id)
@@ -281,7 +281,7 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
     }
     if (oldChildIds.length > 0) {
       const placeholders = oldChildIds.map(() => '?').join(',')
-      db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...oldChildIds)
+      db.query(`UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = datetime('now') WHERE id IN (${placeholders}) AND is_deleted = 0`).run(...oldChildIds)
     }
 
     db.query("UPDATE blocks SET content = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?").run(newTitle, computeContentHash(newTitle), id)

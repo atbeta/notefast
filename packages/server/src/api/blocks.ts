@@ -227,7 +227,7 @@ blocks.delete('/:id', (c) => {
   const db = getDb()
   const id = c.req.param('id')
 
-  const existing = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow | undefined
+  const existing = db.query('SELECT * FROM blocks WHERE id = ? AND is_deleted = 0').get(id) as BlockRow | undefined
   if (!existing) {
     return c.json({ error: 'not_found', message: `Block ${id} 不存在` }, 404)
   }
@@ -240,11 +240,59 @@ blocks.delete('/:id', (c) => {
       db.query('DELETE FROM block_refs WHERE source_id = ? OR target_id = ?').run(delId, delId)
     }
     const placeholders = allIds.map(() => '?').join(',')
-    db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...allIds)
+    db.query(`UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = datetime('now') WHERE id IN (${placeholders}) AND is_deleted = 0`).run(...allIds)
   })()
 
   fireAfterDelete(id)
   return c.json({ deleted: true, count: allIds.length })
+})
+
+blocks.get('/deleted', (c) => {
+  const db = getDb()
+  const within = c.req.query('within') || '30d'
+  const days = within === '30d' ? 30 : within === '7d' ? 7 : parseInt(within, 10) || 30
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+
+  const rows = db.query(
+    "SELECT id, type, content, notebook_id, root_id, delete_id, updated_at FROM blocks WHERE is_deleted = 1 AND updated_at >= ? ORDER BY updated_at DESC LIMIT 200",
+  ).all(cutoff) as BlockRow[]
+
+  return c.json(rows.map((r) => ({
+    id: r.id,
+    type: r.type,
+    content: r.content,
+    notebook_id: r.notebook_id,
+    root_id: r.root_id,
+    delete_id: (r as any).delete_id,
+    deleted_at: r.updated_at,
+  })))
+})
+
+blocks.post('/:id/restore', (c) => {
+  const db = getDb()
+  const id = c.req.param('id')
+
+  const existing = db.query('SELECT * FROM blocks WHERE id = ? AND is_deleted = 1').get(id) as BlockRow | undefined
+  if (!existing) {
+    return c.json({ error: 'not_found', message: '未找到可恢复的已删除 block' }, 404)
+  }
+
+  // 恢复整个子树
+  const childIds = db.query(
+    `WITH RECURSIVE subtree(id) AS (
+       SELECT id FROM blocks WHERE parent_id = ? AND is_deleted = 1
+       UNION
+       SELECT b.id FROM blocks b JOIN subtree s ON b.parent_id = s.id WHERE b.is_deleted = 1
+     )
+     SELECT b.id FROM blocks b JOIN subtree s ON b.id = s.id`,
+  ).all(id) as Array<{ id: string }>
+
+  const allIds = [id, ...childIds.map((r) => r.id)]
+  const placeholders = allIds.map(() => '?').join(',')
+
+  db.query(`UPDATE blocks SET is_deleted = 0, updated_at = datetime('now') WHERE id IN (${placeholders})`).run(...allIds)
+
+  return c.json({ restored: true, count: allIds.length })
 })
 
 function limitDepth(blocks: import('@notefast/core').Block[], maxDepth: number, current: number): import('@notefast/core').Block[] {

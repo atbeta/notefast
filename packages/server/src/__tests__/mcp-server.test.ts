@@ -111,7 +111,7 @@ describe('createSession', () => {
     const msg = list.body[0] as Record<string, unknown>
     expect(msg.result).toBeDefined()
     const tools = (msg.result as Record<string, unknown>).tools as { name: string }[]
-    expect(tools.length).toBe(22)
+    expect(tools.length).toBe(24)
 
     const toolNames = tools.map((t) => t.name)
     expect(toolNames).toContain('notefast_search')

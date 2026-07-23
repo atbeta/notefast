@@ -37,10 +37,10 @@ tags.get('/', (c) => {
   let rows: BlockRow[]
   if (notebookId) {
     rows = db
-      .query("SELECT * FROM blocks WHERE type = 'document' AND notebook_id = ?")
+      .query("SELECT * FROM blocks WHERE type = 'document' AND notebook_id = ? AND is_deleted = 0")
       .all(notebookId) as BlockRow[]
   } else {
-    rows = db.query("SELECT * FROM blocks WHERE type = 'document'").all() as BlockRow[]
+    rows = db.query("SELECT * FROM blocks WHERE type = 'document' AND is_deleted = 0").all() as BlockRow[]
   }
 
   if (!includeInbox) {

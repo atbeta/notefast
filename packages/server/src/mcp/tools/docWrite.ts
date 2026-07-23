@@ -273,4 +273,68 @@ export function registerDocWriteTools(ctx: ToolContext): void {
       }
     },
   )
+
+  registerTool(
+    'notefast_restore_block',
+    {
+      description: '恢复已软删除的 block 及其子树',
+      inputSchema: {
+        block_id: z.string().describe('要恢复的 block ID（is_deleted=1 的行）'),
+      },
+    },
+    async ({ block_id }) => {
+      const existing = db.query('SELECT * FROM blocks WHERE id = ? AND is_deleted = 1').get(block_id)
+      if (!existing) {
+        return toolError('not_found', `未找到可恢复的已删除 block ${block_id}`, { block_id })
+      }
+
+      const childIds = db.query(
+        `WITH RECURSIVE subtree(id) AS (
+           SELECT id FROM blocks WHERE parent_id = ? AND is_deleted = 1
+           UNION
+           SELECT b.id FROM blocks b JOIN subtree s ON b.parent_id = s.id WHERE b.is_deleted = 1
+         )
+         SELECT b.id FROM blocks b JOIN subtree s ON b.id = s.id`,
+      ).all(block_id) as Array<{ id: string }>
+
+      const allIds = [block_id, ...childIds.map((r) => r.id)]
+      const placeholders = allIds.map(() => '?').join(',')
+      db.query(`UPDATE blocks SET is_deleted = 0, updated_at = datetime('now') WHERE id IN (${placeholders})`).run(...allIds)
+
+      return { content: [toText({ restored: true, block_id, count: allIds.length })] }
+    },
+  )
+
+  registerTool(
+    'notefast_list_deleted',
+    {
+      description: '列出最近软删除的 blocks',
+      inputSchema: {
+        within: z.enum(['7d', '30d']).optional().describe('时间窗口，默认 30d'),
+      },
+    },
+    async ({ within }) => {
+      const days = within === '7d' ? 7 : 30
+      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+
+      const rows = db.query(
+        "SELECT id, type, content, notebook_id, root_id, updated_at FROM blocks WHERE is_deleted = 1 AND updated_at >= ? ORDER BY updated_at DESC LIMIT 200",
+      ).all(cutoff) as BlockRow[]
+
+      return {
+        content: [toText({
+          deleted_count: rows.length,
+          within: `${days}d`,
+          blocks: rows.map((r) => ({
+            id: r.id,
+            type: r.type,
+            content: r.content,
+            notebook_id: r.notebook_id,
+            root_id: r.root_id,
+            deleted_at: r.updated_at,
+          })),
+        })],
+      }
+    },
+  )
 }

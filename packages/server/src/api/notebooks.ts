@@ -92,7 +92,7 @@ notebooks.delete('/:id', (c) => {
 
   db.transaction(() => {
     if (blockCount > 0) {
-      db.query('DELETE FROM blocks WHERE notebook_id = ?').run(id)
+      db.query(`UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = datetime('now') WHERE notebook_id = ? AND is_deleted = 0`).run(id)
     }
     db.query('DELETE FROM notebooks WHERE id = ?').run(id)
   })()
