@@ -1,10 +1,11 @@
-import { useEffect, useCallback, useMemo } from 'react'
+import { useEffect, useCallback, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, FileText, Clock, Tag } from 'lucide-react'
+import { Plus, FileText, Clock, Tag, Star } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
 import { parseTagMatchMode } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
+import { usePinnedViews } from '../hooks/usePinnedViews'
 import DocList from '../components/DocList'
 import PageHeader from '../components/PageHeader'
 import TagFilter from '../components/TagFilter'
@@ -58,6 +59,14 @@ export default function HomePage() {
   const [searchParams] = useSearchParams()
   const listQuery = useMemo(() => buildListQuery(searchParams), [searchParams])
   const title = useMemo(() => viewTitle(searchParams), [searchParams])
+  const { pin, isPinned } = usePinnedViews()
+  const [showPinModal, setShowPinModal] = useState(false)
+  const [pinName, setPinName] = useState(title)
+
+  const hasFilter = searchParams.get('tags') || searchParams.get('tag') ||
+    searchParams.get('status') || searchParams.get('updated_within') ||
+    searchParams.get('untagged') === '1' || searchParams.get('view') === 'untagged' ||
+    searchParams.get('view') === 'recent'
 
   const { data, loading, error, refetch } = useApiQuery(
     () => api.get<DocSummary[]>(`/docs/list${listQuery}`),
@@ -79,6 +88,15 @@ export default function HomePage() {
           <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
             {title}
           </h1>
+          {hasFilter && (
+            <button
+              onClick={() => { setPinName(title); setShowPinModal(true) }}
+              className="p-1 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              title="固定到侧边栏"
+            >
+              <Star className="w-3.5 h-3.5" strokeWidth={1.75} fill={isPinned(listQuery) ? 'currentColor' : 'none'} />
+            </button>
+          )}
           {!loading && (
             <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
               {docs.length}
@@ -116,6 +134,34 @@ export default function HomePage() {
           )}
         </section>
       </div>
+
+      {showPinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowPinModal(false)}>
+          <div className="bg-card border border-border rounded-xl p-5 w-80 shadow-xl space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="text-[14px] font-medium text-foreground">固定视图</div>
+            <input
+              type="text"
+              value={pinName}
+              onChange={(e) => setPinName(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-foreground/20"
+              placeholder="视图名称"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  pin(pinName || title, listQuery)
+                  setShowPinModal(false)
+                }
+                if (e.key === 'Escape') setShowPinModal(false)
+              }}
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button onClick={() => setShowPinModal(false)} className="px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors">取消</button>
+              <button onClick={() => { pin(pinName || title, listQuery); setShowPinModal(false) }} className="px-3 py-1.5 text-[12px] font-medium bg-foreground text-background rounded-md hover:opacity-90 transition-opacity">固定</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

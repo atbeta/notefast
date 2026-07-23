@@ -5,6 +5,7 @@ import * as m004 from './004_entity_changes'
 import * as m006 from './006_content_hash'
 import * as m007 from './007_api_tokens'
 import * as m008 from './008_soft_delete'
+import * as m009 from './009_pinned_views'
 
 interface Migration {
   id: string
@@ -13,7 +14,7 @@ interface Migration {
   down?: (db: Database) => void
 }
 
-const MIGRATIONS: Migration[] = [m001, m003, m004, m006, m007, m008]
+const MIGRATIONS: Migration[] = [m001, m003, m004, m006, m007, m008, m009]
 
 export function runMigrations(db: Database): { applied: string[]; skipped: string[] } {
   db.exec(`
@@ -63,6 +64,8 @@ export function listMigrations(db: Database): Array<{ id: string; description: s
       SELECT '007_api_tokens' AS id, 'Multi-token auth with scopes (Trilium etapi_tokens pattern)' AS description
       UNION ALL
       SELECT '008_soft_delete' AS id, 'Soft-delete blocks with is_deleted/delete_id and restore support' AS description
+      UNION ALL
+      SELECT '009_pinned_views' AS id, 'Server-side pinned views table' AS description
     ) m
     LEFT JOIN schema_migrations s ON m.id = s.id
     ORDER BY m.id

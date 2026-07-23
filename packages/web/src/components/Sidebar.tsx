@@ -14,9 +14,12 @@ import {
   Clock,
   Tag,
   Link2,
+  Star,
+  X,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
+import { usePinnedViews } from '../hooks/usePinnedViews'
 import type { DocSummary } from '@notefast/core'
 
 interface SidebarProps {
@@ -57,6 +60,7 @@ export default function Sidebar({
   const [isMac, setIsMac] = useState(false)
   const [inboxCount, setInboxCount] = useState(0)
   const [autolinkCount, setAutolinkCount] = useState(0)
+  const { views: pinnedViews, unpin } = usePinnedViews()
 
   useEffect(() => {
     setIsMac(/Mac|iPhone|iPad/i.test(navigator.platform))
@@ -233,6 +237,38 @@ export default function Sidebar({
             未打标
           </Link>
         </div>
+
+        {pinnedViews.length > 0 && (
+          <div className="mt-5">
+            <SidebarSectionLabel label="固定视图" />
+            {pinnedViews.map((v) => (
+              <div key={v.id} className="group flex items-center gap-1">
+                <Link
+                  to={`/?${v.query}`}
+                  onClick={closeAfterNav}
+                  className={`flex-1 px-2.5 py-1 rounded-md text-[13px] truncate transition-colors ${
+                    location.search === `?${v.query}`
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+                      : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                  }`}
+                  title={v.name}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Star className="w-[11px] h-[11px] shrink-0" strokeWidth={2} />
+                    {v.name}
+                  </span>
+                </Link>
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); unpin(v.id) }}
+                  className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 transition-all shrink-0"
+                  title="取消固定"
+                >
+                  <X className="w-3 h-3" strokeWidth={2} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {recentDocs.length > 0 && (
           <div className="mt-5">
