@@ -19,8 +19,9 @@ export interface ApiTokenCreateResult {
 export function createToken(name: string, scopes: string[] = ['read', 'write']): ApiTokenCreateResult {
   const db = getDb()
   const tokenId = crypto.randomUUID()
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-  const plain = 'nf_' + Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  const plain = 'nf_' + Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')
   const tokenHash = computeContentHash(plain)
 
   db.query(

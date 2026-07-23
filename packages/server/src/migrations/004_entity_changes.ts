@@ -1,7 +1,7 @@
 import type { Database } from 'bun:sqlite'
 
 export const id = '004_entity_changes'
-export const description = 'Audit + sync queue + soft-delete tracking for block changes'
+export const description = 'Audit + sync queue tracking for block changes'
 
 export function up(db: Database): void {
   db.exec(`

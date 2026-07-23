@@ -1,4 +1,6 @@
 import type { Database } from 'bun:sqlite'
+// 迁移 002、005 为废稿（已删除），编号保留为空洞。
+// 新迁移按递增编号续接即可。
 import * as m001 from './001_initial'
 import * as m003 from './003_properties_columns'
 import * as m004 from './004_entity_changes'
@@ -50,24 +52,13 @@ export function runMigrations(db: Database): { applied: string[]; skipped: strin
 
 export function listMigrations(db: Database): Array<{ id: string; description: string; applied_at: string | null }> {
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (id TEXT PRIMARY KEY, description TEXT NOT NULL, applied_at TEXT NOT NULL DEFAULT (datetime('now')))`)
-  return db.query(`
-    SELECT m.id, m.description, s.applied_at
-    FROM (
-      SELECT '001_initial' AS id, 'Initial schema: notebooks, blocks, FTS, block_vectors, assets, autolink, triggers' AS description
-      UNION ALL
-      SELECT '003_properties_columns' AS id, 'Extract tags/status/ai_exclude from properties JSON into explicit columns' AS description
-      UNION ALL
-      SELECT '004_entity_changes' AS id, 'Audit + sync queue + soft-delete tracking for block changes' AS description
-      UNION ALL
-      SELECT '006_content_hash' AS id, 'Add content_hash column to blocks for content dedup/sync' AS description
-      UNION ALL
-      SELECT '007_api_tokens' AS id, 'Multi-token auth with scopes (Trilium etapi_tokens pattern)' AS description
-      UNION ALL
-      SELECT '008_soft_delete' AS id, 'Soft-delete blocks with is_deleted/delete_id and restore support' AS description
-      UNION ALL
-      SELECT '009_pinned_views' AS id, 'Server-side pinned views table' AS description
-    ) m
-    LEFT JOIN schema_migrations s ON m.id = s.id
-    ORDER BY m.id
-  `).all() as Array<{ id: string; description: string; applied_at: string | null }>
+  const applied = new Map(
+    (db.query('SELECT id, applied_at FROM schema_migrations').all() as Array<{ id: string; applied_at: string }>)
+      .map((r) => [r.id, r.applied_at] as const),
+  )
+  return MIGRATIONS.map((m) => ({
+    id: m.id,
+    description: m.description,
+    applied_at: applied.get(m.id) ?? null,
+  }))
 }

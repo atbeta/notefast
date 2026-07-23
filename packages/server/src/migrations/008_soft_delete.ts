@@ -33,4 +33,6 @@ export function down(db: Database): void {
   `)
   db.exec(`DROP INDEX IF EXISTS idx_blocks_is_deleted_date`)
   db.exec(`DROP INDEX IF EXISTS idx_blocks_is_deleted`)
+  db.exec(`ALTER TABLE blocks DROP COLUMN is_deleted`)
+  db.exec(`ALTER TABLE blocks DROP COLUMN delete_id`)
 }
