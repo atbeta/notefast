@@ -235,29 +235,21 @@ function ToastCard({
   toast: ToastRecord
   onDismiss: (id: string) => void
 }) {
-  const { id, title, description, variant, action, durationMs, createdAt } = toast
+  const { id, title, description, variant, action } = toast
   const exiting = (toast as ToastRecord & { _exiting?: boolean })._exiting === true
-
-  // 进度条剩余时间通过 CSS variable + keyframe 控制
-  const cssDuration = durationMs > 0 ? `${durationMs}ms` : '0ms'
 
   return (
     <div
       role={variant === 'error' ? 'alert' : 'status'}
       data-variant={variant}
-      className={`relative overflow-hidden rounded-[10px] bg-card text-card-foreground border border-border/70 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18),0_2px_4px_-2px_rgba(0,0,0,0.06)] ${
+      className={`relative overflow-hidden rounded-[10px] bg-card text-card-foreground border border-border/40 shadow-[0_4px_12px_-4px_rgba(0,0,0,0.08)] ${
         exiting ? 'animate-toast-out' : 'animate-toast-in'
       }`}
     >
-      {/* 左侧色带 */}
-      <div
-        aria-hidden
-        className={`absolute left-0 top-0 bottom-0 w-1 ${barClass(variant)}`}
-      />
-      <div className="pl-4 pr-2 py-3 flex items-start gap-3">
-        <div className={`shrink-0 w-7 h-7 rounded-full grid place-items-center ${iconBoxClass(variant)}`}>
+      <div className="px-3 py-2.5 flex items-start gap-2.5">
+        <div className={`shrink-0 w-5 h-5 rounded-full grid place-items-center ${iconDotClass(variant)}`}>
           {variant === 'loading' ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <Loader2 className="w-3 h-3 animate-spin" />
           ) : (
             <Icon variant={variant} />
           )}
@@ -286,82 +278,42 @@ function ToastCard({
           type="button"
           onClick={() => onDismiss(id)}
           aria-label="关闭"
-          className="shrink-0 -mr-1 -mt-1 p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-accent transition-colors"
+          className="shrink-0 p-0.5 rounded text-muted-foreground/40 hover:text-foreground transition-colors"
         >
-          <X className="w-3.5 h-3.5" />
+          <X className="w-3 h-3" />
         </button>
       </div>
-      {durationMs > 0 && variant !== 'loading' && (
-        <div
-          aria-hidden
-          className={`absolute left-0 bottom-0 h-[2px] w-full origin-left ${progressClass(variant)}`}
-          style={{
-            animation: `toast-progress ${cssDuration} linear forwards`,
-            animationDelay: `-${Math.max(0, Date.now() - createdAt)}ms`,
-          }}
-        />
-      )}
     </div>
   )
 }
 
 function Icon({ variant }: { variant: ToastVariant }) {
-  const cls = 'w-3.5 h-3.5'
+  const cls = 'w-3 h-3'
   switch (variant) {
     case 'success':
-      return <CheckCircle2 className={cls} strokeWidth={2.25} />
+      return <CheckCircle2 className={cls} strokeWidth={2} />
     case 'error':
-      return <AlertCircle className={cls} strokeWidth={2.25} />
+      return <AlertCircle className={cls} strokeWidth={2} />
     case 'info':
-      return <Info className={cls} strokeWidth={2.25} />
+      return <Info className={cls} strokeWidth={2} />
     case 'warning':
-      return <AlertTriangle className={cls} strokeWidth={2.25} />
+      return <AlertTriangle className={cls} strokeWidth={2} />
     case 'loading':
       return null
   }
 }
 
-function barClass(v: ToastVariant): string {
+function iconDotClass(v: ToastVariant): string {
   switch (v) {
     case 'success':
-      return 'bg-emerald-500'
+      return 'bg-emerald-500/15 text-emerald-500'
     case 'error':
-      return 'bg-destructive'
+      return 'bg-destructive/15 text-destructive'
     case 'info':
-      return 'bg-sky-500'
+      return 'bg-sky-500/15 text-sky-500'
     case 'warning':
-      return 'bg-amber-500'
+      return 'bg-amber-500/15 text-amber-500'
     case 'loading':
-      return 'bg-primary'
-  }
-}
-
-function iconBoxClass(v: ToastVariant): string {
-  switch (v) {
-    case 'success':
-      return 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400'
-    case 'error':
-      return 'bg-destructive/12 text-destructive'
-    case 'info':
-      return 'bg-sky-500/12 text-sky-600 dark:text-sky-400'
-    case 'warning':
-      return 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-    case 'loading':
-      return 'bg-primary/12 text-primary'
-  }
-}
-
-function progressClass(v: ToastVariant): string {
-  switch (v) {
-    case 'success':
-      return 'bg-emerald-500/50'
-    case 'error':
-      return 'bg-destructive/60'
-    case 'info':
-      return 'bg-sky-500/60'
-    case 'warning':
-      return 'bg-amber-500/60'
-    case 'loading':
-      return 'bg-primary/60'
+      return 'bg-primary/15 text-primary'
   }
 }

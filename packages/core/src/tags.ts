@@ -101,15 +101,20 @@ export function readTagsFromProperties(properties: unknown): Tag[] {
   return normalizeTagList(raw.filter((x): x is string => typeof x === 'string'))
 }
 
-/** 从 BlockRow 显式 tags 列读取标签 */
+/** 从 BlockRow 读取标签：合并显式 tags 列 + properties.tags（兜底老数据） */
 export function readTags(row: BlockRow): Tag[] {
-  try {
-    const parsed = JSON.parse(row.tags ?? '[]')
-    if (!Array.isArray(parsed)) return []
-    return normalizeTagList(parsed.filter((x): x is string => typeof x === 'string'))
-  } catch {
-    return []
-  }
+  const fromColumn: string[] = (() => {
+    try {
+      const parsed = JSON.parse(row.tags ?? '[]')
+      if (!Array.isArray(parsed)) return []
+      return parsed.filter((x): x is string => typeof x === 'string')
+    } catch {
+      return []
+    }
+  })()
+  const fromProperties = readTagsFromProperties(row.properties ?? '{}')
+  const merged = new Set([...fromColumn, ...fromProperties])
+  return normalizeTagList(Array.from(merged))
 }
 
 /** 将标签数组序列化为 JSON 字符串（用于写入 tags 列） */

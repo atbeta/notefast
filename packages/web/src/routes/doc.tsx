@@ -131,23 +131,9 @@ export default function DocPage() {
   useEffect(() => {
     if (doc) {
       setTitleDraft(doc.content)
-      // 从 properties JSON 同步 tag / ai_exclude / status
-      const raw = (doc as Block & { properties?: unknown }).properties
-      if (raw && typeof raw === 'object') {
-        const props = raw as Record<string, unknown>
-        const arr = props.tags
-        if (Array.isArray(arr)) {
-          setTags(arr.filter((t): t is string => typeof t === 'string').slice(0, 64))
-        } else {
-          setTags([])
-        }
-        setAiExclude(props.ai_exclude === true)
-        setDocStatus(props.status === 'inbox' ? 'inbox' : 'note')
-      } else {
-        setTags([])
-        setAiExclude(false)
-        setDocStatus('note')
-      }
+      setTags((doc.tags ?? []).slice(0, 64))
+      setAiExclude(doc.ai_exclude)
+      setDocStatus(doc.status === 'inbox' ? 'inbox' : 'note')
     }
   }, [doc])
 
@@ -398,16 +384,6 @@ export default function DocPage() {
                 )}
               </div>
             )}
-            {!isEditing && (
-              <button
-                type="button"
-                onClick={handleStartEdit}
-                className="inline-flex items-center gap-1.5 mt-1 mb-4 px-3 py-1.5 rounded-md border border-border/70 bg-card hover:border-foreground/30 hover:text-foreground text-[13px] font-medium text-muted-foreground transition-colors"
-              >
-                <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
-                编辑文档
-              </button>
-            )}
             {isEditing && <div className="mb-2" />}
 
             {/* Tags + 对 AI 隐藏（默认可见，不展示锁图标；仅隐藏态强调） */}
@@ -479,26 +455,22 @@ export default function DocPage() {
         <div className={`hidden lg:flex flex-col w-72 shrink-0 bg-sidebar/30 h-full transition-opacity duration-200 ${showingStale ? 'opacity-40' : 'opacity-100'}`}>
           {/* 顶栏占位：三栏 h-14 水平基准线对齐 */}
           <div className="h-14 shrink-0 border-b border-border/50" />
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            <section className="min-h-0">
-              <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-3">
+          <div className="flex-1 overflow-y-auto p-6 space-y-5">
+            <section>
+              <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
                 大纲
               </h3>
-              <div className="max-h-52 overflow-y-auto">
-                <OutlineView headings={flatHeadings} loading={auxLoading} />
-              </div>
+              <OutlineView headings={flatHeadings} loading={auxLoading} />
             </section>
 
-            <section className="min-h-0">
-              <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-3">
+            <section>
+              <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
                 反向链接
               </h3>
-              <div className="max-h-40 overflow-y-auto">
-                <BacklinksView backlinks={backlinks} loading={auxLoading} />
-              </div>
+              <BacklinksView backlinks={backlinks} loading={auxLoading} />
             </section>
 
-            <section className="min-h-0 flex flex-col min-h-[120px]">
+            <section>
               {aiExclude ? (
                 <div className="text-[12px] text-muted-foreground leading-relaxed">
                   <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
