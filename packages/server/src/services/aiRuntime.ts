@@ -13,7 +13,7 @@
  * 4. 根据新 cfg 重新挂载 hooks
  */
 
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, chmodSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   AiRuntime,
@@ -142,6 +142,7 @@ export function saveConfigToDisk(cfg: AiConfig): void {
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true })
   const path = join(dataDir, CONFIG_FILE)
   writeFileSync(path, JSON.stringify(cfg, null, 2) + '\n', 'utf-8')
+  try { chmodSync(path, 0o600) } catch { /* Windows 不支持 */ }
 }
 
 function loadOrSeed(): AiConfig {

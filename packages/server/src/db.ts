@@ -1,9 +1,11 @@
 import { Database } from 'bun:sqlite'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CURRENT_SCHEMA_VERSION } from '@notefast/core'
 import { configureSqliteForExtensions } from './sqliteVec'
 import { runMigrations } from './migrations/framework'
+import { safeLogInfo } from '@notefast/core'
+import { auditSecretFilePermissions } from './services/secretAudit'
 
 let db: Database
 let dbPath = ''
@@ -14,6 +16,7 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
   configureSqliteForExtensions()
   if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true })
+    try { chmodSync(dataDir, 0o700) } catch { /* Windows 不支持 */ }
   }
 
   dbPath = join(dataDir, 'notefast.db')
@@ -39,6 +42,7 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
   }
 
   initApiKey(dataDir)
+  auditSecretFilePermissions(dataDir)
 
   return { db, notebookId }
 }
@@ -91,6 +95,7 @@ function initApiKey(dataDir: string): void {
   const key = 'nf_' + Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
   writeFileSync(keyPath, key + '\n', 'utf-8')
   process.env.API_TOKEN = key
+  safeLogInfo('API Key 已生成', { key_path: keyPath, api_key: key })
   console.log('')
   console.log('  🔑 API Key: ' + key)
   console.log('     保存位置: ' + keyPath)

@@ -13,7 +13,7 @@
  * - 失败不影响下一次；lastError / lastSuccessAt 暴露
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   emptySyncConfig,
@@ -177,6 +177,7 @@ export function saveConfigToDisk(c: SyncPersistedConfig): void {
   if (!dataDir) throw new Error('dataDir 未初始化')
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true })
   writeFileSync(join(dataDir, CONFIG_FILE), JSON.stringify(c, null, 2) + '\n', 'utf-8')
+  try { chmodSync(join(dataDir, CONFIG_FILE), 0o600) } catch { /* Windows 不支持 */ }
 }
 
 // ───────────────────── 适配器工厂 ─────────────────────
