@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.2](https://github.com/atbeta/notefast/compare/v0.14.1...v0.14.2) (2026-07-23)
+
+
+### Bug Fixes
+
+* remove duplicate /api/v1 prefix in ApiTokensPanel API calls ([1c66687](https://github.com/atbeta/notefast/commit/1c6668722276c0342c9296ab5c134a3bffae9811))
+
 ## [0.14.1](https://github.com/atbeta/notefast/compare/v0.14.0...v0.14.1) (2026-07-23)
 
 
