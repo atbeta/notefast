@@ -260,6 +260,8 @@ export const createDocSchema = z.object({
   status: z.enum(['note', 'inbox']).optional(),
   /** 可选正文（Markdown）；常用于快速采集到收集箱 */
   markdown: z.string().max(5_000_000).optional(),
+  /** 初始标签 */
+  tags: z.array(z.string().min(1).max(64)).max(64).optional(),
 })
 
 export const importMarkdownSchema = z.object({
@@ -267,6 +269,7 @@ export const importMarkdownSchema = z.object({
   markdown: z.string().min(1).max(5_000_000),
   title: z.string().max(500).optional(),
   status: z.enum(['note', 'inbox']).optional(),
+  tags: z.array(z.string().min(1).max(64)).max(64).optional(),
 })
 
 export const updateDocStatusSchema = z.object({

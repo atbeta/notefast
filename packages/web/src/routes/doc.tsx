@@ -393,6 +393,16 @@ export default function DocPage() {
                 )}
               </div>
             )}
+            {!isEditing && (
+              <button
+                type="button"
+                onClick={handleStartEdit}
+                className="inline-flex items-center gap-1.5 mt-1 mb-4 px-3 py-1.5 rounded-md border border-border/70 bg-card hover:border-foreground/30 hover:text-foreground text-[13px] font-medium text-muted-foreground transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
+                编辑文档
+              </button>
+            )}
             {isEditing && <div className="mb-2" />}
 
             {/* Tags + 对 AI 隐藏（默认可见，不展示锁图标；仅隐藏态强调） */}

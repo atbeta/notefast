@@ -22,6 +22,7 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
       title,
       markdown: input.markdown,
       status: input.status,
+      tags: input.tags,
       rejectEmpty: true,
     })
   } catch (e) {

@@ -1,10 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Check, X, Upload, Sparkles, Loader2 } from 'lucide-react'
+import { ArrowLeft, Check, X, Upload, Sparkles, Loader2, Tag, Plus } from 'lucide-react'
 import type { Notebook } from '@notefast/core'
 import { request } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
 import SubNavTabs from '../components/SubNavTabs'
+
+function normalizeTag(t: string): string {
+  return t.toLowerCase().replace(/\s+/g, '-').slice(0, 64)
+}
 
 export default function NewDocPage() {
   const navigate = useNavigate()
@@ -15,6 +19,8 @@ export default function NewDocPage() {
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'create' | 'import'>('create')
   const [generating, setGenerating] = useState(false)
+  const [tags, setTags] = useState<string[]>([])
+  const [tagDraft, setTagDraft] = useState('')
   const titleInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -40,14 +46,14 @@ export default function NewDocPage() {
       if (markdown.trim()) {
         const res = await request<{ doc: { id: string }; index_job?: { id: string } }>('/import/markdown', {
           method: 'POST',
-          body: JSON.stringify({ notebook_id: notebookId, markdown, title: finalTitle }),
+          body: JSON.stringify({ notebook_id: notebookId, markdown, title: finalTitle, tags }),
         })
         docId = res.doc.id
         indexJobId = res.index_job?.id
       } else {
         const res = await request<{ id: string; index_job?: { id: string } }>('/docs', {
           method: 'POST',
-          body: JSON.stringify({ notebook_id: notebookId, title: finalTitle }),
+          body: JSON.stringify({ notebook_id: notebookId, title: finalTitle, tags }),
         })
         docId = res.id
         indexJobId = res.index_job?.id
@@ -62,6 +68,30 @@ export default function NewDocPage() {
   }
 
   const handleCancel = () => navigate('/')
+
+  const handleAddTag = () => {
+    const normalized = normalizeTag(tagDraft.trim())
+    if (!normalized || tags.includes(normalized)) {
+      setTagDraft('')
+      return
+    }
+    setTags((prev) => [...prev, normalized].sort())
+    setTagDraft('')
+  }
+
+  const handleRemoveTag = (tag: string) => {
+    setTags((prev) => prev.filter((t) => t !== tag))
+  }
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleAddTag()
+    } else if (e.key === 'Escape') {
+      setTagDraft('')
+      e.currentTarget.blur()
+    }
+  }
 
   const handleSuggestTitle = async () => {
     const source = markdown.trim() || title.trim()
@@ -164,6 +194,44 @@ export default function NewDocPage() {
               rows={9}
               className="input-mono"
             />
+          </div>
+
+          <div>
+            <div className="flex items-baseline justify-between mb-2">
+              <label className="text-[12px] font-medium text-muted-foreground">标签</label>
+              <span className="text-[11.5px] text-muted-foreground/60">可选</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" strokeWidth={1.75} />
+              {tags.map((t) => (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11.5px] bg-muted/60 text-foreground/85"
+                >
+                  <span className="font-mono">{t}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTag(t)}
+                    className="w-4 h-4 rounded-full grid place-items-center text-muted-foreground/50 hover:text-destructive hover:bg-background/60 transition-colors"
+                  >
+                    <X className="w-3 h-3" strokeWidth={2} />
+                  </button>
+                </span>
+              ))}
+              <div className="inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full border border-dashed border-border/70 hover:border-foreground/30 transition-colors">
+                <Plus className="w-3 h-3 text-muted-foreground/60" strokeWidth={2} />
+                <input
+                  value={tagDraft}
+                  onChange={(e) => setTagDraft(e.target.value)}
+                  onKeyDown={handleTagKeyDown}
+                  onBlur={() => {
+                    if (tagDraft.trim()) handleAddTag()
+                  }}
+                  placeholder="加标签"
+                  className="bg-transparent border-none outline-none text-[11.5px] w-16 placeholder:text-muted-foreground/40 focus:w-28 transition-[width] duration-200"
+                />
+              </div>
+            </div>
           </div>
 
           {error && (

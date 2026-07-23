@@ -78,7 +78,7 @@ blocks.post('/', zValidator('json', createBlockSchema), (c) => {
     level = 0
   }
 
-  const now = new Date().toISOString()
+  const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
   db.query(
     `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, '{}', '[]', 'note', 0, ?, ?, ?, ?)`,

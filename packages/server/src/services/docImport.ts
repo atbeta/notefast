@@ -32,6 +32,8 @@ export interface InsertDocFromMarkdownOptions {
   status?: 'note' | 'inbox'
   /** true 时解析结果为空抛 EmptyMarkdownError（import 接口的 400 语义） */
   rejectEmpty?: boolean
+  /** 初始标签（已 normalize） */
+  tags?: string[]
 }
 
 export interface InsertDocFromMarkdownResult {
@@ -55,7 +57,7 @@ export function insertDocFromMarkdown(
 
   const docStatus = opts.status === 'inbox' ? 'inbox' : 'note'
   const docId = crypto.randomUUID()
-  const now = new Date().toISOString()
+  const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
   const blockIds: string[] = []
 
   // inp.id → 实际 blockId 映射表；父对子的引用必须走这条映射。
@@ -84,10 +86,12 @@ export function insertDocFromMarkdown(
     // 安全网：PRAGMA 作用域限本事务，提交时检查 FK，避免 immediate 阶段炸开
     db.run('PRAGMA defer_foreign_keys = ON')
 
+    const initialTags = opts.tags?.length ? JSON.stringify(opts.tags) : '[]'
+
     db.query(
       `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
-       VALUES (?, ?, NULL, ?, 'document', ?, ?, '{}', '[]', ?, 0, 0, 0, ?, ?)`,
-    ).run(docId, opts.notebookId, docId, opts.title, computeContentHash(opts.title), docStatus, now, now)
+       VALUES (?, ?, NULL, ?, 'document', ?, ?, '{}', ?, ?, 0, 0, 0, ?, ?)`,
+    ).run(docId, opts.notebookId, docId, opts.title, computeContentHash(opts.title), initialTags, docStatus, now, now)
 
     for (let i = 0; i < inputs.length; i++) {
       const inp = inputs[i]

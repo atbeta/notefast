@@ -76,7 +76,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
         rootId = id
       }
 
-      const now = new Date().toISOString()
+      const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
       db.query(
         `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, sort, level, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,

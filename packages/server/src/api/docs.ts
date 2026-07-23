@@ -138,11 +138,14 @@ docs.post('/', zValidator('json', createDocSchema), (c) => {
   const db = getDb()
   const input = c.req.valid('json')
   const status = input.status === 'inbox' ? 'inbox' : 'note'
+  const normalizeTag = (t: string) => t.toLowerCase().replace(/\s+/g, '-').slice(0, 64)
+  const initialTags = (input.tags || []).map(normalizeTag).filter(Boolean)
   const { docId, blockIds } = insertDocFromMarkdown(db, {
     notebookId: input.notebook_id,
     title: input.title,
     markdown: input.markdown || '',
     status,
+    tags: initialTags,
   })
 
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
@@ -160,7 +163,7 @@ docs.post('/', zValidator('json', createDocSchema), (c) => {
     title: row.content,
     created_at: row.created_at,
     updated_at: row.updated_at,
-    tags: [],
+    tags: initialTags,
     ...(status === 'inbox' ? { status: 'inbox' as const } : {}),
     ...(indexJob ? { index_job: indexJob } : {}),
   }, 201)
@@ -308,7 +311,7 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
 
     db.query("UPDATE blocks SET content = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?").run(newTitle, computeContentHash(newTitle), id)
 
-    const now = new Date().toISOString()
+    const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
     const idMap = new Map<string, string>()
 
     for (let i = 0; i < inputs.length; i++) {
