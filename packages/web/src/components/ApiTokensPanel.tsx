@@ -24,8 +24,7 @@ export default function ApiTokensPanel() {
 
   const loadTokens = useCallback(async () => {
     try {
-      const res = await api.get<ApiTokenView[]>('/api-tokens')
-      const data = (res as { body?: ApiTokenView[] }).body
+      const data = await api.get<ApiTokenView[]>('/api-tokens')
       if (Array.isArray(data)) setTokens(data)
     } catch {
       /* ignore */
@@ -46,8 +45,7 @@ export default function ApiTokensPanel() {
       return
     }
     try {
-      const res = await api.post<{ token: string }>('/api-tokens', { name: name.trim(), scopes })
-      const data = (res as { body?: { token: string } }).body
+      const data = await api.post<{ token: string }>('/api-tokens', { name: name.trim(), scopes })
       if (data?.token) {
         setNewToken(data.token)
         setName('')
