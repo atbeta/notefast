@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import type { Block, HeadingNode } from '@notefast/core'
+import { buildHeadingTree } from '@notefast/core'
 import {
   ArrowLeft,
   Trash2,
@@ -153,13 +154,17 @@ export default function DocPage() {
   useEffect(() => {
     if (!id) return
     setAuxLoading(true)
-    Promise.all([
-      request<HeadingNode[]>(`/docs/tree?doc_id=${id}`).catch(() => [] as HeadingNode[]),
-      request<Backlink[]>(`/search/refs?target_id=${id}`).catch(() => [] as Backlink[]),
-    ])
-      .then(([tree, refs]) => { setHeadings(tree); setBacklinks(refs) })
+    request<Backlink[]>(`/search/refs?target_id=${id}`)
+      .then(setBacklinks)
+      .catch(() => setBacklinks([]))
       .finally(() => setAuxLoading(false))
   }, [id, refreshKey])
+
+  useEffect(() => {
+    if (doc) {
+      setHeadings(buildHeadingTree(doc.children || []))
+    }
+  }, [doc])
 
   const handleEditSaved = useCallback(() => { setRefreshKey((k) => k + 1) }, [])
 
@@ -474,22 +479,26 @@ export default function DocPage() {
         <div className={`hidden lg:flex flex-col w-72 shrink-0 bg-sidebar/30 h-full transition-opacity duration-200 ${showingStale ? 'opacity-40' : 'opacity-100'}`}>
           {/* 顶栏占位：三栏 h-14 水平基准线对齐 */}
           <div className="h-14 shrink-0 border-b border-border/50" />
-          <div className="flex-1 overflow-y-auto p-6 space-y-8">
-            <section>
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <section className="min-h-0">
               <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-3">
                 大纲
               </h3>
-              <OutlineView headings={flatHeadings} loading={auxLoading} />
+              <div className="max-h-52 overflow-y-auto">
+                <OutlineView headings={flatHeadings} loading={auxLoading} />
+              </div>
             </section>
 
-            <section>
+            <section className="min-h-0">
               <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-3">
                 反向链接
               </h3>
-              <BacklinksView backlinks={backlinks} loading={auxLoading} />
+              <div className="max-h-40 overflow-y-auto">
+                <BacklinksView backlinks={backlinks} loading={auxLoading} />
+              </div>
             </section>
 
-            <section>
+            <section className="min-h-0 flex flex-col min-h-[120px]">
               {aiExclude ? (
                 <div className="text-[12px] text-muted-foreground leading-relaxed">
                   <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">

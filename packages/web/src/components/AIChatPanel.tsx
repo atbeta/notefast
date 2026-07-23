@@ -380,7 +380,9 @@ export default function AIChatPanel({
                       <div className="rounded-lg border border-border/40 bg-background/40 px-3 py-2 space-y-1">
                         <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
                           引用 · {retrieval?.reranked ? `reranked (${retrieval.model})` : 'hybrid search'}
-                          {retrieval && ` · FTS ${retrieval.fts_hits} · semantic ${retrieval.semantic_hits}`}
+                          {retrieval && retrieval.fts_hits > 0 && retrieval.semantic_hits > 0 && ` · 关键词 ${retrieval.fts_hits} + 语义 ${retrieval.semantic_hits}`}
+                          {retrieval && retrieval.fts_hits > 0 && retrieval.semantic_hits === 0 && ` · 关键词 ${retrieval.fts_hits}`}
+                          {retrieval && retrieval.fts_hits === 0 && retrieval.semantic_hits > 0 && ` · 语义 ${retrieval.semantic_hits} 条`}
                           {retrieval?.timing && (
                             <span className="tabular-nums text-muted-foreground/80">
                               {` · 检索 ${retrieval.timing.total_ms}ms`}

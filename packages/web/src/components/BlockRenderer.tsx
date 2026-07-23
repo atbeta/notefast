@@ -1,4 +1,4 @@
-import { useState, useEffect, createElement } from 'react'
+import { useState, useEffect, createElement, memo } from 'react'
 import type { ReactNode } from 'react'
 import { Check, Link2 } from 'lucide-react'
 import type { Block } from '@notefast/core'
@@ -324,7 +324,7 @@ function ChildrenView({ children }: { children: Block[] }) {
 
 // ───────────────────────── 树遍历 ─────────────────────────
 
-function BlockNode({ block }: BlockNodeProps) {
+const BlockNode = memo(function BlockNode({ block }: BlockNodeProps) {
   switch (block.type) {
     case 'heading':
       return <HeadingTag block={block} />
@@ -363,7 +363,7 @@ function BlockNode({ block }: BlockNodeProps) {
     default:
       return <p className="text-muted-foreground italic">[未识别块类型：{block.type}]</p>
   }
-}
+})
 
 export default function BlockRenderer({ block, depth = 0 }: BlockRendererProps) {
   if (!block) {
