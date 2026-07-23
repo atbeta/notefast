@@ -156,7 +156,7 @@ export const DEFAULT_AUTO_LINK_MIN_CONFIDENCE = 0.6
 export const DEFAULT_AUTO_LINK_MIN_MARGIN = 0.15
 export const DEFAULT_AUTO_LINK_EXCLUDE_KINDS: string[] = ['tool']
 export const DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC = true
-export const DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE = 10
+export const DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE = 0
 
 export function defaultAutoLinkConfig(): AutoLinkConfig {
   return {
