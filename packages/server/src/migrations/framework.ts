@@ -2,6 +2,7 @@ import type { Database } from 'bun:sqlite'
 import * as m001 from './001_initial'
 import * as m003 from './003_properties_columns'
 import * as m004 from './004_entity_changes'
+import * as m006 from './006_content_hash'
 
 interface Migration {
   id: string
@@ -10,7 +11,7 @@ interface Migration {
   down?: (db: Database) => void
 }
 
-const MIGRATIONS: Migration[] = [m001, m003, m004]
+const MIGRATIONS: Migration[] = [m001, m003, m004, m006]
 
 export function runMigrations(db: Database): { applied: string[]; skipped: string[] } {
   db.exec(`
@@ -54,6 +55,8 @@ export function listMigrations(db: Database): Array<{ id: string; description: s
       SELECT '003_properties_columns' AS id, 'Extract tags/status/ai_exclude from properties JSON into explicit columns' AS description
       UNION ALL
       SELECT '004_entity_changes' AS id, 'Audit + sync queue + soft-delete tracking for block changes' AS description
+      UNION ALL
+      SELECT '006_content_hash' AS id, 'Add content_hash column to blocks for content dedup/sync' AS description
     ) m
     LEFT JOIN schema_migrations s ON m.id = s.id
     ORDER BY m.id

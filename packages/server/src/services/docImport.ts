@@ -17,6 +17,7 @@
 import { parseMarkdownToBlocks, stripTitleHeading } from '@notefast/core'
 import type { CreateBlockInput } from '@notefast/core'
 import type { getDb } from '../db'
+import { computeContentHash } from './contentHash'
 
 type Db = ReturnType<typeof getDb>
 
@@ -84,9 +85,9 @@ export function insertDocFromMarkdown(
     db.run('PRAGMA defer_foreign_keys = ON')
 
     db.query(
-      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
-       VALUES (?, ?, NULL, ?, 'document', ?, '{}', '[]', ?, 0, 0, 0, ?, ?)`,
-    ).run(docId, opts.notebookId, docId, opts.title, docStatus, now, now)
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', ?, ?, '{}', '[]', ?, 0, 0, 0, ?, ?)`,
+    ).run(docId, opts.notebookId, docId, opts.title, computeContentHash(opts.title), docStatus, now, now)
 
     for (let i = 0; i < inputs.length; i++) {
       const inp = inputs[i]
@@ -98,8 +99,8 @@ export function insertDocFromMarkdown(
         : docId
 
       db.query(
-        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 'note', 0, ?, ?, ?, ?)`,
+        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', 'note', 0, ?, ?, ?, ?)`,
       ).run(
         blockId,
         opts.notebookId,
@@ -107,6 +108,7 @@ export function insertDocFromMarkdown(
         docId,
         inp.type,
         inp.content ?? '',
+        computeContentHash(inp.content ?? ''),
         JSON.stringify(inp.properties || {}),
         i,
         levelOf(inp),

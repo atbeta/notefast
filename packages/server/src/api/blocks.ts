@@ -13,6 +13,7 @@ import { getDb } from '../db'
 import { fetchSubtreeBlocks } from '../dbQueries'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete } from '../services/hooks'
 import { applyAiExcludeChange } from '../ai/aiExclude'
+import { computeContentHash } from '../services/contentHash'
 
 const blocks = new Hono()
 
@@ -79,8 +80,8 @@ blocks.post('/', zValidator('json', createBlockSchema), (c) => {
 
   const now = new Date().toISOString()
   db.query(
-    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 'note', 0, ?, ?, ?, ?)`,
+    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, '{}', '[]', 'note', 0, ?, ?, ?, ?)`,
   ).run(
     id,
     input.notebook_id,
@@ -88,7 +89,7 @@ blocks.post('/', zValidator('json', createBlockSchema), (c) => {
     rootId,
     input.type,
     input.content || '',
-    JSON.stringify(input.properties || {}),
+    computeContentHash(input.content || ''),
     input.sort || 0,
     level,
     now,
@@ -121,6 +122,8 @@ blocks.patch('/:id', zValidator('json', updateBlockSchema), async (c) => {
   if (input.content !== undefined) {
     updates.push('content = ?')
     params.push(input.content)
+    updates.push('content_hash = ?')
+    params.push(computeContentHash(input.content))
   }
   if (input.properties !== undefined) {
     updates.push('properties = ?')

@@ -31,6 +31,7 @@ import {
   validateNotebook,
   type ToolContext,
 } from './helpers'
+import { computeContentHash } from '../../services/contentHash'
 
 export function registerDocWriteTools(ctx: ToolContext): void {
   const { db, notebookId, registerTool } = ctx
@@ -77,9 +78,9 @@ export function registerDocWriteTools(ctx: ToolContext): void {
 
       const now = new Date().toISOString()
       db.query(
-        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
-      ).run(id, nid, parent_id || null, rootId, type, content, level, now, now)
+        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, sort, level, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+      ).run(id, nid, parent_id || null, rootId, type, content, computeContentHash(content), level, now, now)
 
       const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
       fireAfterCreate(rowToBlock(row))
@@ -104,7 +105,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
         return toolError('not_found', `Block ${block_id} 不存在`, { block_id })
       }
 
-      db.query("UPDATE blocks SET content = ?, updated_at = datetime('now') WHERE id = ?").run(content, block_id)
+      db.query("UPDATE blocks SET content = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?").run(content, computeContentHash(content), block_id)
 
       const row = db.query('SELECT * FROM blocks WHERE id = ?').get(block_id) as BlockRow
       fireAfterUpdate(rowToBlock(row))

@@ -11,6 +11,7 @@ import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { writeDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
 import { readDocAiExclude } from '../ai/aiExcludeQuery'
 import { scheduleDocIndex } from '../ai/indexJobs'
+import { computeContentHash } from '../services/contentHash'
 
 const docs = new Hono()
 
@@ -283,7 +284,7 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
       db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...oldChildIds)
     }
 
-    db.query("UPDATE blocks SET content = ?, updated_at = datetime('now') WHERE id = ?").run(newTitle, id)
+    db.query("UPDATE blocks SET content = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?").run(newTitle, computeContentHash(newTitle), id)
 
     const now = new Date().toISOString()
     const idMap = new Map<string, string>()
@@ -295,8 +296,8 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
       const parentId = inp.parent_id ? (idMap.get(inp.parent_id) ?? id) : id
 
       db.query(
-        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 'note', 0, ?, 1, ?, ?)`,
+        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, '{}', '[]', 'note', 0, ?, 1, ?, ?)`,
       ).run(
         blockId,
         docRow.notebook_id,
@@ -304,7 +305,7 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
         id,
         inp.type,
         inp.content ?? '',
-        JSON.stringify(inp.properties || {}),
+        computeContentHash(inp.content ?? ''),
         i,
         now,
         now,
