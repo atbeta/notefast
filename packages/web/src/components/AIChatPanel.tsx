@@ -105,6 +105,20 @@ export default function AIChatPanel({
     }
   }, [])
 
+  /** 同源引用合并：一份文档被引多个 block 时只列一次标题，片段以紧凑子列表收纳 */
+  const groupedCitations = useMemo(() => {
+    const map = new Map<string, { doc_id: string; doc_title: string; items: Citation[] }>()
+    for (const c of citations) {
+      const existing = map.get(c.doc_id)
+      if (existing) {
+        existing.items.push(c)
+      } else {
+        map.set(c.doc_id, { doc_id: c.doc_id, doc_title: c.doc_title, items: [c] })
+      }
+    }
+    return Array.from(map.values())
+  }, [citations])
+
   if (!isOpen) return null
 
   const upsertAssistant = (patch: { content?: string; reasoning?: string }) => {
@@ -270,20 +284,6 @@ export default function AIChatPanel({
   }
 
   const showSpinner = loading && !messages.some((m) => m.role === 'assistant' && (m.content || m.reasoning))
-
-  /** 同源引用合并：一份文档被引多个 block 时只列一次标题，片段以紧凑子列表收纳 */
-  const groupedCitations = useMemo(() => {
-    const map = new Map<string, { doc_id: string; doc_title: string; items: Citation[] }>()
-    for (const c of citations) {
-      const existing = map.get(c.doc_id)
-      if (existing) {
-        existing.items.push(c)
-      } else {
-        map.set(c.doc_id, { doc_id: c.doc_id, doc_title: c.doc_title, items: [c] })
-      }
-    }
-    return Array.from(map.values())
-  }, [citations])
 
   return (
     <div
