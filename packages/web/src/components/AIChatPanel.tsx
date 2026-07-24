@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Send,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { request, fetchWithAuth } from '../hooks/useAPI'
 import ChatMarkdown from './ChatMarkdown'
+import ConfirmDialog from './ConfirmDialog'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -67,6 +68,7 @@ export default function AIChatPanel({
   const [loading, setLoading] = useState(false)
   const [capabilities, setCapabilities] = useState<{ chat: boolean; reranker: boolean; embedding: boolean } | null>(null)
   const [configMissing, setConfigMissing] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -267,6 +269,20 @@ export default function AIChatPanel({
 
   const showSpinner = loading && !messages.some((m) => m.role === 'assistant' && (m.content || m.reasoning))
 
+  /** 同源引用合并：一份文档被引多个 block 时只列一次标题，片段以紧凑子列表收纳 */
+  const groupedCitations = useMemo(() => {
+    const map = new Map<string, { doc_id: string; doc_title: string; items: Citation[] }>()
+    for (const c of citations) {
+      const existing = map.get(c.doc_id)
+      if (existing) {
+        existing.items.push(c)
+      } else {
+        map.set(c.doc_id, { doc_id: c.doc_id, doc_title: c.doc_title, items: [c] })
+      }
+    }
+    return Array.from(map.values())
+  }, [citations])
+
   return (
     <div
       className={`fixed top-0 right-0 h-screen bg-card border-l border-border shadow-[var(--shadow-floating)] transition-all duration-300 z-40 flex flex-col
@@ -275,25 +291,28 @@ export default function AIChatPanel({
     >
       {/* Header */}
       <div className="h-14 flex items-center justify-between px-4 border-b border-border shrink-0 bg-background/40">
-        <div className="flex items-center gap-2 text-foreground font-medium">
+        <div className="flex items-center gap-2.5 text-foreground font-medium min-w-0">
           <MessageSquareText className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
-          <span>聊天 · 知识库</span>
+          <span className="truncate">聊天 · 知识库</span>
           {capabilities && (
-            <span className="text-[10px] text-muted-foreground font-normal">
+            <span className="text-[10px] text-muted-foreground font-normal shrink-0">
               {capabilities.embedding && '·emb'} {capabilities.reranker && '·rerank'}
             </span>
           )}
-        </div>
-        <div className="flex items-center gap-1">
           {messages.length > 0 && (
-            <button
-              onClick={handleClear}
-              className="px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              title="清空对话"
-            >
-              清空
-            </button>
+            <>
+              <span className="text-border shrink-0">|</span>
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                className="text-[11px] text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                title="清空对话（二次确认）"
+              >
+                清空
+              </button>
+            </>
           )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={onToggleExpand}
             className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
@@ -376,8 +395,8 @@ export default function AIChatPanel({
                         )}
                       </div>
                     )}
-                    {isLastAssistant && citations.length > 0 && (
-                      <div className="rounded-lg border border-border/40 bg-background/40 px-3 py-2 space-y-1">
+                    {isLastAssistant && groupedCitations.length > 0 && (
+                      <div className="rounded-lg border border-border/40 bg-background/40 px-3 py-2 space-y-2">
                         <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
                           引用 · {retrieval?.reranked ? `reranked (${retrieval.model})` : 'hybrid search'}
                           {retrieval && retrieval.fts_hits > 0 && retrieval.semantic_hits > 0 && ` · 关键词 ${retrieval.fts_hits} + 语义 ${retrieval.semantic_hits}`}
@@ -393,21 +412,34 @@ export default function AIChatPanel({
                             </span>
                           )}
                         </div>
-                        <ol className="space-y-1">
-                          {citations.map((c, ci) => (
-                            <li key={c.block_id} className="text-[11px] text-muted-foreground">
-                              <span className="text-primary font-mono mr-1">[{ci + 1}]</span>
-                              <Link
-                                to={`/doc/${c.doc_id}#block-${c.block_id}`}
-                                className="text-foreground hover:text-primary hover:underline"
-                              >
-                                {c.doc_title}
-                              </Link>
-                              <span className="mx-1">·</span>
-                              <span className="line-clamp-1 inline">{c.snippet}</span>
-                            </li>
+                        <div className="space-y-2">
+                          {groupedCitations.map((group) => (
+                            <div key={group.doc_id} className="text-[11px]">
+                              <div className="flex items-baseline gap-1.5">
+                                <Link
+                                  to={`/doc/${group.doc_id}`}
+                                  className="text-foreground hover:text-primary hover:underline font-medium line-clamp-1"
+                                >
+                                  {group.doc_title}
+                                </Link>
+                                <span className="text-muted-foreground/80 text-[10px] shrink-0">· {group.items.length} 段</span>
+                              </div>
+                              <ul className="mt-0.5 space-y-0.5 pl-2.5 border-l border-border/40">
+                                {group.items.map((c) => (
+                                  <li key={c.block_id}>
+                                    <Link
+                                      to={`/doc/${c.doc_id}#block-${c.block_id}`}
+                                      className="text-muted-foreground hover:text-foreground transition-colors line-clamp-1 inline"
+                                      title="点击跳转到原文块"
+                                    >
+                                      {c.snippet}
+                                    </Link>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
                           ))}
-                        </ol>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -475,18 +507,33 @@ export default function AIChatPanel({
             }}
             placeholder="向知识库提问…"
             rows={1}
-            disabled={loading || configMissing}
+            disabled={configMissing}
             className="flex-1 resize-none bg-transparent border-0 outline-none text-sm px-2 py-1.5 max-h-32 placeholder:text-muted-foreground disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={!input.trim() || loading || configMissing}
             className="p-2 rounded-lg bg-ink text-ink-foreground disabled:opacity-40 hover:opacity-90 transition-opacity"
+            title="发送 (Enter)"
+            aria-label={loading ? '正在生成回复' : '发送'}
           >
-            <Send className="w-4 h-4" />
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>
         </form>
       </div>
+
+      <ConfirmDialog
+        open={showClearConfirm}
+        title="清空对话"
+        message="清空后会丢失当前的对话历史与引用上下文，是否继续？"
+        confirmLabel="清空"
+        destructive
+        onCancel={() => setShowClearConfirm(false)}
+        onConfirm={() => {
+          setShowClearConfirm(false)
+          handleClear()
+        }}
+      />
     </div>
   )
 }
