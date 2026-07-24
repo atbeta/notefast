@@ -53,7 +53,7 @@ export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 mt-4 mb-6">
+    <div className="flex flex-wrap items-center gap-1.5">
       <TagIcon className="w-3.5 h-3.5 text-muted-foreground/50 mr-0.5" strokeWidth={1.75} />
       {tags.map((t) => (
         <span

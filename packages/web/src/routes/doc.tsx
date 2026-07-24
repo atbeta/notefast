@@ -387,7 +387,7 @@ export default function DocPage() {
             {isEditing && <div className="mb-2" />}
 
             {/* Tags + 对 AI 隐藏（默认可见，不展示锁图标；仅隐藏态强调） */}
-            <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 mt-4 mb-6">
               {id && <TagEditor docId={id} tags={tags} onChange={setTags} />}
               {!aiExclude && (
                 <button
