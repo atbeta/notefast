@@ -10,6 +10,8 @@ import {
   MessageSquareText,
   ChevronRight,
   Brain,
+  Binary,
+  ArrowUpDown,
 } from 'lucide-react'
 import { request, fetchWithAuth } from '../hooks/useAPI'
 import ChatMarkdown from './ChatMarkdown'
@@ -295,8 +297,17 @@ export default function AIChatPanel({
           <MessageSquareText className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
           <span className="truncate">聊天 · 知识库</span>
           {capabilities && (
-            <span className="text-[10px] text-muted-foreground font-normal shrink-0">
-              {capabilities.embedding && '·emb'} {capabilities.reranker && '·rerank'}
+            <span className="flex items-center gap-1 text-muted-foreground shrink-0">
+              {capabilities.embedding && (
+                <span title="Embedding 已配置">
+                  <Binary className="w-3 h-3" strokeWidth={1.75} aria-label="Embedding 已配置" />
+                </span>
+              )}
+              {capabilities.reranker && (
+                <span title="Rerank 已配置">
+                  <ArrowUpDown className="w-3 h-3" strokeWidth={1.75} aria-label="Rerank 已配置" />
+                </span>
+              )}
             </span>
           )}
           {messages.length > 0 && (
