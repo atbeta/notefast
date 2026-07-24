@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.15.0](https://github.com/atbeta/notefast/compare/v0.14.3...v0.15.0) (2026-07-24)
+
+
+### Features
+
+* **ai-chat:** confirm clear, unlock input during stream, group citations ([2effeb7](https://github.com/atbeta/notefast/commit/2effeb7105bcbb64e3120eaca9fa054967b14b7b))
+* **ai-chat:** swap capability badges from text to icons ([e42dbfa](https://github.com/atbeta/notefast/commit/e42dbfaf2ddcabd95da0723415c6252a280d6ac2))
+
+
+### Bug Fixes
+
+* **doc:** align TagEditor row with the '对 AI 隐藏' toggle ([bf0bd43](https://github.com/atbeta/notefast/commit/bf0bd43e47898cf3c0f73e4fdf2dcba9c735a612))
+
 ## [0.14.3](https://github.com/atbeta/notefast/compare/v0.14.2...v0.14.3) (2026-07-23)
 
 
