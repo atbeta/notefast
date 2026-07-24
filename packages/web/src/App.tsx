@@ -5,9 +5,12 @@ import DocPage from './routes/doc'
 import NewDocPage from './routes/new'
 import SettingsPage from './routes/settings'
 import SettingsAIPage from './routes/settings-ai'
+import SettingsBackupPage from './routes/settings-backup'
+import SettingsSyncPage from './routes/settings-sync'
 import InboxPage from './routes/inbox'
 import AutolinkPage from './routes/autolink'
 import Layout from './components/Layout'
+import RouteTransition from './components/RouteTransition'
 import AuthPrompt from './components/AuthPrompt'
 import { ToastProvider } from './components/ui'
 import { getStoredPassword } from './hooks/useAPI'
@@ -37,15 +40,19 @@ export default function App() {
     <ToastProvider>
       {showAuthPrompt && <AuthPrompt />}
       <Layout contentClassName={contentClassName}>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/new" element={<NewDocPage />} />
-          <Route path="/doc/:id" element={<DocPage />} />
-          <Route path="/inbox" element={<InboxPage />} />
-          <Route path="/autolink" element={<AutolinkPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/settings/ai" element={<SettingsAIPage />} />
-        </Routes>
+        <RouteTransition>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/new" element={<NewDocPage />} />
+            <Route path="/doc/:id" element={<DocPage />} />
+            <Route path="/inbox" element={<InboxPage />} />
+            <Route path="/autolink" element={<AutolinkPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/ai" element={<SettingsAIPage />} />
+            <Route path="/settings/backup" element={<SettingsBackupPage />} />
+            <Route path="/settings/sync" element={<SettingsSyncPage />} />
+          </Routes>
+        </RouteTransition>
       </Layout>
     </ToastProvider>
   )

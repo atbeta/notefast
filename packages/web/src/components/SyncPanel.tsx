@@ -54,6 +54,18 @@ const EMPTY_WEBDAV: WebDavAdapterConfig = {
   enabled: true,
 }
 
+/** form.kind 可能已被切换，但 onChange 仍以旧 form 闭包调用 —— 把当前 form
+    提升到对应适配器并 patch；处理「所有适配器表单同时挂载」时的输入回填 */
+function s3WithPatch(form: FormState, patch: Partial<S3AdapterConfig>): S3AdapterConfig {
+  if (form.kind === 's3') return { ...form, ...patch }
+  return { ...EMPTY_S3, ...patch, kind: 's3', enabled: true }
+}
+
+function webdavWithPatch(form: FormState, patch: Partial<WebDavAdapterConfig>): WebDavAdapterConfig {
+  if (form.kind === 'webdav') return { ...form, ...patch }
+  return { ...EMPTY_WEBDAV, ...patch, kind: 'webdav', enabled: true }
+}
+
 export default function SyncPanel() {
   const [status, setStatus] = useState<SyncRuntimeStatus | null>(null)
   const [adapters, setAdapters] = useState<AdapterInfo[]>([])
@@ -176,6 +188,7 @@ export default function SyncPanel() {
       <button
         type="button"
         onClick={() => setCollapsed((c) => !c)}
+        aria-expanded={!collapsed}
         className="w-full flex items-center justify-between gap-2 px-5 py-3.5 hover:bg-accent/60 transition-colors"
       >
         <div className="flex items-center gap-2.5 text-[13.5px] font-medium text-foreground">
@@ -194,265 +207,335 @@ export default function SyncPanel() {
         {collapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} /> : <ChevronUp className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />}
       </button>
 
-      {!collapsed && (
-        <div className="p-5 space-y-5">
-          <p className="text-[12px] text-muted-foreground leading-relaxed -mt-1">
-            将文档导出为 Markdown 推送到单一远端（LocalFS / S3 / WebDAV）。这是内容归档，不是完整数据库备份；
-            不含 block ID、引用、标签与向量。同名文档使用带 ID 的文件名，删除会清理归档清单管理的陈旧文件。
-          </p>
-          {/* Adapter catalog */}
-          <div className="space-y-3">
-            <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">适配器</h4>
-            <div className="grid gap-2 text-sm">
-              {adapters.map((a) => (
-                <div
-                  key={a.kind}
-                  className={`flex items-center justify-between px-3 py-2 rounded-md border ${
-                    a.status === 'available'
-                      ? 'border-border bg-background'
-                      : 'border-border/40 bg-muted/30 text-muted-foreground'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    {a.kind === 'localfs' ? (
-                      <FolderOpen className="w-4 h-4" />
-                    ) : a.kind === 'webdav' ? (
-                      <HardDrive className="w-4 h-4" />
-                    ) : (
-                      <Cloud className="w-4 h-4" />
-                    )}
-                    <span className="font-medium">{a.label}</span>
+      {/* 折叠/展开用 grid-rows trick 平滑过渡，避免下方内容被瞬时撑下 */}
+      <div
+        className={`grid duration-300 ease-in-out ${
+          collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'
+        }`}
+        style={{ transitionProperty: 'grid-template-rows, opacity' }}
+        aria-hidden={collapsed}
+      >
+        <div className="overflow-hidden">
+          <div className="p-5 space-y-5 border-t border-border/50">
+            <p className="text-[12px] text-muted-foreground leading-relaxed -mt-1">
+              将文档导出为 Markdown 推送到单一远端（LocalFS / S3 / WebDAV）。这是内容归档，不是完整数据库备份；
+              不含 block ID、引用、标签与向量。同名文档使用带 ID 的文件名，删除会清理归档清单管理的陈旧文件。
+            </p>
+            {/* Adapter catalog */}
+            <div className="space-y-3">
+              <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">适配器</h4>
+              <div className="grid gap-2 text-sm">
+                {adapters.map((a) => (
+                  <div
+                    key={a.kind}
+                    className={`flex items-center justify-between px-3 py-2 rounded-md border ${
+                      a.status === 'available'
+                        ? 'border-border bg-background'
+                        : 'border-border/40 bg-muted/30 text-muted-foreground'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {a.kind === 'localfs' ? (
+                        <FolderOpen className="w-4 h-4" />
+                      ) : a.kind === 'webdav' ? (
+                        <HardDrive className="w-4 h-4" />
+                      ) : (
+                        <Cloud className="w-4 h-4" />
+                      )}
+                      <span className="font-medium">{a.label}</span>
+                    </div>
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      {a.status === 'available' ? '可用' : '计划中'}
+                    </span>
                   </div>
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {a.status === 'available' ? '可用' : '计划中'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Configuration form */}
-          <div className="space-y-3 pt-2 border-t border-border/60">
-            <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">启用方式</h4>
-
-            {form.kind === 'none' && (
-              <div className="flex gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...EMPTY_LOCALFS })}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-accent"
-                >
-                  <FolderOpen className="w-4 h-4" /> 本地文件
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...EMPTY_S3 })}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-accent"
-                >
-                  <Cloud className="w-4 h-4" /> S3 兼容
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...EMPTY_WEBDAV })}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-accent"
-                >
-                  <HardDrive className="w-4 h-4" /> WebDAV
-                </button>
+                ))}
               </div>
-            )}
+            </div>
 
-            {form.kind === 'localfs' && (
-              <>
-                <TextField label="导出目录" value={form.dir} onChange={(v) => setForm({ ...form, dir: v })} placeholder="/path/to/your/notes" mono />
-                <TextField label="文件名前缀（可选）" value={form.prefix ?? ''} onChange={(v) => setForm({ ...form, prefix: v })} placeholder="notes/" mono />
-              </>
-            )}
+            {/* Configuration form: 4 个候选（chooser + 3 适配器）叠在同一 grid cell，
+                容器高度由最高者决定，切换只换透明度，避免下方内容抖动 */}
+            <div className="space-y-3 pt-2 border-t border-border/60">
+              <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">启用方式</h4>
+              <div className="grid">
+                <div
+                  className={`col-start-1 row-start-1 space-y-3 transition-opacity duration-200 ${
+                    form.kind === 'none' ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
+                  aria-hidden={form.kind !== 'none'}
+                >
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...EMPTY_LOCALFS })}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-accent"
+                    >
+                      <FolderOpen className="w-4 h-4" /> 本地文件
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...EMPTY_S3 })}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-accent"
+                    >
+                      <Cloud className="w-4 h-4" /> S3 兼容
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...EMPTY_WEBDAV })}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-accent"
+                    >
+                      <HardDrive className="w-4 h-4" /> WebDAV
+                    </button>
+                  </div>
+                </div>
 
-            {form.kind === 's3' && (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <TextField label="Bucket" value={form.bucket} onChange={(v) => setForm({ ...form, bucket: v })} placeholder="my-notefast-bucket" mono />
-                  <TextField label="Region" value={form.region} onChange={(v) => setForm({ ...form, region: v })} placeholder="us-east-1" mono />
-                  <TextField label="Endpoint（MinIO / R2 / OSS 必填）" value={form.endpoint ?? ''} onChange={(v) => setForm({ ...form, endpoint: v })} placeholder="https://s3.amazonaws.com" mono />
-                  <TextField label="Key 前缀" value={form.prefix ?? ''} onChange={(v) => setForm({ ...form, prefix: v })} placeholder="notes/" mono />
-                  <TextField label="Access Key ID" value={form.accessKeyId} onChange={(v) => setForm({ ...form, accessKeyId: v })} placeholder="AKIA..." mono />
+                <div
+                  className={`col-start-1 row-start-1 space-y-3 transition-opacity duration-200 ${
+                    form.kind === 'localfs' ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
+                  aria-hidden={form.kind !== 'localfs'}
+                >
+                  <TextField
+                    label="导出目录"
+                    value={form.kind === 'localfs' ? form.dir : ''}
+                    onChange={(v) => setForm({ kind: 'localfs', dir: v, prefix: form.kind === 'localfs' ? form.prefix : '', enabled: true })}
+                    placeholder="/path/to/your/notes"
+                    mono
+                  />
+                  <TextField
+                    label="文件名前缀（可选）"
+                    value={form.kind === 'localfs' ? (form.prefix ?? '') : ''}
+                    onChange={(v) => setForm({ kind: 'localfs', dir: form.kind === 'localfs' ? form.dir : '', prefix: v, enabled: true })}
+                    placeholder="notes/"
+                    mono
+                  />
+                </div>
+
+                <div
+                  className={`col-start-1 row-start-1 space-y-3 transition-opacity duration-200 ${
+                    form.kind === 's3' ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
+                  aria-hidden={form.kind !== 's3'}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <TextField
+                      label="Bucket"
+                      value={form.kind === 's3' ? form.bucket : ''}
+                      onChange={(v) => setForm(s3WithPatch(form, { bucket: v }))}
+                      placeholder="my-notefast-bucket"
+                      mono
+                    />
+                    <TextField
+                      label="Region"
+                      value={form.kind === 's3' ? form.region : ''}
+                      onChange={(v) => setForm(s3WithPatch(form, { region: v }))}
+                      placeholder="us-east-1"
+                      mono
+                    />
+                    <TextField
+                      label="Endpoint（MinIO / R2 / OSS 必填）"
+                      value={form.kind === 's3' ? (form.endpoint ?? '') : ''}
+                      onChange={(v) => setForm(s3WithPatch(form, { endpoint: v }))}
+                      placeholder="https://s3.amazonaws.com"
+                      mono
+                    />
+                    <TextField
+                      label="Key 前缀"
+                      value={form.kind === 's3' ? (form.prefix ?? '') : ''}
+                      onChange={(v) => setForm(s3WithPatch(form, { prefix: v }))}
+                      placeholder="notes/"
+                      mono
+                    />
+                    <TextField
+                      label="Access Key ID"
+                      value={form.kind === 's3' ? form.accessKeyId : ''}
+                      onChange={(v) => setForm(s3WithPatch(form, { accessKeyId: v }))}
+                      placeholder="AKIA..."
+                      mono
+                    />
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Secret Access Key</label>
+                      <div className="mt-1 flex items-center gap-2">
+                        <input
+                          type={showS3Secret ? 'text' : 'password'}
+                          value={form.kind === 's3' ? form.secretAccessKey : ''}
+                          onChange={(e) => setForm(s3WithPatch(form, { secretAccessKey: e.target.value }))}
+                          placeholder="••••••••"
+                          className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowS3Secret((s) => !s)}
+                          className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-accent"
+                          tabIndex={form.kind === 's3' ? 0 : -1}
+                        >
+                          {showS3Secret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm min-h-7">
+                    <input
+                      type="checkbox"
+                      checked={form.kind === 's3' ? form.forcePathStyle : false}
+                      onChange={(e) => setForm(s3WithPatch(form, { forcePathStyle: e.target.checked }))}
+                      tabIndex={form.kind === 's3' ? 0 : -1}
+                    />
+                    <span>Path-style endpoint（MinIO 必需，AWS / R2 默认关闭）</span>
+                  </label>
+                </div>
+
+                <div
+                  className={`col-start-1 row-start-1 space-y-3 transition-opacity duration-200 ${
+                    form.kind === 'webdav' ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
+                  aria-hidden={form.kind !== 'webdav'}
+                >
+                  <div className="text-[10.5px] text-muted-foreground/70 leading-relaxed -mt-1">
+                    支持 NextCloud / ownCloud / 群晖 / 极空间 / 威联通 / 坚果云 WebDAV。
+                    第一次推送时前缀不存在会创建中间目录。
+                  </div>
+                  <TextField
+                    label="Endpoint URL"
+                    value={form.kind === 'webdav' ? form.endpoint : ''}
+                    onChange={(v) => setForm(webdavWithPatch(form, { endpoint: v }))}
+                    placeholder="https://nas.local/dav/ 或 https://dav.jianguoyun.com/dav/"
+                    mono
+                  />
+                  <TextField
+                    label="用户名"
+                    value={form.kind === 'webdav' ? form.username : ''}
+                    onChange={(v) => setForm(webdavWithPatch(form, { username: v }))}
+                    mono
+                  />
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Secret Access Key</label>
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">密码 / 应用专用密码</label>
                     <div className="mt-1 flex items-center gap-2">
                       <input
-                        type={showS3Secret ? 'text' : 'password'}
-                        value={form.secretAccessKey}
-                        onChange={(e) => setForm({ ...form, secretAccessKey: e.target.value })}
+                        type={showWebDavSecret ? 'text' : 'password'}
+                        value={form.kind === 'webdav' ? form.password : ''}
+                        onChange={(e) => setForm(webdavWithPatch(form, { password: e.target.value }))}
                         placeholder="••••••••"
                         className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
                       />
                       <button
                         type="button"
-                        onClick={() => setShowS3Secret((s) => !s)}
+                        onClick={() => setShowWebDavSecret((s) => !s)}
                         className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-accent"
+                        tabIndex={form.kind === 'webdav' ? 0 : -1}
                       >
-                        {showS3Secret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        {showWebDavSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
-                </div>
-                <label className="inline-flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={form.forcePathStyle}
-                    onChange={(e) => setForm({ ...form, forcePathStyle: e.target.checked })}
+                  <TextField
+                    label="远端子目录前缀（可选）"
+                    value={form.kind === 'webdav' ? (form.prefix ?? '') : ''}
+                    onChange={(v) => setForm(webdavWithPatch(form, { prefix: v }))}
+                    placeholder="notes/"
+                    mono
                   />
-                  <span>Path-style endpoint（MinIO 必需，AWS / R2 默认关闭）</span>
-                </label>
-              </>
-            )}
-
-            {form.kind === 'webdav' && (
-              <>
-                <div className="text-[10.5px] text-muted-foreground/70 leading-relaxed -mt-1">
-                  支持 NextCloud / ownCloud / 群晖 / 极空间 / 威联通 / 坚果云 WebDAV。
-                  第一次推送时前缀不存在会创建中间目录。
                 </div>
+              </div>
+
+              {form.kind !== 'none' && (
                 <TextField
-                  label="Endpoint URL"
-                  value={form.endpoint}
-                  onChange={(v) => setForm({ ...form, endpoint: v })}
-                  placeholder="https://nas.local/dav/ 或 https://dav.jianguoyun.com/dav/"
+                  label="自动同步间隔（秒，0 = 关闭）"
+                  value={String(interval)}
+                  type="number"
+                  onChange={(v) => setInterval(parseInt(v, 10) || 0)}
                   mono
                 />
-                <TextField
-                  label="用户名"
-                  value={form.username}
-                  onChange={(v) => setForm({ ...form, username: v })}
-                  mono
-                />
+              )}
+
+              {form.kind !== 'none' && (
+                <div className="flex items-center gap-2 flex-wrap pt-1 min-h-7">
+                  <ActionButton
+                    onAction={handleSave}
+                    successToast={{ title: status?.configured && status.adapterName === form.kind ? '归档配置已保存' : '归档已启用' }}
+                    errorToast={(e) => ({ title: '保存失败', description: e instanceof Error ? e.message : String(e) })}
+                  >
+                    {status?.configured && status.adapterName === form.kind ? '保存' : '启用'}
+                  </ActionButton>
+                  {status?.configured && (
+                    <>
+                      <ActionButton
+                        variant="secondary"
+                        size="sm"
+                        onAction={handleRun}
+                        successToast={{ title: '归档完成' }}
+                        errorToast={(e) => ({ title: '归档失败', description: e instanceof Error ? e.message : String(e) })}
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
+                        立即归档
+                      </ActionButton>
+                      <button
+                        type="button"
+                        onClick={handleInfo}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent"
+                      >
+                        探测远端
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ kind: 'none' })}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent"
+                        title="切换到另一种适配器"
+                      >
+                        切换适配器
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowDisableConfirm(true)}
+                        className="inline-flex items-center justify-center gap-1.5 h-7 px-2.5 text-[12px] font-medium leading-none rounded-[var(--radius-btn)] text-destructive hover:bg-destructive/10 ml-auto min-w-[88px]"
+                      >
+                        禁用
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {(status?.lastRunAt || status?.lastResult) && (
+              <div className="text-xs text-muted-foreground pt-2 border-t border-border/60 space-y-1">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">密码 / 应用专用密码</label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <input
-                      type={showWebDavSecret ? 'text' : 'password'}
-                      value={form.password}
-                      onChange={(e) => setForm({ ...form, password: e.target.value })}
-                      placeholder="••••••••"
-                      className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowWebDavSecret((s) => !s)}
-                      className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-accent"
-                    >
-                      {showWebDavSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
+                  上次归档：<span className="font-mono">{status?.lastRunAt || '尚未运行'}</span>
                 </div>
-                <TextField
-                  label="远端子目录前缀（可选）"
-                  value={form.prefix ?? ''}
-                  onChange={(v) => setForm({ ...form, prefix: v })}
-                  placeholder="notes/"
-                  mono
-                />
-              </>
-            )}
-
-            {form.kind !== 'none' && (
-              <TextField
-                label="自动同步间隔（秒，0 = 关闭）"
-                value={String(interval)}
-                type="number"
-                onChange={(v) => setInterval(parseInt(v, 10) || 0)}
-                mono
-              />
-            )}
-
-            {form.kind !== 'none' && (
-              <div className="flex items-center gap-2 flex-wrap pt-1">
-                <ActionButton
-                  onAction={handleSave}
-                  successToast={{ title: status?.configured && status.adapterName === form.kind ? '归档配置已保存' : '归档已启用' }}
-                  errorToast={(e) => ({ title: '保存失败', description: e instanceof Error ? e.message : String(e) })}
-                >
-                  {status?.configured && status.adapterName === form.kind ? '保存' : '启用'}
-                </ActionButton>
-                {status?.configured && (
-                  <>
-                    <ActionButton
-                      variant="secondary"
-                      size="sm"
-                      onAction={handleRun}
-                      successToast={{ title: '归档完成' }}
-                      errorToast={(e) => ({ title: '归档失败', description: e instanceof Error ? e.message : String(e) })}
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
-                      立即归档
-                    </ActionButton>
-                    <button
-                      type="button"
-                      onClick={handleInfo}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent"
-                    >
-                      探测远端
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setForm({ kind: 'none' })}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent"
-                      title="切换到另一种适配器"
-                    >
-                      切换适配器
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowDisableConfirm(true)}
-                      className="inline-flex items-center justify-center gap-1.5 h-7 px-2.5 text-[12px] font-medium leading-none rounded-[var(--radius-btn)] text-destructive hover:bg-destructive/10 ml-auto min-w-[88px]"
-                    >
-                      禁用
-                    </button>
-                  </>
+                {status?.lastSuccessAt && status.lastResult && (
+                  <div className="text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    成功上传 {status.lastResult.pushed} 个文档
+                  </div>
+                )}
+                {status?.lastError && (
+                  <div className="text-destructive inline-flex items-start gap-1">
+                    <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                    <span className="break-all">{status.lastError}</span>
+                  </div>
+                )}
+                {status?.lastResult?.errors && status.lastResult.errors.length > 0 && (
+                  <ul className="list-disc pl-4 space-y-0.5 text-destructive/90">
+                    {status.lastResult.errors.slice(0, 5).map((err) => (
+                      <li key={err} className="break-all">{err}</li>
+                    ))}
+                  </ul>
                 )}
               </div>
             )}
-          </div>
 
-          {(status?.lastRunAt || status?.lastResult) && (
-            <div className="text-xs text-muted-foreground pt-2 border-t border-border/60 space-y-1">
-              <div>
-                上次归档：<span className="font-mono">{status?.lastRunAt || '尚未运行'}</span>
+            {info && (
+              <div className="text-xs text-muted-foreground bg-muted/40 px-3 py-2 rounded-md space-y-0.5">
+                {typeof info.remoteDocCount === 'number' && (
+                  <div>远端 .md 文件数：<span className="font-mono">{info.remoteDocCount}</span></div>
+                )}
+                {Object.entries(info.extra).map(([k, v]) => (
+                  <div key={k}>{k}：<span className="font-mono">{String(v)}</span></div>
+                ))}
               </div>
-              {status?.lastSuccessAt && status.lastResult && (
-                <div className="text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" />
-                  成功上传 {status.lastResult.pushed} 个文档
-                </div>
-              )}
-              {status?.lastError && (
-                <div className="text-destructive inline-flex items-start gap-1">
-                  <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
-                  <span className="break-all">{status.lastError}</span>
-                </div>
-              )}
-              {status?.lastResult?.errors && status.lastResult.errors.length > 0 && (
-                <ul className="list-disc pl-4 space-y-0.5 text-destructive/90">
-                  {status.lastResult.errors.slice(0, 5).map((err) => (
-                    <li key={err} className="break-all">{err}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-
-          {info && (
-            <div className="text-xs text-muted-foreground bg-muted/40 px-3 py-2 rounded-md space-y-0.5">
-              {typeof info.remoteDocCount === 'number' && (
-                <div>远端 .md 文件数：<span className="font-mono">{info.remoteDocCount}</span></div>
-              )}
-              {Object.entries(info.extra).map(([k, v]) => (
-                <div key={k}>{k}：<span className="font-mono">{String(v)}</span></div>
-              ))}
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      )}
+      </div>
 
       <ConfirmDialog
         open={showDisableConfirm}

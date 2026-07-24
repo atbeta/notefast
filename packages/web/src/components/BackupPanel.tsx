@@ -157,6 +157,7 @@ export default function BackupPanel() {
       <button
         type="button"
         onClick={() => setCollapsed((c) => !c)}
+        aria-expanded={!collapsed}
         className="w-full flex items-center justify-between gap-2 px-5 py-3.5 hover:bg-accent/60 transition-colors"
       >
         <div className="flex items-center gap-2.5 text-[13.5px] font-medium text-foreground">
@@ -179,165 +180,174 @@ export default function BackupPanel() {
         )}
       </button>
 
-      {!collapsed && (
-        <div className="p-5 space-y-5">
-          <p className="text-[12px] text-muted-foreground leading-relaxed">
-            完整灾备：在线生成一致 SQLite 快照并上传 S3。默认每小时一次、保留 30 天。
-            恢复须先停止服务，再执行 CLI（Web 不提供一键覆盖）。
-          </p>
+      {/* 折叠/展开用 grid-rows trick 平滑过渡，避免下方内容被瞬时撑下 */}
+      <div
+        className={`grid duration-300 ease-in-out ${
+          collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'
+        }`}
+        style={{ transitionProperty: 'grid-template-rows, opacity' }}
+        aria-hidden={collapsed}
+      >
+        <div className="overflow-hidden">
+          <div className="p-5 space-y-5 border-t border-border/50">
+            <p className="text-[12px] text-muted-foreground leading-relaxed">
+              完整灾备：在线生成一致 SQLite 快照并上传 S3。默认每小时一次、保留 30 天。
+              恢复须先停止服务，再执行 CLI（Web 不提供一键覆盖）。
+            </p>
 
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-            <span>启用数据库备份</span>
-          </label>
+            <label className="flex items-center gap-2 text-sm min-h-7">
+              <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+              <span>启用数据库备份</span>
+            </label>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Field label="Bucket" value={bucket} onChange={setBucket} mono placeholder="notefast-backup" />
-            <Field label="Region" value={region} onChange={setRegion} mono placeholder="auto" />
-            <Field
-              label="Endpoint（R2 / MinIO 必填）"
-              value={endpoint}
-              onChange={setEndpoint}
-              mono
-              placeholder="https://xxx.r2.cloudflarestorage.com"
-            />
-            <Field label="Key 前缀" value={prefix} onChange={setPrefix} mono placeholder="notefast-backup" />
-            <Field
-              label="Access Key ID"
-              value={accessKeyId}
-              onChange={setAccessKeyId}
-              mono
-              placeholder={BACKUP_SECRET_MASK}
-            />
-            <div>
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Secret Access Key
-              </label>
-              <div className="mt-1 flex items-center gap-2">
-                <input
-                  type={showSecret ? 'text' : 'password'}
-                  value={secretAccessKey}
-                  onChange={(e) => setSecretAccessKey(e.target.value)}
-                  placeholder={BACKUP_SECRET_MASK}
-                  className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowSecret((s) => !s)}
-                  className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-accent"
-                >
-                  {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-            <Field
-              label="自动备份间隔（小时，0=仅手动）"
-              value={String(intervalHours)}
-              onChange={(v) => setIntervalHours(parseInt(v, 10) || 0)}
-              type="number"
-            />
-            <Field
-              label="保留天数"
-              value={String(retentionDays)}
-              onChange={(v) => setRetentionDays(parseInt(v, 10) || 30)}
-              type="number"
-            />
-          </div>
-
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={forcePathStyle}
-              onChange={(e) => setForcePathStyle(e.target.checked)}
-            />
-            <span>Path-style endpoint（MinIO 通常需要）</span>
-          </label>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <ActionButton onAction={handleSave}>保存</ActionButton>
-            {status?.configured && (
-              <>
-                <ActionButton variant="secondary" size="sm" onAction={handleTest}>
-                  <Plug className="w-3.5 h-3.5" strokeWidth={1.75} />
-                  测试连接
-                </ActionButton>
-                <ActionButton variant="secondary" size="sm" onAction={handleRun}>
-                  <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
-                  立即备份
-                </ActionButton>
-                <button
-                  type="button"
-                  onClick={() => setShowDisableConfirm(true)}
-                  className="inline-flex items-center justify-center gap-1.5 h-7 px-2.5 text-[12px] font-medium leading-none rounded-[var(--radius-btn)] text-destructive hover:bg-destructive/10 ml-auto min-w-[88px]"
-                >
-                  禁用
-                </button>
-              </>
-            )}
-          </div>
-
-          {status && (
-            <div className="text-xs text-muted-foreground pt-2 border-t border-border/60 space-y-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Field label="Bucket" value={bucket} onChange={setBucket} mono placeholder="notefast-backup" />
+              <Field label="Region" value={region} onChange={setRegion} mono placeholder="auto" />
+              <Field
+                label="Endpoint（R2 / MinIO 必填）"
+                value={endpoint}
+                onChange={setEndpoint}
+                mono
+                placeholder="https://xxx.r2.cloudflarestorage.com"
+              />
+              <Field label="Key 前缀" value={prefix} onChange={setPrefix} mono placeholder="notefast-backup" />
+              <Field
+                label="Access Key ID"
+                value={accessKeyId}
+                onChange={setAccessKeyId}
+                mono
+                placeholder={BACKUP_SECRET_MASK}
+              />
               <div>
-                状态：{status.running ? `进行中 (${status.phase})` : '空闲'}
-                {status.nextRunAt && (
-                  <span className="ml-2">下次：<span className="font-mono">{status.nextRunAt}</span></span>
-                )}
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Secret Access Key
+                </label>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type={showSecret ? 'text' : 'password'}
+                    value={secretAccessKey}
+                    onChange={(e) => setSecretAccessKey(e.target.value)}
+                    placeholder={BACKUP_SECRET_MASK}
+                    className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSecret((s) => !s)}
+                    className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-accent"
+                  >
+                    {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
-              {status.lastSuccessAt && (
-                <div className="text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" />
-                  上次成功 {status.lastSuccessAt}
-                  {status.lastResult?.objectKey && (
-                    <span className="font-mono ml-1 truncate max-w-[240px]">{status.lastResult.objectKey}</span>
+              <Field
+                label="自动备份间隔（小时，0=仅手动）"
+                value={String(intervalHours)}
+                onChange={(v) => setIntervalHours(parseInt(v, 10) || 0)}
+                type="number"
+              />
+              <Field
+                label="保留天数"
+                value={String(retentionDays)}
+                onChange={(v) => setRetentionDays(parseInt(v, 10) || 30)}
+                type="number"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-sm min-h-7">
+              <input
+                type="checkbox"
+                checked={forcePathStyle}
+                onChange={(e) => setForcePathStyle(e.target.checked)}
+              />
+              <span>Path-style endpoint（MinIO 通常需要）</span>
+            </label>
+
+            <div className="flex items-center gap-2 flex-wrap min-h-7">
+              <ActionButton onAction={handleSave}>保存</ActionButton>
+              {status?.configured && (
+                <>
+                  <ActionButton variant="secondary" size="sm" onAction={handleTest}>
+                    <Plug className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    测试连接
+                  </ActionButton>
+                  <ActionButton variant="secondary" size="sm" onAction={handleRun}>
+                    <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    立即备份
+                  </ActionButton>
+                  <button
+                    type="button"
+                    onClick={() => setShowDisableConfirm(true)}
+                    className="inline-flex items-center justify-center gap-1.5 h-7 px-2.5 text-[12px] font-medium leading-none rounded-[var(--radius-btn)] text-destructive hover:bg-destructive/10 ml-auto min-w-[88px]"
+                  >
+                    禁用
+                  </button>
+                </>
+              )}
+            </div>
+
+            {status && (
+              <div className="text-xs text-muted-foreground pt-2 border-t border-border/60 space-y-1">
+                <div>
+                  状态：{status.running ? `进行中 (${status.phase})` : '空闲'}
+                  {status.nextRunAt && (
+                    <span className="ml-2">下次：<span className="font-mono">{status.nextRunAt}</span></span>
                   )}
                 </div>
-              )}
-              {status.lastError && (
-                <div className="text-destructive inline-flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  {status.lastError}
-                </div>
-              )}
-            </div>
-          )}
-
-          {points.length > 0 && (
-            <div className="space-y-2 pt-2 border-t border-border/60">
-              <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                恢复点
-              </h4>
-              <div className="space-y-1.5">
-                {points.map((p) => (
-                  <div
-                    key={p.objectKey}
-                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border border-border bg-background text-xs"
-                  >
-                    <div className="min-w-0">
-                      <div className="font-mono truncate">{p.createdAt}</div>
-                      <div className="text-muted-foreground truncate">
-                        {(p.sizeBytes / 1024).toFixed(1)} KB · schema v{p.schemaVersion}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => copyRestoreCmd(p.objectKey)}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded hover:bg-accent shrink-0"
-                      title="复制恢复命令"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      恢复命令
-                    </button>
+                {status.lastSuccessAt && (
+                  <div className="text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    上次成功 {status.lastSuccessAt}
+                    {status.lastResult?.objectKey && (
+                      <span className="font-mono ml-1 truncate max-w-[240px]">{status.lastResult.objectKey}</span>
+                    )}
                   </div>
-                ))}
+                )}
+                {status.lastError && (
+                  <div className="text-destructive inline-flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    {status.lastError}
+                  </div>
+                )}
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                恢复前请停止服务。可用 <code className="font-mono">--dry-run</code> 预演。
-              </p>
-            </div>
-          )}
+            )}
+
+            {points.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-border/60">
+                <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                  恢复点
+                </h4>
+                <div className="space-y-1.5">
+                  {points.map((p) => (
+                    <div
+                      key={p.objectKey}
+                      className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border border-border bg-background text-xs"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-mono truncate">{p.createdAt}</div>
+                        <div className="text-muted-foreground truncate">
+                          {(p.sizeBytes / 1024).toFixed(1)} KB · schema v{p.schemaVersion}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => copyRestoreCmd(p.objectKey)}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded hover:bg-accent shrink-0"
+                        title="复制恢复命令"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        恢复命令
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  恢复前请停止服务。可用 <code className="font-mono">--dry-run</code> 预演。
+                </p>
+              </div>
+            )}
+          </div>
         </div>
-      )}
+      </div>
 
       <ConfirmDialog
         open={showDisableConfirm}

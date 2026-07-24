@@ -309,6 +309,16 @@
   animation: fade-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* RouteTransition 旧页淡出：与新页 animate-fade-in 并行，靠 useLayoutEffect
+   提前挂到 outgoing 上避免「空白 → 新页」的闪烁 */
+@keyframes page-leave {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-2px); }
+}
+.animate-page-leave {
+  animation: page-leave 200ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
 /* Toast 滑入：从右上角 + 渐显 */
 @keyframes toast-in {
   from { opacity: 0; transform: translateX(16px) scale(0.96); }

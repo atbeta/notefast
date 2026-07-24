@@ -1,10 +1,21 @@
-import { ArrowRight, Sun, Moon, Monitor } from 'lucide-react'
-import SyncPanel from '../components/SyncPanel'
-import BackupPanel from '../components/BackupPanel'
+import { useEffect, useState } from 'react'
+import { Sun, Moon, Monitor, Database, Settings as SettingsIcon, Sparkles } from 'lucide-react'
 import ApiTokensPanel from '../components/ApiTokensPanel'
+import SummaryCard from '../components/SummaryCard'
 import { useTheme } from '../hooks/useTheme'
+import { api } from '../hooks/useAPI'
 
 export default function SettingsPage() {
+  const [backupEnabled, setBackupEnabled] = useState<boolean | null>(null)
+  const [syncEnabled, setSyncEnabled] = useState<boolean | null>(null)
+  const [aiEnabled, setAiEnabled] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    api.get<{ configured: boolean }>('/backup/config').then((r) => setBackupEnabled(r.configured)).catch(() => setBackupEnabled(false))
+    api.get<{ configured: boolean }>('/sync/config').then((r) => setSyncEnabled(r.configured)).catch(() => setSyncEnabled(false))
+    api.get<{ ai_configured: boolean }>('/status').then((r) => setAiEnabled(Boolean(r.ai_configured))).catch(() => setAiEnabled(false))
+  }, [])
+
   return (
     <div className="w-full max-w-4xl mx-auto px-8 py-10 space-y-10 animate-fade-in">
       <header className="space-y-1.5">
@@ -26,35 +37,64 @@ export default function SettingsPage() {
           数据主权
         </h2>
         <ApiTokensPanel />
-        <BackupPanel />
-        <SyncPanel />
+        <div className="space-y-2.5">
+          <SummaryCard
+            icon={<Database className="w-4 h-4" strokeWidth={1.75} />}
+            title="数据库备份 (SQLite → S3)"
+            badge={<StatusBadge enabled={backupEnabled} activeLabel="已启用" />}
+            description="完整灾备：在线生成一致 SQLite 快照并上传 S3。默认每小时一次、保留 30 天。"
+            to="/settings/backup"
+          />
+          <SummaryCard
+            icon={<SettingsIcon className="w-4 h-4" strokeWidth={1.75} />}
+            title="Markdown 归档（单向）"
+            badge={<StatusBadge enabled={syncEnabled} activeLabel="运行中" />}
+            description="将文档导出为 Markdown 推送到单一远端（LocalFS / S3 / WebDAV）。内容归档，不是完整数据库备份。"
+            to="/settings/sync"
+          />
+        </div>
       </section>
 
       <section className="space-y-3">
         <h2 className="px-0.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80 select-none">
           AI 能力
         </h2>
-        <a
-          href="/settings/ai"
-          className="group block rounded-xl border border-border bg-card px-5 py-4 hover:border-foreground/20 transition-colors"
-        >
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <div className="text-[13.5px] font-medium text-foreground">配置 AI Provider、Embedding、Reranker、AutoLink</div>
-              <p className="text-[12px] text-muted-foreground mt-1">所有 AI 能力都可以在这里独立开关</p>
-            </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground/60 group-hover:text-foreground group-hover:translate-x-0.5 transition-all shrink-0" strokeWidth={1.75} />
-          </div>
-        </a>
+        <SummaryCard
+          icon={<Sparkles className="w-4 h-4" strokeWidth={1.75} />}
+          title="配置 AI Provider、Embedding、Reranker、AutoLink"
+          badge={<StatusBadge enabled={aiEnabled} activeLabel="已启用" />}
+          description="所有 AI 能力都可以在这里独立开关；缺哪个就降级到 FTS5 与手动链接。"
+          to="/settings/ai"
+        />
       </section>
     </div>
+  )
+}
+
+function StatusBadge({ enabled, activeLabel }: { enabled: boolean | null; activeLabel: string }) {
+  if (enabled === null) {
+    return (
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground/70 animate-pulse">
+        检测中
+      </span>
+    )
+  }
+  if (enabled) {
+    return (
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/12 text-emerald-600 dark:text-emerald-300 font-medium">
+        {activeLabel}
+      </span>
+    )
+  }
+  return (
+    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">未启用</span>
   )
 }
 
 function ThemePicker() {
   const { theme, resolvedTheme, setTheme } = useTheme()
   return (
-    <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+    <div className="rounded-xl border border-border bg-card shadow-[var(--shadow-card)] p-5 space-y-4">
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <div className="text-[13.5px] font-medium text-foreground">主题</div>
