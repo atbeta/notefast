@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.1](https://github.com/atbeta/notefast/compare/v0.15.0...v0.15.1) (2026-07-24)
+
+
+### Bug Fixes
+
+* **ai-chat:** move groupedCitations useMemo above the isOpen early return ([5352cc5](https://github.com/atbeta/notefast/commit/5352cc5c8057967869a964fb474c04884046f27b))
+
 ## [0.15.0](https://github.com/atbeta/notefast/compare/v0.14.3...v0.15.0) (2026-07-24)
 
 
