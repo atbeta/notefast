@@ -8,6 +8,7 @@ import {
   RefreshCw,
   FileSearch,
   Copy,
+  Globe,
 } from 'lucide-react'
 import {
   KNOWN_EMBEDDING_MODELS,
@@ -91,6 +92,8 @@ export default function AISettingsPanel() {
   const [autoIndex, setAutoIndex] = useState(true)
   const [reranker, setReranker] = useState<RerankerDefinition | null>(null)
   const [autoLink, setAutoLink] = useState<AutoLinkConfig>(defaultAutoLink())
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false)
+  const [webSearchApiKey, setWebSearchApiKey] = useState('')
 
   const [showKey, setShowKey] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -115,6 +118,8 @@ export default function AISettingsPanel() {
       setReranker(s.config.reranker ?? null)
       setAutoLink(s.config.autoLink ?? defaultAutoLink())
       setAutoIndex(s.config.autoIndex ?? true)
+      setWebSearchEnabled(s.config.webSearch?.enabled ?? false)
+      setWebSearchApiKey(s.config.webSearch?.apiKey ?? '')
     } catch (e) {
       toast.error({ title: '加载 AI 状态失败', description: e instanceof Error ? e.message : String(e) })
     }
@@ -176,6 +181,7 @@ export default function AISettingsPanel() {
         autoIndex,
         reranker: reranker?.enabled ? reranker : null,
         autoLink,
+        webSearch: webSearchEnabled ? { enabled: true, apiKey: webSearchApiKey } : undefined,
       })
       setStatus(r.status)
       toast.success({
@@ -640,6 +646,48 @@ export default function AISettingsPanel() {
                   仅同 Notebook
                 </button>
               </div>
+            </FieldRow>
+          </div>
+        )}
+      </Section>
+
+      {/* Section 6: Web Search */}
+      <Section
+        icon={<Globe className="w-4 h-4" />}
+        title="网页搜索（可选）"
+        hint={
+          <>
+            当知识库笔记不足以回答用户问题时，AI 可调用 Brave Search 联网补充信息。
+            搜索结果用 🌐 标注来源 URL，与笔记引用 [n] 区分。
+            <span className="block mt-1 text-muted-foreground/80">
+              需要 <a href="https://brave.com/search/api/" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Brave Search API Key</a>（免费额度 2000 次/月）
+            </span>
+          </>
+        }
+      >
+        <Toggle
+          checked={webSearchEnabled}
+          onChange={setWebSearchEnabled}
+          disabled={!capabilities?.chat}
+          label={
+            capabilities?.chat
+              ? webSearchEnabled ? '启用' : '禁用'
+              : '需先配 Chat'
+          }
+        />
+        {webSearchEnabled && (
+          <div className="mt-3 space-y-3">
+            <FieldRow label="Brave Search API Key">
+              <input
+                type="password"
+                value={webSearchApiKey === KEY_MASK ? '' : webSearchApiKey}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setWebSearchApiKey(v === '' && webSearchApiKey === KEY_MASK ? KEY_MASK : v)
+                }}
+                placeholder={webSearchApiKey === KEY_MASK ? '已保存 Key（留空保持不变）' : 'BSA-...'}
+                className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
+              />
             </FieldRow>
           </div>
         )}
