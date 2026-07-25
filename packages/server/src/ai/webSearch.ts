@@ -21,13 +21,13 @@ export async function searchWeb(query: string, apiKey: string, count = 5): Promi
   const res = await fetch(url, {
     headers: {
       Accept: 'application/json',
-      'Accept-Encoding': 'gzip',
       'X-Subscription-Token': apiKey,
     },
   })
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
+    console.error(`[webSearch] Brave Search ${res.status}:`, text.slice(0, 500))
     throw new Error(`Brave Search ${res.status}: ${text.slice(0, 200)}`)
   }
 
