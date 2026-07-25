@@ -1,66 +1,29 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
-  Edit3,
   Loader2,
-  Eye,
   Pencil,
-  Bold,
-  Italic,
-  Link2,
-  Code,
-  Quote,
-  List,
-  ListOrdered,
-  Heading1,
-  Heading2,
-  Heading3,
-  X,
-  FilePlus2,
-  ImagePlus,
-  RotateCcw,
 } from 'lucide-react'
 import { parseMarkdownToBlocks, inputsToBlockTree, stripTitleFromMarkdown } from '@notefast/core'
 import type { Block } from '@notefast/core'
-import { api, fetchWithAuth } from '../hooks/useAPI'
+import { api } from '../hooks/useAPI'
 import { useToast } from './ui'
 import { relativeTime } from '../lib/time'
+import { useEditorDraft } from '../hooks/useEditorDraft'
+import { useEditorKeyboard } from '../hooks/useEditorKeyboard'
+import { useImageUploader } from '../hooks/useImageUploader'
 import BlockRenderer from './BlockRenderer'
+import EditorToolbar, { ShortcutsHelp } from './editor/EditorToolbar'
+import EditorFooter from './editor/EditorFooter'
 
 interface MarkdownEditorProps {
   docId: string
-  /** 文档标题：加载导出 markdown 时剥离首行重复的 `# {title}`，避免与标题框双重显示 */
   title?: string
   onSaved: () => void
   autoEdit?: boolean
-  /** 内部 editing 状态变化时通知父组件，便于父组件同步隐藏只读视图等 */
   onActiveChange?: (editing: boolean) => void
 }
 
-const DRAFT_PREFIX = 'notefast-draft-'
 const CJK_WORDS_PER_MIN = 320
-
-// ───────────────────────── 持久化草稿 ─────────────────────────
-
-function loadDraft(docId: string): string | null {
-  try { return localStorage.getItem(DRAFT_PREFIX + docId) } catch { return null }
-}
-function saveDraft(docId: string, content: string) {
-  try { localStorage.setItem(DRAFT_PREFIX + docId, content) } catch { /* ignore */ }
-}
-function clearDraft(docId: string) {
-  try { localStorage.removeItem(DRAFT_PREFIX + docId) } catch { /* ignore */ }
-}
-
-function hasDraft(docId: string): boolean {
-  try { return localStorage.getItem(DRAFT_PREFIX + docId) !== null } catch { return false }
-}
-
-// ───────────────────────── Markdown 快捷键识别 ─────────────────────────
-
-/** 行首可识别的 markdown block-trigger 正则 */
-const BLOCK_TRIGGER = /^(\s*)(?:#{1,6}|>|[-+*]\s|\d+\.\s|```)\s$/
-
-// ───────────────────────── 入口 ─────────────────────────
 
 export default function MarkdownEditor({ docId, title, onSaved, autoEdit = false, onActiveChange }: MarkdownEditorProps) {
   const [editing, setEditing] = useState(autoEdit)
@@ -69,12 +32,10 @@ export default function MarkdownEditor({ docId, title, onSaved, autoEdit = false
     onActiveChange?.(editing)
   }, [editing, onActiveChange])
 
-  const handleStartEdit = useCallback(() => setEditing(true), [])
-
   if (!editing) {
     return (
       <button
-        onClick={handleStartEdit}
+        onClick={() => setEditing(true)}
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground bg-card border border-border rounded-md transition-colors"
       >
         <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
@@ -86,12 +47,11 @@ export default function MarkdownEditor({ docId, title, onSaved, autoEdit = false
   return <EditorInline docId={docId} title={title} onSaved={onSaved} onClose={() => setEditing(false)} />
 }
 
-// ───────────────────────── 编辑器主体 ─────────────────────────
-
 type Mode = 'edit' | 'view'
 
 function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title?: string; onSaved: () => void; onClose: () => void }) {
   const toast = useToast()
+  const draft = useEditorDraft(docId)
   const [content, setContent] = useState('')
   const [initialContent, setInitialContent] = useState('')
   const [loadedAt, setLoadedAt] = useState<Date | null>(null)
@@ -100,19 +60,15 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<Mode>('edit')
   const [showHelp, setShowHelp] = useState(false)
-  const [uploadingImage, setUploadingImage] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const imageInputRef = useRef<HTMLInputElement>(null)
 
-  // ───── 加载（草稿优先，否则从服务端拉 markdown）─────
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    const draft = loadDraft(docId)
-    if (draft !== null) {
-      setContent(draft)
-      setInitialContent(draft)
+    const saved = draft.loadDraft()
+    if (saved !== null) {
+      setContent(saved)
+      setInitialContent(saved)
       setDraftedAt(new Date())
       setLoadedAt(new Date())
       setLoading(false)
@@ -121,7 +77,6 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
     api.get<{ markdown: string }>(`/docs/${docId}/export/markdown`)
       .then((r) => {
         if (cancelled) return
-        // 剥离导出时自动 prepend 的 `# {title}`，避免与页面标题框重复
         const raw = r.markdown || ''
         const md = title ? stripTitleFromMarkdown(raw, title) : raw
         setContent(md)
@@ -131,9 +86,8 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
       .catch(() => { if (!cancelled) setContent('') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [docId, title])
+  }, [docId, title, draft])
 
-  // 进入编辑后立刻定位到末尾
   useEffect(() => {
     if (!loading && textareaRef.current) {
       textareaRef.current.focus()
@@ -142,18 +96,16 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
     }
   }, [loading])
 
-  // 自动保存草稿（debounced 600ms）
   useEffect(() => {
     if (!loadedAt) return
     if (content === initialContent) return
     const id = setTimeout(() => {
-      saveDraft(docId, content)
+      draft.saveDraft(content)
       setDraftedAt(new Date())
     }, 600)
     return () => clearTimeout(id)
-  }, [content, docId, initialContent, loadedAt])
+  }, [content, docId, initialContent, loadedAt, draft])
 
-  // textarea 自动增高 — 编辑器随文档流自然延伸，不内部滚动
   useEffect(() => {
     const ta = textareaRef.current
     if (!ta || mode !== 'edit') return
@@ -161,34 +113,6 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
     ta.style.height = `${ta.scrollHeight}px`
   }, [content, mode, loading])
 
-  // ───── 保存 / 取消 ─────
-  const handleSave = useCallback(async () => {
-    if (saving) return
-    setSaving(true)
-    try {
-      await api.put(`/docs/${docId}/markdown`, { markdown: content })
-      setInitialContent(content)
-      clearDraft(docId)
-      onSaved()
-      // 主动保存 = 完成本次编辑 → 回到阅读模式（参考 Notion：写完即回到阅读态）
-      onClose()
-    } catch (e) {
-      // 失败时本地草稿兜底 + 顶部 toast 报错，停留在编辑态继续改
-      saveDraft(docId, content)
-      toast.error({
-        title: '保存失败',
-        description: e instanceof Error ? e.message : String(e),
-      })
-      setSaving(false)
-    }
-  }, [saving, content, docId, onSaved, onClose, toast])
-
-  const handleCancel = useCallback(() => {
-    saveDraft(docId, content)
-    onClose()
-  }, [docId, content, onClose])
-
-  // ───── 工具栏动作：插入到光标位置（textarea-level）─────
   const insertAtCursor = useCallback(
     (text: string, opts?: { cursorOffset?: number; selectStart?: number }) => {
       const ta = textareaRef.current
@@ -236,225 +160,52 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
     [content],
   )
 
-  // ───── 图片上传（AssetStore）─────
-  // 上传成功后在光标处插入 asset:<id> 稳定引用（渲染时解析为 /api/v1/assets/<id>）
-  const uploadImage = useCallback(
-    async (file: File) => {
-      if (!file.type.startsWith('image/') || uploadingImage) return
-      setUploadingImage(true)
-      try {
-        const res = await fetchWithAuth('/assets', {
-          method: 'POST',
-          headers: { 'Content-Type': file.type },
-          body: file,
-        })
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ message: res.statusText }))
-          throw new Error(err.message || `HTTP ${res.status}`)
-        }
-        const data = (await res.json()) as { ref: string }
-        const alt = file.name.replace(/\.[a-z0-9]+$/i, '') || 'image'
-        insertAtCursor(`\n![${alt}](${data.ref})\n`)
-      } catch (e) {
-        toast.error({
-          title: '图片上传失败',
-          description: e instanceof Error ? e.message : String(e),
-        })
-      } finally {
-        setUploadingImage(false)
-      }
-    },
-    [uploadingImage, insertAtCursor, toast],
-  )
+  const handleSave = useCallback(async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      await api.put(`/docs/${docId}/markdown`, { markdown: content })
+      setInitialContent(content)
+      draft.clearDraft()
+      onSaved()
+      onClose()
+    } catch (e) {
+      draft.saveDraft(content)
+      toast.error({
+        title: '保存失败',
+        description: e instanceof Error ? e.message : String(e),
+      })
+      setSaving(false)
+    }
+  }, [saving, content, docId, onSaved, onClose, toast, draft])
 
-  // 粘贴图片（截图/剪贴板文件）
-  const handlePaste = useCallback(
-    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'))
-      if (file) {
-        e.preventDefault()
-        void uploadImage(file)
-      }
-    },
-    [uploadImage],
-  )
+  const handleCancel = useCallback(() => {
+    draft.saveDraft(content)
+    onClose()
+  }, [docId, content, onClose, draft])
 
-  // 拖入图片文件
-  const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLTextAreaElement>) => {
-      const file = Array.from(e.dataTransfer?.files ?? []).find((f) => f.type.startsWith('image/'))
-      if (file) {
-        e.preventDefault()
-        void uploadImage(file)
-      }
-    },
-    [uploadImage],
-  )
+  const imageUploader = useImageUploader({ insertAtCursor })
 
-  // ───── 全局键盘 ─────
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      const ta = e.currentTarget
-      const mod = e.metaKey || e.ctrlKey
+  const { handleKeyDown } = useEditorKeyboard({
+    content,
+    mode,
+    onSave: handleSave,
+    onCancel: handleCancel,
+    onSetMode: setMode,
+    wrapSelection,
+    insertAtCursor,
+    setContent,
+    textareaRef,
+  })
 
-      if (mod && e.key.toLowerCase() === 's') {
-        e.preventDefault()
-        handleSave()
-        return
-      }
-      if (mod && e.key.toLowerCase() === 'p') {
-        e.preventDefault()
-        setMode((m) => (m === 'edit' ? 'view' : 'edit'))
-        return
-      }
-      if (mod && e.shiftKey && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        const sel = content.slice(ta.selectionStart, ta.selectionEnd)
-        const hasSel = sel.length > 0
-        const linkText = hasSel ? sel : 'text'
-        const ins = `[${linkText}](url)`
-        if (hasSel) {
-          wrapSelection('[', `](url)`)
-        } else {
-          insertAtCursor(ins, { cursorOffset: linkText.length + 3 })
-        }
-        return
-      }
-
-      // 块级 markdown shortcut：行末触发
-      if (e.key === 'Enter' && !e.shiftKey) {
-        const { selectionStart, value } = ta
-        if (selectionStart === ta.selectionEnd) {
-          const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1
-          const currentLine = value.slice(lineStart, selectionStart)
-          const m = currentLine.match(BLOCK_TRIGGER)
-          if (m) {
-            e.preventDefault()
-            const prefix = (m[1] ?? '') + (m[2] ?? '')
-            // 但 "```" 特殊：连按 Enter 时退出 code fence
-            if (m[2] === '```' && /^\s*```/.test(value.slice(value.lastIndexOf('\n', selectionStart - 2), lineStart))) {
-              // 上方已开过 ```，让用户退出
-              const exit = value.slice(0, selectionStart) + '\n```\n' + value.slice(selectionStart)
-              setContent(exit)
-              requestAnimationFrame(() => {
-                const pos = selectionStart + 5
-                ta.setSelectionRange(pos, pos)
-              })
-              return
-            }
-            const indentLen = m[1]?.length ?? 0
-            const fullPrefix = m[1] + m[2] + (m[2]?.endsWith(' ') ? '' : ' ')
-            const before = value.slice(0, selectionStart)
-            const after = value.slice(selectionStart)
-            const insert = '\n' + fullPrefix
-            const newPos = selectionStart + insert.length
-            const newValue = before + insert + after
-            setContent(newValue)
-            requestAnimationFrame(() => ta.setSelectionRange(newPos, newPos))
-            void indentLen
-            void prefix
-            return
-          }
-          // 空 list / quote 行按 Enter 直接退出 block
-          const emptyList = /^(\s*)([-+*]|>)\s*$/.exec(currentLine)
-          if (emptyList) {
-            e.preventDefault()
-            const before = value.slice(0, lineStart)
-            const after = value.slice(selectionStart)
-            // 整行删除前缀
-            setContent(before + after)
-            requestAnimationFrame(() => ta.setSelectionRange(lineStart, lineStart))
-            return
-          }
-        }
-      }
-
-      // 智能配对括号 / 引号
-      const PAIRS: Record<string, string> = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'" }
-      const pair = PAIRS[e.key]
-      if (pair) {
-        const { selectionStart, selectionEnd, value } = ta
-        if (selectionStart === selectionEnd) {
-          // 普通括号
-          const next = value[selectionStart]
-          if (next === pair) {
-            // 光标已经在同一个闭合括号上，跳过插入避免重复
-            e.preventDefault()
-            ta.setSelectionRange(selectionStart + 1, selectionStart + 1)
-            return
-          }
-          e.preventDefault()
-          const newValue = value.slice(0, selectionStart) + e.key + pair + value.slice(selectionEnd)
-          setContent(newValue)
-          requestAnimationFrame(() => ta.setSelectionRange(selectionStart + 1, selectionStart + 1))
-          return
-        }
-        // 包裹选中
-        e.preventDefault()
-        const inner = value.slice(selectionStart, selectionEnd)
-        const newValue = value.slice(0, selectionStart) + e.key + inner + pair + value.slice(selectionEnd)
-        setContent(newValue)
-        requestAnimationFrame(() => ta.setSelectionRange(selectionEnd + 2, selectionEnd + 2))
-        return
-      }
-
-      // 退格时若自动配对的括号正成对，紧贴 -> 一并删除
-      if (e.key === 'Backspace' && !mod) {
-        const { selectionStart, selectionEnd, value } = ta
-        if (selectionStart === selectionEnd && selectionStart > 0) {
-          const left = value[selectionStart - 1]
-          const right = value[selectionStart]
-          const PAIRS2: Record<string, string> = { '(': ')', '[': ']', '{': '}' }
-          if (PAIRS2[left] === right) {
-            e.preventDefault()
-            const newValue = value.slice(0, selectionStart - 1) + value.slice(selectionStart + 1)
-            setContent(newValue)
-            requestAnimationFrame(() => ta.setSelectionRange(selectionStart - 1, selectionStart - 1))
-            return
-          }
-        }
-      }
-
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        handleCancel()
-      }
-    },
-    [content, handleSave, handleCancel, wrapSelection, insertAtCursor],
-  )
-
-  // 当按下 ⌘B / ⌘I / ⌘K 之外的修饰键也由 textarea 接收
-  const handleShortcutKey = useCallback(
-    (e: KeyboardEvent) => {
-      const ta = textareaRef.current
-      if (!ta) return
-      const mod = e.metaKey || e.ctrlKey
-      if (!mod) return
-      if (document.activeElement !== ta) return
-      const k = e.key.toLowerCase()
-      if (k === 'b') { e.preventDefault(); wrapSelection('**', '**'); return }
-      if (k === 'i') { e.preventDefault(); wrapSelection('*', '*'); return }
-      if (k === 'e') { e.preventDefault(); wrapSelection('`', '`'); return }
-    },
-    [wrapSelection],
-  )
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleShortcutKey)
-    return () => window.removeEventListener('keydown', handleShortcutKey)
-  }, [handleShortcutKey])
-
-  // ───── 统计指标 ─────
   const lines = content === '' ? 1 : content.split('\n').length
   const charCount = content.length
-  // 估算字数：中英文混合 — 中文按 1 字/词、英文按 5 字符/词
   const cjkCount = (content.match(/[\u4e00-\u9fff]/g) || []).length
   const enCount = content.length - cjkCount
   const words = cjkCount + Math.floor(enCount / 5)
   const readMin = words <= 0 ? 0 : Math.max(1, Math.round(words / CJK_WORDS_PER_MIN))
   const dirty = content !== initialContent
 
-  // 防丢失兜底：有未保存内容时，关闭/刷新页面给原生确认（草稿机制之外的第二道保险）
   useEffect(() => {
     if (!dirty) return
     const handler = (e: BeforeUnloadEvent) => {
@@ -465,8 +216,6 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
     return () => window.removeEventListener('beforeunload', handler)
   }, [dirty])
 
-  // ───── 视图（只读预览）─────
-  // inputsToBlockTree 返回顶层 block 数组；包装为 document 根节点以预览完整文档
   const previewTree: Block | null = mode === 'view' && content
     ? (() => {
         try {
@@ -495,106 +244,23 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
 
   return (
     <div className="animate-fade-in">
-      {/* Toolbar — sticky 于文档列顶部，融入页面而非浮于卡片（实色背景，滚动时正文从下方穿过） */}
-      <div className="sticky top-14 z-10 -mx-8 px-8 mb-2 bg-background">
-        <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1 py-1.5 border-b border-border/60">
-          {/* Block-type group */}
-          <IconBtn title="一级标题 (#)" onClick={() => insertAtCursor('\n# ')}>
-            <Heading1 className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          </IconBtn>
-          <IconBtn title="二级标题 (##)" onClick={() => insertAtCursor('\n## ')}>
-            <Heading2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          </IconBtn>
-          <IconBtn title="三级标题 (###)" onClick={() => insertAtCursor('\n### ')}>
-            <Heading3 className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          </IconBtn>
-          <ToolbarDivider />
-          <IconBtn title="无序列表 (-)" onClick={() => insertAtCursor('\n- ')}>
-            <List className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          </IconBtn>
-          <IconBtn title="有序列表 (1.)" onClick={() => insertAtCursor('\n1. ')}>
-            <ListOrdered className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          </IconBtn>
-          <IconBtn title="引用 (>)" onClick={() => insertAtCursor('\n> ')}>
-            <Quote className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          </IconBtn>
-          <IconBtn title="代码块 (```)" onClick={() => insertAtCursor('\n```\n\n```\n', { cursorOffset: 5 })}>
-            <Code className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          </IconBtn>
-          <ToolbarDivider />
-          {/* Inline format group */}
-          <IconBtn title="加粗 (⌘B)" onClick={() => wrapSelection('**')}>
-            <Bold className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          </IconBtn>
-          <IconBtn title="斜体 (⌘I)" onClick={() => wrapSelection('*')}>
-            <Italic className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          </IconBtn>
-          <IconBtn title="行内代码 (⌘E)" onClick={() => wrapSelection('`')}>
-            <Code className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          </IconBtn>
-          <IconBtn title="链接 (⌘⇧K)" onClick={() => {
-            const sel = content.slice(textareaRef.current?.selectionStart ?? 0, textareaRef.current?.selectionEnd ?? 0)
-            const hasSel = sel.length > 0
-            const linkText = hasSel ? sel : 'text'
-            const ins = `[${linkText}](url)`
-            if (hasSel) wrapSelection('[', `](url)`)
-            else insertAtCursor(ins, { cursorOffset: linkText.length + 3 })
-          }}>
-            <Link2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          </IconBtn>
-          <IconBtn
-            title={uploadingImage ? '上传中…' : '插入图片（也可直接粘贴/拖入）'}
-            onClick={() => imageInputRef.current?.click()}
-          >
-            {uploadingImage ? (
-              <Loader2 className="w-[15px] h-[15px] animate-spin" strokeWidth={1.75} />
-            ) : (
-              <ImagePlus className="w-[15px] h-[15px]" strokeWidth={1.75} />
-            )}
-          </IconBtn>
-          <input
-            ref={imageInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) void uploadImage(f)
-              e.target.value = ''
-            }}
-          />
+      <EditorToolbar
+        mode={mode}
+        onModeToggle={() => setMode((m) => (m === 'edit' ? 'view' : 'edit'))}
+        saving={saving}
+        loading={loading}
+        uploadingImage={imageUploader.uploading}
+        showHelp={showHelp}
+        onToggleHelp={setShowHelp}
+        onSave={handleSave}
+        onCancel={handleCancel}
+        insertAtCursor={insertAtCursor}
+        wrapSelection={wrapSelection}
+        uploadImage={imageUploader.uploadImage}
+        content={content}
+        textareaRef={textareaRef}
+      />
 
-          {/* Right cluster */}
-          <div className="flex items-center gap-1 ml-auto">
-            <IconBtn
-              title={mode === 'view' ? '返回编辑 (⌘P)' : '预览 (⌘P)'}
-              onClick={() => setMode((m) => (m === 'edit' ? 'view' : 'edit'))}
-              active={mode === 'view'}
-            >
-              {mode === 'view' ? <Edit3 className="w-[15px] h-[15px]" strokeWidth={1.75} /> : <Eye className="w-[15px] h-[15px]" strokeWidth={1.75} />}
-            </IconBtn>
-            <IconBtn title="快捷键" onClick={() => setShowHelp((s) => !s)} active={showHelp}>
-              <span className="text-[12px] font-medium leading-none">?</span>
-            </IconBtn>
-            <ToolbarDivider />
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving || loading}
-              title={saving ? '保存中…' : '保存并返回阅读 (⌘S)'}
-              className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border transition-all active:scale-[0.97] disabled:cursor-not-allowed bg-ink text-ink-foreground border-ink shadow-[var(--shadow-btn)] hover:bg-ink-hover hover:border-ink-hover ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
-            >
-              {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-              {saving ? '保存中' : '保存'}
-            </button>
-            <IconBtn title="退出编辑 (Esc)" onClick={handleCancel}>
-              <X className="w-[15px] h-[15px]" strokeWidth={1.75} />
-            </IconBtn>
-          </div>
-        </div>
-      </div>
-
-      {/* Editor body — 与阅读态共享同一文档流宽度 */}
       {loading ? (
         <div className="py-16 flex items-center justify-center text-muted-foreground text-sm">
           <Loader2 className="w-4 h-4 animate-spin mr-2 text-primary" />
@@ -610,7 +276,6 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
         </div>
       ) : (
         <div className="flex items-start">
-          {/* 行号 — 极淡化，无边栏底色，像文本的自然延伸 */}
           <div
             aria-hidden
             className="shrink-0 w-7 pr-3 pt-[7px] text-right font-mono text-[11px] leading-[1.75] text-muted-foreground/35 select-none tabular-nums"
@@ -624,8 +289,8 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            onDrop={handleDrop}
+            onPaste={imageUploader.handlePaste}
+            onDrop={imageUploader.handleDrop}
             onDragOver={(e) => e.preventDefault()}
             spellCheck={false}
             rows={Math.max(lines, 5)}
@@ -635,63 +300,18 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
         </div>
       )}
 
-      {/* Footer — 单行极简状态 */}
-      <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground/70 tabular-nums">
-        <span>
-          {charCount.toLocaleString('zh-CN')} 字 · {lines.toLocaleString('zh-CN')} 行 · 约 {readMin} 分钟
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span
-            className={`w-1.5 h-1.5 rounded-full ${dirty ? 'bg-amber-500' : 'bg-border'}`}
-          />
-          {dirty
-            ? draftedAt
-              ? `未保存 · 草稿 ${relativeTime(draftedAt)}`
-              : '未保存'
-            : '未修改'}
-        </span>
+      <EditorFooter
+        charCount={charCount}
+        lines={lines}
+        readMin={readMin}
+        dirty={dirty}
+        draftedAt={draftedAt}
+        hasDraft={draft.hasDraft()}
+        onClearDraft={() => { draft.clearDraft(); window.location.reload() }}
+        onAppendFile={insertAtCursor}
+        relativeTime={relativeTime}
+      />
 
-        <span className="ml-auto flex items-center gap-1">
-          {hasDraft(docId) && (
-            <button
-              type="button"
-              onClick={() => {
-                clearDraft(docId)
-                window.location.reload()
-              }}
-              title="丢弃本地草稿并重新加载"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-muted-foreground/80 hover:text-destructive transition-colors"
-            >
-              <RotateCcw className="w-3 h-3" strokeWidth={1.75} />
-              丢弃草稿
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            title="追加本地 Markdown 文件 (.md)"
-            aria-label="追加本地 Markdown 文件"
-            className="inline-flex items-center justify-center w-6 h-6 rounded text-muted-foreground/80 hover:text-foreground hover:bg-accent transition-colors"
-          >
-            <FilePlus2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".md,.markdown,.txt"
-            className="hidden"
-            onChange={async (e) => {
-              const file = e.target.files?.[0]
-              if (!file) return
-              const text = await file.text()
-              insertAtCursor('\n\n' + text + '\n\n')
-              e.target.value = ''
-            }}
-          />
-        </span>
-      </div>
-
-      {/* Keyboard help sheet */}
       {showHelp && (
         <div className="mt-3 pt-3 border-t border-border/50 text-[11.5px] text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-1.5">
           <ShortcutsHelp kbd="⌘ S" desc="保存" />
@@ -703,51 +323,6 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
           <ShortcutsHelp kbd="Esc" desc="退出（保留草稿）" />
         </div>
       )}
-    </div>
-  )
-}
-
-// ───────────────────────── 子组件 ─────────────────────────
-
-function IconBtn({
-  children,
-  onClick,
-  title,
-  active,
-}: {
-  children: React.ReactNode
-  onClick: () => void
-  title: string
-  active?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-label={title}
-      className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
-        active
-          ? 'bg-primary/10 text-primary'
-          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-      }`}
-    >
-      {children}
-    </button>
-  )
-}
-
-function ToolbarDivider() {
-  return <span className="w-px h-4 bg-border/80 mx-1.5" />
-}
-
-function ShortcutsHelp({ kbd, desc }: { kbd: string; desc: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <kbd className="font-mono text-[10.5px] px-1.5 py-0.5 border border-border rounded bg-background text-foreground/85 whitespace-nowrap">
-        {kbd}
-      </kbd>
-      <span>{desc}</span>
     </div>
   )
 }
