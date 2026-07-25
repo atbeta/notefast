@@ -141,6 +141,21 @@ function getWriteToolDefinitions(): ToolDefinition[] {
         },
       },
     },
+    {
+      type: 'function',
+      function: {
+        name: 'notefast_update_block',
+        description: '更新已有 block 的内容。block_id 从检索结果的 citation.block_id 获取。当用户要求"修改那段""改成 XX"时调用。',
+        parameters: {
+          type: 'object',
+          properties: {
+            block_id: { type: 'string', description: '目标 block ID（从检索结果的 citation.block_id 获取）' },
+            content: { type: 'string', description: '新内容，Markdown 格式' },
+          },
+          required: ['block_id', 'content'],
+        },
+      },
+    },
   ]
 }
 
@@ -260,6 +275,35 @@ async function executeToolCall(
         block_id: id,
         doc_id: docId,
         message: `已将内容追加到文档 ${docId}（标题截取）`,
+      }),
+      resultCount: 1,
+    }
+  }
+
+  if (name === 'notefast_update_block') {
+    const blockId = typeof args.block_id === 'string' ? args.block_id.trim() : ''
+    const newContent = typeof args.content === 'string' ? args.content : ''
+    if (!blockId || !newContent) {
+      return { content: JSON.stringify({ error: 'block_id 和 content 不能为空' }), resultCount: 0 }
+    }
+    const db = getDb()
+    const row = db.query('SELECT id, root_id FROM blocks WHERE id = ?').get(blockId) as
+      | { id: string; root_id: string } | undefined
+    if (!row) {
+      return { content: JSON.stringify({ error: `Block ${blockId} 不存在` }), resultCount: 0 }
+    }
+    const excluded = loadAiExcludedDocIds([row.root_id])
+    if (excluded.has(row.root_id)) {
+      return { content: JSON.stringify({ error: `Block ${blockId} 所属文档已对 AI 隐藏` }), resultCount: 0 }
+    }
+    db.query(
+      "UPDATE blocks SET content = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?",
+    ).run(newContent, computeContentHash(newContent), blockId)
+    return {
+      content: JSON.stringify({
+        success: true,
+        block_id: blockId,
+        message: `已更新 block ${blockId.slice(0, 8)}`,
       }),
       resultCount: 1,
     }
