@@ -30,6 +30,7 @@ import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { insertDocFromMarkdown } from '../services/docImport'
 import { computeContentHash } from '../services/contentHash'
 import { loadAiExcludedDocIds } from './aiExcludeQuery'
+import { searchWeb } from './webSearch'
 
 export type ChatEvent =
   | { type: 'retrieval'; report: HybridSearchReport }
@@ -160,7 +161,28 @@ function getWriteToolDefinitions(): ToolDefinition[] {
 }
 
 function getAllToolDefinitions(): ToolDefinition[] {
-  return [getSearchToolDefinition(), ...getWriteToolDefinitions()]
+  const tools: ToolDefinition[] = [getSearchToolDefinition(), ...getWriteToolDefinitions()]
+  if (hasRuntime()) {
+    const cfg = getRuntime().status().config
+    if (cfg.webSearch?.enabled && cfg.webSearch.apiKey) {
+      tools.push({
+        type: 'function',
+        function: {
+          name: 'notefast_web_search',
+          description: '搜索互联网获取最新信息。当用户的问题在知识库笔记中找不到答案、需要外部最新资讯时调用。结果来自网络，与笔记引用分开标注。',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: '搜索关键词' },
+              count: { type: 'number', description: '返回条数（1-10），默认 5' },
+            },
+            required: ['query'],
+          },
+        },
+      })
+    }
+  }
+  return tools
 }
 
 /**
@@ -306,6 +328,41 @@ async function executeToolCall(
         message: `已更新 block ${blockId.slice(0, 8)}`,
       }),
       resultCount: 1,
+    }
+  }
+
+  if (name === 'notefast_web_search') {
+    const q = typeof args.query === 'string' ? args.query.trim() : ''
+    if (!q) {
+      return { content: JSON.stringify({ error: 'query 不能为空' }), resultCount: 0 }
+    }
+    if (!hasRuntime()) {
+      return { content: JSON.stringify({ error: 'AI runtime 未初始化' }), resultCount: 0 }
+    }
+    const cfg = getRuntime().status().config
+    if (!cfg.webSearch?.enabled || !cfg.webSearch.apiKey) {
+      return { content: JSON.stringify({ error: '网页搜索未配置，请在 /settings 中设置 Brave Search API Key' }), resultCount: 0 }
+    }
+    const count = typeof args.count === 'number' ? Math.min(10, Math.max(1, args.count)) : 5
+    try {
+      const results = await searchWeb(q, cfg.webSearch.apiKey, count)
+      return {
+        content: JSON.stringify({
+          query: q,
+          results: results.map((r, i) => ({
+            index: i + 1,
+            title: r.title,
+            url: r.url,
+            snippet: r.snippet,
+          })),
+        }),
+        resultCount: results.length,
+      }
+    } catch (e) {
+      return {
+        content: JSON.stringify({ error: `网页搜索失败: ${e instanceof Error ? e.message : e}` }),
+        resultCount: 0,
+      }
     }
   }
 

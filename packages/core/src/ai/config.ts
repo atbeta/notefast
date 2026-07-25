@@ -192,6 +192,13 @@ export interface AiConfig {
   reranker: RerankerDefinition | null
   /** 自动反向链接配置（默认禁用；缺省时按 defaultAutoLinkConfig 处理）*/
   autoLink?: AutoLinkConfig
+  /** 网页搜索配置（用于 chat 中知识库不足时联网补充）*/
+  webSearch?: WebSearchConfig
+}
+
+export interface WebSearchConfig {
+  enabled: boolean
+  apiKey: string
 }
 
 export const DEFAULT_TIMEOUT_MS = 60_000
@@ -441,6 +448,12 @@ export function publicView(cfg: AiConfig): AiConfig {
     next = {
       ...next,
       reranker: { ...cfg.reranker, apiKey: KEY_MASK },
+    }
+  }
+  if (cfg.webSearch?.apiKey) {
+    next = {
+      ...next,
+      webSearch: { ...cfg.webSearch, apiKey: KEY_MASK },
     }
   }
   return next

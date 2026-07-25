@@ -117,6 +117,12 @@ const configSchema = z.object({
       rateLimitPerMinute: z.number().int().min(0).max(600).optional(),
     })
     .optional(),
+  webSearch: z
+    .object({
+      enabled: z.boolean(),
+      apiKey: z.string(),
+    })
+    .optional(),
 })
 
 ai.put(
@@ -140,6 +146,10 @@ ai.put(
     if (reranker) {
       reranker.apiKey = resolveApiKey(reranker.apiKey, current.reranker?.apiKey)
     }
+    const webSearch = body.webSearch ?? null
+    if (webSearch) {
+      webSearch.apiKey = resolveApiKey(webSearch.apiKey, current.webSearch?.apiKey)
+    }
     // autoLink 合并策略：磁盘现有值（含 schema 外的手加字段）→ 默认值兜底 → 请求体覆盖。
     // 防止「在 UI 改别的字段再保存」把配置文件里手加的字段物理抹掉。
     const mergedAutoLink: AiConfig['autoLink'] = {
@@ -154,6 +164,7 @@ ai.put(
       autoIndex: body.autoIndex,
       reranker: reranker && reranker.enabled ? reranker : null,
       autoLink: mergedAutoLink,
+      webSearch: webSearch && webSearch.enabled ? webSearch : undefined,
     }
     // 业务校验（chatModel / embeddingModel 必填等）→ 400
     const errors = validateConfig(cfg)
