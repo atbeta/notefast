@@ -248,11 +248,13 @@ export default function DocPage() {
           <div className="h-14 shrink-0 border-b border-border/50" />
           <div className="flex-1 overflow-hidden">
             <div className="w-full max-w-4xl mx-auto px-8 pt-10 space-y-3">
-              <div className="h-9 bg-secondary rounded w-1/2" />
-              <div className="h-3.5 bg-secondary rounded w-28" />
-              <div className="h-4 bg-secondary rounded w-full mt-8" />
-              <div className="h-4 bg-secondary rounded w-5/6" />
-              <div className="h-4 bg-secondary rounded w-4/6" />
+              <div className="mx-auto max-w-[var(--reading-max-w)] space-y-3">
+                <div className="h-9 bg-secondary rounded w-1/2" />
+                <div className="h-3.5 bg-secondary rounded w-28" />
+                <div className="h-4 bg-secondary rounded w-full mt-8" />
+                <div className="h-4 bg-secondary rounded w-5/6" />
+                <div className="h-4 bg-secondary rounded w-4/6" />
+              </div>
             </div>
           </div>
         </div>
@@ -347,6 +349,8 @@ export default function DocPage() {
                 </Link>
               </div>
             )}
+            {/* 阅读列：标题/meta/tags/正文 走 --reading-max-w；状态横幅保留在外层 max-w-4xl */}
+            <div className="mx-auto max-w-[var(--reading-max-w)]">
             {/* Title — always editable, AI-generate on hover */}
             <div className="group relative">
               <input
@@ -445,6 +449,7 @@ export default function DocPage() {
                  </article>
                </div>
              )}
+           </div>
            </div>
           </div>
         </div>

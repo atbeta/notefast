@@ -145,10 +145,12 @@
     box-shadow: var(--shadow-card);
   }
   .card-interactive {
-    @apply bg-transparent text-card-foreground rounded-card transition-[background-color] duration-150 cursor-pointer;
+    @apply bg-transparent text-card-foreground rounded-card cursor-pointer;
+    transition: background-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
   }
   .card-interactive:hover {
     @apply bg-muted/50;
+    box-shadow: var(--shadow-card-hover);
   }
   .sidebar-link {
     @apply flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] text-sidebar-foreground

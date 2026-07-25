@@ -51,6 +51,9 @@ NoteFast 的视觉只通过 **CSS 变量 token** 定义。所有组件应通过 
 ### 1.6 排版
 字体栈 + Tailwind `text-xs / sm / base / md / lg / xl / 2xl / 3xl / display`，映射到 `--text-*` 变量。`font-serif` 为阅读视图的衬线字体，不要在 UI 控件上用。
 
+### 1.6.1 阅读列宽
+`--reading-max-w`（48rem）— 仅 doc 路由的内层阅读列引用，外层页面容器仍走 `max-w-4xl`。详见 `routes/doc.tsx` 的 `reading-col` 包裹。
+
 ### 1.7 阴影
 | Token | 用处 |
 |---|---|

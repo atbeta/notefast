@@ -160,14 +160,13 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     if (el) el.scrollIntoView({ block: 'nearest' })
   }, [active])
 
-  if (!open) return null
-
   const commandSection = allItems.filter((i) => i.section === 'command')
   const documentSection = allItems.filter((i) => i.section === 'document')
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-start justify-center pt-[12vh] px-4 animate-fade-in"
+      aria-hidden={!open}
+      className={`fixed inset-0 z-[100] flex items-start justify-center pt-[12vh] px-4 transition-opacity duration-[var(--dur)] ease-[var(--ease)] ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       role="dialog"
       aria-modal="true"
       aria-label="命令面板"
@@ -176,7 +175,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-xl bg-popover rounded-2xl border border-border shadow-2xl overflow-hidden">
+      <div className={`relative w-full max-w-xl bg-popover rounded-2xl border border-border shadow-2xl overflow-hidden transition-transform duration-[var(--dur)] ease-[var(--ease)] ${open ? 'translate-y-0 scale-100' : 'translate-y-2 scale-[0.98]'}`}>
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
           <Search className="w-4 h-4 text-muted-foreground shrink-0" />
           <input
