@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.17.0](https://github.com/atbeta/notefast/compare/v0.16.0...v0.17.0) (2026-07-25)
+
+
+### Features
+
+* **ai:** add web search config UI in AI settings panel ([dad96ee](https://github.com/atbeta/notefast/commit/dad96eef29b2c0da4faba473669dc6c41c973001))
+
+
+### Bug Fixes
+
+* **doc:** skip stale-while-revalidate dim on fast doc switches ([80a8d66](https://github.com/atbeta/notefast/commit/80a8d66f7d329e282d6b8452bae331a73a802a78))
+
 ## [0.16.0](https://github.com/atbeta/notefast/compare/v0.15.1...v0.16.0) (2026-07-25)
 
 
