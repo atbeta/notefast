@@ -32,6 +32,11 @@ interface Backlink {
   ref_type: string
 }
 
+/** stale-while-revalidate 降透明的最短延迟：
+ * fetch 在此窗口内完成则永远不显示降透明（避免 LAN 快请求下的幽灵闪烁）。
+ * 经验值：本地/同机房 fetch 通常 20-60ms，留 120ms 留余量。 */
+const STALE_DIM_DELAY = 120
+
 function countWords(doc: Block): number {
   let n = 0
   const walk = (b: Block) => {
@@ -90,11 +95,39 @@ export default function DocPage() {
   const [statusSaving, setStatusSaving] = useState(false)
   const [auxLoading, setAuxLoading] = useState(false)
   const [indexJob, setIndexJob] = useState<IndexJob | null>(null)
+  /** stale-while-revalidate：仅在 fetch 超过 STALE_DIM_DELAY 时才置 true，
+   * 用于让旧内容降透明作 loading 提示；快请求下永远不显示，避免幽灵闪烁 */
+  const [staleShown, setStaleShown] = useState(false)
 
   useEffect(() => {
     if (!id) return
-    setLoading(true); setError(null)
-    api.get<Block>('/docs/' + id).then(setDoc).catch((e) => setError(e.message)).finally(() => setLoading(false))
+    let cancelled = false
+    setError(null)
+    setStaleShown(false)
+    // 切换文档时旧 doc 仍是有效上下文，无需 loading 态；仅首次加载（doc === null）才显示骨架
+    if (doc === null) setLoading(true)
+    const staleTimer = window.setTimeout(() => {
+      if (!cancelled) setStaleShown(true)
+    }, STALE_DIM_DELAY)
+    api
+      .get<Block>('/docs/' + id)
+      .then((d) => {
+        if (!cancelled) setDoc(d)
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message)
+      })
+      .finally(() => {
+        if (!cancelled) {
+          clearTimeout(staleTimer)
+          setStaleShown(false)
+          setLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+      clearTimeout(staleTimer)
+    }
   }, [id, refreshKey])
 
   // 创建/导入后的向量化进度（?index_job=）
@@ -237,8 +270,10 @@ export default function DocPage() {
   const updatedAt = doc ? formatRelative(doc.updated_at, 'long') : ''
   const wordCount = doc ? countWords(doc) : 0
   const isEmpty = wordCount === 0
-  /** 正在显示的是旧文档（A），新文档（B）还在拉取中 —— stale-while-revalidate */
-  const showingStale = doc !== null && doc.id !== id
+  /** 正在显示的是旧文档（A），新文档（B）还在拉取中 —— stale-while-revalidate。
+   * 加 min-delay：fetch 在 STALE_DIM_DELAY 内完成则永远不显示降透明，
+   * 避免 LAN 缓存等快请求下的「闪一下变 40%」幽灵闪烁。 */
+  const showingStale = staleShown && doc !== null && doc.id !== id
 
   // 首屏骨架：结构与正式布局一致（header + 内容列 + 右栏），加载完成后布局零跳动
   if (!doc && loading) {
