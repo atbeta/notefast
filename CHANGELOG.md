@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.16.0](https://github.com/atbeta/notefast/compare/v0.15.1...v0.16.0) (2026-07-25)
+
+
+### Features
+
+* **ai:** AI writing continuation in editor + agent write tools in chat loop ([5b9b725](https://github.com/atbeta/notefast/commit/5b9b725629c5c3f790b6af7ca0500a94d8ad4e32))
+* **ai:** expose notefast_update_block in chat agent loop ([1cccdbc](https://github.com/atbeta/notefast/commit/1cccdbc7aa7e994367c61974a9ff1a6713370f2c))
+* **ai:** web search capability in chat agent loop ([e9dbaca](https://github.com/atbeta/notefast/commit/e9dbaca44673bd57ce79f3503cc8515668eec23b))
+
 ## [0.15.1](https://github.com/atbeta/notefast/compare/v0.15.0...v0.15.1) (2026-07-24)
 
 
