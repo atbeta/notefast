@@ -49,6 +49,7 @@ import { getIndexJob, getLatestIndexJobForDoc } from '../ai/indexJobs'
 import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
 import { loadAiExcludedDocIds } from '../ai/aiExcludeQuery'
 import { runChat, runChatSync } from '../ai/chat'
+import { streamWrite } from '../ai/writeStream'
 import { getDb } from '../db'
 import { runFtsQuery } from '../dbQueries'
 
@@ -586,6 +587,45 @@ ai.post('/suggest-title', zValidator('json', suggestSchema), async (c) => {
   } catch (e) {
     return c.json({ error: 'llm_error', message: eMsg(e) }, 500)
   }
+})
+
+// ───────────────────── write ─────────────────────
+
+const writeSchema = z.object({
+  mode: z.enum(['continue', 'refine', 'translate', 'summarize', 'expand', 'shorten']),
+  content: z.string().min(1).max(100_000),
+  instruction: z.string().max(200).optional(),
+  target_lang: z.string().max(30).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  max_tokens: z.number().int().min(16).max(4096).optional(),
+})
+
+ai.post('/write', zValidator('json', writeSchema), async (c) => {
+  if (!runtimeSafe() || !getRuntime().hasChat()) {
+    return c.json(
+      { error: 'not_configured', message: 'AI chat 未配置', fix_hint: FIX_HINT },
+      400,
+    )
+  }
+  const body = c.req.valid('json')
+  return streamSSE(c, async (sse) => {
+    for await (const ev of streamWrite({
+      mode: body.mode,
+      content: body.content,
+      instruction: body.instruction,
+      targetLang: body.target_lang,
+      temperature: body.temperature,
+      maxTokens: body.max_tokens,
+    })) {
+      if (ev.type === 'token') {
+        await sse.writeSSE({ event: 'token', data: JSON.stringify({ content: ev.content }) })
+      } else if (ev.type === 'done') {
+        await sse.writeSSE({ event: 'done', data: '{}' })
+      } else if (ev.type === 'error') {
+        await sse.writeSSE({ event: 'error', data: JSON.stringify(ev.error) })
+      }
+    }
+  })
 })
 
 // ───────────────────── helpers ─────────────────────

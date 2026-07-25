@@ -33,7 +33,9 @@ const SYSTEM_PROMPT = `你是 NoteFast 的 AI 助手，正在与用户讨论他�
 4. 如果用户问的是方法/步骤，优先引用相关笔记而不是泛泛而谈。没有检索到相关内容时，不要提供"常见做法"或"通用建议"，直接说明未找到。
 5. 用户当前正在查看的文档（如有）具有更高优先级——可以引用但不要假设用户只关心这一个文档。
 6. 若初始检索结果不充分、用户问得更具体、或需要时间维度（"上周写过什么"），调用 notefast_search_more 重新检索，不要硬猜。
-7. 用户问"我有哪些笔记""知识库里有什么"等开放式问题，必须先调 notefast_list_docs 获取列表，不要凭检索片段揣测全貌。`
+7. 用户要求"记下来""保存""新建笔记""创建文档"时，调用 notefast_create_note 写入新笔记。创建后简要告知用户已保存，并提供 doc_id。
+8. 用户要求"加到 XX 笔记里""补充到 XX 文档""追加"时，调用 notefast_append_to_doc。需要准确的 doc_id（从检索结果中的 block.doc_id 获取）。操作完成后告知用户是否成功。
+9. 写操作前先确认：如果用户提到的是模糊名称而非具体 doc_id，先检索找到目标文档再写。不要猜测 doc_id。`
 
 export function buildChatPrompt(input: ChatPromptInput): ChatMessage[] {
   const { messages, citations, currentDocTitle, tools } = input
@@ -72,9 +74,9 @@ function buildContextBlock(citations: Citation[], currentDocTitle?: string): str
 function buildToolsBlock(tools: ToolDefinition[]): string {
   const lines = tools.map((t) => {
     const params = JSON.stringify(t.function.parameters, null, 2)
-    return `- **${t.function.name}**: ${t.function.description}\n  参数 schema:\n  \`\`\`json\n  ${params}\n  \`\`\``
+    return `- **${t.function.name}**: ${t.function.description}\n  参数:\n  \`\`\`json\n  ${params}\n  \`\`\``
   })
-  return `可用工具（必要时调用；最多连续 ${3} 轮）：\n\n${lines.join('\n\n')}\n\n调用方式：返回 \`tool_calls\` 字段，参数用 JSON 对象。每次只调 1~2 个工具，避免噪音。`
+  return `可用工具（必要时调用；最多连续 3 轮）：\n\n${lines.join('\n\n')}\n\n调用方式：返回 tool_calls 字段，参数用 JSON 对象。每次只调 1~2 个工具，避免噪音。写工具执行后不需要二次确认。`
 }
 
 /**

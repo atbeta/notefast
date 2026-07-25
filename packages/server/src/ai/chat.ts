@@ -27,6 +27,9 @@ import { getDb } from '../db'
 import { hybridSearch, type HybridSearchReport } from './hybridSearch'
 import { buildChatPrompt } from './prompt'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
+import { insertDocFromMarkdown } from '../services/docImport'
+import { computeContentHash } from '../services/contentHash'
+import { loadAiExcludedDocIds } from './aiExcludeQuery'
 
 export type ChatEvent =
   | { type: 'retrieval'; report: HybridSearchReport }
@@ -46,6 +49,12 @@ export interface ToolTraceEntry {
   tool: string
   args: Record<string, unknown>
   result_count: number
+  result_text?: string
+}
+
+export interface ToolResult {
+  content: string
+  resultCount: number
 }
 
 export interface RunChatOptions {
@@ -83,7 +92,7 @@ function getSearchToolDefinition(): ToolDefinition {
     function: {
       name: 'notefast_search_more',
       description:
-        '用不同的关键词、缩小范围、加时间窗等条件重新检索知识库。当初始结果不够、用户问得更具体、或需要时间维度（"上周写过什么"）时调用。',
+        '用不同的关键词、缩小范围、加时间窗等条件重新检索知识库。当初始结果不够、用户问得更具体、或需要时间维度（"上次我写过什么"）时调用。',
       parameters: {
         type: 'object',
         properties: {
@@ -98,6 +107,47 @@ function getSearchToolDefinition(): ToolDefinition {
   }
 }
 
+function getWriteToolDefinitions(): ToolDefinition[] {
+  return [
+    {
+      type: 'function',
+      function: {
+        name: 'notefast_create_note',
+        description: '在知识库中创建一篇新笔记。标题必须简洁（5-20字），内容用 Markdown。当用户要求"记下来""保存这段""新建笔记"时调用。',
+        parameters: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: '笔记标题，5-20字' },
+            markdown: { type: 'string', description: '笔记正文，Markdown 格式' },
+            status: { type: 'string', enum: ['note', 'inbox'], description: 'note=正式笔记，inbox=收集箱；默认 note' },
+          },
+          required: ['title', 'markdown'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'notefast_append_to_doc',
+        description: '向已有文档末尾追加一段内容。doc_id 从检索结果中的 block.doc_id 获取。当用户要求"加到那篇笔记里""补充到 XX 文档"时调用。',
+        parameters: {
+          type: 'object',
+          properties: {
+            doc_id: { type: 'string', description: '目标文档 ID（从检索结果或之前的对话中获取）' },
+            content: { type: 'string', description: '要追加的内容，Markdown 格式' },
+            heading: { type: 'string', description: '追加内容前先插入的标题（可选），如"## 补充"' },
+          },
+          required: ['doc_id', 'content'],
+        },
+      },
+    },
+  ]
+}
+
+function getAllToolDefinitions(): ToolDefinition[] {
+  return [getSearchToolDefinition(), ...getWriteToolDefinitions()]
+}
+
 /**
  * 执行 LLM 请求的工具调用。
  * 当前只支持 notefast_search_more；其它工具返回空结果，避免 LLM 调用未实现的工具。
@@ -106,35 +156,122 @@ async function executeToolCall(
   name: string,
   args: Record<string, unknown>,
   fallbackQuery: string,
-  ctx: { notebookId?: string; since?: string; until?: string; minScore?: number },
-): Promise<{ citations: Citation[]; retrieval: HybridSearchReport['retrieval']; resultCount: number }> {
-  if (name !== 'notefast_search_more') {
+  ctx: { notebookId?: string; ctxDocId?: string; since?: string; until?: string; minScore?: number },
+): Promise<ToolResult> {
+  if (name === 'notefast_search_more') {
+    const q = (typeof args.query === 'string' && args.query.trim()) || fallbackQuery
+    const notebookId = (typeof args.notebook_id === 'string' ? args.notebook_id : undefined) || ctx.notebookId
+    const since = (typeof args.since === 'string' ? args.since : undefined) || ctx.since
+    const until = (typeof args.until === 'string' ? args.until : undefined) || ctx.until
+    const limit = typeof args.limit === 'number' ? Math.min(20, Math.max(1, args.limit)) : 5
+
+    const report = await hybridSearch({
+      query: q,
+      notebookId,
+      since,
+      until,
+      topK: limit,
+      minScore: ctx.minScore,
+    })
     return {
-      citations: [],
-      retrieval: {
-        fts_hits: 0,
-        semantic_hits: 0,
-        reranked: false,
-        timing: { fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
-      },
-      resultCount: 0,
+      content: JSON.stringify({
+        citations: report.citations.map((c) => ({
+          block_id: c.block_id,
+          doc_id: c.doc_id,
+          doc_title: c.doc_title,
+          snippet: c.snippet,
+          score: c.score,
+        })),
+        retrieval: report.retrieval,
+      }),
+      resultCount: report.citations.length,
     }
   }
-  const q = (typeof args.query === 'string' && args.query.trim()) || fallbackQuery
-  const notebookId = (typeof args.notebook_id === 'string' ? args.notebook_id : undefined) || ctx.notebookId
-  const since = (typeof args.since === 'string' ? args.since : undefined) || ctx.since
-  const until = (typeof args.until === 'string' ? args.until : undefined) || ctx.until
-  const limit = typeof args.limit === 'number' ? Math.min(20, Math.max(1, args.limit)) : 5
 
-  const report = await hybridSearch({
-    query: q,
-    notebookId,
-    since,
-    until,
-    topK: limit,
-    minScore: ctx.minScore,
-  })
-  return { citations: report.citations, retrieval: report.retrieval, resultCount: report.citations.length }
+  if (name === 'notefast_create_note') {
+    const title = typeof args.title === 'string' ? args.title.trim() : ''
+    const markdown = typeof args.markdown === 'string' ? args.markdown : ''
+    if (!title || !markdown) {
+      return { content: JSON.stringify({ error: 'title 和 markdown 不能为空' }), resultCount: 0 }
+    }
+    const status = args.status === 'inbox' ? 'inbox' : 'note'
+    const db = getDb()
+    const notebookId = ctx.notebookId || guessNotebookId(db)
+    try {
+      const result = insertDocFromMarkdown(db, {
+        notebookId,
+        title,
+        markdown,
+        status,
+      })
+      return {
+        content: JSON.stringify({
+          success: true,
+          doc_id: result.docId,
+          title,
+          block_count: result.parsedCount + 1,
+          status,
+        }),
+        resultCount: 1,
+      }
+    } catch (e) {
+      return {
+        content: JSON.stringify({ error: `创建笔记失败: ${e instanceof Error ? e.message : e}` }),
+        resultCount: 0,
+      }
+    }
+  }
+
+  if (name === 'notefast_append_to_doc') {
+    const docId = typeof args.doc_id === 'string' ? args.doc_id.trim() : ''
+    const content = typeof args.content === 'string' ? args.content : ''
+    if (!docId || !content) {
+      return { content: JSON.stringify({ error: 'doc_id 和 content 不能为空' }), resultCount: 0 }
+    }
+    const db = getDb()
+    const doc = db.query("SELECT id, notebook_id FROM blocks WHERE id = ? AND type = 'document'").get(docId) as
+      | { id: string; notebook_id: string } | undefined
+    if (!doc) {
+      return { content: JSON.stringify({ error: `文档 ${docId} 不存在` }), resultCount: 0 }
+    }
+    const excluded = loadAiExcludedDocIds([docId])
+    if (excluded.has(docId)) {
+      return { content: JSON.stringify({ error: `文档 ${docId} 已对 AI 隐藏` }), resultCount: 0 }
+    }
+
+    const heading = typeof args.heading === 'string' && args.heading.trim()
+    const fullContent = heading ? `${heading}\n\n${content}` : content
+    const id = crypto.randomUUID()
+    const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
+
+    const maxSort = db.query(
+      'SELECT COALESCE(MAX(sort), -1) AS m FROM blocks WHERE parent_id = ?',
+    ).get(docId) as { m: number }
+    const sort = maxSort.m + 1
+
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, sort, level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'paragraph', ?, ?, ?, 1, ?, ?)`,
+    ).run(id, doc.notebook_id, docId, docId, fullContent, computeContentHash(fullContent), sort, now, now)
+
+    return {
+      content: JSON.stringify({
+        success: true,
+        block_id: id,
+        doc_id: docId,
+        message: `已将内容追加到文档 ${docId}（标题截取）`,
+      }),
+      resultCount: 1,
+    }
+  }
+
+  return { content: JSON.stringify({ error: `未知工具 ${name}` }), resultCount: 0 }
+}
+
+function guessNotebookId(db: ReturnType<typeof getDb>): string {
+  const row = db.query("SELECT id FROM notebooks ORDER BY created_at ASC LIMIT 1").get() as
+    | { id: string } | undefined
+  return row?.id ?? 'default'
 }
 
 /** 把流式 chunk 经 Think 标签拆分后 yield 为 reasoning / token 事件 */
@@ -243,7 +380,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
     messages: opts.messages,
     citations: initialReport.citations,
     currentDocTitle,
-    tools: enableTools ? [getSearchToolDefinition()] : undefined,
+    tools: enableTools ? getAllToolDefinitions() : undefined,
   })
 
   yield { type: 'retrieval', report: initialReport }
@@ -264,7 +401,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
             runtime.streamChatWithTools(workingMessages, {
               temperature: opts.temperature ?? 0.3,
               maxTokens: opts.maxTokens ?? 2000,
-              tools: [getSearchToolDefinition()],
+              tools: getAllToolDefinitions(),
             }),
           )
           let next = await gen.next()
@@ -292,7 +429,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
               const result = await runtime.chatWithTools(workingMessages, {
                 temperature: opts.temperature ?? 0.3,
                 maxTokens: opts.maxTokens ?? 2000,
-                tools: [getSearchToolDefinition()],
+                tools: getAllToolDefinitions(),
               })
               if (result && result.tool_calls.length > 0 && round < maxRounds) {
                 toolCalls = result.tool_calls
@@ -332,6 +469,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
           for (const tc of toolCalls) {
             const exec = await executeToolCall(tc.name, tc.args, lastUser.content, {
               notebookId: opts.notebookId,
+              ctxDocId: opts.contextDocId,
               since: opts.since,
               until: opts.until,
               minScore: opts.minScore,
@@ -340,6 +478,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
               tool: tc.name,
               args: tc.args,
               result_count: exec.resultCount,
+              result_text: exec.content,
             })
             yield {
               type: 'tool',
@@ -350,21 +489,18 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
             workingMessages.push({
               role: 'tool',
               tool_call_id: tc.id,
-              content: JSON.stringify({
-                citations: exec.citations.map((c) => ({
-                  block_id: c.block_id,
-                  doc_id: c.doc_id,
-                  doc_title: c.doc_title,
-                  snippet: c.snippet,
-                  score: c.score,
-                })),
-                retrieval: exec.retrieval,
-              }),
+              content: exec.content,
             })
 
-            if (exec.citations.length > 0) {
-              finalCitations = exec.citations
-              finalRetrieval = exec.retrieval
+            // 搜索工具的命中结果更新 citations（用于最终返回）
+            if (tc.name === 'notefast_search_more') {
+              try {
+                const parsed = JSON.parse(exec.content)
+                if (parsed.citations?.length > 0) {
+                  finalCitations = parsed.citations
+                  finalRetrieval = parsed.retrieval ?? finalRetrieval
+                }
+              } catch { /* ignore parse failure */ }
             }
           }
           continue

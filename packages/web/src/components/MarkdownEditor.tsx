@@ -14,6 +14,8 @@ import { useImageUploader } from '../hooks/useImageUploader'
 import BlockRenderer from './BlockRenderer'
 import EditorToolbar, { ShortcutsHelp } from './editor/EditorToolbar'
 import EditorFooter from './editor/EditorFooter'
+import AiGhostOverlay from './editor/AiGhostOverlay'
+import { useAiWriting } from '../ai/useAiWriting'
 
 interface MarkdownEditorProps {
   docId: string
@@ -60,7 +62,10 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<Mode>('edit')
   const [showHelp, setShowHelp] = useState(false)
+  const [ghostText, setGhostText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const aiWriting = useAiWriting()
 
   useEffect(() => {
     let cancelled = false
@@ -186,6 +191,19 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
 
   const imageUploader = useImageUploader({ insertAtCursor })
 
+  const handleAiContinue = useCallback(() => {
+    if (aiWriting.isStreaming) return
+    let accumulated = ''
+    void aiWriting.streamContinue(content, {
+      onToken: (token) => {
+        accumulated += token
+        setGhostText(accumulated)
+      },
+    }).catch(() => {
+      setGhostText('')
+    })
+  }, [content, aiWriting])
+
   const { handleKeyDown } = useEditorKeyboard({
     content,
     mode,
@@ -196,7 +214,33 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
     insertAtCursor,
     setContent,
     textareaRef,
+    onAiContinue: handleAiContinue,
   })
+
+  const handleKeyDownWithGhost = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (ghostText) {
+        if (e.key === 'Tab') {
+          e.preventDefault()
+          insertAtCursor(ghostText)
+          setGhostText('')
+          return
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          aiWriting.cancel()
+          setGhostText('')
+          return
+        }
+        if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete' || (e.key === 'Enter' && !e.metaKey && !e.ctrlKey)) {
+          aiWriting.cancel()
+          setGhostText('')
+        }
+      }
+      handleKeyDown(e)
+    },
+    [ghostText, handleKeyDown, insertAtCursor, aiWriting],
+  )
 
   const lines = content === '' ? 1 : content.split('\n').length
   const charCount = content.length
@@ -275,7 +319,7 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
           )}
         </div>
       ) : (
-        <div className="flex items-start">
+        <div className="flex items-start relative">
           <div
             aria-hidden
             className="shrink-0 w-7 pr-3 pt-[7px] text-right font-mono text-[11px] leading-[1.75] text-muted-foreground/35 select-none tabular-nums"
@@ -288,7 +332,7 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
             ref={textareaRef}
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onKeyDown={handleKeyDownWithGhost}
             onPaste={imageUploader.handlePaste}
             onDrop={imageUploader.handleDrop}
             onDragOver={(e) => e.preventDefault()}
@@ -296,6 +340,12 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
             rows={Math.max(lines, 5)}
             className="flex-1 min-w-0 pt-[7px] pb-16 font-mono text-[14px] leading-[1.75] text-foreground bg-transparent resize-none overflow-hidden focus:outline-none placeholder:text-muted-foreground/40 selection:bg-primary/15"
             placeholder="开始写…（⌘B 加粗 / ⌘I 斜体 / # 标题 / - 列表；⌘P 预览；⌘S 保存）"
+          />
+          <AiGhostOverlay
+            textareaRef={textareaRef}
+            content={content}
+            ghostText={ghostText}
+            visible={!!ghostText}
           />
         </div>
       )}
@@ -318,6 +368,7 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
           <ShortcutsHelp kbd="⌘ P" desc="切换 预览 / 编辑" />
           <ShortcutsHelp kbd="⌘ B / I / E" desc="加粗 / 斜体 / 行内代码" />
           <ShortcutsHelp kbd="⌘⇧ K" desc="插入链接" />
+          <ShortcutsHelp kbd="⌘ Enter" desc="AI 续写（需配置 AI）" />
           <ShortcutsHelp kbd="# Enter" desc="自动加 heading 触发器" />
           <ShortcutsHelp kbd="- Enter" desc="自动加 list 触发器" />
           <ShortcutsHelp kbd="Esc" desc="退出（保留草稿）" />

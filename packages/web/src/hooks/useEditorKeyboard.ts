@@ -12,6 +12,7 @@ interface EditorKeyboardOpts {
   insertAtCursor: (text: string, opts?: { cursorOffset?: number; selectStart?: number }) => void
   setContent: (text: string) => void
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
+  onAiContinue?: () => void
 }
 
 export function useEditorKeyboard({
@@ -24,6 +25,7 @@ export function useEditorKeyboard({
   insertAtCursor,
   setContent,
   textareaRef,
+  onAiContinue,
 }: EditorKeyboardOpts) {
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -38,6 +40,11 @@ export function useEditorKeyboard({
       if (mod && e.key.toLowerCase() === 'p') {
         e.preventDefault()
         onSetMode((m) => (m === 'edit' ? 'view' : 'edit'))
+        return
+      }
+      if (mod && e.key === 'Enter' && onAiContinue) {
+        e.preventDefault()
+        onAiContinue()
         return
       }
       if (mod && e.shiftKey && e.key.toLowerCase() === 'k') {
@@ -139,7 +146,7 @@ export function useEditorKeyboard({
         onCancel()
       }
     },
-    [content, mode, onSave, onCancel, onSetMode, wrapSelection, insertAtCursor, setContent],
+    [content, mode, onSave, onCancel, onSetMode, wrapSelection, insertAtCursor, setContent, onAiContinue],
   )
 
   const handleShortcutKey = useCallback(
