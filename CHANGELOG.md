@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.18.0](https://github.com/atbeta/notefast/compare/v0.17.2...v0.18.0) (2026-07-26)
+
+
+### Features
+
+* **server,web:** archived doc status with retrieval soft-exclusion ([aff2147](https://github.com/atbeta/notefast/commit/aff214767580251d8420c4f2b4399c598f31ef5c))
+* **server,web:** push doc changes over SSE for instant list refresh ([7dbe3f4](https://github.com/atbeta/notefast/commit/7dbe3f43a102b9c8e675c43c850236fd95bea607))
+
+
+### Bug Fixes
+
+* **ai:** parse appended markdown into structured blocks in notefast_append_to_doc ([d83206a](https://github.com/atbeta/notefast/commit/d83206a8d53c9e28475a6f53cbd03a99d71d8e71))
+* **api:** preserve block properties on PUT /docs/:id/markdown ([87148f1](https://github.com/atbeta/notefast/commit/87148f188e39ae553d57fd3050ca6dce98d5c461))
+* **server,web:** rebuild vectors asynchronously when restoring AI visibility ([8029e57](https://github.com/atbeta/notefast/commit/8029e576c98419fd15a38e5135926f3dc1b0547d))
+* **web:** chat panel polish — empty bubble while thinking, retrieval footer labels ([003dd08](https://github.com/atbeta/notefast/commit/003dd085e393a4b2df61b0c80f2d50c4d1e244ae))
+* **web:** keep settings button pinned to bottom in collapsed sidebar ([a8e8ad7](https://github.com/atbeta/notefast/commit/a8e8ad79fc574f51d16b10800ef569e6cf61fbd5))
+
 ## [0.17.2](https://github.com/atbeta/notefast/compare/v0.17.1...v0.17.2) (2026-07-26)
 
 
