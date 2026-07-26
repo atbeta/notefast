@@ -300,6 +300,19 @@ const x = 1
     const headings = body.doc.children.filter((c: { type: string }) => c.type === 'heading')
     expect(headings.length).toBe(1)
     expect(headings[0].content).toBe('新章节')
+
+    // properties 必须随保存入库（headingLevel / language），否则标题层级与代码高亮/mermaid 渲染退化
+    expect(headings[0].properties.headingLevel).toBe(2)
+    const codes = body.doc.children.filter((c: { type: string }) => c.type === 'code')
+    expect(codes.length).toBe(1)
+    expect(codes[0].properties.language).toBe('js')
+
+    // 再 GET 一次确认是持久化后的值，而非仅响应内组装
+    const { body: fetched } = await api('GET', `/api/v1/docs/${doc.id}`)
+    const fetchedHeading = fetched.children.find((c: { type: string }) => c.type === 'heading')
+    expect(fetchedHeading.properties.headingLevel).toBe(2)
+    const fetchedCode = fetched.children.find((c: { type: string }) => c.type === 'code')
+    expect(fetchedCode.properties.language).toBe('js')
   })
 
   test('PUT /api/v1/docs/:id/markdown 缺少 markdown 返回 400', async () => {

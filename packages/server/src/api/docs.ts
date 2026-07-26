@@ -5,7 +5,7 @@ import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, pa
 import type { BlockRow, DocSummary } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks, fetchSubtreeBlocks } from '../dbQueries'
-import { insertDocFromMarkdown } from '../services/docImport'
+import { insertDocFromMarkdown, insertChildBlocks } from '../services/docImport'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { writeDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
@@ -312,31 +312,17 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
     db.query("UPDATE blocks SET content = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?").run(newTitle, computeContentHash(newTitle), id)
 
     const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
-    const idMap = new Map<string, string>()
-
-    for (let i = 0; i < inputs.length; i++) {
-      const inp = inputs[i]
-      const blockId = crypto.randomUUID()
-      if (inp.id) idMap.set(inp.id, blockId)
-      const parentId = inp.parent_id ? (idMap.get(inp.parent_id) ?? id) : id
-
-      db.query(
-        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, '{}', '[]', 'note', 0, ?, 1, ?, ?)`,
-      ).run(
-        blockId,
-        docRow.notebook_id,
-        parentId,
-        id,
-        inp.type,
-        inp.content ?? '',
-        computeContentHash(inp.content ?? ''),
-        i,
+    // 与 insertDocFromMarkdown / appendMarkdownToDoc 共用插入逻辑：
+    // properties（headingLevel/language 等）与嵌套 level 不再丢失
+    insertedIds.push(
+      ...insertChildBlocks(db, {
+        notebookId: docRow.notebook_id,
+        rootId: id,
+        inputs,
+        sortOffset: 0,
         now,
-        now,
-      )
-      insertedIds.push(blockId)
-    }
+      }),
+    )
   })()
 
   // Hook 触发（fire-and-forget）：删旧 → 文档级索引作业 → 增新 hooks → 更 doc
