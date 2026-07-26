@@ -259,6 +259,55 @@ export class AiRuntime {
     return Boolean(this.rerankerProvider)
   }
 
+  /** 图片理解是否可用：chat 已配置且用户在设置中显式开启 */
+  hasVision(): boolean {
+    return Boolean(this.chatProvider) && this.cfg.vision?.enabled === true
+  }
+
+  /**
+   * 为图片生成文字描述（非流式，内部组装 OpenAI 多模态消息）。
+   * 供索引时 caption 与聊天图片理解共用；chat 未配置时抛错。
+   * 返回空串表示模型未给出描述（调用方按无 caption 降级）。
+   */
+  async describeImage(
+    imageBase64: string,
+    mime: string,
+    opts?: { prompt?: string; maxTokens?: number },
+  ): Promise<string> {
+    const p = this.cfg.chat
+    if (!p) throw new Error('AI chat is not configured')
+    const url = joinUrl(p.baseUrl, '/chat/completions')
+    const headers = buildHeaders(p.apiKey, p.extraHeaders)
+    return this.track('chat', async () => {
+      const json = await postJson<{ choices?: Array<{ message?: { content?: string | null } }> }>(
+        this.fetchImpl,
+        url,
+        headers,
+        {
+          model: p.chatModel.trim(),
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text:
+                    opts?.prompt ??
+                    '用 2-4 句话客观描述这张图片的内容，涵盖图中的文字（如有）、主要对象与用途。这段描述将用于知识库的检索索引，请使用与图片内容相同的语言。',
+                },
+                { type: 'image_url', image_url: { url: `data:${mime};base64,${imageBase64}` } },
+              ],
+            },
+          ],
+          temperature: 0.2,
+          max_tokens: opts?.maxTokens ?? 300,
+        },
+        { timeoutMs: p.timeoutMs, errorLabel: 'Vision API' },
+      )
+      return (json.choices?.[0]?.message?.content ?? '').trim()
+    })
+  }
+
   /** 替换 fetch 实现（测试和自定义代理场景使用） */
   setFetchImpl(impl: typeof fetch): void {
     this.fetchImpl = impl

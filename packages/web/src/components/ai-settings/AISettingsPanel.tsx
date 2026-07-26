@@ -94,6 +94,7 @@ export default function AISettingsPanel() {
   const [autoLink, setAutoLink] = useState<AutoLinkConfig>(defaultAutoLink())
   const [webSearchEnabled, setWebSearchEnabled] = useState(false)
   const [webSearchApiKey, setWebSearchApiKey] = useState('')
+  const [visionEnabled, setVisionEnabled] = useState(false)
 
   const [showKey, setShowKey] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -120,6 +121,7 @@ export default function AISettingsPanel() {
       setAutoIndex(s.config.autoIndex ?? true)
       setWebSearchEnabled(s.config.webSearch?.enabled ?? false)
       setWebSearchApiKey(s.config.webSearch?.apiKey ?? '')
+      setVisionEnabled(s.config.vision?.enabled ?? false)
     } catch (e) {
       toast.error({ title: '加载 AI 状态失败', description: e instanceof Error ? e.message : String(e) })
     }
@@ -182,6 +184,7 @@ export default function AISettingsPanel() {
         reranker: reranker?.enabled ? reranker : null,
         autoLink,
         webSearch: webSearchEnabled ? { enabled: true, apiKey: webSearchApiKey } : undefined,
+        vision: visionEnabled ? { enabled: true } : undefined,
       })
       setStatus(r.status)
       toast.success({
@@ -424,6 +427,21 @@ export default function AISettingsPanel() {
               : '需先配 Embedding'
           }
         />
+        <div className="mt-3 pt-3 border-t border-border/50">
+          <Toggle
+            checked={visionEnabled}
+            onChange={setVisionEnabled}
+            disabled={!capabilities?.chat}
+            label={
+              capabilities?.chat
+                ? visionEnabled ? '图片理解 · 开启' : '图片理解 · 关闭'
+                : '图片理解 · 需先配 Chat'
+            }
+          />
+          <p className="mt-1.5 text-[12px] text-muted-foreground/80 leading-relaxed">
+            开启后，索引时为文档中的图片生成文字描述并纳入语义检索（每张图片一次视觉模型调用，图片内容会发送给你的 AI Provider）
+          </p>
+        </div>
         {status?.vectorStore && (
           <div className="mt-3 rounded-md border border-border/70 bg-muted/20 px-3 py-2.5 space-y-2 text-[12.5px]">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

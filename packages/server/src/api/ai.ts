@@ -124,6 +124,11 @@ const configSchema = z.object({
       apiKey: z.string(),
     })
     .optional(),
+  vision: z
+    .object({
+      enabled: z.boolean(),
+    })
+    .optional(),
 })
 
 ai.put(
@@ -166,6 +171,7 @@ ai.put(
       reranker: reranker && reranker.enabled ? reranker : null,
       autoLink: mergedAutoLink,
       webSearch: webSearch && webSearch.enabled ? webSearch : undefined,
+      vision: body.vision?.enabled ? { enabled: true } : undefined,
     }
     // 业务校验（chatModel / embeddingModel 必填等）→ 400
     const errors = validateConfig(cfg)

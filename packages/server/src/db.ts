@@ -51,6 +51,7 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
  * 顺序 migration：以 PRAGMA user_version 为权威。
  * v0 → v1：基线（当前 SCHEMA_SQL）
  * v1 → v2：已应用的 AutoLink 建议补齐 review_status=accepted（此前只改 action_status）
+ * v2 → v3：新增 asset_captions 表（图片理解的 caption 缓存）
  */
 function applySchemaMigrations(database: Database): void {
   const current = getSchemaVersion(database)
@@ -73,6 +74,17 @@ function applySchemaMigrations(database: Database): void {
         AND review_status = 'unreviewed'
     `)
     database.exec(`PRAGMA user_version = 2`)
+  }
+  if (getSchemaVersion(database) < 3) {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS asset_captions (
+        id          TEXT PRIMARY KEY,
+        caption     TEXT NOT NULL,
+        model       TEXT NOT NULL,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
+    database.exec(`PRAGMA user_version = 3`)
   }
 }
 

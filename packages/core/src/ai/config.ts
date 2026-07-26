@@ -194,6 +194,12 @@ export interface AiConfig {
   autoLink?: AutoLinkConfig
   /** 网页搜索配置（用于 chat 中知识库不足时联网补充）*/
   webSearch?: WebSearchConfig
+  /** 图片理解：索引时用 chat 模型为图片生成描述并纳入向量检索（会产生额外 API 调用，默认关）*/
+  vision?: VisionConfig
+}
+
+export interface VisionConfig {
+  enabled: boolean
 }
 
 export interface WebSearchConfig {

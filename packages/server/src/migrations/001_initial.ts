@@ -171,6 +171,14 @@ export function up(db: Database): void {
       created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- 图片理解：asset sha256 → 视觉模型生成的描述（供向量索引拼接；模型变化后重索引自然刷新）
+    CREATE TABLE IF NOT EXISTS asset_captions (
+      id          TEXT PRIMARY KEY,
+      caption     TEXT NOT NULL,
+      model       TEXT NOT NULL,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS entity_changes (
       id               INTEGER PRIMARY KEY AUTOINCREMENT,
       entity_name      TEXT NOT NULL,

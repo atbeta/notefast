@@ -19,6 +19,7 @@ import {
 } from './vectorStore'
 import { SqliteVecVectorStore } from './vectorStoreVec'
 import { isBlockAiExcluded, loadAiExcludedDocIds, loadInboxDocIds, loadArchivedDocIds } from './aiExcludeQuery'
+import { indexedTextWithCaptions } from './imageCaptions'
 
 export type IndexBlockResult = 'indexed' | 'skipped' | 'deleted' | 'error' | 'noop'
 
@@ -65,20 +66,21 @@ export async function indexBlock(blockId: string): Promise<IndexBlockResult> {
   const row = db.query('SELECT * FROM blocks WHERE id = ?').get(blockId) as BlockRow | undefined
   if (!row) return 'noop'
 
-  const text = (row.content || '').trim()
+  // 图片理解开启时，索引文本 = 原文 + 图片 caption（hash/freshness 均以此为准）
+  const text = await indexedTextWithCaptions(row.content || '')
   if (!text) {
     await deleteVector(blockId)
     return 'deleted'
   }
 
-  if (hasFreshVector(blockId, row.content)) {
+  if (hasFreshVector(blockId, text)) {
     return 'skipped'
   }
 
   try {
     const vectors = await r.embedBatch([text])
     if (vectors.length > 0 && vectors[0]) {
-      await upsertVector(blockId, vectors[0], row.content)
+      await upsertVector(blockId, vectors[0], text)
       return 'indexed'
     }
     return 'error'
@@ -113,7 +115,8 @@ export async function indexBlockBatch(
       | { id: string; content: string }
       | undefined
     if (!row) continue
-    const text = (row.content || '').trim()
+    // 与 indexBlock 一致：索引文本含图片 caption（视觉启用时）
+    const text = await indexedTextWithCaptions(row.content || '')
     if (!text) {
       try {
         await deleteVector(id)
@@ -122,18 +125,18 @@ export async function indexBlockBatch(
       }
       continue
     }
-    if (hasFreshVector(id, row.content)) {
+    if (hasFreshVector(id, text)) {
       skipped++
       continue
     }
-    toEmbed.push({ id: row.id, content: row.content })
+    toEmbed.push({ id: row.id, content: text })
   }
 
   if (toEmbed.length === 0) return { indexed: 0, skipped, errors }
 
   let indexed = 0
   try {
-    const vectors = await r.embedBatch(toEmbed.map((b) => b.content.trim()))
+    const vectors = await r.embedBatch(toEmbed.map((b) => b.content))
     for (let j = 0; j < toEmbed.length; j++) {
       const vec = vectors[j]
       if (!vec) {
