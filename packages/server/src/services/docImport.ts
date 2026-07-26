@@ -58,6 +58,89 @@ export function insertDocFromMarkdown(
   const docStatus = opts.status === 'inbox' ? 'inbox' : 'note'
   const docId = crypto.randomUUID()
   const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
+
+  let blockIds: string[] = []
+  db.transaction(() => {
+    // 安全网：PRAGMA 作用域限本事务，提交时检查 FK，避免 immediate 阶段炸开
+    db.run('PRAGMA defer_foreign_keys = ON')
+
+    const initialTags = opts.tags?.length ? JSON.stringify(opts.tags) : '[]'
+
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', ?, ?, '{}', ?, ?, 0, 0, 0, ?, ?)`,
+    ).run(docId, opts.notebookId, docId, opts.title, computeContentHash(opts.title), initialTags, docStatus, now, now)
+
+    blockIds = insertChildBlocks(db, {
+      notebookId: opts.notebookId,
+      rootId: docId,
+      inputs,
+      sortOffset: 0,
+      now,
+    })
+  })()
+
+  return { docId, blockIds, parsedCount: inputs.length }
+}
+
+export interface AppendMarkdownToDocOptions {
+  docId: string
+  notebookId: string
+  markdown: string
+}
+
+export interface AppendMarkdownToDocResult {
+  /** 实际入库的 block id（顺序 = 插入顺序） */
+  blockIds: string[]
+  /** 解析入库的 block 数量（= blockIds.length） */
+  parsedCount: number
+}
+
+/**
+ * 向已有文档末尾追加 Markdown（解析为结构化 block 树入库）。
+ *
+ * 与 insertDocFromMarkdown 的区别：
+ * - 不新建 document 根、不做 stripTitleHeading（追加内容的标题是用户显式写的）
+ * - 顶层块 sort 接在当前最大 sort 之后，嵌套块沿解析顺序递增
+ */
+export function appendMarkdownToDoc(
+  db: Db,
+  opts: AppendMarkdownToDocOptions,
+): AppendMarkdownToDocResult {
+  const inputs = parseMarkdownToBlocks(opts.markdown, opts.notebookId)
+
+  const maxSort = db
+    .query('SELECT COALESCE(MAX(sort), -1) AS m FROM blocks WHERE parent_id = ? AND is_deleted = 0')
+    .get(opts.docId) as { m: number }
+  const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
+
+  let blockIds: string[] = []
+  db.transaction(() => {
+    db.run('PRAGMA defer_foreign_keys = ON')
+    blockIds = insertChildBlocks(db, {
+      notebookId: opts.notebookId,
+      rootId: opts.docId,
+      inputs,
+      sortOffset: maxSort.m + 1,
+      now,
+    })
+  })()
+
+  return { blockIds, parsedCount: inputs.length }
+}
+
+export interface InsertChildBlocksOptions {
+  notebookId: string
+  /** 文档根 block id（顶层块的 parent_id / 全部块的 root_id） */
+  rootId: string
+  inputs: CreateBlockInput[]
+  /** 起始 sort（追加场景接在当前最大 sort 之后） */
+  sortOffset: number
+  now: string
+}
+
+/** 把解析出的 block 树插入为 rootId 的子块，返回实际入库的 block id（插入顺序） */
+export function insertChildBlocks(db: Db, opts: InsertChildBlocksOptions): string[] {
   const blockIds: string[] = []
 
   // inp.id → 实际 blockId 映射表；父对子的引用必须走这条映射。
@@ -66,7 +149,7 @@ export function insertDocFromMarkdown(
   const idMap = new Map<string, string>()
   // 临时 id → input，用于沿父链计算真实 level
   const byTempId = new Map<string, CreateBlockInput>()
-  for (const inp of inputs) {
+  for (const inp of opts.inputs) {
     if (inp.id) byTempId.set(inp.id, inp)
   }
   const levelOf = (inp: CreateBlockInput): number => {
@@ -82,46 +165,34 @@ export function insertDocFromMarkdown(
     return level
   }
 
-  db.transaction(() => {
-    // 安全网：PRAGMA 作用域限本事务，提交时检查 FK，避免 immediate 阶段炸开
-    db.run('PRAGMA defer_foreign_keys = ON')
-
-    const initialTags = opts.tags?.length ? JSON.stringify(opts.tags) : '[]'
+  for (let i = 0; i < opts.inputs.length; i++) {
+    const inp = opts.inputs[i]
+    const blockId = crypto.randomUUID()
+    if (inp.id) idMap.set(inp.id, blockId)
+    // 父链映射：从临时 id 翻译成已经 INSERT 的实际 id
+    const parentId = inp.parent_id
+      ? (idMap.get(inp.parent_id) ?? opts.rootId)
+      : opts.rootId
 
     db.query(
       `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
-       VALUES (?, ?, NULL, ?, 'document', ?, ?, '{}', ?, ?, 0, 0, 0, ?, ?)`,
-    ).run(docId, opts.notebookId, docId, opts.title, computeContentHash(opts.title), initialTags, docStatus, now, now)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', 'note', 0, ?, ?, ?, ?)`,
+    ).run(
+      blockId,
+      opts.notebookId,
+      parentId as string,
+      opts.rootId,
+      inp.type,
+      inp.content ?? '',
+      computeContentHash(inp.content ?? ''),
+      JSON.stringify(inp.properties || {}),
+      opts.sortOffset + i,
+      levelOf(inp),
+      opts.now,
+      opts.now,
+    )
+    blockIds.push(blockId)
+  }
 
-    for (let i = 0; i < inputs.length; i++) {
-      const inp = inputs[i]
-      const blockId = crypto.randomUUID()
-      if (inp.id) idMap.set(inp.id, blockId)
-      // 父链映射：从临时 id 翻译成已经 INSERT 的实际 id
-      const parentId = inp.parent_id
-        ? (idMap.get(inp.parent_id) ?? docId)
-        : docId
-
-      db.query(
-        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', 'note', 0, ?, ?, ?, ?)`,
-      ).run(
-        blockId,
-        opts.notebookId,
-        parentId as string,
-        docId,
-        inp.type,
-        inp.content ?? '',
-        computeContentHash(inp.content ?? ''),
-        JSON.stringify(inp.properties || {}),
-        i,
-        levelOf(inp),
-        now,
-        now,
-      )
-      blockIds.push(blockId)
-    }
-  })()
-
-  return { docId, blockIds, parsedCount: inputs.length }
+  return blockIds
 }

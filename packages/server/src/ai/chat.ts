@@ -20,15 +20,17 @@
  *     c. 否则 → 答案已在流中发出
  */
 
-import type { ChatMessage, ToolCall, ToolDefinition } from '@notefast/core'
-import { ThinkStreamParser, splitThinkContent } from '@notefast/core'
+import type { ChatMessage, ToolCall, ToolDefinition, BlockRow } from '@notefast/core'
+import { ThinkStreamParser, splitThinkContent, rowToBlock } from '@notefast/core'
 import type { Citation } from './hybridSearch'
 import { getDb } from '../db'
 import { hybridSearch, type HybridSearchReport } from './hybridSearch'
 import { buildChatPrompt } from './prompt'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
-import { insertDocFromMarkdown } from '../services/docImport'
+import { insertDocFromMarkdown, appendMarkdownToDoc } from '../services/docImport'
 import { computeContentHash } from '../services/contentHash'
+import { fireAfterCreateMany, fireAfterUpdate } from '../services/hooks'
+import { scheduleDocIndex } from './indexJobs'
 import { loadAiExcludedDocIds } from './aiExcludeQuery'
 import { searchWeb } from './webSearch'
 
@@ -275,25 +277,38 @@ async function executeToolCall(
 
     const heading = typeof args.heading === 'string' && args.heading.trim()
     const fullContent = heading ? `${heading}\n\n${content}` : content
-    const id = crypto.randomUUID()
-    const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
 
-    const maxSort = db.query(
-      'SELECT COALESCE(MAX(sort), -1) AS m FROM blocks WHERE parent_id = ?',
-    ).get(docId) as { m: number }
-    const sort = maxSort.m + 1
+    // 追加内容与编辑保存同语义：解析为结构化 block 树入库，
+    // 否则整段 Markdown 原文会成为单个 paragraph，预览把 ```、表格等按纯文本渲染
+    const { blockIds, parsedCount } = appendMarkdownToDoc(db, {
+      docId,
+      notebookId: doc.notebook_id,
+      markdown: fullContent,
+    })
+    if (parsedCount === 0) {
+      return { content: JSON.stringify({ error: '内容无法解析为有效 block' }), resultCount: 0 }
+    }
 
-    db.query(
-      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, sort, level, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'paragraph', ?, ?, ?, 1, ?, ?)`,
-    ).run(id, doc.notebook_id, docId, docId, fullContent, computeContentHash(fullContent), sort, now, now)
+    // 与 PUT /docs/:id/markdown 一致的副作用：索引作业 + afterCreate hooks + 更新文档
+    const indexJob = scheduleDocIndex(docId, blockIds)
+    if (blockIds.length > 0) {
+      const placeholders = blockIds.map(() => '?').join(',')
+      const newRows = db
+        .query(`SELECT * FROM blocks WHERE id IN (${placeholders})`)
+        .all(...blockIds) as BlockRow[]
+      fireAfterCreateMany(newRows.map(rowToBlock))
+    }
+    const updatedDocRow = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
+    fireAfterUpdate(rowToBlock(updatedDocRow))
 
     return {
       content: JSON.stringify({
         success: true,
-        block_id: id,
+        block_ids: blockIds,
+        block_count: parsedCount,
         doc_id: docId,
-        message: `已将内容追加到文档 ${docId}（标题截取）`,
+        ...(indexJob ? { index_job: indexJob } : {}),
+        message: `已将 ${parsedCount} 个 block 追加到文档 ${docId}`,
       }),
       resultCount: 1,
     }
