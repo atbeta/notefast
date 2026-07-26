@@ -29,7 +29,7 @@ import { buildChatPrompt } from './prompt'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { insertDocFromMarkdown, appendMarkdownToDoc } from '../services/docImport'
 import { computeContentHash } from '../services/contentHash'
-import { fireAfterCreateMany, fireAfterUpdate } from '../services/hooks'
+import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate } from '../services/hooks'
 import { scheduleDocIndex } from './indexJobs'
 import { loadAiExcludedDocIds } from './aiExcludeQuery'
 import { searchWeb } from './webSearch'
@@ -240,6 +240,18 @@ async function executeToolCall(
         markdown,
         status,
       })
+      // 与 MCP notefast_create_doc 对齐：索引作业 + afterCreate hooks（doc 先、子块批量），
+      // 否则聊天创建的笔记跳过自动索引与 doc 变更广播
+      const docRow = db.query('SELECT * FROM blocks WHERE id = ?').get(result.docId) as BlockRow
+      const indexJob = scheduleDocIndex(result.docId, result.blockIds)
+      fireAfterCreate(rowToBlock(docRow))
+      if (result.blockIds.length > 0) {
+        const placeholders = result.blockIds.map(() => '?').join(',')
+        const childRows = db
+          .query(`SELECT * FROM blocks WHERE id IN (${placeholders})`)
+          .all(...result.blockIds) as BlockRow[]
+        fireAfterCreateMany(childRows.map(rowToBlock))
+      }
       return {
         content: JSON.stringify({
           success: true,
@@ -247,6 +259,7 @@ async function executeToolCall(
           title,
           block_count: result.parsedCount + 1,
           status,
+          ...(indexJob ? { index_job: indexJob } : {}),
         }),
         resultCount: 1,
       }

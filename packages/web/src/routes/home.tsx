@@ -5,6 +5,7 @@ import type { DocSummary } from '@notefast/core'
 import { parseTagMatchMode } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
+import { useDocChanges } from '../hooks/useDocEvents'
 import { usePinnedViews } from '../hooks/usePinnedViews'
 import DocList from '../components/DocList'
 import PageHeader from '../components/PageHeader'
@@ -105,6 +106,8 @@ export default function HomePage() {
   }, [error])
 
   const handleRefresh = useCallback(() => { refetch() }, [refetch])
+  // 外部 MCP / AI 聊天等任何通道写入文档 → 即时刷新主列表（沿用当前筛选条件）
+  useDocChanges(handleRefresh)
   const goNew = useCallback(() => { navigate('/new') }, [navigate])
 
   return (

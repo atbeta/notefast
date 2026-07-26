@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
+import { useDocChanges } from '../hooks/useDocEvents'
 import { usePinnedViews } from '../hooks/usePinnedViews'
 import type { DocSummary } from '@notefast/core'
 
@@ -73,11 +74,18 @@ export default function Sidebar({
    * 最近文档：折叠态不展示也不发请求（挂起的 Promise 保持旧数据，重新展开时无闪烁）；
    * 展开 / 路由变化时重拉，失败静默保留旧数据
    */
-  const { data: docList } = useApiQuery(
+  const { data: docList, refetch: refetchRecent } = useApiQuery(
     () => (collapsed ? new Promise<DocSummary[]>(() => {}) : api.get<DocSummary[]>('/docs/list')),
     [collapsed, location.pathname],
   )
   const recentDocs = (docList ?? []).slice(0, 15)
+
+  // 外部 MCP / AI 聊天等任何通道写入文档 → 即时刷新最近列表（服务端已聚合去抖）
+  useDocChanges(
+    useCallback(() => {
+      if (!collapsed) refetchRecent()
+    }, [collapsed, refetchRecent]),
+  )
 
   // 收集箱计数 + 链接建议未读计数
   useEffect(() => {

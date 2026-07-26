@@ -315,6 +315,83 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
   })
 
   /**
+   * notefast_create_note 必须触发 afterCreate hooks（doc 先、子块批量），
+   * 否则聊天创建的笔记跳过自动索引与 doc 变更广播（SSE 列表刷新）。
+   */
+  test('agent loop: notefast_create_note 创建文档并触发 afterCreate hooks', async () => {
+    applyNewConfig(
+      {
+        version: 1,
+        chat: {
+          id: 'x',
+          label: 'x',
+          preset: 'custom',
+          baseUrl: 'http://mock',
+          apiKey: '',
+          embeddingModel: '',
+          chatModel: 'fake-chat',
+          timeoutMs: 5000,
+          extraHeaders: {},
+        },
+        embedding: null,
+        autoIndex: false,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+
+    let callCount = 0
+    const encoder = new TextEncoder()
+    const sseResponse = (chunks: string[]) =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            for (const ch of chunks) c.enqueue(encoder.encode(ch))
+            c.close()
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+
+    const fetcher: typeof fetch = (async () => {
+      callCount++
+      if (callCount === 1) {
+        return sseResponse([
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"notefast_create_note","arguments":""}}]}}]}\n\n',
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"title\\":\\"聊天建的笔记\\",\\"markdown\\":\\"## 章节\\\\n\\\\n正文内容\\"}"}}]}}]}\n\n',
+          'data: [DONE]\n\n',
+        ]) as unknown as Response
+      }
+      return sseResponse([
+        'data: {"choices":[{"delta":{"content":"已保存"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ]) as unknown as Response
+    }) as unknown as typeof fetch
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl(fetcher)
+
+    const created: Array<{ type: string; content: string }> = []
+    pluginSystem.note.afterCreate.tap('test-create-note-spy', (block) => {
+      created.push({ type: block.type, content: block.content })
+    })
+    try {
+      const events: string[] = []
+      for await (const ev of runChat({ messages: [{ role: 'user', content: '记一下' }] })) {
+        events.push(ev.type)
+      }
+      expect(events).toContain('tool')
+    } finally {
+      pluginSystem.note.afterCreate.untap('test-create-note-spy')
+    }
+
+    // doc 根 + 子块（heading + paragraph）都触发了 afterCreate
+    const docBlock = created.find((b) => b.type === 'document')
+    expect(docBlock?.content).toBe('聊天建的笔记')
+    expect(created.some((b) => b.type === 'heading' && b.content === '章节')).toBe(true)
+    expect(created.some((b) => b.type === 'paragraph' && b.content === '正文内容')).toBe(true)
+  })
+
+  /**
    * Time-window filter：since/until 限制返回的 blocks
    */
   test('hybridSearch since/until 时间窗过滤', async () => {

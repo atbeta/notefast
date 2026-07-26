@@ -1,0 +1,90 @@
+/**
+ * 文档变更订阅（SSE /api/v1/events）
+ *
+ * 模块级单例连接：所有订阅者共享一条 SSE 流，断线指数退避重连（1s→30s）。
+ * 用 fetch 流式读取而非 EventSource —— 后者无法携带 Authorization 头。
+ * 服务端已在 300ms 窗口内按 docId 聚合，订阅方收到事件直接 refetch 即可。
+ */
+
+import { useEffect, useRef } from 'react'
+import { fetchWithAuth } from './useAPI'
+
+export interface DocChangeEvent {
+  doc_id: string
+  kind: 'created' | 'updated' | 'deleted'
+  at: string
+}
+
+type Listener = (ev: DocChangeEvent) => void
+
+const listeners = new Set<Listener>()
+let running = false
+let retryDelay = 1000
+const RETRY_MAX_MS = 30_000
+
+/** 订阅 doc 级变更；返回取消订阅函数。首个订阅者触发连接，全部退订后连接随下次断开回收 */
+export function subscribeDocChanges(fn: Listener): () => void {
+  listeners.add(fn)
+  if (!running) void loop()
+  return () => {
+    listeners.delete(fn)
+  }
+}
+
+async function loop(): Promise<void> {
+  running = true
+  while (listeners.size > 0) {
+    try {
+      const res = await fetchWithAuth('/events')
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+      retryDelay = 1000 // 连接成功即重置退避
+      await readStream(res.body)
+    } catch {
+      // 断线 / 服务重启 / 401（未登录）：退避后重连
+    }
+    if (listeners.size === 0) break
+    await new Promise((r) => setTimeout(r, retryDelay))
+    retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS)
+  }
+  running = false
+}
+
+async function readStream(body: ReadableStream<Uint8Array>): Promise<void> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) return
+      buffer += decoder.decode(value, { stream: true })
+      let idx: number
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const chunk = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 2)
+        let eventName = 'message'
+        let data = ''
+        for (const line of chunk.split('\n')) {
+          if (line.startsWith('event:')) eventName = line.slice(6).trim()
+          else if (line.startsWith('data:')) data += line.slice(5).trim()
+        }
+        if (eventName !== 'doc' || !data) continue
+        try {
+          const ev = JSON.parse(data) as DocChangeEvent
+          for (const fn of listeners) fn(ev)
+        } catch {
+          // 单帧解析失败跳过（心跳/ping 帧已被 event 名过滤）
+        }
+      }
+    }
+  } finally {
+    reader.cancel().catch(() => {})
+  }
+}
+
+/** React 绑定：挂载期间订阅 doc 变更（回调经 ref 取最新，不触发重订阅） */
+export function useDocChanges(fn: Listener): void {
+  const fnRef = useRef(fn)
+  fnRef.current = fn
+  useEffect(() => subscribeDocChanges((ev) => fnRef.current(ev)), [])
+}

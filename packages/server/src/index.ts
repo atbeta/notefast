@@ -32,6 +32,8 @@ import assets from './api/assets'
 import apiTokens from './api/apiTokens'
 import pinnedViews from './api/pinnedViews'
 import statusRouter from './api/status'
+import eventsRouter from './api/events'
+import { initDocEvents } from './services/docEvents'
 
 const PORT = parseInt(process.env.PORT || '3140', 10)
 const DATA_DIR = process.env.DATA_DIR || './data'
@@ -129,8 +131,10 @@ app.route('/api/v1/assets', assets)
 app.route('/api/v1/api-tokens', apiTokens)
 app.route('/api/v1/pinned-views', pinnedViews)
 app.route('/api/v1/status', statusRouter)
+app.route('/api/v1/events', eventsRouter)
 
 const pluginSystem = createPluginSystem()
+initDocEvents(pluginSystem)
 
 await initVectorStore()
 initAssetStore(DATA_DIR)
