@@ -16,6 +16,8 @@ import {
   Archive,
   CalendarDays,
   ImagePlus,
+  Mic,
+  MicOff,
 } from 'lucide-react'
 import { request, fetchWithAuth } from '../hooks/useAPI'
 import ChatMarkdown from './ChatMarkdown'
@@ -33,6 +35,30 @@ const SKILL_ICONS: Record<string, typeof Inbox> = {
   inbox: Inbox,
   archive: Archive,
   calendar: CalendarDays,
+}
+
+/** Web Speech API 的最小类型（lib.dom 不含 webkitSpeechRecognition，自行收窄） */
+interface SpeechResultEvent {
+  resultIndex: number
+  results: Array<{ isFinal: boolean; 0: { transcript: string } }>
+}
+interface SpeechRecognitionLike {
+  lang: string
+  interimResults: boolean
+  continuous: boolean
+  onresult: ((ev: SpeechResultEvent) => void) | null
+  onend: (() => void) | null
+  onerror: (() => void) | null
+  start(): void
+  stop(): void
+  abort(): void
+}
+function speechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
+  const w = window as unknown as {
+    SpeechRecognition?: new () => SpeechRecognitionLike
+    webkitSpeechRecognition?: new () => SpeechRecognitionLike
+  }
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
 }
 
 interface Message {
@@ -104,6 +130,49 @@ export default function AIChatPanel({
   const abortRef = useRef<AbortController | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // 语音转文字：识别中的实例 + 开始识别时的输入框基底文本
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const speechBaseRef = useRef('')
+  const [listening, setListening] = useState(false)
+  const speechSupported = typeof window !== 'undefined' && speechRecognitionCtor() !== null
+
+  const toggleListen = () => {
+    if (listening) {
+      recognitionRef.current?.stop()
+      return
+    }
+    const Ctor = speechRecognitionCtor()
+    if (!Ctor) return
+    const rec = new Ctor()
+    rec.lang = 'zh-CN'
+    rec.interimResults = true
+    rec.continuous = true
+    speechBaseRef.current = input.trim() ? input.trim() + ' ' : ''
+    let finalText = ''
+    rec.onresult = (ev) => {
+      let interim = ''
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const r = ev.results[i]!
+        if (r.isFinal) finalText += r[0].transcript
+        else interim += r[0].transcript
+      }
+      setInput(speechBaseRef.current + finalText + interim)
+    }
+    rec.onend = () => {
+      recognitionRef.current = null
+      setListening(false)
+    }
+    rec.onerror = () => {
+      recognitionRef.current = null
+      setListening(false)
+    }
+    recognitionRef.current = rec
+    rec.start()
+    setListening(true)
+  }
+
+  // 卸载时停止识别
+  useEffect(() => () => recognitionRef.current?.abort(), [])
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -202,6 +271,7 @@ export default function AIChatPanel({
     e.preventDefault()
     const hasImages = attachments.length > 0
     if ((!input.trim() && !hasImages) || loading) return
+    if (listening) recognitionRef.current?.stop()
 
     // 纯图片消息给一段兜底文本：服务端检索与校验都需要非空文本
     const userMessage = input.trim() || '请描述这张图片的内容'
@@ -684,6 +754,22 @@ export default function AIChatPanel({
             disabled={configMissing}
             className="flex-1 resize-none bg-transparent border-0 outline-none text-sm px-2 py-1.5 max-h-32 placeholder:text-muted-foreground disabled:opacity-50"
           />
+          {speechSupported && (
+            <button
+              type="button"
+              onClick={toggleListen}
+              disabled={configMissing}
+              className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${
+                listening
+                  ? 'text-destructive bg-destructive/10 animate-pulse'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+              }`}
+              title={listening ? '停止语音输入' : '语音输入（中文）'}
+              aria-label={listening ? '停止语音输入' : '语音输入'}
+            >
+              {listening ? <MicOff className="w-4 h-4" strokeWidth={1.75} /> : <Mic className="w-4 h-4" strokeWidth={1.75} />}
+            </button>
+          )}
           <button
             type="submit"
             disabled={(!input.trim() && attachments.length === 0) || loading || configMissing}
@@ -692,8 +778,7 @@ export default function AIChatPanel({
             aria-label={loading ? '正在生成回复' : '发送'}
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </button>
-        </form>
+          </button>        </form>
       </div>
 
       <ConfirmDialog
