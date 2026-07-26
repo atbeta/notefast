@@ -120,7 +120,7 @@ export default function Sidebar({
             <PanelLeft className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
           </button>
         </div>
-        <div className="mt-14 w-full flex flex-col items-center pt-4 gap-1">
+        <div className="mt-14 w-full flex-1 flex flex-col items-center pt-4 gap-1">
           <Link to="/" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-primary transition-colors" title="文档">
             <FileText className="w-4 h-4" strokeWidth={1.75} />
           </Link>
