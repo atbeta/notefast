@@ -281,7 +281,7 @@ export default function AIChatPanel({
     setToolStatus(null)
   }
 
-  const showSpinner = loading && !messages.some((m) => m.role === 'assistant' && (m.content || m.reasoning))
+  const showSpinner = loading && !messages.some((m) => m.role === 'assistant' && (m.content.trim() || m.reasoning))
 
   return (
     <div
@@ -369,7 +369,7 @@ export default function AIChatPanel({
           <>
             {messages.map((msg, idx) => {
               const isLastAssistant = msg.role === 'assistant' && idx === messages.length - 1
-              const reasoningOpen = Boolean(loading && isLastAssistant && msg.reasoning && !msg.content)
+              const reasoningOpen = Boolean(loading && isLastAssistant && msg.reasoning && !msg.content.trim())
               return (
                 <div
                   key={idx}
@@ -389,10 +389,11 @@ export default function AIChatPanel({
                       <ThinkBlock
                         text={msg.reasoning}
                         defaultOpen={reasoningOpen}
-                        streaming={Boolean(loading && isLastAssistant && !msg.content)}
+                        streaming={Boolean(loading && isLastAssistant && !msg.content.trim())}
                       />
                     ) : null}
-                    {(msg.content || msg.role === 'user') && (
+                    {/* 仅空白 token（如 </think> 后的换行）不渲染气泡，避免思考期出现空内容框 */}
+                    {(msg.role === 'user' || msg.content.trim()) && (
                       <div
                         className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                           msg.role === 'user'
@@ -411,16 +412,16 @@ export default function AIChatPanel({
                       <div className="rounded-lg border border-border/40 bg-background/40 px-3 py-2 space-y-2">
                         <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
                           引用 · {retrieval?.reranked ? `reranked (${retrieval.model})` : 'hybrid search'}
-                          {retrieval && retrieval.fts_hits > 0 && retrieval.semantic_hits > 0 && ` · 关键词 ${retrieval.fts_hits} + 语义 ${retrieval.semantic_hits}`}
-                          {retrieval && retrieval.fts_hits > 0 && retrieval.semantic_hits === 0 && ` · 关键词 ${retrieval.fts_hits}`}
-                          {retrieval && retrieval.fts_hits === 0 && retrieval.semantic_hits > 0 && ` · 语义 ${retrieval.semantic_hits} 条`}
+                          {/* 召回候选数（非最终引用数），两路统一展示，避免 fts=0 时格式分叉 */}
+                          {retrieval && (retrieval.fts_hits > 0 || retrieval.semantic_hits > 0) &&
+                            ` · 召回 关键词 ${retrieval.fts_hits} + 语义 ${retrieval.semantic_hits}`}
                           {retrieval?.timing && (
                             <span className="tabular-nums text-muted-foreground/80">
                               {` · 检索 ${retrieval.timing.total_ms}ms`}
-                              {retrieval.timing.fts_ms > 0 && ` · FTS ${retrieval.timing.fts_ms}`}
-                              {retrieval.timing.embed_query_ms > 0 && ` · emb ${retrieval.timing.embed_query_ms}`}
-                              {retrieval.timing.semantic_ms > 0 && ` · 语义 ${retrieval.timing.semantic_ms}`}
-                              {retrieval.timing.rerank_ms > 0 && ` · 精排 ${retrieval.timing.rerank_ms}`}
+                              {retrieval.timing.fts_ms > 0 && ` · FTS ${retrieval.timing.fts_ms}ms`}
+                              {retrieval.timing.embed_query_ms > 0 && ` · 嵌入 ${retrieval.timing.embed_query_ms}ms`}
+                              {retrieval.timing.semantic_ms > 0 && ` · 向量 ${retrieval.timing.semantic_ms}ms`}
+                              {retrieval.timing.rerank_ms > 0 && ` · 精排 ${retrieval.timing.rerank_ms}ms`}
                             </span>
                           )}
                         </div>
