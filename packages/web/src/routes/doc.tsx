@@ -94,13 +94,19 @@ export default function DocPage() {
   const [statusSaving, setStatusSaving] = useState(false)
   const [auxLoading, setAuxLoading] = useState(false)
   const [indexJob, setIndexJob] = useState<IndexJob | null>(null)
+  const [showSkeleton, setShowSkeleton] = useState(false)
 
   useEffect(() => {
     if (!id) return
     let cancelled = false
     setError(null)
-    // 切换文档时旧 doc 仍是有效上下文，无需 loading 态；仅首次加载（doc === null）才显示骨架
+    setShowSkeleton(false)
     if (doc === null) setLoading(true)
+
+    const skeletonTimer = window.setTimeout(() => {
+      if (!cancelled && doc === null) setShowSkeleton(true)
+    }, 150)
+
     api
       .get<Block>('/docs/' + id)
       .then((d) => {
@@ -111,11 +117,14 @@ export default function DocPage() {
       })
       .finally(() => {
         if (!cancelled) {
+          clearTimeout(skeletonTimer)
           setLoading(false)
+          setShowSkeleton(false)
         }
       })
     return () => {
       cancelled = true
+      clearTimeout(skeletonTimer)
     }
   }, [id, refreshKey])
 
@@ -261,7 +270,7 @@ export default function DocPage() {
   const isEmpty = wordCount === 0
 
   // 首屏骨架：结构与正式布局一致（header + 内容列 + 右栏），加载完成后布局零跳动
-  if (!doc && loading) {
+  if (!doc && loading && showSkeleton) {
     return (
       <div className="flex flex-col lg:flex-row h-full animate-pulse">
         <div className="flex-1 min-w-0 flex flex-col h-full border-r border-border/50">
@@ -284,6 +293,9 @@ export default function DocPage() {
       </div>
     )
   }
+
+  // 加载中但还没到骨架延迟：空 div 撑住布局，避免 Error 态闪现
+  if (!doc && loading) return <div className="flex-1" />
 
   if (!doc) return <ErrorState message={error || '文档不存在'} />
 
