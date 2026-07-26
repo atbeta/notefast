@@ -12,10 +12,27 @@ import {
   Brain,
   Binary,
   ArrowUpDown,
+  Inbox,
+  Archive,
+  CalendarDays,
 } from 'lucide-react'
 import { request, fetchWithAuth } from '../hooks/useAPI'
 import ChatMarkdown from './ChatMarkdown'
 import ConfirmDialog from './ConfirmDialog'
+
+interface AiSkill {
+  id: string
+  name: string
+  description: string
+  icon: string
+  prompt: string
+}
+
+const SKILL_ICONS: Record<string, typeof Inbox> = {
+  inbox: Inbox,
+  archive: Archive,
+  calendar: CalendarDays,
+}
 
 interface Message {
   role: 'user' | 'assistant'
@@ -71,8 +88,10 @@ export default function AIChatPanel({
   const [capabilities, setCapabilities] = useState<{ chat: boolean; reranker: boolean; embedding: boolean } | null>(null)
   const [configMissing, setConfigMissing] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [skills, setSkills] = useState<AiSkill[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -97,6 +116,16 @@ export default function AIChatPanel({
     return () => {
       cancelled = true
     }
+  }, [isOpen])
+
+  // 内置技能（整理收集箱 / 归档建议 / 周期回顾）：点击填入输入框，用户可改再发
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    request<{ skills: AiSkill[] }>('/ai/skills')
+      .then((r) => { if (!cancelled) setSkills(r.skills) })
+      .catch(() => {})
+    return () => { cancelled = true }
   }, [isOpen])
 
   useEffect(() => {
@@ -505,11 +534,34 @@ export default function AIChatPanel({
 
       {/* Input */}
       <div className="p-4 border-t border-border bg-background">
+        {skills.length > 0 && !configMissing && (
+          <div className="flex gap-1.5 mb-2 overflow-x-auto pb-0.5">
+            {skills.map((s) => {
+              const SkillIcon = SKILL_ICONS[s.icon] ?? MessageSquareText
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  title={s.description}
+                  onClick={() => {
+                    setInput(s.prompt)
+                    inputRef.current?.focus()
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-border/60 text-[11px] text-muted-foreground hover:text-foreground hover:border-foreground/25 transition-colors whitespace-nowrap shrink-0"
+                >
+                  <SkillIcon className="w-3 h-3" strokeWidth={1.75} />
+                  {s.name}
+                </button>
+              )
+            })}
+          </div>
+        )}
         <form
           onSubmit={handleSubmit}
           className="relative flex items-end gap-2 bg-card border border-border rounded-xl shadow-sm focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all p-2"
         >
           <textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {

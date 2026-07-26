@@ -392,6 +392,92 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
   })
 
   /**
+   * notefast_list_docs：skills（整理收集箱/归档建议/周期回顾）依赖的列表工具。
+   * 验证 status 过滤生效且结果回填进下一轮 LLM 请求。
+   */
+  test('agent loop: notefast_list_docs 按 status 过滤并回填结果', async () => {
+    applyNewConfig(
+      {
+        version: 1,
+        chat: {
+          id: 'x',
+          label: 'x',
+          preset: 'custom',
+          baseUrl: 'http://mock',
+          apiKey: '',
+          embeddingModel: '',
+          chatModel: 'fake-chat',
+          timeoutMs: 5000,
+          extraHeaders: {},
+        },
+        embedding: null,
+        autoIndex: false,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+
+    // seed：一篇正式笔记 + 一篇收集箱
+    const { getDb } = await import('../db')
+    const db = getDb()
+    const nb = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const now = new Date().toISOString()
+    for (const [id, title, st] of [
+      ['ld-note', '正式笔记ZZZ', 'note'],
+      ['ld-inbox', '收集箱素材ZZZ', 'inbox'],
+    ] as const) {
+      db.query(
+        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, status, sort, level, created_at, updated_at)
+         VALUES (?, ?, NULL, ?, 'document', ?, ?, 0, 0, ?, ?)`,
+      ).run(id, nb, id, title, st, now, now)
+    }
+
+    let callCount = 0
+    let secondCallBody = ''
+    const encoder = new TextEncoder()
+    const sseResponse = (chunks: string[]) =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            for (const ch of chunks) c.enqueue(encoder.encode(ch))
+            c.close()
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+
+    const fetcher: typeof fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      callCount++
+      if (callCount === 1) {
+        return sseResponse([
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"notefast_list_docs","arguments":""}}]}}]}\n\n',
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"status\\":\\"inbox\\"}"}}]}}]}\n\n',
+          'data: [DONE]\n\n',
+        ]) as unknown as Response
+      }
+      secondCallBody = String(init?.body ?? '')
+      return sseResponse([
+        'data: {"choices":[{"delta":{"content":"收集箱里有 1 篇"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ]) as unknown as Response
+    }) as unknown as typeof fetch
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl(fetcher)
+
+    const events: Array<{ type: string; payload?: unknown }> = []
+    for await (const ev of runChat({ messages: [{ role: 'user', content: '收集箱里有什么' }] })) {
+      events.push({ type: ev.type, payload: ev })
+    }
+    const toolEvent = events.find((e) => e.type === 'tool') as { payload?: { tool: string } }
+    expect(toolEvent.payload?.tool).toBe('notefast_list_docs')
+
+    // 工具结果回填：含收集箱文档、不含正式笔记
+    expect(secondCallBody).toContain('收集箱素材ZZZ')
+    expect(secondCallBody).not.toContain('正式笔记ZZZ')
+  })
+
+  /**
    * Time-window filter：since/until 限制返回的 blocks
    */
   test('hybridSearch since/until 时间窗过滤', async () => {

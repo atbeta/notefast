@@ -99,6 +99,25 @@ describe('GET /api/v1/ai/status', () => {
   })
 })
 
+describe('内置技能 API', () => {
+  test('GET /ai/skills 返回注册表且 prompt 已插值日期', async () => {
+    const { status, body } = await api('GET', '/api/v1/ai/skills')
+    expect(status).toBe(200)
+    expect(Array.isArray(body.skills)).toBe(true)
+    expect(body.skills.length).toBeGreaterThanOrEqual(3)
+    const ids = body.skills.map((s: { id: string }) => s.id)
+    expect(ids).toContain('inbox-triage')
+    expect(ids).toContain('archive-suggest')
+    expect(ids).toContain('weekly-review')
+    for (const s of body.skills as Array<{ prompt: string }>) {
+      expect(s.prompt).not.toContain('{{today}}')
+    }
+    const today = new Date().toISOString().slice(0, 10)
+    const weekly = (body.skills as Array<{ id: string; prompt: string }>).find((s) => s.id === 'weekly-review')!
+    expect(weekly.prompt).toContain(today)
+  })
+})
+
 describe('向量索引状态与重建 API', () => {
   test('GET /index/status 暴露后端与索引状态', async () => {
     const { status, body } = await api('GET', '/api/v1/ai/index/status')

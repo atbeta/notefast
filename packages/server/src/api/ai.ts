@@ -49,6 +49,7 @@ import { getIndexJob, getLatestIndexJobForDoc } from '../ai/indexJobs'
 import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
 import { loadAiExcludedDocIds } from '../ai/aiExcludeQuery'
 import { runChat, runChatSync } from '../ai/chat'
+import { listSkills } from '../ai/skills'
 import { streamWrite } from '../ai/writeStream'
 import { getDb } from '../db'
 import { runFtsQuery } from '../dbQueries'
@@ -347,7 +348,12 @@ ai.post('/diagnose', async (c) => {
   return c.json(payload)
 })
 
-// ───────────────────── search / index ─────────────────────
+// ───────────────────── skills / search / index ─────────────────────
+
+/** GET /ai/skills — 内置技能列表（聊天面板快捷入口；prompt 已插值当天日期） */
+ai.get('/skills', (c) => {
+  return c.json({ skills: listSkills() })
+})
 
 ai.get('/search', async (c) => {
   if (!runtimeSafe()) {

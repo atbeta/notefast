@@ -21,7 +21,7 @@
  */
 
 import type { ChatMessage, ToolCall, ToolDefinition, BlockRow } from '@notefast/core'
-import { ThinkStreamParser, splitThinkContent, rowToBlock } from '@notefast/core'
+import { ThinkStreamParser, splitThinkContent, rowToBlock, readDocStatus, readTags, parseStaleWithin, parseUpdatedWithin } from '@notefast/core'
 import type { Citation } from './hybridSearch'
 import { getDb } from '../db'
 import { hybridSearch, type HybridSearchReport } from './hybridSearch'
@@ -111,6 +111,27 @@ function getSearchToolDefinition(): ToolDefinition {
   }
 }
 
+/** 文档列表工具：让 LLM 能回答"有哪些笔记/收集箱里有什么/哪些长期没更新"类问题 */
+function getListDocsToolDefinition(): ToolDefinition {
+  return {
+    type: 'function',
+    function: {
+      name: 'notefast_list_docs',
+      description:
+        '列出知识库文档（标题/状态/标签/更新时间）。用于"我有哪些笔记""收集箱里有什么""找长期未更新的文档"等列表性场景；需要具体内容时再调用 notefast_search_more。',
+      parameters: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', enum: ['note', 'inbox', 'archived', 'all'], description: 'note=正式笔记（默认）；inbox=收集箱；archived=归档；all=全部' },
+          stale_within: { type: 'string', enum: ['30d', '90d'], description: '仅返回超过该时长未更新的文档（找过时内容用）' },
+          updated_within: { type: 'string', enum: ['24h', '7d'], description: '仅返回最近更新的文档' },
+          limit: { type: 'number', description: '返回数量（1-50），默认 20' },
+        },
+      },
+    },
+  }
+}
+
 function getWriteToolDefinitions(): ToolDefinition[] {
   return [
     {
@@ -164,7 +185,7 @@ function getWriteToolDefinitions(): ToolDefinition[] {
 }
 
 function getAllToolDefinitions(): ToolDefinition[] {
-  const tools: ToolDefinition[] = [getSearchToolDefinition(), ...getWriteToolDefinitions()]
+  const tools: ToolDefinition[] = [getSearchToolDefinition(), getListDocsToolDefinition(), ...getWriteToolDefinitions()]
   if (hasRuntime() && getRuntime().webSearchKey()) {
     tools.push({
       type: 'function',
@@ -224,6 +245,38 @@ async function executeToolCall(
       }),
       resultCount: report.citations.length,
     }
+  }
+
+  if (name === 'notefast_list_docs') {
+    const db = getDb()
+    const status = typeof args.status === 'string' ? args.status : 'note'
+    const limit = typeof args.limit === 'number' ? Math.min(50, Math.max(1, args.limit)) : 20
+    const staleMs = parseStaleWithin(typeof args.stale_within === 'string' ? args.stale_within : null)
+    const updatedMs = parseUpdatedWithin(typeof args.updated_within === 'string' ? args.updated_within : null)
+
+    let rows = db
+      .query("SELECT * FROM blocks WHERE type = 'document' AND is_deleted = 0 ORDER BY updated_at DESC")
+      .all() as BlockRow[]
+    const excluded = loadAiExcludedDocIds(rows.map((r) => r.id))
+    rows = rows.filter((r) => !excluded.has(r.id))
+    if (status !== 'all') rows = rows.filter((r) => readDocStatus(r) === status)
+    if (staleMs != null) {
+      const cutoff = Date.now() - staleMs
+      rows = rows.filter((r) => new Date(r.updated_at).getTime() <= cutoff)
+    }
+    if (updatedMs != null) {
+      const cutoff = Date.now() - updatedMs
+      rows = rows.filter((r) => new Date(r.updated_at).getTime() >= cutoff)
+    }
+
+    const docs = rows.slice(0, limit).map((r) => ({
+      doc_id: r.id,
+      title: r.content,
+      status: readDocStatus(r),
+      tags: readTags(r),
+      updated_at: r.updated_at,
+    }))
+    return { content: JSON.stringify({ docs, total: rows.length }), resultCount: docs.length }
   }
 
   if (name === 'notefast_create_note') {
