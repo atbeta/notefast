@@ -91,7 +91,7 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
       .catch(() => { if (!cancelled) setContent('') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [docId, title, draft])
+  }, [docId, title])
 
   useEffect(() => {
     if (!loading && textareaRef.current) {
@@ -109,7 +109,7 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
       setDraftedAt(new Date())
     }, 600)
     return () => clearTimeout(id)
-  }, [content, docId, initialContent, loadedAt, draft])
+  }, [content, docId, initialContent, loadedAt])
 
   useEffect(() => {
     const ta = textareaRef.current
@@ -182,12 +182,12 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
       })
       setSaving(false)
     }
-  }, [saving, content, docId, onSaved, onClose, toast, draft])
+  }, [saving, content, docId, onSaved, onClose, toast])
 
   const handleCancel = useCallback(() => {
     draft.saveDraft(content)
     onClose()
-  }, [docId, content, onClose, draft])
+  }, [docId, content, onClose])
 
   const imageUploader = useImageUploader({ insertAtCursor })
 

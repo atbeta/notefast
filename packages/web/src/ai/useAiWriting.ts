@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useMemo } from 'react'
 import { streamSSE } from '../lib/streaming'
 import type { WriteMode } from '@notefast/core'
 
@@ -100,11 +100,14 @@ export function useAiWriting(): UseAiWritingResult {
     setIsStreaming(false)
   }, [])
 
-  return {
-    isStreaming,
-    error,
-    streamContinue,
-    streamRefine,
-    cancel,
-  }
+  return useMemo(
+    () => ({
+      isStreaming,
+      error,
+      streamContinue,
+      streamRefine,
+      cancel,
+    }),
+    [isStreaming, error, streamContinue, streamRefine, cancel],
+  )
 }

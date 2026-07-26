@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 
 const DRAFT_PREFIX = 'notefast-draft-'
 
@@ -22,5 +22,8 @@ export function useEditorDraft(docId: string) {
     try { return localStorage.getItem(DRAFT_PREFIX + docId) !== null } catch { return false }
   }, [docId])
 
-  return { loadDraft, saveDraft, clearDraft, hasDraft }
+  return useMemo(
+    () => ({ loadDraft, saveDraft, clearDraft, hasDraft }),
+    [loadDraft, saveDraft, clearDraft, hasDraft],
+  )
 }

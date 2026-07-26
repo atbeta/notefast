@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { fetchWithAuth } from './useAPI'
 import { useToast } from '../components/ui'
 
@@ -61,5 +61,8 @@ export function useImageUploader({ insertAtCursor }: UseImageUploaderOpts) {
     [uploadImage],
   )
 
-  return { uploading, uploadImage, handlePaste, handleDrop }
+  return useMemo(
+    () => ({ uploading, uploadImage, handlePaste, handleDrop }),
+    [uploading, uploadImage, handlePaste, handleDrop],
+  )
 }
