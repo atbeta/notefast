@@ -162,25 +162,22 @@ function getWriteToolDefinitions(): ToolDefinition[] {
 
 function getAllToolDefinitions(): ToolDefinition[] {
   const tools: ToolDefinition[] = [getSearchToolDefinition(), ...getWriteToolDefinitions()]
-  if (hasRuntime()) {
-    const cfg = getRuntime().status().config
-    if (cfg.webSearch?.enabled && cfg.webSearch.apiKey) {
-      tools.push({
-        type: 'function',
-        function: {
-          name: 'notefast_web_search',
-          description: '搜索互联网获取最新信息。当用户的问题在知识库笔记中找不到答案、需要外部最新资讯时调用。结果来自网络，与笔记引用分开标注。',
-          parameters: {
-            type: 'object',
-            properties: {
-              query: { type: 'string', description: '搜索关键词' },
-              count: { type: 'number', description: '返回条数（1-10），默认 5' },
-            },
-            required: ['query'],
+  if (hasRuntime() && getRuntime().webSearchKey()) {
+    tools.push({
+      type: 'function',
+      function: {
+        name: 'notefast_web_search',
+        description: '搜索互联网获取最新信息。当用户的问题在知识库笔记中找不到答案、需要外部最新资讯时调用。结果来自网络，与笔记引用分开标注。',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: '搜索关键词' },
+            count: { type: 'number', description: '返回条数（1-10），默认 5' },
           },
+          required: ['query'],
         },
-      })
-    }
+      },
+    })
   }
   return tools
 }
@@ -339,13 +336,14 @@ async function executeToolCall(
     if (!hasRuntime()) {
       return { content: JSON.stringify({ error: 'AI runtime 未初始化' }), resultCount: 0 }
     }
-    const cfg = getRuntime().status().config
-    if (!cfg.webSearch?.enabled || !cfg.webSearch.apiKey) {
+    const runtime = getRuntime()
+    const apiKey = runtime.webSearchKey()
+    if (!apiKey) {
       return { content: JSON.stringify({ error: '网页搜索未配置，请在 /settings 中设置 Brave Search API Key' }), resultCount: 0 }
     }
     const count = typeof args.count === 'number' ? Math.min(10, Math.max(1, args.count)) : 5
     try {
-      const results = await searchWeb(q, cfg.webSearch.apiKey, count)
+      const results = await searchWeb(q, apiKey, count)
       return {
         content: JSON.stringify({
           query: q,

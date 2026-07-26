@@ -243,6 +243,10 @@ export class AiRuntime {
     return this.cfg.reranker
   }
 
+  webSearchKey(): string {
+    return this.cfg.webSearch?.apiKey ?? ''
+  }
+
   hasEmbedding(): boolean {
     return Boolean(this.embeddingProvider)
   }
