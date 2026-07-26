@@ -125,6 +125,18 @@ export default function Sidebar({
               <Sparkles className="w-4 h-4" strokeWidth={1.75} />
             </button>
           )}
+          <div className="flex-1" />
+          <Link
+            to="/settings"
+            className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
+              location.pathname.startsWith('/settings')
+                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                : 'text-sidebar-muted/70 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent'
+            }`}
+            title="设置"
+          >
+            <Settings className="w-3.5 h-3.5" strokeWidth={1.75} />
+          </Link>
         </div>
       </aside>
     )
