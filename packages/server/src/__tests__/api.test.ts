@@ -177,6 +177,47 @@ describe('Documents API', () => {
     expect((after.body as Array<{ id: string }>).map((d) => d.id)).toContain(inbox.id)
   })
 
+  test('GET /api/v1/docs/list 默认排除归档；status=archived 可列出；可恢复', async () => {
+    const { body: note } = await api('POST', '/api/v1/docs', {
+      notebook_id: notebookId,
+      title: '活跃笔记abc',
+    })
+    const { body: outdated } = await api('POST', '/api/v1/docs', {
+      notebook_id: notebookId,
+      title: '过时记录abc',
+      markdown: '已修复的 Bug 记录',
+    })
+
+    // 归档
+    const { status: patchStatus, body: patched } = await api('PATCH', `/api/v1/docs/${outdated.id}/status`, { status: 'archived' })
+    expect(patchStatus).toBe(200)
+    expect(patched.status).toBe('archived')
+
+    // 默认列表不含归档
+    const main = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}`)
+    const mainIds = (main.body as Array<{ id: string }>).map((d) => d.id)
+    expect(mainIds).toContain(note.id)
+    expect(mainIds).not.toContain(outdated.id)
+
+    // status=archived 只列归档，响应带 status 字段
+    const box = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}&status=archived`)
+    const boxRows = box.body as Array<{ id: string; status?: string }>
+    expect(boxRows.map((d) => d.id)).toContain(outdated.id)
+    expect(boxRows.map((d) => d.id)).not.toContain(note.id)
+    expect(boxRows.find((d) => d.id === outdated.id)?.status).toBe('archived')
+
+    // status=all 两者都在
+    const all = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}&status=all`)
+    const allIds = (all.body as Array<{ id: string }>).map((d) => d.id)
+    expect(allIds).toContain(note.id)
+    expect(allIds).toContain(outdated.id)
+
+    // 恢复为 note 后回到默认列表
+    await api('PATCH', `/api/v1/docs/${outdated.id}/status`, { status: 'note' })
+    const after = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}`)
+    expect((after.body as Array<{ id: string }>).map((d) => d.id)).toContain(outdated.id)
+  })
+
   test('GET /api/v1/docs/list 支持 tags AND/OR / untagged / ai_exclude 字段', async () => {
     const { body: d1 } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '带标签A' })
     const { body: d2 } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '带标签B' })

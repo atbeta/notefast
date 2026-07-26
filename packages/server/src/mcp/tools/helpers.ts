@@ -10,7 +10,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   docMatchesTags,
   isDocInbox,
+  isDocArchived,
   parseUpdatedWithin,
+  readDocStatus,
   readTags,
   type Block,
   type BlockRow,
@@ -78,15 +80,17 @@ export function filterDocRowsForMcp(rows: BlockRow[], opts: {
   tagMatch?: TagMatchMode
   untagged?: boolean
   updatedWithin?: string | null
-  /** 默认 note：排除收集箱；inbox / all 见 parseDocStatusFilter */
-  status?: 'note' | 'inbox' | 'all'
+  /** 默认 note：排除收集箱与归档；inbox / archived / all 见 parseDocStatusFilter */
+  status?: 'note' | 'inbox' | 'archived' | 'all'
 }): BlockRow[] {
   let out = rows.filter((r) => !isDocRowAiExcluded(r))
   const statusFilter = opts.status ?? 'note'
   if (statusFilter === 'inbox') {
     out = out.filter((r) => isDocInbox(r))
+  } else if (statusFilter === 'archived') {
+    out = out.filter((r) => isDocArchived(r))
   } else if (statusFilter === 'note') {
-    out = out.filter((r) => !isDocInbox(r))
+    out = out.filter((r) => readDocStatus(r) === 'note')
   }
   if (opts.untagged) {
     out = out.filter((r) => readTags(r).length === 0)

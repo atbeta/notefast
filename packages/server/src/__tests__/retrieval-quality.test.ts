@@ -63,14 +63,14 @@ function seedDoc(opts: {
   notebookId: string
   title: string
   content: string
-  status?: 'note' | 'inbox'
+  status?: 'note' | 'inbox' | 'archived'
   blockId?: string
 }) {
   const db = getDb()
   const docId = crypto.randomUUID()
   const blockId = opts.blockId ?? crypto.randomUUID()
   const now = new Date().toISOString()
-  const docStatus = opts.status === 'inbox' ? 'inbox' : 'note'
+  const docStatus = opts.status ?? 'note'
   db.query(
     `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
      VALUES (?, ?, NULL, ?, 'document', ?, '{}', '[]', ?, 0, 0, 0, ?, ?)`,
@@ -123,6 +123,34 @@ describe('inbox 排除 RAG', () => {
 
     const withInbox = await hybridSearch({ query: 'AlphaNoteFast', topK: 10, includeInbox: true })
     expect(withInbox.citations.some((c) => c.block_id === 'inbox-block')).toBe(true)
+  })
+})
+
+describe('archived 排除 RAG', () => {
+  test('默认不返回归档文档；includeArchived 可放开', async () => {
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    seedDoc({
+      notebookId: nb,
+      title: '活跃笔记',
+      content: '独有关键词 BetaNoteFast',
+      status: 'note',
+      blockId: 'active-block',
+    })
+    seedDoc({
+      notebookId: nb,
+      title: '已修复的旧 Bug',
+      content: '独有关键词 BetaNoteFast 归档',
+      status: 'archived',
+      blockId: 'archived-block',
+    })
+
+    const filtered = await hybridSearch({ query: 'BetaNoteFast', topK: 10 })
+    expect(filtered.citations.every((c) => c.block_id !== 'archived-block')).toBe(true)
+    expect(filtered.citations.some((c) => c.block_id === 'active-block')).toBe(true)
+
+    const withArchived = await hybridSearch({ query: 'BetaNoteFast', topK: 10, includeArchived: true })
+    expect(withArchived.citations.some((c) => c.block_id === 'archived-block')).toBe(true)
   })
 })
 

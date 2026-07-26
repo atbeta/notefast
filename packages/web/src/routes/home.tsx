@@ -28,6 +28,8 @@ function viewTitle(params: URLSearchParams): string {
     return `${v}天未更新`
   }
   if (params.get('ai_exclude') === '1') return '对 AI 隐藏'
+  if (params.get('status') === 'archived') return '归档'
+  if (params.get('status') === 'inbox') return '收集箱'
   const tags = params.get('tags') || params.get('tag')
   if (tags) {
     const parts = tags.split(',').filter(Boolean)
@@ -68,6 +70,10 @@ function buildListQuery(params: URLSearchParams): string {
   if (stale === '30d' || stale === '90d') q.set('stale_within', stale)
 
   if (params.get('ai_exclude') === '1') q.set('ai_exclude', '1')
+
+  // status 透传（?status=archived / inbox 直达对应视图）
+  const status = params.get('status') || ''
+  if (status === 'archived' || status === 'inbox' || status === 'all') q.set('status', status)
 
   const s = q.toString()
   return s ? `?${s}` : ''

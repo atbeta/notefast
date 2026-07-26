@@ -21,13 +21,14 @@ import {
   type TagInfo,
   getTagProvider,
   readTags,
-  isDocInbox,
+  readDocStatus,
+  isDocArchived,
 } from '@notefast/core'
 import { getDb } from '../db'
 
 const tags = new Hono()
 
-/** GET /api/v1/tags —— 列 notebook 下所有 tag + count（默认不含收集箱文档） */
+/** GET /api/v1/tags —— 列 notebook 下所有 tag + count（默认仅正式笔记：不含收集箱与归档） */
 tags.get('/', (c) => {
   const db = getDb()
   const notebookId = c.req.query('notebook_id') || ''
@@ -43,9 +44,8 @@ tags.get('/', (c) => {
     rows = db.query("SELECT * FROM blocks WHERE type = 'document' AND is_deleted = 0").all() as BlockRow[]
   }
 
-  if (!includeInbox) {
-    rows = rows.filter((r) => !isDocInbox(r))
-  }
+  // 归档一律不进 tags 聚合；include_inbox=1 仅放开收集箱
+  rows = rows.filter((r) => (includeInbox ? !isDocArchived(r) : readDocStatus(r) === 'note'))
 
   const counts = new Map<string, number>()
   for (const r of rows) {

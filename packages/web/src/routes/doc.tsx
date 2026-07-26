@@ -10,6 +10,7 @@ import {
   Pencil,
   EyeOff,
   Inbox,
+  Archive,
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
@@ -90,7 +91,7 @@ export default function DocPage() {
   const [tags, setTags] = useState<string[]>([])
   const [aiExclude, setAiExclude] = useState(false)
   const [aiExcludeSaving, setAiExcludeSaving] = useState(false)
-  const [docStatus, setDocStatus] = useState<'note' | 'inbox'>('note')
+  const [docStatus, setDocStatus] = useState<'note' | 'inbox' | 'archived'>('note')
   const [statusSaving, setStatusSaving] = useState(false)
   const [auxLoading, setAuxLoading] = useState(false)
   const [indexJob, setIndexJob] = useState<IndexJob | null>(null)
@@ -167,7 +168,7 @@ export default function DocPage() {
       setTitleDraft(doc.content)
       setTags((doc.tags ?? []).slice(0, 64))
       setAiExclude(doc.ai_exclude)
-      setDocStatus(doc.status === 'inbox' ? 'inbox' : 'note')
+      setDocStatus(doc.status === 'inbox' ? 'inbox' : doc.status === 'archived' ? 'archived' : 'note')
     }
   }, [doc])
 
@@ -267,6 +268,19 @@ export default function DocPage() {
     try {
       await api.patch(`/docs/${id}/status`, { status: 'note' })
       setDocStatus('note')
+      setRefreshKey((k) => k + 1)
+    } catch { /* silent */ }
+    finally { setStatusSaving(false) }
+  }
+
+  // 归档 ⇄ 恢复：归档后从「所有文档」与 AI 检索默认排除，可随时恢复
+  const handleToggleArchive = async () => {
+    if (!id || statusSaving) return
+    const next = docStatus === 'archived' ? 'note' : 'archived'
+    setStatusSaving(true)
+    try {
+      await api.patch(`/docs/${id}/status`, { status: next })
+      setDocStatus(next)
       setRefreshKey((k) => k + 1)
     } catch { /* silent */ }
     finally { setStatusSaving(false) }
@@ -401,6 +415,23 @@ export default function DocPage() {
                 </Link>
               </div>
             )}
+            {docStatus === 'archived' && (
+              <div className="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
+                <Archive className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
+                <span className="flex-1 min-w-[12rem]">此篇已归档，不出现在「所有文档」，AI 回答默认也不再引用。</span>
+                <button
+                  type="button"
+                  onClick={handleToggleArchive}
+                  disabled={statusSaving}
+                  className="shrink-0 text-foreground underline underline-offset-2 hover:text-foreground/80"
+                >
+                  恢复为笔记
+                </button>
+                <Link to="/archived" className="shrink-0 text-muted-foreground hover:text-foreground">
+                  查看归档
+                </Link>
+              </div>
+            )}
             {/* 阅读列：标题/meta/tags/正文 走 --reading-max-w；状态横幅保留在外层 max-w-4xl */}
             <div className="mx-auto max-w-[var(--reading-max-w)]">
             {/* Title — always editable, AI-generate on hover */}
@@ -442,20 +473,33 @@ export default function DocPage() {
             )}
             {isEditing && <div className="mb-2" />}
 
-            {/* Tags + 对 AI 隐藏（默认可见，不展示锁图标；仅隐藏态强调） */}
+            {/* Tags + 归档/对 AI 隐藏（默认可见，不展示锁图标；仅隐藏态强调） */}
             <div className="flex flex-wrap items-center justify-between gap-3 mt-4 mb-6">
               {id && <TagEditor docId={id} tags={tags} onChange={setTags} />}
-              {!aiExclude && (
-                <button
-                  type="button"
-                  onClick={handleToggleAiExclude}
-                  disabled={aiExcludeSaving}
-                  className="shrink-0 text-[11.5px] text-muted-foreground/75 hover:text-foreground transition-colors"
-                  title="隐藏后不进向量索引 / RAG / AutoLink / MCP（你仍可搜索与编辑）"
-                >
-                  对 AI 隐藏
-                </button>
-              )}
+              <div className="flex items-center gap-3 shrink-0">
+                {docStatus !== 'archived' && (
+                  <button
+                    type="button"
+                    onClick={handleToggleArchive}
+                    disabled={statusSaving}
+                    className="text-[11.5px] text-muted-foreground/75 hover:text-foreground transition-colors"
+                    title="归档后不出现在「所有文档」，AI 回答默认不再引用；可随时恢复"
+                  >
+                    归档
+                  </button>
+                )}
+                {!aiExclude && (
+                  <button
+                    type="button"
+                    onClick={handleToggleAiExclude}
+                    disabled={aiExcludeSaving}
+                    className="text-[11.5px] text-muted-foreground/75 hover:text-foreground transition-colors"
+                    title="隐藏后不进向量索引 / RAG / AutoLink / MCP（你仍可搜索与编辑）"
+                  >
+                    对 AI 隐藏
+                  </button>
+                )}
+              </div>
             </div>
 
             {aiExclude && (

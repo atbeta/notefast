@@ -24,7 +24,7 @@ export interface Block {
   content: string
   properties: Record<string, unknown>
   tags: string[]
-  status: 'note' | 'inbox'
+  status: 'note' | 'inbox' | 'archived'
   ai_exclude: boolean
   sort: number
   level: number
@@ -95,8 +95,8 @@ export interface DocSummary {
   tags: string[]
   /** 对 AI 隐藏：不进向量 / RAG / AutoLink / MCP */
   ai_exclude?: boolean
-  /** 生命周期：inbox=收集箱；缺省视为 note */
-  status?: 'note' | 'inbox'
+  /** 生命周期：inbox=收集箱，archived=归档；缺省视为 note */
+  status?: 'note' | 'inbox' | 'archived'
 }
 
 /** 搜索结果 */
@@ -273,7 +273,7 @@ export const importMarkdownSchema = z.object({
 })
 
 export const updateDocStatusSchema = z.object({
-  status: z.enum(['note', 'inbox']),
+  status: z.enum(['note', 'inbox', 'archived']),
 })
 
 export const updateDocMarkdownSchema = z.object({

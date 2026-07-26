@@ -358,6 +358,7 @@ ai.get('/search', async (c) => {
   const q = (c.req.query('q') || '').trim()
   const limit = Math.min(parseInt(c.req.query('limit') || '10', 10) || 10, 20)
   const notebookId = c.req.query('notebook_id') || undefined
+  const includeArchived = c.req.query('include_archived') === '1' || c.req.query('include_archived') === 'true'
 
   if (!q) return c.json([])
 
@@ -372,7 +373,7 @@ ai.get('/search', async (c) => {
       }
       const v = await r.embedQuery(q)
       if (!v) return c.json({ error: 'embedding_failed', message: 'Embedding 返回为空' }, 500)
-      const hits = await semanticSearch(v, limit, notebookId)
+      const hits = await semanticSearch(v, limit, notebookId, undefined, undefined, { includeArchived })
       return c.json(hits)
     }
     // hybrid（默认）
@@ -380,6 +381,7 @@ ai.get('/search', async (c) => {
       query: q,
       notebookId,
       topK: limit,
+      includeArchived,
     })
     if (c.req.query('with_retrieval') === '1' || c.req.query('with_retrieval') === 'true') {
       return c.json(report)

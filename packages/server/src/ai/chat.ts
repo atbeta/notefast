@@ -104,6 +104,7 @@ function getSearchToolDefinition(): ToolDefinition {
           since: { type: 'string', description: 'ISO 时间字符串，只返回 blocks.updated_at >= since 的块' },
           until: { type: 'string', description: 'ISO 时间字符串，只返回 blocks.updated_at <= until 的块' },
           limit: { type: 'number', description: '返回的引用数量（1-20）', default: 5 },
+          include_archived: { type: 'boolean', description: '是否包含已归档文档（默认 false；仅当用户明确要找过时/历史内容时置 true）' },
         },
       },
     },
@@ -208,6 +209,7 @@ async function executeToolCall(
       until,
       topK: limit,
       minScore: ctx.minScore,
+      includeArchived: args.include_archived === true,
     })
     return {
       content: JSON.stringify({

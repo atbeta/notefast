@@ -57,18 +57,28 @@ export function loadAiExcludedDocIds(docIds: Iterable<string>): Set<string> {
 
 /** 批量：哪些 root_id 是收集箱（RAG 默认排除，与主列表一致） */
 export function loadInboxDocIds(docIds: Iterable<string>): Set<string> {
+  return loadDocIdsByStatus(docIds, 'inbox')
+}
+
+/** 批量：哪些 root_id 已归档（RAG 默认软排除，可经 includeArchived 显式包含） */
+export function loadArchivedDocIds(docIds: Iterable<string>): Set<string> {
+  return loadDocIdsByStatus(docIds, 'archived')
+}
+
+/** 批量：哪些 root_id 处于指定 status */
+function loadDocIdsByStatus(docIds: Iterable<string>, status: string): Set<string> {
   const ids = [...new Set([...docIds].filter(Boolean))]
-  const inbox = new Set<string>()
-  if (ids.length === 0) return inbox
+  const matched = new Set<string>()
+  if (ids.length === 0) return matched
   const db = getDb()
   const placeholders = ids.map(() => '?').join(',')
   const rows = db
     .query(`SELECT id, status FROM blocks WHERE type = 'document' AND id IN (${placeholders})`)
     .all(...ids) as Array<{ id: string; status: string }>
   for (const r of rows) {
-    if (r.status === 'inbox') inbox.add(r.id)
+    if (r.status === status) matched.add(r.id)
   }
-  return inbox
+  return matched
 }
 
 /** 取某文档下所有 block id（含 root），用于批量 purge / reindex */

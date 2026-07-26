@@ -8,7 +8,6 @@
 import { z } from 'zod'
 import {
   getTagProvider,
-  isDocInbox,
   parseDocStatusFilter,
   parseTagMatchMode,
   parseTagsQueryParam,
@@ -167,14 +166,14 @@ export function registerDocWriteTools(ctx: ToolContext): void {
   registerTool(
     'notefast_list_docs',
     {
-      description: '列出文档列表（默认排除「对 AI 隐藏」与收集箱；status=inbox 可列收集箱）',
+      description: '列出文档列表（默认排除「对 AI 隐藏」、收集箱与归档；status=inbox/archived 可列对应集合）',
       inputSchema: {
         notebook_id: z.string().optional().describe('笔记本 ID，默认使用默认笔记本'),
         tags: z.string().optional().describe('逗号分隔 tags；默认同时包含全部（AND），tag_match=any 时为包含任一'),
         tag_match: z.enum(['all', 'any']).optional().describe('多 tag 匹配：all=同时包含（默认），any=包含任一'),
         untagged: z.boolean().optional().describe('仅未打标文档'),
         updated_within: z.enum(['24h', '7d']).optional().describe('仅最近更新的文档'),
-        status: z.enum(['note', 'inbox', 'all']).optional().describe('note=正式笔记（默认）；inbox=收集箱；all=全部'),
+        status: z.enum(['note', 'inbox', 'archived', 'all']).optional().describe('note=正式笔记（默认）；inbox=收集箱；archived=归档；all=全部'),
       },
     },
     async ({ notebook_id, tags, tag_match, untagged, updated_within, status }) => {
@@ -230,7 +229,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
       const counts = new Map<string, number>()
       for (const r of rows) {
         if (isDocRowAiExcluded(r)) continue
-        if (isDocInbox(r)) continue
+        if (readDocStatus(r) !== 'note') continue
         for (const t of readTags(r)) {
           counts.set(t, (counts.get(t) ?? 0) + 1)
         }

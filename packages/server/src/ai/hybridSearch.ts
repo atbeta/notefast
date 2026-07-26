@@ -17,7 +17,7 @@ import { runFtsQuery } from '../dbQueries'
 import { buildFtsQuery, highlightSnippet } from '@notefast/core'
 import { semanticSearch } from './indexer'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
-import { loadAiExcludedDocIds, loadInboxDocIds } from './aiExcludeQuery'
+import { loadAiExcludedDocIds, loadInboxDocIds, loadArchivedDocIds } from './aiExcludeQuery'
 
 export interface SearchOptions {
   query: string
@@ -53,6 +53,11 @@ export interface SearchOptions {
    * 是否包含收集箱文档（默认 false：RAG 与主列表一致，排除 inbox）。
    */
   includeInbox?: boolean
+  /**
+   * 是否包含归档文档（默认 false：归档软排除，避免过时内容污染回答；
+   * 显式查历史时置 true）。
+   */
+  includeArchived?: boolean
 }
 
 export interface Citation {
@@ -123,6 +128,7 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
   const topK = opts.topK ?? DEFAULT_TOP_K
   const rerankWindow = opts.rerankWindow ?? DEFAULT_RERANK_WINDOW
   const includeInbox = opts.includeInbox === true
+  const includeArchived = opts.includeArchived === true
 
   const ftsPromise = (async (): Promise<{ hits: FtsHit[]; fts_ms: number }> => {
     const t0 = Date.now()
@@ -148,18 +154,15 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
   const ftsRaw0 = ftsResult.hits
   const semanticRaw0 = semanticResult.hits
 
-  // AI 软隔离 + 收集箱：过滤 ai_exclude；默认也过滤 inbox
-  const excluded = loadAiExcludedDocIds([
+  // AI 软隔离 + 生命周期：过滤 ai_exclude；默认也过滤 inbox 与 archived
+  const candidateDocIds = [
     ...ftsRaw0.map((h) => h.doc_id),
     ...semanticRaw0.map((h) => h.doc_id),
-  ])
-  const inboxIds = includeInbox
-    ? new Set<string>()
-    : loadInboxDocIds([
-        ...ftsRaw0.map((h) => h.doc_id),
-        ...semanticRaw0.map((h) => h.doc_id),
-      ])
-  const drop = (docId: string) => excluded.has(docId) || inboxIds.has(docId)
+  ]
+  const excluded = loadAiExcludedDocIds(candidateDocIds)
+  const inboxIds = includeInbox ? new Set<string>() : loadInboxDocIds(candidateDocIds)
+  const archivedIds = includeArchived ? new Set<string>() : loadArchivedDocIds(candidateDocIds)
+  const drop = (docId: string) => excluded.has(docId) || inboxIds.has(docId) || archivedIds.has(docId)
   const ftsRaw = ftsRaw0.filter((h) => !drop(h.doc_id))
   const semanticRaw = semanticRaw0.filter((h) => !drop(h.doc_id))
 

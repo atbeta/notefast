@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  isDocArchived,
   isDocInbox,
   parseDocStatusFilter,
   readDocStatus,
@@ -20,17 +21,27 @@ describe('docStatus', () => {
     const row = makeRow()
     expect(readDocStatus(row)).toBe('note')
     expect(isDocInbox(row)).toBe(false)
+    expect(isDocArchived(row)).toBe(false)
   })
 
   test('读写 inbox', () => {
     const row = makeRow('inbox')
     expect(readDocStatus(row)).toBe('inbox')
     expect(isDocInbox(row)).toBe(true)
+    expect(isDocArchived(row)).toBe(false)
+  })
+
+  test('读写 archived', () => {
+    const row = makeRow('archived')
+    expect(readDocStatus(row)).toBe('archived')
+    expect(isDocArchived(row)).toBe(true)
+    expect(isDocInbox(row)).toBe(false)
   })
 
   test('parseDocStatusFilter 默认 note', () => {
     expect(parseDocStatusFilter(undefined)).toBe('note')
     expect(parseDocStatusFilter('inbox')).toBe('inbox')
+    expect(parseDocStatusFilter('archived')).toBe('archived')
     expect(parseDocStatusFilter('all')).toBe('all')
   })
 })

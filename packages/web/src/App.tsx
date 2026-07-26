@@ -8,6 +8,7 @@ import SettingsAIPage from './routes/settings-ai'
 import SettingsBackupPage from './routes/settings-backup'
 import SettingsSyncPage from './routes/settings-sync'
 import InboxPage from './routes/inbox'
+import ArchivedPage from './routes/archived'
 import AutolinkPage from './routes/autolink'
 import Layout from './components/Layout'
 import RouteTransition from './components/RouteTransition'
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/new" element={<NewDocPage />} />
             <Route path="/doc/:id" element={<DocPage />} />
             <Route path="/inbox" element={<InboxPage />} />
+            <Route path="/archived" element={<ArchivedPage />} />
             <Route path="/autolink" element={<AutolinkPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/settings/ai" element={<SettingsAIPage />} />

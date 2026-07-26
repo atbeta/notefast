@@ -18,7 +18,7 @@ import {
   VECTOR_INDEX_VERSION,
 } from './vectorStore'
 import { SqliteVecVectorStore } from './vectorStoreVec'
-import { isBlockAiExcluded, loadAiExcludedDocIds, loadInboxDocIds } from './aiExcludeQuery'
+import { isBlockAiExcluded, loadAiExcludedDocIds, loadInboxDocIds, loadArchivedDocIds } from './aiExcludeQuery'
 
 export type IndexBlockResult = 'indexed' | 'skipped' | 'deleted' | 'error' | 'noop'
 
@@ -246,7 +246,7 @@ export async function semanticSearch(
   notebookId?: string,
   since?: string,
   until?: string,
-  options?: { includeInbox?: boolean },
+  options?: { includeInbox?: boolean; includeArchived?: boolean },
 ): Promise<Array<{ block_id: string; score: number; content: string; doc_id: string; doc_title: string }>> {
   const fingerprint = currentEmbeddingFingerprint()
   if (!fingerprint) return []
@@ -259,11 +259,11 @@ export async function semanticSearch(
     until,
   })
   if (raw.length === 0) return raw
-  const excluded = loadAiExcludedDocIds(raw.map((h) => h.doc_id))
-  const inbox = options?.includeInbox
-    ? new Set<string>()
-    : loadInboxDocIds(raw.map((h) => h.doc_id))
+  const docIds = raw.map((h) => h.doc_id)
+  const excluded = loadAiExcludedDocIds(docIds)
+  const inbox = options?.includeInbox ? new Set<string>() : loadInboxDocIds(docIds)
+  const archived = options?.includeArchived ? new Set<string>() : loadArchivedDocIds(docIds)
   return raw
-    .filter((h) => !excluded.has(h.doc_id) && !inbox.has(h.doc_id))
+    .filter((h) => !excluded.has(h.doc_id) && !inbox.has(h.doc_id) && !archived.has(h.doc_id))
     .slice(0, limit)
 }

@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, updateDocStatusSchema, rowToBlock, readTags, readAiExclude, readDocStatus, isDocInbox, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, parseDocStatusFilter, docMatchesTags, parseCreatedWithin, parseStaleWithin } from '@notefast/core'
+import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, updateDocStatusSchema, rowToBlock, readTags, readAiExclude, readDocStatus, isDocInbox, isDocArchived, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, parseDocStatusFilter, docMatchesTags, parseCreatedWithin, parseStaleWithin } from '@notefast/core'
 import type { BlockRow, DocSummary } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks, fetchSubtreeBlocks } from '../dbQueries'
@@ -35,11 +35,13 @@ docs.get('/list', (c) => {
       .all('document') as BlockRow[]
   }
 
-  // 生命周期：默认只列正式笔记；status=inbox 只列收集箱；all 不过滤
+  // 生命周期：默认只列正式笔记（排除收集箱与归档）；status=inbox/archived 只列对应集合；all 不过滤
   if (statusFilter === 'inbox') {
     rows = rows.filter((r) => isDocInbox(r))
+  } else if (statusFilter === 'archived') {
+    rows = rows.filter((r) => isDocArchived(r))
   } else if (statusFilter === 'note') {
-    rows = rows.filter((r) => !isDocInbox(r))
+    rows = rows.filter((r) => readDocStatus(r) === 'note')
   }
 
   // 标签 / 时间过滤在 Node 端做（文档量小，不值得加 SQL JSON 函数）
@@ -90,7 +92,7 @@ docs.get('/list', (c) => {
       updated_at: r.updated_at,
       tags,
       ...(aiExclude ? { ai_exclude: true } : {}),
-      ...(status === 'inbox' ? { status: 'inbox' as const } : {}),
+      ...(status !== 'note' ? { status } : {}),
     }
   })
 
