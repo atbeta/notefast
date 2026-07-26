@@ -35,7 +35,6 @@ interface Backlink {
 /** stale-while-revalidate 降透明的最短延迟：
  * fetch 在此窗口内完成则永远不显示降透明（避免 LAN 快请求下的幽灵闪烁）。
  * 经验值：本地/同机房 fetch 通常 20-60ms，留 120ms 留余量。 */
-const STALE_DIM_DELAY = 120
 
 function countWords(doc: Block): number {
   let n = 0
@@ -95,20 +94,13 @@ export default function DocPage() {
   const [statusSaving, setStatusSaving] = useState(false)
   const [auxLoading, setAuxLoading] = useState(false)
   const [indexJob, setIndexJob] = useState<IndexJob | null>(null)
-  /** stale-while-revalidate：仅在 fetch 超过 STALE_DIM_DELAY 时才置 true，
-   * 用于让旧内容降透明作 loading 提示；快请求下永远不显示，避免幽灵闪烁 */
-  const [staleShown, setStaleShown] = useState(false)
 
   useEffect(() => {
     if (!id) return
     let cancelled = false
     setError(null)
-    setStaleShown(false)
     // 切换文档时旧 doc 仍是有效上下文，无需 loading 态；仅首次加载（doc === null）才显示骨架
     if (doc === null) setLoading(true)
-    const staleTimer = window.setTimeout(() => {
-      if (!cancelled) setStaleShown(true)
-    }, STALE_DIM_DELAY)
     api
       .get<Block>('/docs/' + id)
       .then((d) => {
@@ -119,14 +111,11 @@ export default function DocPage() {
       })
       .finally(() => {
         if (!cancelled) {
-          clearTimeout(staleTimer)
-          setStaleShown(false)
           setLoading(false)
         }
       })
     return () => {
       cancelled = true
-      clearTimeout(staleTimer)
     }
   }, [id, refreshKey])
 
@@ -270,10 +259,6 @@ export default function DocPage() {
   const updatedAt = doc ? formatRelative(doc.updated_at, 'long') : ''
   const wordCount = doc ? countWords(doc) : 0
   const isEmpty = wordCount === 0
-  /** 正在显示的是旧文档（A），新文档（B）还在拉取中 —— stale-while-revalidate。
-   * 加 min-delay：fetch 在 STALE_DIM_DELAY 内完成则永远不显示降透明，
-   * 避免 LAN 缓存等快请求下的「闪一下变 40%」幽灵闪烁。 */
-  const showingStale = staleShown && doc !== null && doc.id !== id
 
   // 首屏骨架：结构与正式布局一致（header + 内容列 + 右栏），加载完成后布局零跳动
   if (!doc && loading) {
@@ -355,8 +340,8 @@ export default function DocPage() {
 
         {/* Scrollable Document Body — scrollbar-gutter 预留滚动条位，切换文档时内容不横移 */}
         <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
-          {/* stale-while-revalidate：切换文档时保留旧内容降透明，新文档就地替换，无闪烁 */}
-          <div className={`transition-opacity duration-200 ${showingStale ? 'opacity-40' : 'opacity-100'}`}>
+          {/* 切换文档时保留旧内容完整展示，新数据到了直接替换 */}
+          <div>
             <div className="w-full max-w-4xl mx-auto px-8 pt-14 pb-32 animate-fade-in">
             {indexJob && (indexJob.state === 'pending' || indexJob.state === 'running') && (
               <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
@@ -492,7 +477,7 @@ export default function DocPage() {
 
       {/* Right Sidebar (Desktop only) — AI 聊天打开时让位，避免双栏堆叠的割裂感 */}
       {!aiChatOpen && (
-        <div className={`hidden lg:flex flex-col w-72 shrink-0 bg-sidebar/30 h-full transition-opacity duration-200 ${showingStale ? 'opacity-40' : 'opacity-100'}`}>
+        <div className="hidden lg:flex flex-col w-72 shrink-0 bg-sidebar/30 h-full">
           {/* 顶栏占位：三栏 h-14 水平基准线对齐 */}
           <div className="h-14 shrink-0 border-b border-border/50" />
           <div className="flex-1 overflow-y-auto p-6 space-y-5">
