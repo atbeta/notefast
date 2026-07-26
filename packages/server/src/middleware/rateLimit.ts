@@ -1,17 +1,17 @@
 import type { Context, Next } from 'hono'
 
 interface RateLimitOpts {
-  /** 每分钟最大请求数，默认 200 */
+  /** 每分钟最大请求数，默认 600 */
   perMin?: number
-  /** 是否启用，默认 true */
+  /** 是否启用，默认 false（单用户工具不需要限速） */
   enabled?: boolean
 }
 
 const WINDOW_MS = 60_000
 
 export function createRateLimit(opts?: RateLimitOpts) {
-  const maxPerMin = opts?.perMin ?? parseInt(process.env.RATE_LIMIT_PER_MIN || '200', 10)
-  const enabled = opts?.enabled ?? (process.env.RATE_LIMIT_ENABLED || 'true') !== 'false'
+  const maxPerMin = opts?.perMin ?? parseInt(process.env.RATE_LIMIT_PER_MIN || '600', 10)
+  const enabled = opts?.enabled ?? (process.env.RATE_LIMIT_ENABLED || 'false') !== 'false'
 
   if (!enabled || maxPerMin <= 0) return null
 
