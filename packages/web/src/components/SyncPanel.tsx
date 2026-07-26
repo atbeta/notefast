@@ -54,18 +54,6 @@ const EMPTY_WEBDAV: WebDavAdapterConfig = {
   enabled: true,
 }
 
-/** form.kind 可能已被切换，但 onChange 仍以旧 form 闭包调用 —— 把当前 form
-    提升到对应适配器并 patch；处理「所有适配器表单同时挂载」时的输入回填 */
-function s3WithPatch(form: FormState, patch: Partial<S3AdapterConfig>): S3AdapterConfig {
-  if (form.kind === 's3') return { ...form, ...patch }
-  return { ...EMPTY_S3, ...patch, kind: 's3', enabled: true }
-}
-
-function webdavWithPatch(form: FormState, patch: Partial<WebDavAdapterConfig>): WebDavAdapterConfig {
-  if (form.kind === 'webdav') return { ...form, ...patch }
-  return { ...EMPTY_WEBDAV, ...patch, kind: 'webdav', enabled: true }
-}
-
 export default function SyncPanel() {
   const [status, setStatus] = useState<SyncRuntimeStatus | null>(null)
   const [adapters, setAdapters] = useState<AdapterInfo[]>([])
@@ -191,12 +179,11 @@ export default function SyncPanel() {
         aria-expanded={!collapsed}
         className="w-full flex items-center justify-between gap-2 px-5 py-3.5 hover:bg-accent/60 transition-colors"
       >
-        <div className="flex items-center gap-2.5 text-[13.5px] font-medium text-foreground">
-          <SettingsIcon className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
-          <span>Markdown 归档（单向）</span>
+        <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+          <SettingsIcon className="w-4 h-4" strokeWidth={1.75} />
           {status?.configured ? (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/12 text-emerald-600 dark:text-emerald-300 font-medium">
-              {status.adapterName}
+              已启用 · {status.adapterName}
             </span>
           ) : (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
@@ -252,103 +239,99 @@ export default function SyncPanel() {
               </div>
             </div>
 
-            {/* Configuration form: 4 个候选（chooser + 3 适配器）叠在同一 grid cell，
-                容器高度由最高者决定，切换只换透明度，避免下方内容抖动 */}
+            {/* Configuration: chooser at top, then conditionally render only the selected adapter form */}
             <div className="space-y-3 pt-2 border-t border-border/60">
               <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">启用方式</h4>
-              <div className="grid">
-                <div
-                  className={`col-start-1 row-start-1 space-y-3 transition-opacity duration-200 ${
-                    form.kind === 'none' ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...EMPTY_LOCALFS })}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border ${
+                    form.kind === 'localfs'
+                      ? 'border-foreground/30 bg-accent text-foreground'
+                      : 'border-border bg-background text-muted-foreground hover:bg-accent'
                   }`}
-                  aria-hidden={form.kind !== 'none'}
                 >
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setForm({ ...EMPTY_LOCALFS })}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-accent"
-                    >
-                      <FolderOpen className="w-4 h-4" /> 本地文件
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setForm({ ...EMPTY_S3 })}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-accent"
-                    >
-                      <Cloud className="w-4 h-4" /> S3 兼容
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setForm({ ...EMPTY_WEBDAV })}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-accent"
-                    >
-                      <HardDrive className="w-4 h-4" /> WebDAV
-                    </button>
-                  </div>
-                </div>
+                  <FolderOpen className="w-4 h-4" /> 本地文件
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...EMPTY_S3 })}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border ${
+                    form.kind === 's3'
+                      ? 'border-foreground/30 bg-accent text-foreground'
+                      : 'border-border bg-background text-muted-foreground hover:bg-accent'
+                  }`}
+                >
+                  <Cloud className="w-4 h-4" /> S3 兼容
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...EMPTY_WEBDAV })}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border ${
+                    form.kind === 'webdav'
+                      ? 'border-foreground/30 bg-accent text-foreground'
+                      : 'border-border bg-background text-muted-foreground hover:bg-accent'
+                  }`}
+                >
+                  <HardDrive className="w-4 h-4" /> WebDAV
+                </button>
+              </div>
 
-                <div
-                  className={`col-start-1 row-start-1 space-y-3 transition-opacity duration-200 ${
-                    form.kind === 'localfs' ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                  }`}
-                  aria-hidden={form.kind !== 'localfs'}
-                >
+              {form.kind === 'localfs' && (
+                <div className="space-y-3">
                   <TextField
                     label="导出目录"
-                    value={form.kind === 'localfs' ? form.dir : ''}
-                    onChange={(v) => setForm({ kind: 'localfs', dir: v, prefix: form.kind === 'localfs' ? form.prefix : '', enabled: true })}
+                    value={form.dir}
+                    onChange={(v) => setForm({ ...form, dir: v })}
                     placeholder="/path/to/your/notes"
                     mono
                   />
                   <TextField
                     label="文件名前缀（可选）"
-                    value={form.kind === 'localfs' ? (form.prefix ?? '') : ''}
-                    onChange={(v) => setForm({ kind: 'localfs', dir: form.kind === 'localfs' ? form.dir : '', prefix: v, enabled: true })}
+                    value={form.prefix ?? ''}
+                    onChange={(v) => setForm({ ...form, prefix: v })}
                     placeholder="notes/"
                     mono
                   />
                 </div>
+              )}
 
-                <div
-                  className={`col-start-1 row-start-1 space-y-3 transition-opacity duration-200 ${
-                    form.kind === 's3' ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                  }`}
-                  aria-hidden={form.kind !== 's3'}
-                >
+              {form.kind === 's3' && (
+                <div className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <TextField
                       label="Bucket"
-                      value={form.kind === 's3' ? form.bucket : ''}
-                      onChange={(v) => setForm(s3WithPatch(form, { bucket: v }))}
+                      value={form.bucket}
+                      onChange={(v) => setForm({ ...form, bucket: v })}
                       placeholder="my-notefast-bucket"
                       mono
                     />
                     <TextField
                       label="Region"
-                      value={form.kind === 's3' ? form.region : ''}
-                      onChange={(v) => setForm(s3WithPatch(form, { region: v }))}
+                      value={form.region}
+                      onChange={(v) => setForm({ ...form, region: v })}
                       placeholder="us-east-1"
                       mono
                     />
                     <TextField
                       label="Endpoint（MinIO / R2 / OSS 必填）"
-                      value={form.kind === 's3' ? (form.endpoint ?? '') : ''}
-                      onChange={(v) => setForm(s3WithPatch(form, { endpoint: v }))}
+                      value={form.endpoint ?? ''}
+                      onChange={(v) => setForm({ ...form, endpoint: v })}
                       placeholder="https://s3.amazonaws.com"
                       mono
                     />
                     <TextField
                       label="Key 前缀"
-                      value={form.kind === 's3' ? (form.prefix ?? '') : ''}
-                      onChange={(v) => setForm(s3WithPatch(form, { prefix: v }))}
+                      value={form.prefix ?? ''}
+                      onChange={(v) => setForm({ ...form, prefix: v })}
                       placeholder="notes/"
                       mono
                     />
                     <TextField
                       label="Access Key ID"
-                      value={form.kind === 's3' ? form.accessKeyId : ''}
-                      onChange={(v) => setForm(s3WithPatch(form, { accessKeyId: v }))}
+                      value={form.accessKeyId}
+                      onChange={(v) => setForm({ ...form, accessKeyId: v })}
                       placeholder="AKIA..."
                       mono
                     />
@@ -357,8 +340,8 @@ export default function SyncPanel() {
                       <div className="mt-1 flex items-center gap-2">
                         <input
                           type={showS3Secret ? 'text' : 'password'}
-                          value={form.kind === 's3' ? form.secretAccessKey : ''}
-                          onChange={(e) => setForm(s3WithPatch(form, { secretAccessKey: e.target.value }))}
+                          value={form.secretAccessKey}
+                          onChange={(e) => setForm({ ...form, secretAccessKey: e.target.value })}
                           placeholder="••••••••"
                           className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
                         />
@@ -366,7 +349,7 @@ export default function SyncPanel() {
                           type="button"
                           onClick={() => setShowS3Secret((s) => !s)}
                           className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-accent"
-                          tabIndex={form.kind === 's3' ? 0 : -1}
+                          tabIndex={0}
                         >
                           {showS3Secret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
@@ -376,35 +359,31 @@ export default function SyncPanel() {
                   <label className="flex items-center gap-2 text-sm min-h-7">
                     <input
                       type="checkbox"
-                      checked={form.kind === 's3' ? form.forcePathStyle : false}
-                      onChange={(e) => setForm(s3WithPatch(form, { forcePathStyle: e.target.checked }))}
-                      tabIndex={form.kind === 's3' ? 0 : -1}
+                      checked={form.forcePathStyle}
+                      onChange={(e) => setForm({ ...form, forcePathStyle: e.target.checked })}
                     />
                     <span>Path-style endpoint（MinIO 必需，AWS / R2 默认关闭）</span>
                   </label>
                 </div>
+              )}
 
-                <div
-                  className={`col-start-1 row-start-1 space-y-3 transition-opacity duration-200 ${
-                    form.kind === 'webdav' ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                  }`}
-                  aria-hidden={form.kind !== 'webdav'}
-                >
-                  <div className="text-[10.5px] text-muted-foreground/70 leading-relaxed -mt-1">
+              {form.kind === 'webdav' && (
+                <div className="space-y-3">
+                  <div className="text-[10.5px] text-muted-foreground/70 leading-relaxed">
                     支持 NextCloud / ownCloud / 群晖 / 极空间 / 威联通 / 坚果云 WebDAV。
                     第一次推送时前缀不存在会创建中间目录。
                   </div>
                   <TextField
                     label="Endpoint URL"
-                    value={form.kind === 'webdav' ? form.endpoint : ''}
-                    onChange={(v) => setForm(webdavWithPatch(form, { endpoint: v }))}
+                    value={form.endpoint}
+                    onChange={(v) => setForm({ ...form, endpoint: v })}
                     placeholder="https://nas.local/dav/ 或 https://dav.jianguoyun.com/dav/"
                     mono
                   />
                   <TextField
                     label="用户名"
-                    value={form.kind === 'webdav' ? form.username : ''}
-                    onChange={(v) => setForm(webdavWithPatch(form, { username: v }))}
+                    value={form.username}
+                    onChange={(v) => setForm({ ...form, username: v })}
                     mono
                   />
                   <div>
@@ -412,8 +391,8 @@ export default function SyncPanel() {
                     <div className="mt-1 flex items-center gap-2">
                       <input
                         type={showWebDavSecret ? 'text' : 'password'}
-                        value={form.kind === 'webdav' ? form.password : ''}
-                        onChange={(e) => setForm(webdavWithPatch(form, { password: e.target.value }))}
+                        value={form.password}
+                        onChange={(e) => setForm({ ...form, password: e.target.value })}
                         placeholder="••••••••"
                         className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
                       />
@@ -421,7 +400,7 @@ export default function SyncPanel() {
                         type="button"
                         onClick={() => setShowWebDavSecret((s) => !s)}
                         className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-accent"
-                        tabIndex={form.kind === 'webdav' ? 0 : -1}
+                        tabIndex={0}
                       >
                         {showWebDavSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -429,13 +408,13 @@ export default function SyncPanel() {
                   </div>
                   <TextField
                     label="远端子目录前缀（可选）"
-                    value={form.kind === 'webdav' ? (form.prefix ?? '') : ''}
-                    onChange={(v) => setForm(webdavWithPatch(form, { prefix: v }))}
+                    value={form.prefix ?? ''}
+                    onChange={(v) => setForm({ ...form, prefix: v })}
                     placeholder="notes/"
                     mono
                   />
                 </div>
-              </div>
+              )}
 
               {form.kind !== 'none' && (
                 <TextField

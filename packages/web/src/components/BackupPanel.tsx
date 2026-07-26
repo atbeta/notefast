@@ -160,9 +160,8 @@ export default function BackupPanel() {
         aria-expanded={!collapsed}
         className="w-full flex items-center justify-between gap-2 px-5 py-3.5 hover:bg-accent/60 transition-colors"
       >
-        <div className="flex items-center gap-2.5 text-[13.5px] font-medium text-foreground">
-          <Database className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
-          <span>数据库备份 (SQLite → S3)</span>
+        <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+          <Database className="w-4 h-4" strokeWidth={1.75} />
           {status?.configured ? (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/12 text-emerald-600 dark:text-emerald-300 font-medium">
               已启用
