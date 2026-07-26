@@ -21,7 +21,7 @@
  */
 
 import type { ChatMessage, ToolCall, ToolDefinition, BlockRow } from '@notefast/core'
-import { ThinkStreamParser, splitThinkContent, rowToBlock, readDocStatus, readTags, parseStaleWithin, parseUpdatedWithin } from '@notefast/core'
+import { ThinkStreamParser, splitThinkContent, rowToBlock, readDocStatus, readTags, parseStaleWithin, parseUpdatedWithin, messageText } from '@notefast/core'
 import type { Citation } from './hybridSearch'
 import { getDb } from '../db'
 import { hybridSearch, type HybridSearchReport } from './hybridSearch'
@@ -516,7 +516,8 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
   }
 
   const lastUser = [...opts.messages].reverse().find((m) => m.role === 'user')
-  if (!lastUser || !lastUser.content.trim()) {
+  const lastUserText = lastUser ? messageText(lastUser.content) : ''
+  if (!lastUser || !lastUserText.trim()) {
     yield {
       type: 'error',
       error: { code: 'no_user_message', message: '未提供用户消息' },
@@ -528,7 +529,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
   let initialReport: HybridSearchReport
   try {
     initialReport = await hybridSearch({
-      query: lastUser.content,
+      query: lastUserText,
       contextDocId: opts.contextDocId,
       notebookId: opts.notebookId,
       since: opts.since,
@@ -649,7 +650,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
           })
 
           for (const tc of toolCalls) {
-            const exec = await executeToolCall(tc.name, tc.args, lastUser.content, {
+            const exec = await executeToolCall(tc.name, tc.args, lastUserText, {
               notebookId: opts.notebookId,
               ctxDocId: opts.contextDocId,
               since: opts.since,

@@ -509,7 +509,16 @@ const suggestSchema = z.object({
 
 const chatMessageSchema = z.object({
   role: z.enum(['system', 'user', 'assistant']),
-  content: z.string().min(1).max(50_000),
+  content: z.union([
+    z.string().min(1).max(50_000),
+    // 多模态（图片随 data URL 透传给视觉模型；仅在 vision 开启时由前端附加）
+    z.array(
+      z.union([
+        z.object({ type: z.literal('text'), text: z.string().max(50_000) }),
+        z.object({ type: z.literal('image_url'), image_url: z.object({ url: z.string().max(15_000_000) }) }),
+      ]),
+    ).min(1).max(10),
+  ]),
 })
 
 const chatSchema = z.object({

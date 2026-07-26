@@ -74,6 +74,8 @@ export interface Capabilities {
   chat: boolean
   reranker: boolean
   hybrid_search: boolean
+  /** 图片理解（chat 已配置且设置开启）：聊天图片输入 / 索引 caption 的显示依据 */
+  vision: boolean
   external_sources: string[]
 }
 
@@ -224,6 +226,7 @@ export class AiRuntime {
       reranker: hasRerank,
       // 至少有 embedding 或 FTS5 之一（后者始终可用）即为真；为简洁，恒 true 表示"检索可用"
       hybrid_search: true,
+      vision: this.hasVision(),
       external_sources: [],
     }
   }

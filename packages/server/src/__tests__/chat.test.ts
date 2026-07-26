@@ -477,6 +477,70 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
     expect(secondCallBody).not.toContain('正式笔记ZZZ')
   })
 
+  /** 多模态消息：图片段原样透传给模型，文本段用于检索（不报 no_user_message） */
+  test('带图片的 user 消息：文本段参与检索，图片段透传', async () => {
+    applyNewConfig(
+      {
+        version: 1,
+        chat: {
+          id: 'x',
+          label: 'x',
+          preset: 'custom',
+          baseUrl: 'http://mock',
+          apiKey: '',
+          embeddingModel: '',
+          chatModel: 'fake-chat',
+          timeoutMs: 5000,
+          extraHeaders: {},
+        },
+        embedding: null,
+        autoIndex: false,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+
+    let firstCallBody = ''
+    const encoder = new TextEncoder()
+    const fetcher: typeof fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      firstCallBody = String(init?.body ?? '')
+      return new Response(
+        new ReadableStream({
+          start(c) {
+            c.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"这是一张架构图"}}]}\n\n'))
+            c.enqueue(encoder.encode('data: [DONE]\n\n'))
+            c.close()
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      ) as unknown as Response
+    }) as unknown as typeof fetch
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl(fetcher)
+
+    const events: string[] = []
+    for await (const ev of runChat({
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: '这张图讲了什么' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,QUJD' } },
+          ],
+        },
+      ],
+    })) {
+      events.push(ev.type)
+    }
+
+    expect(events).not.toContain('error')
+    expect(events).toContain('done')
+    // 多模态结构原样透传给 provider
+    expect(firstCallBody).toContain('image_url')
+    expect(firstCallBody).toContain('data:image/png;base64,QUJD')
+    expect(firstCallBody).toContain('这张图讲了什么')
+  })
+
   /**
    * Time-window filter：since/until 限制返回的 blocks
    */

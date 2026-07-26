@@ -5,9 +5,17 @@
  * 此文件只保留接口契约，便于未来替换为其他实现（如 transformers.js 本地推理）。
  */
 
+/**
+ * OpenAI 多模态消息内容段（与 chat/completions 线格式一致，可原样透传）。
+ * 图片用 data URL（base64）承载——外部 LLM 无法访问自托管实例的 asset URL。
+ */
+export type ChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
-  content: string
+  content: string | ChatContentPart[]
   /** 对应被调用的 tool_call.id（role=tool 时必填） */
   tool_call_id?: string
   /**
@@ -21,6 +29,15 @@ export interface ChatMessage {
     type: 'function'
     function: { name: string; arguments: string }
   }>
+}
+
+/** 提取消息纯文本：多模态消息拼接全部 text 段（检索 query / 历史压缩等场景用） */
+export function messageText(content: ChatMessage['content']): string {
+  if (typeof content === 'string') return content
+  return content
+    .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+    .map((p) => p.text)
+    .join('\n')
 }
 
 /** OpenAI response_format 兼容选项 */

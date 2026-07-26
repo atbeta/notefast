@@ -15,6 +15,7 @@ import {
   Inbox,
   Archive,
   CalendarDays,
+  ImagePlus,
 } from 'lucide-react'
 import { request, fetchWithAuth } from '../hooks/useAPI'
 import ChatMarkdown from './ChatMarkdown'
@@ -38,6 +39,15 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   reasoning?: string
+  /** 用户消息附带的图片（data URL，仅本地展示；历史轮次不重复发送） */
+  images?: string[]
+}
+
+/** 待发送的图片附件（base64 data URL 随消息透传给视觉模型，不落库） */
+interface Attachment {
+  dataUrl: string
+  mime: string
+  name: string
 }
 
 interface Citation {
@@ -85,13 +95,15 @@ export default function AIChatPanel({
   const [toolStatus, setToolStatus] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [capabilities, setCapabilities] = useState<{ chat: boolean; reranker: boolean; embedding: boolean } | null>(null)
+  const [capabilities, setCapabilities] = useState<{ chat: boolean; reranker: boolean; embedding: boolean; vision?: boolean } | null>(null)
   const [configMissing, setConfigMissing] = useState(false)
+  const [attachments, setAttachments] = useState<Attachment[]>([])
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [skills, setSkills] = useState<AiSkill[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -103,7 +115,7 @@ export default function AIChatPanel({
   useEffect(() => {
     if (!isOpen) return
     let cancelled = false
-    request<{ chat: boolean; reranker: boolean; embedding: boolean }>('/ai/capabilities')
+    request<{ chat: boolean; reranker: boolean; embedding: boolean; vision?: boolean }>('/ai/capabilities')
       .then((cap) => {
         if (cancelled) return
         setCapabilities(cap)
@@ -169,19 +181,57 @@ export default function AIChatPanel({
     })
   }
 
+  const addAttachments = (files: Iterable<File>) => {
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) continue
+      if (file.size > 10 * 1024 * 1024) {
+        console.warn(`[chat] 图片超过 10MB，已跳过: ${file.name}`)
+        continue
+      }
+      const reader = new FileReader()
+      reader.onload = () => {
+        const dataUrl = String(reader.result || '')
+        if (!dataUrl.startsWith('data:image/')) return
+        setAttachments((prev) => [...prev, { dataUrl, mime: file.type, name: file.name }])
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || loading) return
+    const hasImages = attachments.length > 0
+    if ((!input.trim() && !hasImages) || loading) return
 
-    const userMessage = input.trim()
+    // 纯图片消息给一段兜底文本：服务端检索与校验都需要非空文本
+    const userMessage = input.trim() || '请描述这张图片的内容'
+    const sentAttachments = attachments
     setInput('')
-    const newHistory: Message[] = [...messages, { role: 'user', content: userMessage }]
+    setAttachments([])
+    const newHistory: Message[] = [
+      ...messages,
+      { role: 'user', content: userMessage, ...(hasImages ? { images: sentAttachments.map((a) => a.dataUrl) } : {}) },
+    ]
     setMessages(newHistory)
     setCitations([])
     setRetrieval(null)
     setToolStatus(null)
     setLoading(true)
     setConfigMissing(false)
+
+    // 图片只随当轮发送（data URL 透传给视觉模型），历史轮次保持纯文本以控制 token 成本
+    const outgoing = newHistory.map((m, i) => {
+      if (i === newHistory.length - 1 && hasImages) {
+        return {
+          role: m.role,
+          content: [
+            { type: 'text', text: userMessage },
+            ...sentAttachments.map((a) => ({ type: 'image_url', image_url: { url: a.dataUrl } })),
+          ],
+        }
+      }
+      return { role: m.role, content: m.content }
+    })
 
     const ac = new AbortController()
     abortRef.current = ac
@@ -191,7 +241,7 @@ export default function AIChatPanel({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: newHistory.map((m) => ({ role: m.role, content: m.content })),
+          messages: outgoing,
           context_doc_id: contextDocId,
           top_k: 5,
         }),
@@ -431,7 +481,16 @@ export default function AIChatPanel({
                         }`}
                       >
                         {msg.role === 'user' ? (
-                          msg.content
+                          <>
+                            {msg.images && msg.images.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                                {msg.images.map((src, i) => (
+                                  <img key={i} src={src} alt="附件图片" className="max-h-32 max-w-full rounded-md border border-border/40 object-contain" />
+                                ))}
+                              </div>
+                            )}
+                            {msg.content}
+                          </>
                         ) : (
                           <ChatMarkdown content={msg.content} />
                         )}
@@ -556,14 +615,64 @@ export default function AIChatPanel({
             })}
           </div>
         )}
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {attachments.map((a, i) => (
+              <div key={i} className="relative group">
+                <img src={a.dataUrl} alt={a.name} className="h-14 w-14 rounded-md border border-border/60 object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-ink text-ink-foreground text-[10px] leading-none flex items-center justify-center opacity-80 hover:opacity-100"
+                  title="移除"
+                >
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <form
           onSubmit={handleSubmit}
           className="relative flex items-end gap-2 bg-card border border-border rounded-xl shadow-sm focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all p-2"
         >
+          {capabilities?.vision && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  addAttachments(e.target.files ?? [])
+                  e.target.value = ''
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={configMissing}
+                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-40"
+                title="添加图片（或直接粘贴）"
+                aria-label="添加图片"
+              >
+                <ImagePlus className="w-4 h-4" strokeWidth={1.75} />
+              </button>
+            </>
+          )}
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onPaste={(e) => {
+              if (!capabilities?.vision) return
+              const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'))
+              if (files.length > 0) {
+                e.preventDefault()
+                addAttachments(files)
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
@@ -577,7 +686,7 @@ export default function AIChatPanel({
           />
           <button
             type="submit"
-            disabled={!input.trim() || loading || configMissing}
+            disabled={(!input.trim() && attachments.length === 0) || loading || configMissing}
             className="p-2 rounded-lg bg-ink text-ink-foreground disabled:opacity-40 hover:opacity-90 transition-opacity"
             title="发送 (Enter)"
             aria-label={loading ? '正在生成回复' : '发送'}
