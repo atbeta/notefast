@@ -34,6 +34,38 @@ export interface InsertDocFromMarkdownOptions {
   rejectEmpty?: boolean
   /** 初始标签（已 normalize） */
   tags?: string[]
+  /**
+   * 来源溯源（连接器架构预留）：外部系统推入的文档记录来源标识，
+   * 存于文档根 properties.source；后续同步按 (provider, external_id)
+   * 查找既有文档做更新而非重复新建（见 findDocIdBySource）。
+   */
+  source?: DocSourceRef
+}
+
+/** 外部来源标识（未来连接器：webhook / RSS / 剪藏插件等） */
+export interface DocSourceRef {
+  /** 来源提供方标识，如 'webhook' / 'rss' / 'chrome-clipper' */
+  provider: string
+  /** 来源系统内的唯一 ID（原文 URL、条目 ID 等） */
+  external_id: string
+  /** 最近一次同步时间（ISO） */
+  synced_at?: string
+}
+
+/**
+ * 按来源标识查找文档（upsert 语义的基础）：返回 docId 或 null。
+ * properties 是 JSON 文本，用 json_extract 精确匹配。
+ */
+export function findDocIdBySource(db: Db, provider: string, externalId: string): string | null {
+  const row = db
+    .query(
+      `SELECT id FROM blocks
+       WHERE type = 'document' AND is_deleted = 0
+         AND json_extract(properties, '$.source.provider') = ?
+         AND json_extract(properties, '$.source.external_id') = ?`,
+    )
+    .get(provider, externalId) as { id: string } | undefined
+  return row?.id ?? null
 }
 
 export interface InsertDocFromMarkdownResult {
@@ -65,11 +97,12 @@ export function insertDocFromMarkdown(
     db.run('PRAGMA defer_foreign_keys = ON')
 
     const initialTags = opts.tags?.length ? JSON.stringify(opts.tags) : '[]'
+    const docProperties = opts.source ? JSON.stringify({ source: opts.source }) : '{}'
 
     db.query(
       `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
-       VALUES (?, ?, NULL, ?, 'document', ?, ?, '{}', ?, ?, 0, 0, 0, ?, ?)`,
-    ).run(docId, opts.notebookId, docId, opts.title, computeContentHash(opts.title), initialTags, docStatus, now, now)
+       VALUES (?, ?, NULL, ?, 'document', ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)`,
+    ).run(docId, opts.notebookId, docId, opts.title, computeContentHash(opts.title), docProperties, initialTags, docStatus, now, now)
 
     blockIds = insertChildBlocks(db, {
       notebookId: opts.notebookId,

@@ -5,7 +5,7 @@ import { blocksToMarkdown, buildBlockTree } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import { initDb, closeDb, getDb } from '../db'
 import { fetchDocBlocks } from '../dbQueries'
-import { insertDocFromMarkdown, appendMarkdownToDoc } from '../services/docImport'
+import { insertDocFromMarkdown, appendMarkdownToDoc, findDocIdBySource } from '../services/docImport'
 
 let testDir: string
 let notebookId: string
@@ -131,5 +131,31 @@ describe('appendMarkdownToDoc', () => {
     const md = blocksToMarkdown(tree)
     expect(md).toContain('```js')
     expect(md).toContain('| a | b |')
+  })
+})
+
+describe('来源溯源（连接器预留）', () => {
+  test('带 source 创建后可按 (provider, external_id) 找回', () => {
+    const db = getDb()
+    const { docId } = insertDocFromMarkdown(db, {
+      notebookId,
+      title: '外部推入的文档',
+      markdown: '内容',
+      source: { provider: 'webhook', external_id: 'https://example.com/post/1', synced_at: '2026-07-26T00:00:00Z' },
+    })
+
+    expect(findDocIdBySource(db, 'webhook', 'https://example.com/post/1')).toBe(docId)
+    // provider / external_id 不匹配时不误中
+    expect(findDocIdBySource(db, 'rss', 'https://example.com/post/1')).toBeNull()
+    expect(findDocIdBySource(db, 'webhook', 'https://example.com/post/2')).toBeNull()
+
+    // 无 source 的文档不参与匹配
+    const { docId: plainId } = insertDocFromMarkdown(db, {
+      notebookId,
+      title: '普通文档',
+      markdown: '内容',
+    })
+    expect(plainId).not.toBe(docId)
+    expect(findDocIdBySource(db, 'webhook', '')).toBeNull()
   })
 })
