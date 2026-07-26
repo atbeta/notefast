@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.17.2](https://github.com/atbeta/notefast/compare/v0.17.1...v0.17.2) (2026-07-26)
+
+
+### Bug Fixes
+
+* **ai:** read webSearch API key from runtime, not publicView ([b613013](https://github.com/atbeta/notefast/commit/b6130133c442f64b24e9c821426b64096cf2259b))
+* **web:** cleanup settings page — remove duplicate titles, fix empty space ([b84c471](https://github.com/atbeta/notefast/commit/b84c4719984b324936feb0e00ff3a1910443e9b9))
+* **web:** delay skeleton screen to prevent flash on fast navigation ([d346544](https://github.com/atbeta/notefast/commit/d34654405c5ebfd41d046848441cfc1850bc34c5))
+
 ## [0.17.1](https://github.com/atbeta/notefast/compare/v0.17.0...v0.17.1) (2026-07-26)
 
 
