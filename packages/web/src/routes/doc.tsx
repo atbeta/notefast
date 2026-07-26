@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import type { Block, HeadingNode } from '@notefast/core'
 import { buildHeadingTree } from '@notefast/core'
@@ -95,6 +95,9 @@ export default function DocPage() {
   const [auxLoading, setAuxLoading] = useState(false)
   const [indexJob, setIndexJob] = useState<IndexJob | null>(null)
   const [showSkeleton, setShowSkeleton] = useState(false)
+  // 恢复 AI 可见触发的索引轮询（切换文档/重复点击时中止上一轮）
+  const indexJobAcRef = useRef<AbortController | null>(null)
+  useEffect(() => () => indexJobAcRef.current?.abort(), [])
 
   useEffect(() => {
     if (!id) return
@@ -234,9 +237,26 @@ export default function DocPage() {
     setAiExcludeSaving(true)
     try {
       const next = !aiExclude
-      await api.patch(`/docs/${id}/ai-exclude`, { ai_exclude: next })
+      const res = await api.patch<{ effect?: { index_job?: IndexJob } }>(`/docs/${id}/ai-exclude`, { ai_exclude: next })
       setAiExclude(next)
       setRefreshKey((k) => k + 1)
+      // 恢复可见：向量重建已在服务端异步调度，前端复用创建/导入的进度条 + 完成 toast
+      const jobId = res.effect?.index_job?.id
+      if (!next && jobId) {
+        indexJobAcRef.current?.abort()
+        const ac = new AbortController()
+        indexJobAcRef.current = ac
+        void pollIndexJob(jobId, {
+          signal: ac.signal,
+          onUpdate: (j) => { if (!ac.signal.aborted) setIndexJob(j) },
+        }).then((final) => {
+          if (ac.signal.aborted) return
+          setIndexJob(null)
+          if (final.state === 'ready') toast.success({ title: formatIndexProgress(final) })
+          else if (final.state === 'partial') toast.warning({ title: formatIndexProgress(final) })
+          else if (final.state === 'failed') toast.error({ title: formatIndexProgress(final) })
+        }).catch(() => {})
+      }
     } catch { /* silent */ }
     finally { setAiExcludeSaving(false) }
   }

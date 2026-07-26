@@ -13,7 +13,8 @@
 
 import { type BlockRow } from '@notefast/core'
 import { getDb } from '../db'
-import { deleteVector, indexBlock } from './indexer'
+import { deleteVector } from './indexer'
+import { scheduleDocIndex, type IndexJob } from './indexJobs'
 import { loadDocBlockIds } from './aiExcludeQuery'
 
 export {
@@ -24,25 +25,6 @@ export {
   loadDocBlockIds,
   readDocAiExclude,
 } from './aiExcludeQuery'
-
-/**
- * 关闭 ai_exclude 后重 build 该文档下所有 block 的向量。
- * 增量语义：content 为空或仍被排除的块不重建。
- */
-export async function reindexDocTree(docId: string): Promise<{ reindexed: number; errors: number }> {
-  const ids = loadDocBlockIds(docId)
-  let reindexed = 0
-  let errors = 0
-  for (const id of ids) {
-    try {
-      await indexBlock(id)
-      reindexed++
-    } catch {
-      errors++
-    }
-  }
-  return { reindexed, errors }
-}
 
 /** 写入 ai_exclude 到 blocks 显式列，返回更新后的 row */
 export function writeDocAiExclude(docId: string, aiExclude: boolean): BlockRow | null {
@@ -96,8 +78,10 @@ export async function purgeAiArtifactsForDoc(docId: string): Promise<{ vectors: 
 
 /**
  * 应用 ai_exclude 切换的副作用（在 properties 写入之后调用）。
- * - 关闭 → 启用：purge 所有 AI 产物
- * - 启用 → 关闭：重新 build 向量（AutoLink 在下一次 run 时自然重建）
+ * - 关闭 → 启用：purge 所有 AI 产物（本地删除，快）
+ * - 启用 → 关闭：调度文档级索引作业异步重建向量（批量 embed + 进度/ETA），
+ *   不在请求内逐块 await embedding API —— N 块 × 网络延迟会把接口卡到分钟级；
+ *   embedding / autoIndex 未启用时不重建（返回 { reindexed: 0 }）
  * - 无变化：返回 undefined
  */
 export interface AiExcludeChangeResult {
@@ -105,6 +89,8 @@ export interface AiExcludeChangeResult {
   suggestions?: number
   reindexed?: number
   errors?: number
+  /** 恢复可见时调度的索引作业（前端可轮询进度） */
+  index_job?: IndexJob
 }
 
 export async function applyAiExcludeChange(
@@ -116,6 +102,6 @@ export async function applyAiExcludeChange(
   if (newExcluded) {
     return await purgeAiArtifactsForDoc(docId)
   }
-  const { reindexed, errors } = await reindexDocTree(docId)
-  return { reindexed, errors }
+  const job = scheduleDocIndex(docId, loadDocBlockIds(docId))
+  return job ? { index_job: job } : { reindexed: 0, errors: 0 }
 }

@@ -121,3 +121,83 @@ describe('aiExclude helpers', () => {
     expect(disableResult?.reindexed).toBeGreaterThanOrEqual(0)
   })
 })
+
+describe('恢复可见 → 异步索引作业', () => {
+  test('不在调用内逐块 embed：立即返回 index_job，后台完成重建', async () => {
+    const { createPluginSystem } = await import('@notefast/core')
+    const { initAiRuntime, applyNewConfig, _setRuntimeForTests, getRuntime } = await import('../services/aiRuntime')
+    const { initVectorStore } = await import('../ai/indexer')
+    const { getIndexJob, _resetIndexJobsForTests } = await import('../ai/indexJobs')
+
+    const pluginSystem = createPluginSystem()
+    initAiRuntime(pluginSystem, testDir)
+    applyNewConfig(
+      {
+        version: 1,
+        chat: null,
+        embedding: {
+          id: 'emb-1',
+          label: 'Emb',
+          preset: 'custom',
+          baseUrl: 'https://api.example.com/v1',
+          apiKey: 'sk-test',
+          embeddingModel: 'test-embedding',
+          chatModel: '',
+          timeoutMs: 30_000,
+          extraHeaders: {},
+        },
+        autoIndex: true,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+    await initVectorStore()
+
+    // mock embedding API：按批量输入返回等长向量
+    const fetcher = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(init!.body as string)
+      const inputs: unknown[] = Array.isArray(body.input) ? body.input : [body.input]
+      return new Response(
+        JSON.stringify({ data: inputs.map((_, i) => ({ embedding: [0.1, 0.2, 0.3], index: i })) }),
+        { status: 200 },
+      )
+    }) as unknown as typeof fetch
+    getRuntime().setFetchImpl(fetcher)
+
+    const db = getDb()
+    const nb = db.query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const docId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', '恢复测试', 0, 0, ?, ?)`,
+    ).run(docId, nb.id, docId, now, now)
+    for (const [i, content] of ['块一', '块二'].entries()) {
+      db.query(
+        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'paragraph', ?, ?, 1, ?, ?)`,
+      ).run(crypto.randomUUID(), nb.id, docId, docId, content, i, now, now)
+    }
+
+    try {
+      const t0 = Date.now()
+      const result = await applyAiExcludeChange(docId, true, false)
+      // 关键断言：调用不阻塞在逐块 embedding 上
+      expect(Date.now() - t0).toBeLessThan(1000)
+      expect(result?.index_job).toBeDefined()
+
+      const jobId = result!.index_job!.id
+      let final = getIndexJob(jobId)
+      const deadline = Date.now() + 5000
+      while (final && (final.state === 'pending' || final.state === 'running') && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 100))
+        final = getIndexJob(jobId)
+      }
+      expect(final?.state).toBe('ready')
+      expect(final!.done + final!.skipped).toBe(3)
+    } finally {
+      _setRuntimeForTests(null)
+      _resetIndexJobsForTests()
+    }
+  })
+})
