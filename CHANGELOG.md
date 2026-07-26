@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.17.1](https://github.com/atbeta/notefast/compare/v0.17.0...v0.17.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* **ai:** remove Accept-Encoding header causing Brave Search 422 ([55da963](https://github.com/atbeta/notefast/commit/55da96316c556a723eabd5c478b882fb98089af5))
+* **server:** disable rate limiting by default for single-user mode ([28a883d](https://github.com/atbeta/notefast/commit/28a883de7fbb6d90f328c4271cbea628b8f0d8e4))
+* **web:** keep Settings icon in collapsed sidebar ([5387d41](https://github.com/atbeta/notefast/commit/5387d41737c3e4904079205df70a3d9a0ccf5625))
+* **web:** remove stale content dimming when switching documents ([d1bfc34](https://github.com/atbeta/notefast/commit/d1bfc3432f9daceca84451a70058ddb4dd3a9e97))
+* **web:** stabilize hook references to prevent infinite re-render loops ([46df378](https://github.com/atbeta/notefast/commit/46df3780f0189e19cff5284282c8577ad8e68636))
+
 ## [0.17.0](https://github.com/atbeta/notefast/compare/v0.16.0...v0.17.0) (2026-07-25)
 
 
