@@ -3,6 +3,16 @@ import { api } from './useAPI'
 
 const MAX_VIEWS = 50
 
+/**
+ * 规范化视图 query：统一去掉前导 ?。
+ * 历史上 pin 存过带 ? 的形式（buildListQuery 返回值），Sidebar 再拼 `/?` 前缀
+ * 会产生 `/??tags=...` 双问号链接，URLSearchParams 解析不出 tags 导致不过滤。
+ * 读侧统一 canonical 化，兼容已存库的旧数据。
+ */
+export function canonicalViewQuery(q: string): string {
+  return q.replace(/^\?+/, '')
+}
+
 export interface PinnedView {
   id: string
   name: string
@@ -39,7 +49,7 @@ export function usePinnedViews() {
   const pin = useCallback(async (name: string, query: string) => {
     if (views.length >= MAX_VIEWS) return false
     try {
-      await api.post('/pinned-views', { name: name.trim().slice(0, 50), query })
+      await api.post('/pinned-views', { name: name.trim().slice(0, 50), query: canonicalViewQuery(query) })
       bus.dispatchEvent(new Event(CHANGED))
       return true
     } catch {
@@ -55,7 +65,8 @@ export function usePinnedViews() {
   }, [])
 
   const isPinned = useCallback((query: string): boolean => {
-    return views.some((v) => v.query === query)
+    const target = canonicalViewQuery(query)
+    return views.some((v) => canonicalViewQuery(v.query) === target)
   }, [views])
 
   return { views, pin, unpin, isPinned }

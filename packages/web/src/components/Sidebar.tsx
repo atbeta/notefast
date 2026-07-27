@@ -23,7 +23,7 @@ import {
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import { useDocChanges } from '../hooks/useDocEvents'
-import { usePinnedViews } from '../hooks/usePinnedViews'
+import { usePinnedViews, canonicalViewQuery } from '../hooks/usePinnedViews'
 import type { DocSummary } from '@notefast/core'
 
 interface SidebarProps {
@@ -288,10 +288,10 @@ export default function Sidebar({
             {pinnedViews.map((v) => (
               <div key={v.id} className="group flex items-center gap-1">
                 <Link
-                  to={`/?${v.query}`}
+                  to={`/?${canonicalViewQuery(v.query)}`}
                   onClick={closeAfterNav}
                   className={`flex-1 px-2.5 py-1 rounded-md text-[13px] truncate transition-colors ${
-                    location.search === `?${v.query}`
+                    location.search === `?${canonicalViewQuery(v.query)}`
                       ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
                       : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                   }`}
