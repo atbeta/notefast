@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.21.0](https://github.com/atbeta/notefast/compare/v0.20.0...v0.21.0) (2026-07-27)
+
+
+### Features
+
+* **server,web:** doc sharing with public read-only links and expiry ([a77bbde](https://github.com/atbeta/notefast/commit/a77bbde528d63266bb53b3b87d67373283b9c131))
+
+
+### Bug Fixes
+
+* **web:** canonicalize pinned view query to fix double-question-mark links ([edba68d](https://github.com/atbeta/notefast/commit/edba68df6b0d53bb35b8b8819791605a80e6d508))
+* **web:** stale-while-revalidate in useApiQuery to kill skeleton flash on view switches ([07d3f13](https://github.com/atbeta/notefast/commit/07d3f13c7f20308c78f756a05ec4e66d6bac1a50))
+
 ## [0.20.0](https://github.com/atbeta/notefast/compare/v0.19.0...v0.20.0) (2026-07-27)
 
 
