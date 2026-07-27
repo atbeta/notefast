@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.20.0](https://github.com/atbeta/notefast/compare/v0.19.0...v0.20.0) (2026-07-27)
+
+
+### Features
+
+* **server,web,core:** smart view presets, archived search, chat robustness ([353fdeb](https://github.com/atbeta/notefast/commit/353fdebd4a327b78f9227f4dac2a22db5237fa41))
+
+
+### Bug Fixes
+
+* **server,web:** keep SSE alive past Bun idleTimeout; show pinned views ([acdc8c6](https://github.com/atbeta/notefast/commit/acdc8c67b1637b2b61bc7b5757aafb3278f80407))
+
 ## [0.19.0](https://github.com/atbeta/notefast/compare/v0.18.0...v0.19.0) (2026-07-27)
 
 
