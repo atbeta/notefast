@@ -541,39 +541,49 @@ ai.post('/chat', zValidator('json', chatSchema), async (c) => {
 
   if (stream) {
     return streamSSE(c, async (sse) => {
-      for await (const ev of runChat({
-        messages,
-        contextDocId: body.context_doc_id,
-        topK: body.top_k,
-        ftsLimit: body.fts_limit,
-        semanticLimit: body.semantic_limit,
-        rerankWindow: body.rerank_window,
-        temperature: body.temperature,
-        maxTokens: body.max_tokens,
-      })) {
-        if (ev.type === 'retrieval') {
-          await sse.writeSSE({ event: 'retrieval', data: JSON.stringify(ev.report) })
-        } else if (ev.type === 'tool') {
-          await sse.writeSSE({
-            event: 'tool',
-            data: JSON.stringify({ tool: ev.tool, args: ev.args, result_count: ev.resultCount }),
-          })
-        } else if (ev.type === 'reasoning') {
-          await sse.writeSSE({ event: 'reasoning', data: JSON.stringify({ content: ev.content }) })
-        } else if (ev.type === 'token') {
-          await sse.writeSSE({ event: 'token', data: JSON.stringify({ content: ev.content }) })
-        } else if (ev.type === 'done') {
-          await sse.writeSSE({
-            event: 'done',
-            data: JSON.stringify({
-              citations: ev.citations,
-              retrieval: ev.retrieval,
-              tool_trace: ev.toolTrace,
-            }),
-          })
-        } else if (ev.type === 'error') {
-          await sse.writeSSE({ event: 'error', data: JSON.stringify(ev.error) })
+      // 心跳：首轮检索（embedding/rerank 往返）与 LLM 首 token / agent 工具轮之间
+      // 可能出现 >10s 无事件的空窗，10s 一帧 ping 防止 Bun idleTimeout 与中间
+      // 代理（Traefik/CF）掐断连接。前端解析时无匹配分支会自然忽略 ping 帧。
+      const heartbeat = setInterval(() => {
+        sse.writeSSE({ event: 'ping', data: '{}' }).catch(() => {})
+      }, 10_000)
+      try {
+        for await (const ev of runChat({
+          messages,
+          contextDocId: body.context_doc_id,
+          topK: body.top_k,
+          ftsLimit: body.fts_limit,
+          semanticLimit: body.semantic_limit,
+          rerankWindow: body.rerank_window,
+          temperature: body.temperature,
+          maxTokens: body.max_tokens,
+        })) {
+          if (ev.type === 'retrieval') {
+            await sse.writeSSE({ event: 'retrieval', data: JSON.stringify(ev.report) })
+          } else if (ev.type === 'tool') {
+            await sse.writeSSE({
+              event: 'tool',
+              data: JSON.stringify({ tool: ev.tool, args: ev.args, result_count: ev.resultCount }),
+            })
+          } else if (ev.type === 'reasoning') {
+            await sse.writeSSE({ event: 'reasoning', data: JSON.stringify({ content: ev.content }) })
+          } else if (ev.type === 'token') {
+            await sse.writeSSE({ event: 'token', data: JSON.stringify({ content: ev.content }) })
+          } else if (ev.type === 'done') {
+            await sse.writeSSE({
+              event: 'done',
+              data: JSON.stringify({
+                citations: ev.citations,
+                retrieval: ev.retrieval,
+                tool_trace: ev.toolTrace,
+              }),
+            })
+          } else if (ev.type === 'error') {
+            await sse.writeSSE({ event: 'error', data: JSON.stringify(ev.error) })
+          }
         }
+      } finally {
+        clearInterval(heartbeat)
       }
     })
   }

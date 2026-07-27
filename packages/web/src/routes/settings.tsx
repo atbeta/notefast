@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sun, Moon, Monitor, Database, Settings as SettingsIcon, Sparkles } from 'lucide-react'
-import ApiTokensPanel from '../components/ApiTokensPanel'
+import { Sun, Moon, Monitor, Database, Settings as SettingsIcon, Sparkles, Key } from 'lucide-react'
 import SummaryCard from '../components/SummaryCard'
 import { useTheme } from '../hooks/useTheme'
 import { api } from '../hooks/useAPI'
@@ -36,8 +35,13 @@ export default function SettingsPage() {
         <h2 className="px-0.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80 select-none">
           数据主权
         </h2>
-        <ApiTokensPanel />
         <div className="space-y-2.5">
+          <SummaryCard
+            icon={<Key className="w-4 h-4" strokeWidth={1.75} />}
+            title="API Token"
+            description="为外部工具、MCP 客户端或脚本创建独立 Token，支持读写权限拆分与独立撤销。"
+            to="/settings/tokens"
+          />
           <SummaryCard
             icon={<Database className="w-4 h-4" strokeWidth={1.75} />}
             title="数据库备份 (SQLite → S3)"

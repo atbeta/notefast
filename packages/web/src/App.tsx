@@ -7,6 +7,7 @@ import SettingsPage from './routes/settings'
 import SettingsAIPage from './routes/settings-ai'
 import SettingsBackupPage from './routes/settings-backup'
 import SettingsSyncPage from './routes/settings-sync'
+import SettingsTokensPage from './routes/settings-tokens'
 import InboxPage from './routes/inbox'
 import ArchivedPage from './routes/archived'
 import AutolinkPage from './routes/autolink'
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/settings/ai" element={<SettingsAIPage />} />
             <Route path="/settings/backup" element={<SettingsBackupPage />} />
             <Route path="/settings/sync" element={<SettingsSyncPage />} />
+            <Route path="/settings/tokens" element={<SettingsTokensPage />} />
           </Routes>
         </RouteTransition>
       </Layout>

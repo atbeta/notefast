@@ -22,7 +22,7 @@ import type {
   StreamChatChunk,
   ToolDefinition,
 } from '../llm'
-import { createTeiReranker } from '../reranker'
+import { createReranker } from '../reranker'
 import type { RerankHit, RerankInput, RerankerProvider } from '../reranker'
 
 /** Runtime 状态对外可序列化视图（不含原始 key） */
@@ -158,7 +158,7 @@ export class AiRuntime {
     }
 
     if (cfg.reranker && cfg.reranker.enabled) {
-      this.rerankerProvider = createTeiReranker(
+      this.rerankerProvider = createReranker(
         cfg.reranker.baseUrl,
         cfg.reranker.model,
         this.fetchImpl,

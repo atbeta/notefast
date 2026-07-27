@@ -15,9 +15,9 @@ function viewTitle(params: URLSearchParams): string {
   if (params.get('untagged') === '1' || params.get('view') === 'untagged') return '未打标'
   const within = params.get('within') || params.get('updated_within') || ''
   if (params.get('view') === 'recent' || within) {
-    if (within === '7d') return '最近 7 天'
-    if (within === '30d') return '最近 30 天'
-    return '最近 24 小时'
+    if (within === '7d') return '最近 7 天更新'
+    if (within === '30d') return '最近 30 天更新'
+    return '最近 24 小时更新'
   }
   if (params.get('created_within')) {
     const v = params.get('created_within')!
@@ -25,7 +25,9 @@ function viewTitle(params: URLSearchParams): string {
   }
   if (params.get('stale_within')) {
     const v = params.get('stale_within')!
-    return `${v}天未更新`
+    if (v === '30d') return '30 天未更新'
+    if (v === '90d') return '90 天未更新'
+    return '许久未更新'
   }
   if (params.get('ai_exclude') === '1') return '对 AI 隐藏'
   if (params.get('status') === 'archived') return '归档'
@@ -98,6 +100,8 @@ export default function HomePage() {
 
   const hasFilter = searchParams.get('tags') || searchParams.get('tag') ||
     searchParams.get('status') || searchParams.get('updated_within') ||
+    searchParams.get('created_within') || searchParams.get('stale_within') ||
+    searchParams.get('ai_exclude') === '1' ||
     searchParams.get('untagged') === '1' || searchParams.get('view') === 'untagged' ||
     searchParams.get('view') === 'recent'
 

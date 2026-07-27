@@ -21,9 +21,10 @@
  */
 
 import type { ChatMessage, ToolCall, ToolDefinition, BlockRow } from '@notefast/core'
-import { ThinkStreamParser, splitThinkContent, rowToBlock, readDocStatus, readTags, parseStaleWithin, parseUpdatedWithin, messageText } from '@notefast/core'
+import { ThinkStreamParser, splitThinkContent, rowToBlock, readDocStatus, readTags, parseStaleWithin, parseUpdatedWithin, messageText, buildBlockTree, blocksToMarkdown } from '@notefast/core'
 import type { Citation } from './hybridSearch'
 import { getDb } from '../db'
+import { fetchDocBlocks } from '../dbQueries'
 import { hybridSearch, type HybridSearchReport } from './hybridSearch'
 import { buildChatPrompt } from './prompt'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
@@ -132,6 +133,25 @@ function getListDocsToolDefinition(): ToolDefinition {
   }
 }
 
+/** 读全文工具：检索只给片段，需要完整文章时让 LLM 主动拉取整篇 Markdown */
+function getReadDocToolDefinition(): ToolDefinition {
+  return {
+    type: 'function',
+    function: {
+      name: 'notefast_read_doc',
+      description:
+        '读取一篇文档的完整内容（Markdown）。检索结果只是 block 级片段，当需要完整文章、总结全文、或片段不足以回答时调用。doc_id 从检索结果或 notefast_list_docs 获取。',
+      parameters: {
+        type: 'object',
+        properties: {
+          doc_id: { type: 'string', description: '目标文档 ID' },
+        },
+        required: ['doc_id'],
+      },
+    },
+  }
+}
+
 function getWriteToolDefinitions(): ToolDefinition[] {
   return [
     {
@@ -185,7 +205,7 @@ function getWriteToolDefinitions(): ToolDefinition[] {
 }
 
 function getAllToolDefinitions(): ToolDefinition[] {
-  const tools: ToolDefinition[] = [getSearchToolDefinition(), getListDocsToolDefinition(), ...getWriteToolDefinitions()]
+  const tools: ToolDefinition[] = [getSearchToolDefinition(), getListDocsToolDefinition(), getReadDocToolDefinition(), ...getWriteToolDefinitions()]
   if (hasRuntime() && getRuntime().webSearchKey()) {
     tools.push({
       type: 'function',
@@ -277,6 +297,38 @@ async function executeToolCall(
       updated_at: r.updated_at,
     }))
     return { content: JSON.stringify({ docs, total: rows.length }), resultCount: docs.length }
+  }
+
+  if (name === 'notefast_read_doc') {
+    const docId = typeof args.doc_id === 'string' ? args.doc_id.trim() : ''
+    if (!docId) {
+      return { content: JSON.stringify({ error: 'doc_id 不能为空' }), resultCount: 0 }
+    }
+    const db = getDb()
+    const docRow = db
+      .query("SELECT * FROM blocks WHERE id = ? AND type = 'document' AND is_deleted = 0")
+      .get(docId) as BlockRow | undefined
+    if (!docRow) {
+      return { content: JSON.stringify({ error: `文档 ${docId} 不存在` }), resultCount: 0 }
+    }
+    const excluded = loadAiExcludedDocIds([docId])
+    if (excluded.has(docId)) {
+      return { content: JSON.stringify({ error: `文档 ${docId} 已对 AI 隐藏` }), resultCount: 0 }
+    }
+    let markdown = blocksToMarkdown(buildBlockTree(fetchDocBlocks(db, docId)))
+    // 上限防超长文档撑爆上下文；截断时明确告知，LLM 可改用 search_more 定位
+    const MAX_DOC_CHARS = 12_000
+    const truncated = markdown.length > MAX_DOC_CHARS
+    if (truncated) markdown = markdown.slice(0, MAX_DOC_CHARS)
+    return {
+      content: JSON.stringify({
+        doc_id: docId,
+        title: docRow.content,
+        markdown,
+        ...(truncated ? { truncated: true, note: `文档过长，仅返回前 ${MAX_DOC_CHARS} 字符` } : {}),
+      }),
+      resultCount: 1,
+    }
   }
 
   if (name === 'notefast_create_note') {

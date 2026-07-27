@@ -16,6 +16,9 @@ import {
   Link2,
   Star,
   X,
+  Clock,
+  Hourglass,
+  EyeOff,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
@@ -246,12 +249,36 @@ export default function Sidebar({
         <div className="mt-5">
           <SidebarSectionLabel label="智能视图" />
           <Link
+            to="/?updated_within=7d"
+            onClick={closeAfterNav}
+            className={location.search.includes('updated_within=7d') ? 'sidebar-link-active' : 'sidebar-link'}
+          >
+            <Clock className="w-[15px] h-[15px]" strokeWidth={1.75} />
+            最近 7 天更新
+          </Link>
+          <Link
             to="/?view=untagged"
             onClick={closeAfterNav}
             className={location.search.includes('untagged') || location.search.includes('view=untagged') ? 'sidebar-link-active' : 'sidebar-link'}
           >
             <Tag className="w-[15px] h-[15px]" strokeWidth={1.75} />
             未打标
+          </Link>
+          <Link
+            to="/?stale_within=90d"
+            onClick={closeAfterNav}
+            className={location.search.includes('stale_within=90d') ? 'sidebar-link-active' : 'sidebar-link'}
+          >
+            <Hourglass className="w-[15px] h-[15px]" strokeWidth={1.75} />
+            90 天未更新
+          </Link>
+          <Link
+            to="/?ai_exclude=1"
+            onClick={closeAfterNav}
+            className={location.search.includes('ai_exclude=1') ? 'sidebar-link-active' : 'sidebar-link'}
+          >
+            <EyeOff className="w-[15px] h-[15px]" strokeWidth={1.75} />
+            对 AI 隐藏
           </Link>
         </div>
 
