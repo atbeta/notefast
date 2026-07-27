@@ -85,7 +85,7 @@ notefast/
 │   │   └── src/
 │   │       ├── index.ts     # 入口，Hono 应用创建
 │   │       ├── db.ts        # SQLite 初始化、migrations
-│   │       ├── store/       # 数据访问层（blocks / block_refs / entity_changes 的唯一读写入口）
+│   │       ├── store/       # 数据访问层（blocks / block_refs / entity_changes / shares 的唯一读写入口）
 │   │       ├── dbQueries.ts # FTS5 检索查询构建（runFtsQuery；blocks 普通读写不走这里）
 │   │       ├── api/         # REST 路由（blocks, docs, search, refs, import, ai, sync, backup, autolink…）
 │   │       ├── mcp/         # MCP Server 与 Tool 定义
@@ -184,6 +184,7 @@ docker compose up -d
 - `listDocRows` 排序带 rowid 决胜（updated_at 秒精度，同秒写入必撞）：ASC 按入库序（归档导出确定性），DESC 后入库在前（「最近更新」语义）
 - 文档列表/导出统一排除软删除文档：MCP `list_docs`/`list_tags`、sync 三适配器与 autoExport 原先不过滤 `is_deleted`，已对齐 Web 语义；软删除文档会在下次全量同步时经 manifest 从远端归档清理
 - `updated_at` 语义 = 内容最后编辑时间（未来 LWW 裁决字段，客户端 push 可自带），**不做增量同步游标**；拉取游标用 `entity_changes.seq`（AUTOINCREMENT 单调递增，blocks 表 trigger 驱动，`store/changeFeed.ts` 只读封装）；change feed 清理策略待同步 API 落地时定，超窗客户端走全量快照重同步
+- 文档分享：`shares` 表（doc_id → 公开 token，schema v4）独立存储，开关不写 blocks（不触发 updated_at/hooks/索引/change feed）；管理 API `GET/PUT/DELETE /docs/:id/share`（PUT 幂等，关闭即删记录，重开全新 token 旧链接永久失效；仅对未删除文档开放）；有效期 `expires_at` 默认 NULL=永不过期（Notion 同款），可选 1/7/30 天（以调整为起点重算），过期=未分享（读取时惰性清理，公开/管理端点统一只见未过期）；**删除文档级联清除 shares 行（docs/blocks/notebooks 三条删除路径），恢复文档不复活旧链接，需重新开启**；公开端点 `/share/:token`（markdown，`Cache-Control: no-store`）与 `/share/:token/assets/:sha256`（限本文引用的图片，非全站代理；immutable 缓存、不写 Content-Length）挂在 `/api/*` 之外、无鉴权；Web 公开页 `/s/:token` 绕开 Layout/AuthPrompt，允许分享 inbox/archived/ai_exclude 文档（显式行为覆盖默认过滤）；MCP 分享工具未做
 - 内部 AI 功能边界：只做「采集/理解/检索/维护」四类笔记核心行为；通用聊天客户端能力（多会话、语音对话、角色市场）与平台生态能力（Agent 运行时、插件市场）外放给 MCP 消费方；外部连接器未来可能做，已预留 `properties.source`（`{provider, external_id, synced_at}`）+ `findDocIdBySource()` 供 upsert
 - 内置 skills：`server/src/ai/skills.ts` 注册表（prompt 模板，非 skill 运行时），`GET /ai/skills` 下发（`{{today}}` 服务端插值），聊天面板 chip 点击填入输入框；执行走现有 agent loop，写操作为建议模式；chat 工具含 `notefast_list_docs`（status/stale/updated 过滤）与 `notefast_read_doc`（读整篇 Markdown，12k 字符截断）；`/ai/chat` SSE 每 10s 写 `ping` 帧防 idleTimeout/代理断连（前端无匹配分支自然忽略）
 - 图片理解：`vision.enabled` 设置开关（默认关）；索引时 `asset_captions`（schema v3，按 asset sha256 缓存）生成 caption 拼入索引文本（hash/freshness 以拼接后文本为准）；聊天图片走 `ChatMessage.content` 多模态 parts（base64 data URL，仅当轮发送，历史保持纯文本）；能力经 `/ai/capabilities` 的 `vision` 字段下发

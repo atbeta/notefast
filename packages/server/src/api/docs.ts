@@ -17,6 +17,7 @@ import {
   nowTimestamp,
 } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
+import { getShareByDocId, createShare, deleteShare, setShareExpiry, deleteSharesByDocIds } from '../store/shares'
 import { insertDocFromMarkdown, insertChildBlocks } from '../services/docImport'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
@@ -217,6 +218,78 @@ const aiExcludeSchema = z.object({
   ai_exclude: z.boolean(),
 })
 
+// ───────────────────── 分享（公开只读链接）─────────────────────
+// 独立 shares 表：开关不触发 updated_at / hooks / 索引 / change feed。
+// 允许分享 inbox / archived / ai_exclude 文档（显式用户行为覆盖默认过滤）。
+// 有效期：默认永不过期（Notion 同款），可选 1/7/30 天；过期 = 未分享（惰性清理）。
+
+const sharePutSchema = z.object({
+  expires_in_days: z.union([z.literal(1), z.literal(7), z.literal(30)]).nullish(),
+})
+
+docs.get('/:id/share', (c) => {
+  const db = getDb()
+  const id = c.req.param('id')
+
+  if (!getLiveDocById(db, id)) {
+    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
+  }
+
+  const share = getShareByDocId(db, id)
+  return c.json(share
+    ? {
+        shared: true,
+        token: share.token,
+        path: `/s/${share.token}`,
+        created_at: share.created_at,
+        expires_at: share.expires_at,
+      }
+    : { shared: false })
+})
+
+docs.put('/:id/share', async (c) => {
+  const db = getDb()
+  const id = c.req.param('id')
+
+  if (!getLiveDocById(db, id)) {
+    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
+  }
+
+  // body 可选（空 body = {}）；仅 expires_in_days 一个字段，手工校验
+  const rawBody = await c.req.json().catch(() => ({}))
+  const parsed = sharePutSchema.safeParse(rawBody)
+  if (!parsed.success) {
+    return c.json({ error: 'bad_request', message: 'expires_in_days 只接受 1 / 7 / 30 / null' }, 400)
+  }
+
+  const expiryDays = parsed.data.expires_in_days
+  // 幂等：已开启返回现有 token；带 expires_in_days 时以现在为起点调整有效期。
+  // 事务包裹：开启 + 调有效期两步写入对并发 PUT 原子（createShare 内部 ON CONFLICT 兜底）
+  const share = db.transaction(() => {
+    const created = createShare(db, id)
+    return expiryDays !== undefined ? setShareExpiry(db, id, expiryDays)! : created
+  })()
+  return c.json({
+    token: share.token,
+    path: `/s/${share.token}`,
+    created_at: share.created_at,
+    expires_at: share.expires_at,
+  })
+})
+
+docs.delete('/:id/share', (c) => {
+  const db = getDb()
+  const id = c.req.param('id')
+
+  if (!getLiveDocById(db, id)) {
+    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
+  }
+
+  // 幂等：本就没开启也返回成功；关闭后旧链接立即 404，重开生成全新 token
+  deleteShare(db, id)
+  return c.json({ deleted: true })
+})
+
 docs.patch('/:id/ai-exclude', async (c) => {
   const id = c.req.param('id')
   const body = await c.req.json().catch(() => ({}))
@@ -260,6 +333,8 @@ docs.delete('/:id', (c) => {
   db.transaction(() => {
     deleteRefsTouchingBlocks(db, allIds)
     softDeleteBlocks(db, allIds)
+    // 删除即切断公开链接（恢复文档不复活旧 token，需重新开启）
+    deleteSharesByDocIds(db, [id])
   })()
 
   fireAfterDelete(id)

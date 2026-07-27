@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { getDb } from '../db'
 import { listLiveBlockIdsByNotebook, softDeleteByNotebook } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
+import { deleteSharesByNotebook } from '../store/shares'
 
 const notebooks = new Hono()
 
@@ -90,12 +91,14 @@ notebooks.delete('/:id', (c) => {
     return c.json({ error: 'not_found', message: `笔记本 ${id} 不存在` }, 404)
   }
 
-  // 级联与 blocks.delete 对齐：先清理引用，再软删除整个笔记本的 blocks
+  // 级联与 blocks.delete 对齐：先清理引用，再软删除整个笔记本的 blocks；
+  // 同时切断这些文档的公开分享链接（恢复不复活旧 token）
   const blockIds = listLiveBlockIdsByNotebook(db, id)
 
   db.transaction(() => {
     deleteRefsTouchingBlocks(db, blockIds)
     softDeleteByNotebook(db, id)
+    deleteSharesByNotebook(db, id)
     db.query('DELETE FROM notebooks WHERE id = ?').run(id)
   })()
 

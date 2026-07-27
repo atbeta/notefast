@@ -11,6 +11,7 @@ import {
   EyeOff,
   Inbox,
   Archive,
+  Share2,
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
@@ -19,6 +20,7 @@ import MarkdownEditor from '../components/MarkdownEditor'
 import TagEditor from '../components/TagEditor'
 import ConfirmDialog from '../components/ConfirmDialog'
 import PageHeader from '../components/PageHeader'
+import ShareDialog from '../components/ShareDialog'
 import { useAiChatOpen } from '../components/Layout'
 import { scrollToElement } from '../lib/scroll'
 import { formatRelative } from '../lib/time'
@@ -70,6 +72,7 @@ export default function DocPage() {
 
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showShare, setShowShare] = useState(false)
 
   const [titleDraft, setTitleDraft] = useState('')
   const [generatingTitle, setGeneratingTitle] = useState(false)
@@ -375,6 +378,14 @@ export default function DocPage() {
             <div className="w-px h-4 bg-border/60 mx-1" />
             <button
               type="button"
+              onClick={() => setShowShare(true)}
+              className="btn-icon-ghost text-muted-foreground hover:text-foreground"
+              title="分享文档"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
               onClick={() => setShowDelete(true)}
               className="btn-icon-ghost text-muted-foreground hover:text-destructive hover:bg-destructive/10"
               title="删除文档"
@@ -620,6 +631,8 @@ export default function DocPage() {
         onConfirm={handleDelete}
         onCancel={() => setShowDelete(false)}
       />
+
+      {showShare && id && <ShareDialog docId={id} onClose={() => setShowShare(false)} />}
     </div>
   )
 }

@@ -52,6 +52,7 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
  * v0 → v1：基线（当前 SCHEMA_SQL）
  * v1 → v2：已应用的 AutoLink 建议补齐 review_status=accepted（此前只改 action_status）
  * v2 → v3：新增 asset_captions 表（图片理解的 caption 缓存）
+ * v3 → v4：新增 shares 表（文档分享的公开 token）
  */
 function applySchemaMigrations(database: Database): void {
   const current = getSchemaVersion(database)
@@ -85,6 +86,21 @@ function applySchemaMigrations(database: Database): void {
       )
     `)
     database.exec(`PRAGMA user_version = 3`)
+  }
+  if (getSchemaVersion(database) < 4) {
+    // 分享：doc_id → 公开 token。独立表而非 blocks.properties：
+    // 开关分享不触发 updated_at / hooks / 索引 / change feed。
+    // expires_at NULL = 永不过期（Notion 同款默认）。
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS shares (
+        doc_id     TEXT PRIMARY KEY,
+        token      TEXT NOT NULL UNIQUE,
+        expires_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_shares_token ON shares(token);
+    `)
+    database.exec(`PRAGMA user_version = 4`)
   }
 }
 

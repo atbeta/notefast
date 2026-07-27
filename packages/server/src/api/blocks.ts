@@ -27,6 +27,7 @@ import {
   nowTimestamp,
 } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
+import { deleteSharesByDocIds } from '../store/shares'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete } from '../services/hooks'
 import { applyAiExcludeChange } from '../ai/aiExclude'
 
@@ -225,6 +226,10 @@ blocks.delete('/:id', (c) => {
   db.transaction(() => {
     deleteRefsTouchingBlocks(db, allIds)
     softDeleteBlocks(db, allIds)
+    // 删除文档根时切断公开链接（恢复不复活旧 token，需重新开启）
+    if (existing.type === 'document') {
+      deleteSharesByDocIds(db, [id])
+    }
   })()
 
   fireAfterDelete(id)

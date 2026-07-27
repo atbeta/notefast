@@ -33,6 +33,7 @@ import apiTokens from './api/apiTokens'
 import pinnedViews from './api/pinnedViews'
 import statusRouter from './api/status'
 import eventsRouter from './api/events'
+import sharePublic from './api/sharePublic'
 import { initDocEvents } from './services/docEvents'
 
 const PORT = parseInt(process.env.PORT || '3140', 10)
@@ -132,6 +133,9 @@ app.route('/api/v1/api-tokens', apiTokens)
 app.route('/api/v1/pinned-views', pinnedViews)
 app.route('/api/v1/status', statusRouter)
 app.route('/api/v1/events', eventsRouter)
+
+// 分享公开端点：挂在 /api/* 之外（authMiddleware 只覆盖 /api/*），无需鉴权
+app.route('/share', sharePublic)
 
 const pluginSystem = createPluginSystem()
 initDocEvents(pluginSystem)

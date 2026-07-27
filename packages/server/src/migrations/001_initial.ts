@@ -193,6 +193,17 @@ export function up(db: Database): void {
       changed_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_entity_changes_entity ON entity_changes(entity, entity_id);
+
+    -- 分享：doc_id → 公开 token。独立表而非 blocks.properties：
+    -- 开关分享不触发 updated_at / hooks / 索引 / change feed。
+    -- expires_at NULL = 永不过期
+    CREATE TABLE IF NOT EXISTS shares (
+      doc_id     TEXT PRIMARY KEY,
+      token      TEXT NOT NULL UNIQUE,
+      expires_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_shares_token ON shares(token);
   `)
 
   // triggers
