@@ -168,4 +168,7 @@ export default {
   port: PORT,
   host: '0.0.0.0',
   fetch: app.fetch,
+  // Bun.serve 默认 10s 无数据即断开连接，会杀死 /api/v1/events 的 SSE 长连接
+  // （心跳 25s 才写一次）。放宽到 60s，大于心跳间隔，连接由心跳保活。
+  idleTimeout: 60,
 }
