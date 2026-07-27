@@ -17,9 +17,11 @@
 import { parseMarkdownToBlocks, stripTitleHeading } from '@notefast/core'
 import type { CreateBlockInput } from '@notefast/core'
 import type { getDb } from '../db'
-import { computeContentHash } from './contentHash'
+import { findDocIdBySource, getMaxChildSort, insertBlock, nowTimestamp } from '../store/blocks'
 
 type Db = ReturnType<typeof getDb>
+
+export { findDocIdBySource }
 
 /** Markdown 解析不出任何 block 时抛出（调用方映射为 400） */
 export class EmptyMarkdownError extends Error {}
@@ -53,20 +55,9 @@ export interface DocSourceRef {
 }
 
 /**
- * 按来源标识查找文档（upsert 语义的基础）：返回 docId 或 null。
- * properties 是 JSON 文本，用 json_extract 精确匹配。
+ * 按来源标识查找文档的实现在 store/blocks.ts（数据访问层），
+ * 此处 re-export 保持 docImport 的对外面不变（来源溯源语义见上方注释）。
  */
-export function findDocIdBySource(db: Db, provider: string, externalId: string): string | null {
-  const row = db
-    .query(
-      `SELECT id FROM blocks
-       WHERE type = 'document' AND is_deleted = 0
-         AND json_extract(properties, '$.source.provider') = ?
-         AND json_extract(properties, '$.source.external_id') = ?`,
-    )
-    .get(provider, externalId) as { id: string } | undefined
-  return row?.id ?? null
-}
 
 export interface InsertDocFromMarkdownResult {
   docId: string
@@ -89,7 +80,7 @@ export function insertDocFromMarkdown(
 
   const docStatus = opts.status === 'inbox' ? 'inbox' : 'note'
   const docId = crypto.randomUUID()
-  const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
+  const now = nowTimestamp()
 
   let blockIds: string[] = []
   db.transaction(() => {
@@ -99,10 +90,20 @@ export function insertDocFromMarkdown(
     const initialTags = opts.tags?.length ? JSON.stringify(opts.tags) : '[]'
     const docProperties = opts.source ? JSON.stringify({ source: opts.source }) : '{}'
 
-    db.query(
-      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
-       VALUES (?, ?, NULL, ?, 'document', ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)`,
-    ).run(docId, opts.notebookId, docId, opts.title, computeContentHash(opts.title), docProperties, initialTags, docStatus, now, now)
+    insertBlock(db, {
+      id: docId,
+      notebook_id: opts.notebookId,
+      parent_id: null,
+      root_id: docId,
+      type: 'document',
+      content: opts.title,
+      properties: docProperties,
+      tags: initialTags,
+      status: docStatus,
+      sort: 0,
+      level: 0,
+      now,
+    })
 
     blockIds = insertChildBlocks(db, {
       notebookId: opts.notebookId,
@@ -142,10 +143,8 @@ export function appendMarkdownToDoc(
 ): AppendMarkdownToDocResult {
   const inputs = parseMarkdownToBlocks(opts.markdown, opts.notebookId)
 
-  const maxSort = db
-    .query('SELECT COALESCE(MAX(sort), -1) AS m FROM blocks WHERE parent_id = ? AND is_deleted = 0')
-    .get(opts.docId) as { m: number }
-  const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
+  const maxSort = getMaxChildSort(db, opts.docId)
+  const now = nowTimestamp()
 
   let blockIds: string[] = []
   db.transaction(() => {
@@ -154,7 +153,7 @@ export function appendMarkdownToDoc(
       notebookId: opts.notebookId,
       rootId: opts.docId,
       inputs,
-      sortOffset: maxSort.m + 1,
+      sortOffset: maxSort + 1,
       now,
     })
   })()
@@ -207,23 +206,18 @@ export function insertChildBlocks(db: Db, opts: InsertChildBlocksOptions): strin
       ? (idMap.get(inp.parent_id) ?? opts.rootId)
       : opts.rootId
 
-    db.query(
-      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', 'note', 0, ?, ?, ?, ?)`,
-    ).run(
-      blockId,
-      opts.notebookId,
-      parentId as string,
-      opts.rootId,
-      inp.type,
-      inp.content ?? '',
-      computeContentHash(inp.content ?? ''),
-      JSON.stringify(inp.properties || {}),
-      opts.sortOffset + i,
-      levelOf(inp),
-      opts.now,
-      opts.now,
-    )
+    insertBlock(db, {
+      id: blockId,
+      notebook_id: opts.notebookId,
+      parent_id: parentId as string,
+      root_id: opts.rootId,
+      type: inp.type,
+      content: inp.content ?? '',
+      properties: JSON.stringify(inp.properties || {}),
+      sort: opts.sortOffset + i,
+      level: levelOf(inp),
+      now: opts.now,
+    })
     blockIds.push(blockId)
   }
 

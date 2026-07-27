@@ -9,6 +9,7 @@
 
 import { z } from 'zod'
 import { getDb } from '../../db'
+import { getBlockById } from '../../store/blocks'
 import { hasRuntime, getRuntime } from '../../services/aiRuntime'
 import {
   applySuggestion,
@@ -140,9 +141,7 @@ export function registerAutoLinkTools(ctx: ToolContext): void {
       const denied = denyAiExcludedBlock(block_id)
       if (denied) return denied
       const db = getDb()
-      const row = db.query('SELECT id, content, notebook_id FROM blocks WHERE id = ?').get(block_id) as
-        | { id: string; content: string; notebook_id: string }
-        | undefined
+      const row = getBlockById(db, block_id)
       if (!row) {
         return toolError('not_found', `Block ${block_id} 不存在`, { block_id })
       }

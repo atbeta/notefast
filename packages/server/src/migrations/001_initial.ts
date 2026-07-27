@@ -179,22 +179,20 @@ export function up(db: Database): void {
       created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- 变更馈送（change feed）：同步协议的地基。
+    -- seq 单调递增，是客户端增量拉取的游标（不用 updated_at 做游标：
+    -- 客户端 push 可自带 updated_at，时钟偏慢会导致变更漏拉）。
+    -- updated_at 仅用于 LWW 裁决与「最近编辑」展示语义。
+    -- 清理策略待同步 API 落地时定（超出窗口的客户端走全量快照重同步）。
     CREATE TABLE IF NOT EXISTS entity_changes (
-      id               INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_name      TEXT NOT NULL,
-      entity_id        TEXT NOT NULL,
-      hash             TEXT NOT NULL DEFAULT '',
-      is_erased        INTEGER NOT NULL DEFAULT 0,
-      is_synced        INTEGER NOT NULL DEFAULT 0,
-      change_id        TEXT NOT NULL,
-      component_id     TEXT NOT NULL DEFAULT 'system',
-      actor            TEXT NOT NULL DEFAULT 'system',
-      utc_date_changed TEXT NOT NULL DEFAULT (datetime('now'))
+      seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity     TEXT NOT NULL,
+      entity_id  TEXT NOT NULL,
+      is_erased  INTEGER NOT NULL DEFAULT 0,
+      actor      TEXT NOT NULL DEFAULT 'server',
+      changed_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-    CREATE INDEX IF NOT EXISTS idx_entity_changes_entity ON entity_changes(entity_name, entity_id);
-    CREATE INDEX IF NOT EXISTS idx_entity_changes_synced ON entity_changes(is_synced, id);
-    CREATE INDEX IF NOT EXISTS idx_entity_changes_date ON entity_changes(utc_date_changed DESC);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_changes_change_id ON entity_changes(change_id);
+    CREATE INDEX IF NOT EXISTS idx_entity_changes_entity ON entity_changes(entity, entity_id);
   `)
 
   // triggers
@@ -216,22 +214,22 @@ export function up(db: Database): void {
 
     CREATE TRIGGER IF NOT EXISTS trg_blocks_ai AFTER INSERT ON blocks
     BEGIN
-      INSERT INTO entity_changes (entity_name, entity_id, change_id, component_id, actor)
-      VALUES ('block', NEW.id, lower(hex(randomblob(16))), 'system', 'system');
+      INSERT INTO entity_changes (entity, entity_id, actor)
+      VALUES ('block', NEW.id, 'server');
     END;
 
     CREATE TRIGGER IF NOT EXISTS trg_blocks_au AFTER UPDATE ON blocks
     BEGIN
-      INSERT INTO entity_changes (entity_name, entity_id, is_erased, change_id, component_id, actor)
+      INSERT INTO entity_changes (entity, entity_id, is_erased, actor)
       VALUES ('block', NEW.id,
         CASE WHEN OLD.is_deleted = 0 AND NEW.is_deleted = 1 THEN 1 ELSE 0 END,
-        lower(hex(randomblob(16))), 'system', 'system');
+        'server');
     END;
 
     CREATE TRIGGER IF NOT EXISTS trg_blocks_ad AFTER DELETE ON blocks
     BEGIN
-      INSERT INTO entity_changes (entity_name, entity_id, is_erased, change_id, component_id, actor)
-      VALUES ('block', OLD.id, 1, lower(hex(randomblob(16))), 'system', 'system');
+      INSERT INTO entity_changes (entity, entity_id, is_erased, actor)
+      VALUES ('block', OLD.id, 1, 'server');
     END;
   `)
 

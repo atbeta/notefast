@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { importMarkdownSchema, rowToBlock } from '@notefast/core'
-import type { BlockRow } from '@notefast/core'
 import { getDb } from '../db'
+import { getBlockById, getBlocksByIds } from '../store/blocks'
 import { fireAfterCreate, fireAfterCreateMany } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { EmptyMarkdownError, insertDocFromMarkdown, type InsertDocFromMarkdownResult } from '../services/docImport'
@@ -34,16 +34,10 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
   const { docId, blockIds } = result
 
   // Hook 触发（fire-and-forget）：先 doc，再批量子块；大文档索引进度走 scheduleDocIndex
-  const docRow = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
+  const docRow = getBlockById(db, docId)!
   const indexJob = scheduleDocIndex(docId, blockIds)
   fireAfterCreate(rowToBlock(docRow))
-  if (blockIds.length > 0) {
-    const placeholders = blockIds.map(() => '?').join(',')
-    const childRows = db
-      .query(`SELECT * FROM blocks WHERE id IN (${placeholders})`)
-      .all(...blockIds) as BlockRow[]
-    fireAfterCreateMany(childRows.map(rowToBlock))
-  }
+  fireAfterCreateMany(getBlocksByIds(db, blockIds).map(rowToBlock))
 
   // asset 引用对账：悬空引用不阻断导入（可能来自其他实例的导出），但如实告知调用方
   const missingAssets = findMissingAssets(extractAssetRefs(input.markdown))

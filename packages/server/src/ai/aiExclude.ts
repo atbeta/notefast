@@ -13,6 +13,7 @@
 
 import { type BlockRow } from '@notefast/core'
 import { getDb } from '../db'
+import { getBlockById, getDocById, updateBlock } from '../store/blocks'
 import { deleteVector } from './indexer'
 import { scheduleDocIndex, type IndexJob } from './indexJobs'
 import { loadDocBlockIds } from './aiExcludeQuery'
@@ -29,16 +30,12 @@ export {
 /** 写入 ai_exclude 到 blocks 显式列，返回更新后的 row */
 export function writeDocAiExclude(docId: string, aiExclude: boolean): BlockRow | null {
   const db = getDb()
-  const docRow = db
-    .query("SELECT * FROM blocks WHERE id = ? AND type = 'document'")
-    .get(docId) as BlockRow | undefined
+  const docRow = getDocById(db, docId)
   if (!docRow) return null
 
-  db.query(
-    "UPDATE blocks SET ai_exclude = ?, updated_at = datetime('now') WHERE id = ?",
-  ).run(aiExclude ? 1 : 0, docId)
+  updateBlock(db, docId, { ai_exclude: aiExclude ? 1 : 0 })
 
-  return db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
+  return getBlockById(db, docId)
 }
 
 /**

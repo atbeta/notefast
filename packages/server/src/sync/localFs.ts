@@ -12,10 +12,9 @@ import {
   type SyncResult,
   type PushOptions,
   type LocalFsAdapterConfig,
-  type BlockRow,
 } from '@notefast/core'
 import { getDb } from '../db'
-import { fetchDocBlocks } from '../dbQueries'
+import { countDocRows, fetchDocBlocks, listDocRows } from '../store/blocks'
 import {
   ARCHIVE_MANIFEST_NAME,
   archiveFilename,
@@ -42,8 +41,7 @@ function countMdFiles(dir: string): number {
 }
 
 function countDocs(db: ReturnType<typeof getDb>): number {
-  const row = db.query("SELECT count(*) as c FROM blocks WHERE type = 'document'").get() as { c: number }
-  return row?.c ?? 0
+  return countDocRows(db)
 }
 
 function loadPreviousManifest(dir: string): ArchiveManifest | null {
@@ -94,15 +92,8 @@ export function createLocalFsAdapter(cfg: LocalFsAdapterConfig): SyncAdapter {
       }
 
       const db = getDb()
-      let sql = "SELECT * FROM blocks WHERE type = 'document'"
-      const params: string[] = []
-      if (options?.docIds && options.docIds.length > 0) {
-        const placeholders = options.docIds.map(() => '?').join(',')
-        sql += ` AND id IN (${placeholders})`
-        params.push(...options.docIds)
-      }
-      sql += ' ORDER BY updated_at ASC'
-      const docs = db.query(sql).all(...params) as BlockRow[]
+      // 归档镜像活库：软删除文档不导出（下次全量同步时经 manifest 清理远端陈旧文件）
+      const docs = listDocRows(db, { docIds: options?.docIds, order: 'updated_asc' })
       const result: SyncResult = { pushed: 0, pulled: 0, errors: [] }
       const files: ArchiveManifest['files'] = []
       const previous =

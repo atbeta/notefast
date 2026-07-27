@@ -11,6 +11,7 @@
 
 import type { Block, PluginSystem } from '@notefast/core'
 import { getDb } from '../db'
+import { getBlockById } from '../store/blocks'
 
 export type DocChangeKind = 'created' | 'updated' | 'deleted'
 
@@ -81,9 +82,7 @@ export function initDocEvents(pluginSystem: PluginSystem): void {
     publishDocChange(docIdOf(block), 'updated')
   })
   pluginSystem.note.afterDelete.tap(HOOK_NAME, (blockId) => {
-    const row = getDb()
-      .query('SELECT type, root_id FROM blocks WHERE id = ?')
-      .get(blockId) as { type: string; root_id: string | null } | undefined
+    const row = getBlockById(getDb(), blockId)
     if (!row) return // 硬删除或无此块：无法归属文档，跳过
     if (row.type === 'document') publishDocChange(blockId, 'deleted')
     else if (row.root_id) publishDocChange(row.root_id, 'updated')

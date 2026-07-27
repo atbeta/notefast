@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { blocksToMarkdown, buildBlockTree } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import { initDb, closeDb, getDb } from '../db'
-import { fetchDocBlocks } from '../dbQueries'
+import { fetchDocBlocks } from '../store/blocks'
 import { insertDocFromMarkdown, appendMarkdownToDoc, findDocIdBySource } from '../services/docImport'
 
 let testDir: string

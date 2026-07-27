@@ -8,12 +8,27 @@ import {
   buildBlockTree,
   readAiExclude,
 } from '@notefast/core'
-import type { BlockRow } from '@notefast/core'
 import { getDb } from '../db'
-import { fetchSubtreeBlocks } from '../dbQueries'
+import {
+  fetchSubtreeBlocks,
+  fetchDeletedSubtreeIds,
+  getBlockById,
+  getLiveBlockById,
+  getDeletedBlockById,
+  getBlockAnchor,
+  insertBlock,
+  updateBlock,
+  moveBlock,
+  shiftDescendantLevels,
+  reRootDescendants,
+  softDeleteBlocks,
+  restoreBlocks,
+  listRecentlyDeletedBlocks,
+  nowTimestamp,
+} from '../store/blocks'
+import { deleteRefsTouchingBlocks } from '../store/refs'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete } from '../services/hooks'
 import { applyAiExcludeChange } from '../ai/aiExclude'
-import { computeContentHash } from '../services/contentHash'
 
 const blocks = new Hono()
 
@@ -23,7 +38,7 @@ blocks.get('/:id', (c) => {
   const depthParam = c.req.query('depth')
   const maxDepth = depthParam ? parseInt(depthParam, 10) : 3
 
-  const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow | undefined
+  const row = getBlockById(db, id)
   if (!row) {
     return c.json({ error: 'not_found', message: `Block ${id} 不存在` }, 404)
   }
@@ -43,7 +58,7 @@ blocks.get('/:id/tree', (c) => {
   const db = getDb()
   const id = c.req.param('id')
 
-  const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow | undefined
+  const row = getBlockById(db, id)
   if (!row) {
     return c.json({ error: 'not_found', message: `Block ${id} 不存在` }, 404)
   }
@@ -65,9 +80,7 @@ blocks.post('/', zValidator('json', createBlockSchema), (c) => {
   let level = 0
 
   if (input.parent_id) {
-    const parent = db.query('SELECT root_id, level FROM blocks WHERE id = ?').get(input.parent_id) as
-      | { root_id: string; level: number }
-      | undefined
+    const parent = getBlockAnchor(db, input.parent_id)
     if (!parent) {
       return c.json({ error: 'not_found', message: `父块 ${input.parent_id} 不存在` }, 404)
     }
@@ -78,26 +91,19 @@ blocks.post('/', zValidator('json', createBlockSchema), (c) => {
     level = 0
   }
 
-  const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
-  db.query(
-    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, '{}', '[]', 'note', 0, ?, ?, ?, ?)`,
-  ).run(
+  insertBlock(db, {
     id,
-    input.notebook_id,
-    input.parent_id || null,
-    rootId,
-    input.type,
-    input.content || '',
-    computeContentHash(input.content || ''),
-    input.sort || 0,
+    notebook_id: input.notebook_id,
+    parent_id: input.parent_id || null,
+    root_id: rootId,
+    type: input.type,
+    content: input.content || '',
+    sort: input.sort || 0,
     level,
-    now,
-    now,
-  )
+    now: nowTimestamp(),
+  })
 
-  const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
-  const block = rowToBlock(row)
+  const block = rowToBlock(getBlockById(db, id)!)
   fireAfterCreate(block)
   return c.json(block, 201)
 })
@@ -107,50 +113,37 @@ blocks.patch('/:id', zValidator('json', updateBlockSchema), async (c) => {
   const id = c.req.param('id')
   const input = c.req.valid('json')
 
-  const existing = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow | undefined
+  const existing = getBlockById(db, id)
   if (!existing) {
     return c.json({ error: 'not_found', message: `Block ${id} 不存在` }, 404)
   }
-
-  const updates: string[] = []
-  const params: (string | number)[] = []
 
   // 仅当写入文档根的 properties 时检测 ai_exclude 切换，确保与专用端点行为一致
   const oldAiExclude =
     existing.type === 'document' ? readAiExclude(existing) : false
 
+  const patch: Parameters<typeof updateBlock>[2] = {}
   if (input.content !== undefined) {
-    updates.push('content = ?')
-    params.push(input.content)
-    updates.push('content_hash = ?')
-    params.push(computeContentHash(input.content))
+    patch.content = input.content
   }
   if (input.properties !== undefined) {
-    updates.push('properties = ?')
-    params.push(JSON.stringify(input.properties))
+    patch.properties = JSON.stringify(input.properties)
     const inputAiExclude = (input.properties as Record<string, unknown>).ai_exclude
     if (inputAiExclude !== undefined) {
-      updates.push('ai_exclude = ?')
-      params.push(inputAiExclude ? 1 : 0)
+      patch.ai_exclude = inputAiExclude ? 1 : 0
     }
   }
   if (input.type !== undefined) {
-    updates.push('type = ?')
-    params.push(input.type)
+    patch.type = input.type
   }
 
-  if (updates.length === 0) {
+  if (Object.keys(patch).length === 0) {
     return c.json(rowToBlock(existing))
   }
 
-  updates.push("updated_at = datetime('now')")
-  params.push(id)
+  updateBlock(db, id, patch)
 
-  db.query(`UPDATE blocks SET ${updates.join(', ')} WHERE id = ?`)
-    .run(...params as [string, ...string[]])
-
-  const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
-  const block = rowToBlock(row)
+  const block = rowToBlock(getBlockById(db, id)!)
   fireAfterUpdate(block)
 
   // 通用 PATCH 路径下应用 ai_exclude 切换的副作用（与 /docs/:id/ai-exclude 等价）
@@ -169,7 +162,7 @@ blocks.patch('/:id/move', zValidator('json', moveBlockSchema), (c) => {
   const id = c.req.param('id')
   const input = c.req.valid('json')
 
-  const existing = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow | undefined
+  const existing = getBlockById(db, id)
   if (!existing) {
     return c.json({ error: 'not_found', message: `Block ${id} 不存在` }, 404)
   }
@@ -178,9 +171,7 @@ blocks.patch('/:id/move', zValidator('json', moveBlockSchema), (c) => {
   let newLevel: number
 
   if (input.new_parent_id) {
-    const parent = db.query('SELECT root_id, level FROM blocks WHERE id = ?').get(input.new_parent_id) as
-      | { root_id: string; level: number }
-      | undefined
+    const parent = getBlockAnchor(db, input.new_parent_id)
     if (!parent) {
       return c.json({ error: 'not_found', message: `目标父块 ${input.new_parent_id} 不存在` }, 404)
     }
@@ -194,31 +185,27 @@ blocks.patch('/:id/move', zValidator('json', moveBlockSchema), (c) => {
   const levelDiff = newLevel - existing.level
   const rootChanged = newRootId !== existing.root_id
 
-  db.query(
-    `UPDATE blocks SET parent_id = ?, root_id = ?, level = level + ?,
-     sort = COALESCE(?, sort), updated_at = datetime('now')
-     WHERE id = ?`,
-  ).run(input.new_parent_id, newRootId, levelDiff, input.new_sort ?? existing.sort, id)
+  moveBlock(db, id, {
+    parentId: input.new_parent_id,
+    rootId: newRootId,
+    levelDiff,
+    sort: input.new_sort ?? existing.sort,
+  })
 
   // level 与 root_id 传播相互独立：跨文档同层移动时 levelDiff 为 0，但后代 root_id 仍须跟随
   if (levelDiff !== 0 || rootChanged) {
     db.transaction(() => {
-      const descendants = fetchSubtreeBlocks(db, id)
-      const descendantIds = descendants.map((r) => r.id)
-      if (descendantIds.length > 0) {
-        const placeholders = descendantIds.map(() => '?').join(',')
-        if (levelDiff !== 0) {
-          db.query(`UPDATE blocks SET level = level + ? WHERE id IN (${placeholders})`).run(levelDiff, ...descendantIds)
-        }
-        if (rootChanged) {
-          db.query(`UPDATE blocks SET root_id = ? WHERE id IN (${placeholders})`).run(newRootId, ...descendantIds)
-        }
+      const descendantIds = fetchSubtreeBlocks(db, id).map((r) => r.id)
+      if (levelDiff !== 0) {
+        shiftDescendantLevels(db, descendantIds, levelDiff)
+      }
+      if (rootChanged) {
+        reRootDescendants(db, descendantIds, newRootId)
       }
     })()
   }
 
-  const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
-  const block = rowToBlock(row)
+  const block = rowToBlock(getBlockById(db, id)!)
   fireAfterUpdate(block)
   return c.json(block)
 })
@@ -227,7 +214,7 @@ blocks.delete('/:id', (c) => {
   const db = getDb()
   const id = c.req.param('id')
 
-  const existing = db.query('SELECT * FROM blocks WHERE id = ? AND is_deleted = 0').get(id) as BlockRow | undefined
+  const existing = getLiveBlockById(db, id)
   if (!existing) {
     return c.json({ error: 'not_found', message: `Block ${id} 不存在` }, 404)
   }
@@ -236,11 +223,8 @@ blocks.delete('/:id', (c) => {
   const allIds = [id, ...childIds.map((r) => r.id)]
 
   db.transaction(() => {
-    for (const delId of allIds) {
-      db.query('DELETE FROM block_refs WHERE source_id = ? OR target_id = ?').run(delId, delId)
-    }
-    const placeholders = allIds.map(() => '?').join(',')
-    db.query(`UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = datetime('now') WHERE id IN (${placeholders}) AND is_deleted = 0`).run(...allIds)
+    deleteRefsTouchingBlocks(db, allIds)
+    softDeleteBlocks(db, allIds)
   })()
 
   fireAfterDelete(id)
@@ -253,9 +237,7 @@ blocks.get('/deleted', (c) => {
   const days = within === '30d' ? 30 : within === '7d' ? 7 : parseInt(within, 10) || 30
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
 
-  const rows = db.query(
-    "SELECT id, type, content, notebook_id, root_id, delete_id, updated_at FROM blocks WHERE is_deleted = 1 AND updated_at >= ? ORDER BY updated_at DESC LIMIT 200",
-  ).all(cutoff) as BlockRow[]
+  const rows = listRecentlyDeletedBlocks(db, cutoff)
 
   return c.json(rows.map((r) => ({
     id: r.id,
@@ -263,7 +245,7 @@ blocks.get('/deleted', (c) => {
     content: r.content,
     notebook_id: r.notebook_id,
     root_id: r.root_id,
-    delete_id: (r as any).delete_id,
+    delete_id: r.delete_id,
     deleted_at: r.updated_at,
   })))
 })
@@ -272,25 +254,14 @@ blocks.post('/:id/restore', (c) => {
   const db = getDb()
   const id = c.req.param('id')
 
-  const existing = db.query('SELECT * FROM blocks WHERE id = ? AND is_deleted = 1').get(id) as BlockRow | undefined
+  const existing = getDeletedBlockById(db, id)
   if (!existing) {
     return c.json({ error: 'not_found', message: '未找到可恢复的已删除 block' }, 404)
   }
 
   // 恢复整个子树
-  const childIds = db.query(
-    `WITH RECURSIVE subtree(id) AS (
-       SELECT id FROM blocks WHERE parent_id = ? AND is_deleted = 1
-       UNION
-       SELECT b.id FROM blocks b JOIN subtree s ON b.parent_id = s.id WHERE b.is_deleted = 1
-     )
-     SELECT b.id FROM blocks b JOIN subtree s ON b.id = s.id`,
-  ).all(id) as Array<{ id: string }>
-
-  const allIds = [id, ...childIds.map((r) => r.id)]
-  const placeholders = allIds.map(() => '?').join(',')
-
-  db.query(`UPDATE blocks SET is_deleted = 0, updated_at = datetime('now') WHERE id IN (${placeholders})`).run(...allIds)
+  const allIds = [id, ...fetchDeletedSubtreeIds(db, id)]
+  restoreBlocks(db, allIds)
 
   return c.json({ restored: true, count: allIds.length })
 })

@@ -27,6 +27,7 @@ import {
   type ChatMessage,
 } from '@notefast/core'
 import { getDb } from '../db'
+import { getBlockById } from '../store/blocks'
 import { runFtsQuery } from '../dbQueries'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { embeddingFingerprint, getVectorStore } from './vectorStore'
@@ -163,9 +164,7 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
   const db = getDb()
 
   // 读源 block 的 updated_at 与所属文档（root_id 用于自指过滤）
-  const blockRow = db
-    .query('SELECT updated_at, root_id FROM blocks WHERE id = ?')
-    .get(opts.blockId) as { updated_at: string; root_id: string } | undefined
+  const blockRow = getBlockById(db, opts.blockId)
   const sourceUpdatedAt = blockRow?.updated_at ?? new Date().toISOString()
   const excludeSelfDoc = cfg.excludeSelfDoc ?? DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC
   const sourceDocId = excludeSelfDoc ? (blockRow?.root_id ?? null) : null

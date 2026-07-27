@@ -20,6 +20,7 @@ import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import type { AutolinkSuggestionWire } from '@notefast/core'
 import { getDb } from '../db'
+import { getBlockById, fetchDocBlocks } from '../store/blocks'
 import {
   analyzeBlock,
   deleteRefByPair,
@@ -167,9 +168,7 @@ autoLink.post('/run', zValidator('json', runSchema), async (c) => {
   }
   const { block_id } = c.req.valid('json')
   const db = getDb()
-  const row = db.query('SELECT id, content, notebook_id FROM blocks WHERE id = ?').get(block_id) as
-    | { id: string; content: string; notebook_id: string }
-    | undefined
+  const row = getBlockById(db, block_id)
   if (!row) return c.json({ error: 'not_found', message: `Block ${block_id} 不存在` }, 404)
   const cfg = getRuntime().autoLinkConfig()
   const result = await analyzeBlock({
@@ -202,9 +201,10 @@ autoLink.post('/run-batch', zValidator('json', runBatchSchema), async (c) => {
   }
   const { doc_id, max_blocks } = c.req.valid('json')
   const db = getDb()
-  const rows = db
-    .query('SELECT id, content, notebook_id FROM blocks WHERE root_id = ? AND type != ? LIMIT ?')
-    .all(doc_id, 'document', max_blocks) as Array<{ id: string; content: string; notebook_id: string }>
+  // 仅未删除的非文档根 block（文档量小，内存截断即可，不值得 SQL LIMIT）
+  const rows = fetchDocBlocks(db, doc_id)
+    .filter((r) => r.type !== 'document')
+    .slice(0, max_blocks)
   const cfg = getRuntime().autoLinkConfig()
   let total = 0
   let suggestions = 0

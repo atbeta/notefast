@@ -1,0 +1,370 @@
+/**
+ * Block 数据访问层 —— blocks 表读写的统一入口
+ *
+ * 收敛原先散落在 api / mcp / services / sync / ai 各层的同款 SQL：
+ * - 过滤约定只保留一份：列表/树读取默认排除软删除（is_deleted = 0），
+ *   需要含已删除行的调用方必须显式选择（getBlockById / includeDeleted）。
+ * - 写入约定只保留一份：任何 UPDATE 都带 updated_at = datetime('now')；
+ *   content 变更自动同步 content_hash；软删除统一 is_deleted + delete_id tombstone。
+ * - 函数级模块而非 interface：只有一个后端（SQLite）时不冻结接口形状，
+ *   未来换远程存储时再以这里为边界提取 interface。
+ *
+ * 不属于本层：FTS5 检索（dbQueries.runFtsQuery）、向量存储（ai/vectorStore*）、
+ * autolink / assets / api_tokens 等自有表的 store。
+ */
+
+import type { BlockRow } from '@notefast/core'
+import type { getDb } from '../db'
+import { computeContentHash } from '../services/contentHash'
+
+export type Db = ReturnType<typeof getDb>
+
+/** INSERT/批量写入统一使用的时间戳（与 datetime('now') 同格式：'YYYY-MM-DD HH:MM:SS'，UTC） */
+export function nowTimestamp(): string {
+  return new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
+}
+
+// ───────────────────── 单行读取 ─────────────────────
+
+/** 按 id 读 block（含软删除行；调用方自行判断 is_deleted） */
+export function getBlockById(db: Db, id: string): BlockRow | null {
+  return (db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow | undefined) ?? null
+}
+
+/** 按 id 读未删除 block */
+export function getLiveBlockById(db: Db, id: string): BlockRow | null {
+  return (
+    (db.query('SELECT * FROM blocks WHERE id = ? AND is_deleted = 0').get(id) as BlockRow | undefined) ??
+    null
+  )
+}
+
+/** 按 id 读已软删除 block */
+export function getDeletedBlockById(db: Db, id: string): BlockRow | null {
+  return (
+    (db.query('SELECT * FROM blocks WHERE id = ? AND is_deleted = 1').get(id) as BlockRow | undefined) ??
+    null
+  )
+}
+
+/** 按 id 读文档根（type='document'，含软删除行） */
+export function getDocById(db: Db, id: string): BlockRow | null {
+  return (
+    (db.query("SELECT * FROM blocks WHERE id = ? AND type = 'document'").get(id) as BlockRow | undefined) ??
+    null
+  )
+}
+
+/** 按 id 读未删除文档根 */
+export function getLiveDocById(db: Db, id: string): BlockRow | null {
+  return (
+    (db
+      .query("SELECT * FROM blocks WHERE id = ? AND type = 'document' AND is_deleted = 0")
+      .get(id) as BlockRow | undefined) ?? null
+  )
+}
+
+/** create / move 需要的父块锚点信息 */
+export function getBlockAnchor(db: Db, id: string): { root_id: string; level: number } | null {
+  return (
+    (db.query('SELECT root_id, level FROM blocks WHERE id = ?').get(id) as
+      | { root_id: string; level: number }
+      | undefined) ?? null
+  )
+}
+
+/** 存在性检查（refs 校验等，含软删除行，保持既有语义） */
+export function blockExists(db: Db, id: string): boolean {
+  return db.query('SELECT id FROM blocks WHERE id = ?').get(id) != null
+}
+
+// ───────────────────── 列表 / 树 ─────────────────────
+
+export interface ListDocRowsOptions {
+  notebookId?: string
+  /** 限定文档 id 集合（sync 归档的选择性导出） */
+  docIds?: string[]
+  order?: 'updated_desc' | 'updated_asc'
+  /** 默认 false：只列未删除文档。软删除文档不应出现在任何列表/导出中 */
+  includeDeleted?: boolean
+}
+
+/** 文档根行列表（type='document'）；过滤约定（is_deleted / 排序）统一在此 */
+export function listDocRows(db: Db, opts: ListDocRowsOptions = {}): BlockRow[] {
+  let sql = "SELECT * FROM blocks WHERE type = 'document'"
+  const params: string[] = []
+  if (!opts.includeDeleted) sql += ' AND is_deleted = 0'
+  if (opts.notebookId) {
+    sql += ' AND notebook_id = ?'
+    params.push(opts.notebookId)
+  }
+  if (opts.docIds && opts.docIds.length > 0) {
+    sql += ` AND id IN (${opts.docIds.map(() => '?').join(',')})`
+    params.push(...opts.docIds)
+  }
+  // updated_at 精度到秒（应用内写入同秒必撞），补 rowid 稳定决胜：
+  // ASC = 按入库顺序（归档导出确定性），DESC = 后入库在前（列表「最近更新」语义）
+  sql += opts.order === 'updated_asc'
+    ? ' ORDER BY updated_at ASC, rowid ASC'
+    : ' ORDER BY updated_at DESC, rowid DESC'
+  return db.query(sql).all(...(params as [string, ...string[]])) as BlockRow[]
+}
+
+/** 未删除文档计数（sync 归档的概要信息用） */
+export function countDocRows(db: Db): number {
+  const row = db
+    .query("SELECT count(*) as c FROM blocks WHERE type = 'document' AND is_deleted = 0")
+    .get() as { c: number }
+  return row.c
+}
+
+/**
+ * 文档级拉取：root_id 下全部 block（含文档根本身），按 level, sort 排序。
+ * 走 root_id 索引一条查询；buildBlockTree 内部会按 sort 重排子节点，
+ * 扁平行顺序不影响建树结果。
+ */
+export function fetchDocBlocks(db: Db, rootId: string): BlockRow[] {
+  return db
+    .query('SELECT * FROM blocks WHERE root_id = ? AND is_deleted = 0 ORDER BY level, sort')
+    .all(rootId) as BlockRow[]
+}
+
+/** 任意子树后代（不含起点本身，仅未删除），按 level, sort 排序 */
+export function fetchSubtreeBlocks(db: Db, blockId: string): BlockRow[] {
+  return db
+    .query(
+      `WITH RECURSIVE subtree(id) AS (
+         SELECT id FROM blocks WHERE parent_id = ? AND is_deleted = 0
+         UNION
+         SELECT b.id FROM blocks b JOIN subtree s ON b.parent_id = s.id WHERE b.is_deleted = 0
+       )
+       SELECT b.* FROM blocks b JOIN subtree s ON b.id = s.id
+       ORDER BY b.level, b.sort`,
+    )
+    .all(blockId) as BlockRow[]
+}
+
+/** 已软删除子树的后代 id（不含起点本身），restore 用 */
+export function fetchDeletedSubtreeIds(db: Db, blockId: string): string[] {
+  const rows = db
+    .query(
+      `WITH RECURSIVE subtree(id) AS (
+         SELECT id FROM blocks WHERE parent_id = ? AND is_deleted = 1
+         UNION
+         SELECT b.id FROM blocks b JOIN subtree s ON b.parent_id = s.id WHERE b.is_deleted = 1
+       )
+       SELECT b.id FROM blocks b JOIN subtree s ON b.id = s.id`,
+    )
+    .all(blockId) as Array<{ id: string }>
+  return rows.map((r) => r.id)
+}
+
+/** 直接子块（仅未删除），按 sort 排序 */
+export function listChildBlocks(db: Db, parentId: string): BlockRow[] {
+  return db
+    .query('SELECT * FROM blocks WHERE parent_id = ? AND is_deleted = 0 ORDER BY sort ASC')
+    .all(parentId) as BlockRow[]
+}
+
+/** 按 id 集合批量读（保持传入顺序无关，调用方不依赖顺序） */
+export function getBlocksByIds(db: Db, ids: string[]): BlockRow[] {
+  if (ids.length === 0) return []
+  const placeholders = ids.map(() => '?').join(',')
+  return db.query(`SELECT * FROM blocks WHERE id IN (${placeholders})`).all(...(ids as [string, ...string[]])) as BlockRow[]
+}
+
+/** 当前最大子块 sort（追加场景接在其后）；无子块返回 -1 */
+export function getMaxChildSort(db: Db, parentId: string): number {
+  const row = db
+    .query('SELECT COALESCE(MAX(sort), -1) AS m FROM blocks WHERE parent_id = ? AND is_deleted = 0')
+    .get(parentId) as { m: number }
+  return row.m
+}
+
+/** 软删除行（含 delete_id tombstone） */
+export type DeletedBlockRow = BlockRow & { delete_id: string }
+
+/** 最近软删除的 blocks（回收站列表），cutoff 为 updated_at 下界 */
+export function listRecentlyDeletedBlocks(db: Db, cutoffIso: string, limit = 200): DeletedBlockRow[] {
+  return db
+    .query(
+      'SELECT * FROM blocks WHERE is_deleted = 1 AND updated_at >= ? ORDER BY updated_at DESC LIMIT ?',
+    )
+    .all(cutoffIso, limit) as DeletedBlockRow[]
+}
+
+/**
+ * 按来源标识查找文档（外部连接器 upsert 的基础）：返回 docId 或 null。
+ * properties 是 JSON 文本，用 json_extract 精确匹配。
+ */
+export function findDocIdBySource(db: Db, provider: string, externalId: string): string | null {
+  const row = db
+    .query(
+      `SELECT id FROM blocks
+       WHERE type = 'document' AND is_deleted = 0
+         AND json_extract(properties, '$.source.provider') = ?
+         AND json_extract(properties, '$.source.external_id') = ?`,
+    )
+    .get(provider, externalId) as { id: string } | undefined
+  return row?.id ?? null
+}
+
+// ───────────────────── 写入 ─────────────────────
+
+/** 新 block 的全部列值（properties/tags 为 JSON 文本；now 同时写入 created_at / updated_at） */
+export interface NewBlockRow {
+  id: string
+  notebook_id: string
+  parent_id: string | null
+  root_id: string
+  type: string
+  content: string
+  properties?: string
+  tags?: string
+  status?: string
+  ai_exclude?: number
+  sort: number
+  level: number
+  now: string
+}
+
+/** 统一 INSERT：列清单只此一份；content_hash 由 content 推导，不允许调用方传错 */
+export function insertBlock(db: Db, row: NewBlockRow): void {
+  db.query(
+    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    row.id,
+    row.notebook_id,
+    row.parent_id,
+    row.root_id,
+    row.type,
+    row.content,
+    computeContentHash(row.content),
+    row.properties ?? '{}',
+    row.tags ?? '[]',
+    row.status ?? 'note',
+    row.ai_exclude ?? 0,
+    row.sort,
+    row.level,
+    row.now,
+    row.now,
+  )
+}
+
+/** 可更新字段（properties/tags 为 JSON 文本）。content 变更自动同步 content_hash */
+export interface BlockPatch {
+  content?: string
+  properties?: string
+  ai_exclude?: number
+  type?: string
+  status?: string
+  tags?: string
+}
+
+/** 统一 UPDATE：自动带 updated_at = datetime('now')；空 patch 不执行 SQL */
+export function updateBlock(db: Db, id: string, patch: BlockPatch): void {
+  const updates: string[] = []
+  const params: (string | number)[] = []
+
+  if (patch.content !== undefined) {
+    updates.push('content = ?', 'content_hash = ?')
+    params.push(patch.content, computeContentHash(patch.content))
+  }
+  if (patch.properties !== undefined) {
+    updates.push('properties = ?')
+    params.push(patch.properties)
+  }
+  if (patch.ai_exclude !== undefined) {
+    updates.push('ai_exclude = ?')
+    params.push(patch.ai_exclude)
+  }
+  if (patch.type !== undefined) {
+    updates.push('type = ?')
+    params.push(patch.type)
+  }
+  if (patch.status !== undefined) {
+    updates.push('status = ?')
+    params.push(patch.status)
+  }
+  if (patch.tags !== undefined) {
+    updates.push('tags = ?')
+    params.push(patch.tags)
+  }
+
+  if (updates.length === 0) return
+
+  updates.push("updated_at = datetime('now')")
+  params.push(id)
+  db.query(`UPDATE blocks SET ${updates.join(', ')} WHERE id = ?`).run(
+    ...(params as [string, ...string[]]),
+  )
+}
+
+/** 移动：更新自身 parent/root/level/sort（后代传播见 shiftDescendantLevels / reRootDescendants） */
+export function moveBlock(
+  db: Db,
+  id: string,
+  target: { parentId: string | null; rootId: string; levelDiff: number; sort: number },
+): void {
+  db.query(
+    `UPDATE blocks SET parent_id = ?, root_id = ?, level = level + ?,
+     sort = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+  ).run(target.parentId, target.rootId, target.levelDiff, target.sort, id)
+}
+
+/** 后代 level 平移（move 的 levelDiff 传播） */
+export function shiftDescendantLevels(db: Db, ids: string[], levelDiff: number): void {
+  if (ids.length === 0) return
+  const placeholders = ids.map(() => '?').join(',')
+  db.query(`UPDATE blocks SET level = level + ? WHERE id IN (${placeholders})`).run(
+    levelDiff,
+    ...(ids as [string, ...string[]]),
+  )
+}
+
+/** 后代 root_id 跟随（跨文档移动传播） */
+export function reRootDescendants(db: Db, ids: string[], rootId: string): void {
+  if (ids.length === 0) return
+  const placeholders = ids.map(() => '?').join(',')
+  db.query(`UPDATE blocks SET root_id = ? WHERE id IN (${placeholders})`).run(
+    rootId,
+    ...(ids as [string, ...string[]]),
+  )
+}
+
+/** 软删除：is_deleted = 1 + delete_id tombstone + updated_at（幂等：已删除行不受影响） */
+export function softDeleteBlocks(db: Db, ids: string[]): void {
+  if (ids.length === 0) return
+  const placeholders = ids.map(() => '?').join(',')
+  db.query(
+    `UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = datetime('now')
+     WHERE id IN (${placeholders}) AND is_deleted = 0`,
+  ).run(...(ids as [string, ...string[]]))
+}
+
+/** 恢复软删除（含子树，由调用方收集 id） */
+export function restoreBlocks(db: Db, ids: string[]): void {
+  if (ids.length === 0) return
+  const placeholders = ids.map(() => '?').join(',')
+  db.query(`UPDATE blocks SET is_deleted = 0, updated_at = datetime('now') WHERE id IN (${placeholders})`).run(
+    ...(ids as [string, ...string[]]),
+  )
+}
+
+/** 笔记本下全部未删除 block id（删除笔记本时的级联清理用） */
+export function listLiveBlockIdsByNotebook(db: Db, notebookId: string): string[] {
+  const rows = db
+    .query('SELECT id FROM blocks WHERE notebook_id = ? AND is_deleted = 0')
+    .all(notebookId) as Array<{ id: string }>
+  return rows.map((r) => r.id)
+}
+
+/** 笔记本删除时级联软删除其下全部 blocks（幂等） */
+export function softDeleteByNotebook(db: Db, notebookId: string): void {
+  db.query(
+    `UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = datetime('now')
+     WHERE notebook_id = ? AND is_deleted = 0`,
+  ).run(notebookId)
+}

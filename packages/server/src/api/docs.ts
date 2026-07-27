@@ -2,16 +2,27 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, updateDocStatusSchema, rowToBlock, readTags, readAiExclude, readDocStatus, isDocInbox, isDocArchived, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, parseDocStatusFilter, docMatchesTags, parseCreatedWithin, parseStaleWithin } from '@notefast/core'
-import type { BlockRow, DocSummary } from '@notefast/core'
+import type { DocSummary } from '@notefast/core'
 import { getDb } from '../db'
-import { fetchDocBlocks, fetchSubtreeBlocks } from '../dbQueries'
+import {
+  fetchDocBlocks,
+  fetchSubtreeBlocks,
+  getBlockById,
+  getDocById,
+  getLiveDocById,
+  getBlocksByIds,
+  listDocRows,
+  updateBlock,
+  softDeleteBlocks,
+  nowTimestamp,
+} from '../store/blocks'
+import { deleteRefsTouchingBlocks } from '../store/refs'
 import { insertDocFromMarkdown, insertChildBlocks } from '../services/docImport'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { writeDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
 import { readDocAiExclude } from '../ai/aiExcludeQuery'
 import { scheduleDocIndex } from '../ai/indexJobs'
-import { computeContentHash } from '../services/contentHash'
 
 const docs = new Hono()
 
@@ -24,16 +35,7 @@ docs.get('/list', (c) => {
   const withinMs = parseUpdatedWithin(c.req.query('updated_within'))
   const statusFilter = parseDocStatusFilter(c.req.query('status'))
 
-  let rows: BlockRow[]
-  if (notebookId) {
-    rows = db
-      .query('SELECT * FROM blocks WHERE type = ? AND notebook_id = ? AND is_deleted = 0 ORDER BY updated_at DESC')
-      .all('document', notebookId) as BlockRow[]
-  } else {
-    rows = db
-      .query('SELECT * FROM blocks WHERE type = ? AND is_deleted = 0 ORDER BY updated_at DESC')
-      .all('document') as BlockRow[]
-  }
+  let rows = listDocRows(db, { notebookId: notebookId || undefined })
 
   // 生命周期：默认只列正式笔记（排除收集箱与归档）；status=inbox/archived 只列对应集合；all 不过滤
   if (statusFilter === 'inbox') {
@@ -107,7 +109,7 @@ docs.get('/tree', (c) => {
     return c.json({ error: 'bad_request', message: '缺少 doc_id 参数' }, 400)
   }
 
-  const docRow = db.query('SELECT * FROM blocks WHERE id = ? AND type = ?').get(docId, 'document') as BlockRow | undefined
+  const docRow = getDocById(db, docId)
   if (!docRow) {
     return c.json({ error: 'not_found', message: `文档 ${docId} 不存在` }, 404)
   }
@@ -126,7 +128,7 @@ docs.get('/:id', (c) => {
   const db = getDb()
   const id = c.req.param('id')
 
-  const docRow = db.query('SELECT * FROM blocks WHERE id = ? AND type = ?').get(id, 'document') as BlockRow | undefined
+  const docRow = getDocById(db, id)
   if (!docRow) {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
@@ -150,16 +152,10 @@ docs.post('/', zValidator('json', createDocSchema), (c) => {
     tags: initialTags,
   })
 
-  const row = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
+  const row = getBlockById(db, docId)!
   const indexJob = scheduleDocIndex(docId, blockIds)
   fireAfterCreate(rowToBlock(row))
-  if (blockIds.length > 0) {
-    const placeholders = blockIds.map(() => '?').join(',')
-    const childRows = db
-      .query(`SELECT * FROM blocks WHERE id IN (${placeholders})`)
-      .all(...blockIds) as BlockRow[]
-    fireAfterCreateMany(childRows.map(rowToBlock))
-  }
+  fireAfterCreateMany(getBlocksByIds(db, blockIds).map(rowToBlock))
   return c.json({
     id: row.id,
     title: row.content,
@@ -176,18 +172,14 @@ docs.patch('/:id/status', zValidator('json', updateDocStatusSchema), (c) => {
   const id = c.req.param('id')
   const { status } = c.req.valid('json')
 
-  const docRow = db
-    .query("SELECT * FROM blocks WHERE id = ? AND type = 'document'")
-    .get(id) as BlockRow | undefined
+  const docRow = getDocById(db, id)
   if (!docRow) {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
 
-  db.query(
-    "UPDATE blocks SET status = ?, updated_at = datetime('now') WHERE id = ?",
-  ).run(status, id)
+  updateBlock(db, id, { status })
 
-  const updatedRow = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
+  const updatedRow = getBlockById(db, id)!
   fireAfterUpdate(rowToBlock(updatedRow))
   return c.json({
     doc_id: id,
@@ -203,21 +195,17 @@ docs.patch('/:id/tags', async (c) => {
   const rawTags = Array.isArray(body.tags) ? body.tags : []
   const newTags = rawTags.filter((t): t is string => typeof t === 'string').slice(0, 64)
 
-  const docRow = db
-    .query("SELECT * FROM blocks WHERE id = ? AND type = 'document'")
-    .get(id) as BlockRow | undefined
+  const docRow = getDocById(db, id)
   if (!docRow) {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
 
   const provider = getTagProvider()
   const updated = provider.setDocTags(docRow, newTags)
-  db.query(
-    "UPDATE blocks SET tags = ?, updated_at = datetime('now') WHERE id = ?",
-  ).run(updated.tags, id)
+  updateBlock(db, id, { tags: updated.tags })
 
   const finalTags = provider.getDocTags(updated)
-  const updatedRow = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
+  const updatedRow = getBlockById(db, id)!
   return c.json({
     doc_id: id,
     tags: finalTags,
@@ -261,7 +249,7 @@ docs.delete('/:id', (c) => {
   const db = getDb()
   const id = c.req.param('id')
 
-  const docRow = db.query('SELECT * FROM blocks WHERE id = ? AND type = ? AND is_deleted = 0').get(id, 'document') as BlockRow | undefined
+  const docRow = getLiveDocById(db, id)
   if (!docRow) {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
@@ -270,11 +258,8 @@ docs.delete('/:id', (c) => {
   const allIds = [id, ...childIds.map((r) => r.id)]
 
   db.transaction(() => {
-    for (const delId of allIds) {
-      db.query('DELETE FROM block_refs WHERE source_id = ? OR target_id = ?').run(delId, delId)
-    }
-    const placeholders = allIds.map(() => '?').join(',')
-    db.query(`UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = datetime('now') WHERE id IN (${placeholders}) AND is_deleted = 0`).run(...allIds)
+    deleteRefsTouchingBlocks(db, allIds)
+    softDeleteBlocks(db, allIds)
   })()
 
   fireAfterDelete(id)
@@ -286,7 +271,7 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
   const id = c.req.param('id')
   const { markdown, title } = c.req.valid('json')
 
-  const docRow = db.query('SELECT * FROM blocks WHERE id = ? AND type = ?').get(id, 'document') as BlockRow | undefined
+  const docRow = getDocById(db, id)
   if (!docRow) {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
@@ -303,17 +288,11 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
   const insertedIds: string[] = []
 
   db.transaction(() => {
-    for (const delId of oldChildIds) {
-      db.query('DELETE FROM block_refs WHERE source_id = ? OR target_id = ?').run(delId, delId)
-    }
-    if (oldChildIds.length > 0) {
-      const placeholders = oldChildIds.map(() => '?').join(',')
-      db.query(`UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = datetime('now') WHERE id IN (${placeholders}) AND is_deleted = 0`).run(...oldChildIds)
-    }
+    deleteRefsTouchingBlocks(db, oldChildIds)
+    softDeleteBlocks(db, oldChildIds)
 
-    db.query("UPDATE blocks SET content = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?").run(newTitle, computeContentHash(newTitle), id)
+    updateBlock(db, id, { content: newTitle })
 
-    const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
     // 与 insertDocFromMarkdown / appendMarkdownToDoc 共用插入逻辑：
     // properties（headingLevel/language 等）与嵌套 level 不再丢失
     insertedIds.push(
@@ -322,7 +301,7 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
         rootId: id,
         inputs,
         sortOffset: 0,
-        now,
+        now: nowTimestamp(),
       }),
     )
   })()
@@ -330,14 +309,8 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
   // Hook 触发（fire-and-forget）：删旧 → 文档级索引作业 → 增新 hooks → 更 doc
   fireAfterDeleteMany(oldChildIds)
   const indexJob = scheduleDocIndex(id, insertedIds)
-  if (insertedIds.length > 0) {
-    const placeholders = insertedIds.map(() => '?').join(',')
-    const newRows = db
-      .query(`SELECT * FROM blocks WHERE id IN (${placeholders})`)
-      .all(...insertedIds) as BlockRow[]
-    fireAfterCreateMany(newRows.map(rowToBlock))
-  }
-  const updatedDocRow = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
+  fireAfterCreateMany(getBlocksByIds(db, insertedIds).map(rowToBlock))
+  const updatedDocRow = getBlockById(db, id)!
   fireAfterUpdate(rowToBlock(updatedDocRow))
 
   const tree = buildBlockTree(fetchDocBlocks(db, id))
@@ -354,7 +327,7 @@ docs.get('/:id/export/markdown', (c) => {
   const id = c.req.param('id')
   const db = getDb()
 
-  const docRow = db.query('SELECT * FROM blocks WHERE id = ? AND type = ?').get(id, 'document') as BlockRow | undefined
+  const docRow = getDocById(db, id)
   if (!docRow) {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }

@@ -10,10 +10,9 @@ import {
   type SyncResult,
   type PushOptions,
   type WebDavAdapterConfig,
-  type BlockRow,
 } from '@notefast/core'
 import { getDb } from '../db'
-import { fetchDocBlocks } from '../dbQueries'
+import { fetchDocBlocks, listDocRows } from '../store/blocks'
 import {
   ARCHIVE_MANIFEST_NAME,
   archiveFilename,
@@ -185,14 +184,8 @@ export function createWebDavAdapter(
       const docIds = options?.docIds
       const prefix = normalizePrefix(options?.prefix ?? cfg.prefix)
 
-      let sql = "SELECT * FROM blocks WHERE type = 'document'"
-      const params: string[] = []
-      if (docIds && docIds.length > 0) {
-        sql += ` AND id IN (${docIds.map(() => '?').join(',')})`
-        params.push(...docIds)
-      }
-      sql += ' ORDER BY updated_at ASC'
-      const docs = db.query(sql).all(...params) as BlockRow[]
+      // 归档镜像活库：软删除文档不导出（下次全量同步时经 manifest 清理远端陈旧文件）
+      const docs = listDocRows(db, { docIds, order: 'updated_asc' })
 
       const result: SyncResult = { pushed: 0, pulled: 0, errors: [] }
       const files: ArchiveManifest['files'] = []

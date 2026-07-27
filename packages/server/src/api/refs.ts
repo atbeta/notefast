@@ -2,6 +2,8 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { getDb } from '../db'
+import { blockExists } from '../store/blocks'
+import { findRefByPair, insertRef, deleteRefById } from '../store/refs'
 
 const refs = new Hono()
 
@@ -15,28 +17,19 @@ refs.post('/', zValidator('json', createRefSchema), (c) => {
   const db = getDb()
   const { source_id, target_id, ref_type } = c.req.valid('json')
 
-  const source = db.query('SELECT id FROM blocks WHERE id = ?').get(source_id)
-  if (!source) {
+  if (!blockExists(db, source_id)) {
     return c.json({ error: 'not_found', message: `源块 ${source_id} 不存在` }, 404)
   }
 
-  const target = db.query('SELECT id FROM blocks WHERE id = ?').get(target_id)
-  if (!target) {
+  if (!blockExists(db, target_id)) {
     return c.json({ error: 'not_found', message: `目标块 ${target_id} 不存在` }, 404)
   }
 
-  const existing = db
-    .query('SELECT id FROM block_refs WHERE source_id = ? AND target_id = ?')
-    .get(source_id, target_id)
-  if (existing) {
+  if (findRefByPair(db, source_id, target_id)) {
     return c.json({ message: '引用关系已存在' }, 200)
   }
 
-  db.query('INSERT INTO block_refs (source_id, target_id, ref_type) VALUES (?, ?, ?)').run(
-    source_id,
-    target_id,
-    ref_type,
-  )
+  insertRef(db, { sourceId: source_id, targetId: target_id, refType: ref_type })
 
   return c.json({ created: true }, 201)
 })
@@ -49,8 +42,7 @@ refs.delete('/:id', (c) => {
     return c.json({ error: 'bad_request', message: '无效的引用 ID' }, 400)
   }
 
-  const result = db.query('DELETE FROM block_refs WHERE id = ?').run(id)
-  if (result.changes === 0) {
+  if (!deleteRefById(db, id)) {
     return c.json({ error: 'not_found', message: '引用关系不存在' }, 404)
   }
 

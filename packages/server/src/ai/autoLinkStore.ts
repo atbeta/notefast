@@ -15,6 +15,7 @@
 
 import type Database from 'bun:sqlite'
 import { getDb } from '../db'
+import { blockExists } from '../store/blocks'
 
 // ───────────────────── Types ─────────────────────
 
@@ -218,8 +219,7 @@ export function applySuggestion(
     if (!cand) return { applied: false, reason: 'invalid_candidate' }
 
     // 检查 target block 是否还存在
-    const targetExists = db.query('SELECT 1 FROM blocks WHERE id = ?').get(cand.blockId)
-    if (!targetExists) {
+    if (!blockExists(db, cand.blockId)) {
       // 标 failed 让用户知道
       db.query(
         `UPDATE autolink_suggestions

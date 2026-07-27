@@ -13,6 +13,7 @@ import {
   type LLMProvider,
 } from '@notefast/core'
 import { hasRuntime, getRuntime } from '../../services/aiRuntime'
+import { getDocById } from '../../store/blocks'
 import { semanticSearch } from '../../ai/indexer'
 import { runChatSync } from '../../ai/chat'
 import {
@@ -125,8 +126,7 @@ export function registerAiChatTools(ctx: ToolContext): void {
       if (context_doc_id) {
         const denied = denyAiExcludedDoc(context_doc_id)
         if (denied) return denied
-        const ctx2 = db.query("SELECT id FROM blocks WHERE id = ? AND type = 'document'").get(context_doc_id)
-        if (!ctx2) {
+        if (getDocById(db, context_doc_id) == null) {
           return toolError('not_found', `context_doc_id 指向的文档不存在：${context_doc_id}`, { context_doc_id })
         }
       }

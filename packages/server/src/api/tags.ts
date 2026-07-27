@@ -17,7 +17,6 @@
 
 import { Hono } from 'hono'
 import {
-  type BlockRow,
   type TagInfo,
   getTagProvider,
   readTags,
@@ -25,6 +24,7 @@ import {
   isDocArchived,
 } from '@notefast/core'
 import { getDb } from '../db'
+import { listDocRows } from '../store/blocks'
 
 const tags = new Hono()
 
@@ -35,14 +35,7 @@ tags.get('/', (c) => {
   const includeInbox = c.req.query('include_inbox') === '1' || c.req.query('include_inbox') === 'true'
   const providerName = getTagProvider().name
 
-  let rows: BlockRow[]
-  if (notebookId) {
-    rows = db
-      .query("SELECT * FROM blocks WHERE type = 'document' AND notebook_id = ? AND is_deleted = 0")
-      .all(notebookId) as BlockRow[]
-  } else {
-    rows = db.query("SELECT * FROM blocks WHERE type = 'document' AND is_deleted = 0").all() as BlockRow[]
-  }
+  let rows = listDocRows(db, { notebookId: notebookId || undefined })
 
   // 归档一律不进 tags 聚合；include_inbox=1 仅放开收集箱
   rows = rows.filter((r) => (includeInbox ? !isDocArchived(r) : readDocStatus(r) === 'note'))

@@ -6,8 +6,8 @@
  * content_hash 未变时跳过重新 embed；大文档索引走 indexJobs 批处理限流。
  */
 
-import type { BlockRow } from '@notefast/core'
 import { getDb } from '../db'
+import { getBlockById } from '../store/blocks'
 import { getRuntime } from '../services/aiRuntime'
 import {
   JsonVectorStore,
@@ -63,7 +63,7 @@ export async function indexBlock(blockId: string): Promise<IndexBlockResult> {
   }
 
   const db = getDb()
-  const row = db.query('SELECT * FROM blocks WHERE id = ?').get(blockId) as BlockRow | undefined
+  const row = getBlockById(db, blockId)
   if (!row) return 'noop'
 
   // 图片理解开启时，索引文本 = 原文 + 图片 caption（hash/freshness 均以此为准）
@@ -111,9 +111,7 @@ export async function indexBlockBatch(
       }
       continue
     }
-    const row = db.query('SELECT id, content FROM blocks WHERE id = ?').get(id) as
-      | { id: string; content: string }
-      | undefined
+    const row = getBlockById(db, id)
     if (!row) continue
     // 与 indexBlock 一致：索引文本含图片 caption（视觉启用时）
     const text = await indexedTextWithCaptions(row.content || '')
@@ -224,9 +222,7 @@ export async function upsertVector(
 ): Promise<void> {
   const fingerprint = currentEmbeddingFingerprint()
   if (!fingerprint) throw new Error('Embedding provider is not configured')
-  const blockContent = content ?? (
-    getDb().query('SELECT content FROM blocks WHERE id = ?').get(blockId) as { content: string } | null
-  )?.content
+  const blockContent = content ?? getBlockById(getDb(), blockId)?.content
   if (blockContent === undefined) return
   await getVectorStore().upsert({
     blockId,

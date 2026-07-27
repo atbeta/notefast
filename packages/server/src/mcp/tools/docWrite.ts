@@ -14,9 +14,22 @@ import {
   readDocStatus,
   readTags,
   rowToBlock,
-  type BlockRow,
 } from '@notefast/core'
 import { insertDocFromMarkdown } from '../../services/docImport'
+import {
+  fetchDeletedSubtreeIds,
+  getBlockAnchor,
+  getBlockById,
+  getBlocksByIds,
+  getDeletedBlockById,
+  getDocById,
+  insertBlock,
+  listDocRows,
+  listRecentlyDeletedBlocks,
+  nowTimestamp,
+  restoreBlocks,
+  updateBlock,
+} from '../../store/blocks'
 import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate } from '../../services/hooks'
 import { scheduleDocIndex } from '../../ai/indexJobs'
 import { extractAssetRefs, findMissingAssets } from '../../assets/store'
@@ -30,7 +43,6 @@ import {
   validateNotebook,
   type ToolContext,
 } from './helpers'
-import { computeContentHash } from '../../services/contentHash'
 
 export function registerDocWriteTools(ctx: ToolContext): void {
   const { db, notebookId, registerTool } = ctx
@@ -63,9 +75,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
       let level = 0
 
       if (parent_id) {
-        const parent = db.query('SELECT root_id, level FROM blocks WHERE id = ?').get(parent_id) as
-          | { root_id: string; level: number }
-          | undefined
+        const parent = getBlockAnchor(db, parent_id)
         if (!parent) {
           return toolError('not_found', `父块 ${parent_id} 不存在`, { parent_id })
         }
@@ -75,13 +85,19 @@ export function registerDocWriteTools(ctx: ToolContext): void {
         rootId = id
       }
 
-      const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
-      db.query(
-        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, sort, level, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
-      ).run(id, nid, parent_id || null, rootId, type, content, computeContentHash(content), level, now, now)
+      insertBlock(db, {
+        id,
+        notebook_id: nid,
+        parent_id: parent_id || null,
+        root_id: rootId,
+        type,
+        content,
+        sort: 0,
+        level,
+        now: nowTimestamp(),
+      })
 
-      const row = db.query('SELECT * FROM blocks WHERE id = ?').get(id) as BlockRow
+      const row = getBlockById(db, id)!
       fireAfterCreate(rowToBlock(row))
       return { content: [toText({ block: rowToBlock(row) })] }
     },
@@ -99,14 +115,14 @@ export function registerDocWriteTools(ctx: ToolContext): void {
     async ({ block_id, content }) => {
       const denied = denyAiExcludedBlock(block_id)
       if (denied) return denied
-      const existing = db.query('SELECT * FROM blocks WHERE id = ?').get(block_id)
+      const existing = getBlockById(db, block_id)
       if (!existing) {
         return toolError('not_found', `Block ${block_id} 不存在`, { block_id })
       }
 
-      db.query("UPDATE blocks SET content = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?").run(content, computeContentHash(content), block_id)
+      updateBlock(db, block_id, { content })
 
-      const row = db.query('SELECT * FROM blocks WHERE id = ?').get(block_id) as BlockRow
+      const row = getBlockById(db, block_id)!
       fireAfterUpdate(rowToBlock(row))
       return { content: [toText({ block: rowToBlock(row) })] }
     },
@@ -136,16 +152,10 @@ export function registerDocWriteTools(ctx: ToolContext): void {
       })
 
       // Hook 触发（fire-and-forget）：先 doc，再批量子块；索引进度走 scheduleDocIndex
-      const docRow = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
+      const docRow = getBlockById(db, docId)!
       const indexJob = scheduleDocIndex(docId, blockIds)
       fireAfterCreate(rowToBlock(docRow))
-      if (blockIds.length > 0) {
-        const placeholders = blockIds.map(() => '?').join(',')
-        const childRows = db
-          .query(`SELECT * FROM blocks WHERE id IN (${placeholders})`)
-          .all(...blockIds) as BlockRow[]
-        fireAfterCreateMany(childRows.map(rowToBlock))
-      }
+      fireAfterCreateMany(getBlocksByIds(db, blockIds).map(rowToBlock))
 
       return {
         content: [toText({
@@ -179,9 +189,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
     async ({ notebook_id, tags, tag_match, untagged, updated_within, status }) => {
       const nid = notebook_id || notebookId
 
-      const rows = db
-        .query('SELECT * FROM blocks WHERE type = ? AND notebook_id = ? ORDER BY updated_at DESC')
-        .all('document', nid) as BlockRow[]
+      const rows = listDocRows(db, { notebookId: nid })
 
       const filtered = filterDocRowsForMcp(rows, {
         tags: parseTagsQueryParam(tags),
@@ -218,14 +226,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
     },
     async ({ notebook_id }) => {
       const nid = notebook_id || notebookId
-      let rows: BlockRow[]
-      if (notebook_id) {
-        rows = db
-          .query("SELECT * FROM blocks WHERE type = 'document' AND notebook_id = ?")
-          .all(nid) as BlockRow[]
-      } else {
-        rows = db.query("SELECT * FROM blocks WHERE type = 'document'").all() as BlockRow[]
-      }
+      const rows = listDocRows(db, { notebookId: notebook_id ? nid : undefined })
       const counts = new Map<string, number>()
       for (const r of rows) {
         if (isDocRowAiExcluded(r)) continue
@@ -255,17 +256,13 @@ export function registerDocWriteTools(ctx: ToolContext): void {
     async ({ doc_id, tags }) => {
       const denied = denyAiExcludedDoc(doc_id)
       if (denied) return denied
-      const docRow = db
-        .query("SELECT * FROM blocks WHERE id = ? AND type = 'document'")
-        .get(doc_id) as BlockRow | undefined
+      const docRow = getDocById(db, doc_id)
       if (!docRow) {
         return toolError('not_found', `文档 ${doc_id} 不存在`, { doc_id })
       }
       const provider = getTagProvider()
       const updated = provider.setDocTags(docRow, tags)
-      db.query(
-        "UPDATE blocks SET tags = ?, updated_at = datetime('now') WHERE id = ?",
-      ).run(updated.tags, doc_id)
+      updateBlock(db, doc_id, { tags: updated.tags })
       const finalTags = provider.getDocTags(updated)
       return {
         content: [toText({ doc_id, tags: finalTags })],
@@ -282,23 +279,13 @@ export function registerDocWriteTools(ctx: ToolContext): void {
       },
     },
     async ({ block_id }) => {
-      const existing = db.query('SELECT * FROM blocks WHERE id = ? AND is_deleted = 1').get(block_id)
+      const existing = getDeletedBlockById(db, block_id)
       if (!existing) {
         return toolError('not_found', `未找到可恢复的已删除 block ${block_id}`, { block_id })
       }
 
-      const childIds = db.query(
-        `WITH RECURSIVE subtree(id) AS (
-           SELECT id FROM blocks WHERE parent_id = ? AND is_deleted = 1
-           UNION
-           SELECT b.id FROM blocks b JOIN subtree s ON b.parent_id = s.id WHERE b.is_deleted = 1
-         )
-         SELECT b.id FROM blocks b JOIN subtree s ON b.id = s.id`,
-      ).all(block_id) as Array<{ id: string }>
-
-      const allIds = [block_id, ...childIds.map((r) => r.id)]
-      const placeholders = allIds.map(() => '?').join(',')
-      db.query(`UPDATE blocks SET is_deleted = 0, updated_at = datetime('now') WHERE id IN (${placeholders})`).run(...allIds)
+      const allIds = [block_id, ...fetchDeletedSubtreeIds(db, block_id)]
+      restoreBlocks(db, allIds)
 
       return { content: [toText({ restored: true, block_id, count: allIds.length })] }
     },
@@ -316,9 +303,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
       const days = within === '7d' ? 7 : 30
       const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
 
-      const rows = db.query(
-        "SELECT id, type, content, notebook_id, root_id, updated_at FROM blocks WHERE is_deleted = 1 AND updated_at >= ? ORDER BY updated_at DESC LIMIT 200",
-      ).all(cutoff) as BlockRow[]
+      const rows = listRecentlyDeletedBlocks(db, cutoff)
 
       return {
         content: [toText({

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { SemanticHit } from '@notefast/core'
 import { getDb } from '../db'
+import { getBlockById } from '../store/blocks'
 import { loadSqliteVec } from '../sqliteVec'
 import {
   contentHash,
@@ -113,14 +114,7 @@ export class SqliteVecVectorStore implements VectorStore {
       || target.dimension !== record.vector.length
     ) throw new Error('向量模型或维度与 generation 不匹配')
 
-    const block = db.query(
-      'SELECT content, notebook_id, root_id, updated_at FROM blocks WHERE id = ?',
-    ).get(record.blockId) as {
-      content: string
-      notebook_id: string
-      root_id: string
-      updated_at: string
-    } | null
+    const block = getBlockById(db, record.blockId)
     if (!block || contentHash(block.content) !== record.contentHash) return false
 
     db.transaction(() => {

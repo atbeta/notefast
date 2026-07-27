@@ -9,6 +9,7 @@
 
 import { readAiExclude, type BlockRow } from '@notefast/core'
 import { getDb } from '../db'
+import { getBlockById, getBlocksByIds, getDocById } from '../store/blocks'
 
 /** 从 document 行判断是否 AI 排除 */
 export function isDocRowAiExcluded(docRow: BlockRow | null | undefined): boolean {
@@ -19,10 +20,7 @@ export function isDocRowAiExcluded(docRow: BlockRow | null | undefined): boolean
 /** 按文档 ID（root）判断是否 AI 排除 */
 export function isDocAiExcluded(docId: string): boolean {
   const db = getDb()
-  const row = db
-    .query("SELECT * FROM blocks WHERE id = ? AND type = 'document'")
-    .get(docId) as BlockRow | undefined
-  return isDocRowAiExcluded(row)
+  return isDocRowAiExcluded(getDocById(db, docId))
 }
 
 /**
@@ -31,9 +29,7 @@ export function isDocAiExcluded(docId: string): boolean {
  */
 export function isBlockAiExcluded(blockId: string): boolean {
   const db = getDb()
-  const row = db
-    .query('SELECT id, type, root_id, ai_exclude FROM blocks WHERE id = ?')
-    .get(blockId) as Pick<BlockRow, 'id' | 'type' | 'root_id' | 'ai_exclude'> | undefined
+  const row = getBlockById(db, blockId)
   if (!row) return false
   if (row.type === 'document') return row.ai_exclude === 1
   return isDocAiExcluded(row.root_id)
@@ -45,12 +41,10 @@ export function loadAiExcludedDocIds(docIds: Iterable<string>): Set<string> {
   const excluded = new Set<string>()
   if (ids.length === 0) return excluded
   const db = getDb()
-  const placeholders = ids.map(() => '?').join(',')
-  const rows = db
-    .query(`SELECT id, ai_exclude FROM blocks WHERE type = 'document' AND id IN (${placeholders})`)
-    .all(...ids) as Array<{ id: string; ai_exclude: number }>
+  // getBlocksByIds 无 type 过滤，内存补齐原 type='document' 条件
+  const rows = getBlocksByIds(db, ids)
   for (const r of rows) {
-    if (r.ai_exclude === 1) excluded.add(r.id)
+    if (r.type === 'document' && r.ai_exclude === 1) excluded.add(r.id)
   }
   return excluded
 }
@@ -71,12 +65,10 @@ function loadDocIdsByStatus(docIds: Iterable<string>, status: string): Set<strin
   const matched = new Set<string>()
   if (ids.length === 0) return matched
   const db = getDb()
-  const placeholders = ids.map(() => '?').join(',')
-  const rows = db
-    .query(`SELECT id, status FROM blocks WHERE type = 'document' AND id IN (${placeholders})`)
-    .all(...ids) as Array<{ id: string; status: string }>
+  // getBlocksByIds 无 type 过滤，内存补齐原 type='document' 条件
+  const rows = getBlocksByIds(db, ids)
   for (const r of rows) {
-    if (r.status === status) matched.add(r.id)
+    if (r.type === 'document' && r.status === status) matched.add(r.id)
   }
   return matched
 }
@@ -94,9 +86,7 @@ export function loadDocBlockIds(docId: string): string[] {
  * docId 不存在时返回 null（调用方应另行处理 not_found）。
  */
 export function readDocAiExclude(docId: string): boolean | null {
-  const row = getDb()
-    .query("SELECT ai_exclude FROM blocks WHERE id = ? AND type = 'document'")
-    .get(docId) as { ai_exclude: number } | undefined
+  const row = getDocById(getDb(), docId)
   if (!row) return null
   return row.ai_exclude === 1
 }

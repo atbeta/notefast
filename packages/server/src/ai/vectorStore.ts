@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { SemanticHit } from '@notefast/core'
 import { getDb } from '../db'
+import { getBlockById } from '../store/blocks'
 
 export const VECTOR_INDEX_VERSION = 2
 
@@ -212,9 +213,7 @@ export class JsonVectorStore implements VectorStore {
 
     const titleMap = new Map<string, string>()
     for (const docId of new Set(scored.map((row) => row.root_id))) {
-      const doc = db.query('SELECT content FROM blocks WHERE id = ?').get(docId) as
-        | { content: string }
-        | null
+      const doc = getBlockById(db, docId)
       if (doc) titleMap.set(docId, doc.content)
     }
     return scored.map((row) => ({

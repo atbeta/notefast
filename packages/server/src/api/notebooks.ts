@@ -2,6 +2,8 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { getDb } from '../db'
+import { listLiveBlockIdsByNotebook, softDeleteByNotebook } from '../store/blocks'
+import { deleteRefsTouchingBlocks } from '../store/refs'
 
 const notebooks = new Hono()
 
@@ -88,16 +90,16 @@ notebooks.delete('/:id', (c) => {
     return c.json({ error: 'not_found', message: `笔记本 ${id} 不存在` }, 404)
   }
 
-  const { c: blockCount } = db.query('SELECT count(*) as c FROM blocks WHERE notebook_id = ?').get(id) as { c: number }
+  // 级联与 blocks.delete 对齐：先清理引用，再软删除整个笔记本的 blocks
+  const blockIds = listLiveBlockIdsByNotebook(db, id)
 
   db.transaction(() => {
-    if (blockCount > 0) {
-      db.query(`UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = datetime('now') WHERE notebook_id = ? AND is_deleted = 0`).run(id)
-    }
+    deleteRefsTouchingBlocks(db, blockIds)
+    softDeleteByNotebook(db, id)
     db.query('DELETE FROM notebooks WHERE id = ?').run(id)
   })()
 
-  return c.json({ deleted: true, blocks_deleted: blockCount })
+  return c.json({ deleted: true, blocks_deleted: blockIds.length })
 })
 
 export default notebooks

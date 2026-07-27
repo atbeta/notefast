@@ -17,11 +17,10 @@ import { join } from 'node:path'
 import {
   blocksToMarkdown,
   buildBlockTree,
-  type BlockRow,
 } from '@notefast/core'
 import { isSyncConfigured, syncPush } from '../sync/manager'
 import { getDb } from '../db'
-import { fetchDocBlocks } from '../dbQueries'
+import { fetchDocBlocks, listDocRows } from '../store/blocks'
 
 /** 老入口：保留 API 形态；底层逻辑已切到 sync manager */
 export function startAutoExport(dir: string): void {
@@ -55,7 +54,7 @@ export interface LegacyExportResult {
 export function legacyExportMarkdown(dir: string): LegacyExportResult {
   const db = getDb()
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  const docs = db.query("SELECT * FROM blocks WHERE type = 'document' ORDER BY updated_at ASC").all() as BlockRow[]
+  const docs = listDocRows(db, { order: 'updated_asc' })
   const results: LegacyExportFileResult[] = []
   for (const doc of docs) {
     try {

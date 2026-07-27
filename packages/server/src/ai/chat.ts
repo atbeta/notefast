@@ -20,16 +20,23 @@
  *     c. 否则 → 答案已在流中发出
  */
 
-import type { ChatMessage, ToolCall, ToolDefinition, BlockRow } from '@notefast/core'
+import type { ChatMessage, ToolCall, ToolDefinition } from '@notefast/core'
 import { ThinkStreamParser, splitThinkContent, rowToBlock, readDocStatus, readTags, parseStaleWithin, parseUpdatedWithin, messageText, buildBlockTree, blocksToMarkdown } from '@notefast/core'
 import type { Citation } from './hybridSearch'
 import { getDb } from '../db'
-import { fetchDocBlocks } from '../dbQueries'
+import {
+  fetchDocBlocks,
+  getBlockById,
+  getBlocksByIds,
+  getDocById,
+  getLiveDocById,
+  listDocRows,
+  updateBlock,
+} from '../store/blocks'
 import { hybridSearch, type HybridSearchReport } from './hybridSearch'
 import { buildChatPrompt } from './prompt'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { insertDocFromMarkdown, appendMarkdownToDoc } from '../services/docImport'
-import { computeContentHash } from '../services/contentHash'
 import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate } from '../services/hooks'
 import { scheduleDocIndex } from './indexJobs'
 import { loadAiExcludedDocIds } from './aiExcludeQuery'
@@ -274,9 +281,7 @@ async function executeToolCall(
     const staleMs = parseStaleWithin(typeof args.stale_within === 'string' ? args.stale_within : null)
     const updatedMs = parseUpdatedWithin(typeof args.updated_within === 'string' ? args.updated_within : null)
 
-    let rows = db
-      .query("SELECT * FROM blocks WHERE type = 'document' AND is_deleted = 0 ORDER BY updated_at DESC")
-      .all() as BlockRow[]
+    let rows = listDocRows(db)
     const excluded = loadAiExcludedDocIds(rows.map((r) => r.id))
     rows = rows.filter((r) => !excluded.has(r.id))
     if (status !== 'all') rows = rows.filter((r) => readDocStatus(r) === status)
@@ -305,9 +310,7 @@ async function executeToolCall(
       return { content: JSON.stringify({ error: 'doc_id 不能为空' }), resultCount: 0 }
     }
     const db = getDb()
-    const docRow = db
-      .query("SELECT * FROM blocks WHERE id = ? AND type = 'document' AND is_deleted = 0")
-      .get(docId) as BlockRow | undefined
+    const docRow = getLiveDocById(db, docId)
     if (!docRow) {
       return { content: JSON.stringify({ error: `文档 ${docId} 不存在` }), resultCount: 0 }
     }
@@ -349,14 +352,11 @@ async function executeToolCall(
       })
       // 与 MCP notefast_create_doc 对齐：索引作业 + afterCreate hooks（doc 先、子块批量），
       // 否则聊天创建的笔记跳过自动索引与 doc 变更广播
-      const docRow = db.query('SELECT * FROM blocks WHERE id = ?').get(result.docId) as BlockRow
+      const docRow = getBlockById(db, result.docId)!
       const indexJob = scheduleDocIndex(result.docId, result.blockIds)
       fireAfterCreate(rowToBlock(docRow))
       if (result.blockIds.length > 0) {
-        const placeholders = result.blockIds.map(() => '?').join(',')
-        const childRows = db
-          .query(`SELECT * FROM blocks WHERE id IN (${placeholders})`)
-          .all(...result.blockIds) as BlockRow[]
+        const childRows = getBlocksByIds(db, result.blockIds)
         fireAfterCreateMany(childRows.map(rowToBlock))
       }
       return {
@@ -385,8 +385,7 @@ async function executeToolCall(
       return { content: JSON.stringify({ error: 'doc_id 和 content 不能为空' }), resultCount: 0 }
     }
     const db = getDb()
-    const doc = db.query("SELECT id, notebook_id FROM blocks WHERE id = ? AND type = 'document'").get(docId) as
-      | { id: string; notebook_id: string } | undefined
+    const doc = getDocById(db, docId)
     if (!doc) {
       return { content: JSON.stringify({ error: `文档 ${docId} 不存在` }), resultCount: 0 }
     }
@@ -412,13 +411,10 @@ async function executeToolCall(
     // 与 PUT /docs/:id/markdown 一致的副作用：索引作业 + afterCreate hooks + 更新文档
     const indexJob = scheduleDocIndex(docId, blockIds)
     if (blockIds.length > 0) {
-      const placeholders = blockIds.map(() => '?').join(',')
-      const newRows = db
-        .query(`SELECT * FROM blocks WHERE id IN (${placeholders})`)
-        .all(...blockIds) as BlockRow[]
+      const newRows = getBlocksByIds(db, blockIds)
       fireAfterCreateMany(newRows.map(rowToBlock))
     }
-    const updatedDocRow = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
+    const updatedDocRow = getBlockById(db, docId)!
     fireAfterUpdate(rowToBlock(updatedDocRow))
 
     return {
@@ -441,8 +437,7 @@ async function executeToolCall(
       return { content: JSON.stringify({ error: 'block_id 和 content 不能为空' }), resultCount: 0 }
     }
     const db = getDb()
-    const row = db.query('SELECT id, root_id FROM blocks WHERE id = ?').get(blockId) as
-      | { id: string; root_id: string } | undefined
+    const row = getBlockById(db, blockId)
     if (!row) {
       return { content: JSON.stringify({ error: `Block ${blockId} 不存在` }), resultCount: 0 }
     }
@@ -450,9 +445,7 @@ async function executeToolCall(
     if (excluded.has(row.root_id)) {
       return { content: JSON.stringify({ error: `Block ${blockId} 所属文档已对 AI 隐藏` }), resultCount: 0 }
     }
-    db.query(
-      "UPDATE blocks SET content = ?, content_hash = ?, updated_at = datetime('now') WHERE id = ?",
-    ).run(newContent, computeContentHash(newContent), blockId)
+    updateBlock(db, blockId, { content: newContent })
     return {
       content: JSON.stringify({
         success: true,
@@ -782,10 +775,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
 
 function lookupDocTitle(docId: string): string | undefined {
   try {
-    const row = getDb().query('SELECT content FROM blocks WHERE id = ? AND type = ?').get(docId, 'document') as
-      | { content: string }
-      | undefined
-    return row?.content
+    return getDocById(getDb(), docId)?.content
   } catch {
     return undefined
   }

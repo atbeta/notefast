@@ -85,7 +85,8 @@ notefast/
 │   │   └── src/
 │   │       ├── index.ts     # 入口，Hono 应用创建
 │   │       ├── db.ts        # SQLite 初始化、migrations
-│   │       ├── dbQueries.ts # 共享 block 查询（fetchDocBlocks / fetchSubtreeBlocks）
+│   │       ├── store/       # 数据访问层（blocks / block_refs / entity_changes 的唯一读写入口）
+│   │       ├── dbQueries.ts # FTS5 检索查询构建（runFtsQuery；blocks 普通读写不走这里）
 │   │       ├── api/         # REST 路由（blocks, docs, search, refs, import, ai, sync, backup, autolink…）
 │   │       ├── mcp/         # MCP Server 与 Tool 定义
 │   │       ├── ai/          # indexer / chat / hybridSearch / autoLink / vectorStore / aiExclude
@@ -179,6 +180,10 @@ docker compose up -d
 - 收集箱：`properties.status: 'inbox'`；主列表 / tags 聚合 / MCP `list_docs` 默认排除；`GET /docs/list?status=inbox` 与侧栏「收集箱」；升格 `PATCH /docs/:id/status` → `note`；原 AutoLink Inbox 改名为「链接建议」（`/autolink`）
 - 归档：`blocks.status: 'archived'`（文档根显式列，无 CHECK 约束）；默认过滤语义统一为「仅 status='note'」（主列表 / tags 聚合 / MCP `list_docs` 同时排除 inbox 与 archived，`status=all` 全量）；AI 检索默认软排除归档（hybridSearch/semanticSearch 的 `includeArchived`、REST `/ai/search?include_archived=1`、chat `notefast_search_more` 的 `include_archived` 可显式包含）；Web 侧栏「归档」入口 + `/archived` 页 + 文档页归档/恢复（`PATCH /docs/:id/status`）；介于正常笔记与 ai_exclude 之间——保留内容、不再污染检索；创建路径不支持直接建归档
 - 文档阅读/编辑预览用自定义 `BlockRenderer`，AI 聊天用 `react-markdown` + `remark-gfm`；mermaid 代码围栏经懒加载组件渲染并跟随 `data-theme`
+- blocks / block_refs 读写统一走 `server/src/store/`（blocks.ts / refs.ts）：函数级数据访问层而非 interface（单后端不冻结接口形状，未来换远程存储时以此为边界提取）；列表/树读取默认排除软删除，`updateBlock` 自动带 `updated_at`，content 变更自动同步 `content_hash`，软删除统一 `is_deleted + delete_id` tombstone 并级联清 block_refs；FTS 检索留 `dbQueries.runFtsQuery`（与 SQLite 共生，不进数据访问层）；向量 / autolink / assets 等自有表各留原 store
+- `listDocRows` 排序带 rowid 决胜（updated_at 秒精度，同秒写入必撞）：ASC 按入库序（归档导出确定性），DESC 后入库在前（「最近更新」语义）
+- 文档列表/导出统一排除软删除文档：MCP `list_docs`/`list_tags`、sync 三适配器与 autoExport 原先不过滤 `is_deleted`，已对齐 Web 语义；软删除文档会在下次全量同步时经 manifest 从远端归档清理
+- `updated_at` 语义 = 内容最后编辑时间（未来 LWW 裁决字段，客户端 push 可自带），**不做增量同步游标**；拉取游标用 `entity_changes.seq`（AUTOINCREMENT 单调递增，blocks 表 trigger 驱动，`store/changeFeed.ts` 只读封装）；change feed 清理策略待同步 API 落地时定，超窗客户端走全量快照重同步
 - 内部 AI 功能边界：只做「采集/理解/检索/维护」四类笔记核心行为；通用聊天客户端能力（多会话、语音对话、角色市场）与平台生态能力（Agent 运行时、插件市场）外放给 MCP 消费方；外部连接器未来可能做，已预留 `properties.source`（`{provider, external_id, synced_at}`）+ `findDocIdBySource()` 供 upsert
 - 内置 skills：`server/src/ai/skills.ts` 注册表（prompt 模板，非 skill 运行时），`GET /ai/skills` 下发（`{{today}}` 服务端插值），聊天面板 chip 点击填入输入框；执行走现有 agent loop，写操作为建议模式；chat 工具含 `notefast_list_docs`（status/stale/updated 过滤）与 `notefast_read_doc`（读整篇 Markdown，12k 字符截断）；`/ai/chat` SSE 每 10s 写 `ping` 帧防 idleTimeout/代理断连（前端无匹配分支自然忽略）
 - 图片理解：`vision.enabled` 设置开关（默认关）；索引时 `asset_captions`（schema v3，按 asset sha256 缓存）生成 caption 拼入索引文本（hash/freshness 以拼接后文本为准）；聊天图片走 `ChatMessage.content` 多模态 parts（base64 data URL，仅当轮发送，历史保持纯文本）；能力经 `/ai/capabilities` 的 `vision` 字段下发
