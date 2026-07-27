@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.19.0](https://github.com/atbeta/notefast/compare/v0.18.0...v0.19.0) (2026-07-27)
+
+
+### Features
+
+* **server,web:** built-in chat skills with list_docs tool ([2f5f159](https://github.com/atbeta/notefast/commit/2f5f1592b5a106846992baf6f205589f9eab64d0))
+* **server,web:** image attachments in AI chat ([008acb6](https://github.com/atbeta/notefast/commit/008acb6132b87ff31d04132fe2de3033b4bb65b9))
+* **server,web:** image understanding at index time (captions in vectors) ([45b1871](https://github.com/atbeta/notefast/commit/45b1871cdbfdbe37f91c26f49ceaeca5fb922acd))
+* **server:** reserve source provenance for future connectors ([b16296a](https://github.com/atbeta/notefast/commit/b16296a18560b4c8a4eee5f6b3261fdaf20d314d))
+* **web:** speech-to-text input in AI chat panel ([6c60d69](https://github.com/atbeta/notefast/commit/6c60d6978f14f0bb67c3c00d5054dbfa75cff94f))
+
 ## [0.18.0](https://github.com/atbeta/notefast/compare/v0.17.2...v0.18.0) (2026-07-26)
 
 
