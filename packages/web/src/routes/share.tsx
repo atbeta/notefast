@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { FileWarning } from 'lucide-react'
+import { FileWarning, Globe } from 'lucide-react'
 import ChatMarkdown from '../components/ChatMarkdown'
 
 /**
@@ -82,7 +82,14 @@ export default function SharePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <article className="max-w-[var(--reading-max-w,42rem)] mx-auto px-6 pt-16 pb-24">
+      {/* 公开可见提示：页面与登录后阅读页样式一致，需让访问者明确知道这是无需登录的公开分享页 */}
+      <div className="border-b border-border/60 bg-muted/40">
+        <div className="max-w-[var(--reading-max-w,42rem)] mx-auto px-6 py-2 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+          <Globe className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
+          这是公开分享页面，任何获得链接的人无需登录即可阅读
+        </div>
+      </div>
+      <article className="max-w-[var(--reading-max-w,42rem)] mx-auto px-6 pt-12 pb-24">
         <header className="mb-8">
           <h1 className="text-[28px] font-bold text-foreground leading-snug tracking-[-0.01em]">
             {doc.title || '无标题文档'}

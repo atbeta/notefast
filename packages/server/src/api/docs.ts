@@ -180,12 +180,20 @@ docs.patch('/:id/status', zValidator('json', updateDocStatusSchema), (c) => {
 
   updateBlock(db, id, { status })
 
+  // 归档 = 退出活跃流通：与删除保持一致，级联关闭公开分享（旧链接立即 404）。
+  // 恢复为 note 不复活旧链接，需重新开启（与删除路径语义一致）
+  let shareRevoked = false
+  if (status === 'archived') {
+    shareRevoked = deleteShare(db, id)
+  }
+
   const updatedRow = getBlockById(db, id)!
   fireAfterUpdate(rowToBlock(updatedRow))
   return c.json({
     doc_id: id,
     status: readDocStatus(updatedRow),
     updated_at: updatedRow.updated_at,
+    ...(shareRevoked ? { share_revoked: true } : {}),
   })
 })
 

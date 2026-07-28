@@ -1,6 +1,8 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { Hono } from 'hono'
 import { authMiddleware, isAuthEnabled } from '../middleware/auth'
+import { createToken } from '../services/apiTokens'
+import { getDb } from '../db'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { initDb, closeDb } from '../db'
@@ -122,6 +124,23 @@ describe('authMiddleware', () => {
     const res = await app.fetch(
       new Request('http://localhost/api/v1/test', {
         headers: { Authorization: 'Basic !!!not-valid-base64!!!' },
+      }),
+    )
+    expect(res.status).toBe(401)
+  })
+
+  test('api_tokens 的 scopes 为非法 JSON 时返回 401 而非 500', async () => {
+    process.env.API_TOKEN = ''
+    process.env.AUTH_PASSWORD = 'mypassword'
+
+    const { plain, record } = createToken('broken-scopes', ['read'])
+    // 模拟历史写入 / 直接 SQL 操作产生的脏数据
+    getDb().query('UPDATE api_tokens SET scopes = ? WHERE token_id = ?').run('not-json{', record.token_id)
+
+    const app = createApp()
+    const res = await app.fetch(
+      new Request('http://localhost/api/v1/test', {
+        headers: { Authorization: `Bearer ${plain}` },
       }),
     )
     expect(res.status).toBe(401)

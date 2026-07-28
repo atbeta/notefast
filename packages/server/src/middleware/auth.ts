@@ -129,11 +129,19 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
     if (bearerMatch) {
       const record = verifyToken(bearerMatch[1]!)
       if (record) {
-        c.set('authScopes', JSON.parse(record.scopes) as string[])
-        // fire-and-forget 更新 last_used_at
-        try { updateLastUsed(record.token_id) } catch { /* ignore */ }
-        await next()
-        return
+        // scopes 列若被写坏（历史数据/直接 SQL），拒绝该 token（401）而不是炸 500
+        let scopes: string[] | null = null
+        try {
+          const parsed: unknown = JSON.parse(record.scopes)
+          if (Array.isArray(parsed)) scopes = parsed.filter((s): s is string => typeof s === 'string')
+        } catch { /* scopes 保持 null，落到底部 401 */ }
+        if (scopes) {
+          c.set('authScopes', scopes)
+          // fire-and-forget 更新 last_used_at
+          try { updateLastUsed(record.token_id) } catch { /* ignore */ }
+          await next()
+          return
+        }
       }
     }
   }

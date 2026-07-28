@@ -41,6 +41,7 @@ import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate } from '../servic
 import { scheduleDocIndex } from './indexJobs'
 import { loadAiExcludedDocIds } from './aiExcludeQuery'
 import { searchWeb } from './webSearch'
+import { emitAppEvent } from '../events'
 
 export type ChatEvent =
   | { type: 'retrieval'; report: HybridSearchReport }
@@ -323,6 +324,16 @@ async function executeToolCall(
     const MAX_DOC_CHARS = 12_000
     const truncated = markdown.length > MAX_DOC_CHARS
     if (truncated) markdown = markdown.slice(0, MAX_DOC_CHARS)
+    // 审计：agent 读了哪篇文档全文（含是否截断），便于事后追溯 LLM 接触过的内容
+    emitAppEvent({
+      source: 'system',
+      actor: 'ai-agent',
+      action: 'doc.read_by_agent',
+      target: { type: 'doc', id: docId },
+      outcome: 'success',
+      durationMs: undefined,
+      fields: { title: docRow.content, truncated, chars: markdown.length },
+    })
     return {
       content: JSON.stringify({
         doc_id: docId,

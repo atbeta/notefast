@@ -211,6 +211,24 @@ describe('分享公开端点（/share/:token，无鉴权）', () => {
     expect((await api('GET', `/share/${share.token}`)).status).toBe(404)
   })
 
+  test('归档级联关闭分享：公开链接立即 404；恢复为 note 不复活旧链接', async () => {
+    const docId = await createDoc('归档级联', '内容')
+    const { body: share } = await api('PUT', `/api/v1/docs/${docId}/share`)
+    expect((await api('GET', `/share/${share.token}`)).status).toBe(200)
+
+    const archived = await api('PATCH', `/api/v1/docs/${docId}/status`, { status: 'archived' })
+    expect(archived.status).toBe(200)
+    expect(archived.body.share_revoked).toBe(true)
+    expect((await api('GET', `/share/${share.token}`)).status).toBe(404)
+    expect((await api('GET', `/api/v1/docs/${docId}/share`)).body.shared).toBe(false)
+
+    // 恢复为 note：分享不复活（与删除路径语义一致），且不再返回 share_revoked
+    const restored = await api('PATCH', `/api/v1/docs/${docId}/status`, { status: 'note' })
+    expect(restored.status).toBe(200)
+    expect(restored.body.share_revoked).toBeUndefined()
+    expect((await api('GET', `/share/${share.token}`)).status).toBe(404)
+  })
+
   test('随机 token / 畸形 token → 404，不暴露存在性', async () => {
     expect((await api('GET', `/share/${'0'.repeat(32)}`)).status).toBe(404)
     expect((await api('GET', '/share/not-a-token')).status).toBe(404)

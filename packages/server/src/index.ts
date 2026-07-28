@@ -1,11 +1,12 @@
 import { Hono } from 'hono'
+import type { MiddlewareHandler } from 'hono'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/bun'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createPluginSystem } from '@notefast/core'
 import { initDb, closeDb } from './db'
-import { authMiddleware, SESSION_COOKIE, sessionTokenValue } from './middleware/auth'
+import { authMiddleware, isAuthEnabled, SESSION_COOKIE, sessionTokenValue } from './middleware/auth'
 import { createRateLimit } from './middleware/rateLimit'
 import { eventContextMiddleware } from './middleware/eventContext'
 import { emitAppEvent } from './events'
@@ -91,12 +92,16 @@ app.get('/api/v1/version', (c) => c.json({ version: appVersion }))
 
 // Web 登录后建立会话 cookie：<img> 等无法携带 Authorization 头的读取场景用它鉴权。
 // cookie 值 = HMAC(密码)，不含密码本身；remember=0 时为会话 cookie（关浏览器即失效）。
+// HTTPS（直连或反代终止 TLS 经 X-Forwarded-Proto 传递）时加 Secure，防 HTTP 明文泄露。
 app.post('/api/v1/auth/session', (c) => {
   const token = sessionTokenValue()
   if (!token) return c.json({ session: false })
   const remember = c.req.query('remember') !== '0'
   const maxAge = remember ? '; Max-Age=604800' : ''
-  c.header('Set-Cookie', `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax${maxAge}`)
+  const secure = c.req.url.startsWith('https://') || c.req.header('x-forwarded-proto') === 'https'
+    ? '; Secure'
+    : ''
+  c.header('Set-Cookie', `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax${maxAge}${secure}`)
   return c.json({ session: true })
 })
 
@@ -134,6 +139,15 @@ app.route('/api/v1/events', eventsRouter)
 
 // 分享公开端点：挂在 /api/* 之外（authMiddleware 只覆盖 /api/*），无需鉴权
 app.route('/share', sharePublic)
+
+// 公开分享页（/s/*）与分享端点（/share/*）：禁止被 iframe 嵌入（防点击劫持）
+const denyFraming: MiddlewareHandler = async (c, next) => {
+  await next()
+  c.header('X-Frame-Options', 'DENY')
+  c.header('Content-Security-Policy', "frame-ancestors 'none'")
+}
+app.use('/s/*', denyFraming)
+app.use('/share/*', denyFraming)
 
 const pluginSystem = createPluginSystem()
 initDocEvents(pluginSystem)
@@ -174,6 +188,14 @@ const server = Bun.serve({
   // （心跳 25s 才写一次）。放宽到 60s，大于心跳间隔，连接由心跳保活。
   idleTimeout: 60,
 })
+
+// 未配置任何鉴权时所有请求以 admin 放行（本地开发便利设计）；
+// 监听 0.0.0.0，误暴露到公网即全面失防——启动时醒目告警，不做静默放行
+if (!isAuthEnabled()) {
+  console.warn('⚠️  未配置任何鉴权（API_TOKEN / AUTH_PASSWORD / READ_TOKEN / WRITE_TOKEN）')
+  console.warn('⚠️  所有 API/MCP 请求将以 admin 权限放行，仅适用于本地开发或可信内网')
+  console.warn('⚠️  暴露到公网前请务必配置鉴权（见 .env.example）')
+}
 
 // 优雅停机：docker restart / systemd stop 的 SIGTERM 先停止接收新连接，
 // 等在飞请求（写事务 / SSE / AI 流）drain 完再退出；超时强退，避免无限挂起

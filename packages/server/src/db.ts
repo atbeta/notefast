@@ -116,8 +116,19 @@ export function getDbPath(): string {
 
 function initApiKey(dataDir: string): void {
   const keyPath = join(dataDir, 'api.key')
-  if (existsSync(keyPath)) return
   if (process.env.API_TOKEN) return
+
+  // 重启场景：api.key 已存在但 env 未设置时，必须加载进 env。
+  // 否则 authMiddleware 看到所有鉴权变量为空，会静默退化为全 admin 放行。
+  if (existsSync(keyPath)) {
+    try {
+      const key = readFileSync(keyPath, 'utf-8').trim()
+      if (key) {
+        process.env.API_TOKEN = key
+        return
+      }
+    } catch { /* 读取失败则走重新生成 */ }
+  }
 
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
   const key = 'nf_' + Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
