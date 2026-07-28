@@ -65,7 +65,8 @@
   input[type='checkbox']:focus-visible,
   input[type='radio']:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgb(var(--primary) / 0.22);
+    /* 与下方按钮/链接的双层 ring 保持一致 */
+    box-shadow: 0 0 0 2px rgb(var(--background)), 0 0 0 4px rgb(var(--ring) / 0.55);
   }
   input[type='checkbox']:checked {
     background-color: rgb(var(--ink));
@@ -97,9 +98,13 @@
     cursor: not-allowed;
   }
 
-  /* ───────────── 滚动条：细、淡、近乎隐形，hover 容器时浮现 ───────────── */
+  /* ───────────── 滚动条：细、淡；滑块默认隐藏，hover 容器时浮现（离开后延迟渐隐） ───────────── */
   * {
     scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  /* :hover 沿祖先链传播——悬停容器内任意位置即显现其滑块（Firefox 即时切换，不可过渡） */
+  *:hover {
     scrollbar-color: rgb(var(--foreground) / 0.14) transparent;
   }
   *::-webkit-scrollbar {
@@ -110,18 +115,41 @@
     background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    background: rgb(var(--foreground) / 0.12);
+    background: transparent;
     border-radius: 99px;
     background-clip: content-box;
     border: 2px solid transparent;
+    /* 离开 500ms 后才渐隐；Chromium 对滚动条伪元素的 transition 支持不稳，退化为立即隐藏也成立 */
+    transition: background-color 0.2s ease 0.5s;
+  }
+  *:hover::-webkit-scrollbar-thumb {
+    background: rgb(var(--foreground) / 0.12);
+    background-clip: content-box;
+    border: 2px solid transparent;
+    transition-delay: 0s;
   }
   *::-webkit-scrollbar-thumb:hover {
     background: rgb(var(--foreground) / 0.22);
     background-clip: content-box;
     border: 2px solid transparent;
+    transition-delay: 0s;
   }
   *::-webkit-scrollbar-corner {
     background: transparent;
+  }
+
+  /* ───────────── 滚动边缘羽化：仅在该方向还有溢出内容时淡出（useScrollFade 驱动） ───────────── */
+  .scroll-fade {
+    --sf-top: 0px;
+    --sf-bottom: 0px;
+    mask-image: linear-gradient(to bottom, transparent, black var(--sf-top), black calc(100% - var(--sf-bottom)), transparent);
+    -webkit-mask-image: linear-gradient(to bottom, transparent, black var(--sf-top), black calc(100% - var(--sf-bottom)), transparent);
+  }
+  .scroll-fade[data-fade-top='true'] {
+    --sf-top: 16px;
+  }
+  .scroll-fade[data-fade-bottom='true'] {
+    --sf-bottom: 16px;
   }
   /* 焦点环：精致的双层 ring（底色 + 主色），键盘可访问；
      文本输入类元素（input/textarea）不套用 —— 它们有自己的聚焦语义 */
@@ -130,7 +158,6 @@
   }
   :is(button, a, [role='button'], [tabindex]:not(input):not(textarea)):focus-visible {
     box-shadow: 0 0 0 2px rgb(var(--background)), 0 0 0 4px rgb(var(--ring) / 0.55);
-    border-radius: var(--radius);
   }
   /* 交互节奏全局统一 */
   button, a, [role='button'] {
@@ -431,6 +458,11 @@
   display: grid;
   place-items: center;
   color: rgb(var(--muted-foreground));
+}
+
+/* 段落开标点悬挂（光学对齐）：全角开括号的左半字空白悬到边界外，文字主体左对齐 */
+.hanging-punct {
+  text-indent: -0.5em;
 }
 
 /* ref 卡片 */

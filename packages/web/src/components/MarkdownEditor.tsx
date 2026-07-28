@@ -63,6 +63,7 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
   const [mode, setMode] = useState<Mode>('edit')
   const [showHelp, setShowHelp] = useState(false)
   const [ghostText, setGhostText] = useState('')
+  const [cursorLine, setCursorLine] = useState(1)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const aiWriting = useAiWriting()
@@ -242,6 +243,14 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
     [ghostText, handleKeyDown, insertAtCursor, aiWriting],
   )
 
+  // 光标所在逻辑行（1 起），用于行号槽高亮；只跟踪行号，不渲染整行背景——
+  // textarea 软换行会让逻辑行与视觉行错位，整行背景需要对齐测量，易引入抖动
+  const updateCursorLine = useCallback(() => {
+    const ta = textareaRef.current
+    if (!ta) return
+    setCursorLine(ta.value.slice(0, ta.selectionStart).split('\n').length)
+  }, [])
+
   const lines = content === '' ? 1 : content.split('\n').length
   const charCount = content.length
   const cjkCount = (content.match(/[\u4e00-\u9fff]/g) || []).length
@@ -325,13 +334,16 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
             className="shrink-0 w-7 pr-3 pt-[7px] text-right font-mono text-[11px] leading-[1.75] text-muted-foreground/35 select-none tabular-nums"
           >
             {Array.from({ length: lines }, (_, i) => (
-              <div key={i + 1}>{i + 1}</div>
+              <div key={i + 1} className={i + 1 === cursorLine ? 'text-muted-foreground' : undefined}>
+                {i + 1}
+              </div>
             ))}
           </div>
           <textarea
             ref={textareaRef}
             value={content}
             onChange={(e) => setContent(e.target.value)}
+            onSelect={updateCursorLine}
             onKeyDown={handleKeyDownWithGhost}
             onPaste={imageUploader.handlePaste}
             onDrop={imageUploader.handleDrop}

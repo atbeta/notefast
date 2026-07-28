@@ -24,8 +24,10 @@ import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import { useDocChanges } from '../hooks/useDocEvents'
 import { usePinnedViews, canonicalViewQuery } from '../hooks/usePinnedViews'
+import { useScrollFade } from '../hooks/useScrollFade'
 import type { DocSummary } from '@notefast/core'
 import DocActionsMenu from './DocActionsMenu'
+import { Kbd, Tooltip } from './ui'
 
 interface SidebarProps {
   collapsed: boolean
@@ -67,6 +69,7 @@ export default function Sidebar({
   const [archivedCount, setArchivedCount] = useState(0)
   const [autolinkCount, setAutolinkCount] = useState(0)
   const { views: pinnedViews, unpin } = usePinnedViews()
+  const navFadeRef = useScrollFade<HTMLElement>()
 
   useEffect(() => {
     setIsMac(/Mac|iPhone|iPad/i.test(navigator.platform))
@@ -120,40 +123,46 @@ export default function Sidebar({
     return (
       <aside className="w-14 flex flex-col items-center py-3 shrink-0 h-full relative bg-sidebar border-r border-border/50">
         <div className="h-14 w-full flex items-center justify-center border-b border-border/50 shrink-0 absolute top-0 left-0">
-          <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group" title="展开侧边栏">
-            <PanelLeft className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
-          </button>
+          <Tooltip label="展开侧边栏">
+            <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group">
+              <PanelLeft className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
+            </button>
+          </Tooltip>
         </div>
         <div className="mt-14 w-full flex-1 flex flex-col items-center pt-4 gap-1">
-          <Link to="/" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-primary transition-colors" title="文档">
-            <FileText className="w-4 h-4" strokeWidth={1.75} />
-          </Link>
+          <Tooltip label="文档">
+            <Link to="/" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-primary transition-colors">
+              <FileText className="w-4 h-4" strokeWidth={1.75} />
+            </Link>
+          </Tooltip>
           {onToggleAiChat && (
-            <button
-              type="button"
-              onClick={onToggleAiChat}
-              className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
-                aiChatOpen
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-              }`}
-              title="AI 助手"
-            >
-              <Sparkles className="w-4 h-4" strokeWidth={1.75} />
-            </button>
+            <Tooltip label="AI 助手">
+              <button
+                type="button"
+                onClick={onToggleAiChat}
+                className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
+                  aiChatOpen
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                    : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                }`}
+              >
+                <Sparkles className="w-4 h-4" strokeWidth={1.75} />
+              </button>
+            </Tooltip>
           )}
           <div className="flex-1" />
-          <Link
-            to="/settings"
-            className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
-              location.pathname.startsWith('/settings')
-                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                : 'text-sidebar-muted/70 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent'
-            }`}
-            title="设置"
-          >
-            <Settings className="w-3.5 h-3.5" strokeWidth={1.75} />
-          </Link>
+          <Tooltip label="设置">
+            <Link
+              to="/settings"
+              className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
+                location.pathname.startsWith('/settings')
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-muted/70 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent'
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5" strokeWidth={1.75} />
+            </Link>
+          </Tooltip>
         </div>
       </aside>
     )
@@ -176,9 +185,11 @@ export default function Sidebar({
             Beta
           </span>
         </div>
-        <button onClick={onToggle} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group" title="折叠侧边栏">
-          <PanelLeftClose className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
-        </button>
+        <Tooltip label="折叠侧边栏">
+          <button onClick={onToggle} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group">
+            <PanelLeftClose className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
+          </button>
+        </Tooltip>
       </div>
 
       <div className="px-3 pt-3 pb-2 shrink-0">
@@ -190,13 +201,11 @@ export default function Sidebar({
         >
           <Search className="w-3.5 h-3.5" strokeWidth={1.75} />
           <span className="flex-1 text-left">搜索文档…</span>
-          <kbd className="font-mono text-[10px] px-1.5 py-0.5 border border-border rounded bg-card text-muted-foreground/80">
-            {isMac ? '⌘' : 'Ctrl'}K
-          </kbd>
+          <Kbd>{isMac ? '⌘' : 'Ctrl'}K</Kbd>
         </button>
       </div>
 
-      <nav className="px-2 pt-2 pb-1 flex-1 overflow-y-auto">
+      <nav ref={navFadeRef} className="scroll-fade px-2 pt-2 pb-1 flex-1 overflow-y-auto">
         <SidebarSectionLabel label="导航" />
         <Link to="/" onClick={closeAfterNav} className={location.pathname === '/' && !location.search ? 'sidebar-link-active' : 'sidebar-link'}>
           <LayoutGrid className="w-[15px] h-[15px]" strokeWidth={1.75} />
@@ -241,9 +250,7 @@ export default function Sidebar({
           >
             <Sparkles className="w-[15px] h-[15px]" strokeWidth={1.75} />
             <span className="flex-1">AI 助手</span>
-            <kbd className="ml-auto font-mono text-[10px] text-sidebar-muted/70">
-              {isMac ? '⌘' : 'Ctrl'}J
-            </kbd>
+            <Kbd className="ml-auto">{isMac ? '⌘' : 'Ctrl'}J</Kbd>
           </button>
         )}
 
@@ -357,19 +364,20 @@ export default function Sidebar({
 
       <div className="border-t border-sidebar-border shrink-0">
         <div className="px-3 pt-2 pb-2.5 flex items-center justify-between gap-2">
-          <Link
-            to="/settings"
-            onClick={closeAfterNav}
-            title="设置"
-            aria-label="设置"
-            className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${
-              location.pathname.startsWith('/settings')
-                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                : 'text-sidebar-muted/70 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent'
-            }`}
-          >
-            <Settings className="w-3.5 h-3.5" strokeWidth={1.75} />
-          </Link>
+          <Tooltip label="设置">
+            <Link
+              to="/settings"
+              onClick={closeAfterNav}
+              aria-label="设置"
+              className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${
+                location.pathname.startsWith('/settings')
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-muted/70 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent'
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5" strokeWidth={1.75} />
+            </Link>
+          </Tooltip>
           {version && (
             <span className="text-[10px] font-mono tabular-nums text-sidebar-muted/55">v{version}</span>
           )}

@@ -14,6 +14,7 @@ import {
   Share2,
   Globe,
   ChevronDown,
+  SquarePen,
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
@@ -27,7 +28,7 @@ import { useAiChatOpen } from '../components/Layout'
 import { scrollToElement } from '../lib/scroll'
 import { formatRelative } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
-import { useToast } from '../components/ui'
+import { Kbd, Tooltip, useToast } from '../components/ui'
 
 interface Backlink {
   id: number
@@ -44,7 +45,9 @@ interface Backlink {
 function countWords(doc: Block): number {
   let n = 0
   const walk = (b: Block) => {
-    if (b.content) n += b.content.trim().length
+    // 根 document 块的 content 是文档标题而非正文，不计入——
+    // 否则标题恒非空，isEmpty 永远为 false（空态不可达），字数也虚高一个标题长
+    if (b.content && b.type !== 'document') n += b.content.trim().length
     b.children.forEach(walk)
   }
   walk(doc)
@@ -313,6 +316,24 @@ export default function DocPage() {
     try {
       await api.del('/docs/' + id)
       navigate('/')
+      // 软删除 + restore 端点：Undo toast 是 Web 上唯一的恢复入口
+      toast.success({
+        title: '已删除',
+        durationMs: 6000,
+        action: {
+          label: '撤销',
+          onClick: () => {
+            void (async () => {
+              try {
+                await api.post(`/blocks/${id}/restore`, {})
+                toast.success({ title: '已恢复' })
+              } catch {
+                toast.error({ title: '撤销失败' })
+              }
+            })()
+          },
+        },
+      })
     } catch {
       setDeleting(false)
       setShowDelete(false)
@@ -394,34 +415,36 @@ export default function DocPage() {
               </span>
             )}
             <div className="w-px h-4 bg-border/60 mx-1" />
-            <button
-              ref={shareBtnRef}
-              type="button"
-              onClick={() => setShowShare((v) => !v)}
-              className={`inline-flex items-center justify-center gap-0.5 h-7 rounded-md transition-colors ${
-                docShared
-                  ? 'px-1.5 text-foreground bg-muted/70 hover:bg-muted'
-                  : 'w-7 text-muted-foreground hover:text-foreground hover:bg-accent'
-              }`}
-              title={docShared ? '已公开分享' : '分享文档'}
-              aria-expanded={showShare}
-              aria-haspopup="dialog"
-            >
-              {docShared
-                ? <Globe className="w-3.5 h-3.5" strokeWidth={1.75} />
-                : <Share2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
-              {docShared && (
-                <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform ${showShare ? 'rotate-180' : ''}`} strokeWidth={2} />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowDelete(true)}
-              className="btn-icon-ghost text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-              title="删除文档"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            <Tooltip label={docShared ? '已公开分享' : '分享文档'}>
+              <button
+                ref={shareBtnRef}
+                type="button"
+                onClick={() => setShowShare((v) => !v)}
+                className={`inline-flex items-center justify-center gap-0.5 h-7 rounded-md transition-colors ${
+                  docShared
+                    ? 'px-1.5 text-foreground bg-muted/70 hover:bg-muted'
+                    : 'w-7 text-muted-foreground hover:text-foreground hover:bg-accent'
+                }`}
+                aria-expanded={showShare}
+                aria-haspopup="dialog"
+              >
+                {docShared
+                  ? <Globe className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  : <Share2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
+                {docShared && (
+                  <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform ${showShare ? 'rotate-180' : ''}`} strokeWidth={2} />
+                )}
+              </button>
+            </Tooltip>
+            <Tooltip label="删除文档">
+              <button
+                type="button"
+                onClick={() => setShowDelete(true)}
+                className="btn-icon-ghost text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </Tooltip>
           </div>
         </PageHeader>
 
@@ -576,8 +599,14 @@ export default function DocPage() {
             {!isEditing && (
               <div className="relative">
                 {isEmpty && (
-                  <div className="py-4 text-[13px] text-muted-foreground">
-                    按下 <kbd className="font-mono text-[11px] px-1 py-px border border-border rounded bg-muted/50 text-foreground">⌘E</kbd> 或点击右上角编辑开始写作。
+                  <div className="px-3 py-14 flex flex-col items-center text-center select-none">
+                    <div className="empty-icon-tile">
+                      <SquarePen className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-[15px] font-medium text-foreground mb-1.5">空白文档</h3>
+                    <p className="text-[13px] text-muted-foreground max-w-[300px] leading-relaxed flex items-center justify-center gap-1.5 flex-wrap">
+                      按下 <Kbd>⌘E</Kbd> 开始写作，或 <Kbd>⌘J</Kbd> 向 AI 提问。
+                    </p>
                   </div>
                 )}
 
@@ -655,7 +684,7 @@ export default function DocPage() {
       <ConfirmDialog
         open={showDelete}
         title="删除文档"
-        message="此操作不可撤销。文档及其所有内容将被永久删除。"
+        message="确定要删除这篇文档吗？删除后可在右下角提示中撤销。"
         confirmLabel={deleting ? '删除中...' : '删除'}
         destructive
         onConfirm={handleDelete}

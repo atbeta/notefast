@@ -84,6 +84,8 @@ export default function AiGhostOverlay({ textareaRef, content, ghostText, visibl
         }}
       >
         {ghostText}
+        {/* 终端式块光标：随 animate-pulse 一起呼吸，暗示「输出进行中」，零布局成本 */}
+        ▌
       </span>
     </>
   )

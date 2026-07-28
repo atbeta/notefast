@@ -28,6 +28,14 @@ function trimUrlTail(url: string): string {
   return url.replace(/[.,;:!?，。；：！？、)）\]】'"]+$/, '')
 }
 
+/**
+ * 段落首字符为全角开标点时悬挂到边界外（光学对齐）。
+ * 集合只含 Inter 没有、必然落到中文字体的全角括号——它们的字身左侧有半字宽空白，
+ * 用 text-indent: -0.5em 悬挂后文字主体保持绝对左对齐。
+ * 不含 “”‘’：它们会由 Inter 渲染成窄 glyph（无半字宽空白），悬挂量不确定。
+ */
+const HANGING_OPEN_PUNCT_RE = /^[「『《（【〈［｛]/
+
 function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
   const nodes: ReactNode[] = []
   let last = 0
@@ -335,7 +343,7 @@ const BlockNode = memo(function BlockNode({ block }: BlockNodeProps) {
         return <hr className="my-7 border-border/70" />
       }
       return (
-        <p className="leading-[1.75] text-foreground/95">
+        <p className={`leading-[1.75] text-foreground/95${block.content && HANGING_OPEN_PUNCT_RE.test(block.content) ? ' hanging-punct' : ''}`}>
           {block.content ? renderInline(block.content, `p-${block.id}`) : <span className="text-muted-foreground">（空白段落）</span>}
         </p>
       )

@@ -172,6 +172,20 @@ export default function DocActionsMenu({
       afterMutation()
       toast.success({
         title: next === 'archived' ? '已归档' : status === 'inbox' ? '已加入笔记' : '已恢复为笔记',
+        durationMs: 6000,
+        action: {
+          label: '撤销',
+          onClick: () => {
+            void (async () => {
+              try {
+                await api.patch(`/docs/${doc.id}/status`, { status })
+                afterMutation()
+              } catch {
+                toast.error({ title: '撤销失败' })
+              }
+            })()
+          },
+        },
       })
     } catch {
       toast.error({ title: '操作失败' })
@@ -224,6 +238,25 @@ export default function DocActionsMenu({
       await api.del(`/docs/${doc.id}`)
       setShowDelete(false)
       afterMutation()
+      // 软删除 + restore 端点：Undo toast 是 Web 上唯一的恢复入口
+      toast.success({
+        title: surface === 'inbox' ? '已丢弃' : '已删除',
+        durationMs: 6000,
+        action: {
+          label: '撤销',
+          onClick: () => {
+            void (async () => {
+              try {
+                await api.post(`/blocks/${doc.id}/restore`, {})
+                afterMutation()
+                toast.success({ title: '已恢复' })
+              } catch {
+                toast.error({ title: '撤销失败' })
+              }
+            })()
+          },
+        },
+      })
     } catch {
       toast.error({ title: '删除失败' })
       setBusy(false)
@@ -396,8 +429,8 @@ export default function DocActionsMenu({
         title={surface === 'inbox' ? '丢弃收集项' : '删除文档'}
         message={
           surface === 'inbox'
-            ? `确定丢弃「${title}」吗？此操作不可撤销。`
-            : `确定要删除「${title}」吗？此操作不可撤销。`
+            ? `确定丢弃「${title}」吗？丢弃后可在右下角提示中撤销。`
+            : `确定要删除「${title}」吗？删除后可在右下角提示中撤销。`
         }
         confirmLabel={busy ? (surface === 'inbox' ? '丢弃中…' : '删除中…') : (surface === 'inbox' ? '丢弃' : '删除')}
         destructive

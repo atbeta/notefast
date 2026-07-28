@@ -16,6 +16,7 @@ import {
   X,
   ImagePlus,
 } from 'lucide-react'
+import { Kbd, Tooltip } from '../ui'
 
 type Mode = 'edit' | 'view'
 
@@ -67,7 +68,7 @@ export default function EditorToolbar({
   }
 
   return (
-    <div className="sticky top-14 z-10 -mx-8 px-8 mb-2 bg-background">
+    <div className="sticky top-14 z-10 -mx-8 px-8 mb-2 bg-background/85 backdrop-blur-md">
       <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1 py-1.5 border-b border-border/60">
         <IconBtn title="一级标题 (#)" onClick={() => insertAtCursor('\n# ')}>
           <Heading1 className="w-[15px] h-[15px]" strokeWidth={1.75} />
@@ -138,16 +139,17 @@ export default function EditorToolbar({
             <span className="text-[12px] font-medium leading-none">?</span>
           </IconBtn>
           <ToolbarDivider />
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={saving || loading}
-            title={saving ? '保存中…' : '保存并返回阅读 (⌘S)'}
-            className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border transition-all active:scale-[0.97] disabled:cursor-not-allowed bg-ink text-ink-foreground border-ink shadow-[var(--shadow-btn)] hover:bg-ink-hover hover:border-ink-hover ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
-          >
-            {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-            {saving ? '保存中' : '保存'}
-          </button>
+          <Tooltip label={saving ? '保存中…' : '保存并返回阅读 (⌘S)'}>
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={saving || loading}
+              className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border transition-all active:scale-[0.97] disabled:cursor-not-allowed bg-ink text-ink-foreground border-ink shadow-[var(--shadow-btn)] hover:bg-ink-hover hover:border-ink-hover ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
+            >
+              {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+              {saving ? '保存中' : '保存'}
+            </button>
+          </Tooltip>
           <IconBtn title="退出编辑 (Esc)" onClick={onCancel}>
             <X className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
@@ -169,19 +171,20 @@ function IconBtn({
   active?: boolean
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-label={title}
-      className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
-        active
-          ? 'bg-primary/10 text-primary'
-          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-      }`}
-    >
-      {children}
-    </button>
+    <Tooltip label={title}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={title}
+        className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+          active
+            ? 'bg-primary/10 text-primary'
+            : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+        }`}
+      >
+        {children}
+      </button>
+    </Tooltip>
   )
 }
 
@@ -192,9 +195,7 @@ function ToolbarDivider() {
 export function ShortcutsHelp({ kbd, desc }: { kbd: string; desc: string }) {
   return (
     <div className="flex items-center gap-2">
-      <kbd className="font-mono text-[10.5px] px-1.5 py-0.5 border border-border rounded bg-background text-foreground/85 whitespace-nowrap">
-        {kbd}
-      </kbd>
+      <Kbd>{kbd}</Kbd>
       <span>{desc}</span>
     </div>
   )

@@ -15,6 +15,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { SearchResult } from '@notefast/core'
 import { request } from '../hooks/useAPI'
 import { useTheme } from '../hooks/useTheme'
+import { Kbd } from './ui'
 
 interface CommandPaletteProps {
   open: boolean
@@ -186,7 +187,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
             placeholder="搜索文档、命令或文件…"
             className="flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground outline-none"
           />
-          <kbd className="font-mono text-[11px] px-1.5 py-0.5 border border-border rounded bg-card text-muted-foreground">esc</kbd>
+          <Kbd className="text-[11px]">esc</Kbd>
         </div>
 
         <div ref={listRef} className="max-h-[60vh] overflow-y-auto p-2">
@@ -243,7 +244,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
               打开
             </span>
             <span className="inline-flex items-center gap-1">
-              <kbd className="font-mono text-[10px] px-1 py-px border border-border rounded bg-card">esc</kbd>
+              <Kbd>esc</Kbd>
               关闭
             </span>
           </div>
@@ -304,9 +305,7 @@ function PaletteRow({
         )}
       </div>
       {item.shortcut && (
-        <kbd className="font-mono text-[11px] px-1.5 py-0.5 border border-border rounded bg-card text-muted-foreground shrink-0">
-          {item.shortcut}
-        </kbd>
+        <Kbd className="text-[11px] shrink-0">{item.shortcut}</Kbd>
       )}
     </button>
   )

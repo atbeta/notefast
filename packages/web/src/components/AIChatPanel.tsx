@@ -20,8 +20,10 @@ import {
   MicOff,
 } from 'lucide-react'
 import { request, fetchWithAuth } from '../hooks/useAPI'
+import { useScrollFade } from '../hooks/useScrollFade'
 import ChatMarkdown from './ChatMarkdown'
 import ConfirmDialog from './ConfirmDialog'
+import { Tooltip } from './ui'
 
 interface AiSkill {
   id: string
@@ -127,6 +129,7 @@ export default function AIChatPanel({
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [skills, setSkills] = useState<AiSkill[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesFadeRef = useScrollFade<HTMLDivElement>()
   const abortRef = useRef<AbortController | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -474,25 +477,27 @@ export default function AIChatPanel({
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={onToggleExpand}
-            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
-            title={expanded ? '收起' : '展开'}
-          >
-            {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
-            title="关闭面板"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <Tooltip label={expanded ? '收起' : '展开'}>
+            <button
+              onClick={onToggleExpand}
+              className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
+            >
+              {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+          </Tooltip>
+          <Tooltip label="关闭面板">
+            <button
+              onClick={onClose}
+              className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </Tooltip>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div ref={messagesFadeRef} className="scroll-fade flex-1 overflow-y-auto p-4 space-y-6">
         {configMissing ? (
           <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground space-y-3">
             <MessageSquareText className="w-7 h-7 mb-1 opacity-50" strokeWidth={1.25} />
@@ -518,7 +523,6 @@ export default function AIChatPanel({
           <>
             {messages.map((msg, idx) => {
               const isLastAssistant = msg.role === 'assistant' && idx === messages.length - 1
-              const reasoningOpen = Boolean(loading && isLastAssistant && msg.reasoning && !msg.content.trim())
               return (
                 <div
                   key={idx}
@@ -537,7 +541,6 @@ export default function AIChatPanel({
                     {msg.role === 'assistant' && msg.reasoning ? (
                       <ThinkBlock
                         text={msg.reasoning}
-                        defaultOpen={reasoningOpen}
                         streaming={Boolean(loading && isLastAssistant && !msg.content.trim())}
                       />
                     ) : null}
@@ -719,16 +722,17 @@ export default function AIChatPanel({
                   e.target.value = ''
                 }}
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={configMissing}
-                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-40"
-                title="添加图片（或直接粘贴）"
-                aria-label="添加图片"
-              >
-                <ImagePlus className="w-4 h-4" strokeWidth={1.75} />
-              </button>
+              <Tooltip label="添加图片（或直接粘贴）">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={configMissing}
+                  className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-40"
+                  aria-label="添加图片"
+                >
+                  <ImagePlus className="w-4 h-4" strokeWidth={1.75} />
+                </button>
+              </Tooltip>
             </>
           )}
           <textarea
@@ -755,30 +759,32 @@ export default function AIChatPanel({
             className="flex-1 resize-none bg-transparent border-0 outline-none text-sm px-2 py-1.5 max-h-32 placeholder:text-muted-foreground disabled:opacity-50"
           />
           {speechSupported && (
-            <button
-              type="button"
-              onClick={toggleListen}
-              disabled={configMissing}
-              className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${
-                listening
-                  ? 'text-destructive bg-destructive/10 animate-pulse'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-              }`}
-              title={listening ? '停止语音输入' : '语音输入（中文）'}
-              aria-label={listening ? '停止语音输入' : '语音输入'}
-            >
-              {listening ? <MicOff className="w-4 h-4" strokeWidth={1.75} /> : <Mic className="w-4 h-4" strokeWidth={1.75} />}
-            </button>
+            <Tooltip label={listening ? '停止语音输入' : '语音输入（中文）'}>
+              <button
+                type="button"
+                onClick={toggleListen}
+                disabled={configMissing}
+                className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${
+                  listening
+                    ? 'text-destructive bg-destructive/10 animate-pulse'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                }`}
+                aria-label={listening ? '停止语音输入' : '语音输入'}
+              >
+                {listening ? <MicOff className="w-4 h-4" strokeWidth={1.75} /> : <Mic className="w-4 h-4" strokeWidth={1.75} />}
+              </button>
+            </Tooltip>
           )}
-          <button
-            type="submit"
-            disabled={(!input.trim() && attachments.length === 0) || loading || configMissing}
-            className="p-2 rounded-lg bg-ink text-ink-foreground disabled:opacity-40 hover:opacity-90 transition-opacity"
-            title="发送 (Enter)"
-            aria-label={loading ? '正在生成回复' : '发送'}
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </button>        </form>
+          <Tooltip label="发送 (Enter)">
+            <button
+              type="submit"
+              disabled={(!input.trim() && attachments.length === 0) || loading || configMissing}
+              className="p-2 rounded-lg bg-ink text-ink-foreground disabled:opacity-40 hover:opacity-90 transition-opacity"
+              aria-label={loading ? '正在生成回复' : '发送'}
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            </button>
+          </Tooltip>        </form>
       </div>
 
       <ConfirmDialog
@@ -799,18 +805,14 @@ export default function AIChatPanel({
 
 function ThinkBlock({
   text,
-  defaultOpen,
   streaming,
 }: {
   text: string
-  defaultOpen: boolean
   streaming: boolean
 }) {
-  const [open, setOpen] = useState(defaultOpen)
-  useEffect(() => {
-    if (defaultOpen) setOpen(true)
-    else if (!streaming) setOpen(false)
-  }, [defaultOpen, streaming])
+  // 默认折叠，且不做任何自动开合——思考期自动展开、正文到达自动收起的生命周期
+  // 切换本身就是对话流中的一次高度跳变；展开与否完全交给用户
+  const [open, setOpen] = useState(false)
 
   return (
     <div className="chat-think">
