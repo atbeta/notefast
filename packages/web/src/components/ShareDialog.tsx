@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Check, Copy, Globe, Loader2, Trash2 } from 'lucide-react'
-import { api } from '../hooks/useAPI'
+import { api, ApiError } from '../hooks/useAPI'
 import { useToast } from './ui'
 
 /**
@@ -72,7 +72,25 @@ export default function ShareDialog({ docId, onClose }: ShareDialogProps) {
   const handleEnable = useCallback(async () => {
     setBusy(true)
     try {
-      const r = await api.put<ShareInfo & { token: string; path: string }>(`/docs/${docId}/share`, {})
+      let body: Record<string, unknown> = {}
+      try {
+        const r = await api.put<ShareInfo & { token: string; path: string }>(`/docs/${docId}/share`, body)
+        setInfo({ ...r, shared: true })
+        setExpiry(inferExpiryChoice(r.expires_at))
+        return
+      } catch (err) {
+        // 服务端 guardrail：ai_exclude 文档首次开启需显式确认（409）
+        const needsConfirm =
+          err instanceof ApiError && err.status === 409 &&
+          (err.body as { error?: string } | null)?.error === 'ai_exclude_share_needs_confirm'
+        if (!needsConfirm) throw err
+        const confirmed = window.confirm(
+          '这篇文档已标记「对 AI 隐藏」。\n\n开启公开分享后，任何拿到链接的人无需登录即可阅读全文。确认仍要开启分享吗？',
+        )
+        if (!confirmed) return
+        body = { confirm_ai_exclude: true }
+      }
+      const r = await api.put<ShareInfo & { token: string; path: string }>(`/docs/${docId}/share`, body)
       setInfo({ ...r, shared: true })
       setExpiry(inferExpiryChoice(r.expires_at))
     } catch {

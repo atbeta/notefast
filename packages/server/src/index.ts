@@ -42,8 +42,6 @@ const DATA_DIR = process.env.DATA_DIR || './data'
 const { notebookId } = initDb(DATA_DIR)
 
 process.on('exit', () => { stopBackupManager(); closeDb() })
-process.on('SIGINT', () => { stopBackupManager(); closeDb(); process.exit(0) })
-process.on('SIGTERM', () => { stopBackupManager(); closeDb(); process.exit(0) })
 
 const app = new Hono()
 
@@ -168,11 +166,36 @@ if (exportDir) {
   }
 }
 
-export default {
+const server = Bun.serve({
   port: PORT,
-  host: '0.0.0.0',
+  hostname: '0.0.0.0',
   fetch: app.fetch,
   // Bun.serve 默认 10s 无数据即断开连接，会杀死 /api/v1/events 的 SSE 长连接
   // （心跳 25s 才写一次）。放宽到 60s，大于心跳间隔，连接由心跳保活。
   idleTimeout: 60,
+})
+
+// 优雅停机：docker restart / systemd stop 的 SIGTERM 先停止接收新连接，
+// 等在飞请求（写事务 / SSE / AI 流）drain 完再退出；超时强退，避免无限挂起
+// （SSE 长连接本身不会自然结束，只能靠超时兜底）。
+// SQLite 事务在 bun:sqlite 中是同步的，信号 handler 不会插在事务中间执行，
+// drain 主要保护 async handler 的跨 await 写序列（sync push、备份、AI 调用）。
+const SHUTDOWN_TIMEOUT_MS = 10_000
+let shuttingDown = false
+function shutdown(signal: string) {
+  if (shuttingDown) return
+  shuttingDown = true
+  console.log(`\n🛑 收到 ${signal}，停止接收新连接，等待在飞请求完成…`)
+  const forceTimer = setTimeout(() => {
+    console.error(`⚠️ ${SHUTDOWN_TIMEOUT_MS}ms 内未能 drain，强制退出`)
+    process.exit(1)
+  }, SHUTDOWN_TIMEOUT_MS)
+  forceTimer.unref()
+  // stop(false)：不再 accept，但等已建立的连接处理完；DB 清理由 exit handler 统一做
+  void server.stop(false).then(() => {
+    clearTimeout(forceTimer)
+    process.exit(0)
+  })
 }
+process.on('SIGINT', () => shutdown('SIGINT'))
+process.on('SIGTERM', () => shutdown('SIGTERM'))

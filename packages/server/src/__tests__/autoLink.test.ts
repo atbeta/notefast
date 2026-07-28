@@ -387,6 +387,8 @@ describe('AutoLink — store apply / dismiss', () => {
     const applyR = applySuggestion(sid, 0, 'ai_suggested')
     expect(applyR.applied).toBe(true)
     expect(applyR.refId).toBeGreaterThan(0)
+    expect(applyR.sourceBlockId).toBe('src2')
+    expect(applyR.targetBlockId).toBe('tgt2')
     // 手动塞一对 (src2, tgt2) manual ref 来验证 revert 不误删
     const manualRow = db
       .query(`INSERT INTO block_refs (source_id, target_id, ref_type) VALUES (?, ?, 'link') RETURNING id`)

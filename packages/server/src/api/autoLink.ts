@@ -104,7 +104,7 @@ autoLink.post('/apply', zValidator('json', applySchema), (c) => {
   return c.json({
     applied: result.applied,
     ref_id: result.refId,
-    source_id: undefined as string | undefined,
+    source_id: result.sourceBlockId,
     target_id: result.targetBlockId,
     reason: result.reason,
   })

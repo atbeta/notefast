@@ -220,11 +220,14 @@ const aiExcludeSchema = z.object({
 
 // ───────────────────── 分享（公开只读链接）─────────────────────
 // 独立 shares 表：开关不触发 updated_at / hooks / 索引 / change feed。
-// 允许分享 inbox / archived / ai_exclude 文档（显式用户行为覆盖默认过滤）。
+// 允许分享 inbox / archived 文档（显式用户行为覆盖默认过滤）；
+// ai_exclude 文档也可分享，但首次开启需 confirm_ai_exclude 显式确认（见下）。
 // 有效期：默认永不过期（Notion 同款），可选 1/7/30 天；过期 = 未分享（惰性清理）。
 
 const sharePutSchema = z.object({
   expires_in_days: z.union([z.literal(1), z.literal(7), z.literal(30)]).nullish(),
+  /** 对 ai_exclude 文档首次开启分享时的显式确认（防误触外泄） */
+  confirm_ai_exclude: z.boolean().optional(),
 })
 
 docs.get('/:id/share', (c) => {
@@ -263,6 +266,22 @@ docs.put('/:id/share', async (c) => {
   }
 
   const expiryDays = parsed.data.expires_in_days
+
+  // Guardrail：对 ai_exclude 文档首次开启公开分享需要显式确认。
+  // 「对 AI 隐藏」不等于「不能分享」（显式用户行为仍可覆盖），但公开链接
+  // 对任何持有者裸读全文、默认永不过期，误触代价高，所以服务端强制二次确认。
+  // 已开启的 PUT（仅调整有效期，无新增暴露面）不重复要求确认。
+  if (
+    parsed.data.confirm_ai_exclude !== true &&
+    !getShareByDocId(db, id) &&
+    readDocAiExclude(id) === true
+  ) {
+    return c.json({
+      error: 'ai_exclude_share_needs_confirm',
+      message: '该文档已标记「对 AI 隐藏」。开启公开分享后，任何拿到链接的人无需登录即可阅读全文；确认仍要分享请带 confirm_ai_exclude: true 重试',
+    }, 409)
+  }
+
   // 幂等：已开启返回现有 token；带 expires_in_days 时以现在为起点调整有效期。
   // 事务包裹：开启 + 调有效期两步写入对并发 PUT 原子（createShare 内部 ON CONFLICT 兜底）
   const share = db.transaction(() => {

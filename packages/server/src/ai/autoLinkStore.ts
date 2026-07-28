@@ -179,6 +179,8 @@ export interface ApplyResult {
   applied: boolean
   refId?: number
   reason?: 'not_found' | 'already_applied' | 'invalid_candidate' | 'target_deleted' | 'ref_already_exists'
+  /** 建议的源 block（找到 suggestion 后总是存在；not_found 时为 undefined） */
+  sourceBlockId?: string
   targetBlockId?: string
 }
 
@@ -212,11 +214,11 @@ export function applySuggestion(
            WHERE id=?`,
         ).run(suggestionId)
       }
-      return { applied: false, refId: s.createdRefId, reason: 'already_applied', targetBlockId: s.appliedTargetId ?? undefined }
+      return { applied: false, refId: s.createdRefId, reason: 'already_applied', sourceBlockId: s.sourceBlockId, targetBlockId: s.appliedTargetId ?? undefined }
     }
 
     const cand = s.candidates[candidateIndex]
-    if (!cand) return { applied: false, reason: 'invalid_candidate' }
+    if (!cand) return { applied: false, reason: 'invalid_candidate', sourceBlockId: s.sourceBlockId }
 
     // 检查 target block 是否还存在
     if (!blockExists(db, cand.blockId)) {
@@ -226,7 +228,7 @@ export function applySuggestion(
          SET action_status='failed', error='target_block_deleted'
          WHERE id=?`,
       ).run(suggestionId)
-      return { applied: false, reason: 'target_deleted' }
+      return { applied: false, reason: 'target_deleted', sourceBlockId: s.sourceBlockId }
     }
 
     // 查重：同 (source, target) ref 是否已存在
@@ -242,7 +244,7 @@ export function applySuggestion(
              applied_at=datetime('now'), reviewed_at=datetime('now')
          WHERE id=?`,
       ).run(dup.id, cand.blockId, suggestionId)
-      return { applied: false, refId: dup.id, reason: 'ref_already_exists', targetBlockId: cand.blockId }
+      return { applied: false, refId: dup.id, reason: 'ref_already_exists', sourceBlockId: s.sourceBlockId, targetBlockId: cand.blockId }
     }
 
     // INSERT ref，拿 id
@@ -261,7 +263,7 @@ export function applySuggestion(
        WHERE id=?`,
     ).run(inserted.id, cand.blockId, suggestionId)
 
-    return { applied: true, refId: inserted.id, targetBlockId: cand.blockId }
+    return { applied: true, refId: inserted.id, sourceBlockId: s.sourceBlockId, targetBlockId: cand.blockId }
   })()
 }
 

@@ -156,6 +156,7 @@ describe('分享公开端点（/share/:token，无鉴权）', () => {
     const cases: Array<[string, (docId: string) => Promise<void>]> = [
       ['inbox', async () => {}],
       ['archived', async (docId) => { await api('PATCH', `/api/v1/docs/${docId}/status`, { status: 'archived' }) }],
+      // ai_exclude：guardrail 要求显式确认（见下条测试），确认后即可分享
       ['ai_exclude', async (docId) => { await api('PATCH', `/api/v1/docs/${docId}/ai-exclude`, { ai_exclude: true }) }],
     ]
     for (const [label, setup] of cases) {
@@ -166,11 +167,32 @@ describe('分享公开端点（/share/:token，无鉴权）', () => {
         ...(label === 'inbox' ? { status: 'inbox' } : {}),
       })
       await setup(created.id as string)
-      const { body: share } = await api('PUT', `/api/v1/docs/${created.id}/share`)
+      const { body: share } = await api('PUT', `/api/v1/docs/${created.id}/share`, { confirm_ai_exclude: true })
       const pub = await api('GET', `/share/${share.token}`)
       expect(pub.status).toBe(200)
       expect(pub.body.title).toBe(`特殊状态分享-${label}`)
     }
+  })
+
+  test('ai_exclude 文档首次开启分享需显式确认（409）；确认后可分享；已开启后调有效期不再要求', async () => {
+    const docId = await createDoc('隐藏文档分享确认', '敏感内容')
+    await api('PATCH', `/api/v1/docs/${docId}/ai-exclude`, { ai_exclude: true })
+
+    // 无确认 → 409，不创建分享
+    const denied = await api('PUT', `/api/v1/docs/${docId}/share`)
+    expect(denied.status).toBe(409)
+    expect(denied.body.error).toBe('ai_exclude_share_needs_confirm')
+    expect((await api('GET', `/api/v1/docs/${docId}/share`)).body.shared).toBe(false)
+
+    // 显式确认 → 正常开启，公开可读
+    const enabled = await api('PUT', `/api/v1/docs/${docId}/share`, { confirm_ai_exclude: true })
+    expect(enabled.status).toBe(200)
+    expect((await api('GET', `/share/${enabled.body.token}`)).status).toBe(200)
+
+    // 已开启后再 PUT（调整有效期）不重复要求确认
+    const adjusted = await api('PUT', `/api/v1/docs/${docId}/share`, { expires_in_days: 7 })
+    expect(adjusted.status).toBe(200)
+    expect(adjusted.body.token).toBe(enabled.body.token)
   })
 
   test('删除文档级联清除分享：恢复后 shared=false，旧 token 保持 404', async () => {
@@ -213,6 +235,9 @@ describe('分享公开端点（/share/:token，无鉴权）', () => {
     const res = await app.fetch(new Request(`http://localhost/share/${share.token}/assets/${meta.id}`))
     expect(res.status).toBe(200)
     expect(res.headers.get('Content-Type')).toBe('image/png')
+    // private：浏览器可按内容寻址永久缓存，但共享缓存（CDN/反代）不得留存，
+    // 否则分享关闭后旧 URL 仍可从缓存读到图片
+    expect(res.headers.get('Cache-Control')).toBe('private, max-age=31536000, immutable')
 
     // 未被此文档引用的其他 asset → 404（不退化为全站代理）
     const other = saveAsset(Buffer.from('89504e47', 'hex'), 'image/png')

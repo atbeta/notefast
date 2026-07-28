@@ -17,6 +17,7 @@ import { buildBlockTree, blocksToMarkdown } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks } from '../store/blocks'
 import { getShareByToken } from '../store/shares'
+import { getChangesAnchor } from '../store/changeFeed'
 import { extractAssetRefs, readAsset } from '../assets/store'
 
 const sharePublic = new Hono()
@@ -26,6 +27,27 @@ function resolveShare(token: string) {
   // 粗过滤：token 定长 32 hex，避免无谓的数据库扫描与注入面
   if (!/^[0-9a-f]{32}$/.test(token)) return null
   return getShareByToken(getDb(), token)
+}
+
+/**
+ * 文档 → 其引用的 asset sha 集合缓存。
+ * 失效令牌用 entity_changes 的全局 MAX(seq)：任何写操作（不限于本文档）都会
+ * 使其前进，从而触发重扫；无写时一次 MAX 查询（主键索引）即可复用缓存。
+ * 不能用 doc 根的 updated_at 做失效令牌——子 block 编辑不碰根行。
+ * 规模：key 仅出现在有公开分享的文档上，天然有界，无需 LRU。
+ */
+const docAssetRefsCache = new Map<string, { seq: number; refs: string[] }>()
+
+function getDocAssetRefs(docId: string): string[] {
+  const db = getDb()
+  const seq = getChangesAnchor(db)
+  const cached = docAssetRefsCache.get(docId)
+  if (cached && cached.seq === seq) return cached.refs
+  // 单次扫描：拼一次内容跑一遍正则，不逐块重复编译匹配
+  const allContent = fetchDocBlocks(db, docId).map((r) => r.content).join('\n')
+  const refs = extractAssetRefs(allContent)
+  docAssetRefsCache.set(docId, { seq, refs })
+  return refs
 }
 
 sharePublic.get('/:token', (c) => {
@@ -60,11 +82,7 @@ sharePublic.get('/:token/assets/:sha256', (c) => {
 
   // 引用校验：asset 必须确实被此文档引用，否则该端点会退化为全站 asset 代理
   const sha = c.req.param('sha256')
-  const db = getDb()
-  const rows = fetchDocBlocks(db, share.doc_id)
-  // 单次扫描：拼一次内容跑一遍正则，不逐块重复编译匹配
-  const allContent = rows.map((r) => r.content).join('\n')
-  if (!extractAssetRefs(allContent).includes(sha)) {
+  if (!getDocAssetRefs(share.doc_id).includes(sha)) {
     return c.json({ error: 'not_found', message: '图片不存在' }, 404)
   }
 
@@ -77,9 +95,11 @@ sharePublic.get('/:token/assets/:sha256', (c) => {
   return new Response(new Uint8Array(bytes), {
     headers: {
       'Content-Type': found.meta.mime,
-      // 内容寻址：sha 即内容哈希，永不变化，可永久缓存。
+      // 内容寻址：sha 即内容哈希，永不变化，浏览器可永久缓存。
+      // 但必须 private：public 会允许共享缓存（CDN / 反代）留存副本，
+      // 分享关闭（token 404）后旧 URL 仍可能从缓存读到图片，无法撤回。
       // 不写 Content-Length：交由 Bun/反代（可能启 gzip）自行处理
-      'Cache-Control': 'public, max-age=31536000, immutable',
+      'Cache-Control': 'private, max-age=31536000, immutable',
       'X-Content-Type-Options': 'nosniff',
     },
   })

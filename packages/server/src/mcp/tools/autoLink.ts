@@ -85,6 +85,7 @@ export function registerAutoLinkTools(ctx: ToolContext): void {
         content: [toText({
           applied: result.applied,
           ref_id: result.refId,
+          source_id: result.sourceBlockId,
           target_id: result.targetBlockId,
           reason: result.reason,
         })],
