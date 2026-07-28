@@ -18,6 +18,8 @@ import {
   ImagePlus,
   Mic,
   MicOff,
+  User,
+  Sparkles,
 } from 'lucide-react'
 import { request, fetchWithAuth } from '../hooks/useAPI'
 import { useScrollFade } from '../hooks/useScrollFade'
@@ -531,11 +533,16 @@ export default function AIChatPanel({
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                       msg.role === 'user'
-                        ? 'bg-ink text-ink-foreground'
-                        : 'bg-accent text-foreground'
+                        ? 'bg-muted text-muted-foreground'
+                        : 'bg-primary-soft text-primary'
                     }`}
                   >
-                    {msg.role === 'user' ? 'U' : <MessageSquareText className="w-4 h-4" strokeWidth={1.5} />}
+                    {/* 用户 = 人形（中性灰）；AI = Sparkles（与侧栏 AI 入口同标识 + 品牌色） */}
+                    {msg.role === 'user' ? (
+                      <User className="w-4 h-4" strokeWidth={1.75} />
+                    ) : (
+                      <Sparkles className="w-4 h-4" strokeWidth={1.75} />
+                    )}
                   </div>
                   <div className="max-w-[85%] space-y-1.5 min-w-0">
                     {msg.role === 'assistant' && msg.reasoning ? (
@@ -779,7 +786,7 @@ export default function AIChatPanel({
             <button
               type="submit"
               disabled={(!input.trim() && attachments.length === 0) || loading || configMissing}
-              className="p-2 rounded-lg bg-ink text-ink-foreground disabled:opacity-40 hover:opacity-90 transition-opacity"
+              className="p-2 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] disabled:opacity-40 hover:bg-[rgb(var(--primary-hover))] transition-colors"
               aria-label={loading ? '正在生成回复' : '发送'}
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

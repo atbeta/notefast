@@ -4,7 +4,7 @@
  * 设计原则（Geek & Notion-like）：
  * - 极致极简：纯白/纯黑背景，高对比度，摒弃多余边框与投影
  * - 高信息密度：紧凑的行高，清晰的视觉层级
- * - 专业感：黑白灰为主，主色调收敛为克制的蓝色/灰色
+ * - 专业感：黑白灰为主（95%），低饱和品牌靛蓝仅用于选中态 / 主要操作 / AI 功能
  * - 仪表盘化：悬浮、扁平，代码感
  */
 
@@ -32,10 +32,11 @@
   --secondary-foreground: 55 53 47;
 
   /* ───────────── 主色 ───────────── */
-  /* 高级感公式：界面 95% 黑白灰；主行动按钮用墨色（近黑）；
-     品牌蓝仅小面积点缀（链接、激活态、focus ring、focus 指示） */
-  --primary: 37 99 235; /* #2563EB — 比 #2383E2 更深邃一档 */
+  /* 高级感公式：界面 95% 黑白灰；低饱和品牌靛蓝只用于三处——
+     选中态（sidebar active / tag 选中）、主要操作（主按钮）、AI 功能标识 */
+  --primary: 90 116 176;      /* #5A74B0 — 低饱和石板靛蓝 */
   --primary-foreground: 255 255 255;
+  --primary-hover: 78 100 152; /* #4E6498 */
   --primary-soft: rgb(var(--primary) / 0.08);
   --primary-softer: rgb(var(--primary) / 0.04);
 
@@ -53,7 +54,7 @@
   --border: 233 233 231;
   --border-strong: 200 200 198;
   --input: 233 233 231;
-  --ring: 37 99 235;
+  --ring: 90 116 176;
 
   /* ───────────── 编辑器专属 ───────────── */
   --editor-bg: 255 255 255;
@@ -95,7 +96,7 @@
   --shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
   /* ───────────── 代码高亮（低饱和，贴合极简基调） ───────────── */
-  --code-keyword: 37 99 235;   /* blue-600 */
+  --code-keyword: 90 116 176;  /* 与品牌 primary 同值 */
   --code-string: 21 128 61;    /* green-700 */
   --code-comment: 146 147 144; /* 灰，近 muted */
   --code-number: 180 83 9;     /* amber-700 */
@@ -121,8 +122,9 @@
   --secondary: 47 47 47;
   --secondary-foreground: 255 255 255;
 
-  --primary: 59 130 246;
-  --primary-foreground: 255 255 255;
+  --primary: 149 164 198;
+  --primary-foreground: 25 25 25;
+  --primary-hover: 169 184 214;
   --primary-soft: rgb(var(--primary) / 0.15);
   --primary-softer: rgb(var(--primary) / 0.08);
 
@@ -137,7 +139,7 @@
   --border: 60 60 60;
   --border-strong: 80 80 80;
   --input: 60 60 60;
-  --ring: 59 130 246;
+  --ring: 149 164 198;
 
   --sidebar-background: 32 32 32;
   --sidebar-foreground: 155 155 155;
@@ -154,7 +156,7 @@
   --shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
   --shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 
-  --code-keyword: 147 197 253; /* blue-300 */
+  --code-keyword: 149 164 198; /* 与品牌 primary 同值 */
   --code-string: 134 239 172;  /* green-300 */
   --code-comment: 110 110 108;
   --code-number: 252 211 77;   /* amber-300 */

@@ -141,7 +141,7 @@ export default function TagFilter({ onChange }: TagFilterProps) {
               aria-pressed={isSelected}
               className={`group inline-flex items-center gap-1.5 pl-2 pr-1.5 py-0.5 rounded-full text-[11.5px] font-mono transition-colors ${
                 isSelected
-                  ? 'bg-foreground text-background'
+                  ? 'bg-primary text-primary-foreground'
                   : 'bg-muted/50 text-foreground/75 hover:bg-muted hover:text-foreground'
               }`}
             >

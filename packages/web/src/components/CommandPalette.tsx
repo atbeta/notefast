@@ -287,7 +287,7 @@ function PaletteRow({
         'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ' +
         (active
           ? 'bg-primary-soft text-foreground'
-          : 'text-foreground/80 hover:bg-accent')
+          : 'text-foreground/80 hover:bg-[var(--primary-softer)]')
       }
     >
       <span

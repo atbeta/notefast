@@ -144,7 +144,7 @@ export default function EditorToolbar({
               type="button"
               onClick={onSave}
               disabled={saving || loading}
-              className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border transition-all active:scale-[0.97] disabled:cursor-not-allowed bg-ink text-ink-foreground border-ink shadow-[var(--shadow-btn)] hover:bg-ink-hover hover:border-ink-hover ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
+              className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border transition-all active:scale-[0.97] disabled:cursor-not-allowed bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] border-[rgb(var(--primary))] shadow-[var(--shadow-btn)] hover:bg-[rgb(var(--primary-hover))] hover:border-[rgb(var(--primary-hover))] ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
             >
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
               {saving ? '保存中' : '保存'}

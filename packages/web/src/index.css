@@ -181,11 +181,20 @@
   }
   .sidebar-link {
     @apply flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] text-sidebar-foreground
-           hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
            transition-colors duration-150;
   }
+  /* 色阶统一：hover = primary-softer（浅），选中 = primary-soft（中），选中 hover 再深一档 */
+  .sidebar-link:hover {
+    background: var(--primary-softer);
+    color: rgb(var(--sidebar-accent-foreground));
+  }
   .sidebar-link-active {
-    @apply sidebar-link bg-sidebar-accent text-sidebar-accent-foreground font-medium;
+    /* 选中态 = 低饱和品牌色（Linear 式 tint），不再是灰底 */
+    @apply sidebar-link bg-primary-soft text-primary font-medium;
+  }
+  .sidebar-link-active:hover {
+    background: rgb(var(--primary) / 0.16);
+    color: rgb(var(--primary));
   }
 }
 
@@ -204,14 +213,14 @@
     min-height: 32px;
     padding: 0 14px;
     border-radius: var(--radius-btn);
-    border: 1px solid rgb(var(--ink));
+    border: 1px solid rgb(var(--primary));
     font-size: var(--text-base);
     font-weight: 500;
     letter-spacing: -0.005em;
     line-height: 1.2;
     cursor: pointer;
-    color: rgb(var(--ink-foreground));
-    background: rgb(var(--ink));
+    color: rgb(var(--primary-foreground));
+    background: rgb(var(--primary));
     box-shadow: var(--shadow-btn);
     transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease),
                 box-shadow var(--dur) var(--ease), transform 100ms var(--ease);
@@ -221,8 +230,8 @@
     flex-shrink: 0;
   }
   .btn-primary-custom:hover:not(:disabled) {
-    background: rgb(var(--ink-hover));
-    border-color: rgb(var(--ink-hover));
+    background: rgb(var(--primary-hover));
+    border-color: rgb(var(--primary-hover));
   }
   .btn-primary-custom:active:not(:disabled) {
     transform: scale(0.98);
