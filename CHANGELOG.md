@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.22.0](https://github.com/atbeta/notefast/compare/v0.21.0...v0.22.0) (2026-07-28)
+
+
+### Features
+
+* **server,web:** single-doc export as Markdown or zip with images ([20fd187](https://github.com/atbeta/notefast/commit/20fd187d624db7ac3c7f78d75b9863097f7fd7c6))
+* **server:** MCP create_doc_from_file with chunked markdown staging ([ec6a50b](https://github.com/atbeta/notefast/commit/ec6a50b8cc301d18a7734481a1c85d1604de8457))
+* **server:** unauthenticated dev mode by default when no auth configured ([a09c170](https://github.com/atbeta/notefast/commit/a09c170d83e60d6d2501b236ea622bdd6b1312dc))
+* **web:** add shared doc overflow menu on list rows ([27c0a92](https://github.com/atbeta/notefast/commit/27c0a92c7ae5ff1cee18cebc996c1dc5fa96d6af))
+* **web:** block-level citation navigation and readable citation chips ([31195da](https://github.com/atbeta/notefast/commit/31195da58f6e4e83cf309c24073b861ed5b76dfe))
+* **web:** lighten share UI to anchored popover with shared state ([0001e8f](https://github.com/atbeta/notefast/commit/0001e8fa8c01de86f751bebb456e75877568c7a9))
+* **web:** low-saturation brand indigo for selection, primary actions, AI ([81e1f52](https://github.com/atbeta/notefast/commit/81e1f52bcdeae37ad26732d4a0b910a94fd49ecc))
+* **web:** micro-interaction and reading-experience polish ([dda89de](https://github.com/atbeta/notefast/commit/dda89decf34d38f0e3d2079093b5572a8ddc9dd8))
+
+
+### Bug Fixes
+
+* **server,web:** auth hardening, share page security headers, archive share cascade ([e517dec](https://github.com/atbeta/notefast/commit/e517dec5d7837b82cae25b4aad747b9a5985ec88))
+* **server,web:** return real source_id in autolink apply, graceful shutdown, share guardrails ([8b0bd08](https://github.com/atbeta/notefast/commit/8b0bd08795074500a9bd0b1c5542e58afea443e3))
+* **server:** exclude soft-deleted blocks from vector indexing and retrieval ([1117f64](https://github.com/atbeta/notefast/commit/1117f64620254ad6ecadd2c370d74b1047c5171f))
+* **server:** register SSE idle-timeout middleware before routes ([4fe928e](https://github.com/atbeta/notefast/commit/4fe928e7c4ad6c10f19de378c56b08395f375722))
+* **server:** robustness — index job map pruning, autoExport single loop, per-route SSE timeout, ms timestamps ([689f7fa](https://github.com/atbeta/notefast/commit/689f7faea35b816363846fdf350d057da1962abe))
+* **web:** doc lifecycle UX — read-mode landing, per-doc edit state, draft visibility ([6a280df](https://github.com/atbeta/notefast/commit/6a280df43e171265fffabede6339422cffa29187))
+
 ## [0.21.0](https://github.com/atbeta/notefast/compare/v0.20.0...v0.21.0) (2026-07-27)
 
 
