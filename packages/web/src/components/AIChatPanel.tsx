@@ -605,12 +605,12 @@ export default function AIChatPanel({
                                 </Link>
                                 <span className="text-muted-foreground/80 text-[10px] shrink-0">· {group.items.length} 段</span>
                               </div>
-                              <ul className="mt-0.5 space-y-0.5 pl-2.5 border-l border-border/40">
+                              <ul className="mt-1 space-y-1">
                                 {group.items.map((c) => (
                                   <li key={c.block_id}>
                                     <Link
                                       to={`/doc/${c.doc_id}#block-${c.block_id}`}
-                                      className="text-muted-foreground hover:text-foreground transition-colors line-clamp-1 inline"
+                                      className="block rounded-md bg-muted/40 px-2 py-1.5 line-clamp-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                                       title="点击跳转到原文块"
                                     >
                                       {c.snippet}

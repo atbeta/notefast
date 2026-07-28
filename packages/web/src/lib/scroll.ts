@@ -19,11 +19,15 @@ export function findScrollableAncestor(el: HTMLElement): HTMLElement | null {
   return null
 }
 
-/** 平滑滚动容器到目标 scrollTop */
+/** 平滑滚动容器到目标 scrollTop；duration<=0 时瞬时定位（深链接落地等不允许动画竞争的场景） */
 export function smoothScrollTo(container: HTMLElement, target: number, duration = 260) {
   const start = container.scrollTop
   const diff = target - start
   if (Math.abs(diff) < 2) return
+  if (duration <= 0) {
+    container.scrollTop = target
+    return
+  }
   const startTime = performance.now()
   const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
 
@@ -36,7 +40,7 @@ export function smoothScrollTo(container: HTMLElement, target: number, duration 
 }
 
 /** 滚动到指定元素（相对其滚动容器定位，顶部预留偏移） */
-export function scrollToElement(el: HTMLElement, topOffset = 72) {
+export function scrollToElement(el: HTMLElement, topOffset = 72, duration = 260) {
   const scroller = findScrollableAncestor(el)
   if (!scroller) {
     el.scrollIntoView({ block: 'start' })
@@ -47,5 +51,5 @@ export function scrollToElement(el: HTMLElement, topOffset = 72) {
     scroller.getBoundingClientRect().top +
     scroller.scrollTop -
     topOffset
-  smoothScrollTo(scroller, Math.max(0, target))
+  smoothScrollTo(scroller, Math.max(0, target), duration)
 }

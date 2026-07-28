@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom'
 import type { Block, HeadingNode } from '@notefast/core'
 import { buildHeadingTree } from '@notefast/core'
 import {
@@ -26,7 +26,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import PageHeader from '../components/PageHeader'
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
 import { useAiChatOpen } from '../components/Layout'
-import { scrollToElement } from '../lib/scroll'
+import { scrollToElement, findScrollableAncestor } from '../lib/scroll'
 import { formatRelative, relativeTime } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
@@ -69,6 +69,7 @@ function flattenHeadings(nodes: HeadingNode[]): Array<HeadingNode & { depth: num
 export default function DocPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const aiChatOpen = useAiChatOpen()
   const toast = useToast()
@@ -229,6 +230,48 @@ export default function DocPage() {
       setHeadings(buildHeadingTree(doc.children || []))
     }
   }, [doc])
+
+  // 引用/反链/大纲跳转：文档加载后按 hash 滚动到目标块。
+  // 兼容两种形式：引用链接的 #block-<id> 与大纲/heading 锚的 #<id>。
+  // SPA 导航时内容分多拍到达（旧文档保留 → 新数据替换 → SSE 再刷新），
+  // 单次滚动会落在过期布局上（且并发平滑动画会互相截停）——
+  // 瞬时跳 + 两次位置校验补跳，覆盖所有时序。
+  useEffect(() => {
+    if (!doc) return
+    const raw = location.hash.slice(1)
+    if (!raw) return
+    const targetId = raw.startsWith('block-') ? raw.slice(6) : raw
+    // 路由离场叠影（.animate-page-leave）里是旧页快照，含相同 block id 的幽灵节点；
+    // getElementById 按文档序会命中幽灵——查找时显式排除
+    const findTarget = (): HTMLElement | null => {
+      for (const el of document.querySelectorAll(`[id="${targetId}"]`)) {
+        if (el instanceof HTMLElement && !el.closest('.animate-page-leave')) return el
+      }
+      return null
+    }
+    const jump = () => {
+      const el = findTarget()
+      if (el) scrollToElement(el, 72, 0)
+    }
+    const inPlace = () => {
+      const el = findTarget()
+      if (!el) return false
+      const scroller = findScrollableAncestor(el)
+      const base = scroller ? scroller.getBoundingClientRect().top : 0
+      return Math.abs(el.getBoundingClientRect().top - (base + 72)) < 24
+    }
+    const timers = [
+      window.setTimeout(jump, 60),
+      window.setTimeout(() => { if (!inPlace()) jump() }, 400),
+      window.setTimeout(() => {
+        if (inPlace()) return
+        if (findTarget()) jump()
+        // 锚点失效（回答生成后文档被编辑/删除，或过期引用）：明确告知而非沉默停在顶部
+        else toast.info({ title: '原文块已不存在', description: '该内容可能在此之后被编辑或删除' })
+      }, 900),
+    ]
+    return () => timers.forEach(clearTimeout)
+  }, [doc, location.hash])
 
   const handleEditSaved = useCallback(() => { setRefreshKey((k) => k + 1) }, [])
 

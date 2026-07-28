@@ -163,7 +163,7 @@ function HighlightedCodeBlock({ block, lang }: { block: Block; lang: string }) {
   }, [block.content, lang])
 
   return (
-    <div className="my-5 rounded-lg border border-border bg-muted/30 overflow-hidden">
+    <div id={block.id} className="scroll-mt-20 my-5 rounded-lg border border-border bg-muted/30 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 bg-muted/60 border-b border-border">
         <span className="text-[11px] font-mono text-muted-foreground/80">
           {lang || 'text'}
@@ -214,7 +214,7 @@ function TableBlock({ block }: { block: Block }) {
   const body = rows.slice(2).map(parseTableRow)
 
   return (
-    <div className="my-5 overflow-x-auto rounded-lg border border-border">
+    <div id={block.id} className="scroll-mt-20 my-5 overflow-x-auto rounded-lg border border-border">
       <table className="w-full border-collapse text-[13.5px]">
         <thead>
           <tr className="bg-muted/50">
@@ -259,7 +259,7 @@ function ListItemView({ block }: { block: Block }) {
   const nestedItems = block.children.filter((c) => c.type === 'list_item')
   const otherChildren = block.children.filter((c) => c.type !== 'list_item')
   return (
-    <li className="leading-[1.75] text-foreground/95">
+    <li id={block.id} className="scroll-mt-20 leading-[1.75] text-foreground/95">
       {isTask && (
         <span
           className={`mr-2 inline-flex h-3.5 w-3.5 translate-y-[2px] items-center justify-center rounded-[3px] border transition-colors ${
@@ -343,7 +343,7 @@ const BlockNode = memo(function BlockNode({ block }: BlockNodeProps) {
         return <hr className="my-7 border-border/70" />
       }
       return (
-        <p className={`leading-[1.75] text-foreground/95${block.content && HANGING_OPEN_PUNCT_RE.test(block.content) ? ' hanging-punct' : ''}`}>
+        <p id={block.id} className={`scroll-mt-20 leading-[1.75] text-foreground/95${block.content && HANGING_OPEN_PUNCT_RE.test(block.content) ? ' hanging-punct' : ''}`}>
           {block.content ? renderInline(block.content, `p-${block.id}`) : <span className="text-muted-foreground">（空白段落）</span>}
         </p>
       )
@@ -362,7 +362,7 @@ const BlockNode = memo(function BlockNode({ block }: BlockNodeProps) {
 
     case 'quote':
       return (
-        <blockquote className="my-5 pl-4 border-l-[3px] border-foreground/80 text-foreground">
+        <blockquote id={block.id} className="scroll-mt-20 my-5 pl-4 border-l-[3px] border-foreground/80 text-foreground">
           <p className="leading-[1.65] text-[1.05em]">{renderInline(block.content || '', `q-${block.id}`)}</p>
           <ChildrenView children={block.children} />
         </blockquote>
