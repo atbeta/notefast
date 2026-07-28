@@ -60,6 +60,21 @@ app.use('/api/*', eventContextMiddleware)
 
 app.use('/api/*', authMiddleware)
 
+// SSE 长连接路由：单独放宽 idleTimeout（server.timeout 是 per-request 的）。
+// 全局保持 Bun 默认 10s，避免普通 API 的 keep-alive socket 也被拖住 60s 占 fd。
+// 60s 大于 events 心跳间隔（25s，margin 35s）与 chat ping（10s），健康连接由心跳保活。
+// 注意：必须注册在任何 app.route() 之前——Hono 按注册顺序执行处理器，
+// 放在路由之后的 app.use 永远不会被执行（idleTimeout 放宽会静默失效）。
+let serverRef: Server<undefined> | null = null
+const SSE_IDLE_TIMEOUT_S = 60
+const relaxSseIdleTimeout: MiddlewareHandler = (c, next) => {
+  serverRef?.timeout(c.req.raw, SSE_IDLE_TIMEOUT_S)
+  return next()
+}
+app.use('/api/v1/events', relaxSseIdleTimeout)
+app.use('/api/v1/ai/chat', relaxSseIdleTimeout)
+app.use('/api/v1/ai/write', relaxSseIdleTimeout)
+
 app.get('/health', async (c) => {
   const status = await getVectorStore().status()
   emitAppEvent({
@@ -137,19 +152,6 @@ app.route('/api/v1/api-tokens', apiTokens)
 app.route('/api/v1/pinned-views', pinnedViews)
 app.route('/api/v1/status', statusRouter)
 app.route('/api/v1/events', eventsRouter)
-
-// SSE 长连接路由：单独放宽 idleTimeout（server.timeout 是 per-request 的）。
-// 全局保持 Bun 默认 10s，避免普通 API 的 keep-alive socket 也被拖住 60s 占 fd。
-// 60s 大于 events 心跳间隔（25s，margin 35s）与 chat ping（10s），健康连接由心跳保活。
-let serverRef: Server<undefined> | null = null
-const SSE_IDLE_TIMEOUT_S = 60
-const relaxSseIdleTimeout: MiddlewareHandler = (c, next) => {
-  serverRef?.timeout(c.req.raw, SSE_IDLE_TIMEOUT_S)
-  return next()
-}
-app.use('/api/v1/events', relaxSseIdleTimeout)
-app.use('/api/v1/ai/chat', relaxSseIdleTimeout)
-app.use('/api/v1/ai/write', relaxSseIdleTimeout)
 
 // 分享公开端点：挂在 /api/* 之外（authMiddleware 只覆盖 /api/*），无需鉴权
 app.route('/share', sharePublic)
