@@ -15,6 +15,7 @@ import {
   Globe,
   ChevronDown,
   SquarePen,
+  PencilLine,
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
@@ -26,8 +27,9 @@ import PageHeader from '../components/PageHeader'
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
 import { useAiChatOpen } from '../components/Layout'
 import { scrollToElement } from '../lib/scroll'
-import { formatRelative } from '../lib/time'
+import { formatRelative, relativeTime } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
+import { useEditorDraft } from '../hooks/useEditorDraft'
 import { Kbd, Tooltip, useToast } from '../components/ui'
 
 interface Backlink {
@@ -84,14 +86,31 @@ export default function DocPage() {
   const [titleDraft, setTitleDraft] = useState('')
   const [generatingTitle, setGeneratingTitle] = useState(false)
 
-  /** 编辑态 — 这是唯一的 truth 来源。
-   * MarkdownEditor 的 onActiveChange 通过这条 single source 同步；
-   * 由于 docId 在 URL 里，状态在跨页面时不持久（保留为暂态）。 */
-  const [isEditing, setIsEditing] = useState(searchParams.get('edit') === '1')
+  /** 编辑态 — 记录「哪篇文档」在编辑，而非布尔值。
+   * 同一条路由（/doc/:id）侧栏切换文档时组件不卸载：布尔方案下编辑态会泄漏到
+   * 下一篇（且重置 effect 与新编辑器 onActiveChange(true) 存在时序竞争）；
+   * 记录 docId 后，isEditing 对新 id 在渲染期即为 false，编辑器根本不会挂载。
+   * edit=1 仅作为深链接口保留（/new 已不再携带）。 */
+  const [editingDocId, setEditingDocId] = useState<string | null>(
+    searchParams.get('edit') === '1' ? (id ?? null) : null,
+  )
+  const isEditing = editingDocId !== null && editingDocId === id
+  // 离开被编辑的文档后编辑会话结束（未保存内容由 useEditorDraft 草稿保留）
+  useEffect(() => {
+    if (editingDocId && editingDocId !== id) setEditingDocId(null)
+  }, [id, editingDocId])
   const handleEditorActiveChange = useCallback((editing: boolean) => {
-    setIsEditing(editing)
-  }, [])
-  const handleStartEdit = useCallback(() => setIsEditing(true), [])
+    setEditingDocId(editing ? (id ?? null) : null)
+  }, [id])
+  const handleStartEdit = useCallback(() => setEditingDocId(id ?? null), [id])
+  // 阅读态草稿探测：进入文档 / 退出编辑 / 保存刷新后重估（草稿由编辑器的
+  // 自动暂存产生，阅读态此前完全无感——看不到「这篇还有未保存内容」）
+  const editorDraft = useEditorDraft(id ?? '')
+  const [draftInfo, setDraftInfo] = useState<{ updatedAt: number } | null>(null)
+  useEffect(() => {
+    if (!id || isEditing) return
+    setDraftInfo(editorDraft.getDraftInfo())
+  }, [id, isEditing, refreshKey, editorDraft])
   const handleEditorMountKey = useMemo(
     () => Math.random().toString(36).slice(2, 10),
     [id, isEditing],
@@ -460,6 +479,28 @@ export default function DocPage() {
                 <span className="tabular-nums text-[11px]">
                   {(indexJob.elapsed_ms / 1000).toFixed(1)}s
                 </span>
+              </div>
+            )}
+            {!isEditing && draftInfo && (
+              <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
+                <PencilLine className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
+                <span className="flex-1">
+                  有未保存的草稿{draftInfo.updatedAt > 0 ? `（${relativeTime(new Date(draftInfo.updatedAt))}编辑）` : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleStartEdit}
+                  className="font-medium text-primary hover:text-primary/80 transition-colors"
+                >
+                  继续编辑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { editorDraft.clearDraft(); setDraftInfo(null) }}
+                  className="text-muted-foreground/70 hover:text-destructive transition-colors"
+                >
+                  丢弃
+                </button>
               </div>
             )}
             {docStatus === 'inbox' && (

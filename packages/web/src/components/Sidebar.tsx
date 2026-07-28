@@ -25,6 +25,7 @@ import { useApiQuery } from '../hooks/useApiQuery'
 import { useDocChanges } from '../hooks/useDocEvents'
 import { usePinnedViews, canonicalViewQuery } from '../hooks/usePinnedViews'
 import { useScrollFade } from '../hooks/useScrollFade'
+import { DRAFT_CHANGED_EVENT, hasDraftSync } from '../hooks/useEditorDraft'
 import type { DocSummary } from '@notefast/core'
 import DocActionsMenu from './DocActionsMenu'
 import { Kbd, Tooltip } from './ui'
@@ -88,6 +89,25 @@ export default function Sidebar({
     [collapsed, location.pathname],
   )
   const recentDocs = (docList ?? []).slice(0, 15)
+
+  // 草稿圆点：逐条同步探测 + 订阅草稿变更事件（编辑器防抖暂存后实时出现/消失）
+  const [draftIds, setDraftIds] = useState<ReadonlySet<string>>(new Set())
+  useEffect(() => {
+    const compute = () => {
+      const ids = new Set<string>()
+      for (const d of recentDocs) {
+        if (hasDraftSync(d.id)) ids.add(d.id)
+      }
+      // 内容相同就复用旧 Set——recentDocs 每次渲染都是新数组 identity，effect 会
+      // 随之反复触发，若无条件 setState 新 identity 将构成「渲染→effect→渲染」死循环
+      setDraftIds((prev) =>
+        prev.size === ids.size && [...ids].every((x) => prev.has(x)) ? prev : ids,
+      )
+    }
+    compute()
+    window.addEventListener(DRAFT_CHANGED_EVENT, compute)
+    return () => window.removeEventListener(DRAFT_CHANGED_EVENT, compute)
+  }, [recentDocs])
 
   // 外部 MCP / AI 聊天等任何通道写入文档 → 即时刷新最近列表（服务端已聚合去抖）
   useDocChanges(
@@ -265,14 +285,6 @@ export default function Sidebar({
             最近 7 天更新
           </Link>
           <Link
-            to="/?view=untagged"
-            onClick={closeAfterNav}
-            className={location.search.includes('untagged') || location.search.includes('view=untagged') ? 'sidebar-link-active' : 'sidebar-link'}
-          >
-            <Tag className="w-[15px] h-[15px]" strokeWidth={1.75} />
-            未打标
-          </Link>
-          <Link
             to="/?stale_within=90d"
             onClick={closeAfterNav}
             className={location.search.includes('stale_within=90d') ? 'sidebar-link-active' : 'sidebar-link'}
@@ -287,6 +299,14 @@ export default function Sidebar({
           >
             <EyeOff className="w-[15px] h-[15px]" strokeWidth={1.75} />
             对 AI 隐藏
+          </Link>
+          <Link
+            to="/?view=untagged"
+            onClick={closeAfterNav}
+            className={location.search.includes('untagged') || location.search.includes('view=untagged') ? 'sidebar-link-active' : 'sidebar-link'}
+          >
+            <Tag className="w-[15px] h-[15px]" strokeWidth={1.75} />
+            未加标签
           </Link>
         </div>
 
@@ -333,19 +353,26 @@ export default function Sidebar({
                     key={doc.id}
                     className={`group flex items-center gap-0.5 rounded-md transition-colors ${
                       isActive
-                        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                        : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                        ? 'bg-primary-soft text-primary hover:bg-[rgb(var(--primary)_/_0.16)]'
+                        : 'text-sidebar-foreground hover:bg-[var(--primary-softer)] hover:text-sidebar-accent-foreground'
                     }`}
                   >
                     <Link
                       to={`/doc/${doc.id}`}
                       onClick={closeAfterNav}
-                      className={`min-w-0 flex-1 px-2.5 py-1 text-[13px] truncate ${
+                      className={`min-w-0 flex-1 flex items-center gap-1.5 px-2.5 py-1 text-[13px] ${
                         isActive ? 'font-medium' : ''
                       }`}
                       title={doc.title}
                     >
-                      {doc.title || '无标题文档'}
+                      <span className="truncate">{doc.title || '无标题文档'}</span>
+                      {draftIds.has(doc.id) && (
+                        <span
+                          aria-label="有未保存草稿"
+                          title="有未保存草稿"
+                          className="w-1.5 h-1.5 rounded-full bg-warn shrink-0"
+                        />
+                      )}
                     </Link>
                     <DocActionsMenu
                       doc={doc}

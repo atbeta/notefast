@@ -58,9 +58,11 @@ export default function NewDocPage() {
         docId = res.id
         indexJobId = res.index_job?.id
       }
-      const q = new URLSearchParams({ edit: '1' })
+      // 内容已随创建入库——落地阅读态（不带 edit=1），向量化进度经 index_job 参数照常展示
+      const q = new URLSearchParams()
       if (indexJobId) q.set('index_job', indexJobId)
-      navigate('/doc/' + docId + '?' + q.toString())
+      const qs = q.toString()
+      navigate('/doc/' + docId + (qs ? '?' + qs : ''))
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建失败')
       setCreating(false)

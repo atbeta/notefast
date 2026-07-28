@@ -12,7 +12,7 @@ import PageHeader from '../components/PageHeader'
 import TagFilter from '../components/TagFilter'
 
 function viewTitle(params: URLSearchParams): string {
-  if (params.get('untagged') === '1' || params.get('view') === 'untagged') return '未打标'
+  if (params.get('untagged') === '1' || params.get('view') === 'untagged') return '未加标签'
   const within = params.get('within') || params.get('updated_within') || ''
   if (params.get('view') === 'recent' || within) {
     if (within === '7d') return '最近 7 天更新'
@@ -254,7 +254,7 @@ function EmptyState({ onCreate, title }: { onCreate: () => void; title: string }
   return (
     <div className="px-3 py-12 flex flex-col items-center text-center">
       <div className="empty-icon-tile">
-        {isAll ? <FileText className="w-5 h-5" /> : title.includes('标签') || title === '未打标' ? <Tag className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+        {isAll ? <FileText className="w-5 h-5" /> : title.includes('标签') ? <Tag className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
       </div>
       <h3 className="text-[15px] font-medium text-foreground mb-1.5 tracking-[-0.005em]">
         {isAll ? '这里还没有文档' : `「${title}」暂无文档`}
