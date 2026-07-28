@@ -7,18 +7,17 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, ArchiveRestore, Trash2, Loader2, Search } from 'lucide-react'
+import { Archive, ArchiveRestore, Loader2, Search } from 'lucide-react'
 import type { DocSummary, SearchResult } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import { useDocChanges } from '../hooks/useDocEvents'
 import { formatRelative } from '../lib/time'
-import ConfirmDialog from '../components/ConfirmDialog'
+import DocActionsMenu from '../components/DocActionsMenu'
 import PageHeader from '../components/PageHeader'
 
 export default function ArchivedPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<DocSummary | null>(null)
   const [query, setQuery] = useState('')
   // hits === null 表示未在搜索（展示全量列表）
   const [hits, setHits] = useState<SearchResult[] | null>(null)
@@ -76,18 +75,6 @@ export default function ArchivedPage() {
     }
   }
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return
-    setBusyId(deleteTarget.id)
-    try {
-      await api.del(`/docs/${deleteTarget.id}`)
-      setDeleteTarget(null)
-      refetch()
-    } finally {
-      setBusyId(null)
-    }
-  }
-
   const renderDocRow = (doc: DocSummary, snippet?: string) => (
     <div
       key={doc.id}
@@ -109,12 +96,12 @@ export default function ArchivedPage() {
           归档于 {formatRelative(doc.updated_at)}
         </p>
       </div>
-      <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-0.5 shrink-0">
         <button
           type="button"
           disabled={busyId === doc.id}
           onClick={() => restore(doc.id)}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-foreground hover:bg-accent transition-colors"
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
           title="恢复为笔记（回到所有文档）"
         >
           {busyId === doc.id ? (
@@ -124,15 +111,11 @@ export default function ArchivedPage() {
           )}
           恢复为笔记
         </button>
-        <button
-          type="button"
-          disabled={busyId === doc.id}
-          onClick={() => setDeleteTarget(doc)}
-          className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-          title="删除"
-        >
-          <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-        </button>
+        <DocActionsMenu
+          doc={{ ...doc, status: 'archived' }}
+          surface="archived"
+          onDone={refetch}
+        />
       </div>
     </div>
   )
@@ -207,16 +190,6 @@ export default function ArchivedPage() {
           </>
         )}
       </div>
-
-      <ConfirmDialog
-        open={Boolean(deleteTarget)}
-        title="删除归档文档"
-        message={`确定删除「${deleteTarget?.title || '未命名'}」吗？此操作不可撤销。`}
-        confirmLabel="删除"
-        destructive
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteTarget(null)}
-      />
     </div>
   )
 }

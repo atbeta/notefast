@@ -6,12 +6,12 @@
 
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Inbox, Plus, ArrowUpRight, Trash2, Loader2 } from 'lucide-react'
+import { Inbox, Plus, ArrowUpRight, Loader2 } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import { formatRelative } from '../lib/time'
-import ConfirmDialog from '../components/ConfirmDialog'
+import DocActionsMenu from '../components/DocActionsMenu'
 import PageHeader from '../components/PageHeader'
 
 export default function InboxPage() {
@@ -22,7 +22,6 @@ export default function InboxPage() {
   const [capturing, setCapturing] = useState(false)
   const [showCapture, setShowCapture] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<DocSummary | null>(null)
 
   const { data, loading, error, refetch } = useApiQuery(
     () => api.get<DocSummary[]>('/docs/list?status=inbox'),
@@ -64,18 +63,6 @@ export default function InboxPage() {
     setBusyId(id)
     try {
       await api.patch(`/docs/${id}/status`, { status: 'note' })
-      refetch()
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return
-    setBusyId(deleteTarget.id)
-    try {
-      await api.del(`/docs/${deleteTarget.id}`)
-      setDeleteTarget(null)
       refetch()
     } finally {
       setBusyId(null)
@@ -183,42 +170,28 @@ export default function InboxPage() {
                     {doc.updated_at !== doc.created_at && ` · 更新 ${formatRelative(doc.updated_at)}`}
                   </p>
                 </div>
-                <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-0.5 shrink-0">
                   <button
                     type="button"
                     disabled={busyId === doc.id}
                     onClick={() => promote(doc.id)}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-foreground hover:bg-accent transition-colors"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                     title="加入笔记（离开收集箱）"
                   >
                     <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={1.75} />
                     加入笔记
                   </button>
-                  <button
-                    type="button"
-                    disabled={busyId === doc.id}
-                    onClick={() => setDeleteTarget(doc)}
-                    className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    title="丢弃"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-                  </button>
+                  <DocActionsMenu
+                    doc={{ ...doc, status: 'inbox' }}
+                    surface="inbox"
+                    onDone={refetch}
+                  />
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
-
-      <ConfirmDialog
-        open={Boolean(deleteTarget)}
-        title="丢弃收集项"
-        message={`确定丢弃「${deleteTarget?.title || '未命名'}」吗？此操作不可撤销。`}
-        confirmLabel="丢弃"
-        destructive
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteTarget(null)}
-      />
     </div>
   )
 }

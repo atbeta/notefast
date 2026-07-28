@@ -25,6 +25,7 @@ import { useApiQuery } from '../hooks/useApiQuery'
 import { useDocChanges } from '../hooks/useDocEvents'
 import { usePinnedViews, canonicalViewQuery } from '../hooks/usePinnedViews'
 import type { DocSummary } from '@notefast/core'
+import DocActionsMenu from './DocActionsMenu'
 
 interface SidebarProps {
   collapsed: boolean
@@ -321,19 +322,32 @@ export default function Sidebar({
               {recentDocs.map(doc => {
                 const isActive = location.pathname === `/doc/${doc.id}`
                 return (
-                  <Link
+                  <div
                     key={doc.id}
-                    to={`/doc/${doc.id}`}
-                    onClick={closeAfterNav}
-                    className={`px-2.5 py-1 rounded-md text-[13px] truncate transition-colors ${
+                    className={`group flex items-center gap-0.5 rounded-md transition-colors ${
                       isActive
-                        ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                         : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                     }`}
-                    title={doc.title}
                   >
-                    {doc.title || '无标题文档'}
-                  </Link>
+                    <Link
+                      to={`/doc/${doc.id}`}
+                      onClick={closeAfterNav}
+                      className={`min-w-0 flex-1 px-2.5 py-1 text-[13px] truncate ${
+                        isActive ? 'font-medium' : ''
+                      }`}
+                      title={doc.title}
+                    >
+                      {doc.title || '无标题文档'}
+                    </Link>
+                    <DocActionsMenu
+                      doc={doc}
+                      surface="sidebar"
+                      compact
+                      onDone={() => refetchRecent()}
+                      className="pr-0.5"
+                    />
+                  </div>
                 )
               })}
             </div>
