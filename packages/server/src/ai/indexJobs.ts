@@ -30,10 +30,29 @@ const BATCH = 20
 const MAX_CONCURRENT_JOBS = 1
 /** 批与批之间最小间隔，避免打爆 embedding API */
 const BATCH_GAP_MS = 50
+/** 终态（ready/partial/failed）作业保留上限：jobs Map 只增不减会内存单调增长，
+ * 每次 schedule 后淘汰最老的终态作业（pending/running 永不淘汰） */
+const MAX_FINISHED_JOBS = 100
 
 const jobs = new Map<string, IndexJob>()
 const queue: string[] = []
 let activeCount = 0
+
+/** 淘汰最老的终态作业（Map 迭代按插入序 = 创建序） */
+function pruneFinishedJobs(): void {
+  let finished = 0
+  for (const job of jobs.values()) {
+    if (job.state !== 'pending' && job.state !== 'running') finished++
+  }
+  let toDelete = finished - MAX_FINISHED_JOBS
+  if (toDelete <= 0) return
+  for (const [id, job] of jobs) {
+    if (toDelete <= 0) break
+    if (job.state === 'pending' || job.state === 'running') continue
+    jobs.delete(id)
+    toDelete--
+  }
+}
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -150,6 +169,7 @@ export function scheduleDocIndex(docId: string, blockIds: string[]): IndexJob | 
     _blockIds: ids,
   }
   jobs.set(jobId, job)
+  pruneFinishedJobs()
 
   // 同文档旧未完成作业标记为 superseded（保留查询，但不抢进度）
   for (const [id, existing] of jobs) {

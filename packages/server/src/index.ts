@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { MiddlewareHandler } from 'hono'
+import type { Server } from 'bun'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/bun'
 import { readFileSync } from 'node:fs'
@@ -137,6 +138,19 @@ app.route('/api/v1/pinned-views', pinnedViews)
 app.route('/api/v1/status', statusRouter)
 app.route('/api/v1/events', eventsRouter)
 
+// SSE 长连接路由：单独放宽 idleTimeout（server.timeout 是 per-request 的）。
+// 全局保持 Bun 默认 10s，避免普通 API 的 keep-alive socket 也被拖住 60s 占 fd。
+// 60s 大于 events 心跳间隔（25s，margin 35s）与 chat ping（10s），健康连接由心跳保活。
+let serverRef: Server<undefined> | null = null
+const SSE_IDLE_TIMEOUT_S = 60
+const relaxSseIdleTimeout: MiddlewareHandler = (c, next) => {
+  serverRef?.timeout(c.req.raw, SSE_IDLE_TIMEOUT_S)
+  return next()
+}
+app.use('/api/v1/events', relaxSseIdleTimeout)
+app.use('/api/v1/ai/chat', relaxSseIdleTimeout)
+app.use('/api/v1/ai/write', relaxSseIdleTimeout)
+
 // 分享公开端点：挂在 /api/* 之外（authMiddleware 只覆盖 /api/*），无需鉴权
 app.route('/share', sharePublic)
 
@@ -184,10 +198,10 @@ const server = Bun.serve({
   port: PORT,
   hostname: '0.0.0.0',
   fetch: app.fetch,
-  // Bun.serve 默认 10s 无数据即断开连接，会杀死 /api/v1/events 的 SSE 长连接
-  // （心跳 25s 才写一次）。放宽到 60s，大于心跳间隔，连接由心跳保活。
-  idleTimeout: 60,
+  // idleTimeout 保持 Bun 默认（10s）：普通 API 连接快速回收；
+  // SSE 长连接由上面的 relaxSseIdleTimeout 中间件经 server.timeout 单独放宽
 })
+serverRef = server
 
 // 未配置任何鉴权时所有请求以 admin 放行（本地开发便利设计）；
 // 监听 0.0.0.0，误暴露到公网即全面失防——启动时醒目告警，不做静默放行

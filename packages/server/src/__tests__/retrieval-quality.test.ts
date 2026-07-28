@@ -224,6 +224,32 @@ describe('文档级索引作业', () => {
     expect(latest.done + latest.skipped).toBeGreaterThanOrEqual(1)
     expect(latest.elapsed_ms).toBeGreaterThanOrEqual(0)
   })
+
+  test('终态作业超过 100 个时淘汰最老的（Map 不单调增长）', () => {
+    applyNewConfig(
+      {
+        version: 1,
+        chat: null,
+        embedding: FULL_PROVIDER,
+        autoIndex: true,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+    // 空 blockIds 的 job 立即 ready（终态），用于快速堆量
+    const ids: string[] = []
+    for (let i = 0; i < 105; i++) {
+      const job = scheduleDocIndex(crypto.randomUUID(), [])
+      expect(job).not.toBeNull()
+      ids.push(job!.id)
+    }
+    // 最老的 5 个已被淘汰；最新的 100 个保留
+    for (const oldId of ids.slice(0, 5)) {
+      expect(getIndexJob(oldId)).toBeNull()
+    }
+    expect(getIndexJob(ids[5]!)).not.toBeNull()
+    expect(getIndexJob(ids[104]!)).not.toBeNull()
+  })
 })
 
 /**

@@ -4,7 +4,7 @@
  * 收敛原先散落在 api / mcp / services / sync / ai 各层的同款 SQL：
  * - 过滤约定只保留一份：列表/树读取默认排除软删除（is_deleted = 0），
  *   需要含已删除行的调用方必须显式选择（getBlockById / includeDeleted）。
- * - 写入约定只保留一份：任何 UPDATE 都带 updated_at = datetime('now')；
+ * - 写入约定只保留一份：任何 UPDATE 都带 updated_at = 当前时间（毫秒精度）；
  *   content 变更自动同步 content_hash；软删除统一 is_deleted + delete_id tombstone。
  * - 函数级模块而非 interface：只有一个后端（SQLite）时不冻结接口形状，
  *   未来换远程存储时再以这里为边界提取 interface。
@@ -19,10 +19,14 @@ import { computeContentHash } from '../services/contentHash'
 
 export type Db = ReturnType<typeof getDb>
 
-/** INSERT/批量写入统一使用的时间戳（与 datetime('now') 同格式：'YYYY-MM-DD HH:MM:SS'，UTC） */
+/** INSERT/批量写入统一使用的时间戳（与 SQL_NOW 同格式：'YYYY-MM-DD HH:MM:SS.sss'，UTC）。
+ * 毫秒精度：秒级精度下同秒多次编辑无法区分「最近更新」顺序（列表排序只能靠 rowid 兜底） */
 export function nowTimestamp(): string {
-  return new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
+  return new Date().toISOString().replace('T', ' ').replace('Z', '')
 }
+
+/** UPDATE 语句统一使用的当前时间表达式（毫秒精度，与 nowTimestamp 同格式） */
+const SQL_NOW = `strftime('%Y-%m-%d %H:%M:%f', 'now')`
 
 // ───────────────────── 单行读取 ─────────────────────
 
@@ -102,7 +106,7 @@ export function listDocRows(db: Db, opts: ListDocRowsOptions = {}): BlockRow[] {
     sql += ` AND id IN (${opts.docIds.map(() => '?').join(',')})`
     params.push(...opts.docIds)
   }
-  // updated_at 精度到秒（应用内写入同秒必撞），补 rowid 稳定决胜：
+  // updated_at 为毫秒精度，同毫秒碰撞概率极低；仍补 rowid 稳定决胜：
   // ASC = 按入库顺序（归档导出确定性），DESC = 后入库在前（列表「最近更新」语义）
   sql += opts.order === 'updated_asc'
     ? ' ORDER BY updated_at ASC, rowid ASC'
@@ -262,7 +266,7 @@ export interface BlockPatch {
   tags?: string
 }
 
-/** 统一 UPDATE：自动带 updated_at = datetime('now')；空 patch 不执行 SQL */
+/** 统一 UPDATE：自动带 updated_at（毫秒精度当前时间）；空 patch 不执行 SQL */
 export function updateBlock(db: Db, id: string, patch: BlockPatch): void {
   const updates: string[] = []
   const params: (string | number)[] = []
@@ -294,7 +298,7 @@ export function updateBlock(db: Db, id: string, patch: BlockPatch): void {
 
   if (updates.length === 0) return
 
-  updates.push("updated_at = datetime('now')")
+  updates.push(`updated_at = ${SQL_NOW}`)
   params.push(id)
   db.query(`UPDATE blocks SET ${updates.join(', ')} WHERE id = ?`).run(
     ...(params as [string, ...string[]]),
@@ -309,7 +313,7 @@ export function moveBlock(
 ): void {
   db.query(
     `UPDATE blocks SET parent_id = ?, root_id = ?, level = level + ?,
-     sort = ?, updated_at = datetime('now')
+     sort = ?, updated_at = ${SQL_NOW}
      WHERE id = ?`,
   ).run(target.parentId, target.rootId, target.levelDiff, target.sort, id)
 }
@@ -339,7 +343,7 @@ export function softDeleteBlocks(db: Db, ids: string[]): void {
   if (ids.length === 0) return
   const placeholders = ids.map(() => '?').join(',')
   db.query(
-    `UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = datetime('now')
+    `UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = ${SQL_NOW}
      WHERE id IN (${placeholders}) AND is_deleted = 0`,
   ).run(...(ids as [string, ...string[]]))
 }
@@ -348,7 +352,7 @@ export function softDeleteBlocks(db: Db, ids: string[]): void {
 export function restoreBlocks(db: Db, ids: string[]): void {
   if (ids.length === 0) return
   const placeholders = ids.map(() => '?').join(',')
-  db.query(`UPDATE blocks SET is_deleted = 0, updated_at = datetime('now') WHERE id IN (${placeholders})`).run(
+  db.query(`UPDATE blocks SET is_deleted = 0, updated_at = ${SQL_NOW} WHERE id IN (${placeholders})`).run(
     ...(ids as [string, ...string[]]),
   )
 }
@@ -364,7 +368,7 @@ export function listLiveBlockIdsByNotebook(db: Db, notebookId: string): string[]
 /** 笔记本删除时级联软删除其下全部 blocks（幂等） */
 export function softDeleteByNotebook(db: Db, notebookId: string): void {
   db.query(
-    `UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = datetime('now')
+    `UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = ${SQL_NOW}
      WHERE notebook_id = ? AND is_deleted = 0`,
   ).run(notebookId)
 }

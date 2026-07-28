@@ -30,8 +30,14 @@ export function startAutoExport(dir: string): void {
   }
   mkdirSync(dir, { recursive: true })
   console.log(`📁 Auto-export: 启动兜底定时循环 dir=${dir}`)
-  setTimeout(() => { legacyExportOnce(dir) }, 10_000)
-  setInterval(() => { legacyExportOnce(dir) }, 60 * 60 * 1000)
+  // 自重排单循环：10s 后首跑，之后每次跑完再计时 1h。
+  // 不用 setTimeout+setInterval 双计时器（首次触发可能紧贴叠加），
+  // 也不会因单次导出超过 1h 而与下一圈重叠；timer 无需取消（进程级常驻）
+  const tick = async () => {
+    await legacyExportOnce(dir)
+    setTimeout(() => { void tick() }, 60 * 60 * 1000)
+  }
+  setTimeout(() => { void tick() }, 10_000)
 }
 
 export interface LegacyExportFileResult {

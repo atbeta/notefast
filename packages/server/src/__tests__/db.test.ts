@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { CURRENT_SCHEMA_VERSION } from '@notefast/core'
 import { initDb, closeDb, getDb, getSchemaVersion } from '../db'
+import { nowTimestamp, updateBlock, getBlockById } from '../store/blocks'
 
 let testDir: string
 let notebookId: string
@@ -85,6 +86,23 @@ describe('FTS 触发器', () => {
 
     expect(results.length).toBeGreaterThan(0)
     expect(results.some((r) => r.id === id)).toBe(true)
+  })
+})
+
+describe('时间戳毫秒精度（P2-NEW-08）', () => {
+  test('nowTimestamp 带毫秒；updateBlock 写入毫秒精度 updated_at', () => {
+    expect(nowTimestamp()).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$/)
+
+    const db = getDb()
+    const id = crypto.randomUUID()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level)
+       VALUES (?, ?, NULL, ?, 'paragraph', ?, 0, 0)`,
+    ).run(id, notebookId, id, 'ms precision')
+
+    updateBlock(db, id, { content: 'ms precision updated' })
+    const row = getBlockById(db, id)!
+    expect(row.updated_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$/)
   })
 })
 
