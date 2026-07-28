@@ -170,7 +170,7 @@ docker compose up -d
 - 语义向量经 `VectorStore` 抽象；默认可为 JSON 后端，配置 embedding 后经索引重建切到 sqlite-vec；向量是可重建二级索引，SQLite 仍为权威数据
 - api.key 鉴权：仅在显式配置了鉴权（AUTH_PASSWORD / READ_TOKEN / WRITE_TOKEN 任一，或 API_TOKEN 直给）时，initDb 才生成 `data/api.key` 并写入 env（供 MCP/API Bearer，重启加载既有 key 保持稳定）；**未配置任何鉴权 = 免鉴权模式（本地开发默认）——不生成也不加载 api.key**，全 admin 放行 + 启动醒目告警。自动 key 不应单方面把实例翻成强制鉴权（Web 无密码可登录只会全 401）
 - 公开分享安全头：`/s/*` 与 `/share/*` 统一带 `X-Frame-Options: DENY` + `CSP frame-ancestors 'none'`（防 iframe 嵌入/点击劫持）；分享页顶部有「公开分享页面」提示条；会话 cookie 在 HTTPS（直连或 X-Forwarded-Proto）下带 `Secure`；chat 工具 `notefast_read_doc` 成功读全文时发 `doc.read_by_agent` 审计事件（emitAppEvent）
-- `block_vectors` 需记录 `embedding_model` / `content_hash` / `index_version`；模型或版本变化标记 stale，旧向量不参与检索
+- `block_vectors` 需记录 `embedding_model` / `content_hash` / `index_version`；模型或版本变化标记 stale，旧向量不参与检索；**软删除 block 的向量必须被隔离——两个后端 search 与 `indexAllBlocks` / `loadDocBlockIds` 均显式过滤 `is_deleted = 0`**（afterDelete hook 只清当次删除的向量，不过滤的全量/恢复重建会把软删块重新 embed 成「幽灵命中」：内容与新块近似、id 是死锚）
 - Docker 部署需显式打包 sqlite-vec 原生扩展（linux amd64/arm64 的 `vec0`），不能依赖完整 `node_modules`
 - Markdown 归档（LocalFS/S3/WebDAV）是单向内容副本，会丢失 ID/引用/标签等元数据；完整灾备用应用内 SQLite→S3 快照（设置页 / `docs/backup.md`）
 - Markdown 归档远端文件名为 `<slug>--<docId>.md`，并由 `notefast-archive.manifest.json` 跟踪与清理陈旧文件；S3 与 WebDAV 同步适配器同时只能启用一个，且仅为单向 push

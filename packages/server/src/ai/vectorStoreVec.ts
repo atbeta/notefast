@@ -208,7 +208,7 @@ export class SqliteVecVectorStore implements VectorStore {
       JOIN vector_entries e ON e.id = v.rowid AND e.generation = ?
       JOIN blocks b ON b.id = e.block_id
       LEFT JOIN blocks d ON d.id = b.root_id
-      WHERE v.embedding MATCH ? AND v.k = ?`
+      WHERE v.embedding MATCH ? AND v.k = ? AND b.is_deleted = 0`
     const params: Array<string | number | Float32Array> = [
       target.id,
       new Float32Array(query),

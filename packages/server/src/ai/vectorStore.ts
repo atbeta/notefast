@@ -174,7 +174,8 @@ export class JsonVectorStore implements VectorStore {
       SELECT v.block_id, v.embedding, b.content, b.root_id
       FROM block_vectors v
       JOIN blocks b ON b.id = v.block_id
-      WHERE v.embedding_model = ? AND v.dim = ? AND v.index_version = ?`
+      WHERE v.embedding_model = ? AND v.dim = ? AND v.index_version = ?
+        AND b.is_deleted = 0`
     const params: Array<string | number> = [
       options.modelFingerprint,
       query.length,

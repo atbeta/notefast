@@ -84,6 +84,33 @@ describe('向量元数据', () => {
     expect(row.updated_at).not.toBe('')
   })
 
+  test('软删除 block 的向量不参与检索（幽灵向量隔离）', async () => {
+    seedBlock('live', 'live content')
+    seedBlock('ghost', 'ghost content')
+    const store = new JsonVectorStore()
+    await store.init()
+    await store.upsert({
+      blockId: 'live',
+      vector: new Float64Array([1, 0]),
+      modelFingerprint: 'model-a',
+      contentHash: contentHash('live content'),
+    })
+    await store.upsert({
+      blockId: 'ghost',
+      vector: new Float64Array([1, 0]),
+      modelFingerprint: 'model-a',
+      contentHash: contentHash('ghost content'),
+    })
+    // 软删除后（向量行未清理的场景）检索仍不得命中
+    getDb().query('UPDATE blocks SET is_deleted = 1 WHERE id = ?').run('ghost')
+
+    const hits = await store.search(new Float64Array([1, 0]), {
+      limit: 10,
+      modelFingerprint: 'model-a',
+    })
+    expect(hits.map((h) => h.block_id)).toEqual(['live'])
+  })
+
   test('模型不匹配或 legacy 向量不会参与检索', async () => {
     seedBlock('current', 'current content')
     seedBlock('legacy', 'legacy content')

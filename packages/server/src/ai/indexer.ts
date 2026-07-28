@@ -163,7 +163,7 @@ export async function indexAllBlocks(notebookId?: string): Promise<{ indexed: nu
   }
 
   const db = getDb()
-  let sql = 'SELECT id, content FROM blocks WHERE content IS NOT NULL AND content != ?'
+  let sql = 'SELECT id, content FROM blocks WHERE content IS NOT NULL AND content != ? AND is_deleted = 0'
   const params: string[] = ['']
   if (notebookId) {
     sql += ' AND notebook_id = ?'

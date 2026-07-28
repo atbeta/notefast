@@ -73,10 +73,10 @@ function loadDocIdsByStatus(docIds: Iterable<string>, status: string): Set<strin
   return matched
 }
 
-/** 取某文档下所有 block id（含 root），用于批量 purge / reindex */
+/** 取某文档下所有 block id（含 root，仅未删除），用于批量 purge / reindex */
 export function loadDocBlockIds(docId: string): string[] {
   const rows = getDb()
-    .query('SELECT id FROM blocks WHERE root_id = ? OR id = ?')
+    .query('SELECT id FROM blocks WHERE (root_id = ? OR id = ?) AND is_deleted = 0')
     .all(docId, docId) as Array<{ id: string }>
   return rows.map((r) => r.id)
 }
