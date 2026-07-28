@@ -12,6 +12,8 @@ import {
   Inbox,
   Archive,
   Share2,
+  Globe,
+  ChevronDown,
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
@@ -20,7 +22,7 @@ import MarkdownEditor from '../components/MarkdownEditor'
 import TagEditor from '../components/TagEditor'
 import ConfirmDialog from '../components/ConfirmDialog'
 import PageHeader from '../components/PageHeader'
-import ShareDialog from '../components/ShareDialog'
+import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
 import { useAiChatOpen } from '../components/Layout'
 import { scrollToElement } from '../lib/scroll'
 import { formatRelative } from '../lib/time'
@@ -73,6 +75,8 @@ export default function DocPage() {
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showShare, setShowShare] = useState(false)
+  const [docShared, setDocShared] = useState(false)
+  const shareBtnRef = useRef<HTMLButtonElement>(null)
 
   const [titleDraft, setTitleDraft] = useState('')
   const [generatingTitle, setGeneratingTitle] = useState(false)
@@ -134,6 +138,20 @@ export default function DocPage() {
       clearTimeout(skeletonTimer)
     }
   }, [id, refreshKey])
+
+  // 分享状态：切换文档时拉取，供顶栏图标区分「已公开」
+  useEffect(() => {
+    if (!id) {
+      setDocShared(false)
+      return
+    }
+    let cancelled = false
+    setDocShared(false)
+    void fetchDocShared(id).then((shared) => {
+      if (!cancelled) setDocShared(shared)
+    })
+    return () => { cancelled = true }
+  }, [id])
 
   // 创建/导入后的向量化进度（?index_job=）
   useEffect(() => {
@@ -377,12 +395,24 @@ export default function DocPage() {
             )}
             <div className="w-px h-4 bg-border/60 mx-1" />
             <button
+              ref={shareBtnRef}
               type="button"
-              onClick={() => setShowShare(true)}
-              className="btn-icon-ghost text-muted-foreground hover:text-foreground"
-              title="分享文档"
+              onClick={() => setShowShare((v) => !v)}
+              className={`inline-flex items-center justify-center gap-0.5 h-7 rounded-md transition-colors ${
+                docShared
+                  ? 'px-1.5 text-foreground bg-muted/70 hover:bg-muted'
+                  : 'w-7 text-muted-foreground hover:text-foreground hover:bg-accent'
+              }`}
+              title={docShared ? '已公开分享' : '分享文档'}
+              aria-expanded={showShare}
+              aria-haspopup="dialog"
             >
-              <Share2 className="w-3.5 h-3.5" />
+              {docShared
+                ? <Globe className="w-3.5 h-3.5" strokeWidth={1.75} />
+                : <Share2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
+              {docShared && (
+                <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform ${showShare ? 'rotate-180' : ''}`} strokeWidth={2} />
+              )}
             </button>
             <button
               type="button"
@@ -632,7 +662,14 @@ export default function DocPage() {
         onCancel={() => setShowDelete(false)}
       />
 
-      {showShare && id && <ShareDialog docId={id} onClose={() => setShowShare(false)} />}
+      {showShare && id && (
+        <ShareDialog
+          docId={id}
+          anchorRef={shareBtnRef}
+          onClose={() => setShowShare(false)}
+          onSharedChange={setDocShared}
+        />
+      )}
     </div>
   )
 }
