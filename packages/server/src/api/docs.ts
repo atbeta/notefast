@@ -24,6 +24,7 @@ import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { writeDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
 import { readDocAiExclude } from '../ai/aiExcludeQuery'
 import { scheduleDocIndex } from '../ai/indexJobs'
+import { buildDocExportFile, contentDispositionAttachment } from '../services/docExport'
 
 const docs = new Hono()
 
@@ -438,6 +439,27 @@ docs.get('/:id/export/markdown', (c) => {
 
   const markdown = blocksToMarkdown(tree)
   return c.json({ markdown })
+})
+
+/**
+ * 单文档文件下载：无图 → .md；有可用图片 → .zip（Markdown + media/，asset: 改写为相对路径）。
+ * 编辑器加载仍走 /export/markdown（JSON）。
+ */
+docs.get('/:id/export/file', (c) => {
+  const id = c.req.param('id')
+  const file = buildDocExportFile(id)
+  if (!file) {
+    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
+  }
+
+  return new Response(Buffer.from(file.body), {
+    status: 200,
+    headers: {
+      'Content-Type': file.contentType,
+      'Content-Disposition': contentDispositionAttachment(file.filename),
+      'Cache-Control': 'no-store',
+    },
+  })
 })
 
 export default docs

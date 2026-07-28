@@ -11,6 +11,7 @@ import {
   Archive,
   ArchiveRestore,
   ArrowUpRight,
+  Download,
   Eye,
   EyeOff,
   ExternalLink,
@@ -20,7 +21,8 @@ import {
   Trash2,
 } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
-import { api } from '../hooks/useAPI'
+import { api, fetchWithAuth } from '../hooks/useAPI'
+import { parseContentDispositionFilename, triggerBlobDownload } from '../lib/download'
 import ConfirmDialog from './ConfirmDialog'
 import ShareDialog from './ShareDialog'
 import { useToast } from './ui'
@@ -192,6 +194,30 @@ export default function DocActionsMenu({
     }
   }
 
+  const handleExport = async () => {
+    setBusy(true)
+    close()
+    try {
+      const res = await fetchWithAuth(`/docs/${doc.id}/export/file`)
+      if (!res.ok) {
+        toast.error({ title: '导出失败' })
+        return
+      }
+      const blob = await res.blob()
+      const filename =
+        parseContentDispositionFilename(res.headers.get('Content-Disposition'))
+        || (blob.type.includes('zip') ? `${title}.zip` : `${title}.md`)
+      triggerBlobDownload(blob, filename)
+      toast.success({
+        title: filename.endsWith('.zip') ? '已导出（含图片）' : '已导出 Markdown',
+      })
+    } catch {
+      toast.error({ title: '导出失败' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const handleDelete = async () => {
     setBusy(true)
     try {
@@ -264,7 +290,13 @@ export default function DocActionsMenu({
     },
   })
 
-  // 导出位：单文档导出落地后在此插入（Markdown / zip）
+  items.push({
+    id: 'export',
+    label: '导出',
+    icon: <Download className={iconCls} strokeWidth={iconStroke} />,
+    onSelect: () => { void handleExport() },
+    disabled: busy,
+  })
 
   items.push({
     id: 'ai-exclude',
