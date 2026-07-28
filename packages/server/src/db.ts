@@ -115,11 +115,20 @@ export function getDbPath(): string {
 }
 
 function initApiKey(dataDir: string): void {
-  const keyPath = join(dataDir, 'api.key')
   if (process.env.API_TOKEN) return
 
-  // 重启场景：api.key 已存在但 env 未设置时，必须加载进 env。
-  // 否则 authMiddleware 看到所有鉴权变量为空，会静默退化为全 admin 放行。
+  // 未显式配置任何鉴权时保持免鉴权（本地开发默认）：不生成也不加载 api.key。
+  // 自动生成的 key 不应单方面把实例从免鉴权翻成强制鉴权——Web UI 没有密码可登录，
+  // 只会全面 401。免鉴权状态由启动时的醒目告警（index.ts）提示。
+  const authConfigured = ['AUTH_PASSWORD', 'READ_TOKEN', 'WRITE_TOKEN'].some(
+    (k) => (process.env[k] || '').trim().length > 0,
+  )
+  if (!authConfigured) return
+
+  const keyPath = join(dataDir, 'api.key')
+
+  // 重启场景（鉴权已配置）：api.key 已存在但 env 未设置时加载进 env，
+  // 保持 MCP/API 的 Bearer token 跨重启稳定，不重新生成。
   if (existsSync(keyPath)) {
     try {
       const key = readFileSync(keyPath, 'utf-8').trim()
