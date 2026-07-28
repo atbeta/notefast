@@ -6,14 +6,38 @@ import { getBlockById, getBlocksByIds } from '../store/blocks'
 import { fireAfterCreate, fireAfterCreateMany } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { EmptyMarkdownError, insertDocFromMarkdown, type InsertDocFromMarkdownResult } from '../services/docImport'
+import {
+  createDocFromMarkdownFile,
+  DocFileImportError,
+  extractTitleFromMarkdown,
+} from '../services/docFileImport'
+import { MAX_MARKDOWN_IMPORT_BYTES } from '../services/markdownStage'
 import { scheduleDocIndex } from '../ai/indexJobs'
 
 const importRouter = new Hono()
 
+function respondCreated(
+  result: InsertDocFromMarkdownResult,
+  markdown: string,
+) {
+  const db = getDb()
+  const docRow = getBlockById(db, result.docId)!
+  const indexJob = scheduleDocIndex(result.docId, result.blockIds)
+  fireAfterCreate(rowToBlock(docRow))
+  fireAfterCreateMany(getBlocksByIds(db, result.blockIds).map(rowToBlock))
+  const missingAssets = findMissingAssets(extractAssetRefs(markdown))
+  return {
+    doc: rowToBlock(docRow),
+    block_count: result.blockIds.length + 1,
+    ...(indexJob ? { index_job: indexJob } : {}),
+    ...(missingAssets.length > 0 ? { missing_assets: missingAssets } : {}),
+  }
+}
+
 importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => {
   const db = getDb()
   const input = c.req.valid('json')
-  const title = input.title || extractTitle(input.markdown) || '未命名文档'
+  const title = input.title || extractTitleFromMarkdown(input.markdown) || '未命名文档'
 
   let result: InsertDocFromMarkdownResult
   try {
@@ -31,31 +55,76 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
     }
     throw e
   }
-  const { docId, blockIds } = result
 
-  // Hook 触发（fire-and-forget）：先 doc，再批量子块；大文档索引进度走 scheduleDocIndex
-  const docRow = getBlockById(db, docId)!
-  const indexJob = scheduleDocIndex(docId, blockIds)
-  fireAfterCreate(rowToBlock(docRow))
-  fireAfterCreateMany(getBlocksByIds(db, blockIds).map(rowToBlock))
-
-  // asset 引用对账：悬空引用不阻断导入（可能来自其他实例的导出），但如实告知调用方
-  const missingAssets = findMissingAssets(extractAssetRefs(input.markdown))
-
-  return c.json(
-    {
-      doc: rowToBlock(docRow),
-      block_count: blockIds.length + 1,
-      ...(indexJob ? { index_job: indexJob } : {}),
-      ...(missingAssets.length > 0 ? { missing_assets: missingAssets } : {}),
-    },
-    201,
-  )
+  return c.json(respondCreated(result, input.markdown), 201)
 })
 
-function extractTitle(markdown: string): string | null {
-  const match = markdown.match(/^#\s+(.+)/m)
-  return match ? match[1].trim() : null
+/**
+ * multipart 文件导入：字段 file（必填）、notebook_id（必填）、title / status / tags（可选）。
+ * tags 可为 JSON 数组字符串或逗号分隔。
+ */
+importRouter.post('/file', async (c) => {
+  const body = await c.req.parseBody({ all: true })
+  const notebookId = typeof body['notebook_id'] === 'string' ? body['notebook_id'].trim() : ''
+  if (!notebookId) {
+    return c.json({ error: 'bad_request', message: '缺少 notebook_id' }, 400)
+  }
+
+  const fileField = body['file']
+  if (!fileField || typeof fileField === 'string') {
+    return c.json({ error: 'bad_request', message: '缺少 file 字段（multipart 文件）' }, 400)
+  }
+
+  const file = fileField as File
+  const buf = Buffer.from(await file.arrayBuffer())
+  if (buf.byteLength === 0) {
+    return c.json({ error: 'bad_request', message: '文件内容为空' }, 400)
+  }
+  if (buf.byteLength > MAX_MARKDOWN_IMPORT_BYTES) {
+    return c.json({
+      error: 'bad_request',
+      message: `文件不得超过 ${MAX_MARKDOWN_IMPORT_BYTES} 字节`,
+    }, 400)
+  }
+
+  const content = buf.toString('utf8')
+  const title = typeof body['title'] === 'string' ? body['title'] : undefined
+  const statusRaw = typeof body['status'] === 'string' ? body['status'] : undefined
+  const status = statusRaw === 'inbox' || statusRaw === 'note' ? statusRaw : undefined
+  const tags = parseTagsField(body['tags'])
+
+  const db = getDb()
+  try {
+    const result = createDocFromMarkdownFile(db, {
+      notebookId,
+      content,
+      title,
+      filename: file.name || undefined,
+      status,
+      tags,
+    })
+    return c.json(respondCreated(result, result.markdown), 201)
+  } catch (e) {
+    if (e instanceof DocFileImportError) {
+      return c.json({ error: 'bad_request', message: e.message }, 400)
+    }
+    throw e
+  }
+})
+
+function parseTagsField(raw: unknown): string[] | undefined {
+  if (typeof raw !== 'string' || !raw.trim()) return undefined
+  const s = raw.trim()
+  if (s.startsWith('[')) {
+    try {
+      const arr = JSON.parse(s) as unknown
+      if (!Array.isArray(arr)) return undefined
+      return arr.filter((t): t is string => typeof t === 'string' && t.trim().length > 0).slice(0, 64)
+    } catch {
+      return undefined
+    }
+  }
+  return s.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 64)
 }
 
 export default importRouter

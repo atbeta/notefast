@@ -5,6 +5,7 @@
  * - docRead.ts   只读：search / get_doc / get_block / get_doc_tree /
  *                export_markdown / get_backlinks + 2 个 resource
  * - docWrite.ts  写入与列表：create_block / update_block / create_doc /
+ *                stage_markdown / create_doc_from_file /
  *                list_docs / list_tags / set_doc_tags
  * - aiChat.ts    AI：semantic_search / suggest_title / chat / get_config
  * - autoLink.ts  AutoLink：suggestions / apply / dismiss / revert / run /

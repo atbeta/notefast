@@ -1,8 +1,9 @@
 /**
  * MCP 工具 —— 文档写入与列表组
  *
- * notefast_create_block / update_block / create_doc / list_docs /
- * list_tags / set_doc_tags。
+ * notefast_create_block / update_block / create_doc /
+ * stage_markdown / create_doc_from_file /
+ * list_docs / list_tags / set_doc_tags。
  */
 
 import { z } from 'zod'
@@ -16,6 +17,15 @@ import {
   rowToBlock,
 } from '@notefast/core'
 import { insertDocFromMarkdown } from '../../services/docImport'
+import {
+  createDocFromMarkdownFile,
+  DocFileImportError,
+} from '../../services/docFileImport'
+import {
+  MAX_STAGE_CHUNK_BYTES,
+  StageError,
+  stageMarkdownChunk,
+} from '../../services/markdownStage'
 import {
   fetchDeletedSubtreeIds,
   getBlockAnchor,
@@ -131,11 +141,12 @@ export function registerDocWriteTools(ctx: ToolContext): void {
   registerTool(
     'notefast_create_doc',
     {
-      description: '从 Markdown 创建文档（可指定 status=inbox 创建到收集箱）',
+      description:
+        '从短 Markdown 字符串创建文档（适合几段以内）。长文/本地文件请用 notefast_stage_markdown + notefast_create_doc_from_file，避免正文经模型转写导致换行丢失。',
       inputSchema: {
         notebook_id: z.string().optional().describe('笔记本 ID，默认使用默认笔记本'),
         title: z.string().describe('文档标题'),
-        markdown: z.string().describe('Markdown 内容'),
+        markdown: z.string().describe('Markdown 内容（短文）'),
         status: z.enum(['note', 'inbox']).optional().describe('inbox=收集箱；缺省 note'),
       },
     },
@@ -169,6 +180,91 @@ export function registerDocWriteTools(ctx: ToolContext): void {
             return missing.length > 0 ? { missing_assets: missing } : {}
           })(),
         })],
+      }
+    },
+  )
+
+  registerTool(
+    'notefast_stage_markdown',
+    {
+      description:
+        '分块上传 Markdown 正文到服务端暂存（大文件建档用）。返回 upload_id；继续追加时传入同一 upload_id。单次 chunk 建议 ≤64KiB。完成后调用 notefast_create_doc_from_file(upload_id=...)。',
+      inputSchema: {
+        chunk: z.string().min(1).describe('本段 Markdown 原文（勿改写换行）'),
+        upload_id: z.string().optional().describe('续传时传入；首块省略由服务端生成'),
+      },
+    },
+    async ({ chunk, upload_id }) => {
+      try {
+        const r = stageMarkdownChunk(chunk, upload_id)
+        return {
+          content: [toText({
+            upload_id: r.upload_id,
+            size: r.size,
+            max_chunk_bytes: MAX_STAGE_CHUNK_BYTES,
+            next: '继续 stage 或调用 notefast_create_doc_from_file',
+          })],
+        }
+      } catch (e) {
+        if (e instanceof StageError) {
+          return toolError(e.code, e.message)
+        }
+        throw e
+      }
+    },
+  )
+
+  registerTool(
+    'notefast_create_doc_from_file',
+    {
+      description:
+        '从文件正文创建文档：传 content（小文件一次上传）或 upload_id（先 stage_markdown 分块）。服务端按 Markdown 解析为多 block；会规范化换行并尽量修复字面量 \\n 损坏。长文请走 upload_id，勿用 create_doc。',
+      inputSchema: {
+        notebook_id: z.string().optional().describe('笔记本 ID，默认使用默认笔记本'),
+        content: z.string().optional().describe('完整 Markdown 文件正文；与 upload_id 二选一'),
+        upload_id: z.string().optional().describe('notefast_stage_markdown 返回的 id；与 content 二选一'),
+        filename: z.string().optional().describe('原文件名（用于推断标题，如 notes/foo.md）'),
+        title: z.string().optional().describe('文档标题；缺省用 filename 或首个 H1'),
+        status: z.enum(['note', 'inbox']).optional().describe('inbox=收集箱；缺省 note'),
+        tags: z.array(z.string().min(1).max(64)).max(64).optional().describe('初始标签'),
+      },
+    },
+    async ({ notebook_id, content, upload_id, filename, title, status, tags }) => {
+      const nid = notebook_id || notebookId
+      const nbErr = validateNotebook(db, nid)
+      if (nbErr) return nbErr
+
+      try {
+        const result = createDocFromMarkdownFile(db, {
+          notebookId: nid,
+          content,
+          uploadId: upload_id,
+          filename,
+          title,
+          status,
+          tags,
+        })
+
+        const docRow = getBlockById(db, result.docId)!
+        const indexJob = scheduleDocIndex(result.docId, result.blockIds)
+        fireAfterCreate(rowToBlock(docRow))
+        fireAfterCreateMany(getBlocksByIds(db, result.blockIds).map(rowToBlock))
+        const missing = findMissingAssets(extractAssetRefs(result.markdown))
+
+        return {
+          content: [toText({
+            doc_id: result.docId,
+            title: result.title,
+            block_count: result.parsedCount + 1,
+            ...(indexJob ? { index_job: indexJob } : {}),
+            ...(missing.length > 0 ? { missing_assets: missing } : {}),
+          })],
+        }
+      } catch (e) {
+        if (e instanceof DocFileImportError) {
+          return toolError(e.code, e.message)
+        }
+        throw e
       }
     },
   )
