@@ -22,6 +22,7 @@ import BlockRenderer from '../components/BlockRenderer'
 import MarkdownEditor from '../components/MarkdownEditor'
 import TagEditor from '../components/TagEditor'
 import ConfirmDialog from '../components/ConfirmDialog'
+import EntityPanel from '../components/EntityPanel'
 import PageHeader from '../components/PageHeader'
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
 import { useAiChatOpen } from '../components/Layout'
@@ -724,6 +725,7 @@ export default function DocPage() {
               <BacklinksView backlinks={backlinks} loading={auxLoading} />
             </section>
 
+            {id && <EntityPanel docId={id} variant="aside" />}
           </div>
         </div>
       )}
@@ -739,6 +741,8 @@ export default function DocPage() {
           <h3 className="text-sm font-medium text-foreground mb-3">反向链接</h3>
           <BacklinksView backlinks={backlinks} loading={auxLoading} />
         </section>
+
+        {id && <EntityPanel docId={id} variant="stack" />}
       </div>
 
       <ConfirmDialog

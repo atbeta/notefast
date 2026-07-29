@@ -26,6 +26,7 @@ import type { PluginSystem } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks, getDocById } from '../store/blocks'
 import { deleteRefsFromSource } from '../store/refs'
+import { deleteMentionsFromSource } from '../store/entities'
 import { indexBlock, deleteVector } from '../ai/indexer'
 import { getLatestIndexJobForDoc, scheduleDocIndex } from '../ai/indexJobs'
 import { analyzeBlock } from '../ai/autoLink'
@@ -240,7 +241,6 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
   const max = al.maxPerBlock
 
   pluginSystem.note.afterCreate.tap(AUTOLINK_HOOK_NAME, async (block) => {
-    if (block.type === 'document') return // doc 头不分析
     if (isBlockAiExcluded(block.id)) return
     if (isDocInboxOrArchived(block)) return
     await analyzeBlock({
@@ -249,23 +249,26 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
       notebookId: block.notebook_id,
       notebookScope: scope,
       maxPerBlock: max,
+      // 文档根（标题）：强实体信号，只登记实体不建链
+      entitiesOnly: block.type === 'document',
     }).catch((e) => console.warn('[autoLink] afterCreate:', e instanceof Error ? e.message : e))
   })
   pluginSystem.note.afterUpdate.tap(AUTOLINK_HOOK_NAME, async (block) => {
-    if (block.type === 'document') return
     if (isBlockAiExcluded(block.id)) return
     if (isDocInboxOrArchived(block)) return
-    // 内容变化 = 旧链重评：先清掉该块发出的 ai_auto 引用，再按新内容重建
+    // 内容变化 = 旧链/旧提及重评：双清理（该块发出的 ai_auto 引用 + 实体提及），再按新内容重建
     deleteRefsFromSource(getDb(), block.id, 'ai_auto')
+    deleteMentionsFromSource(getDb(), block.id)
     await analyzeBlock({
       blockId: block.id,
       content: block.content,
       notebookId: block.notebook_id,
       notebookScope: scope,
       maxPerBlock: max,
+      entitiesOnly: block.type === 'document',
     }).catch((e) => console.warn('[autoLink] afterUpdate:', e instanceof Error ? e.message : e))
   })
-  // 块软删除的引用级联由 store 层 deleteRefsTouchingBlocks 覆盖，无需 afterDelete hook
+  // 块软删除的引用/提及级联由 store 层 deleteRefsTouchingBlocks + deleteMentionsTouchingBlocks 覆盖，无需 afterDelete hook
   console.log('🧠 AI auto-link hooks attached')
 }
 

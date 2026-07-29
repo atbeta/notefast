@@ -180,6 +180,30 @@ export function up(db: Database): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_shares_token ON shares(token);
+
+    -- 图谱实体层：block→entity 提及边（与 block_refs 并列的第二类边）。
+    -- name 为规范化名（trim→lowercase→去首尾标点→压缩空白），display 为首个 surface 写法；
+    -- mention_count 冗余计数（列表排序 / 归零清理）。软删除不走 FK，由 store 层显式级联。
+    CREATE TABLE IF NOT EXISTS entities (
+      id            TEXT PRIMARY KEY,
+      name          TEXT NOT NULL,
+      display       TEXT NOT NULL,
+      kind          TEXT NOT NULL,
+      mention_count INTEGER NOT NULL DEFAULT 0,
+      created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_entities_name ON entities(name);
+
+    CREATE TABLE IF NOT EXISTS entity_mentions (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity_id  TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+      block_id   TEXT NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
+      surface    TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(entity_id, block_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_entity_mentions_block ON entity_mentions(block_id);
   `)
 
   // triggers

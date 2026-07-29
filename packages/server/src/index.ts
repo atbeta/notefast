@@ -29,6 +29,7 @@ import sync from './api/sync'
 import backup from './api/backup'
 import ai from './api/ai'
 import autoLink from './api/autoLink'
+import entities, { docEntities } from './api/entities'
 import tags from './api/tags'
 import assets from './api/assets'
 import apiTokens from './api/apiTokens'
@@ -146,6 +147,8 @@ app.route('/api/v1/sync', sync)
 app.route('/api/v1/backup', backup)
 app.route('/api/v1/ai', ai)
 app.route('/api/v1/auto-link', autoLink)
+app.route('/api/v1/entities', entities)
+app.route('/api/v1/docs', docEntities)
 app.route('/api/v1/tags', tags)
 app.route('/api/v1/assets', assets)
 app.route('/api/v1/api-tokens', apiTokens)

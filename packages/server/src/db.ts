@@ -59,6 +59,7 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
  * v5 → v6：向量双 hash——block_vectors / vector_entries 新增 source_content_hash
  *          （= block.content 原文 hash，并发写保护用；content_hash 改为索引文本 hash），
  *          并按 blocks 现内容回填
+ * v6 → v7：图谱实体层——新增 entities / entity_mentions 表（block→entity 提及边）
  */
 function applySchemaMigrations(database: Database): void {
   const current = getSchemaVersion(database)
@@ -140,6 +141,35 @@ function applySchemaMigrations(database: Database): void {
     backfill('block_vectors')
     backfill('vector_entries')
     database.exec(`PRAGMA user_version = 6`)
+  }
+  if (getSchemaVersion(database) < 7) {
+    // 图谱数据层第二类边：entity_mentions（block→entity 提及）。
+    // 与 block_refs（block↔block）并列；一次 LLM 抽取同时喂建链与实体登记两条线。
+    // 归并策略：规范化名精确匹配（idx_entities_name UNIQUE），不做 embedding 消歧。
+    // mention_count 为冗余计数（列表排序/归零清理）；软删除不走 FK，由 store 层显式级联。
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS entities (
+        id            TEXT PRIMARY KEY,
+        name          TEXT NOT NULL,
+        display       TEXT NOT NULL,
+        kind          TEXT NOT NULL,
+        mention_count INTEGER NOT NULL DEFAULT 0,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_entities_name ON entities(name);
+
+      CREATE TABLE IF NOT EXISTS entity_mentions (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_id  TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+        block_id   TEXT NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
+        surface    TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(entity_id, block_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_entity_mentions_block ON entity_mentions(block_id);
+    `)
+    database.exec(`PRAGMA user_version = 7`)
   }
 }
 

@@ -46,6 +46,7 @@ autoLink.post('/run', zValidator('json', runSchema), async (c) => {
     analyzed: result.analyzed,
     applied: result.applied,
     links: result.links,
+    entities: result.entities,
     errors: result.errors,
     rate_limited: result.rateLimited === true,
     skipped_low_confidence: result.skippedLowConfidence ?? 0,
@@ -72,6 +73,7 @@ autoLink.post('/run-batch', zValidator('json', runBatchSchema), async (c) => {
   const cfg = getRuntime().autoLinkConfig()
   let total = 0
   let applied = 0
+  let entities = 0
   let errors = 0
   for (const row of rows) {
     try {
@@ -84,12 +86,13 @@ autoLink.post('/run-batch', zValidator('json', runBatchSchema), async (c) => {
       })
       total++
       applied += r.applied
+      entities += r.entities
       errors += r.errors.length
     } catch {
       errors++
     }
   }
-  return c.json({ processed: total, applied, errors })
+  return c.json({ processed: total, applied, entities, errors })
 })
 
 /** 解除某对 block 之间的引用（用户想 undo） */

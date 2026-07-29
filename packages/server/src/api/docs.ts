@@ -17,12 +17,14 @@ import {
   nowTimestamp,
 } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
+import { deleteMentionsTouchingBlocks } from '../store/entities'
 import { getShareByDocId, createShare, deleteShare, setShareExpiry, deleteSharesByDocIds } from '../store/shares'
 import { insertDocFromMarkdown, insertChildBlocks } from '../services/docImport'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { writeDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
 import { readDocAiExclude } from '../ai/aiExcludeQuery'
+import { reanalyzeDoc } from '../ai/autoLink'
 import { scheduleDocIndex } from '../ai/indexJobs'
 import { buildDocExportFile, contentDispositionAttachment } from '../services/docExport'
 
@@ -178,6 +180,7 @@ docs.patch('/:id/status', zValidator('json', updateDocStatusSchema), (c) => {
   if (!docRow) {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
+  const oldStatus = readDocStatus(docRow)
 
   updateBlock(db, id, { status })
 
@@ -186,6 +189,12 @@ docs.patch('/:id/status', zValidator('json', updateDocStatusSchema), (c) => {
   let shareRevoked = false
   if (status === 'archived') {
     shareRevoked = deleteShare(db, id)
+  }
+
+  // 升格（inbox/archived → note）：文档重新进入流通，全 doc 重抽补齐实体与链
+  // （fireAfterUpdate 只触发文档根，子块不经 hook；fire-and-forget，限速自然生效）
+  if (status === 'note' && (oldStatus === 'inbox' || oldStatus === 'archived')) {
+    reanalyzeDoc(id)
   }
 
   const updatedRow = getBlockById(db, id)!
@@ -364,6 +373,7 @@ docs.delete('/:id', (c) => {
 
   db.transaction(() => {
     deleteRefsTouchingBlocks(db, allIds)
+    deleteMentionsTouchingBlocks(db, allIds)
     softDeleteBlocks(db, allIds)
     // 删除即切断公开链接（恢复文档不复活旧 token，需重新开启）
     deleteSharesByDocIds(db, [id])
@@ -396,6 +406,7 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
 
   db.transaction(() => {
     deleteRefsTouchingBlocks(db, oldChildIds)
+    deleteMentionsTouchingBlocks(db, oldChildIds)
     softDeleteBlocks(db, oldChildIds)
 
     updateBlock(db, id, { content: newTitle })

@@ -1,14 +1,13 @@
 /**
- * AutoLink 引擎（v4 —— 高置信直接建链，无人工审核）
+ * AutoLink 引擎 —— 写入时实体理解引擎（高置信直接建链，无人工审核）
  *
- * 流程：
- *   1) LLM 从块内容里抽出 mention 列表（严格 JSON；不抽工具/API/函数名）
- *   2) kind 过滤（excludeAnchorKinds，默认丢 tool）
- *   3) 每个 mention.anchor 去命中现有 block（hybrid search；excludeSelfDoc 排除同文档；
- *      ai_exclude / inbox / archived 文档不作候选）
- *   4) 建链门槛：top-1 必须语义命中（embedding/hybrid）且 ≥ minConfidence，
+ * 一次 LLM 抽取，mentions 同时喂两条消费线：
+ *   1) 实体登记（ai/entities.registerMentions）：不过滤 kind，全量 → entities + entity_mentions
+ *   2) 建链：kind 过滤（excludeAnchorKinds，默认丢 tool）+ 候选命中（hybrid search；
+ *      excludeSelfDoc 排除同文档；ai_exclude / inbox / archived 文档不作候选）
+ *      → 建链门槛：top-1 必须语义命中（embedding/hybrid）且 ≥ minConfidence，
  *      且与 top-2 的分差 ≥ minMargin —— 满足即直接写 block_refs（ref_type='ai_auto'）
- *   5) 不满足即静默跳过（记入 skippedAnchors 便于排查）；没有任何中间状态与审核队列
+ *   3) 不满足即静默跳过（记入 skippedAnchors 便于排查）；没有任何中间状态与审核队列
  *
  * 评分语义（沿用 v3）：
  *   - FTS-only: confidence = 1 - rank/N，score_kind='fts_rank'，永远达不到建链门槛
@@ -28,10 +27,11 @@ import {
   type ChatMessage,
 } from '@notefast/core'
 import { getDb } from '../db'
-import { getBlockById } from '../store/blocks'
+import { getBlockById, fetchDocBlocks } from '../store/blocks'
 import { findRefByPair, insertRef } from '../store/refs'
 import { lexicalSearch } from '../lexicalSearch'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
+import { registerMentions } from './entities'
 import { embeddingFingerprint, getVectorStore } from './vectorStore'
 import {
   isBlockAiExcluded,
@@ -40,17 +40,17 @@ import {
   loadInboxDocIds,
 } from './aiExcludeQuery'
 
-const EXTRACT_SYSTEM_PROMPT = `你是 NoteFast 的实体抽取助手。从用户给定的笔记内容中识别可以建立反向链接的具体名词短语（"锚点"）。
+const EXTRACT_SYSTEM_PROMPT = `你是 NoteFast 的实体抽取助手。从用户给定的笔记内容中识别关键实体（概念 / 人物 / 工具 / 项目）作为名词短语（"锚点"）。
 
 严格规则：
-- 输出必须是合法 JSON：{"mentions": [{"anchor":"...", "kind":"concept|person|doc"} , ...]}
+- 输出必须是合法 JSON：{"mentions": [{"anchor":"...", "kind":"concept|person|tool|doc"} , ...]}
 - anchor 必须 ≥3 字、最长 20 字，在原文里逐字出现
 - 排除：停用词、人称代词、纯数字、纯标点、连接词
-- 排除：工具名、API 名、函数名、命令行、代码标识符（如 snake_case / camelCase / 带前缀的名称）——提及工具不等于需要链接
+- 工具 / 项目 / 产品名也要抽取（kind=tool）——它们是知识图谱中的一等实体
 - 同一 anchor 在同一块内只出现一次
-- 最多输出 3 个 mentions；过短或没具体名词时返回 {"mentions": []}
+- 最多输出 5 个 mentions；过短或没具体名词时返回 {"mentions": []}
 - 拿不准就不要输出：锚点贵精不贵多
-- kind 只能是 concept / person / doc 之一`
+- kind 只能是 concept / person / tool / doc 之一`
 
 const MAX_CONTENT_CHARS = 1500
 
@@ -60,6 +60,8 @@ export interface AnalyzeOptions {
   notebookId?: string
   notebookScope: 'all' | 'same'
   maxPerBlock: number
+  /** true = 只登记实体不建链（文档根块：标题是强实体信号，但不作链接源） */
+  entitiesOnly?: boolean
 }
 
 /** 一条已自动建立的链接 */
@@ -76,6 +78,8 @@ export interface AnalyzeResult {
   applied: number
   /** 建立的链接明细（anchor → 目标块） */
   links: AutoLinkAppliedLink[]
+  /** 本次登记的不同实体数（实体不过 kind 过滤，全量登记） */
+  entities: number
   errors: string[]
   /** true = 命中全局限速，本次未执行抽取（不视为错误） */
   rateLimited?: boolean
@@ -137,7 +141,8 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
   if (isBlockAiExcluded(opts.blockId)) return empty()
 
   const trimmed = opts.content.trim().slice(0, MAX_CONTENT_CHARS)
-  if (trimmed.length < 10) return empty()
+  // 文档根（标题）只登记实体：标题短，下限放宽到 3 字（抽取层 anchor 本身 ≥3 字）
+  if (trimmed.length < (opts.entitiesOnly ? 3 : 10)) return empty()
 
   const cfg = runtime.autoLinkConfig()
 
@@ -150,21 +155,31 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
 
   let mentions: Mention[]
   try {
-    mentions = await extractMentions(runtime, trimmed, max)
+    mentions = await extractMentions(runtime, trimmed)
   } catch (e) {
     runtime.recordAutoLink(false, e instanceof Error ? e.message : String(e))
     return { ...empty(), errors: [e instanceof Error ? e.message : String(e)] }
   }
 
-  // kind 过滤：默认丢弃 tool 类锚点（工具名 → 工具描述是同义反复，不构成有效链接）
-  const excludedKinds = new Set((cfg.excludeAnchorKinds ?? DEFAULT_AUTO_LINK_EXCLUDE_KINDS).map((k) => k.toLowerCase()))
-  if (excludedKinds.size > 0) {
-    mentions = mentions.filter((m) => !excludedKinds.has(m.kind.toLowerCase()))
+  // 实体登记：一次抽取的第二条消费线——不过滤 kind、不受 maxPerBlock 限制，全量登记
+  const entities = registerMentions(opts.blockId, mentions)
+
+  // 文档根块（标题）：只登记实体不建链
+  if (opts.entitiesOnly) {
+    runtime.recordAutoLink(true)
+    return { ...empty(), analyzed: 1, entities }
   }
 
-  if (mentions.length === 0) {
+  // kind 过滤只作用于建链：默认丢弃 tool 类锚点（工具名 → 工具描述是同义反复，不构成有效链接）
+  const excludedKinds = new Set((cfg.excludeAnchorKinds ?? DEFAULT_AUTO_LINK_EXCLUDE_KINDS).map((k) => k.toLowerCase()))
+  let linkMentions = mentions.slice(0, max)
+  if (excludedKinds.size > 0) {
+    linkMentions = linkMentions.filter((m) => !excludedKinds.has(m.kind.toLowerCase()))
+  }
+
+  if (linkMentions.length === 0) {
     runtime.recordAutoLink(true)
-    return empty()
+    return { ...empty(), analyzed: 1, entities }
   }
 
   const links: AutoLinkAppliedLink[] = []
@@ -177,7 +192,7 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
   const excludeSelfDoc = cfg.excludeSelfDoc ?? DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC
   const sourceDocId = excludeSelfDoc ? (blockRow?.root_id ?? null) : null
 
-  for (const m of mentions) {
+  for (const m of linkMentions) {
     try {
       const ranked = await findCandidates(opts.blockId, m.anchor, opts.notebookId, opts.notebookScope, sourceDocId)
       if (ranked.length === 0) {
@@ -239,6 +254,7 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
     analyzed: 1,
     applied: links.length,
     links,
+    entities,
     errors,
     skippedLowConfidence,
     skippedAnchors: skippedAnchors.length > 0 ? skippedAnchors : undefined,
@@ -246,7 +262,7 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
 }
 
 function empty(): AnalyzeResult {
-  return { analyzed: 0, applied: 0, links: [], errors: [] }
+  return { analyzed: 0, applied: 0, links: [], entities: 0, errors: [] }
 }
 
 // ───────────────────── Extraction ─────────────────────
@@ -259,7 +275,6 @@ interface Mention {
 async function extractMentions(
   runtime: ReturnType<typeof getRuntime>,
   content: string,
-  max: number,
 ): Promise<Mention[]> {
   const messages: ChatMessage[] = [
     { role: 'system', content: EXTRACT_SYSTEM_PROMPT },
@@ -271,8 +286,8 @@ async function extractMentions(
     maxTokens: 1500,
     responseFormat: { type: 'json_object' },
   })
-  const parsed = safeParseMentions(raw, content)
-  return parsed.slice(0, max)
+  // 不在此截断 maxPerBlock：实体登记走全量（prompt 上限 5 个），建链侧再 slice
+  return safeParseMentions(raw, content)
 }
 
 function safeParseMentions(raw: string, sourceContent: string): Mention[] {
@@ -417,4 +432,26 @@ export function listBlockIdsForDoc(docId: string): string[] {
   const db = getDb()
   const rows = db.query('SELECT id FROM blocks WHERE root_id = ?').all(docId) as Array<{ id: string }>
   return rows.map((r) => r.id)
+}
+
+/**
+ * 全 doc 重抽（升格 inbox/archived→note、取消 ai_exclude 后补齐实体与链）。
+ * fire-and-forget 逐块 analyze：全局限速自然生效，不阻塞请求。
+ * 提及/引用均幂等（UNIQUE / findRefByPair），无需先清理。
+ */
+export function reanalyzeDoc(docId: string): void {
+  if (!hasRuntime() || !getRuntime().hasChat()) return
+  const cfg = getRuntime().autoLinkConfig()
+  const db = getDb()
+  const rows = fetchDocBlocks(db, docId)
+  for (const row of rows) {
+    void analyzeBlock({
+      blockId: row.id,
+      content: row.content || '',
+      notebookId: row.notebook_id,
+      notebookScope: cfg.notebookScope,
+      maxPerBlock: cfg.maxPerBlock,
+      entitiesOnly: row.type === 'document',
+    }).catch((e) => console.warn('[autoLink] reanalyzeDoc:', e instanceof Error ? e.message : e))
+  }
 }

@@ -15,6 +15,7 @@
 import { highlightSnippet } from '@notefast/core'
 import { lexicalSearch } from '../lexicalSearch'
 import { semanticSearch } from './indexer'
+import { entitySearch } from './entitySearch'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { loadAiExcludedDocIds, loadInboxDocIds, loadArchivedDocIds } from './aiExcludeQuery'
 
@@ -182,11 +183,30 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
     console.error('[hybridSearch] title channel failed:', e)
   }
 
+  // 实体通道：query 命中实体 → 反查提及块，作为独立 RRF 输入列表。
+  // 实体表为空时零成本短路；图谱越写越厚，这条路的召回随之增强
+  let entityHits0: FtsHit[] = []
+  try {
+    entityHits0 = entitySearch(opts.query).map((h) => ({
+      block_id: h.block_id,
+      doc_id: h.doc_id,
+      doc_title: h.doc_title,
+      type: h.type,
+      content: h.content,
+      rank: 0,
+      matched_by: 'entity',
+      rrf_rank: h.rrf_rank,
+    }))
+  } catch (e) {
+    console.error('[hybridSearch] entity channel failed:', e)
+  }
+
   // AI 软隔离 + 生命周期：过滤 ai_exclude；默认也过滤 inbox 与 archived
   const candidateDocIds = [
     ...ftsRaw0.map((h) => h.doc_id),
     ...semanticRaw0.map((h) => h.doc_id),
     ...titleHits0.map((h) => h.doc_id),
+    ...entityHits0.map((h) => h.doc_id),
   ]
   const excluded = loadAiExcludedDocIds(candidateDocIds)
   const inboxIds = includeInbox ? new Set<string>() : loadInboxDocIds(candidateDocIds)
@@ -195,8 +215,9 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
   const ftsRaw = ftsRaw0.filter((h) => !drop(h.doc_id))
   const semanticRaw = semanticRaw0.filter((h) => !drop(h.doc_id))
   const titleRaw = titleHits0.filter((h) => !drop(h.doc_id))
+  const entityRaw = entityHits0.filter((h) => !drop(h.doc_id))
 
-  const fused = rrfMerge(ftsRaw, semanticRaw, titleRaw)
+  const fused = rrfMerge(ftsRaw, semanticRaw, titleRaw, entityRaw)
   const rerankCandidates = fused.slice(0, rerankWindow)
   const rerankT0 = Date.now()
   const reranked = await maybeRerank(opts.query, rerankCandidates)
@@ -349,7 +370,7 @@ interface FusedCandidate {
   rerank_text: string
 }
 
-function rrfMerge(fts: FtsHit[], semantic: SemanticRawHit[], title: FtsHit[] = []): FusedCandidate[] {
+function rrfMerge(fts: FtsHit[], semantic: SemanticRawHit[], title: FtsHit[] = [], entity: FtsHit[] = []): FusedCandidate[] {
   const map = new Map<string, FusedCandidate>()
 
   for (const f of fts) {
@@ -365,8 +386,9 @@ function rrfMerge(fts: FtsHit[], semantic: SemanticRawHit[], title: FtsHit[] = [
       rerank_text: rerankText(f.doc_title, f.content),
     })
   }
-  // 标题通道：与 fts 同构，已存在的 block_id 累加 RRF 票（标题命中同时也在主 LIKE 路里）
-  for (const t of title) {
+  // 标题/实体通道：与 fts 同构，已存在的 block_id 累加 RRF 票
+  // （标题命中同时也在主 LIKE 路里；实体命中补充词法/语义都够不到的提及块）
+  for (const t of [...title, ...entity]) {
     if (!t.rrf_rank) continue
     const rrf = 1 / (RRF_K + t.rrf_rank)
     const existing = map.get(t.block_id)

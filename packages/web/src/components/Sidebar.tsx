@@ -18,6 +18,7 @@ import {
   Clock,
   Hourglass,
   EyeOff,
+  Waypoints,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
@@ -247,6 +248,10 @@ export default function Sidebar({
               {archivedCount > 99 ? '99+' : archivedCount}
             </span>
           )}
+        </Link>
+        <Link to="/entities" onClick={closeAfterNav} className={location.pathname === '/entities' ? 'sidebar-link-active' : 'sidebar-link'}>
+          <Waypoints className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <span className="flex-1">实体</span>
         </Link>
         {onToggleAiChat && (
           <button

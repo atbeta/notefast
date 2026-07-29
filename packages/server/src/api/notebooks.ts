@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { getDb } from '../db'
 import { listLiveBlockIdsByNotebook, softDeleteByNotebook } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
+import { deleteMentionsTouchingBlocks } from '../store/entities'
 import { deleteSharesByNotebook } from '../store/shares'
 
 const notebooks = new Hono()
@@ -97,6 +98,7 @@ notebooks.delete('/:id', (c) => {
 
   db.transaction(() => {
     deleteRefsTouchingBlocks(db, blockIds)
+    deleteMentionsTouchingBlocks(db, blockIds)
     softDeleteByNotebook(db, id)
     deleteSharesByNotebook(db, id)
     db.query('DELETE FROM notebooks WHERE id = ?').run(id)
