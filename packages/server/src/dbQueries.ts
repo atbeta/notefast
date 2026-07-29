@@ -5,7 +5,10 @@
  * ai/hybridSearch（runFts）、ai/autoLink（findCandidates）五处的同款拼装：
  *   blocks_fts JOIN blocks ... MATCH ? ORDER BY rank LIMIT ?
  * 各处差异全部参数化（见下方注释）；ai_exclude 等后置过滤仍由调用方负责。
- * autoLink 的 LIKE 降级是独立语义，保留在调用方。
+ *
+ * 现状：web /search、MCP notefast_search、hybridSearch、autoLink 四处已上移到
+ * lexicalSearch（FTS5 + LIKE 双路，中文走 LIKE 子串召回），本模块仅剩
+ * lexicalSearch 的 FTS 路与 api/ai 的 ftsHits（mode=fts 调试通道）两个直接调用方。
  *
  * 注意：blocks 表的普通读写不走这里，统一走 store/blocks.ts（数据访问层）。
  * FTS5 与 SQLite 共生，检索层不参与数据访问层抽象。

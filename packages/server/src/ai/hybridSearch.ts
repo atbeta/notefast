@@ -12,9 +12,8 @@
  * - 分阶段 timing（fts / embed_query / semantic / rerank / total）可量化 Fast
  */
 
-import { getDb } from '../db'
-import { runFtsQuery } from '../dbQueries'
-import { buildFtsQuery, highlightSnippet } from '@notefast/core'
+import { highlightSnippet } from '@notefast/core'
+import { lexicalSearch } from '../lexicalSearch'
 import { semanticSearch } from './indexer'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { loadAiExcludedDocIds, loadInboxDocIds, loadArchivedDocIds } from './aiExcludeQuery'
@@ -87,6 +86,8 @@ export interface HybridSearchReport {
   citations: Citation[]
   retrieval: {
     fts_hits: number
+    /** 词法通道命中来源分布（fts / like_and / like_or，调试与评测报告用） */
+    fts_matched_by?: Record<string, number>
     semantic_hits: number
     reranked: boolean
     model?: string
@@ -97,7 +98,8 @@ export interface HybridSearchReport {
   }
 }
 
-const DEFAULT_FTS_LIMIT = 20
+// 词法召回上限：LIKE 路零成本扩大召回，后置过滤（ai_exclude/生命周期）会吃掉名额
+const DEFAULT_FTS_LIMIT = 60
 const DEFAULT_SEMANTIC_LIMIT = 20
 const DEFAULT_TOP_K = 5
 const DEFAULT_RERANK_WINDOW = 20
@@ -157,10 +159,34 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
   const ftsRaw0 = ftsResult.hits
   const semanticRaw0 = semanticResult.hits
 
+  // 标题通道：只查文档根块（type='document'），作为独立 RRF 输入列表提升标题命中。
+  // 主词法路本身也会命中根块，标题通道的意义是多一份 RRF 票，把「查询词在标题里」的文档顶上来
+  let titleHits0: FtsHit[] = []
+  try {
+    titleHits0 = lexicalSearch(opts.query, {
+      notebookId: opts.notebookId,
+      limit: 5,
+      strictOnly: true,
+      titleOnly: true,
+    }).map((h, i) => ({
+      block_id: h.id,
+      doc_id: h.root_id,
+      doc_title: h.doc_title,
+      type: h.type,
+      content: h.content,
+      rank: -h.rank_score,
+      matched_by: h.matched_by,
+      rrf_rank: i + 1,
+    }))
+  } catch (e) {
+    console.error('[hybridSearch] title channel failed:', e)
+  }
+
   // AI 软隔离 + 生命周期：过滤 ai_exclude；默认也过滤 inbox 与 archived
   const candidateDocIds = [
     ...ftsRaw0.map((h) => h.doc_id),
     ...semanticRaw0.map((h) => h.doc_id),
+    ...titleHits0.map((h) => h.doc_id),
   ]
   const excluded = loadAiExcludedDocIds(candidateDocIds)
   const inboxIds = includeInbox ? new Set<string>() : loadInboxDocIds(candidateDocIds)
@@ -168,8 +194,9 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
   const drop = (docId: string) => excluded.has(docId) || inboxIds.has(docId) || archivedIds.has(docId)
   const ftsRaw = ftsRaw0.filter((h) => !drop(h.doc_id))
   const semanticRaw = semanticRaw0.filter((h) => !drop(h.doc_id))
+  const titleRaw = titleHits0.filter((h) => !drop(h.doc_id))
 
-  const fused = rrfMerge(ftsRaw, semanticRaw)
+  const fused = rrfMerge(ftsRaw, semanticRaw, titleRaw)
   const rerankCandidates = fused.slice(0, rerankWindow)
   const rerankT0 = Date.now()
   const reranked = await maybeRerank(opts.query, rerankCandidates)
@@ -211,6 +238,7 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
     citations,
     retrieval: {
       fts_hits: ftsRaw.length,
+      fts_matched_by: countBy(ftsRaw.map((h) => h.matched_by ?? 'fts')),
       semantic_hits: semanticRaw.length,
       reranked: Boolean(reranked),
       model: reranked ? getRuntime().rerankerConfig()?.model : undefined,
@@ -229,6 +257,8 @@ interface FtsHit {
   type: string
   content: string
   rank: number
+  /** 命中来源（lexicalSearch 双路：fts / like_and / like_or / title） */
+  matched_by?: string
   /** 在 fts 列表中的位置（用于 RRF） */
   rrf_rank?: number
 }
@@ -252,20 +282,18 @@ function runFts(
   until?: string,
 ): FtsHit[] {
   if (!query.trim()) return []
-  const db = getDb()
-  const { query: ftsQuery } = buildFtsQuery(query, limit)
+  // 双路词法检索（FTS5 + LIKE）：无空格中文走 LIKE 子串召回，ASCII 沿用 FTS bm25。
   // ai_exclude / inbox 不过取：在 hybridSearch 融合层与语义召回一起过滤
-  const rows = runFtsQuery<FtsHit>(db, {
-    match: ftsQuery,
-    notebookId,
-    since,
-    until,
-    limit,
-    select: `b.id as block_id, b.content as content, b.type as type, b.root_id as doc_id,
-           (SELECT content FROM blocks WHERE id = b.root_id) as doc_title,
-           rank`,
-  })
-  return rows.map((r, i) => ({ ...r, rrf_rank: i + 1 }))
+  return lexicalSearch(query, { notebookId, limit, since, until }).map((h, i) => ({
+    block_id: h.id,
+    doc_id: h.root_id,
+    doc_title: h.doc_title,
+    type: h.type,
+    content: h.content,
+    rank: -h.rank_score, // 保持「越小越好」的 rank 惯例（原 bm25 rank 为负）
+    matched_by: h.matched_by,
+    rrf_rank: i + 1,
+  }))
 }
 
 async function runSemantic(
@@ -321,7 +349,7 @@ interface FusedCandidate {
   rerank_text: string
 }
 
-function rrfMerge(fts: FtsHit[], semantic: SemanticRawHit[]): FusedCandidate[] {
+function rrfMerge(fts: FtsHit[], semantic: SemanticRawHit[], title: FtsHit[] = []): FusedCandidate[] {
   const map = new Map<string, FusedCandidate>()
 
   for (const f of fts) {
@@ -336,6 +364,25 @@ function rrfMerge(fts: FtsHit[], semantic: SemanticRawHit[]): FusedCandidate[] {
       score: rrf,
       rerank_text: rerankText(f.doc_title, f.content),
     })
+  }
+  // 标题通道：与 fts 同构，已存在的 block_id 累加 RRF 票（标题命中同时也在主 LIKE 路里）
+  for (const t of title) {
+    if (!t.rrf_rank) continue
+    const rrf = 1 / (RRF_K + t.rrf_rank)
+    const existing = map.get(t.block_id)
+    if (existing) {
+      existing.score += rrf
+    } else {
+      map.set(t.block_id, {
+        block_id: t.block_id,
+        doc_id: t.doc_id,
+        doc_title: t.doc_title,
+        type: t.type,
+        content: t.content,
+        score: rrf,
+        rerank_text: rerankText(t.doc_title, t.content),
+      })
+    }
   }
   for (const s of semantic) {
     if (!s.rrf_rank) continue
@@ -391,6 +438,13 @@ async function maybeRerank(query: string, candidates: FusedCandidate[]): Promise
 function snippet(text: string, max: number): string {
   if (text.length <= max) return text
   return text.slice(0, max - 1) + '…'
+}
+
+/** 命中来源分布统计（report.fts_matched_by） */
+function countBy(keys: string[]): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const k of keys) out[k] = (out[k] ?? 0) + 1
+  return out
 }
 
 /** reranker 输入：文档标题前缀 + 截短正文（标题为空时退化为正文） */

@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import { buildFtsQuery, highlightSnippet, rowToBlock } from '@notefast/core'
-import type { SearchResult } from '@notefast/core'
+import { highlightSnippet, rowToBlock } from '@notefast/core'
+import type { BlockRow, SearchResult } from '@notefast/core'
 import { getDb } from '../db'
-import { runFtsQuery } from '../dbQueries'
+import { lexicalSearch } from '../lexicalSearch'
 import { listBacklinks } from '../store/refs'
 import { loadAiExcludedDocIds } from '../ai/aiExcludeQuery'
 
@@ -19,16 +19,14 @@ search.get('/', (c) => {
     return c.json([])
   }
 
-  const { query } = buildFtsQuery(q, limit)
-
   // status=archived：只在归档文档（含其子块）内检索，供归档页搜索框使用。
   // 文档根行的 root_id 为空，用 COALESCE 回落到自身 id 命中同一集合。
-  // 不传 status 时保持现状（人类 Web FTS 不滤 ai_exclude / 生命周期状态）。
+  // 不传 status 时保持现状（人类 Web 搜索不滤 ai_exclude / 生命周期状态）。
   const archivedOnly = c.req.query('status') === 'archived'
 
-  // 人类 Web FTS 搜索不滤 ai_exclude（与 MCP/AI 通道刻意不同）
-  const rows = runFtsQuery(db, {
-    match: query,
+  // 双路词法检索（FTS5 + LIKE）：无空格中文走 LIKE 子串召回，ASCII 沿用 FTS bm25。
+  // 人类 Web 搜索不滤 ai_exclude（与 MCP/AI 通道刻意不同）
+  const hits = lexicalSearch(q, {
     notebookId: notebookId || undefined,
     limit,
     ...(archivedOnly
@@ -39,13 +37,24 @@ search.get('/', (c) => {
         }
       : {}),
   })
-  const results: SearchResult[] = rows.map((r) => {
-    const block = rowToBlock(r)
-    return {
-      block,
-      rank: r.rank,
-      snippet: highlightSnippet(block.content, q),
-    }
+
+  // 取完整 block 行组装 SearchResult（返回形状不变；rank 改用列表内相对分 rank_score）
+  const ids = hits.map((h) => h.id)
+  const rowById = new Map<string, BlockRow>()
+  if (ids.length > 0) {
+    const rows = db
+      .query(`SELECT * FROM blocks WHERE id IN (${ids.map(() => '?').join(',')})`)
+      .all(...(ids as [string, ...string[]])) as BlockRow[]
+    for (const r of rows) rowById.set(r.id, r)
+  }
+  const results: SearchResult[] = hits.flatMap((h) => {
+    const row = rowById.get(h.id)
+    if (!row) return []
+    return [{
+      block: rowToBlock(row),
+      rank: h.rank_score,
+      snippet: highlightSnippet(row.content, q),
+    }]
   })
 
   return c.json(results)

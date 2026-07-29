@@ -30,7 +30,7 @@ import {
 import { getDb } from '../db'
 import { getBlockById } from '../store/blocks'
 import { findRefByPair, insertRef } from '../store/refs'
-import { runFtsQuery } from '../dbQueries'
+import { lexicalSearch } from '../lexicalSearch'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { embeddingFingerprint, getVectorStore } from './vectorStore'
 import {
@@ -331,7 +331,6 @@ async function findCandidates(
   sourceDocId: string | null,
 ): Promise<Candidate[]> {
   if (STOP_ANCHORS.has(anchor.toLowerCase())) return []
-  const db = getDb()
 
   const extraWhere: string[] = ['AND b.id != ?']
   const extraParams: (string | number)[] = [sourceBlockId]
@@ -340,28 +339,15 @@ async function findCandidates(
     extraParams.push(sourceDocId)
   }
 
-  let rows: Array<{ id: string; content: string; root_id: string; doc_title: string }>
-  try {
-    rows = runFtsQuery<{ id: string; content: string; root_id: string; doc_title: string }>(db, {
-      match: `"${anchor.replace(/['"*()]/g, ' ').trim()}"`,
-      notebookId: scope === 'same' ? notebookId : undefined,
-      limit: 10,
-      select: 'b.id, b.content, b.root_id, (SELECT content FROM blocks WHERE id = b.root_id) as doc_title',
-      extraWhere,
-      extraParams,
-    })
-  } catch {
-    // LIKE 降级（独立语义）：FTS 表达式执行失败时退回子串匹配
-    const likeSql = `SELECT b.id, b.content, b.root_id, (SELECT content FROM blocks WHERE id = b.root_id) as doc_title
-                     FROM blocks b WHERE b.content LIKE ? AND b.id != ? LIMIT 10`
-    rows = db.query(likeSql).all(`%${anchor}%`, sourceBlockId) as Array<{
-      id: string
-      content: string
-      root_id: string
-      doc_title: string
-    }>
-    if (sourceDocId) rows = rows.filter((r) => r.root_id !== sourceDocId)
-  }
+  // 双路词法检索：LIKE 严格路覆盖 CJK 子串（原 try/catch LIKE 降级已上移到 lexicalSearch），
+  // strictOnly 禁用 OR 降级保精度
+  let rows = lexicalSearch(anchor, {
+    notebookId: scope === 'same' ? notebookId : undefined,
+    limit: 10,
+    strictOnly: true,
+    extraWhere,
+    extraParams,
+  }).map((h) => ({ id: h.id, content: h.content, root_id: h.root_id, doc_title: h.doc_title }))
 
   if (rows.length === 0) return []
 

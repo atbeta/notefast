@@ -8,13 +8,12 @@
 import { z } from 'zod'
 import {
   buildBlockTree,
-  buildFtsQuery,
   blocksToMarkdown,
   highlightSnippet,
   rowToBlock,
 } from '@notefast/core'
 import { getDb } from '../../db'
-import { runFtsQuery } from '../../dbQueries'
+import { lexicalSearch } from '../../lexicalSearch'
 import {
   blockExists,
   fetchDocBlocks,
@@ -52,25 +51,22 @@ export function registerDocReadTools(ctx: ToolContext): void {
       },
     },
     async ({ query, notebook_id, limit }) => {
-      const { query: ftsQuery } = buildFtsQuery(query, limit)
-
+      // 双路词法检索（FTS5 + LIKE）：无空格中文走 LIKE 子串召回。
       // 多取 3 倍，过滤 ai_exclude 后截断
-      const rows = runFtsQuery(db, {
-        match: ftsQuery,
+      const hits = lexicalSearch(query, {
         notebookId: notebook_id,
-        limit: limit as number,
-        overfetch: 3,
+        limit: (limit as number) * 3,
       })
-      const excluded = loadAiExcludedDocIds(rows.map((r) => r.root_id))
-      const filtered = rows.filter((r) => !excluded.has(r.root_id)).slice(0, limit as number)
+      const excluded = loadAiExcludedDocIds(hits.map((h) => h.root_id))
+      const filtered = hits.filter((h) => !excluded.has(h.root_id)).slice(0, limit as number)
 
       return {
-        content: [toText(filtered.map((r) => ({
-          block_id: r.id,
-          type: r.type,
-          content: r.content,
-          snippet: highlightSnippet(r.content, query),
-          rank: r.rank,
+        content: [toText(filtered.map((h) => ({
+          block_id: h.id,
+          type: h.type,
+          content: h.content,
+          snippet: highlightSnippet(h.content, query),
+          rank: h.rank_score,
         })))],
       }
     },
