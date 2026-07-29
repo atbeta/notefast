@@ -26,48 +26,6 @@ export function Section({
   )
 }
 
-/** AutoLink 自动应用策略的单选卡片（role=radio） */
-export function AutoLinkOption({
-  selected,
-  title,
-  description,
-  onSelect,
-}: {
-  selected: boolean
-  title: string
-  description: string
-  onSelect: () => void
-}) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      onClick={onSelect}
-      className={`w-full text-left rounded-lg border px-3.5 py-3 transition-colors ${
-        selected
-          ? 'border-foreground/25 bg-foreground/[0.04]'
-          : 'border-border hover:bg-accent/40'
-      }`}
-    >
-      <div className="flex items-start gap-3">
-        <span
-          aria-hidden
-          className={`mt-0.5 inline-grid h-4 w-4 shrink-0 place-content-center rounded-full border-[1.5px] ${
-            selected ? 'border-[rgb(var(--ink))]' : 'border-[rgb(var(--border))]'
-          }`}
-        >
-          {selected && <span className="h-2 w-2 rounded-full bg-[rgb(var(--ink))]" />}
-        </span>
-        <span className="min-w-0">
-          <span className="block text-sm font-medium text-foreground">{title}</span>
-          <span className="block text-xs text-muted-foreground mt-0.5 leading-relaxed">{description}</span>
-        </span>
-      </div>
-    </button>
-  )
-}
-
 /** 顶部状态条里的能力徽标（Chat / Embedding / Reranker 可用性点） */
 export function CapabilityBadge({ ok, label }: { ok: boolean; label: string }) {
   return (

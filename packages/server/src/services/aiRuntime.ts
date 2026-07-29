@@ -20,12 +20,15 @@ import {
   configFromEnv,
   emptyConfig,
   type AiConfig,
+  type Block,
 } from '@notefast/core'
 import type { PluginSystem } from '@notefast/core'
+import { getDb } from '../db'
+import { getDocById } from '../store/blocks'
+import { deleteRefsFromSource } from '../store/refs'
 import { indexBlock, deleteVector } from '../ai/indexer'
 import { getLatestIndexJobForDoc } from '../ai/indexJobs'
 import { analyzeBlock } from '../ai/autoLink'
-import { removeSuggestionsForBlock } from '../ai/autoLinkStore'
 import {
   embeddingFingerprint,
   markVectorStoreStaleIfModelChanged,
@@ -118,7 +121,7 @@ function warnUnknownAutoLinkKeys(parsed: Record<string, unknown> | null): void {
   const al = parsed?.autoLink
   if (!al || typeof al !== 'object') return
   const known = new Set([
-    'enabled', 'autoApply', 'notebookScope', 'maxPerBlock', 'minConfidence', 'minMargin',
+    'enabled', 'notebookScope', 'maxPerBlock', 'minConfidence', 'minMargin',
     'excludeAnchorKinds', 'excludeSelfDoc', 'rateLimitPerMinute',
   ])
   const unknownKeys = Object.keys(al as Record<string, unknown>).filter((k) => !known.has(k))
@@ -223,7 +226,7 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
 
   const al = cfg.autoLink
   // 打印生效中的 AutoLink 配置（磁盘配置是否被读取一目了然）
-  console.log(`🧠 AI auto-link: enabled, scope=${al.notebookScope}, maxPerBlock=${al.maxPerBlock}, minConfidence=${al.minConfidence}, minMargin=${al.minMargin}, excludeKinds=[${(al.excludeAnchorKinds ?? []).join(',')}], excludeSelfDoc=${al.excludeSelfDoc}, rateLimit=${al.rateLimitPerMinute}/min, autoApply=${al.autoApply}`)
+  console.log(`🧠 AI auto-link: 高置信自动建链, scope=${al.notebookScope}, maxPerBlock=${al.maxPerBlock}, minConfidence=${al.minConfidence}, minMargin=${al.minMargin}, excludeKinds=[${(al.excludeAnchorKinds ?? []).join(',')}], excludeSelfDoc=${al.excludeSelfDoc}, rateLimit=${al.rateLimitPerMinute}/min`)
 
   const scope = al.notebookScope
   const max = al.maxPerBlock
@@ -231,7 +234,7 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
   pluginSystem.note.afterCreate.tap(AUTOLINK_HOOK_NAME, async (block) => {
     if (block.type === 'document') return // doc 头不分析
     if (isBlockAiExcluded(block.id)) return
-    removeSuggestionsForBlock(block.id)
+    if (isDocInboxOrArchived(block)) return
     await analyzeBlock({
       blockId: block.id,
       content: block.content,
@@ -243,7 +246,9 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
   pluginSystem.note.afterUpdate.tap(AUTOLINK_HOOK_NAME, async (block) => {
     if (block.type === 'document') return
     if (isBlockAiExcluded(block.id)) return
-    removeSuggestionsForBlock(block.id)
+    if (isDocInboxOrArchived(block)) return
+    // 内容变化 = 旧链重评：先清掉该块发出的 ai_auto 引用，再按新内容重建
+    deleteRefsFromSource(getDb(), block.id, 'ai_auto')
     await analyzeBlock({
       blockId: block.id,
       content: block.content,
@@ -252,8 +257,13 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
       maxPerBlock: max,
     }).catch((e) => console.warn('[autoLink] afterUpdate:', e instanceof Error ? e.message : e))
   })
-  pluginSystem.note.afterDelete.tap(AUTOLINK_HOOK_NAME, async (blockId) => {
-    removeSuggestionsForBlock(blockId)
-  })
+  // 块软删除的引用级联由 store 层 deleteRefsTouchingBlocks 覆盖，无需 afterDelete hook
   console.log('🧠 AI auto-link hooks attached')
+}
+
+/** inbox / archived 文档不做自动建链（与检索默认过滤语义一致） */
+function isDocInboxOrArchived(block: Block): boolean {
+  const docId = block.type === 'document' ? block.id : block.root_id
+  const doc = getDocById(getDb(), docId)
+  return doc?.status === 'inbox' || doc?.status === 'archived'
 }

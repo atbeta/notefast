@@ -39,9 +39,11 @@ export function writeDocAiExclude(docId: string, aiExclude: boolean): BlockRow |
 }
 
 /**
- * 开启排除后清理 AI 产物：该文档下所有块的向量 + AutoLink 建议。
+ * 开启排除后清理 AI 产物：该文档下所有块的向量。
+ * （AutoLink 已改为「高置信直接建链」无建议表；该文档块发出的 ai_auto 引用
+ * 由块删除级联或下次内容更新重评自然收敛，无需在此清理。）
  */
-export async function purgeAiArtifactsForDoc(docId: string): Promise<{ vectors: number; suggestions: number }> {
+export async function purgeAiArtifactsForDoc(docId: string): Promise<{ vectors: number }> {
   const blockIds = loadDocBlockIds(docId)
 
   let vectors = 0
@@ -54,23 +56,7 @@ export async function purgeAiArtifactsForDoc(docId: string): Promise<{ vectors: 
     }
   }
 
-  // AutoLink suggestions：按源块或候选目标所属文档清理
-  const ids = blockIds
-  const placeholders = ids.map(() => '?').join(',')
-  let suggestions = 0
-  if (ids.length > 0) {
-    const delSource = getDb()
-      .query(`DELETE FROM autolink_suggestions WHERE source_block_id IN (${placeholders})`)
-      .run(...ids)
-    suggestions += Number(delSource.changes ?? 0)
-  }
-  // 候选里指向该文档的建议（candidates JSON 存 camelCase docId）
-  const delCand = getDb()
-    .query(`DELETE FROM autolink_suggestions WHERE candidates LIKE ?`)
-    .run(`%"docId":"${docId}"%`)
-  suggestions += Number(delCand.changes ?? 0)
-
-  return { vectors, suggestions }
+  return { vectors }
 }
 
 /**
@@ -83,7 +69,6 @@ export async function purgeAiArtifactsForDoc(docId: string): Promise<{ vectors: 
  */
 export interface AiExcludeChangeResult {
   vectors?: number
-  suggestions?: number
   reindexed?: number
   errors?: number
   /** 恢复可见时调度的索引作业（前端可轮询进度） */

@@ -13,7 +13,6 @@ type DiagR = {
   model?: string
   embeddingCalls?: number
   prerequisites?: { chat: { configured: boolean; ok: boolean }; embedding: unknown }
-  autoApply?: 'never' | 'high_confidence'
 }
 
 /** 一键诊断结果面板：overall 状态点 + 各能力逐行结果（Embedding / Chat / Reranker / AutoLink） */
@@ -124,10 +123,8 @@ function autoLinkFormat(r: DiagR): string {
   const prereq = r.prerequisites?.chat
   if (!prereq) return ''
   if (!prereq.configured) return '需要 Chat 模型已配置'
-  if (!prereq.ok) return '依赖 Chat 不可达，建议不会触发'
-  return r.autoApply === 'high_confidence'
-    ? '依赖 Chat 已通（高置信自动应用）'
-    : '依赖 Chat 已通（仅建议）'
+  if (!prereq.ok) return '依赖 Chat 不可达，自动建链不会触发'
+  return '依赖 Chat 已通（高置信自动建链）'
 }
 
 function describeMeta(r: DiagR): string {

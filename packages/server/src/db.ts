@@ -53,6 +53,8 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
  * v1 → v2：已应用的 AutoLink 建议补齐 review_status=accepted（此前只改 action_status）
  * v2 → v3：新增 asset_captions 表（图片理解的 caption 缓存）
  * v3 → v4：新增 shares 表（文档分享的公开 token）
+ * v4 → v5：AutoLink 改为「高置信直接建链」——删除 autolink_suggestions 表，
+ *           历史 ai_suggested 引用统一归为 ai_auto
  */
 function applySchemaMigrations(database: Database): void {
   const current = getSchemaVersion(database)
@@ -101,6 +103,13 @@ function applySchemaMigrations(database: Database): void {
       CREATE INDEX IF NOT EXISTS idx_shares_token ON shares(token);
     `)
     database.exec(`PRAGMA user_version = 4`)
+  }
+  if (getSchemaVersion(database) < 5) {
+    // AutoLink 三态审核模型下线：建议表删除（历史建议不落新库），
+    // 已应用的 ai_suggested 引用统一归为 ai_auto（语义等同「AI 建的链」）。
+    database.exec(`DROP TABLE IF EXISTS autolink_suggestions`)
+    database.exec(`UPDATE block_refs SET ref_type = 'ai_auto' WHERE ref_type = 'ai_suggested'`)
+    database.exec(`PRAGMA user_version = 5`)
   }
 }
 

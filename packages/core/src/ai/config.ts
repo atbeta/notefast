@@ -111,27 +111,24 @@ export interface RerankerDefinition {
   timeoutMs: number
 }
 
-/** 自动反向链接：基于 Chat 模型从块内容提取实体，在已有 block_refs 里建议/写入 */
+/**
+ * 自动建链：基于 Chat 模型从块内容提取锚点，高置信时直接写 block_refs（ref_type='ai_auto'）。
+ * 无人工审核流程：满足阈值即建链，不满足即静默跳过。
+ */
 export interface AutoLinkConfig {
-  /** 是否启用（note.afterCreate/Update 触发）*/
+  /** 是否启用（note.afterCreate/Update 触发，默认开启）*/
   enabled: boolean
-  /**
-   * 自动应用策略：
-   * - 'never'            高可信候选也只入 Inbox，不写 ref
-   * - 'high_confidence'  满足 minConfidence + minMargin 的候选自动写 ref（ref_type='ai_auto'）
-   */
-  autoApply: 'never' | 'high_confidence'
   /** 'all' = 任意 notebook；'same' = 同 notebook */
   notebookScope: 'all' | 'same'
-  /** 每个块最多产出几条建议 */
+  /** 每个块最多建立几条链接 */
   maxPerBlock: number
   /**
-   * embedding cosine 阈值（v3 起同时作为「建议入库门槛」）：
-   * top-1 候选为 embedding/hybrid 且 confidence ≥ 该值才入 Inbox；
-   * FTS-only（纯字面匹配）一律不产生建议 —— 宁缺毋滥。
+   * embedding cosine 建链门槛：
+   * top-1 候选为 embedding/hybrid 且 confidence ≥ 该值才可建链；
+   * FTS-only（纯字面匹配）一律不建链 —— 宁缺毋滥。
    */
   minConfidence: number
-  /** top-1 与 top-2 最小差值，避免歧义候选被自动应用 */
+  /** top-1 与 top-2 最小差值，避免歧义候选被建链 */
   minMargin: number
   /**
    * 抽取后要丢弃的锚点类型（默认 ['tool']）：
@@ -144,24 +141,24 @@ export interface AutoLinkConfig {
    */
   excludeSelfDoc: boolean
   /**
-   * 全局每分钟最多触发多少次抽取（默认 10）：
+   * 全局每分钟最多触发多少次抽取（默认 30）：
    * 批量导入/保存 burst 时超出的直接跳过（不排队），保护 chat 配额。
    */
   rateLimitPerMinute: number
 }
 
 export const DEFAULT_MAX_AUTO_LINK_PER_BLOCK = 2
-/** 默认 0.6：embedding 常见命中约 0.55–0.75；0.85 会导致 Inbox 几乎永远为空 */
+/** 默认 0.6：embedding 常见命中约 0.55–0.75；0.85 会几乎永远建不出链 */
 export const DEFAULT_AUTO_LINK_MIN_CONFIDENCE = 0.6
 export const DEFAULT_AUTO_LINK_MIN_MARGIN = 0.15
 export const DEFAULT_AUTO_LINK_EXCLUDE_KINDS: string[] = ['tool']
 export const DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC = true
-export const DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE = 0
+/** 默认 30/分钟：建链默认开启后保护 chat 配额 */
+export const DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE = 30
 
 export function defaultAutoLinkConfig(): AutoLinkConfig {
   return {
-    enabled: false,
-    autoApply: 'never',
+    enabled: true,
     notebookScope: 'all',
     maxPerBlock: DEFAULT_MAX_AUTO_LINK_PER_BLOCK,
     minConfidence: DEFAULT_AUTO_LINK_MIN_CONFIDENCE,
@@ -190,7 +187,7 @@ export interface AiConfig {
   autoIndex: boolean
   /** Reranker 配置；null 表示未配置（hybrid search 跳过精排）*/
   reranker: RerankerDefinition | null
-  /** 自动反向链接配置（默认禁用；缺省时按 defaultAutoLinkConfig 处理）*/
+  /** 自动建链配置（默认开启；缺省时按 defaultAutoLinkConfig 处理）*/
   autoLink?: AutoLinkConfig
   /** 网页搜索配置（用于 chat 中知识库不足时联网补充）*/
   webSearch?: WebSearchConfig
@@ -322,13 +319,8 @@ export function configFromEnv(env: Record<string, string | undefined>): AiConfig
 }
 
 function autoLinkFromEnv(env: Record<string, string | undefined>): AutoLinkConfig {
-  const enabled = (env.AUTO_LINK_ENABLED || '').toLowerCase() === 'true'
-  const aaRaw = (env.AUTO_LINK_AUTO_APPLY || '').toLowerCase()
-  const autoApply: 'never' | 'high_confidence' = aaRaw === 'true'
-    ? 'high_confidence'
-    : aaRaw === 'high_confidence'
-      ? 'high_confidence'
-      : 'never'
+  // 默认开启；显式 AUTO_LINK_ENABLED=false 才关闭
+  const enabled = (env.AUTO_LINK_ENABLED || 'true').toLowerCase() !== 'false'
   const scopeRaw = (env.AUTO_LINK_SCOPE || 'all').toLowerCase()
   const scope: 'all' | 'same' = scopeRaw === 'same' ? 'same' : 'all'
   const maxRaw = parseInt(env.AUTO_LINK_MAX_PER_BLOCK || '', 10)
@@ -341,16 +333,17 @@ function autoLinkFromEnv(env: Record<string, string | undefined>): AutoLinkConfi
   const minMargin = Number.isFinite(minMarginRaw) && minMarginRaw >= 0 && minMarginRaw < 1
     ? minMarginRaw
     : DEFAULT_AUTO_LINK_MIN_MARGIN
+  const rateRaw = parseInt(env.AUTO_LINK_RATE_LIMIT_PER_MINUTE || '', 10)
+  const rate = Number.isFinite(rateRaw) && rateRaw >= 0 ? rateRaw : DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE
   return {
     enabled,
-    autoApply,
     notebookScope: scope,
     maxPerBlock: max,
     minConfidence: minConf,
     minMargin,
     excludeAnchorKinds: [...DEFAULT_AUTO_LINK_EXCLUDE_KINDS],
     excludeSelfDoc: DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC,
-    rateLimitPerMinute: DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE,
+    rateLimitPerMinute: rate,
   }
 }
 

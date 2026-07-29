@@ -39,6 +39,20 @@ export function deleteRefById(db: Db, id: number): boolean {
   return db.query('DELETE FROM block_refs WHERE id = ?').run(id).changes > 0
 }
 
+/** 按 (source, target) 对删除引用（不限 ref_type）；返回删除行数 */
+export function deleteRefByPair(db: Db, sourceId: string, targetId: string): number {
+  return db
+    .query('DELETE FROM block_refs WHERE source_id = ? AND target_id = ?')
+    .run(sourceId, targetId).changes
+}
+
+/** 删除某 source block 发出的指定类型引用（AutoLink 内容变化时旧链重评用）；返回删除行数 */
+export function deleteRefsFromSource(db: Db, sourceId: string, refType: string): number {
+  return db
+    .query('DELETE FROM block_refs WHERE source_id = ? AND ref_type = ?')
+    .run(sourceId, refType).changes
+}
+
 /** 反链行：引用记录 + 来源 block 信息 */
 export interface BacklinkRow {
   id: number

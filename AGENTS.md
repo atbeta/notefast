@@ -100,7 +100,7 @@ notefast/
 │   └── web/                 # React Web 阅读器
 │       └── src/
 │           ├── App.tsx
-│           ├── routes/      # home, doc, new, inbox, autolink, settings, settings-ai
+│           ├── routes/      # home, doc, new, inbox, archived, settings, settings-ai
 │           ├── components/  # BlockRenderer, MarkdownEditor, Sidebar, 设置面板等
 │           └── hooks/       # useAPI（api 客户端 + ApiError）, useTheme
 │
@@ -179,10 +179,11 @@ docker compose up -d
 - 旧 Litestream Compose profile 与根目录 `litestream.yml` 均已移除（`-exec true` 会导致复制进程退出）；灾备统一走应用内 SQLite→S3 快照
 - 文档组织：tag 多选默认 AND（同时包含），`tag_match=any` 为包含任一；智能视图为内置预设 + URL 参数（无自定义命名视图表）
 - `properties.ai_exclude: true` 软隔离：不进向量/RAG/AutoLink/MCP 发现与按 ID 读取；人类 Web 列表/编辑/Cmd+K 仍可用；备份与 Markdown 归档仍含全文
-- 收集箱：`properties.status: 'inbox'`；主列表 / tags 聚合 / MCP `list_docs` 默认排除；`GET /docs/list?status=inbox` 与侧栏「收集箱」；升格 `PATCH /docs/:id/status` → `note`；原 AutoLink Inbox 改名为「链接建议」（`/autolink`）
+- 收集箱：`properties.status: 'inbox'`；主列表 / tags 聚合 / MCP `list_docs` 默认排除；`GET /docs/list?status=inbox` 与侧栏「收集箱」；升格 `PATCH /docs/:id/status` → `note`
+- AutoLink（AI 主动建链）：block 写入/更新后 AI 自动抽取锚点，高置信（语义命中 ≥ minConfidence 且 top-1 margin ≥ minMargin）直接写 `block_refs(ref_type='ai_auto')`，低置信静默跳过，无人工审核；ai_exclude / inbox / archived 文档均不参与；REST 仅 `POST /auto-link/run`、`POST /auto-link/run-batch`、`DELETE /auto-link/refs`；原「链接建议」审核页（`/autolink`）与 suggestions/inbox/apply/dismiss 等审核 API 已移除
 - 归档：`blocks.status: 'archived'`（文档根显式列，无 CHECK 约束）；默认过滤语义统一为「仅 status='note'」（主列表 / tags 聚合 / MCP `list_docs` 同时排除 inbox 与 archived，`status=all` 全量）；AI 检索默认软排除归档（hybridSearch/semanticSearch 的 `includeArchived`、REST `/ai/search?include_archived=1`、chat `notefast_search_more` 的 `include_archived` 可显式包含）；Web 侧栏「归档」入口 + `/archived` 页 + 文档页归档/恢复（`PATCH /docs/:id/status`）；介于正常笔记与 ai_exclude 之间——保留内容、不再污染检索；创建路径不支持直接建归档
 - 文档阅读/编辑预览用自定义 `BlockRenderer`，AI 聊天用 `react-markdown` + `remark-gfm`；mermaid 代码围栏经懒加载组件渲染并跟随 `data-theme`
-- blocks / block_refs 读写统一走 `server/src/store/`（blocks.ts / refs.ts）：函数级数据访问层而非 interface（单后端不冻结接口形状，未来换远程存储时以此为边界提取）；列表/树读取默认排除软删除，`updateBlock` 自动带 `updated_at`，content 变更自动同步 `content_hash`，软删除统一 `is_deleted + delete_id` tombstone 并级联清 block_refs；FTS 检索留 `dbQueries.runFtsQuery`（与 SQLite 共生，不进数据访问层）；向量 / autolink / assets 等自有表各留原 store
+- blocks / block_refs 读写统一走 `server/src/store/`（blocks.ts / refs.ts）：函数级数据访问层而非 interface（单后端不冻结接口形状，未来换远程存储时以此为边界提取）；列表/树读取默认排除软删除，`updateBlock` 自动带 `updated_at`，content 变更自动同步 `content_hash`，软删除统一 `is_deleted + delete_id` tombstone 并级联清 block_refs；FTS 检索留 `dbQueries.runFtsQuery`（与 SQLite 共生，不进数据访问层）；向量 / assets 等自有表各留原 store
 - `listDocRows` 排序带 rowid 决胜：updated_at 为毫秒精度（`nowTimestamp()` / SQL 侧 `strftime('%Y-%m-%d %H:%M:%f','now')`，同毫秒碰撞极低），ASC 按入库序（归档导出确定性），DESC 后入库在前（「最近更新」语义）
 - 运行时杂项：indexJobs 终态作业保留最近 100 个（超出淘汰最老，pending/running 不动，防 Map 内存单调增长）；autoExport 兜底为自重排单循环（10s 首跑、跑完再计 1h，无双计时器叠加）；`Bun.serve` idleTimeout 保持默认 10s，SSE 路由（`/api/v1/events`、`/ai/chat`、`/ai/write`）经 `server.timeout(req, 60)` per-request 放宽——**relaxSseIdleTimeout 必须注册在任何 `app.route()` 之前**（Hono 按注册顺序执行，放路由后 = 死代码，SSE 会在 10s 被 Bun 掐断）
 - 文档列表/导出统一排除软删除文档：MCP `list_docs`/`list_tags`、sync 三适配器与 autoExport 原先不过滤 `is_deleted`，已对齐 Web 语义；软删除文档会在下次全量同步时经 manifest 从远端归档清理

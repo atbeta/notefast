@@ -8,8 +8,7 @@
  *                stage_markdown / create_doc_from_file /
  *                list_docs / list_tags / set_doc_tags
  * - aiChat.ts    AI：semantic_search / suggest_title / chat / get_config
- * - autoLink.ts  AutoLink：suggestions / apply / dismiss / revert / run /
- *                get_autolink_suggestion
+ * - autoLink.ts  AutoLink：run（高置信直接建链，无审核队列）
  *
  * 调用方（mcp/server.ts）只依赖本文件的 registerMcpTools，签名不变。
  */

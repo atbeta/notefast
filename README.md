@@ -76,7 +76,7 @@ All AI features require an LLM provider (OpenAI-compatible API). 18 presets avai
 | **Hybrid Search** | FTS5 + semantic embedding with RRF fusion, optional reranker |
 | **RAG Chat** | Conversational AI with note citations, agent loop, tool calling |
 | **AI Writing** | Ctrl+Enter inline continuation, refine, translate, summarise |
-| **AutoLink** | LLM extracts entities → semantic matching → link suggestions |
+| **AutoLink** | After each write, the LLM extracts key concepts; high-confidence semantic matches automatically create inter-note links (`ref_type=ai_auto`) — no manual review |
 | **Web Search** | Optional Brave Search integration for external knowledge |
 | **Title/Suggest** | AI-generated document titles and summaries |
 | **MCP Server** | Full read/write/search/chat tools for external AI agents |
@@ -96,7 +96,7 @@ External AI agents (Claude Desktop, Cursor, etc.) connect to NoteFast via MCP:
 }
 ```
 
-Available tools: `search`, `get_doc`, `get_block`, `create_doc`, `create_block`, `update_block`, `semantic_search`, `chat`, `list_docs`, `set_doc_tags`, autolink management, and more.
+Available tools: `search`, `get_doc`, `get_block`, `create_doc`, `create_block`, `update_block`, `semantic_search`, `chat`, `list_docs`, `set_doc_tags`, `autolink_run`, and more.
 
 ## Keyboard Shortcuts
 

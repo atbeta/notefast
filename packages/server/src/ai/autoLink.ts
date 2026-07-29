@@ -1,25 +1,26 @@
 /**
- * AutoLink 引擎（v3 —— 精准优先）
+ * AutoLink 引擎（v4 —— 高置信直接建链，无人工审核）
  *
  * 流程：
  *   1) LLM 从块内容里抽出 mention 列表（严格 JSON；不抽工具/API/函数名）
  *   2) kind 过滤（excludeAnchorKinds，默认丢 tool）
- *   3) 每个 mention.anchor 去命中现有 block（hybrid search；excludeSelfDoc 排除同文档）
- *   4) 建议入库门槛：top-1 必须 embedding/hybrid 且 ≥ minConfidence —— FTS-only 不进 Inbox
- *   5) 满足 minMargin 的进一步 autoApply 写 block_refs
+ *   3) 每个 mention.anchor 去命中现有 block（hybrid search；excludeSelfDoc 排除同文档；
+ *      ai_exclude / inbox / archived 文档不作候选）
+ *   4) 建链门槛：top-1 必须语义命中（embedding/hybrid）且 ≥ minConfidence，
+ *      且与 top-2 的分差 ≥ minMargin —— 满足即直接写 block_refs（ref_type='ai_auto'）
+ *   5) 不满足即静默跳过（记入 skippedAnchors 便于排查）；没有任何中间状态与审核队列
  *
- * 评分语义（v3）：
- *   - FTS-only: confidence = 1 - rank/N，score_kind='fts_rank'，永远达不到入库门槛
+ * 评分语义（沿用 v3）：
+ *   - FTS-only: confidence = 1 - rank/N，score_kind='fts_rank'，永远达不到建链门槛
  *   - hybrid: confidence = 纯 cosine（不再与 FTS rank 分取 max，杜绝伪高置信）
  *   - 候选缺向量：诚实地标回 'fts_rank'
  *
  * 并发与配额保护：
  *   - 同 block 的 analyzeBlock 请求串行化（inflight Map）
  *   - 全局滑动窗口限速（rateLimitPerMinute，burst 时超出直接跳过）
- *   - 每次写入前用 source_content_hash 标记旧 suggestion 为 superseded
+ *   - block 内容更新时由 aiRuntime 先清掉旧的 ai_auto 引用再重评（见 services/aiRuntime）
  */
 
-import { createHash } from 'node:crypto'
 import {
   DEFAULT_AUTO_LINK_EXCLUDE_KINDS,
   DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC,
@@ -28,16 +29,16 @@ import {
 } from '@notefast/core'
 import { getDb } from '../db'
 import { getBlockById } from '../store/blocks'
+import { findRefByPair, insertRef } from '../store/refs'
 import { runFtsQuery } from '../dbQueries'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { embeddingFingerprint, getVectorStore } from './vectorStore'
 import {
-  addSuggestions,
-  type AutoLinkSuggestion,
-  type Candidate,
-  type ScoreKind,
-} from './autoLinkStore'
-import { isBlockAiExcluded, loadAiExcludedDocIds } from './aiExcludeQuery'
+  isBlockAiExcluded,
+  loadAiExcludedDocIds,
+  loadArchivedDocIds,
+  loadInboxDocIds,
+} from './aiExcludeQuery'
 
 const EXTRACT_SYSTEM_PROMPT = `你是 NoteFast 的实体抽取助手。从用户给定的笔记内容中识别可以建立反向链接的具体名词短语（"锚点"）。
 
@@ -61,17 +62,26 @@ export interface AnalyzeOptions {
   maxPerBlock: number
 }
 
+/** 一条已自动建立的链接 */
+export interface AutoLinkAppliedLink {
+  anchor: string
+  targetBlockId: string
+  targetDocId: string
+  confidence: number
+}
+
 export interface AnalyzeResult {
   analyzed: number
-  suggestionsAdded: number
+  /** 本次直接建立的链接数 */
   applied: number
-  suggestions: AutoLinkSuggestion[]
+  /** 建立的链接明细（anchor → 目标块） */
+  links: AutoLinkAppliedLink[]
   errors: string[]
   /** true = 命中全局限速，本次未执行抽取（不视为错误） */
   rateLimited?: boolean
-  /** 抽到锚点但因低于 minConfidence / 非语义命中而未入库的数量 */
+  /** 抽到锚点但因低于 minConfidence / 非语义命中而未建链的数量 */
   skippedLowConfidence?: number
-  /** 被门槛过滤的锚点摘要（最多 10 条，便于调用方理解「为何 Inbox 为空」） */
+  /** 被门槛过滤的锚点摘要（最多 10 条，便于调用方理解「为何没有建链」） */
   skippedAnchors?: Array<{ anchor: string; reason: string; confidence?: number }>
 }
 
@@ -157,18 +167,15 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
     return empty()
   }
 
-  const suggestions: AutoLinkSuggestion[] = []
+  const links: AutoLinkAppliedLink[] = []
   const errors: string[] = []
   const skippedAnchors: NonNullable<AnalyzeResult['skippedAnchors']> = []
-  let applied = 0
   const db = getDb()
 
-  // 读源 block 的 updated_at 与所属文档（root_id 用于自指过滤）
+  // 读源 block 所属文档（root_id 用于自指过滤）
   const blockRow = getBlockById(db, opts.blockId)
-  const sourceUpdatedAt = blockRow?.updated_at ?? new Date().toISOString()
   const excludeSelfDoc = cfg.excludeSelfDoc ?? DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC
   const sourceDocId = excludeSelfDoc ? (blockRow?.root_id ?? null) : null
-  const sourceHash = sha256(trimmed)
 
   for (const m of mentions) {
     try {
@@ -180,8 +187,8 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
         continue
       }
 
-      // 建议入库门槛（v3）：top-1 必须是语义命中（embedding/hybrid）且 ≥ minConfidence。
-      // FTS-only 是纯字面匹配，不构成「建议」——宁缺毋滥，避免 Inbox 噪音洪水。
+      // 建链门槛：top-1 必须是语义命中（embedding/hybrid）且 ≥ minConfidence。
+      // FTS-only 是纯字面匹配，不构成「链接」——宁缺毋滥。
       const top1 = ranked[0]!
       const isSemantic = top1.scoreKind === 'embedding' || top1.scoreKind === 'hybrid'
       if (!isSemantic || top1.confidence < cfg.minConfidence) {
@@ -195,89 +202,32 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
         continue
       }
 
-      // 决策：自动应用 vs 仅建议（在入库门槛之上再要求 top1/top2 margin）
+      // 分差门槛：top1 必须明显领先 top2，避免「两个都差不多」的歧义建链
       const top2 = ranked[1]?.confidence ?? 0
-      const margin = top1.confidence - top2
-
-      const canAutoApply =
-        cfg.autoApply === 'high_confidence' &&
-        isSemantic &&
-        margin >= cfg.minMargin
-
-      // 所有 ranked 候选都进 suggestion 表（保留 audit）；
-      // FTS-only 在 Inbox 查询里默认展示（属于"中可信"档），未来 metrics 用
-      const usableCandidates = ranked
-
-      const refType: 'ai_suggested' | 'ai_auto' = canAutoApply ? 'ai_auto' : 'ai_suggested'
-
-      const sug: AutoLinkSuggestion = {
-        id: crypto.randomUUID(),
-        sourceBlockId: opts.blockId,
-        sourceContentHash: sourceHash,
-        sourceUpdatedAt,
-        notebookId: opts.notebookId ?? '',
-        anchor: m.anchor,
-        kind: m.kind,
-        candidates: usableCandidates,
-        actionStatus: 'suggested',         // 初始；若 autoApply 成功，addSuggestions 内部会改
-        reviewStatus: 'unreviewed',
-        createdRefId: null,
-        appliedTargetId: null,
-        scoreKind: usableCandidates[0]!.scoreKind,
-        model: runtime.chatProviderDef()?.label ?? null,
-        error: null,
-        createdAt: new Date().toISOString(),
-        appliedAt: null,
-        reviewedAt: null,
-      }
-      suggestions.push(sug)
-
-      // autoApply：立即落 ref（注意：addSuggestions 之外单独 INSERT ref）
-      if (canAutoApply) {
-        const target = top1.blockId
-        try {
-          const ok = insertRef(opts.blockId, target, refType)
-          if (ok) applied++
-        } catch (e) {
-          errors.push(`apply ${m.anchor}: ${e instanceof Error ? e.message : e}`)
+      if (top1.confidence - top2 < cfg.minMargin) {
+        if (skippedAnchors.length < 10) {
+          skippedAnchors.push({ anchor: m.anchor, reason: 'low_margin', confidence: top1.confidence })
         }
+        continue
       }
+
+      // 已存在同 (source, target) 引用（任意类型）→ 不重复建链
+      if (findRefByPair(db, opts.blockId, top1.blockId)) {
+        if (skippedAnchors.length < 10) {
+          skippedAnchors.push({ anchor: m.anchor, reason: 'already_linked', confidence: top1.confidence })
+        }
+        continue
+      }
+
+      insertRef(db, { sourceId: opts.blockId, targetId: top1.blockId, refType: 'ai_auto' })
+      links.push({
+        anchor: m.anchor,
+        targetBlockId: top1.blockId,
+        targetDocId: top1.docId,
+        confidence: top1.confidence,
+      })
     } catch (e) {
       errors.push(`${m.anchor}: ${e instanceof Error ? e.message : e}`)
-    }
-  }
-
-  if (suggestions.length > 0) {
-    addSuggestions(suggestions)
-    // 注意：autoApply 的 ref 已由 insertRef 写入；但 suggestion 表里的 action_status 还是 'suggested'。
-    // 修复策略：在 autoApply 路径上，把每个被应用的 suggestion 标为 applied + accepted。
-    if (cfg.autoApply === 'high_confidence' && applied > 0) {
-      // 重新查最近一次插入的 suggestions，对 top-1 命中的做精确 mark
-      for (const s of suggestions) {
-        const top = s.candidates[0]
-        if (!top) continue
-        if (
-          (top.scoreKind === 'embedding' || top.scoreKind === 'hybrid') &&
-          top.confidence >= cfg.minConfidence &&
-          top.confidence - (s.candidates[1]?.confidence ?? 0) >= cfg.minMargin
-        ) {
-          // 查 ref id（同 source, target, ref_type='ai_auto'）
-          const refRow = db
-            .query(
-              "SELECT id FROM block_refs WHERE source_id = ? AND target_id = ? AND ref_type = 'ai_auto' ORDER BY id DESC LIMIT 1",
-            )
-            .get(s.sourceBlockId, top.blockId) as { id: number } | undefined
-          if (refRow) {
-            db.query(
-              `UPDATE autolink_suggestions
-               SET action_status='applied', review_status='accepted',
-                   created_ref_id=?, applied_target_id=?,
-                   applied_at=datetime('now'), reviewed_at=datetime('now')
-               WHERE id=?`,
-            ).run(refRow.id, top.blockId, s.id)
-          }
-        }
-      }
     }
   }
 
@@ -287,9 +237,8 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
   ).length
   return {
     analyzed: 1,
-    suggestionsAdded: suggestions.length,
-    suggestions,
-    applied,
+    applied: links.length,
+    links,
     errors,
     skippedLowConfidence,
     skippedAnchors: skippedAnchors.length > 0 ? skippedAnchors : undefined,
@@ -297,11 +246,7 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
 }
 
 function empty(): AnalyzeResult {
-  return { analyzed: 0, suggestionsAdded: 0, suggestions: [], applied: 0, errors: [] }
-}
-
-function sha256(s: string): string {
-  return createHash('sha256').update(s).digest('hex')
+  return { analyzed: 0, applied: 0, links: [], errors: [] }
 }
 
 // ───────────────────── Extraction ─────────────────────
@@ -361,6 +306,17 @@ function safeParseMentions(raw: string, sourceContent: string): Mention[] {
 
 // ───────────────────── Candidate matching ─────────────────────
 
+type ScoreKind = 'fts_rank' | 'embedding' | 'hybrid'
+
+interface Candidate {
+  blockId: string
+  docId: string
+  docTitle: string
+  snippet: string
+  confidence: number
+  scoreKind: ScoreKind
+}
+
 const STOP_ANCHORS = new Set(['note', '笔记', '内容', '下面的', '示例', '例子', '相关', '一般', '通常'])
 
 async function findCandidates(
@@ -406,12 +362,15 @@ async function findCandidates(
 
   if (rows.length === 0) return []
 
-  // 过滤 ai_exclude 文档的候选
-  const excluded = loadAiExcludedDocIds(rows.map((r) => r.root_id))
-  rows = rows.filter((r) => !excluded.has(r.root_id))
+  // 过滤 ai_exclude / inbox / archived 文档的候选（与检索默认过滤语义一致）
+  const rootIds = rows.map((r) => r.root_id)
+  const excluded = loadAiExcludedDocIds(rootIds)
+  const inbox = loadInboxDocIds(rootIds)
+  const archived = loadArchivedDocIds(rootIds)
+  rows = rows.filter((r) => !excluded.has(r.root_id) && !inbox.has(r.root_id) && !archived.has(r.root_id))
   if (rows.length === 0) return []
 
-  // FTS-only：rank 位置分（仅用于展示排序；score_kind='fts_rank'，达不到建议入库门槛）
+  // FTS-only：rank 位置分（score_kind='fts_rank'，达不到建链门槛）
   const embeddingAvailable = hasRuntime() && getRuntime().hasEmbedding()
   const N = rows.length
   const ftsRanked: Candidate[] = rows.map((r, i) => ({
@@ -445,7 +404,7 @@ async function findCandidates(
       const fts = ftsRanked[i]!
       const score = scores.get(fts.blockId)
       if (score === undefined) {
-        // 没向量：无法给出语义分 → 诚实地标回 fts_rank（不会达到建议入库门槛）
+        // 没向量：无法给出语义分 → 诚实地标回 fts_rank（达不到建链门槛）
         hybrid.push({ ...fts, scoreKind: 'fts_rank' })
         continue
       }
@@ -462,30 +421,9 @@ async function findCandidates(
   }
 }
 
-// ───────────────────── DB writes ─────────────────────
+// ───────────────────── DB helpers ─────────────────────
 
-export function insertRef(sourceId: string, targetId: string, refType: string): boolean {
-  if (sourceId === targetId) return false
-  const db = getDb()
-  const existing = db
-    .query('SELECT id FROM block_refs WHERE source_id = ? AND target_id = ?')
-    .get(sourceId, targetId)
-  if (existing) return false
-  db.query('INSERT INTO block_refs (source_id, target_id, ref_type) VALUES (?, ?, ?)').run(
-    sourceId,
-    targetId,
-    refType,
-  )
-  return true
-}
-
-export function deleteRefByPair(sourceId: string, targetId: string): number {
-  const db = getDb()
-  const r = db.query('DELETE FROM block_refs WHERE source_id = ? AND target_id = ?').run(sourceId, targetId)
-  return r.changes
-}
-
-/** 列出某 doc 下所有 block 的 id（用于前端拉取 suggestions） */
+/** 列出某 doc 下所有 block 的 id */
 export function listBlockIdsForDoc(docId: string): string[] {
   const db = getDb()
   const rows = db.query('SELECT id FROM blocks WHERE root_id = ?').all(docId) as Array<{ id: string }>

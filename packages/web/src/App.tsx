@@ -10,7 +10,6 @@ import SettingsSyncPage from './routes/settings-sync'
 import SettingsTokensPage from './routes/settings-tokens'
 import InboxPage from './routes/inbox'
 import ArchivedPage from './routes/archived'
-import AutolinkPage from './routes/autolink'
 import SharePage from './routes/share'
 import Layout from './components/Layout'
 import RouteTransition from './components/RouteTransition'
@@ -62,7 +61,6 @@ export default function App() {
             <Route path="/doc/:id" element={<DocPage />} />
             <Route path="/inbox" element={<InboxPage />} />
             <Route path="/archived" element={<ArchivedPage />} />
-            <Route path="/autolink" element={<AutolinkPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/settings/ai" element={<SettingsAIPage />} />
             <Route path="/settings/backup" element={<SettingsBackupPage />} />

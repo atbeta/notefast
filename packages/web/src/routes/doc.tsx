@@ -19,7 +19,6 @@ import {
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
-import AutoLinkPanel from '../components/AutoLinkPanel'
 import MarkdownEditor from '../components/MarkdownEditor'
 import TagEditor from '../components/TagEditor'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -725,18 +724,6 @@ export default function DocPage() {
               <BacklinksView backlinks={backlinks} loading={auxLoading} />
             </section>
 
-            <section>
-              {aiExclude ? (
-                <div className="text-[12px] text-muted-foreground leading-relaxed">
-                  <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
-                    AutoLink
-                  </h3>
-                  本篇已对 AI 隐藏，不会生成或展示自动链接建议。
-                </div>
-              ) : (
-                <AutoLinkPanel docId={id ?? null} onClose={() => undefined} />
-              )}
-            </section>
           </div>
         </div>
       )}
@@ -751,17 +738,6 @@ export default function DocPage() {
         <section>
           <h3 className="text-sm font-medium text-foreground mb-3">反向链接</h3>
           <BacklinksView backlinks={backlinks} loading={auxLoading} />
-        </section>
-
-        <section>
-          {aiExclude ? (
-            <div className="text-[12px] text-muted-foreground leading-relaxed">
-              <h3 className="text-sm font-medium text-foreground mb-2">AutoLink</h3>
-              本篇已对 AI 隐藏，不会生成或展示自动链接建议。
-            </div>
-          ) : (
-            <AutoLinkPanel docId={id ?? null} onClose={() => undefined} />
-          )}
         </section>
       </div>
 

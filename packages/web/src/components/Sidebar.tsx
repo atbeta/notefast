@@ -13,7 +13,6 @@ import {
   Sparkles,
   Settings,
   Tag,
-  Link2,
   Star,
   X,
   Clock,
@@ -68,7 +67,6 @@ export default function Sidebar({
   const [isMac, setIsMac] = useState(false)
   const [inboxCount, setInboxCount] = useState(0)
   const [archivedCount, setArchivedCount] = useState(0)
-  const [autolinkCount, setAutolinkCount] = useState(0)
   const { views: pinnedViews, unpin } = usePinnedViews()
   const navFadeRef = useScrollFade<HTMLElement>()
 
@@ -116,7 +114,7 @@ export default function Sidebar({
     }, [collapsed, refetchRecent]),
   )
 
-  // 收集箱计数 + 归档计数 + 链接建议未读计数
+  // 收集箱计数 + 归档计数
   useEffect(() => {
     let cancelled = false
     const refresh = () => {
@@ -125,9 +123,6 @@ export default function Sidebar({
         .catch(() => {})
       api.get<DocSummary[]>('/docs/list?status=archived')
         .then((list) => { if (!cancelled) setArchivedCount(list.length) })
-        .catch(() => {})
-      api.get<{ count: number }>('/auto-link/inbox?status=unreviewed&limit=1')
-        .then((r) => { if (!cancelled) setAutolinkCount(r.count) })
         .catch(() => {})
     }
     refresh()
@@ -250,15 +245,6 @@ export default function Sidebar({
           {archivedCount > 0 && (
             <span className="ml-auto text-[10px] text-sidebar-muted/70 tabular-nums">
               {archivedCount > 99 ? '99+' : archivedCount}
-            </span>
-          )}
-        </Link>
-        <Link to="/autolink" onClick={closeAfterNav} className={location.pathname === '/autolink' ? 'sidebar-link-active' : 'sidebar-link'}>
-          <Link2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          <span className="flex-1">链接建议</span>
-          {autolinkCount > 0 && (
-            <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-foreground text-background tabular-nums">
-              {autolinkCount > 99 ? '99+' : autolinkCount}
             </span>
           )}
         </Link>

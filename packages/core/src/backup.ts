@@ -12,7 +12,7 @@ import { z } from 'zod'
 export const BACKUP_SECRET_MASK = '***set***'
 
 /** 当前程序支持的最高 schema 版本；恢复时备份版本不得高于此值 */
-export const CURRENT_SCHEMA_VERSION = 4
+export const CURRENT_SCHEMA_VERSION = 5
 
 /** 默认备份间隔：1 小时 */
 export const DEFAULT_BACKUP_INTERVAL_MS = 3_600_000

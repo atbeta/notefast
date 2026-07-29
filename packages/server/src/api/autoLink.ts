@@ -1,162 +1,26 @@
 /**
- * AutoLink API（v2）
+ * AutoLink API（v4 —— 高置信直接建链，无人工审核）
  *
- * - GET    /api/v1/auto-link/suggestions?doc_id=X
- *   列出某 doc 下所有 block 的活跃建议（apply/revert 状态后保留 history）
- * - GET    /api/v1/auto-link/inbox?status=&limit=
- *   跨 doc 全局 Inbox；默认 review_status=unreviewed
- * - POST   /api/v1/auto-link/apply       body: { suggestion_id, candidate_index? }
- *   事务化接受建议（写入 block_refs，created_ref_id 精确归属）
- * - POST   /api/v1/auto-link/dismiss     body: { suggestion_id }
- *   用户忽略（review_status=dismissed，保留记录）
- * - POST   /api/v1/auto-link/:id/revert
- *   精确撤销（按 created_ref_id 删除）
  * - POST   /api/v1/auto-link/run         body: { block_id }
- *   手动触发单个 block 的分析
+ *   手动触发单个 block 的分析（满足阈值即直接写 block_refs，ref_type='ai_auto'）
+ * - POST   /api/v1/auto-link/run-batch   body: { doc_id, max_blocks? }
+ *   为某个 doc 下所有非 doc block 跑一次分析（兜底场景）
+ * - DELETE /api/v1/auto-link/refs?source_id&target_id
+ *   解除某对 block 之间的引用（用户想 undo）
  */
 
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import type { AutolinkSuggestionWire } from '@notefast/core'
 import { getDb } from '../db'
 import { getBlockById, fetchDocBlocks } from '../store/blocks'
-import {
-  analyzeBlock,
-  deleteRefByPair,
-  listBlockIdsForDoc,
-} from '../ai/autoLink'
-import {
-  applySuggestion,
-  dismissSuggestion,
-  enrichSuggestions,
-  listSuggestions,
-  listSuggestionsForBlock,
-  listSuggestionsForDoc,
-  revertSuggestion,
-  toWire,
-  type ReviewStatus,
-  type ActionStatus,
-} from '../ai/autoLinkStore'
+import { deleteRefByPair } from '../store/refs'
+import { analyzeBlock } from '../ai/autoLink'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 
 const autoLink = new Hono()
 
 const FIX_HINT = '请在 Web UI /settings 页面配置 AI Provider，并启用 AutoLink'
-
-autoLink.get('/suggestions', (c) => {
-  const docId = c.req.query('doc_id') || ''
-  if (!docId) return c.json({ error: 'bad_request', message: '缺少 doc_id' }, 400)
-  const blockIds = listBlockIdsForDoc(docId)
-  const suggestions = listSuggestionsForDoc(docId, blockIds)
-  return c.json({
-    doc_id: docId,
-    count: suggestions.length,
-    suggestions: suggestions.map(toWire),
-  })
-})
-
-/**
- * 全局 Inbox（v2）
- * status 对应 review_status：
- * - unreviewed：待人工处理（仅 suggested / reverted）
- * - accepted：已接受（含手动接受与高置信自动应用）
- * - dismissed：已忽略
- * - all：全部
- */
-autoLink.get('/inbox', (c) => {
-  const status = c.req.query('status') || 'unreviewed'
-  const limit = Math.min(parseInt(c.req.query('limit') || '100', 10) || 100, 500)
-  const reviewStatus = status === 'all' ? undefined : (status as ReviewStatus)
-
-  const suggestions = listSuggestions({
-    reviewStatus,
-    limit,
-    actionStatus: ['suggested', 'applied', 'reverted'] as ActionStatus[],
-  })
-
-  // 补 source content / doc title（Inbox UI 需要；一次 IN 查询批量补全）
-  const items: AutolinkSuggestionWire[] = enrichSuggestions(getDb(), suggestions).map(({ wire, source }) => ({
-    ...wire,
-    source_content: source.content,
-    source_doc_id: source.docId,
-    source_doc_title: source.docTitle,
-    source_missing: source.missing,
-  }))
-
-  return c.json({ status, count: items.length, items })
-})
-
-const applySchema = z.object({
-  suggestion_id: z.string().min(1),
-  candidate_index: z.number().int().min(0).max(4).optional().default(0),
-})
-
-autoLink.post('/apply', zValidator('json', applySchema), (c) => {
-  const { suggestion_id, candidate_index } = c.req.valid('json')
-  const result = applySuggestion(suggestion_id, candidate_index, 'ai_suggested')
-  if (!result.applied && !result.refId) {
-    return c.json(
-      { error: 'apply_failed', reason: result.reason ?? 'unknown' },
-      result.reason === 'not_found' ? 404 : 400,
-    )
-  }
-  return c.json({
-    applied: result.applied,
-    ref_id: result.refId,
-    source_id: result.sourceBlockId,
-    target_id: result.targetBlockId,
-    reason: result.reason,
-  })
-})
-
-const dismissSchema = z.object({ suggestion_id: z.string().min(1) })
-
-autoLink.post('/dismiss', zValidator('json', dismissSchema), (c) => {
-  const { suggestion_id } = c.req.valid('json')
-  const result = dismissSuggestion(suggestion_id)
-  if (!result.dismissed && result.reason === 'not_found') {
-    return c.json({ error: 'not_found' }, 404)
-  }
-  return c.json({ dismissed: result.dismissed, reason: result.reason })
-})
-
-/**
- * 批量审阅（v3）：对给定 id 列表统一接受 / 忽略
- * - accept：逐条 applySuggestion（写 block_refs），失败的计入 failed 不中断
- * - dismiss：逐条 dismissSuggestion
- * 前端确认弹窗由调用方负责；此接口只做幂等执行
- */
-const bulkReviewSchema = z.object({
-  action: z.enum(['accept', 'dismiss']),
-  ids: z.array(z.string().min(1)).min(1).max(500),
-})
-
-autoLink.post('/bulk-review', zValidator('json', bulkReviewSchema), (c) => {
-  const { action, ids } = c.req.valid('json')
-  let done = 0
-  let failed = 0
-  for (const id of ids) {
-    const r = action === 'accept'
-      ? applySuggestion(id, 0, 'ai_suggested').applied
-      : dismissSuggestion(id).dismissed
-    if (r) done++
-    else failed++
-  }
-  return c.json({ action, done, failed, total: ids.length })
-})
-
-/**
- * 精确撤销（v2）：按 created_ref_id 删除，不依赖 (source, target) 对
- */
-autoLink.post('/:suggestion_id/revert', (c) => {
-  const suggestionId = c.req.param('suggestion_id')
-  const result = revertSuggestion(suggestionId)
-  if (!result.reverted && result.reason === 'not_found') {
-    return c.json({ error: 'not_found' }, 404)
-  }
-  return c.json({ reverted: result.reverted, reason: result.reason })
-})
 
 const runSchema = z.object({
   block_id: z.string().min(1),
@@ -180,8 +44,8 @@ autoLink.post('/run', zValidator('json', runSchema), async (c) => {
   })
   return c.json({
     analyzed: result.analyzed,
-    suggestions_added: result.suggestionsAdded,
     applied: result.applied,
+    links: result.links,
     errors: result.errors,
     rate_limited: result.rateLimited === true,
     skipped_low_confidence: result.skippedLowConfidence ?? 0,
@@ -207,7 +71,7 @@ autoLink.post('/run-batch', zValidator('json', runBatchSchema), async (c) => {
     .slice(0, max_blocks)
   const cfg = getRuntime().autoLinkConfig()
   let total = 0
-  let suggestions = 0
+  let applied = 0
   let errors = 0
   for (const row of rows) {
     try {
@@ -219,31 +83,24 @@ autoLink.post('/run-batch', zValidator('json', runBatchSchema), async (c) => {
         maxPerBlock: cfg.maxPerBlock,
       })
       total++
-      suggestions += r.suggestionsAdded
+      applied += r.applied
       errors += r.errors.length
     } catch {
       errors++
     }
   }
-  return c.json({ processed: total, suggestions, errors })
+  return c.json({ processed: total, applied, errors })
 })
 
-/** 解除某 block 上的某条 ai_link 引用（用户想 undo） */
+/** 解除某对 block 之间的引用（用户想 undo） */
 autoLink.delete('/refs', (c) => {
   const sourceId = c.req.query('source_id') || ''
   const targetId = c.req.query('target_id') || ''
   if (!sourceId || !targetId) {
     return c.json({ error: 'bad_request', message: '需要 source_id 和 target_id' }, 400)
   }
-  const changed = deleteRefByPair(sourceId, targetId)
+  const changed = deleteRefByPair(getDb(), sourceId, targetId)
   return c.json({ deleted: changed })
-})
-
-/** 列出某 block 上的活跃建议 */
-autoLink.get('/block/:blockId', (c) => {
-  const blockId = c.req.param('blockId')
-  const list = listSuggestionsForBlock(blockId)
-  return c.json({ block_id: blockId, suggestions: list.map(toWire) })
 })
 
 export default autoLink

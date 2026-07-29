@@ -132,39 +132,6 @@ export interface HeadingNode {
 
 // ───────────────────── API 线格式（server ↔ web 共享，字段以 server 实际返回为准） ─────────────────────
 
-/** AutoLink 候选链接（线格式） */
-export interface AutolinkCandidateWire {
-  block_id: string
-  doc_id: string
-  doc_title: string
-  snippet: string
-  confidence: number
-  score_kind: 'fts_rank' | 'embedding' | 'hybrid'
-}
-
-/** AutoLink 建议（GET /auto-link/inbox 的 items 线格式，含来源补全） */
-export interface AutolinkSuggestionWire {
-  id: string
-  source_block_id: string
-  source_doc_id: string | null
-  source_doc_title: string
-  source_content: string
-  /** 源块是否已删除 */
-  source_missing: boolean
-  anchor: string
-  kind: string
-  candidates: AutolinkCandidateWire[]
-  action_status: 'suggested' | 'applied' | 'reverted' | 'failed' | 'superseded'
-  review_status: 'unreviewed' | 'accepted' | 'dismissed'
-  applied_target_id: string | null
-  created_ref_id: number | null
-  score_kind: 'fts_rank' | 'embedding' | 'hybrid'
-  error: string | null
-  created_at: string
-  applied_at: string | null
-  reviewed_at: string | null
-}
-
 /** /ai/diagnose 单项能力探测结果（公共字段） */
 export interface AiDiagnoseProbe {
   configured: boolean
@@ -200,7 +167,6 @@ export interface AiDiagnoseResult {
   autoLink?: {
     configured: boolean
     enabled: boolean
-    autoApply: 'never' | 'high_confidence'
     ok: boolean
     prerequisites: {
       chat: { configured: boolean; ok: boolean }

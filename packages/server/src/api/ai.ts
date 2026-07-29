@@ -108,7 +108,6 @@ const configSchema = z.object({
   autoLink: z
     .object({
       enabled: z.boolean(),
-      autoApply: z.enum(['never', 'high_confidence']),
       notebookScope: z.enum(['all', 'same']),
       maxPerBlock: z.number().int().min(1).max(10),
       minConfidence: z.number().min(0).max(1),
@@ -320,7 +319,6 @@ ai.post('/diagnose', async (c) => {
   const autoLink = {
     configured: cfg.enabled,
     enabled: cfg.enabled,
-    autoApply: cfg.autoApply,
     ok: cfg.enabled && chat.ok,
     prerequisites: {
       chat: { configured: chat.configured, ok: chat.ok },

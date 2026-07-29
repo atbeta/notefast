@@ -29,7 +29,7 @@ import { ActionButton, useToast, Toggle, FieldRow } from '../ui'
 import ConfirmDialog from '../ConfirmDialog'
 import { ProviderForm } from './ProviderForm'
 import { DiagnosePanel } from './DiagnosePanel'
-import { Section, AutoLinkOption, CapabilityBadge } from './primitives'
+import { Section, CapabilityBadge } from './primitives'
 import { errorsToFields, localValidate, serverValidationErrors, type FormErrors } from './validation'
 
 /**
@@ -565,7 +565,7 @@ export default function AISettingsPanel() {
       </Section>
 
       {/* Section 5: AutoLink */}
-      <Section icon={<Link2 className="w-4 h-4" />} title="AutoLink（自动反向链接）" hint="新建 / 更新 block 时由 LLM 抽取实体并匹配现有笔记，建议建链">
+      <Section icon={<Link2 className="w-4 h-4" />} title="AutoLink（AI 主动建链）" hint="写入后 AI 自动抽取关键概念，高置信（语义命中 ≥ minConfidence 且 top-1 领先 ≥ minMargin）时直接建立笔记间链接（ref_type=ai_auto）；低置信静默跳过，无需人工审核。">
         <Toggle
           checked={autoLink.enabled}
           onChange={(v) => setAutoLink({ ...autoLink, enabled: v })}
@@ -578,26 +578,6 @@ export default function AISettingsPanel() {
         />
         {autoLink.enabled && (
           <div className="mt-4 space-y-4">
-            <div>
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                自动应用策略
-              </div>
-              <div className="grid gap-2" role="radiogroup" aria-label="自动应用策略">
-                <AutoLinkOption
-                  selected={autoLink.autoApply === 'never'}
-                  title="仅建议"
-                  description="AI 抽取实体进 Inbox，但不写 block_refs；用户接受后才落地。"
-                  onSelect={() => setAutoLink({ ...autoLink, autoApply: 'never' })}
-                />
-                <AutoLinkOption
-                  selected={autoLink.autoApply === 'high_confidence'}
-                  title="高置信自动应用"
-                  description="满足 minConfidence 且 top-1 显著领先时自动写入，其余进 Inbox。"
-                  onSelect={() => setAutoLink({ ...autoLink, autoApply: 'high_confidence' })}
-                />
-              </div>
-            </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <FieldRow label="minConfidence">
                 <input
@@ -621,7 +601,7 @@ export default function AISettingsPanel() {
                   onChange={(e) => setAutoLink({ ...autoLink, minMargin: parseFloat(e.target.value) || 0 })}
                 />
               </FieldRow>
-              <FieldRow label="每块最大建议数">
+              <FieldRow label="每块最大建链数">
                 <input
                   type="number"
                   min={1}

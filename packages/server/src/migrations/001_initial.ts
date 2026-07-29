@@ -119,32 +119,6 @@ export function up(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_refs_source ON block_refs(source_id);
     CREATE INDEX IF NOT EXISTS idx_refs_target ON block_refs(target_id);
 
-    CREATE TABLE IF NOT EXISTS autolink_suggestions (
-      id                    TEXT PRIMARY KEY,
-      source_block_id       TEXT NOT NULL,
-      source_content_hash   TEXT NOT NULL,
-      source_updated_at     TEXT NOT NULL,
-      notebook_id           TEXT NOT NULL,
-      anchor                TEXT NOT NULL,
-      kind                  TEXT NOT NULL,
-      candidates            TEXT NOT NULL,
-      action_status         TEXT NOT NULL DEFAULT 'suggested',
-      review_status         TEXT NOT NULL DEFAULT 'unreviewed',
-      created_ref_id        INTEGER,
-      applied_target_id     TEXT,
-      score_kind            TEXT,
-      model                 TEXT,
-      error                 TEXT,
-      created_at            TEXT NOT NULL DEFAULT (datetime('now')),
-      applied_at            TEXT,
-      reviewed_at           TEXT,
-      FOREIGN KEY (created_ref_id) REFERENCES block_refs(id) ON DELETE SET NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_autolink_review ON autolink_suggestions(review_status);
-    CREATE INDEX IF NOT EXISTS idx_autolink_action ON autolink_suggestions(action_status);
-    CREATE INDEX IF NOT EXISTS idx_autolink_source ON autolink_suggestions(source_block_id);
-    CREATE INDEX IF NOT EXISTS idx_autolink_hash   ON autolink_suggestions(source_block_id, source_content_hash);
-
     CREATE TABLE IF NOT EXISTS api_tokens (
       token_id     TEXT PRIMARY KEY,
       name         TEXT NOT NULL,

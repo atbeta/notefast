@@ -111,7 +111,7 @@ describe('createSession', () => {
     const msg = list.body[0] as Record<string, unknown>
     expect(msg.result).toBeDefined()
     const tools = (msg.result as Record<string, unknown>).tools as { name: string }[]
-    expect(tools.length).toBe(26)
+    expect(tools.length).toBe(21)
 
     const toolNames = tools.map((t) => t.name)
     expect(toolNames).toContain('notefast_search')
@@ -131,10 +131,12 @@ describe('createSession', () => {
     expect(toolNames).toContain('notefast_semantic_search')
     expect(toolNames).toContain('notefast_suggest_title')
     expect(toolNames).toContain('notefast_chat')
-    expect(toolNames).toContain('notefast_autolink_suggestions')
-    expect(toolNames).toContain('notefast_autolink_apply')
-    expect(toolNames).toContain('notefast_autolink_dismiss')
     expect(toolNames).toContain('notefast_autolink_run')
+    // 三态审核工具已随「高置信直接建链」模型下线
+    expect(toolNames).not.toContain('notefast_autolink_suggestions')
+    expect(toolNames).not.toContain('notefast_autolink_apply')
+    expect(toolNames).not.toContain('notefast_autolink_dismiss')
+    expect(toolNames).not.toContain('notefast_autolink_revert')
 
     await transport.close()
   })
@@ -267,12 +269,6 @@ describe('MCP 工具错误语义统一（isError + error.code）', () => {
     })
     expect(result.isError).toBe(true)
     expect((payload.error as { code: string }).code).toBe('invalid_params')
-  })
-
-  test('autolink_apply 不存在 → not_found', async () => {
-    const { result, payload } = await callTool('notefast_autolink_apply', { suggestion_id: 'ghost-sug' })
-    expect(result.isError).toBe(true)
-    expect((payload.error as { code: string }).code).toBe('not_found')
   })
 
   test('semantic_search 未配置 embedding → not_configured', async () => {
