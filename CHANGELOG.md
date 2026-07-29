@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.0.0](https://github.com/atbeta/notefast/compare/v0.22.0...v1.0.0) (2026-07-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* **autolink:** autolink_suggestions is dropped and the review APIs/MCP tools are removed.
+
+### Features
+
+* **autolink:** replace human review with high-confidence auto-linking ([8850366](https://github.com/atbeta/notefast/commit/885036653926d75711046a8bda77e74ab62bf768))
+* **server,web:** entity layer - the graph's mention edges ([bbb2057](https://github.com/atbeta/notefast/commit/bbb205773268737b588760122147592118723455))
+* **server:** context-enriched indexed text + retrieval P0 correctness fixes ([d8d58c2](https://github.com/atbeta/notefast/commit/d8d58c2eae5c84d3a61f2e43723681c307a34766))
+* **server:** dual-path lexical search (FTS + LIKE) for Chinese recall ([790f1c2](https://github.com/atbeta/notefast/commit/790f1c21c033a10e1abe999d58031cda6891314e))
+* **server:** graph context channel + fusion layer corrections ([ff81a3c](https://github.com/atbeta/notefast/commit/ff81a3c34d77e48e988bdf92df6a076d4cd161d3))
+* **server:** retrieval evaluation harness with synthetic + private tracks ([2bc8204](https://github.com/atbeta/notefast/commit/2bc82040322b7d0b1e8441686c025972335b92ab))
+
+
+### Bug Fixes
+
+* **core:** strip inline &lt;think&gt; reasoning from non-stream chat responses ([468a9e3](https://github.com/atbeta/notefast/commit/468a9e38daa7f65c45f5c3168b102aebdabc9dfa))
+
 ## [0.22.0](https://github.com/atbeta/notefast/compare/v0.21.0...v0.22.0) (2026-07-28)
 
 
