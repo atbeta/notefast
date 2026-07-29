@@ -19,6 +19,8 @@ import {
 } from '../services/aiRuntime'
 import { hybridSearch } from '../ai/hybridSearch'
 import { upsertVector, initVectorStore } from '../ai/indexer'
+import { insertRef } from '../store/refs'
+import { upsertEntity, addMention } from '../store/entities'
 
 let testDir: string
 let pluginSystem: ReturnType<typeof createPluginSystem>
@@ -43,6 +45,9 @@ beforeEach(() => {
   initAiRuntime(pluginSystem, testDir)
   getDb().query('DELETE FROM blocks').run()
   getDb().query('DELETE FROM block_vectors').run()
+  getDb().query('DELETE FROM block_refs').run()
+  getDb().query('DELETE FROM entity_mentions').run()
+  getDb().query('DELETE FROM entities').run()
   getDb().query(
     `UPDATE vector_store_state
      SET active_backend = 'json', status = 'stale', model_fingerprint = NULL,
@@ -73,6 +78,32 @@ function seedBlock(opts: {
      VALUES (?, ?, ?, ?, ?, ?, 0, 1, ?, ?)`,
   ).run(id, opts.notebookId, docId, docId, opts.type ?? 'paragraph', opts.content, now, now)
   return { id, docId }
+}
+
+/** 种一篇含多个段落块的文档（多样性/上下文通道测试用） */
+function seedDoc(opts: {
+  notebookId: string
+  title?: string
+  contents: string[]
+  idPrefix?: string
+}) {
+  const db = getDb()
+  const now = new Date().toISOString()
+  const docId = crypto.randomUUID()
+  db.query(
+    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+     VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
+  ).run(docId, opts.notebookId, docId, opts.title ?? 'Untitled', now, now)
+  const blockIds: string[] = []
+  opts.contents.forEach((content, i) => {
+    const id = opts.idPrefix ? `${opts.idPrefix}-${i}` : crypto.randomUUID()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'paragraph', ?, ?, 1, ?, ?)`,
+    ).run(id, opts.notebookId, docId, docId, content, i, now, now)
+    blockIds.push(id)
+  })
+  return { docId, blockIds }
 }
 
 describe('hybridSearch — 纯 FTS5 降级', () => {
@@ -298,5 +329,174 @@ describe('hybridSearch — includeArchived 透传到语义通道', () => {
     const included = await hybridSearch({ query: 'zztop-arch', topK: 10, includeArchived: true })
     expect(included.retrieval.semantic_hits).toBe(2)
     expect(included.citations.some((c) => c.block_id === 'arch-sem-block')).toBe(true)
+  })
+})
+
+describe('hybridSearch — reranker 原始分（去归一化）', () => {
+  test('score 保留 reranker 原始分（不强制 1.0/0.5），rrf_score 恒为融合分', async () => {
+    applyNewConfig(
+      {
+        version: 1,
+        chat: null,
+        embedding: null,
+        autoIndex: false,
+        reranker: {
+          enabled: true,
+          baseUrl: 'http://mock-rerank',
+          apiKey: '',
+          model: 'bge',
+          timeoutMs: 5000,
+        },
+      },
+      pluginSystem,
+    )
+    const { getRuntime } = await import('../services/aiRuntime')
+    // TEI 协议：[{ index, score }]，原始分不落在 [0.5, 1] 归一区间
+    getRuntime().setFetchImpl((async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/rerank')) {
+        return new Response(
+          JSON.stringify([
+            { index: 0, score: 0.83 },
+            { index: 1, score: 0.12 },
+          ]),
+          { status: 200 },
+        )
+      }
+      return new Response('unexpected', { status: 500 })
+    }) as unknown as typeof fetch)
+
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    seedBlock({ notebookId: nb, content: 'Tauri window close handler pattern' })
+    seedBlock({ notebookId: nb, content: 'Tauri app packaging guide' })
+
+    const report = await hybridSearch({ query: 'Tauri', topK: 10 })
+    expect(report.retrieval.reranked).toBe(true)
+    expect(report.retrieval.score_kind).toBe('rerank')
+    expect(report.citations.length).toBe(2)
+    // 原始分原样保留：第一名 0.83、最后一名 0.12（去归一化前恒为 1.0 / 0.5）
+    expect(report.citations[0]!.score).toBe(0.83)
+    expect(report.citations[1]!.score).toBe(0.12)
+    // rrf_score 恒为融合分（~0.016 量级），与 score 不同尺度
+    for (const c of report.citations) {
+      expect(typeof c.rrf_score).toBe('number')
+      expect(c.rrf_score).toBeGreaterThan(0)
+      expect(c.rrf_score).toBeLessThan(0.1)
+    }
+    expect(report.citations[0]!.score).not.toBe(report.citations[0]!.rrf_score)
+
+    // applyNewConfig 会写盘：复位 reranker，避免后续测试（beforeEach 重读磁盘配置）误走真实网络
+    applyNewConfig(
+      { version: 1, chat: null, embedding: null, autoIndex: false, reranker: null },
+      pluginSystem,
+    )
+  })
+})
+
+describe('hybridSearch — 文档多样性约束（maxPerDoc）', () => {
+  test('同一文档最多占 maxPerDoc 席（默认 2），其余名额给其他文档', async () => {
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const a = seedDoc({
+      notebookId: nb,
+      contents: ['Zebra 斑马条纹研究一', 'Zebra 斑马条纹研究二', 'Zebra 斑马条纹研究三'],
+    })
+    const b = seedDoc({ notebookId: nb, contents: ['Zebra 斑马迁徙笔记'] })
+
+    const report = await hybridSearch({ query: 'Zebra', topK: 3 })
+    expect(report.citations.length).toBe(3)
+    // 3 个同文档块不能全占 top-3：A 文档 ≤ 2 席，B 文档进入结果
+    expect(report.citations.filter((c) => c.doc_id === a.docId).length).toBe(2)
+    expect(report.citations.filter((c) => c.doc_id === b.docId).length).toBe(1)
+  })
+
+  test('候选不足时按分从溢出补齐（不因多样性少给结果）', async () => {
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const a = seedDoc({
+      notebookId: nb,
+      contents: ['Zebra 斑马条纹研究一', 'Zebra 斑马条纹研究二', 'Zebra 斑马条纹研究三'],
+    })
+
+    const report = await hybridSearch({ query: 'Zebra', topK: 3 })
+    // 只有 A 文档命中：先取 2 条，第 3 席由溢出队列补齐
+    expect(report.citations.length).toBe(3)
+    expect(report.citations.every((c) => c.doc_id === a.docId)).toBe(true)
+  })
+})
+
+describe('hybridSearch — 图谱上下文通道（第 5 路 RRF 输入）', () => {
+  test('自身 / 互链 / 共享实体文档的块都获得 RRF 票，当前文档块排最前', async () => {
+    const db = getDb()
+    const nb = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const ctx = seedDoc({
+      notebookId: nb,
+      title: '当前文档',
+      idPrefix: 'ctx-block',
+      contents: ['上下文文档的段落一', '上下文文档的段落二'],
+    })
+    const linked = seedDoc({
+      notebookId: nb,
+      title: '互链文档',
+      idPrefix: 'link-block',
+      contents: ['互链文档的段落一', '互链文档的段落二'],
+    })
+    const shared = seedDoc({
+      notebookId: nb,
+      title: '共享实体文档',
+      idPrefix: 'ent-block',
+      contents: ['共享实体文档的段落一', '共享实体文档的段落二'],
+    })
+
+    // 互链：当前文档块 → 互链文档块
+    insertRef(db, { sourceId: ctx.blockIds[0]!, targetId: linked.blockIds[0]!, refType: 'manual' })
+    // 共享实体：同一实体在当前文档与共享实体文档各有一条提及
+    const entity = upsertEntity(db, { name: 'graphileon', display: 'Graphileon', kind: 'tool' })
+    addMention(db, entity.id, ctx.blockIds[1]!, 'Graphileon')
+    addMention(db, entity.id, shared.blockIds[0]!, 'Graphileon')
+
+    // 查询与任何内容无字面重叠：词法/标题/实体通道均零命中，只有上下文通道出票
+    const report = await hybridSearch({ query: 'zzzqqq', topK: 10, contextDocId: ctx.docId })
+    expect(report.retrieval.fts_hits).toBe(0)
+    expect(report.citations.length).toBeGreaterThanOrEqual(3)
+    // 三段都进结果
+    expect(report.citations.some((c) => c.doc_id === ctx.docId)).toBe(true)
+    expect(report.citations.some((c) => c.doc_id === linked.docId)).toBe(true)
+    expect(report.citations.some((c) => c.doc_id === shared.docId)).toBe(true)
+    // 票序：自身 > 互链 > 共享实体（单通道内 RRF 分严格递减）
+    expect(report.citations[0]!.doc_id).toBe(ctx.docId)
+    const rankOf = (docId: string) =>
+      report.citations.findIndex((c) => c.doc_id === docId)
+    expect(rankOf(ctx.docId)).toBeLessThan(rankOf(linked.docId))
+    expect(rankOf(linked.docId)).toBeLessThan(rankOf(shared.docId))
+  })
+
+  test('不传 contextDocId 时上下文通道不生效（行为与之前一致）', async () => {
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    seedDoc({ notebookId: nb, idPrefix: 'solo-block', contents: ['独自的段落'] })
+
+    const report = await hybridSearch({ query: 'zzzqqq', topK: 10 })
+    expect(report.citations.length).toBe(0)
+  })
+})
+
+describe('hybridSearch — Citation 携带 rrf_score', () => {
+  test('未配 reranker 时 score 与 rrf_score 同为 RRF 融合分，score_kind=rrf', async () => {
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    seedBlock({ notebookId: nb, content: 'Tauri 窗口关闭事件处理' })
+    seedBlock({ notebookId: nb, content: 'Tauri 应用打包指南' })
+
+    const report = await hybridSearch({ query: 'Tauri', topK: 10 })
+    expect(report.retrieval.reranked).toBe(false)
+    expect(report.retrieval.score_kind).toBe('rrf')
+    expect(report.citations.length).toBeGreaterThan(0)
+    for (const c of report.citations) {
+      expect(typeof c.rrf_score).toBe('number')
+      expect(c.score).toBe(c.rrf_score)
+    }
   })
 })

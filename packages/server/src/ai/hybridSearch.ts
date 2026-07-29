@@ -1,9 +1,10 @@
 /**
  * Hybrid Search
  *
- * 把 FTS5 关键词召回、Embedding 语义召回两条路线并行跑，
- * 用 RRF（Reciprocal Rank Fusion）合并去重；
- * 若 runtime 配置了 reranker，再对融合后的 topM 做交叉精排。
+ * 五路召回并行：FTS5/LIKE 词法、Embedding 语义、标题（文档根块）、实体提及、
+ * 图谱上下文（有 contextDocId 时），用 RRF（Reciprocal Rank Fusion）合并去重；
+ * 若 runtime 配置了 reranker，再对融合后的 topM 做交叉精排（score 为 reranker 原始分，
+ * RRF 融合分保留在 rrf_score）；精排/融合后按 maxPerDoc 做文档多样性选择再截断。
  *
  * 设计原则：
  * - 每条路线都可单独关闭：FTS5 总是可用；语义召回需要 embedding；rerank 需要 reranker
@@ -16,6 +17,7 @@ import { highlightSnippet } from '@notefast/core'
 import { lexicalSearch } from '../lexicalSearch'
 import { semanticSearch } from './indexer'
 import { entitySearch } from './entitySearch'
+import { graphContextCandidates } from './graphContext'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { loadAiExcludedDocIds, loadInboxDocIds, loadArchivedDocIds } from './aiExcludeQuery'
 
@@ -30,15 +32,20 @@ export interface SearchOptions {
   topK?: number
   /** reranker 精排窗口（仅在 hasReranker 时生效） */
   rerankWindow?: number
-  /** 当前文档 hint：同 doc 的 block 优先级 +0.05 */
+  /** 当前文档 hint：以其为中心构造图谱上下文通道（第 5 路 RRF 输入：自身 > 互链 > 共享实体） */
   contextDocId?: string
   /**
    * 引用相关性最低分（按最终 score 过滤，默认 0 = 不过滤）。
-   * 注意 score 有两种 scale：未配 reranker 时是 RRF 融合分（~0.016-0.033），
-   * 配了 reranker 时是归一分（0.5-1）——阈值要按实际 scale 设置。
+   * 注意 score 有两种 scale：配 reranker 时是模型原始分（bge 系经验 0.3~0.9，
+   * 需按所用模型校准）；未配时是 RRF 融合分（5 路 k=60，约 0.016-0.066）。
    * 被过滤掉的数量会计入 retrieval.discarded_low_score。
    */
   minScore?: number
+  /**
+   * 单文档引用数上限（多样性约束，默认 2）。融合/精排后先按分每 doc 取
+   * ≤maxPerDoc 条，不足 topK 时按分从溢出补齐（不因多样性少给结果）。
+   */
+  maxPerDoc?: number
   /**
    * 时间窗口下界（ISO 字符串）。仅返回 blocks.updated_at >= since 的块。
    * 留空表示无下限。常用于「我上周写过什么」「近期关于 X 的笔记」。
@@ -70,8 +77,10 @@ export interface Citation {
   content: string
   /** 用于 UI 的高亮片段 */
   snippet: string
-  /** RRF 或 rerank 后的最终分（越大越好） */
+  /** 最终分（配 reranker 时为模型原始精排分，否则为 RRF 融合分；越大越好） */
   score: number
+  /** RRF 融合分（恒定保留，诊断与跨 scale 对比用） */
+  rrf_score: number
 }
 
 /** 检索各阶段耗时（毫秒）；未跑的阶段为 0 */
@@ -91,6 +100,8 @@ export interface HybridSearchReport {
     fts_matched_by?: Record<string, number>
     semantic_hits: number
     reranked: boolean
+    /** score 的尺度：reranker 原始分（rerank）或 RRF 融合分（rrf） */
+    score_kind: 'rerank' | 'rrf'
     model?: string
     /** 被 minScore 门槛过滤掉的引用数（0 = 没有过滤） */
     discarded_low_score?: number
@@ -106,7 +117,8 @@ const DEFAULT_TOP_K = 5
 const DEFAULT_RERANK_WINDOW = 20
 const MAX_CITATION_CONTENT = 1200
 const RRF_K = 60
-const CONTEXT_DOC_BOOST = 0.05
+/** 多样性约束的默认单文档引用上限 */
+const DEFAULT_MAX_PER_DOC = 2
 
 /**
  * 语义召回的 cosine 下限（默认 0.3，可用 SEMANTIC_MIN_COSINE 覆盖）：
@@ -201,12 +213,33 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
     console.error('[hybridSearch] entity channel failed:', e)
   }
 
+  // 图谱上下文通道（第 5 路）：有 contextDocId 时以该文档为中心召回
+  // 自身/互链/共享实体文档的块；失败不拖垮主流程
+  let contextHits0: FtsHit[] = []
+  if (opts.contextDocId) {
+    try {
+      contextHits0 = graphContextCandidates(opts.contextDocId).map((h) => ({
+        block_id: h.block_id,
+        doc_id: h.doc_id,
+        doc_title: h.doc_title,
+        type: h.type,
+        content: h.content,
+        rank: 0,
+        matched_by: 'graph_context',
+        rrf_rank: h.rrf_rank,
+      }))
+    } catch (e) {
+      console.error('[hybridSearch] graph context channel failed:', e)
+    }
+  }
+
   // AI 软隔离 + 生命周期：过滤 ai_exclude；默认也过滤 inbox 与 archived
   const candidateDocIds = [
     ...ftsRaw0.map((h) => h.doc_id),
     ...semanticRaw0.map((h) => h.doc_id),
     ...titleHits0.map((h) => h.doc_id),
     ...entityHits0.map((h) => h.doc_id),
+    ...contextHits0.map((h) => h.doc_id),
   ]
   const excluded = loadAiExcludedDocIds(candidateDocIds)
   const inboxIds = includeInbox ? new Set<string>() : loadInboxDocIds(candidateDocIds)
@@ -216,20 +249,23 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
   const semanticRaw = semanticRaw0.filter((h) => !drop(h.doc_id))
   const titleRaw = titleHits0.filter((h) => !drop(h.doc_id))
   const entityRaw = entityHits0.filter((h) => !drop(h.doc_id))
+  const contextRaw = contextHits0.filter((h) => !drop(h.doc_id))
 
-  const fused = rrfMerge(ftsRaw, semanticRaw, titleRaw, entityRaw)
+  const fused = rrfMerge(ftsRaw, semanticRaw, titleRaw, entityRaw, contextRaw)
   const rerankCandidates = fused.slice(0, rerankWindow)
   const rerankT0 = Date.now()
   const reranked = await maybeRerank(opts.query, rerankCandidates)
   const rerank_ms = reranked ? Date.now() - rerankT0 : 0
   const ranked = reranked ?? rerankCandidates
 
-  let citations = ranked.slice(0, topK).map((c) => toCitation(c, opts.query))
-  citations = applyContextBoost(citations, opts.contextDocId)
+  // 多样性约束：每 doc 先取 ≤maxPerDoc 条，不足 topK 再从溢出按分补齐（先选后截）
+  const diversified = applyDocDiversity(ranked, opts.maxPerDoc ?? DEFAULT_MAX_PER_DOC)
+  const citations0 = diversified.slice(0, topK).map((c) => toCitation(c, opts.query))
 
   // minScore 相关性门槛：低分引用直接丢弃，避免「强制 topK」造成的引用噪声
   const minScore = opts.minScore ?? 0
   let discardedLowScore = 0
+  let citations = citations0
   if (minScore > 0) {
     const before = citations.length
     citations = citations.filter((c) => c.score >= minScore)
@@ -262,6 +298,7 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
       fts_matched_by: countBy(ftsRaw.map((h) => h.matched_by ?? 'fts')),
       semantic_hits: semanticRaw.length,
       reranked: Boolean(reranked),
+      score_kind: reranked ? 'rerank' : 'rrf',
       model: reranked ? getRuntime().rerankerConfig()?.model : undefined,
       discarded_low_score: discardedLowScore,
       timing,
@@ -364,14 +401,16 @@ interface FusedCandidate {
   doc_title: string
   type: string
   content: string
-  /** RRF 累加得分 */
+  /** 最终分（融合时为 RRF 累加分；rerank 后被替换为 reranker 原始分） */
   score: number
+  /** RRF 融合分（rerank 后仍保留，诊断与跨 scale 对比用） */
+  rrf_score: number
   /** rerank 用的归一化文本 */
   rerank_text: string
 }
 
-function rrfMerge(fts: FtsHit[], semantic: SemanticRawHit[], title: FtsHit[] = [], entity: FtsHit[] = []): FusedCandidate[] {
-  const map = new Map<string, FusedCandidate>()
+function rrfMerge(fts: FtsHit[], semantic: SemanticRawHit[], title: FtsHit[] = [], entity: FtsHit[] = [], context: FtsHit[] = []): FusedCandidate[] {
+  const map = new Map<string, Omit<FusedCandidate, 'rrf_score'>>()
 
   for (const f of fts) {
     if (!f.rrf_rank) continue
@@ -386,9 +425,10 @@ function rrfMerge(fts: FtsHit[], semantic: SemanticRawHit[], title: FtsHit[] = [
       rerank_text: rerankText(f.doc_title, f.content),
     })
   }
-  // 标题/实体通道：与 fts 同构，已存在的 block_id 累加 RRF 票
-  // （标题命中同时也在主 LIKE 路里；实体命中补充词法/语义都够不到的提及块）
-  for (const t of [...title, ...entity]) {
+  // 标题/实体/图谱上下文通道：与 fts 同构，已存在的 block_id 累加 RRF 票
+  // （标题命中同时也在主 LIKE 路里；实体命中补充词法/语义都够不到的提及块；
+  //   上下文通道补充「与当前文档相关」的块）
+  for (const t of [...title, ...entity, ...context]) {
     if (!t.rrf_rank) continue
     const rrf = 1 / (RRF_K + t.rrf_rank)
     const existing = map.get(t.block_id)
@@ -424,8 +464,9 @@ function rrfMerge(fts: FtsHit[], semantic: SemanticRawHit[], title: FtsHit[] = [
       })
     }
   }
-  // 排序后返回
-  return Array.from(map.values()).sort((a, b) => b.score - a.score)
+  // 排序后返回；rrf_score 记录融合分（rerank 改写 score 后仍保留）
+  const merged = Array.from(map.values()).sort((a, b) => b.score - a.score)
+  return merged.map((c) => ({ ...c, rrf_score: c.score }))
 }
 
 // ───────────────────── Rerank（可选）─────────────────────
@@ -441,13 +482,10 @@ async function maybeRerank(query: string, candidates: FusedCandidate[]): Promise
       .map((h) => ({ c: candidates[h.index], s: h.score }))
       .filter((x) => Boolean(x.c))
       .sort((a, b) => b.s - a.s)
-    // 把 rerank 分数归一化到 [0,1] 作为最终 score
-    const max = ranked[0]?.s ?? 1
-    const min = ranked[ranked.length - 1]?.s ?? 0
-    const range = max - min || 1
+    // score = reranker 原始分（不做 min-max 归一化，保留跨批次的绝对意义供 minScore 过滤）
     return ranked.map(({ c, s }) => ({
       ...c,
-      score: 0.5 + ((s - min) / range) * 0.5, // 归一到 [0.5, 1]
+      score: s,
     }))
   } catch (e) {
     console.error('[hybridSearch] rerank failed, fallback to RRF:', e)
@@ -485,12 +523,27 @@ function toCitation(c: FusedCandidate, query: string): Citation {
     content: snippet(c.content, MAX_CITATION_CONTENT),
     snippet: highlightSnippet(c.content, query),
     score: Math.round(c.score * 10000) / 10000,
+    rrf_score: Math.round(c.rrf_score * 10000) / 10000,
   }
 }
 
-function applyContextBoost(citations: Citation[], contextDocId?: string): Citation[] {
-  if (!contextDocId) return citations
-  return citations
-    .map((c) => (c.doc_id === contextDocId ? { ...c, score: c.score + CONTEXT_DOC_BOOST } : c))
-    .sort((a, b) => b.score - a.score)
+/**
+ * 文档多样性约束（截断前）：第一遍按分序每 doc 最多取 maxPerDoc 条，溢出进队列；
+ * 第一遍不足 topK 时按分从溢出补齐（不因多样性少给结果）。调用方随后 slice(0, topK)。
+ */
+function applyDocDiversity(ranked: FusedCandidate[], maxPerDoc: number): FusedCandidate[] {
+  if (maxPerDoc <= 0) return ranked
+  const picked: FusedCandidate[] = []
+  const overflow: FusedCandidate[] = []
+  const counts = new Map<string, number>()
+  for (const c of ranked) {
+    const n = counts.get(c.doc_id) ?? 0
+    if (n < maxPerDoc) {
+      picked.push(c)
+      counts.set(c.doc_id, n + 1)
+    } else {
+      overflow.push(c)
+    }
+  }
+  return [...picked, ...overflow]
 }

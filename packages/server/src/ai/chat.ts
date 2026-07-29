@@ -259,6 +259,8 @@ async function executeToolCall(
       topK: limit,
       minScore: ctx.minScore,
       includeArchived: args.include_archived === true,
+      // RAG 场景放宽多样性上限：同文档连续段落对回答有价值
+      maxPerDoc: 3,
     })
     return {
       content: JSON.stringify({
@@ -595,6 +597,8 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
       semanticLimit: opts.semanticLimit,
       rerankWindow: opts.rerankWindow,
       minScore: opts.minScore,
+      // RAG 场景放宽多样性上限：同文档连续段落对回答有价值
+      maxPerDoc: 3,
     })
   } catch (e) {
     initialReport = {
@@ -603,6 +607,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
         fts_hits: 0,
         semantic_hits: 0,
         reranked: false,
+        score_kind: 'rrf',
         timing: { fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
       },
     }
@@ -810,6 +815,7 @@ export async function runChatSync(opts: RunChatOptions): Promise<{
     fts_hits: 0,
     semantic_hits: 0,
     reranked: false,
+    score_kind: 'rrf',
     timing: { fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
   }
   let toolTrace: ToolTraceEntry[] = []
