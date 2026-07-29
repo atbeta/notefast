@@ -647,6 +647,16 @@ interface ChatCompletionMessage {
   }>
 }
 
+/**
+ * 部分推理模型（如 MiniMax-M3）会把 <think> 块内联进 content 字段
+ * （而非走 reasoning_content 独立字段）。非流式路径统一剥离，
+ * 避免推理过程泄漏给调用方（JSON mode 解析、标题生成等都会被污染）。
+ * 未闭合的 <think>（maxTokens 截断）一并剥到结尾。
+ */
+export function stripThinkTags(s: string): string {
+  return s.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim()
+}
+
 function createChatProvider(p: ProviderDefinition, fetchImpl: typeof fetch): LLMProvider {
   const url = joinUrl(p.baseUrl, '/chat/completions')
   const headers = buildHeaders(p.apiKey, p.extraHeaders)
@@ -676,7 +686,7 @@ function createChatProvider(p: ProviderDefinition, fetchImpl: typeof fetch): LLM
       { timeoutMs: p.timeoutMs, errorLabel: 'LLM API' },
     )
     const msg = json.choices?.[0]?.message
-    const content = msg?.content ?? ''
+    const content = stripThinkTags(msg?.content ?? '')
     const reasoning = msg?.reasoning_content || msg?.reasoning || undefined
     const toolCalls = (msg?.tool_calls ?? []).map((tc) => ({
       id: tc.id,

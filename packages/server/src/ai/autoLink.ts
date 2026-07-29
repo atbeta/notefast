@@ -267,7 +267,8 @@ async function extractMentions(
   ]
   const raw = await runtime.chat(messages, {
     temperature: 0,
-    maxTokens: 400,
+    // 推理模型（如 MiniMax-M3）的 reasoning 会吃掉大量 token 预算，400 容易截断 JSON
+    maxTokens: 1500,
     responseFormat: { type: 'json_object' },
   })
   const parsed = safeParseMentions(raw, content)
@@ -276,6 +277,8 @@ async function extractMentions(
 
 function safeParseMentions(raw: string, sourceContent: string): Mention[] {
   const cleaned = raw
+    // 防御：runtime 非流式 chat 已统一剥离 <think>，这里再兜一层（直调/provider 异常时）
+    .replace(/<think>[\s\S]*?(<\/think>|$)/g, '')
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```\s*$/i, '')
     .trim()

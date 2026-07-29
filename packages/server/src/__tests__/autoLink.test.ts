@@ -251,6 +251,34 @@ describe('AutoLink — 抽取与解析', () => {
     expect(getRuntime().status().usage.autoLinkAnalyses).toBeGreaterThan(0)
   })
 
+  test('推理模型 <think> 包裹 + ```json 围栏 → 仍正常解析建链（MiniMax-M3 回归）', async () => {
+    mockChatAndEmbedding(
+      '<think>用户在搭建个人知识库……候选有「KMP」……</think>\n\n```json\n' +
+        JSON.stringify({ mentions: [{ anchor: 'KMP', kind: 'concept' }] }) +
+        '\n```',
+      [1, 0],
+    )
+    seedDocWithBlocks({
+      docTitle: '目标',
+      blocks: [{ id: 'tgt', content: 'KMP 算法详解' }],
+    })
+    seedDocWithBlocks({
+      docTitle: '源',
+      blocks: [{ id: 'src', content: '这是关于 KMP 的笔记' }],
+    })
+    seedVector('tgt', [1, 0])
+
+    const r = await analyzeBlock({
+      blockId: 'src',
+      content: '这是关于 KMP 的笔记',
+      notebookScope: 'all',
+      maxPerBlock: 5,
+    })
+    expect(r.errors).toEqual([])
+    expect(r.applied).toBe(1)
+    expect(r.links[0]!.anchor).toBe('KMP')
+  })
+
   test('anchor 不在原文 → 解析层过滤，只对原文内的锚点建链', async () => {
     mockChatAndEmbedding(JSON.stringify({
       mentions: [

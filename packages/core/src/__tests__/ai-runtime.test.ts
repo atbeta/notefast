@@ -434,3 +434,35 @@ describe('AiRuntime streamChat', () => {
     expect(toolCalls[0]?.args).toEqual({ query: 'x' })
   })
 })
+
+describe('stripThinkTags（推理模型 content 内联 <think>）', () => {
+  test('非流式 chat 剥离 <think> 块与围栏前的思考内容', async () => {
+    const thinkWrapped =
+      '<think>让我分析一下……结论是 {"mentions": []}</think>\n\n```json\n{"mentions": []}\n```'
+    const r = makeRuntime(
+      makeFullConfig(),
+      mockFetchJson(200, { choices: [{ message: { content: thinkWrapped } }] }),
+    )
+    const out = await r.chat([{ role: 'user', content: 'x' }], { responseFormat: { type: 'json_object' } })
+    expect(out).toBe('```json\n{"mentions": []}\n```')
+    expect(out).not.toContain('<think>')
+  })
+
+  test('未闭合 <think>（maxTokens 截断）剥到结尾', async () => {
+    const r = makeRuntime(
+      makeFullConfig(),
+      mockFetchJson(200, { choices: [{ message: { content: '<think>被截断的思考…' } }] }),
+    )
+    const out = await r.chat([{ role: 'user', content: 'x' }])
+    expect(out).toBe('')
+  })
+
+  test('无 <think> 时内容原样返回', async () => {
+    const r = makeRuntime(
+      makeFullConfig(),
+      mockFetchJson(200, { choices: [{ message: { content: '正常回答' } }] }),
+    )
+    const out = await r.chat([{ role: 'user', content: 'x' }])
+    expect(out).toBe('正常回答')
+  })
+})
