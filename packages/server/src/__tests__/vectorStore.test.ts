@@ -71,6 +71,7 @@ describe('向量元数据', () => {
       vector: new Float64Array([1, 0]),
       modelFingerprint: 'model-a',
       contentHash: contentHash('alpha'),
+      sourceContentHash: contentHash('alpha'),
     })
 
     const row = getDb().query(
@@ -94,12 +95,14 @@ describe('向量元数据', () => {
       vector: new Float64Array([1, 0]),
       modelFingerprint: 'model-a',
       contentHash: contentHash('live content'),
+      sourceContentHash: contentHash('live content'),
     })
     await store.upsert({
       blockId: 'ghost',
       vector: new Float64Array([1, 0]),
       modelFingerprint: 'model-a',
       contentHash: contentHash('ghost content'),
+      sourceContentHash: contentHash('ghost content'),
     })
     // 软删除后（向量行未清理的场景）检索仍不得命中
     getDb().query('UPDATE blocks SET is_deleted = 1 WHERE id = ?').run('ghost')
@@ -121,6 +124,7 @@ describe('向量元数据', () => {
       vector: new Float64Array([1, 0]),
       modelFingerprint: 'model-a',
       contentHash: contentHash('current content'),
+      sourceContentHash: contentHash('current content'),
     })
     getDb().query(
       'INSERT INTO block_vectors (block_id, embedding, dim) VALUES (?, ?, ?)',

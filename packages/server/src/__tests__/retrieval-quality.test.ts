@@ -14,6 +14,8 @@ import {
 } from '../services/aiRuntime'
 import { hybridSearch } from '../ai/hybridSearch'
 import { indexBlock, hasFreshVector, initVectorStore } from '../ai/indexer'
+import { buildIndexedText } from '../ai/indexedText'
+import { getBlockById } from '../store/blocks'
 import {
   scheduleDocIndex,
   getIndexJob,
@@ -180,11 +182,72 @@ describe('content_hash 跳过', () => {
     const r1 = await indexBlock(blockId)
     expect(r1).toBe('indexed')
     expect(embedCalls).toBe(1)
-    expect(hasFreshVector(blockId, 'hello hash skip')).toBe(true)
+    // freshness 以构建后的索引文本为准（标题/章节/标签上下文 + 正文）
+    const indexedText = await buildIndexedText(getBlockById(getDb(), blockId)!)
+    expect(hasFreshVector(blockId, indexedText)).toBe(true)
 
     const r2 = await indexBlock(blockId)
     expect(r2).toBe('skipped')
     expect(embedCalls).toBe(1)
+  })
+})
+
+describe('上下文 freshness 联动', () => {
+  test('改标题 / 章节 / 标签后，相关块 hasFreshVector 变 false', async () => {
+    applyNewConfig(
+      {
+        version: 1,
+        chat: null,
+        embedding: FULL_PROVIDER,
+        autoIndex: false,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const db = getDb()
+    const docId = crypto.randomUUID()
+    const headingId = crypto.randomUUID()
+    const blockId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, tags, status, ai_exclude, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', '旧标题', '[]', 'note', 0, 0, 0, ?, ?)`,
+    ).run(docId, nb, docId, now, now)
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'heading', '旧章节', 0, 1, ?, ?)`,
+    ).run(headingId, nb, docId, docId, now, now)
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'paragraph', '正文内容不变', 0, 2, ?, ?)`,
+    ).run(blockId, nb, headingId, docId, now, now)
+
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl((async () =>
+      new Response(JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }] }), { status: 200 })) as unknown as typeof fetch)
+
+    expect(await indexBlock(blockId)).toBe('indexed')
+    const freshOf = async () =>
+      hasFreshVector(blockId, await buildIndexedText(getBlockById(db, blockId)!))
+    expect(await freshOf()).toBe(true)
+
+    // 标题变化 → 索引文本变 → 不再新鲜
+    db.query('UPDATE blocks SET content = ? WHERE id = ?').run('新标题', docId)
+    expect(await freshOf()).toBe(false)
+    expect(await indexBlock(blockId)).toBe('indexed')
+    expect(await freshOf()).toBe(true)
+
+    // 章节变化 → 不再新鲜
+    db.query('UPDATE blocks SET content = ? WHERE id = ?').run('新章节', headingId)
+    expect(await freshOf()).toBe(false)
+    expect(await indexBlock(blockId)).toBe('indexed')
+    expect(await freshOf()).toBe(true)
+
+    // 标签变化（root 行 tags 列）→ 不再新鲜
+    db.query(`UPDATE blocks SET tags = '["新标签"]' WHERE id = ?`).run(docId)
+    expect(await freshOf()).toBe(false)
   })
 })
 
@@ -223,6 +286,48 @@ describe('文档级索引作业', () => {
     expect(latest.state).toBe('ready')
     expect(latest.done + latest.skipped).toBeGreaterThanOrEqual(1)
     expect(latest.elapsed_ms).toBeGreaterThanOrEqual(0)
+  })
+
+  test('running 作业被 supersede 后循环终止且状态保持 failed', async () => {
+    applyNewConfig(
+      {
+        version: 1,
+        chat: null,
+        embedding: FULL_PROVIDER,
+        autoIndex: true,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const { docId } = seedDoc({ notebookId: nb, title: 'D', content: 'supersede target' })
+
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl((async () =>
+      new Response(JSON.stringify({ data: [{ embedding: [0.2, 0.3, 0.4] }] }), { status: 200 })) as unknown as typeof fetch)
+
+    // 200 个块 = 10 批，批间 50ms 间隔 → 足够的 running 窗口
+    const ids = Array.from({ length: 200 }, () => crypto.randomUUID())
+    const job1 = scheduleDocIndex(docId, ids)
+    expect(job1).not.toBeNull()
+
+    const deadline = Date.now() + 3000
+    while (getIndexJob(job1!.id)!.state === 'pending' && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 5))
+    }
+    expect(getIndexJob(job1!.id)!.state).toBe('running')
+
+    // 同文档新作业 → job1 被 supersede（state 置 failed）
+    scheduleDocIndex(docId, ids)
+    expect(getIndexJob(job1!.id)!.state).toBe('failed')
+
+    // 等过原本要跑完的时长：批前 state 检查应让循环自然终止，状态不被 finalize 覆盖
+    await new Promise((r) => setTimeout(r, 700))
+    const final1 = getIndexJob(job1!.id)!
+    expect(final1.state).toBe('failed')
+    expect(final1.error).toBe('被更新的索引作业取代')
+    expect(final1.done + final1.skipped + final1.errors).toBeLessThan(200)
   })
 
   test('终态作业超过 100 个时淘汰最老的（Map 不单调增长）', () => {

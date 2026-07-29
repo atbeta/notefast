@@ -115,7 +115,9 @@ export class SqliteVecVectorStore implements VectorStore {
     ) throw new Error('向量模型或维度与 generation 不匹配')
 
     const block = getBlockById(db, record.blockId)
-    if (!block || contentHash(block.content) !== record.contentHash) return false
+    // 并发写保护：只认「正文 hash」——索引文本可能含上下文/caption，
+    // 与 block.content 不等；sourceContentHash 才是与原文对得上的锚
+    if (!block || contentHash(block.content) !== record.sourceContentHash) return false
 
     db.transaction(() => {
       let entry = db.query(
@@ -124,12 +126,13 @@ export class SqliteVecVectorStore implements VectorStore {
       if (!entry) {
         const result = db.query(
           `INSERT INTO vector_entries
-             (generation, block_id, content_hash, notebook_id, root_id, block_updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+             (generation, block_id, content_hash, source_content_hash, notebook_id, root_id, block_updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
         ).run(
           generation,
           record.blockId,
           record.contentHash,
+          record.sourceContentHash,
           block.notebook_id,
           block.root_id,
           block.updated_at,
@@ -138,10 +141,11 @@ export class SqliteVecVectorStore implements VectorStore {
       } else {
         db.query(
           `UPDATE vector_entries
-           SET content_hash = ?, notebook_id = ?, root_id = ?, block_updated_at = ?
+           SET content_hash = ?, source_content_hash = ?, notebook_id = ?, root_id = ?, block_updated_at = ?
            WHERE id = ?`,
         ).run(
           record.contentHash,
+          record.sourceContentHash,
           block.notebook_id,
           block.root_id,
           block.updated_at,

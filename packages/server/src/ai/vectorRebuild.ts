@@ -1,6 +1,8 @@
 import { getDb } from '../db'
 import { getRuntime } from '../services/aiRuntime'
 import { isBlockAiExcluded } from './aiExcludeQuery'
+import { buildIndexedText } from './indexedText'
+import type { BlockRow } from '@notefast/core'
 import {
   contentHash,
   embeddingFingerprint,
@@ -97,21 +99,30 @@ export async function runVectorRebuild(
 
   try {
     await staging.init()
-    let sql = "SELECT id, content FROM blocks WHERE trim(content) != ''"
+    // 构建器需要完整行（parent_id/root_id/type/tags）；软删除块不进索引
+    let sql = "SELECT * FROM blocks WHERE trim(content) != '' AND is_deleted = 0"
     const params: string[] = []
     if (options.notebookId) {
       sql += ' AND notebook_id = ?'
       params.push(options.notebookId)
     }
     sql += ' ORDER BY id'
-    const rows = (db.query(sql).all(...params) as Array<{ id: string; content: string }>)
+    const rows = (db.query(sql).all(...params) as BlockRow[])
       .filter((row) => !isBlockAiExcluded(row.id))
     if (rows.length === 0) throw new Error('没有可建立向量索引的 block')
 
     beginRebuildProgress(rows.length)
 
+    // 索引文本与增量路径同一构建器（标题/章节/标签/正文/caption），批内串行构建
+    const buildTexts = async (batch: BlockRow[]): Promise<string[]> => {
+      const texts: string[] = []
+      for (const row of batch) texts.push(await buildIndexedText(row))
+      return texts
+    }
+
     const firstBatch = rows.slice(0, 20)
-    const firstVectors = await provider.embedBatch(firstBatch.map((row) => row.content))
+    const firstTexts = await buildTexts(firstBatch)
+    const firstVectors = await provider.embedBatch(firstTexts)
     const dimension = firstVectors[0]?.length
     if (!dimension) throw new Error('Embedding provider 返回空向量')
 
@@ -126,7 +137,8 @@ export async function runVectorRebuild(
     setVectorStore(shadow)
 
     const writeBatch = async (
-      batch: Array<{ id: string; content: string }>,
+      batch: BlockRow[],
+      texts: string[],
       vectors: Float64Array[],
     ) => {
       for (let index = 0; index < batch.length; index++) {
@@ -136,16 +148,19 @@ export async function runVectorRebuild(
           blockId: batch[index]!.id,
           vector,
           modelFingerprint: provider.fingerprint,
-          contentHash: contentHash(batch[index]!.content),
+          // 双 hash：content_hash = 索引文本 hash；source_content_hash = 原文 hash
+          contentHash: contentHash(texts[index]!),
+          sourceContentHash: contentHash(batch[index]!.content),
         })
       }
     }
-    await writeBatch(firstBatch, firstVectors)
+    await writeBatch(firstBatch, firstTexts, firstVectors)
     bumpRebuildProgress(Math.min(20, rows.length))
     for (let offset = 20; offset < rows.length; offset += 20) {
       const batch = rows.slice(offset, offset + 20)
-      const vectors = await provider.embedBatch(batch.map((row) => row.content))
-      await writeBatch(batch, vectors)
+      const texts = await buildTexts(batch)
+      const vectors = await provider.embedBatch(texts)
+      await writeBatch(batch, texts, vectors)
       bumpRebuildProgress(Math.min(offset + batch.length, rows.length))
     }
 

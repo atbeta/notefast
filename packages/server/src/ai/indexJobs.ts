@@ -107,6 +107,9 @@ async function runJob(jobId: string): Promise<void> {
   const blockIds = (job as IndexJob & { _blockIds?: string[] })._blockIds ?? []
   try {
     for (let offset = 0; offset < blockIds.length; offset += BATCH) {
+      // 被更新的作业 supersede 后 state 已置 failed：直接终止循环，
+      // 不调 finalizeState（避免把 failed 覆盖成 ready/partial）
+      if (job.state !== 'running') return
       const batch = blockIds.slice(offset, offset + BATCH)
       const result = await indexBlockBatch(batch)
       job.done += result.indexed

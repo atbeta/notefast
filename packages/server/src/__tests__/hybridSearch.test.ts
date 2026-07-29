@@ -244,3 +244,59 @@ describe('hybridSearch — 语义召回 cosine 下限（Bug 6）', () => {
     expect(report.citations[0]!.block_id).toBe('hi-cos')
   })
 })
+
+describe('hybridSearch — includeArchived 透传到语义通道', () => {
+  test('includeArchived=true 时 semantic 通道能命中 archived 块（P0 回归）', async () => {
+    applyNewConfig(
+      {
+        version: 1,
+        chat: null,
+        embedding: {
+          id: 'x-emb',
+          label: 'x',
+          preset: 'custom',
+          baseUrl: 'http://mock-emb',
+          apiKey: '',
+          embeddingModel: 'fake-emb',
+          chatModel: '',
+          timeoutMs: 5000,
+          extraHeaders: {},
+        },
+        autoIndex: false,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl((async () =>
+      new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }), { status: 200 })) as unknown as typeof fetch)
+
+    const db = getDb()
+    const nb = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const now = new Date().toISOString()
+    const seed = (docId: string, blockId: string, status: string) => {
+      db.query(
+        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, status, sort, level, created_at, updated_at)
+         VALUES (?, ?, NULL, ?, 'document', ?, ?, 0, 0, ?, ?)`,
+      ).run(docId, nb, docId, `${status}-doc`, status, now, now)
+      db.query(
+        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'paragraph', '语义召回专用内容', 0, 1, ?, ?)`,
+      ).run(blockId, nb, docId, docId, now, now)
+    }
+    seed(crypto.randomUUID(), 'arch-sem-block', 'archived')
+    seed(crypto.randomUUID(), 'note-sem-block', 'note')
+    // 与查询同向的向量（cosine 1.0），查询文本无字面重叠 → 纯语义通道
+    await upsertVector('arch-sem-block', new Float64Array([1, 0]))
+    await upsertVector('note-sem-block', new Float64Array([1, 0]))
+
+    const excluded = await hybridSearch({ query: 'zztop-arch', topK: 10 })
+    expect(excluded.retrieval.semantic_hits).toBe(1)
+    expect(excluded.citations.every((c) => c.block_id === 'note-sem-block')).toBe(true)
+
+    const included = await hybridSearch({ query: 'zztop-arch', topK: 10, includeArchived: true })
+    expect(included.retrieval.semantic_hits).toBe(2)
+    expect(included.citations.some((c) => c.block_id === 'arch-sem-block')).toBe(true)
+  })
+})

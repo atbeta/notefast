@@ -6,6 +6,8 @@
  * - 生成失败返回 null：索引降级为无 caption 的纯文本，不阻断主流程
  * - 模型更换后：hasFreshVector 指纹不变，但 content_hash 以拼接 caption 后的
  *   文本计算——caption 变化会自然触发重索引，无需额外失效机制
+ *
+ * 索引文本的完整组装（标题/章节/标签 + 正文 + caption）见 ai/indexedText.ts。
  */
 
 import { getDb } from '../db'
@@ -63,25 +65,4 @@ export async function captionForAsset(assetId: string): Promise<string | null> {
     console.warn(`[imageCaptions] caption 生成失败 ${assetId.slice(0, 8)}:`, e instanceof Error ? e.message : e)
     return null
   }
-}
-
-/**
- * 计算 block 的实际索引文本：图片引用（asset:<sha256>）追加对应 caption。
- * 无图片引用 / 视觉未启用 / 无可用 caption 时原样返回 trim 后的 content。
- */
-export async function indexedTextWithCaptions(content: string): Promise<string> {
-  const text = (content || '').trim()
-  if (!text || !visionEnabled() || !text.includes('asset:')) return text
-
-  const refs: string[] = []
-  for (const m of text.matchAll(/asset:([0-9a-f]{64})/g)) refs.push(m[1]!)
-  if (refs.length === 0) return text
-
-  const captions: string[] = []
-  for (const id of refs) {
-    const c = await captionForAsset(id)
-    if (c) captions.push(c)
-  }
-  if (captions.length === 0) return text
-  return `${text}\n\n[图片描述] ${captions.join('；')}`
 }

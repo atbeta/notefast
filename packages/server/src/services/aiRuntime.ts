@@ -24,10 +24,10 @@ import {
 } from '@notefast/core'
 import type { PluginSystem } from '@notefast/core'
 import { getDb } from '../db'
-import { getDocById } from '../store/blocks'
+import { fetchDocBlocks, getDocById } from '../store/blocks'
 import { deleteRefsFromSource } from '../store/refs'
 import { indexBlock, deleteVector } from '../ai/indexer'
-import { getLatestIndexJobForDoc } from '../ai/indexJobs'
+import { getLatestIndexJobForDoc, scheduleDocIndex } from '../ai/indexJobs'
 import { analyzeBlock } from '../ai/autoLink'
 import {
   embeddingFingerprint,
@@ -212,6 +212,14 @@ function applyAutoIndex(r: AiRuntime, pluginSystem: PluginSystem): void {
     await indexBlock(block.id)
   })
   pluginSystem.note.afterUpdate.tap(HOOK_NAME, async (block) => {
+    // 标题（document）/章节（heading）是索引文本的上下文：自身 content 变了，
+    // 子孙块的索引文本也跟着变，需整篇重索引（hasFreshVector 会跳过未变块，成本低）
+    if (block.type === 'document' || block.type === 'heading') {
+      const rootId = block.type === 'document' ? block.id : block.root_id
+      const blockIds = fetchDocBlocks(getDb(), rootId).map((r) => r.id)
+      scheduleDocIndex(rootId, blockIds)
+      return
+    }
     await indexBlock(block.id)
   })
   pluginSystem.note.afterDelete.tap(HOOK_NAME, async (blockId) => {

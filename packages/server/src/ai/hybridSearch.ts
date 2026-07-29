@@ -141,7 +141,10 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
     }
   })()
 
-  const semanticPromise = runSemantic(opts.query, opts.notebookId, semanticLimit, opts.since, opts.until)
+  const semanticPromise = runSemantic(opts.query, opts.notebookId, semanticLimit, opts.since, opts.until, {
+    includeInbox,
+    includeArchived,
+  })
 
   const [ftsResult, semanticResult] = await Promise.all([
     ftsPromise,
@@ -271,6 +274,7 @@ async function runSemantic(
   limit: number,
   since?: string,
   until?: string,
+  options?: { includeInbox?: boolean; includeArchived?: boolean },
 ): Promise<{ hits: SemanticRawHit[]; embed_query_ms: number; semantic_ms: number }> {
   if (!query.trim()) return { hits: [], embed_query_ms: 0, semantic_ms: 0 }
   if (!hasRuntime() || !getRuntime().hasEmbedding()) {
@@ -284,7 +288,7 @@ async function runSemantic(
 
   const searchT0 = Date.now()
   const minCosine = semanticMinCosine()
-  const hits = (await semanticSearch(vec, limit, notebookId, since, until))
+  const hits = (await semanticSearch(vec, limit, notebookId, since, until, options))
     .filter((h) => h.score >= minCosine)
   const semantic_ms = Date.now() - searchT0
 
@@ -298,7 +302,7 @@ async function runSemantic(
       doc_id: h.doc_id,
       doc_title: h.doc_title,
       rrf_rank: i + 1,
-      rerank_text: snippet(h.content, 600),
+      rerank_text: rerankText(h.doc_title, h.content),
     })),
   }
 }
@@ -330,7 +334,7 @@ function rrfMerge(fts: FtsHit[], semantic: SemanticRawHit[]): FusedCandidate[] {
       type: f.type,
       content: f.content,
       score: rrf,
-      rerank_text: snippet(f.content, 600),
+      rerank_text: rerankText(f.doc_title, f.content),
     })
   }
   for (const s of semantic) {
@@ -347,7 +351,7 @@ function rrfMerge(fts: FtsHit[], semantic: SemanticRawHit[]): FusedCandidate[] {
         type: '',
         content: s.content,
         score: rrf,
-        rerank_text: s.rerank_text ?? snippet(s.content, 600),
+        rerank_text: s.rerank_text ?? rerankText(s.doc_title, s.content),
       })
     }
   }
@@ -387,6 +391,13 @@ async function maybeRerank(query: string, candidates: FusedCandidate[]): Promise
 function snippet(text: string, max: number): string {
   if (text.length <= max) return text
   return text.slice(0, max - 1) + '…'
+}
+
+/** reranker 输入：文档标题前缀 + 截短正文（标题为空时退化为正文） */
+function rerankText(docTitle: string, content: string): string {
+  const body = snippet(content, 600)
+  const title = docTitle.trim()
+  return title ? `[文档] ${title}\n${body}` : body
 }
 
 function toCitation(c: FusedCandidate, query: string): Citation {

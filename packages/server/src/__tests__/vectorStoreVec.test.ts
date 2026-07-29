@@ -34,12 +34,14 @@ describe('SqliteVecVectorStore', () => {
       vector: new Float64Array([1, 0]),
       modelFingerprint: 'model-a',
       contentHash: contentHash('alpha'),
+      sourceContentHash: contentHash('alpha'),
     })
     await store.upsertToGeneration('test-generation', {
       blockId: 'vec-b',
       vector: new Float64Array([0, 1]),
       modelFingerprint: 'model-a',
       contentHash: contentHash('beta'),
+      sourceContentHash: contentHash('beta'),
     })
     await store.activateGeneration('test-generation')
 
@@ -66,9 +68,27 @@ describe('SqliteVecVectorStore', () => {
       vector: new Float64Array([1, 0]),
       modelFingerprint: 'model-a',
       contentHash: contentHash('alpha'),
+      sourceContentHash: contentHash('alpha'),
     })
 
     expect(inserted).toBe(false)
+  })
+
+  test('索引文本 hash 与正文不同时仍按 sourceContentHash 校验通过（双 hash）', async () => {
+    const store = new SqliteVecVectorStore()
+    await store.init()
+    await store.createGeneration('dual-hash-generation', 'model-a', 2)
+
+    // 模拟 vision/上下文开启：索引文本 ≠ 正文，contentHash ≠ 正文 hash
+    const inserted = await store.upsertToGeneration('dual-hash-generation', {
+      blockId: 'vec-a',
+      vector: new Float64Array([1, 0]),
+      modelFingerprint: 'model-a',
+      contentHash: contentHash('标题：T\n\nnew alpha\n\n[图片描述] 一张图'),
+      sourceContentHash: contentHash('new alpha'),
+    })
+
+    expect(inserted).toBe(true)
   })
 
   test('影子重建完成后原子切换 generation', async () => {
@@ -108,6 +128,7 @@ describe('SqliteVecVectorStore', () => {
       vector: new Float64Array([1, 0]),
       modelFingerprint: 'model-rebuilt',
       contentHash: contentHash('delete me'),
+      sourceContentHash: contentHash('delete me'),
     })
     const mapping = db.query(
       `SELECT e.id, g.table_name

@@ -19,7 +19,7 @@ import {
 } from './vectorStore'
 import { SqliteVecVectorStore } from './vectorStoreVec'
 import { isBlockAiExcluded, loadAiExcludedDocIds, loadInboxDocIds, loadArchivedDocIds } from './aiExcludeQuery'
-import { indexedTextWithCaptions } from './imageCaptions'
+import { buildIndexedText } from './indexedText'
 
 export type IndexBlockResult = 'indexed' | 'skipped' | 'deleted' | 'error' | 'noop'
 
@@ -66,8 +66,8 @@ export async function indexBlock(blockId: string): Promise<IndexBlockResult> {
   const row = getBlockById(db, blockId)
   if (!row) return 'noop'
 
-  // 图片理解开启时，索引文本 = 原文 + 图片 caption（hash/freshness 均以此为准）
-  const text = await indexedTextWithCaptions(row.content || '')
+  // 索引文本 = 标题/章节/标签上下文 + 正文 + 图片 caption（与重建同构建器）
+  const text = await buildIndexedText(row)
   if (!text) {
     await deleteVector(blockId)
     return 'deleted'
@@ -113,8 +113,8 @@ export async function indexBlockBatch(
     }
     const row = getBlockById(db, id)
     if (!row) continue
-    // 与 indexBlock 一致：索引文本含图片 caption（视觉启用时）
-    const text = await indexedTextWithCaptions(row.content || '')
+    // 与 indexBlock 一致：索引文本含上下文与图片 caption（视觉启用时）
+    const text = await buildIndexedText(row)
     if (!text) {
       try {
         await deleteVector(id)
@@ -222,13 +222,19 @@ export async function upsertVector(
 ): Promise<void> {
   const fingerprint = currentEmbeddingFingerprint()
   if (!fingerprint) throw new Error('Embedding provider is not configured')
-  const blockContent = content ?? getBlockById(getDb(), blockId)?.content
-  if (blockContent === undefined) return
+  const row = getBlockById(getDb(), blockId)
+  // content 为索引文本（buildIndexedText 输出）；缺省退化为正文（外部直调场景）
+  const indexedText = content ?? row?.content
+  if (indexedText === undefined) return
+  // 双 hash：content_hash = 索引文本 hash（freshness 判定）；
+  // source_content_hash = block.content 原文 hash（并发写保护）
+  const sourceContent = row?.content ?? indexedText
   await getVectorStore().upsert({
     blockId,
     vector,
     modelFingerprint: fingerprint,
-    contentHash: contentHash(blockContent),
+    contentHash: contentHash(indexedText),
+    sourceContentHash: contentHash(sourceContent),
   })
 }
 

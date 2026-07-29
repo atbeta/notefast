@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite'
+import { createHash } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CURRENT_SCHEMA_VERSION } from '@notefast/core'
@@ -55,6 +56,9 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
  * v3 → v4：新增 shares 表（文档分享的公开 token）
  * v4 → v5：AutoLink 改为「高置信直接建链」——删除 autolink_suggestions 表，
  *           历史 ai_suggested 引用统一归为 ai_auto
+ * v5 → v6：向量双 hash——block_vectors / vector_entries 新增 source_content_hash
+ *          （= block.content 原文 hash，并发写保护用；content_hash 改为索引文本 hash），
+ *          并按 blocks 现内容回填
  */
 function applySchemaMigrations(database: Database): void {
   const current = getSchemaVersion(database)
@@ -110,6 +114,32 @@ function applySchemaMigrations(database: Database): void {
     database.exec(`DROP TABLE IF EXISTS autolink_suggestions`)
     database.exec(`UPDATE block_refs SET ref_type = 'ai_auto' WHERE ref_type = 'ai_suggested'`)
     database.exec(`PRAGMA user_version = 5`)
+  }
+  if (getSchemaVersion(database) < 6) {
+    // 向量双 hash：content_hash 语义从「正文 hash」改为「索引文本 hash」，
+    // 新增 source_content_hash 承载正文 hash（upsertToGeneration 并发校验锚）。
+    // 不 bump VECTOR_INDEX_VERSION：旧向量靠 content_hash 不匹配自然过期。
+    database.exec(`ALTER TABLE block_vectors ADD COLUMN source_content_hash TEXT`)
+    database.exec(`ALTER TABLE vector_entries ADD COLUMN source_content_hash TEXT`)
+    // 回填：按 blocks 现内容计算原文 hash（vision 默认关时与旧 content_hash 一致；
+    // 与 ai/vectorStore.contentHash 同一算法，这里内联避免 db ↔ vectorStore 循环依赖）
+    const hash = (s: string) => createHash('sha256').update(s).digest('hex')
+    const backfill = (table: string) => {
+      const rows = database
+        .query(
+          `SELECT v.rowid AS rid, b.content AS content
+           FROM ${table} v JOIN blocks b ON b.id = v.block_id
+           WHERE v.source_content_hash IS NULL`,
+        )
+        .all() as Array<{ rid: number; content: string }>
+      const update = database.query(
+        `UPDATE ${table} SET source_content_hash = ? WHERE rowid = ?`,
+      )
+      for (const row of rows) update.run(hash(row.content ?? ''), row.rid)
+    }
+    backfill('block_vectors')
+    backfill('vector_entries')
+    database.exec(`PRAGMA user_version = 6`)
   }
 }
 

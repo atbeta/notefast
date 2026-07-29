@@ -9,7 +9,10 @@ export interface VectorRecord {
   blockId: string
   vector: Float64Array
   modelFingerprint: string
+  /** 索引文本（buildIndexedText 输出）的 hash —— freshness 判定用 */
   contentHash: string
+  /** block.content 原文的 hash —— 并发写保护用（upsertToGeneration 自校验） */
+  sourceContentHash: string
 }
 
 export interface VectorSearchOptions {
@@ -122,13 +125,14 @@ export class JsonVectorStore implements VectorStore {
     db.transaction(() => {
       db.query(
         `INSERT INTO block_vectors
-           (block_id, embedding, dim, embedding_model, content_hash, index_version, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+           (block_id, embedding, dim, embedding_model, content_hash, source_content_hash, index_version, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
          ON CONFLICT(block_id) DO UPDATE SET
            embedding = excluded.embedding,
            dim = excluded.dim,
            embedding_model = excluded.embedding_model,
            content_hash = excluded.content_hash,
+           source_content_hash = excluded.source_content_hash,
            index_version = excluded.index_version,
            updated_at = datetime('now')`,
       ).run(
@@ -137,6 +141,7 @@ export class JsonVectorStore implements VectorStore {
         record.vector.length,
         record.modelFingerprint,
         record.contentHash,
+        record.sourceContentHash,
         VECTOR_INDEX_VERSION,
       )
       const count = this.countSync(record.modelFingerprint, record.vector.length)
