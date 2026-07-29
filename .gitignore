@@ -9,6 +9,7 @@ packages/**/vite.config.d.ts
 
 # Data
 data/
+data/eval/
 
 # Environment
 .env

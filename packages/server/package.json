@@ -8,6 +8,8 @@
     "build": "bun build src/index.ts --outdir=dist --target=bun && bun run scripts/copy-sqlite-vec.ts",
     "start": "bun run dist/index.js",
     "backup:restore": "bun run src/cli/restoreBackup.ts",
+    "eval": "bun run src/eval/runEval.ts",
+    "eval:private": "bun run src/eval/generatePrivateEval.ts",
     "lint": "oxlint src",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
