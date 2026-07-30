@@ -16,7 +16,7 @@ import {
   X,
   ImagePlus,
 } from 'lucide-react'
-import { Kbd, Tooltip } from '../ui'
+import { Tooltip, ShortcutKeys, shortcutLabel } from '../ui'
 
 type Mode = 'edit' | 'view'
 
@@ -93,16 +93,16 @@ export default function EditorToolbar({
           <Code className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
         <ToolbarDivider />
-        <IconBtn title="加粗 (⌘B)" onClick={() => wrapSelection('**')}>
+        <IconBtn title={`加粗 (${shortcutLabel(['mod', 'B'])})`} onClick={() => wrapSelection('**')}>
           <Bold className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn title="斜体 (⌘I)" onClick={() => wrapSelection('*')}>
+        <IconBtn title={`斜体 (${shortcutLabel(['mod', 'I'])})`} onClick={() => wrapSelection('*')}>
           <Italic className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn title="行内代码 (⌘E)" onClick={() => wrapSelection('`')}>
+        <IconBtn title={`行内代码 (${shortcutLabel(['mod', 'E'])})`} onClick={() => wrapSelection('`')}>
           <Code className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn title="链接 (⌘⇧K)" onClick={handleInsertLink}>
+        <IconBtn title={`链接 (${shortcutLabel(['mod', '⇧K'])})`} onClick={handleInsertLink}>
           <Link2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
         <IconBtn
@@ -129,7 +129,7 @@ export default function EditorToolbar({
 
         <div className="flex items-center gap-1 ml-auto">
           <IconBtn
-            title={mode === 'view' ? '返回编辑 (⌘P)' : '预览 (⌘P)'}
+            title={mode === 'view' ? `返回编辑 (${shortcutLabel(['mod', 'P'])})` : `预览 (${shortcutLabel(['mod', 'P'])})`}
             onClick={() => onModeToggle(mode === 'edit' ? 'view' : 'edit')}
             active={mode === 'view'}
           >
@@ -139,7 +139,7 @@ export default function EditorToolbar({
             <span className="text-[12px] font-medium leading-none">?</span>
           </IconBtn>
           <ToolbarDivider />
-          <Tooltip label={saving ? '保存中…' : '保存并返回阅读 (⌘S)'}>
+          <Tooltip label={saving ? '保存中…' : `保存并返回阅读 (${shortcutLabel(['mod', 'S'])})`}>
             <button
               type="button"
               onClick={onSave}
@@ -192,10 +192,10 @@ function ToolbarDivider() {
   return <span className="w-px h-4 bg-border/80 mx-1.5" />
 }
 
-export function ShortcutsHelp({ kbd, desc }: { kbd: string; desc: string }) {
+export function ShortcutsHelp({ keys, desc }: { keys: string[]; desc: string }) {
   return (
     <div className="flex items-center gap-2">
-      <Kbd>{kbd}</Kbd>
+      <ShortcutKeys keys={keys} />
       <span>{desc}</span>
     </div>
   )

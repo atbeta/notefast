@@ -68,28 +68,82 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
 
   const aiWriting = useAiWriting()
 
+  const lastSavedContentRef = useRef('')
+  const serverUpdatedAtRef = useRef('')
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [showRecoverDraft, setShowRecoverDraft] = useState(false)
+  const recoverDraftContentRef = useRef<string | null>(null)
+
+  const doSave = useCallback(async (markdown: string): Promise<boolean> => {
+    try {
+      const r = await api.put<{ doc: unknown; updated_at?: string }>(`/docs/${docId}/markdown`, { markdown })
+      lastSavedContentRef.current = markdown
+      if (r.updated_at) serverUpdatedAtRef.current = r.updated_at
+      draft.clearDraft()
+      setAutoSaveStatus('saved')
+      return true
+    } catch {
+      draft.saveDraft(markdown, serverUpdatedAtRef.current)
+      setAutoSaveStatus('error')
+      return false
+    }
+  }, [docId, draft])
+
+  const triggerAutoSave = useCallback((markdown: string) => {
+    if (markdown === lastSavedContentRef.current) return
+    setAutoSaveStatus('saving')
+    doSave(markdown)
+  }, [doSave])
+
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    const saved = draft.loadDraft()
-    if (saved !== null) {
-      setContent(saved)
-      setInitialContent(saved)
-      setDraftedAt(new Date())
-      setLoadedAt(new Date())
-      setLoading(false)
-      return
-    }
-    api.get<{ markdown: string }>(`/docs/${docId}/export/markdown`)
+
+    api.get<{ markdown: string; updated_at?: string }>(`/docs/${docId}/export/markdown`)
       .then((r) => {
         if (cancelled) return
         const raw = r.markdown || ''
         const md = title ? stripTitleFromMarkdown(raw, title) : raw
+        const serverUpdatedAt = r.updated_at ?? ''
+
+        const draftPayload = draft.getDraftPayload()
+
+        if (draftPayload && draftPayload.content !== md) {
+          if (draftPayload.serverUpdatedAt && draftPayload.serverUpdatedAt === serverUpdatedAt) {
+            setContent(draftPayload.content)
+            setInitialContent(draftPayload.content)
+            lastSavedContentRef.current = md
+            serverUpdatedAtRef.current = serverUpdatedAt
+            setDraftedAt(new Date(draftPayload.updatedAt))
+            setLoadedAt(new Date())
+            setLoading(false)
+            return
+          }
+          recoverDraftContentRef.current = draftPayload.content
+          setShowRecoverDraft(true)
+        }
+
         setContent(md)
         setInitialContent(md)
+        lastSavedContentRef.current = md
+        serverUpdatedAtRef.current = serverUpdatedAt
         setLoadedAt(new Date())
       })
-      .catch(() => { if (!cancelled) setContent('') })
+      .catch(() => {
+        if (cancelled) return
+        const saved = draft.loadDraft()
+        if (saved !== null) {
+          setContent(saved)
+          setInitialContent(saved)
+          lastSavedContentRef.current = saved
+          setDraftedAt(new Date())
+        } else {
+          setContent('')
+          setInitialContent('')
+        }
+        setLoadedAt(new Date())
+      })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [docId, title])
@@ -104,13 +158,34 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
 
   useEffect(() => {
     if (!loadedAt) return
-    if (content === initialContent) return
+    if (content === lastSavedContentRef.current) return
+
     const id = setTimeout(() => {
-      draft.saveDraft(content)
+      draft.saveDraft(content, serverUpdatedAtRef.current)
       setDraftedAt(new Date())
     }, 600)
     return () => clearTimeout(id)
-  }, [content, docId, initialContent, loadedAt])
+  }, [content, docId, loadedAt])
+
+  useEffect(() => {
+    if (!loadedAt) return
+    if (content === lastSavedContentRef.current) return
+
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    autoSaveTimerRef.current = setTimeout(() => {
+      triggerAutoSave(content)
+    }, 3000)
+
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    }
+  }, [content, loadedAt, triggerAutoSave])
+
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     const ta = textareaRef.current
@@ -169,26 +244,43 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
   const handleSave = useCallback(async () => {
     if (saving) return
     setSaving(true)
-    try {
-      await api.put(`/docs/${docId}/markdown`, { markdown: content })
+    const ok = await doSave(content)
+    if (ok) {
       setInitialContent(content)
-      draft.clearDraft()
       onSaved()
       onClose()
-    } catch (e) {
-      draft.saveDraft(content)
+    } else {
       toast.error({
         title: '保存失败',
-        description: e instanceof Error ? e.message : String(e),
+        description: '请检查网络连接后重试',
       })
       setSaving(false)
     }
-  }, [saving, content, docId, onSaved, onClose, toast])
+  }, [saving, content, doSave, onSaved, onClose, toast])
 
   const handleCancel = useCallback(() => {
-    draft.saveDraft(content)
+    if (content !== lastSavedContentRef.current) {
+      draft.saveDraft(content, serverUpdatedAtRef.current)
+      triggerAutoSave(content)
+    }
     onClose()
-  }, [docId, content, onClose])
+  }, [content, draft, triggerAutoSave, onClose])
+
+  const handleRecoverDraft = useCallback(() => {
+    const recovered = recoverDraftContentRef.current
+    if (recovered !== null) {
+      setContent(recovered)
+      setInitialContent(recovered)
+    }
+    setShowRecoverDraft(false)
+    recoverDraftContentRef.current = null
+  }, [])
+
+  const handleDismissRecoverDraft = useCallback(() => {
+    draft.clearDraft()
+    setShowRecoverDraft(false)
+    recoverDraftContentRef.current = null
+  }, [draft])
 
   const imageUploader = useImageUploader({ insertAtCursor })
 
@@ -243,8 +335,6 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
     [ghostText, handleKeyDown, insertAtCursor, aiWriting],
   )
 
-  // 光标所在逻辑行（1 起），用于行号槽高亮；只跟踪行号，不渲染整行背景——
-  // textarea 软换行会让逻辑行与视觉行错位，整行背景需要对齐测量，易引入抖动
   const updateCursorLine = useCallback(() => {
     const ta = textareaRef.current
     if (!ta) return
@@ -258,16 +348,17 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
   const words = cjkCount + Math.floor(enCount / 5)
   const readMin = words <= 0 ? 0 : Math.max(1, Math.round(words / CJK_WORDS_PER_MIN))
   const dirty = content !== initialContent
+  const unsavedToServer = content !== lastSavedContentRef.current
 
   useEffect(() => {
-    if (!dirty) return
+    if (!unsavedToServer) return
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault()
       e.returnValue = ''
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [dirty])
+  }, [unsavedToServer])
 
   const previewTree: Block | null = mode === 'view' && content
     ? (() => {
@@ -319,47 +410,73 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
           <Loader2 className="w-4 h-4 animate-spin mr-2 text-primary" />
           加载文档…
         </div>
-      ) : mode === 'view' ? (
-        <div className="min-h-[200px]">
-          {previewTree ? (
-            <BlockRenderer block={previewTree} />
-          ) : (
-            <div className="text-sm text-muted-foreground/70 italic py-4">（空文档，无法预览）</div>
-          )}
-        </div>
       ) : (
-        <div className="flex items-start relative">
-          <div
-            aria-hidden
-            className="shrink-0 w-7 pr-3 pt-[7px] text-right font-mono text-[11px] leading-[1.75] text-muted-foreground/35 select-none tabular-nums"
-          >
-            {Array.from({ length: lines }, (_, i) => (
-              <div key={i + 1} className={i + 1 === cursorLine ? 'text-muted-foreground' : undefined}>
-                {i + 1}
+        <>
+          {showRecoverDraft && (
+            <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[12.5px]">
+              <span className="flex-1 text-muted-foreground">
+                有未保存的本地草稿（可能在其他设备编辑前遗留）
+              </span>
+              <button
+                type="button"
+                onClick={handleRecoverDraft}
+                className="font-medium text-primary hover:text-primary/80 transition-colors"
+              >
+                恢复草稿
+              </button>
+              <button
+                type="button"
+                onClick={handleDismissRecoverDraft}
+                className="text-muted-foreground/60 hover:text-destructive transition-colors"
+              >
+                丢弃
+              </button>
+            </div>
+          )}
+
+          {mode === 'view' ? (
+            <div className="min-h-[200px]">
+              {previewTree ? (
+                <BlockRenderer block={previewTree} />
+              ) : (
+                <div className="text-sm text-muted-foreground/70 italic py-4">（空文档，无法预览）</div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-start relative">
+              <div
+                aria-hidden
+                className="shrink-0 w-7 pr-3 pt-[7px] text-right font-mono text-[11px] leading-[1.75] text-muted-foreground/35 select-none tabular-nums"
+              >
+                {Array.from({ length: lines }, (_, i) => (
+                  <div key={i + 1} className={i + 1 === cursorLine ? 'text-muted-foreground' : undefined}>
+                    {i + 1}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onSelect={updateCursorLine}
-            onKeyDown={handleKeyDownWithGhost}
-            onPaste={imageUploader.handlePaste}
-            onDrop={imageUploader.handleDrop}
-            onDragOver={(e) => e.preventDefault()}
-            spellCheck={false}
-            rows={Math.max(lines, 5)}
-            className="flex-1 min-w-0 pt-[7px] pb-16 font-mono text-[14px] leading-[1.75] text-foreground bg-transparent resize-none overflow-hidden focus:outline-none placeholder:text-muted-foreground/40 selection:bg-primary/15"
-            placeholder="开始写…（⌘B 加粗 / ⌘I 斜体 / # 标题 / - 列表；⌘P 预览；⌘S 保存）"
-          />
-          <AiGhostOverlay
-            textareaRef={textareaRef}
-            content={content}
-            ghostText={ghostText}
-            visible={!!ghostText}
-          />
-        </div>
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                onSelect={updateCursorLine}
+                onKeyDown={handleKeyDownWithGhost}
+                onPaste={imageUploader.handlePaste}
+                onDrop={imageUploader.handleDrop}
+                onDragOver={(e) => e.preventDefault()}
+                spellCheck={false}
+                rows={Math.max(lines, 5)}
+                className="flex-1 min-w-0 pt-[7px] pb-16 font-mono text-[14px] leading-[1.75] text-foreground bg-transparent resize-none overflow-hidden focus:outline-none placeholder:text-muted-foreground/40 selection:bg-primary/15"
+                placeholder="开始写…（⌘B 加粗 / ⌘I 斜体 / # 标题 / - 列表；⌘P 预览；⌘S 保存）"
+              />
+              <AiGhostOverlay
+                textareaRef={textareaRef}
+                content={content}
+                ghostText={ghostText}
+                visible={!!ghostText}
+              />
+            </div>
+          )}
+        </>
       )}
 
       <EditorFooter
@@ -369,21 +486,22 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
         dirty={dirty}
         draftedAt={draftedAt}
         hasDraft={draft.hasDraft()}
-        onClearDraft={() => { draft.clearDraft(); window.location.reload() }}
+        onClearDraft={() => { draft.clearDraft() }}
         onAppendFile={insertAtCursor}
         relativeTime={relativeTime}
+        autoSaveStatus={autoSaveStatus}
       />
 
       {showHelp && (
         <div className="mt-3 pt-3 border-t border-border/50 text-[11.5px] text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-1.5">
-          <ShortcutsHelp kbd="⌘ S" desc="保存" />
-          <ShortcutsHelp kbd="⌘ P" desc="切换 预览 / 编辑" />
-          <ShortcutsHelp kbd="⌘ B / I / E" desc="加粗 / 斜体 / 行内代码" />
-          <ShortcutsHelp kbd="⌘⇧ K" desc="插入链接" />
-          <ShortcutsHelp kbd="⌘ Enter" desc="AI 续写（需配置 AI）" />
-          <ShortcutsHelp kbd="# Enter" desc="自动加 heading 触发器" />
-          <ShortcutsHelp kbd="- Enter" desc="自动加 list 触发器" />
-          <ShortcutsHelp kbd="Esc" desc="退出（保留草稿）" />
+          <ShortcutsHelp keys={['mod', 'S']} desc="保存" />
+          <ShortcutsHelp keys={['mod', 'P']} desc="切换 预览 / 编辑" />
+          <ShortcutsHelp keys={['mod', 'B']} desc="加粗 / 斜体 / 行内代码" />
+          <ShortcutsHelp keys={['mod', '⇧K']} desc="插入链接" />
+          <ShortcutsHelp keys={['mod', 'Enter']} desc="AI 续写（需配置 AI）" />
+          <ShortcutsHelp keys={['#', 'Enter']} desc="自动加 heading 触发器" />
+          <ShortcutsHelp keys={['-', 'Enter']} desc="自动加 list 触发器" />
+          <ShortcutsHelp keys={['Esc']} desc="退出（保留草稿）" />
         </div>
       )}
     </div>

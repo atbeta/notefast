@@ -15,7 +15,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { SearchResult } from '@notefast/core'
 import { request } from '../hooks/useAPI'
 import { useTheme } from '../hooks/useTheme'
-import { Kbd } from './ui'
+import { Kbd, ShortcutKeys } from './ui'
 
 interface CommandPaletteProps {
   open: boolean
@@ -28,7 +28,7 @@ type PaletteItem = {
   title: string
   hint?: string
   section: 'command' | 'document'
-  shortcut?: string
+  shortcut?: string[]
   keywords?: string[]
   action: () => void
 }
@@ -87,7 +87,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         title: '新建文档',
         hint: '创建一个新的 Markdown 文档',
         section: 'command',
-        shortcut: '⌘N',
+        shortcut: ['mod', 'N'],
         keywords: ['create', 'doc', 'new', '新建'],
         action: () => { onClose(); navigate('/new') },
       },
@@ -106,7 +106,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         title: dark ? '切换到浅色' : '切换到深色',
         hint: '切换应用主题',
         section: 'command',
-        shortcut: '⌘⇧D',
+        shortcut: ['mod', '⇧D'],
         keywords: ['theme', 'dark', 'light', '主题'],
         action: toggleDark,
       },
@@ -305,7 +305,7 @@ function PaletteRow({
         )}
       </div>
       {item.shortcut && (
-        <Kbd className="text-[11px] shrink-0">{item.shortcut}</Kbd>
+        <ShortcutKeys keys={item.shortcut} className="shrink-0" />
       )}
     </button>
   )
