@@ -28,7 +28,7 @@ import { useScrollFade } from '../hooks/useScrollFade'
 import { DRAFT_CHANGED_EVENT, hasDraftSync } from '../hooks/useEditorDraft'
 import type { DocSummary } from '@notefast/core'
 import DocActionsMenu from './DocActionsMenu'
-import { Kbd, Tooltip } from './ui'
+import { Tooltip, ShortcutKeys, shortcutLabel } from './ui'
 
 interface SidebarProps {
   collapsed: boolean
@@ -65,15 +65,10 @@ export default function Sidebar({
   onToggleAiChat,
 }: SidebarProps) {
   const location = useLocation()
-  const [isMac, setIsMac] = useState(false)
   const [inboxCount, setInboxCount] = useState(0)
   const [archivedCount, setArchivedCount] = useState(0)
   const { views: pinnedViews, unpin } = usePinnedViews()
   const navFadeRef = useScrollFade<HTMLElement>()
-
-  useEffect(() => {
-    setIsMac(/Mac|iPhone|iPad/i.test(navigator.platform))
-  }, [])
 
   /** 实例版本号（/api/v1/version），加载完成前不渲染版本位；失败静默 */
   const { data: versionInfo } = useApiQuery(() => api.get<{ version: string }>('/version'), [])
@@ -217,7 +212,7 @@ export default function Sidebar({
         >
           <Search className="w-3.5 h-3.5" strokeWidth={1.75} />
           <span className="flex-1 text-left">搜索文档…</span>
-          <Kbd>{isMac ? '⌘' : 'Ctrl'}K</Kbd>
+          <ShortcutKeys keys={['mod', 'K']} />
         </button>
       </div>
 
@@ -227,7 +222,7 @@ export default function Sidebar({
           <LayoutGrid className="w-[15px] h-[15px]" strokeWidth={1.75} />
           所有文档
         </Link>
-        <Link to="/new" onClick={closeAfterNav} className={location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'}>
+        <Link to="/new" onClick={closeAfterNav} className={location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'} title={`新建文档 (${shortcutLabel(['mod', 'N'])})`}>
           <Plus className="w-[15px] h-[15px]" strokeWidth={1.75} />
           新建
         </Link>
@@ -261,7 +256,7 @@ export default function Sidebar({
           >
             <Sparkles className="w-[15px] h-[15px]" strokeWidth={1.75} />
             <span className="flex-1">AI 助手</span>
-            <Kbd className="ml-auto">{isMac ? '⌘' : 'Ctrl'}J</Kbd>
+            <ShortcutKeys keys={['mod', 'J']} className="ml-auto" />
           </button>
         )}
 

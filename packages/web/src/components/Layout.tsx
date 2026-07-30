@@ -50,8 +50,17 @@ export default function Layout({ children, contentClassName }: { children: React
   const { resolvedTheme, setTheme } = useTheme()
 
   // 全局快捷键：⌘K / Ctrl+K, ⌘N / Ctrl+N, ⌘\ / Ctrl+\, ⌘J / Ctrl+J, ⌘⇧D / Ctrl+Shift+D
+  // capture 阶段拦截，在浏览器默认行为之前处理（⌘N 可能被浏览器截为新窗口）
   useEffect(() => {
+    const isEditing = (el: Element | null) => {
+      if (!el) return false
+      const tag = el.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+      if (el.getAttribute('contenteditable') === 'true') return true
+      return false
+    }
     const handler = (e: KeyboardEvent) => {
+      if (isEditing(document.activeElement)) return
       const mod = e.metaKey || e.ctrlKey
       if (mod && e.key.toLowerCase() === 'k') {
         e.preventDefault()
@@ -70,8 +79,8 @@ export default function Layout({ children, contentClassName }: { children: React
         setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')
       }
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    window.addEventListener('keydown', handler, { capture: true })
+    return () => window.removeEventListener('keydown', handler, { capture: true })
   }, [toggleSidebar, navigate, paletteOpen, resolvedTheme, setTheme])
 
   return (
