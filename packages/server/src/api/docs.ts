@@ -436,6 +436,7 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
   const missingAssets = findMissingAssets(extractAssetRefs(markdown))
   return c.json({
     doc: tree.length > 0 ? tree[0] : null,
+    updated_at: updatedDocRow.updated_at,
     ...(indexJob ? { index_job: indexJob } : {}),
     ...(missingAssets.length > 0 ? { missing_assets: missingAssets } : {}),
   })
@@ -453,7 +454,7 @@ docs.get('/:id/export/markdown', (c) => {
   const tree = buildBlockTree(fetchDocBlocks(db, id))
 
   const markdown = blocksToMarkdown(tree)
-  return c.json({ markdown })
+  return c.json({ markdown, updated_at: docRow.updated_at })
 })
 
 /**

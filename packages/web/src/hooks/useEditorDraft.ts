@@ -2,11 +2,8 @@ import { useCallback, useMemo } from 'react'
 
 const DRAFT_PREFIX = 'notefast-draft-'
 
-/** 草稿变更事件：saveDraft / clearDraft 后派发，侧栏草稿圆点据此实时刷新
- * （localStorage 的 storage 事件不覆盖同标签页，必须显式派发） */
 export const DRAFT_CHANGED_EVENT = 'notefast:draft-changed'
 
-/** 同步探测某文档是否有草稿（非 hook，供列表类组件逐条检查） */
 export function hasDraftSync(docId: string): boolean {
   try {
     return localStorage.getItem(DRAFT_PREFIX + docId) !== null
@@ -18,15 +15,15 @@ export function hasDraftSync(docId: string): boolean {
 function emitDraftChanged(): void {
   try {
     window.dispatchEvent(new CustomEvent(DRAFT_CHANGED_EVENT))
-  } catch { /* SSR / 测试环境无 window */ }
+  } catch { /* SSR */ }
 }
 
-interface DraftPayload {
+export interface DraftPayload {
   content: string
   updatedAt: number
+  serverUpdatedAt: string
 }
 
-/** 读取草稿 payload；兼容历史纯字符串格式（无时间戳，updatedAt=0） */
 function readPayload(docId: string): DraftPayload | null {
   let raw: string | null = null
   try {
@@ -42,22 +39,30 @@ function readPayload(docId: string): DraftPayload | null {
         return {
           content: parsed.content,
           updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : 0,
+          serverUpdatedAt: typeof parsed.serverUpdatedAt === 'string' ? parsed.serverUpdatedAt : '',
         }
       }
-    } catch { /* 内容本身以 { 开头的纯文本草稿，落回 legacy 处理 */ }
+    } catch { /* 内容本身以 { 开头的纯文本草稿，落回 legacy */ }
   }
-  return { content: raw, updatedAt: 0 }
+  return { content: raw, updatedAt: 0, serverUpdatedAt: '' }
 }
 
 export function useEditorDraft(docId: string) {
   const loadDraft = useCallback((): string | null => readPayload(docId)?.content ?? null, [docId])
 
+  const getDraftPayload = useCallback((): DraftPayload | null => readPayload(docId), [docId])
+
   const saveDraft = useCallback(
-    (content: string) => {
+    (content: string, serverUpdatedAt?: string) => {
       try {
+        const prev = readPayload(docId)
         localStorage.setItem(
           DRAFT_PREFIX + docId,
-          JSON.stringify({ content, updatedAt: Date.now() } satisfies DraftPayload),
+          JSON.stringify({
+            content,
+            updatedAt: Date.now(),
+            serverUpdatedAt: serverUpdatedAt ?? prev?.serverUpdatedAt ?? '',
+          } satisfies DraftPayload),
         )
         emitDraftChanged()
       } catch { /* ignore */ }
@@ -74,14 +79,13 @@ export function useEditorDraft(docId: string) {
 
   const hasDraft = useCallback((): boolean => hasDraftSync(docId), [docId])
 
-  /** 草稿元信息（阅读态提示条用）；updatedAt=0 表示历史格式无时间戳 */
   const getDraftInfo = useCallback((): { updatedAt: number } | null => {
     const p = readPayload(docId)
     return p ? { updatedAt: p.updatedAt } : null
   }, [docId])
 
   return useMemo(
-    () => ({ loadDraft, saveDraft, clearDraft, hasDraft, getDraftInfo }),
-    [loadDraft, saveDraft, clearDraft, hasDraft, getDraftInfo],
+    () => ({ loadDraft, saveDraft, clearDraft, hasDraft, getDraftInfo, getDraftPayload }),
+    [loadDraft, saveDraft, clearDraft, hasDraft, getDraftInfo, getDraftPayload],
   )
 }
