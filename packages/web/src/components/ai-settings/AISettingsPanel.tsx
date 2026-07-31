@@ -281,12 +281,13 @@ export default function AISettingsPanel() {
     apiKey: '',
     model: 'jina-reranker-v3',
     timeoutMs: 60000,
+    preset: 'jina',
   })
 
   const rerankerAsProvider: ProviderDefinition | null = reranker?.enabled ? {
     id: 'reranker',
     label: 'Reranker',
-    preset: reranker.baseUrl.includes('jina') ? 'jina' : reranker.baseUrl.includes('voyage') ? 'voyage' : 'custom',
+    preset: (reranker.preset as ProviderPresetId) || 'custom',
     baseUrl: reranker.baseUrl,
     apiKey: reranker.apiKey,
     embeddingModel: reranker.model,
@@ -302,6 +303,7 @@ export default function AISettingsPanel() {
       apiKey: v.apiKey,
       model: v.embeddingModel,
       timeoutMs: v.timeoutMs,
+      preset: v.preset,
     })
   }
 

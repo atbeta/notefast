@@ -88,6 +88,8 @@ export interface RerankerDefinition {
   model: string
   /** 请求超时（毫秒）*/
   timeoutMs: number
+  /** UI preset 标识（不影响实际 API 调用，仅用于下拉框状态恢复）*/
+  preset?: string
 }
 
 /**
