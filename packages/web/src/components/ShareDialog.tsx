@@ -215,7 +215,7 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
       ref={panelRef}
       role="dialog"
       aria-label="分享文档"
-      className="fixed z-[80] w-[360px] max-w-[calc(100vw-16px)] rounded-xl border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
+      className="fixed z-[80] w-[360px] max-w-[calc(100vw-16px)] rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
       style={{ top: pos.top, left: pos.left }}
     >
       <div className="px-3.5 pt-3 pb-2 flex items-center gap-2 border-b border-border/60">

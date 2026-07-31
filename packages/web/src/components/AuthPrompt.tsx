@@ -35,7 +35,7 @@ export default function AuthPrompt() {
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/95 backdrop-blur-sm animate-fade-in">
       <form
         onSubmit={handleSubmit}
-        className="w-[360px] max-w-[calc(100vw-32px)] rounded-xl border border-border bg-card p-7 shadow-[var(--shadow-floating)] space-y-5"
+        className="w-[360px] max-w-[calc(100vw-32px)] rounded-lg border border-border bg-card p-7 shadow-[var(--shadow-floating)] space-y-5"
       >
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-md bg-foreground text-background grid place-items-center">

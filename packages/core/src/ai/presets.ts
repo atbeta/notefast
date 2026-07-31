@@ -38,266 +38,120 @@
  * 🛠 自定义 custom         任意 OpenAI 兼容 (vLLM/LM Studio…)     (空)                            (空)
  */
 
-import type { ProviderDefinition, ProviderPresetId, Region } from './config'
+import type { ProviderDefinition, ProviderPresetId } from './config'
 import { DEFAULT_TIMEOUT_MS } from './config'
 
 export interface ProviderPreset {
   id: ProviderPresetId
   label: string
-  hint: string
-  region: Region
   baseUrl: string
   embeddingModel: string
   chatModel: string
   extraHeaders: Record<string, string>
-  /** 该预设是否需要 API Key */
   requiresKey: boolean
-  /** 注册/获取 Key 的官方页面（UI 展示为链接） */
   signupUrl?: string
+  supportedModes: ('chat' | 'embedding' | 'reranker')[]
 }
 
 export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
-  // ─────────── CN ───────────
-  minimax: {
-    id: 'minimax',
-    label: 'MiniMax',
-    hint: 'M3 1M context, MSA 架构，coding/agentic SOTA；MiniMax-Embedding-01',
-    region: 'cn',
-    baseUrl: 'https://api.minimaxi.com/v1',
-    embeddingModel: 'MiniMax-Embedding-01',
-    chatModel: 'MiniMax-M3',
-    extraHeaders: {},
-    requiresKey: true,
-    signupUrl: 'https://platform.minimaxi.com',
-  },
   deepseek: {
     id: 'deepseek',
     label: 'DeepSeek',
-    hint: 'V4-Flash 国产低价；纯 chat，embedding 留空即可',
-    region: 'cn',
     baseUrl: 'https://api.deepseek.com/v1',
     embeddingModel: '',
-    chatModel: 'deepseek-v4-flash',
+    chatModel: 'deepseek-chat',
     extraHeaders: {},
     requiresKey: true,
     signupUrl: 'https://platform.deepseek.com/api_keys',
+    supportedModes: ['chat'],
   },
-  doubao: {
-    id: 'doubao',
-    label: '字节豆包 Doubao',
-    hint: 'Seed 2.1 (2026-06) 256K context，编程/Agent SOTA',
-    region: 'cn',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-    embeddingModel: 'doubao-embedding-large',
-    chatModel: 'doubao-seed-2-1-pro-260628',
+  minimax: {
+    id: 'minimax',
+    label: 'MiniMax',
+    baseUrl: 'https://api.minimaxi.com/v1',
+    embeddingModel: '',
+    chatModel: 'MiniMax-Text-01',
     extraHeaders: {},
     requiresKey: true,
-    signupUrl: 'https://www.volcengine.com/product/doubao',
-  },
-  zhipu: {
-    id: 'zhipu',
-    label: '智谱 GLM',
-    hint: 'GLM-5（744B-A40B, MIT 开源） + embedding-3',
-    region: 'cn',
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    embeddingModel: 'embedding-3',
-    chatModel: 'glm-5',
-    extraHeaders: {},
-    requiresKey: true,
-    signupUrl: 'https://open.bigmodel.cn',
+    signupUrl: 'https://platform.minimaxi.com',
+    supportedModes: ['chat'],
   },
   moonshot: {
     id: 'moonshot',
-    label: 'Moonshot Kimi',
-    hint: 'K2.6（2026-04，长上下文）；embedding 留空即可',
-    region: 'cn',
+    label: 'Moonshot (Kimi)',
     baseUrl: 'https://api.moonshot.cn/v1',
     embeddingModel: '',
-    chatModel: 'kimi-latest',
+    chatModel: 'moonshot-v1-8k',
     extraHeaders: {},
     requiresKey: true,
     signupUrl: 'https://platform.moonshot.cn',
+    supportedModes: ['chat'],
   },
   siliconflow: {
     id: 'siliconflow',
-    label: 'SiliconFlow 硅基流动',
-    hint: '国产聚合 + 免费 Qwen3-Embedding；托管 DeepSeek-V4 / Qwen3 / GLM-5 / Kimi-K2.6 / MiniMax-M3',
-    region: 'cn',
+    label: 'SiliconFlow (硅基流动)',
     baseUrl: 'https://api.siliconflow.cn/v1',
     embeddingModel: 'Qwen/Qwen3-Embedding-8B',
     chatModel: 'deepseek-ai/DeepSeek-V4-Flash',
     extraHeaders: {},
     requiresKey: true,
     signupUrl: 'https://cloud.siliconflow.cn',
+    supportedModes: ['chat', 'embedding', 'reranker'],
   },
-  dashscope: {
-    id: 'dashscope',
-    label: '阿里百炼 DashScope',
-    hint: 'Qwen3.7-max（2026-07）+ text-embedding-v4',
-    region: 'cn',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    embeddingModel: 'text-embedding-v4',
-    chatModel: 'qwen3.7-max',
-    extraHeaders: {},
-    requiresKey: true,
-    signupUrl: 'https://bailian.console.aliyun.com',
-  },
-
-  // ─────────── Global ───────────
   openai: {
     id: 'openai',
     label: 'OpenAI',
-    hint: '官方 GPT-5 mini（GPT-4o 已宣布退役）；embedding 仍用 -3-small',
-    region: 'global',
     baseUrl: 'https://api.openai.com/v1',
-    embeddingModel: 'text-embedding-3-small',
-    chatModel: 'gpt-5-mini',
+    embeddingModel: '',
+    chatModel: 'gpt-4o-mini',
     extraHeaders: {},
     requiresKey: true,
     signupUrl: 'https://platform.openai.com/api-keys',
+    supportedModes: ['chat'],
   },
   openrouter: {
     id: 'openrouter',
     label: 'OpenRouter',
-    hint: '1 key 访问 400+ 模型；默认走 Llama 4 Maverick (1M, MoE)',
-    region: 'global',
     baseUrl: 'https://openrouter.ai/api/v1',
-    embeddingModel: 'qwen/qwen3-embedding-8b',
-    chatModel: 'meta-llama/llama-4-maverick',
+    embeddingModel: '',
+    chatModel: 'openai/gpt-4o-mini',
     extraHeaders: { 'HTTP-Referer': 'https://notefast.local', 'X-Title': 'NoteFast' },
     requiresKey: true,
     signupUrl: 'https://openrouter.ai/keys',
-  },
-  gemini: {
-    id: 'gemini',
-    label: 'Google Gemini',
-    hint: 'Gemini 3.5 Flash（OpenAI 兼容端点）；国内需代理',
-    region: 'global',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    embeddingModel: 'gemini-embedding-001',
-    chatModel: 'gemini-3.5-flash',
-    extraHeaders: {},
-    requiresKey: true,
-    signupUrl: 'https://aistudio.google.com/apikey',
-  },
-  mistral: {
-    id: 'mistral',
-    label: 'Mistral',
-    hint: 'Mistral Large 3 (Apache 2.0) — `mistral-large-latest` alias；mistral-embed',
-    region: 'global',
-    baseUrl: 'https://api.mistral.ai/v1',
-    embeddingModel: 'mistral-embed',
-    chatModel: 'mistral-large-latest',
-    extraHeaders: {},
-    requiresKey: true,
-    signupUrl: 'https://console.mistral.ai',
-  },
-  groq: {
-    id: 'groq',
-    label: 'Groq',
-    hint: 'LPU 极速推理；Qwen 3.6 27B（llama-3.3-70b 已退役）',
-    region: 'global',
-    baseUrl: 'https://api.groq.com/openai/v1',
-    embeddingModel: '',
-    chatModel: 'qwen/qwen3.6-27b',
-    extraHeaders: {},
-    requiresKey: true,
-    signupUrl: 'https://console.groq.com',
-  },
-  xai: {
-    id: 'xai',
-    label: 'xAI Grok',
-    hint: 'Grok 4.5 frontier（2026-07，knowledge cutoff Feb 2026）；grok-2/3/4 已退役',
-    region: 'global',
-    baseUrl: 'https://api.x.ai/v1',
-    embeddingModel: '',
-    chatModel: 'grok-4.5',
-    extraHeaders: {},
-    requiresKey: true,
-    signupUrl: 'https://console.x.ai',
-  },
-  cohere: {
-    id: 'cohere',
-    label: 'Cohere',
-    hint: 'Command A+ MoE（128K + 视觉 + 推理）+ rerank-v4.0-pro（32K）',
-    region: 'global',
-    baseUrl: 'https://api.cohere.com/v1',
-    embeddingModel: 'embed-english-v3.0',
-    chatModel: 'command-a-plus-05-2026',
-    extraHeaders: {},
-    requiresKey: true,
-    signupUrl: 'https://dashboard.cohere.com',
-  },
-  voyage: {
-    id: 'voyage',
-    label: 'Voyage AI',
-    hint: 'voyage-4-large MoE（SOTA 检索）；rerank-2.5（32K 多语言）',
-    region: 'global',
-    baseUrl: 'https://api.voyageai.com/v1',
-    embeddingModel: 'voyage-4-large',
-    chatModel: '',
-    extraHeaders: {},
-    requiresKey: true,
-    signupUrl: 'https://dash.voyageai.com',
+    supportedModes: ['chat'],
   },
   jina: {
     id: 'jina',
     label: 'Jina AI',
-    hint: 'jina-embeddings-v5-text-small（v5 系列）+ jina-reranker-v3',
-    region: 'global',
     baseUrl: 'https://api.jina.ai/v1',
-    embeddingModel: 'jina-embeddings-v5-text-small',
+    embeddingModel: 'jina-embeddings-v3',
     chatModel: '',
     extraHeaders: {},
     requiresKey: true,
     signupUrl: 'https://jina.ai',
+    supportedModes: ['embedding', 'reranker'],
   },
-
-  // ─────────── Local ───────────
-  ollama: {
-    id: 'ollama',
-    label: 'Ollama (本地)',
-    hint: '本机 Ollama 服务，无需 API Key；推荐 llama3.3 + nomic-embed-text',
-    region: 'local',
-    baseUrl: 'http://localhost:11434/v1',
-    embeddingModel: 'nomic-embed-text',
-    chatModel: 'llama3.3',
+  voyage: {
+    id: 'voyage',
+    label: 'Voyage AI',
+    baseUrl: 'https://api.voyageai.com/v1',
+    embeddingModel: 'voyage-3',
+    chatModel: '',
     extraHeaders: {},
-    requiresKey: false,
+    requiresKey: true,
+    signupUrl: 'https://dash.voyageai.com',
+    supportedModes: ['embedding', 'reranker'],
   },
-
-  // ─────────── Custom ───────────
   custom: {
     id: 'custom',
-    label: '自定义 (OpenAI 兼容)',
-    hint: '任何 OpenAI 兼容服务，如 LM Studio / vLLM / TEI',
-    region: 'local',
+    label: '自定义',
     baseUrl: '',
     embeddingModel: '',
     chatModel: '',
     extraHeaders: {},
     requiresKey: true,
+    supportedModes: ['chat', 'embedding', 'reranker'],
   },
-}
-
-/** 按区域分组的预设列表（UI 下拉使用），保持 PRESETS 中的插入顺序 */
-export const PRESETS_BY_REGION: Record<Region, ProviderPreset[]> = {
-  cn: [],
-  global: [],
-  local: [],
-}
-for (const p of Object.values(PRESETS)) {
-  PRESETS_BY_REGION[p.region].push(p)
-}
-
-/** 区域展示顺序 */
-export const REGION_ORDER: Region[] = ['cn', 'global', 'local']
-
-/** 区域中文标签 */
-export const REGION_LABELS: Record<Region, string> = {
-  cn: '🇨🇳 中国大陆',
-  global: '🌍 全球 / 需代理',
-  local: '🖥️ 本地 / 自定义',
 }
 
 /** 根据预设生成初始 ProviderDefinition（用于 UI 选择预设时回填表单） */

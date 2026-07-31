@@ -25,11 +25,12 @@ import {
   type Capabilities,
 } from '@notefast/core'
 import { api } from '../../hooks/useAPI'
-import { ActionButton, useToast, Toggle, FieldRow } from '../ui'
+import { ActionButton, useToast, Toggle } from '../ui'
 import ConfirmDialog from '../ConfirmDialog'
 import { ProviderForm } from './ProviderForm'
 import { DiagnosePanel } from './DiagnosePanel'
-import { Section, CapabilityBadge } from './primitives'
+import { SettingsCard, InlineField, StatusBadge } from '../settings/ui'
+import { CapabilityBadge } from './primitives'
 import { errorsToFields, localValidate, serverValidationErrors, type FormErrors } from './validation'
 
 /**
@@ -96,7 +97,6 @@ export default function AISettingsPanel() {
   const [webSearchApiKey, setWebSearchApiKey] = useState('')
   const [visionEnabled, setVisionEnabled] = useState(false)
 
-  const [showKey, setShowKey] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [diagnose, setDiagnose] = useState<AiDiagnoseResult | null>(null)
@@ -271,15 +271,44 @@ export default function AISettingsPanel() {
       ...chat,
       id: crypto.randomUUID(),
       label: `${chat.label} (Embedding)`,
-      chatModel: '', // embedding provider 不需要 chatModel
-      // 保留 embeddingModel：若 Chat provider 已有 embeddingModel 就一并用，否则清空让用户填
+      chatModel: '',
+    })
+  }
+
+  const handleEnableReranker = () => setReranker({
+    enabled: true,
+    baseUrl: 'https://api.jina.ai/v1',
+    apiKey: '',
+    model: 'jina-reranker-v3',
+    timeoutMs: 60000,
+  })
+
+  const rerankerAsProvider: ProviderDefinition | null = reranker?.enabled ? {
+    id: 'reranker',
+    label: 'Reranker',
+    preset: reranker.baseUrl.includes('jina') ? 'jina' : reranker.baseUrl.includes('voyage') ? 'voyage' : 'custom',
+    baseUrl: reranker.baseUrl,
+    apiKey: reranker.apiKey,
+    embeddingModel: reranker.model,
+    chatModel: '',
+    timeoutMs: reranker.timeoutMs,
+    extraHeaders: {},
+  } : null
+
+  const handleRerankerChange = (v: ProviderDefinition) => {
+    setReranker({
+      enabled: true,
+      baseUrl: v.baseUrl,
+      apiKey: v.apiKey,
+      model: v.embeddingModel,
+      timeoutMs: v.timeoutMs,
     })
   }
 
   return (
     <div className="space-y-5">
       {/* Top status bar */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-border bg-background/40">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg border border-border bg-background/40">
         <div className="flex items-center gap-2 text-sm">
           <span className="font-medium">AI 能力</span>
           {capabilities && (
@@ -321,11 +350,15 @@ export default function AISettingsPanel() {
       )}
 
       {/* Section 1: Chat Provider */}
-      <Section
+      <SettingsCard
         icon={<Sparkles className="w-4 h-4" />}
         title="Chat Provider"
-        hint="标题/摘要/对话/AutoLink 实体抽取都依赖 Chat；可选 DeepSeek / OpenAI / 智谱 / SiliconFlow 等任意 OpenAI 兼容服务"
+        statusBadge={<StatusBadge active={!!chat} />}
+        defaultExpanded={true}
       >
+        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
+          标题生成、文档摘要、聊天对话以及 AutoLink 实体抽取均依赖此模型。
+        </div>
         {!chat && (
           <button
             type="button"
@@ -341,30 +374,26 @@ export default function AISettingsPanel() {
             onChange={setChat}
             mode="chat"
             onRemove={() => setChat(null)}
-            keyShown={showKey}
-            onToggleKey={() => setShowKey((s) => !s)}
             knownModels={KNOWN_CHAT_MODELS}
             modelLabel="Chat 模型"
-            modelRequired={true}
             fieldErrors={formErrors.chat}
           />
         )}
-      </Section>
+      </SettingsCard>
 
       {/* Section 2: Embedding Provider (optional, independent) */}
-      <Section
+      <SettingsCard
         icon={<FileSearch className="w-4 h-4" />}
         title="Embedding Provider"
-        hint={
-          <>
-            语义搜索依赖 Embedding。可与 Chat 共用同一服务商（OpenAI / SiliconFlow 等），
-            也可独立配 Voyage / Jina / Cohere 等专精 embedding 的服务。
-            <span className="block mt-1 text-muted-foreground/80">
-              留空 = 仅 FTS5 全文检索（仍可用，但失去「语义召回」能力）
-            </span>
-          </>
-        }
+        statusBadge={<StatusBadge active={!!embedding} />}
+        defaultExpanded={true}
       >
+        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
+          提供语义搜索能力。
+          <span className="block mt-1 text-muted-foreground/80">
+            留空将回退至纯 FTS5 全文检索（失去语义召回能力）。
+          </span>
+        </div>
         {!embedding && (
           <div className="space-y-2">
             <button
@@ -393,13 +422,10 @@ export default function AISettingsPanel() {
               onChange={setEmbedding}
               mode="embedding"
               onRemove={() => setEmbedding(null)}
-              keyShown={showKey}
-              onToggleKey={() => setShowKey((s) => !s)}
               knownModels={KNOWN_EMBEDDING_MODELS}
-              modelLabel="Embedding 模型"
-              modelRequired={true}
-              fieldErrors={formErrors.embedding}
-            />
+            modelLabel="Embedding 模型"
+            fieldErrors={formErrors.embedding}
+          />
             <button
               type="button"
               onClick={() => setEmbedding(null)}
@@ -409,14 +435,18 @@ export default function AISettingsPanel() {
             </button>
           </div>
         )}
-      </Section>
+      </SettingsCard>
 
       {/* Section 3: Auto-index + 向量库状态 */}
-      <Section
+      <SettingsCard
         icon={<Database className="w-4 h-4" />}
         title="Auto-Index"
-        hint="新建 / 更新 block 时自动生成 embedding，支持语义搜索"
+        statusBadge={<StatusBadge active={autoIndex} />}
+        defaultExpanded={true}
       >
+        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
+          新建 / 更新 block 时自动生成 embedding，支持语义搜索。
+        </div>
         <Toggle
           checked={autoIndex}
           onChange={setAutoIndex}
@@ -496,76 +526,49 @@ export default function AISettingsPanel() {
             </div>
           </div>
         )}
-      </Section>
+      </SettingsCard>
 
       {/* Section 4: Reranker */}
-      <Section icon={<GitBranch className="w-4 h-4" />} title="Reranker（可选）" hint="基于本地 TEI 服务或云端 bge-reranker 的精排；在 Hybrid Search 召回后做交叉注意力二次排序">
-        {!reranker && (
+      <SettingsCard 
+        icon={<GitBranch className="w-4 h-4" />} 
+        title="Reranker 精排" 
+        statusBadge={<StatusBadge active={!!reranker?.enabled} />}
+        defaultExpanded={!!reranker?.enabled}
+      >
+        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
+          精排；在 Hybrid Search 召回后做二次排序。
+        </div>
+        {!reranker?.enabled && (
           <button
             type="button"
-            onClick={() => setReranker({ enabled: true, baseUrl: '', apiKey: '', model: '', timeoutMs: 30000 })}
+            onClick={handleEnableReranker}
             className="w-full py-3 text-sm rounded-md border border-dashed border-border text-muted-foreground hover:bg-accent"
           >
             + 添加 Reranker
           </button>
         )}
-        {reranker && (
-          <div className="space-y-3">
-            <Toggle checked={reranker.enabled} onChange={(v) => setReranker({ ...reranker, enabled: v })} label={reranker.enabled ? '启用' : '禁用'} />
-            <FieldRow label="Base URL（TEI /rerank 端点）">
-              <input
-                type="text"
-                value={reranker.baseUrl}
-                onChange={(e) => setReranker({ ...reranker, baseUrl: e.target.value })}
-                placeholder="http://127.0.0.1:8080"
-                className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
-              />
-            </FieldRow>
-            <FieldRow label="API Key（可选）">
-              <input
-                type="password"
-                value={reranker.apiKey === KEY_MASK ? '' : reranker.apiKey}
-                onChange={(e) => {
-                  const v = e.target.value
-                  setReranker({ ...reranker, apiKey: v === '' && reranker.apiKey === KEY_MASK ? KEY_MASK : v })
-                }}
-                placeholder={reranker.apiKey === KEY_MASK ? '已保存 Key（留空保持不变）' : '留空 = 无鉴权'}
-                className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
-              />
-            </FieldRow>
-            <FieldRow label="模型">
-              <input
-                type="text"
-                value={reranker.model}
-                onChange={(e) => setReranker({ ...reranker, model: e.target.value })}
-                placeholder="BAAI/bge-reranker-v2-m3"
-                className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
-              />
-            </FieldRow>
-            <FieldRow label="超时（毫秒）">
-              <input
-                type="number"
-                min={1000}
-                max={600000}
-                step={1000}
-                value={reranker.timeoutMs}
-                onChange={(e) => setReranker({ ...reranker, timeoutMs: parseInt(e.target.value, 10) || 30000 })}
-                className="w-40 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
-              />
-            </FieldRow>
-            <button
-              type="button"
-              onClick={() => setReranker(null)}
-              className="text-xs text-muted-foreground hover:text-destructive"
-            >
-              移除 Reranker
-            </button>
-          </div>
+        {reranker?.enabled && rerankerAsProvider && (
+          <ProviderForm
+            value={rerankerAsProvider}
+            onChange={handleRerankerChange}
+            mode="reranker"
+            onRemove={() => setReranker(null)}
+            knownModels={['BAAI/bge-reranker-v2-m3', 'jina-reranker-v3', 'voyage-rerank-2', 'voyage-rerank-2-lite']}
+            modelLabel="Reranker 模型"
+          />
         )}
-      </Section>
+      </SettingsCard>
 
       {/* Section 5: AutoLink */}
-      <Section icon={<Link2 className="w-4 h-4" />} title="AutoLink（AI 主动建链）" hint="写入后 AI 自动抽取关键概念，高置信（语义命中 ≥ minConfidence 且 top-1 领先 ≥ minMargin）时直接建立笔记间链接（ref_type=ai_auto）；低置信静默跳过，无需人工审核。">
+      <SettingsCard 
+        icon={<Link2 className="w-4 h-4" />} 
+        title="AutoLink 自动建链" 
+        statusBadge={<StatusBadge active={autoLink.enabled} />}
+        defaultExpanded={autoLink.enabled}
+      >
+        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
+          写入后 AI 自动抽取关键概念，高置信（语义命中 ≥ minConfidence 且 top-1 领先 ≥ minMargin）时直接建立笔记间链接（ref_type=ai_auto）；低置信静默跳过，无需人工审核。
+        </div>
         <Toggle
           checked={autoLink.enabled}
           onChange={(v) => setAutoLink({ ...autoLink, enabled: v })}
@@ -578,42 +581,32 @@ export default function AISettingsPanel() {
         />
         {autoLink.enabled && (
           <div className="mt-4 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <FieldRow label="minConfidence">
-                <input
-                  type="number"
-                  step="0.05"
-                  min="0"
-                  max="1"
-                  className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary/30"
-                  value={autoLink.minConfidence}
-                  onChange={(e) => setAutoLink({ ...autoLink, minConfidence: parseFloat(e.target.value) || 0 })}
-                />
-              </FieldRow>
-              <FieldRow label="minMargin">
-                <input
-                  type="number"
-                  step="0.05"
-                  min="0"
-                  max="1"
-                  className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary/30"
-                  value={autoLink.minMargin}
-                  onChange={(e) => setAutoLink({ ...autoLink, minMargin: parseFloat(e.target.value) || 0 })}
-                />
-              </FieldRow>
-              <FieldRow label="每块最大建链数">
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={autoLink.maxPerBlock}
-                  onChange={(e) => setAutoLink({ ...autoLink, maxPerBlock: Math.min(10, Math.max(1, parseInt(e.target.value, 10) || 5)) })}
-                  className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary/30"
-                />
-              </FieldRow>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
+              <InlineField
+                label="minConfidence"
+                type="number"
+                value={String(autoLink.minConfidence)}
+                onChange={(v) => setAutoLink({ ...autoLink, minConfidence: parseFloat(v) || 0 })}
+                mono
+              />
+              <InlineField
+                label="minMargin"
+                type="number"
+                value={String(autoLink.minMargin)}
+                onChange={(v) => setAutoLink({ ...autoLink, minMargin: parseFloat(v) || 0 })}
+                mono
+              />
+              <InlineField
+                label="每块最大建链数"
+                type="number"
+                value={String(autoLink.maxPerBlock)}
+                onChange={(v) => setAutoLink({ ...autoLink, maxPerBlock: Math.min(10, Math.max(1, parseInt(v, 10) || 5)) })}
+                mono
+              />
             </div>
 
-            <FieldRow label="Notebook 范围">
+            <div className="flex items-center justify-between pt-2">
+              <h4 className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">Notebook 范围</h4>
               <div
                 className="inline-flex items-center rounded-md border border-border/60 bg-muted/30 p-0.5 text-[12px]"
                 role="group"
@@ -644,25 +637,25 @@ export default function AISettingsPanel() {
                   仅同 Notebook
                 </button>
               </div>
-            </FieldRow>
+            </div>
           </div>
         )}
-      </Section>
+      </SettingsCard>
 
       {/* Section 6: Web Search */}
-      <Section
+      <SettingsCard
         icon={<Globe className="w-4 h-4" />}
-        title="网页搜索（可选）"
-        hint={
-          <>
-            当知识库笔记不足以回答用户问题时，AI 可调用 Brave Search 联网补充信息。
-            搜索结果用 🌐 标注来源 URL，与笔记引用 [n] 区分。
-            <span className="block mt-1 text-muted-foreground/80">
-              需要 <a href="https://brave.com/search/api/" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Brave Search API Key</a>（免费额度 2000 次/月）
-            </span>
-          </>
-        }
+        title="网页搜索"
+        statusBadge={<StatusBadge active={webSearchEnabled} />}
+        defaultExpanded={webSearchEnabled}
       >
+        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
+          当知识库笔记不足以回答用户问题时，AI 可调用 Brave Search 联网补充信息。
+          搜索结果用 🌐 标注来源 URL，与笔记引用 [n] 区分。
+          <span className="block mt-1 text-muted-foreground/80">
+            需要 <a href="https://brave.com/search/api/" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Brave Search API Key</a>（免费额度 2000 次/月）
+          </span>
+        </div>
         <Toggle
           checked={webSearchEnabled}
           onChange={setWebSearchEnabled}
@@ -674,22 +667,19 @@ export default function AISettingsPanel() {
           }
         />
         {webSearchEnabled && (
-          <div className="mt-3 space-y-3">
-            <FieldRow label="Brave Search API Key">
-              <input
-                type="password"
-                value={webSearchApiKey === KEY_MASK ? '' : webSearchApiKey}
-                onChange={(e) => {
-                  const v = e.target.value
-                  setWebSearchApiKey(v === '' && webSearchApiKey === KEY_MASK ? KEY_MASK : v)
-                }}
-                placeholder={webSearchApiKey === KEY_MASK ? '已保存 Key（留空保持不变）' : 'BSA-...'}
-                className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
-              />
-            </FieldRow>
+          <div className="mt-3 space-y-4 pt-2">
+            <InlineField
+              label="Brave Search API Key"
+              description="留空保持不变"
+              value={webSearchApiKey === KEY_MASK ? '' : webSearchApiKey}
+              onChange={(v) => setWebSearchApiKey(v === '' && webSearchApiKey === KEY_MASK ? KEY_MASK : v)}
+              placeholder={webSearchApiKey === KEY_MASK ? '已保存 Key' : 'BSA-...'}
+              type="password"
+              mono
+            />
           </div>
         )}
-      </Section>
+      </SettingsCard>
 
       <div className="flex items-center gap-2 pt-2 flex-wrap">
         <ActionButton

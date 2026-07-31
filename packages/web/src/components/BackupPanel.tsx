@@ -4,17 +4,14 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  ChevronDown,
-  ChevronUp,
   Copy,
-  Eye,
-  EyeOff,
   Plug,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { BACKUP_SECRET_MASK, type BackupRuntimeStatus, type BackupRestorePoint } from '@notefast/core'
 import { ActionButton, useToast } from './ui'
 import ConfirmDialog from './ConfirmDialog'
+import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
 
 interface BackupConfig {
   enabled: boolean
@@ -33,7 +30,6 @@ interface BackupConfig {
 
 export default function BackupPanel() {
   const [status, setStatus] = useState<BackupRuntimeStatus | null>(null)
-  const [collapsed, setCollapsed] = useState(false)
   const [enabled, setEnabled] = useState(false)
   const [bucket, setBucket] = useState('')
   const [region, setRegion] = useState('auto')
@@ -44,7 +40,6 @@ export default function BackupPanel() {
   const [forcePathStyle, setForcePathStyle] = useState(false)
   const [intervalHours, setIntervalHours] = useState(1)
   const [retentionDays, setRetentionDays] = useState(30)
-  const [showSecret, setShowSecret] = useState(false)
   const [points, setPoints] = useState<BackupRestorePoint[]>([])
   const [showDisableConfirm, setShowDisableConfirm] = useState(false)
   const toast = useToast()
@@ -153,199 +148,177 @@ export default function BackupPanel() {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card shadow-[var(--shadow-card)] overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setCollapsed((c) => !c)}
-        aria-expanded={!collapsed}
-        className="w-full flex items-center justify-between gap-2 px-5 py-3.5 hover:bg-accent/60 transition-colors"
-      >
-        <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
-          <Database className="w-4 h-4" strokeWidth={1.75} />
-          {status?.configured ? (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/12 text-emerald-600 dark:text-emerald-300 font-medium">
-              已启用
-            </span>
-          ) : (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
-              未启用
-            </span>
+    <SettingsCard
+      title="数据库备份 (SQLite → S3)"
+      icon={<Database className="w-4 h-4" strokeWidth={1.75} />}
+      statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? '已启用' : '未启用'} />}
+      defaultExpanded={!status?.configured}
+      dangerZone={
+        status?.configured && (
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-[13px] font-medium text-destructive">禁用数据库备份</div>
+              <div className="text-[12px] text-destructive/70 mt-0.5">禁用后将停止自动备份，已有恢复点不会被删除。</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDisableConfirm(true)}
+              className="px-3 py-1.5 text-[12.5px] font-medium rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+            >
+              禁用备份
+            </button>
+          </div>
+        )
+      }
+    >
+      <div className="space-y-6">
+        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50">
+          完整灾备：在线生成一致 SQLite 快照并上传 S3。默认每小时一次、保留 30 天。
+          恢复须先停止服务，再执行 CLI（Web 不提供一键覆盖）。
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="text-[13px] font-medium text-foreground">启用自动备份</div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" className="sr-only peer" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+            <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+          </label>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
+          <InlineField label="Bucket" value={bucket} onChange={setBucket} mono placeholder="notefast-backup" />
+          <InlineField label="Region" value={region} onChange={setRegion} mono placeholder="auto" />
+          <InlineField
+            label="Endpoint"
+            description="R2 / MinIO 等兼容协议必填"
+            value={endpoint}
+            onChange={setEndpoint}
+            mono
+            placeholder="https://xxx.r2.cloudflarestorage.com"
+          />
+          <InlineField label="Key 前缀" value={prefix} onChange={setPrefix} mono placeholder="notefast-backup" />
+          <InlineField
+            label="Access Key ID"
+            value={accessKeyId}
+            onChange={setAccessKeyId}
+            mono
+            placeholder={BACKUP_SECRET_MASK}
+          />
+          <InlineField
+            label="Secret Access Key"
+            value={secretAccessKey}
+            onChange={setSecretAccessKey}
+            mono
+            type="password"
+            placeholder={BACKUP_SECRET_MASK}
+          />
+          <InlineField
+            label="自动备份间隔"
+            description="单位：小时，设为 0 表示仅手动备份"
+            value={String(intervalHours)}
+            onChange={(v) => setIntervalHours(parseInt(v, 10) || 0)}
+            type="number"
+          />
+          <InlineField
+            label="保留天数"
+            value={String(retentionDays)}
+            onChange={(v) => setRetentionDays(parseInt(v, 10) || 30)}
+            type="number"
+          />
+        </div>
+
+        <div className="flex items-center justify-between pt-2">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <span className="text-[13px] font-medium text-foreground">Path-style endpoint</span>
+            <span className="text-[11px] text-muted-foreground/60 -ml-1.5">MinIO 必需，AWS / R2 默认关闭</span>
+            <div className="relative inline-flex items-center">
+              <input type="checkbox" className="sr-only peer" checked={forcePathStyle} onChange={(e) => { setForcePathStyle(e.target.checked) }} />
+              <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+            </div>
+          </label>
+        </div>
+
+        <div className="flex items-center gap-3 pt-4 border-t border-border/40">
+          <ActionButton onAction={handleSave}>保存全部更改</ActionButton>
+          {status?.configured && (
+            <>
+              <ActionButton variant="secondary" onAction={handleTest}>
+                <Plug className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
+                测试连接
+              </ActionButton>
+              <ActionButton variant="secondary" onAction={handleRun}>
+                <RefreshCw className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
+                立即备份
+              </ActionButton>
+            </>
           )}
         </div>
-        {collapsed ? (
-          <ChevronDown className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
-        ) : (
-          <ChevronUp className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
-        )}
-      </button>
 
-      {/* 折叠/展开用 grid-rows trick 平滑过渡，避免下方内容被瞬时撑下 */}
-      <div
-        className={`grid duration-300 ease-in-out ${
-          collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'
-        }`}
-        style={{ transitionProperty: 'grid-template-rows, opacity' }}
-        aria-hidden={collapsed}
-      >
-        <div className="overflow-hidden">
-          <div className="p-5 space-y-5 border-t border-border/50">
-            <p className="text-[12px] text-muted-foreground leading-relaxed">
-              完整灾备：在线生成一致 SQLite 快照并上传 S3。默认每小时一次、保留 30 天。
-              恢复须先停止服务，再执行 CLI（Web 不提供一键覆盖）。
-            </p>
-
-            <label className="flex items-center gap-2 text-sm min-h-7">
-              <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-              <span>启用数据库备份</span>
-            </label>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Field label="Bucket" value={bucket} onChange={setBucket} mono placeholder="notefast-backup" />
-              <Field label="Region" value={region} onChange={setRegion} mono placeholder="auto" />
-              <Field
-                label="Endpoint（R2 / MinIO 必填）"
-                value={endpoint}
-                onChange={setEndpoint}
-                mono
-                placeholder="https://xxx.r2.cloudflarestorage.com"
-              />
-              <Field label="Key 前缀" value={prefix} onChange={setPrefix} mono placeholder="notefast-backup" />
-              <Field
-                label="Access Key ID"
-                value={accessKeyId}
-                onChange={setAccessKeyId}
-                mono
-                placeholder={BACKUP_SECRET_MASK}
-              />
-              <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Secret Access Key
-                </label>
-                <div className="mt-1 flex items-center gap-2">
-                  <input
-                    type={showSecret ? 'text' : 'password'}
-                    value={secretAccessKey}
-                    onChange={(e) => setSecretAccessKey(e.target.value)}
-                    placeholder={BACKUP_SECRET_MASK}
-                    className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSecret((s) => !s)}
-                    className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-accent"
-                  >
-                    {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-              <Field
-                label="自动备份间隔（小时，0=仅手动）"
-                value={String(intervalHours)}
-                onChange={(v) => setIntervalHours(parseInt(v, 10) || 0)}
-                type="number"
-              />
-              <Field
-                label="保留天数"
-                value={String(retentionDays)}
-                onChange={(v) => setRetentionDays(parseInt(v, 10) || 30)}
-                type="number"
-              />
-            </div>
-
-            <label className="flex items-center gap-2 text-sm min-h-7">
-              <input
-                type="checkbox"
-                checked={forcePathStyle}
-                onChange={(e) => setForcePathStyle(e.target.checked)}
-              />
-              <span>Path-style endpoint（MinIO 通常需要）</span>
-            </label>
-
-            <div className="flex items-center gap-2 flex-wrap min-h-7">
-              <ActionButton onAction={handleSave}>保存</ActionButton>
-              {status?.configured && (
-                <>
-                  <ActionButton variant="secondary" size="sm" onAction={handleTest}>
-                    <Plug className="w-3.5 h-3.5" strokeWidth={1.75} />
-                    测试连接
-                  </ActionButton>
-                  <ActionButton variant="secondary" size="sm" onAction={handleRun}>
-                    <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
-                    立即备份
-                  </ActionButton>
-                  <button
-                    type="button"
-                    onClick={() => setShowDisableConfirm(true)}
-                    className="inline-flex items-center justify-center gap-1.5 h-7 px-2.5 text-[12px] font-medium leading-none rounded-[var(--radius-btn)] text-destructive hover:bg-destructive/10 ml-auto min-w-[88px]"
-                  >
-                    禁用
-                  </button>
-                </>
+        {status && (
+          <div className="text-[12.5px] text-muted-foreground pt-4 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-foreground">状态：</span>
+              {status.running ? (
+                <span className="text-amber-500 flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5 animate-spin"/> 进行中 ({status.phase})</span>
+              ) : (
+                '空闲'
+              )}
+              {status.nextRunAt && (
+                <span className="ml-2">下次备份：<span className="font-mono">{status.nextRunAt}</span></span>
               )}
             </div>
-
-            {status && (
-              <div className="text-xs text-muted-foreground pt-2 border-t border-border/60 space-y-1">
-                <div>
-                  状态：{status.running ? `进行中 (${status.phase})` : '空闲'}
-                  {status.nextRunAt && (
-                    <span className="ml-2">下次：<span className="font-mono">{status.nextRunAt}</span></span>
-                  )}
-                </div>
-                {status.lastSuccessAt && (
-                  <div className="text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" />
-                    上次成功 {status.lastSuccessAt}
-                    {status.lastResult?.objectKey && (
-                      <span className="font-mono ml-1 truncate max-w-[240px]">{status.lastResult.objectKey}</span>
-                    )}
-                  </div>
-                )}
-                {status.lastError && (
-                  <div className="text-destructive inline-flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    {status.lastError}
-                  </div>
+            {status.lastSuccessAt && (
+              <div className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                上次成功 {status.lastSuccessAt}
+                {status.lastResult?.objectKey && (
+                  <span className="font-mono ml-1 truncate max-w-[240px] text-[11.5px] opacity-80">{status.lastResult.objectKey}</span>
                 )}
               </div>
             )}
-
-            {points.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-border/60">
-                <h4 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                  恢复点
-                </h4>
-                <div className="space-y-1.5">
-                  {points.map((p) => (
-                    <div
-                      key={p.objectKey}
-                      className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border border-border bg-background text-xs"
-                    >
-                      <div className="min-w-0">
-                        <div className="font-mono truncate">{p.createdAt}</div>
-                        <div className="text-muted-foreground truncate">
-                          {(p.sizeBytes / 1024).toFixed(1)} KB · schema v{p.schemaVersion}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => copyRestoreCmd(p.objectKey)}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded hover:bg-accent shrink-0"
-                        title="复制恢复命令"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        恢复命令
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  恢复前请停止服务。可用 <code className="font-mono">--dry-run</code> 预演。
-                </p>
+            {status.lastError && (
+              <div className="text-destructive flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5" />
+                上次失败：{status.lastError}
               </div>
             )}
           </div>
-        </div>
+        )}
+
+        {points.length > 0 && (
+          <div className="space-y-3 pt-4 border-t border-border/40">
+            <h4 className="text-[11.5px] uppercase tracking-[0.08em] text-muted-foreground font-semibold">
+              最近恢复点
+            </h4>
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+              {points.map((p) => (
+                <div
+                  key={p.objectKey}
+                  className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border border-border/60 bg-accent/10 text-[12.5px] hover:border-border transition-colors"
+                >
+                  <div className="min-w-0">
+                    <div className="font-mono truncate font-medium text-foreground">{p.createdAt}</div>
+                    <div className="text-muted-foreground truncate text-[11.5px] mt-0.5">
+                      {(p.sizeBytes / 1024).toFixed(1)} KB · schema v{p.schemaVersion}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyRestoreCmd(p.objectKey)}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-accent hover:text-foreground text-muted-foreground shrink-0 transition-colors border border-transparent hover:border-border/50"
+                    title="复制恢复命令"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>命令</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11.5px] text-muted-foreground">
+              恢复前请停止服务。可用 <code className="font-mono bg-accent/50 px-1 py-0.5 rounded text-[10.5px]">--dry-run</code> 预演。
+            </p>
+          </div>
+        )}
       </div>
 
       <ConfirmDialog
@@ -360,35 +333,6 @@ export default function BackupPanel() {
           void handleDisable()
         }}
       />
-    </div>
-  )
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  placeholder,
-  type = 'text',
-  mono,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
-  type?: 'text' | 'number'
-  mono?: boolean
-}) {
-  return (
-    <div>
-      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={`mt-1 w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/30 ${mono ? 'font-mono' : ''}`}
-      />
-    </div>
+    </SettingsCard>
   )
 }

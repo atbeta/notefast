@@ -41,7 +41,7 @@ export default function ConfirmDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity" onClick={onCancel} />
       {/* 移除粗重边框，依靠阴影和色阶差异建立纵深；增加内边距带来呼吸感 */}
-      <div className="relative bg-card rounded-xl shadow-2xl shadow-black/40 max-w-sm w-full mx-4 p-6 sm:p-7 animate-fade-in">
+      <div className="relative bg-card rounded-lg shadow-2xl shadow-black/40 max-w-sm w-full mx-4 p-6 sm:p-7 animate-fade-in">
         <div className="flex items-start gap-3.5 mb-6">
           {destructive && (
             <div className="w-8 h-8 rounded-md bg-destructive/10 flex items-center justify-center shrink-0 mt-0.5">
