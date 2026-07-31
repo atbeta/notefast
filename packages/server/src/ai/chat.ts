@@ -42,6 +42,7 @@ import { scheduleDocIndex } from './indexJobs'
 import { loadAiExcludedDocIds } from './aiExcludeQuery'
 import { searchWeb } from './webSearch'
 import { emitAppEvent } from '../events'
+import { visionEnabled } from './imageCaptions'
 
 export type ChatEvent =
   | { type: 'retrieval'; report: HybridSearchReport }
@@ -579,6 +580,21 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
     yield {
       type: 'error',
       error: { code: 'no_user_message', message: '未提供用户消息' },
+    }
+    return
+  }
+
+  // 消息中包含图片但视觉模型未启用：提前拒绝，避免透传到 provider 后返回晦涩错误
+  const hasImagePart = opts.messages.some((m) =>
+    Array.isArray(m.content) && m.content.some((p) => p.type === 'image_url'),
+  )
+  if (hasImagePart && !visionEnabled()) {
+    yield {
+      type: 'error',
+      error: {
+        code: 'llm_error',
+        message: '当前模型不支持图片输入。请在设置中开启视觉（vision）能力并配置支持多模态的模型。',
+      },
     }
     return
   }

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw, FolderOpen, Cloud, HardDrive, CheckCircle2, AlertCircle, Settings as SettingsIcon } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { SYNC_SECRET_MASK, type LocalFsAdapterConfig, type S3AdapterConfig, type WebDavAdapterConfig } from '@notefast/core'
-import { ActionButton, useToast } from './ui'
+import { ActionButton, useToast, HelpTip } from './ui'
 import ConfirmDialog from './ConfirmDialog'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
 
@@ -155,8 +155,9 @@ export default function SyncPanel() {
       defaultExpanded={!status?.configured}
     >
       <div className="space-y-6">
-        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50">
-          将文档导出为 Markdown 推送到单一远端（LocalFS / S3 / WebDAV）。这是内容归档，不含 block ID、引用、标签与向量。同名文档使用带 ID 的文件名，删除会清理归档清单管理的陈旧文件。
+        <div className="flex items-center gap-1.5">
+          <span className="text-[13.5px] font-medium text-foreground">Markdown 归档</span>
+          <HelpTip label="将文档导出为 Markdown 推送到单一远端（LocalFS / S3 / WebDAV）。这是内容归档，不含 block ID、引用、标签与向量。同名文档使用带 ID 的文件名，删除会清理归档清单管理的陈旧文件。" />
         </div>
 
         <div className="space-y-3">
@@ -300,8 +301,9 @@ export default function SyncPanel() {
 
           {form.kind === 'webdav' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
-              <div className="md:col-span-2 text-[11.5px] text-muted-foreground/80 leading-relaxed bg-accent/20 p-2.5 rounded border border-border/30">
-                支持 NextCloud / ownCloud / 群晖 / 坚果云等 WebDAV。第一次推送时前缀不存在会创建中间目录。
+              <div className="md:col-span-2 flex items-center gap-1.5">
+                <span className="text-[12px] text-muted-foreground">WebDAV</span>
+                <HelpTip label="支持 NextCloud / ownCloud / 群晖 / 坚果云等 WebDAV。第一次推送时前缀不存在会创建中间目录。" />
               </div>
               <div className="md:col-span-2">
                 <InlineField
