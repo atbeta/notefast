@@ -16,8 +16,10 @@ export interface ChatPromptInput {
   messages: ChatMessage[]
   /** 检索召回的 blocks，按最终排序传入 */
   citations: Citation[]
-  /** 当前查看的文档 ID（可能为空）；用于提示模型"用户正在看 XX" */
+  /** 当前查看的文档标题 */
   currentDocTitle?: string
+  /** 当前查看文档的完整 Markdown 内容（有 contextDocId 时自动加载） */
+  currentDocContent?: string
   /** 历史压缩阈值 */
   maxHistoryTurns?: number
   /** 可用工具定义；为空时不在 system prompt 描述工具能力 */
@@ -40,12 +42,12 @@ const SYSTEM_PROMPT = `你是 NoteFast 的 AI 助手，正在与用户讨论他�
 11. 检索结果只是 block 级片段，不是完整文档。当用户问的是某篇文章的整体内容（"那篇文章具体说了什么""总结一下这篇"）或片段不足以回答时，调用 notefast_read_doc 拉取整篇 Markdown，不要仅凭片段猜测全文。`
 
 export function buildChatPrompt(input: ChatPromptInput): ChatMessage[] {
-  const { messages, citations, currentDocTitle, tools } = input
+  const { messages, citations, currentDocTitle, currentDocContent, tools } = input
   const maxTurns = input.maxHistoryTurns ?? 6
 
   const systemContent = citations.length > 0
-    ? `${SYSTEM_PROMPT}\n\n${buildContextBlock(citations, currentDocTitle)}`
-    : `${SYSTEM_PROMPT}\n\n(本次未检索到相关笔记。请直接告知用户未找到相关内容，不要编造或猜测。若用户的问题涉及"有哪些""列出所有"等列表性查询，建议调用 notefast_list_docs 获取文档列表。)`
+    ? `${SYSTEM_PROMPT}\n\n${buildContextBlock(citations, currentDocTitle, currentDocContent)}`
+    : `${SYSTEM_PROMPT}\n\n${buildContextBlock([], currentDocTitle, currentDocContent)}`
 
   let withTools = systemContent
   if (tools && tools.length > 0) {
@@ -57,10 +59,24 @@ export function buildChatPrompt(input: ChatPromptInput): ChatMessage[] {
   return [{ role: 'system', content: withTools }, ...history]
 }
 
-function buildContextBlock(citations: Citation[], currentDocTitle?: string): string {
-  const header = currentDocTitle
-    ? `用户当前查看文档："${currentDocTitle}"\n\n`
-    : ''
+function buildContextBlock(citations: Citation[], currentDocTitle?: string, currentDocContent?: string): string {
+  let docBlock = ''
+  if (currentDocTitle || currentDocContent) {
+    docBlock = currentDocTitle ? `用户当前查看文档：《${currentDocTitle}》\n` : '用户当前正在浏览一篇文档\n'
+    if (currentDocContent) {
+      // 截断过长内容，为检索结果留空间
+      const maxLen = 4000
+      const truncated = currentDocContent.length > maxLen
+        ? currentDocContent.slice(0, maxLen) + '\n\n... (文档过长，已截断。可使用 notefast_read_doc 读取全文)'
+        : currentDocContent
+      docBlock += `\n完整内容：\n---\n${truncated}\n---\n\n`
+    } else {
+      docBlock += '\n'
+    }
+  }
+  if (citations.length === 0) {
+    return `${docBlock}(本次未检索到相关笔记。请直接告知用户未找到相关内容，不要编造或猜测。若用户的问题涉及"有哪些""列出所有"等列表性查询，建议调用 notefast_list_docs 获取文档列表。)`
+  }
   const items = citations
     .map((c, i) => {
       const head = `[${i + 1}] 文档《${c.doc_title}》 · ${c.type}`
@@ -70,7 +86,7 @@ function buildContextBlock(citations: Citation[], currentDocTitle?: string): str
       return `${head}\n${prefix}${body}${tail}`
     })
     .join('\n\n')
-  return `${header}检索到的笔记（共 ${citations.length} 条）：\n\n${items}`
+  return `${docBlock}检索到的笔记（共 ${citations.length} 条）：\n\n${items}`
 }
 
 function buildToolsBlock(tools: ToolDefinition[]): string {
