@@ -6,7 +6,8 @@ import { serveStatic } from 'hono/bun'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createPluginSystem } from '@notefast/core'
-import { initDb, closeDb } from './db'
+import { safeLogWarn } from '@notefast/core'
+import { initDb, closeDb, getDb } from './db'
 import { authMiddleware, isAuthEnabled, SESSION_COOKIE, sessionTokenValue } from './middleware/auth'
 import { createRateLimit } from './middleware/rateLimit'
 import { eventContextMiddleware } from './middleware/eventContext'
@@ -119,6 +120,20 @@ app.post('/api/v1/auth/session', (c) => {
     ? '; Secure'
     : ''
   c.header('Set-Cookie', `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax${maxAge}${secure}`)
+  // 记录登录事件（fire-and-forget，不阻塞 cookie 写入）
+  try {
+    const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
+      || c.req.header('x-real-ip')
+      || null
+    const ua = c.req.header('user-agent') ?? ''
+    getDb().query(
+      'INSERT INTO auth_events (id, event_type, ip, user_agent) VALUES (?, ?, ?, ?)',
+    ).run(crypto.randomUUID(), 'login', ip, ua)
+    // 保留最近 1000 条审计记录
+    getDb().query(
+      'DELETE FROM auth_events WHERE id NOT IN (SELECT id FROM auth_events ORDER BY created_at DESC LIMIT 1000)',
+    ).run()
+  } catch (e) { safeLogWarn('auth_events.write_failed', { error: String(e) }) }
   return c.json({ session: true })
 })
 
@@ -134,6 +149,19 @@ app.get('/api/v1/auth/mode', (c) => {
     tokenRequired: api.length > 0 || read.length > 0 || write.length > 0,
     tokenGranularity: read.length > 0 || write.length > 0 ? 'split' : api.length > 0 ? 'single' : 'none',
   })
+})
+
+// 登录活动记录：返回最近 30 条登录事件
+app.get('/api/v1/auth/events', (c) => {
+  try {
+    const rows = getDb().query(
+      'SELECT id, event_type, ip, user_agent, created_at FROM auth_events ORDER BY created_at DESC LIMIT 30',
+    ).all() as Array<{ id: string; event_type: string; ip: string | null; user_agent: string | null; created_at: string }>
+    return c.json(rows)
+  } catch (e) {
+    safeLogWarn('auth_events.read_failed', { error: String(e) })
+    return c.json([])
+  }
 })
 
 app.route('/api/v1/blocks', blocks)

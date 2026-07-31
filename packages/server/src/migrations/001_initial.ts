@@ -204,6 +204,16 @@ export function up(db: Database): void {
       UNIQUE(entity_id, block_id)
     );
     CREATE INDEX IF NOT EXISTS idx_entity_mentions_block ON entity_mentions(block_id);
+
+    -- 登录审计：记录每次密码登录的时间/IP/UA
+    CREATE TABLE IF NOT EXISTS auth_events (
+      id          TEXT PRIMARY KEY,
+      event_type  TEXT NOT NULL DEFAULT 'login',
+      ip          TEXT,
+      user_agent  TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_auth_events_created ON auth_events(created_at DESC);
   `)
 
   // triggers
