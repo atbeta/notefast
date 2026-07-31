@@ -156,17 +156,18 @@ docker compose up -d
 - 向量层升级按「元数据与接口 → Docker 原生扩展验证 → sqlite-vec」推进，不以当前规模下的检索延迟为由插队
 - 备份与 Markdown 归档分轨：单向 Markdown 推送不是灾难恢复；完整灾备用应用内 SQLite→S3 快照，恢复走停服 CLI
 - 功能分支合回 `main` 默认 `--ff-only`，避免多余 merge commit
-- 笔记组织优先 tag + 智能视图，不主推多笔记本 UI；底层保留单 Notebook 即可
-- 文档默认对 AI 可见；「对 AI 隐藏」入口应低调（勿用锁图标或「对 AI 可见」易被读成需点击才可见）；已隐藏态再显式状态与恢复
-- 暂不需要「默认 AI 可见性」全局设置；少数敏感笔记用手动 opt-out 即可
+- 笔记组织优先 tag + 智能视图，不主推多笔记本 UI；底层保留单 Notebook 即可；侧栏不默认加「已分享」智能视图（访问面审计，非内容组织）
+- 文档默认对 AI 可见；「对 AI 隐藏」入口应低调（勿用锁图标或「对 AI 可见」易被读成需点击才可见）；已隐藏态再显式状态与恢复；暂不需要全局「默认 AI 可见性」，少数敏感笔记手动 opt-out
 - Markdown 富渲染优先接入 Mermaid；LaTeX/公式后续再做
 - 人类写作体验视为正轨（非整站副产品）；可服务「同步写读找」轻量用户，不对打思源式块级 PKM 全家桶
 - Markdown 仅作表达与导出，不作权威存储；主权靠自托管 SQLite + 可验证导出讲清楚，不为安抚退回文件夹 MD
-- 本地可写 SQLite 的原生客户端是一等拓扑；官方免配置 Sync 云暂缓，先明确默认单远程实例还是多端本地副本
-- 早期不优先完整 PWA/离线数据；手机与轻客户端优先复用现有 Web（可安装壳即可）
+- 本地可写 SQLite 的原生客户端是一等拓扑；官方免配置 Sync 云暂缓；早期不优先完整 PWA/离线，手机与轻客户端优先复用现有 Web（可安装壳即可）
+- MCP 做强：能力落在 NoteFast 自身 MCP/API，不为本地另封一层 API 调用；大文件建档正文不经 LLM，走 stage/upload 通道
+- 分享 UI：顶栏轻量 popover（非全屏 modal）；已分享需可辨识图标态（如 Globe）；文档列表/侧栏项悬浮 `⋯` 菜单承载文档级操作（含导出）
 
 ## Learned Workspace Facts
 
+- Release Please：`.github/release-please-config.json` 启用 `bump-minor-pre-major: true`，0.x 阶段 conventional commits 的 `!`（breaking）只升 minor，避免误跳 1.0.0
 - 语义向量经 `VectorStore` 抽象；默认可为 JSON 后端，配置 embedding 后经索引重建切到 sqlite-vec；向量是可重建二级索引，SQLite 仍为权威数据
 - api.key 鉴权：仅在显式配置了鉴权（AUTH_PASSWORD / READ_TOKEN / WRITE_TOKEN 任一，或 API_TOKEN 直给）时，initDb 才生成 `data/api.key` 并写入 env（供 MCP/API Bearer，重启加载既有 key 保持稳定）；**未配置任何鉴权 = 免鉴权模式（本地开发默认）——不生成也不加载 api.key**，全 admin 放行 + 启动醒目告警。自动 key 不应单方面把实例翻成强制鉴权（Web 无密码可登录只会全 401）
 - 公开分享安全头：`/s/*` 与 `/share/*` 统一带 `X-Frame-Options: DENY` + `CSP frame-ancestors 'none'`（防 iframe 嵌入/点击劫持）；分享页顶部有「公开分享页面」提示条；会话 cookie 在 HTTPS（直连或 X-Forwarded-Proto）下带 `Secure`；chat 工具 `notefast_read_doc` 成功读全文时发 `doc.read_by_agent` 审计事件（emitAppEvent）
@@ -190,9 +191,9 @@ docker compose up -d
 - 运行时杂项：indexJobs 终态作业保留最近 100 个（超出淘汰最老，pending/running 不动，防 Map 内存单调增长）；autoExport 兜底为自重排单循环（10s 首跑、跑完再计 1h，无双计时器叠加）；`Bun.serve` idleTimeout 保持默认 10s，SSE 路由（`/api/v1/events`、`/ai/chat`、`/ai/write`）经 `server.timeout(req, 60)` per-request 放宽——**relaxSseIdleTimeout 必须注册在任何 `app.route()` 之前**（Hono 按注册顺序执行，放路由后 = 死代码，SSE 会在 10s 被 Bun 掐断）
 - 文档列表/导出统一排除软删除文档：MCP `list_docs`/`list_tags`、sync 三适配器与 autoExport 原先不过滤 `is_deleted`，已对齐 Web 语义；软删除文档会在下次全量同步时经 manifest 从远端归档清理
 - `updated_at` 语义 = 内容最后编辑时间（未来 LWW 裁决字段，客户端 push 可自带），**不做增量同步游标**；拉取游标用 `entity_changes.seq`（AUTOINCREMENT 单调递增，blocks 表 trigger 驱动，`store/changeFeed.ts` 只读封装）；change feed 清理策略待同步 API 落地时定，超窗客户端走全量快照重同步
-- 文档分享：`shares` 表（doc_id → 公开 token，schema v4）独立存储，开关不写 blocks（不触发 updated_at/hooks/索引/change feed）；管理 API `GET/PUT/DELETE /docs/:id/share`（PUT 幂等，关闭即删记录，重开全新 token 旧链接永久失效；仅对未删除文档开放）；有效期 `expires_at` 默认 NULL=永不过期（Notion 同款），可选 1/7/30 天（以调整为起点重算），过期=未分享（读取时惰性清理，公开/管理端点统一只见未过期）；**删除文档级联清除 shares 行（docs/blocks/notebooks 三条删除路径），归档（PATCH status=archived）同样级联关闭分享，恢复文档/取消归档均不复活旧链接，需重新开启**；公开端点 `/share/:token`（markdown，`Cache-Control: no-store`）与 `/share/:token/assets/:sha256`（限本文引用的图片，非全站代理；`private, immutable` 缓存——浏览器可永久缓存但共享缓存/CDN 不得留存，防分享关闭后旧 URL 从缓存外泄；引用 sha 集合按 entity_changes `MAX(seq)` 做内存缓存，不写 Content-Length）挂在 `/api/*` 之外、无鉴权；Web 公开页 `/s/:token` 绕开 Layout/AuthPrompt，允许分享 inbox/archived 文档（显式行为覆盖默认过滤），ai_exclude 文档首次开启需 body 带 `confirm_ai_exclude: true`（否则 409 `ai_exclude_share_needs_confirm`，已开启后调有效期不再要求）；MCP 分享工具未做
+- 文档分享：`shares` 表（doc_id → 公开 token，schema v4）独立存储，开关不写 blocks（不触发 updated_at/hooks/索引/change feed）；管理 API `GET/PUT/DELETE /docs/:id/share`（PUT 幂等，关闭即删记录，重开全新 token 旧链接永久失效；仅对未删除文档开放）；有效期 `expires_at` 默认 NULL=永不过期（Notion 同款），可选 1/7/30 天（以调整为起点重算），过期=未分享（读取时惰性清理，公开/管理端点统一只见未过期）；**删除文档级联清除 shares 行（docs/blocks/notebooks 三条删除路径），归档（PATCH status=archived）同样级联关闭分享，恢复文档/取消归档均不复活旧链接，需重新开启**；公开端点 `/share/:token`（markdown，`Cache-Control: no-store`）与 `/share/:token/assets/:sha256`（限本文引用的图片，非全站代理；`private, immutable` 缓存——浏览器可永久缓存但共享缓存/CDN 不得留存，防分享关闭后旧 URL 从缓存外泄；引用 sha 集合按 entity_changes `MAX(seq)` 做内存缓存，不写 Content-Length）挂在 `/api/*` 之外、无鉴权；Web 公开页 `/s/:token` 绕开 Layout/AuthPrompt，允许分享 inbox/archived 文档（显式行为覆盖默认过滤），ai_exclude 文档首次开启需 body 带 `confirm_ai_exclude: true`（否则 409 `ai_exclude_share_needs_confirm`，已开启后调有效期不再要求）；Web 分享面板为顶栏轻量 popover（非 modal），已分享顶栏用 Globe 态；MCP 分享工具未做
 - 内部 AI 功能边界：只做「采集/理解/检索/维护」四类笔记核心行为；通用聊天客户端能力（多会话、语音对话、角色市场）与平台生态能力（Agent 运行时、插件市场）外放给 MCP 消费方；外部连接器未来可能做，已预留 `properties.source`（`{provider, external_id, synced_at}`）+ `findDocIdBySource()` 供 upsert
-- 内置 skills：`server/src/ai/skills.ts` 注册表（prompt 模板，非 skill 运行时），`GET /ai/skills` 下发（`{{today}}` 服务端插值），聊天面板 chip 点击填入输入框；执行走现有 agent loop，写操作为建议模式；chat 工具含 `notefast_list_docs`（status/stale/updated 过滤）与 `notefast_read_doc`（读整篇 Markdown，12k 字符截断）；`/ai/chat` SSE 每 10s 写 `ping` 帧防 idleTimeout/代理断连（前端无匹配分支自然忽略）
+- 内置 skills：`server/src/ai/skills.ts` 注册表（prompt 模板，非 skill 运行时），`GET /ai/skills` 下发（`{{today}}` 服务端插值），聊天面板 chip 点击填入输入框；执行走现有 agent loop，写操作为建议模式；chat 工具含 `notefast_list_docs`（status/stale/updated 过滤）与 `notefast_read_doc`（读整篇 Markdown，12k 字符截断）；大文件建档用 `notefast_stage_markdown`（分块暂存）+ `notefast_create_doc_from_file`（`content` 或 `upload_id`），REST `POST /import/file` 共用入库，`create_doc` 仅适合短 Markdown；`/ai/chat` SSE 每 10s 写 `ping` 帧防 idleTimeout/代理断连（前端无匹配分支自然忽略）
 - 图片理解：`vision.enabled` 设置开关（默认关）；索引时 `asset_captions`（schema v3，按 asset sha256 缓存）生成 caption 拼入索引文本（hash/freshness 以拼接后文本为准）；聊天图片走 `ChatMessage.content` 多模态 parts（base64 data URL，仅当轮发送，历史保持纯文本）；能力经 `/ai/capabilities` 的 `vision` 字段下发
 - 中文词法检索走 `server/src/lexicalSearch.ts`（FTS5 + LIKE 双路合并）：unicode61 不切分 CJK，无空格中文查询在 FTS5 里是一个整 token 短语，只命中被标点/空格包围的完全相同字串；trigram 分词器有 2 字词死区（「笔记」「主权」不进索引），已验证不可用。LIKE 路对所有 term 做子串 AND（CJK 召回主力，SQLite LIKE 对 ASCII 不区分大小写；`%`/`_` 用 `ESCAPE '\'` 转义防注入），严格 AND 零结果时 OR 降级（`strictOnly` 可禁，autoLink 保精度），排序权重整句命中 > 命中 term 数 > 标题命中；FTS 路仅在有 ASCII term 时跑（bm25），合并时 LIKE 在前、FTS 按 bm25 补充，`rank_score` 为列表内合成相对分（非跨通道可比分）。hybridSearch / web `/search` / MCP `notefast_search` / autoLink `findCandidates` 四处统一走这里（autoLink 原 try/catch LIKE 降级已上移）；api/ai 的 `ftsHits`（mode=fts 调试通道）保持纯 FTS。hybridSearch 另有标题通道（`titleOnly`，只查文档根块，limit 5 + strictOnly）作为 rrfMerge 第三个 RRF 输入列表，ftsLimit 默认从 20 提到 60（LIKE 零成本扩大召回，抵消后置过滤吃名额）
 - 检索评测体系：`packages/server/src/eval/`（runEval.ts CLI + evalCore.ts 共享核心 + fixtures/ 合成语料 40 篇 + queries 60 条）。用法：`bun --filter @notefast/server eval --corpus <corpus.json> --queries <queries.json> [--report out.json] [--topk 20]`；`--mock` 为 CI 模式（确定性字符袋 64 维 embedding，只验证管线接线不断，不断言语义质量）；默认活体模式读 `$DATA_DIR/ai.config.json`（或 `--config`）用真实 provider，seed 后 `indexAllBlocks` 全量建索引。指标：Doc Recall@10、Block Recall@20（relevant_blocks 内容子串在 top20 citation 正文覆盖率）、MRR（首个相关 citation 倒数排名）、nDCG@10（二元相关性）、expect_empty 查询 top-1 semantic cosine 均值/最大（无答案噪声，仅信号指标不硬断言）、延迟 P50/P95、按 query type 分组。CI 冒烟在 `__tests__/eval.test.ts`（fixtures 子集跑管线不变量：过滤态文档零泄漏 / gibberish FTS 零命中 / citation 可回查）。私有集：`bun --filter @notefast/server eval:private`（generatePrivateEval.ts 只读打开 `$DATA_DIR/notefast.db`，只取标题/tags/时间戳不导出正文，规则生成 ≤80 条查询到 `data/eval/private-queries.json`，已 gitignore）。评测是 hybridSearch 的只读消费方，不改检索行为；标注宁缺毋滥，relevant_docs 按标题引用语料

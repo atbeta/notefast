@@ -176,7 +176,7 @@ export default function HomePage() {
 
       {showPinModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowPinModal(false)}>
-          <div className="bg-card border border-border rounded-xl p-5 w-80 shadow-xl space-y-3" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-card border border-border rounded-lg p-5 w-80 shadow-xl space-y-3" onClick={(e) => e.stopPropagation()}>
             <div className="text-[14px] font-medium text-foreground">固定视图</div>
             <input
               type="text"
@@ -203,7 +203,7 @@ export default function HomePage() {
 
       {showWelcome && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-card border border-border rounded-2xl p-8 w-[420px] shadow-2xl space-y-5 text-center">
+          <div className="bg-card border border-border rounded-lg p-8 w-[420px] shadow-2xl space-y-5 text-center">
             <h2 className="text-[22px] font-bold text-foreground tracking-[-0.02em]">欢迎使用 NoteFast</h2>
             <p className="text-[14px] text-muted-foreground leading-relaxed">
               基础功能开箱即用：标签、文档、智能视图、全文搜索。
