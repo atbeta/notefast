@@ -7,6 +7,7 @@ import AISettingsPanel from '../components/ai-settings/AISettingsPanel'
 import BackupPanel from '../components/BackupPanel'
 import SyncPanel from '../components/SyncPanel'
 import ApiTokensPanel from '../components/ApiTokensPanel'
+import AuthEventsPanel from '../components/AuthEventsPanel'
 
 export default function SettingsPage() {
   const tabs = [
@@ -14,6 +15,7 @@ export default function SettingsPage() {
     { id: 'ai', label: 'AI 能力与模型' },
     { id: 'backup', label: '灾备与归档' },
     { id: 'tokens', label: 'API Tokens' },
+    { id: 'security', label: '账户安全' },
   ]
 
   return (
@@ -37,6 +39,10 @@ export default function SettingsPage() {
 
       <SettingsSection id="tokens" title="API Tokens">
         <ApiTokensPanel />
+      </SettingsSection>
+
+      <SettingsSection id="security" title="账户安全">
+        <AuthEventsPanel />
       </SettingsSection>
     </SettingsLayout>
   )

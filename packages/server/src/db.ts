@@ -60,6 +60,7 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
  *          （= block.content 原文 hash，并发写保护用；content_hash 改为索引文本 hash），
  *          并按 blocks 现内容回填
  * v6 → v7：图谱实体层——新增 entities / entity_mentions 表（block→entity 提及边）
+ * v7 → v8：登录审计——新增 auth_events 表（记录每次密码登录的时间/IP/UA）
  */
 function applySchemaMigrations(database: Database): void {
   const current = getSchemaVersion(database)
@@ -170,6 +171,20 @@ function applySchemaMigrations(database: Database): void {
       CREATE INDEX IF NOT EXISTS idx_entity_mentions_block ON entity_mentions(block_id);
     `)
     database.exec(`PRAGMA user_version = 7`)
+  }
+  if (getSchemaVersion(database) < 8) {
+    // 登录审计：记录每次密码登录的时间/IP/UA，不涉及鉴权逻辑。
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS auth_events (
+        id          TEXT PRIMARY KEY,
+        event_type  TEXT NOT NULL DEFAULT 'login',
+        ip          TEXT,
+        user_agent  TEXT,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_auth_events_created ON auth_events(created_at DESC);
+    `)
+    database.exec(`PRAGMA user_version = 8`)
   }
 }
 
