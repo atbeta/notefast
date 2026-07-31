@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.24.0](https://github.com/atbeta/notefast/compare/v0.23.0...v0.24.0) (2026-07-31)
+
+
+### Features
+
+* **server,web:** login audit log with IP/device tracking ([6930036](https://github.com/atbeta/notefast/commit/69300368a2a3e292557315a389020d5db3dda35a))
+* **ui:** redesign settings as single-page dashboard and refine border radius ([bc207f8](https://github.com/atbeta/notefast/commit/bc207f85873dcca73d8ec47163248c0ba332fcec))
+* **web,server:** auto-save editor drafts + cross-platform shortcut display ([08477fe](https://github.com/atbeta/notefast/commit/08477fe5f05cbdc33764392ce0caa0b05bf44b39))
+
 ## [0.23.0](https://github.com/atbeta/notefast/compare/v0.22.0...v0.23.0) (2026-07-29)
 
 
