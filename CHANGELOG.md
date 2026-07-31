@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.25.1](https://github.com/atbeta/notefast/compare/v0.25.0...v0.25.1) (2026-07-31)
+
+
+### Bug Fixes
+
+* **web:** extract PinnedViewItem to fix React hooks [#310](https://github.com/atbeta/notefast/issues/310) ([596a23f](https://github.com/atbeta/notefast/commit/596a23f79f090315b25065f09a30ac707b6566bc))
+
 ## [0.25.0](https://github.com/atbeta/notefast/compare/v0.24.0...v0.25.0) (2026-07-31)
 
 
