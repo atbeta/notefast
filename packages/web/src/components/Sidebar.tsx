@@ -23,7 +23,7 @@ import {
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import { useDocChanges } from '../hooks/useDocEvents'
-import { usePinnedViews, canonicalViewQuery } from '../hooks/usePinnedViews'
+import { usePinnedViews, canonicalViewQuery, type PinnedView } from '../hooks/usePinnedViews'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { DRAFT_CHANGED_EVENT, hasDraftSync } from '../hooks/useEditorDraft'
 import type { DocSummary } from '@notefast/core'
@@ -52,6 +52,82 @@ function SidebarSectionLabel({ label }: { label: string }) {
       <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-sidebar-muted/80">
         {label}
       </span>
+    </div>
+  )
+}
+
+/** 固定视图行：双击重命名；hooks 必须在独立组件内，不可放在 Sidebar 的 map 回调里 */
+function PinnedViewItem({
+  view,
+  active,
+  onNavigate,
+  onRename,
+  onUnpin,
+}: {
+  view: PinnedView
+  active: boolean
+  onNavigate?: () => void
+  onRename: (id: string, name: string) => void
+  onUnpin: (id: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editName, setEditName] = useState(view.name)
+
+  const handleRename = () => {
+    if (editName.trim() && editName.trim() !== view.name) {
+      onRename(view.id, editName.trim())
+    }
+    setEditing(false)
+  }
+
+  return (
+    <div className="group flex items-center gap-1">
+      <Link
+        to={`/?${canonicalViewQuery(view.query)}`}
+        onClick={onNavigate}
+        className={`flex-1 px-2.5 py-1 rounded-md text-[13px] truncate transition-colors ${
+          active
+            ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+            : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+        }`}
+        title={view.name}
+        onDoubleClick={(e) => {
+          e.preventDefault()
+          setEditing(true)
+          setEditName(view.name)
+        }}
+      >
+        {editing ? (
+          <input
+            autoFocus
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onBlur={handleRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleRename()
+              if (e.key === 'Escape') setEditing(false)
+            }}
+            onClick={(e) => e.preventDefault()}
+            className="w-full text-[13px] bg-transparent border-b border-border outline-none"
+          />
+        ) : (
+          <span className="flex items-center gap-1.5">
+            <Star className="w-[11px] h-[11px] shrink-0" strokeWidth={2} />
+            {view.name}
+          </span>
+        )}
+      </Link>
+      <button
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          onUnpin(view.id)
+        }}
+        className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 transition-all shrink-0"
+        title="取消固定"
+      >
+        <X className="w-3 h-3" strokeWidth={2} />
+      </button>
     </div>
   )
 }
@@ -299,54 +375,16 @@ export default function Sidebar({
         {pinnedViews.length > 0 && (
           <div className="mt-5">
             <SidebarSectionLabel label="固定视图" />
-            {pinnedViews.map((v) => {
-              const [editing, setEditing] = useState(false)
-              const [editName, setEditName] = useState(v.name)
-              const handleRename = () => {
-                if (editName.trim() && editName.trim() !== v.name) {
-                  rename(v.id, editName.trim())
-                }
-                setEditing(false)
-              }
-              return (
-              <div key={v.id} className="group flex items-center gap-1">
-                <Link
-                  to={`/?${canonicalViewQuery(v.query)}`}
-                  onClick={closeAfterNav}
-                  className={`flex-1 px-2.5 py-1 rounded-md text-[13px] truncate transition-colors ${
-                    location.search === `?${canonicalViewQuery(v.query)}`
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-                      : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-                  }`}
-                  title={v.name}
-                  onDoubleClick={(e) => { e.preventDefault(); setEditing(true); setEditName(v.name) }}
-                >
-                  {editing ? (
-                    <input
-                      autoFocus
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      onBlur={handleRename}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setEditing(false) }}
-                      onClick={(e) => e.preventDefault()}
-                      className="w-full text-[13px] bg-transparent border-b border-border outline-none"
-                    />
-                  ) : (
-                    <span className="flex items-center gap-1.5">
-                      <Star className="w-[11px] h-[11px] shrink-0" strokeWidth={2} />
-                      {v.name}
-                    </span>
-                  )}
-                </Link>
-                <button
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); unpin(v.id) }}
-                  className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 transition-all shrink-0"
-                  title="取消固定"
-                >
-                  <X className="w-3 h-3" strokeWidth={2} />
-                </button>
-              </div>
-            )})}
+            {pinnedViews.map((v) => (
+              <PinnedViewItem
+                key={v.id}
+                view={v}
+                active={location.search === `?${canonicalViewQuery(v.query)}`}
+                onNavigate={closeAfterNav}
+                onRename={rename}
+                onUnpin={unpin}
+              />
+            ))}
           </div>
         )}
 
