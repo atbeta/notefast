@@ -198,7 +198,7 @@ export function InlineField({
       try {
         await onSave()
         setLocalStatus('success')
-      } catch (e) {
+      } catch {
         setLocalStatus('error')
       }
     }
