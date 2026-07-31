@@ -67,7 +67,7 @@ export default function Sidebar({
   const location = useLocation()
   const [inboxCount, setInboxCount] = useState(0)
   const [archivedCount, setArchivedCount] = useState(0)
-  const { views: pinnedViews, unpin } = usePinnedViews()
+  const { views: pinnedViews, unpin, rename } = usePinnedViews()
   const navFadeRef = useScrollFade<HTMLElement>()
 
   /** 实例版本号（/api/v1/version），加载完成前不渲染版本位；失败静默 */
@@ -299,7 +299,16 @@ export default function Sidebar({
         {pinnedViews.length > 0 && (
           <div className="mt-5">
             <SidebarSectionLabel label="固定视图" />
-            {pinnedViews.map((v) => (
+            {pinnedViews.map((v) => {
+              const [editing, setEditing] = useState(false)
+              const [editName, setEditName] = useState(v.name)
+              const handleRename = () => {
+                if (editName.trim() && editName.trim() !== v.name) {
+                  rename(v.id, editName.trim())
+                }
+                setEditing(false)
+              }
+              return (
               <div key={v.id} className="group flex items-center gap-1">
                 <Link
                   to={`/?${canonicalViewQuery(v.query)}`}
@@ -310,11 +319,24 @@ export default function Sidebar({
                       : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                   }`}
                   title={v.name}
+                  onDoubleClick={(e) => { e.preventDefault(); setEditing(true); setEditName(v.name) }}
                 >
-                  <span className="flex items-center gap-1.5">
-                    <Star className="w-[11px] h-[11px] shrink-0" strokeWidth={2} />
-                    {v.name}
-                  </span>
+                  {editing ? (
+                    <input
+                      autoFocus
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onBlur={handleRename}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setEditing(false) }}
+                      onClick={(e) => e.preventDefault()}
+                      className="w-full text-[13px] bg-transparent border-b border-border outline-none"
+                    />
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <Star className="w-[11px] h-[11px] shrink-0" strokeWidth={2} />
+                      {v.name}
+                    </span>
+                  )}
                 </Link>
                 <button
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); unpin(v.id) }}
@@ -324,7 +346,7 @@ export default function Sidebar({
                   <X className="w-3 h-3" strokeWidth={2} />
                 </button>
               </div>
-            ))}
+            )})}
           </div>
         )}
 
