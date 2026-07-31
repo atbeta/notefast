@@ -496,6 +496,7 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
         embedding: null,
         autoIndex: false,
         reranker: null,
+        vision: { enabled: true },
       },
       pluginSystem,
     )
