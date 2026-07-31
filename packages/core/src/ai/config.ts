@@ -17,48 +17,27 @@
 import { PRESETS } from './presets'
 
 
-export type Region = 'cn' | 'global' | 'local'
-
-/** 已内置的 provider 预设（按下拉顺序排序：CN → Global → Local → Custom）*/
 export type ProviderPresetId =
-  | 'minimax'
-  | 'deepseek'
-  | 'doubao'
-  | 'zhipu'
-  | 'moonshot'
   | 'siliconflow'
-  | 'dashscope'
+  | 'deepseek'
+  | 'minimax'
+  | 'moonshot'
   | 'openai'
   | 'openrouter'
-  | 'gemini'
-  | 'mistral'
-  | 'groq'
-  | 'xai'
-  | 'cohere'
-  | 'voyage'
   | 'jina'
-  | 'ollama'
+  | 'voyage'
   | 'custom'
 
 /** ProviderPresetId 的运行时清单：Zod schema、UI 下拉等都从这里取，避免列表漂移 */
 export const PROVIDER_PRESET_IDS: readonly ProviderPresetId[] = [
-  'minimax',
-  'deepseek',
-  'doubao',
-  'zhipu',
-  'moonshot',
   'siliconflow',
-  'dashscope',
+  'deepseek',
+  'minimax',
+  'moonshot',
   'openai',
   'openrouter',
-  'gemini',
-  'mistral',
-  'groq',
-  'xai',
-  'cohere',
-  'voyage',
   'jina',
-  'ollama',
+  'voyage',
   'custom',
 ]
 

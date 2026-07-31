@@ -15,7 +15,7 @@ export default function SummaryCard({ icon, title, badge, description, to }: Sum
   return (
     <Link
       to={to}
-      className="group flex items-center gap-4 rounded-xl border border-border bg-card shadow-[var(--shadow-card)] px-5 py-4 hover:bg-accent/60 transition-colors"
+      className="group flex items-center gap-4 rounded-lg border border-border bg-card shadow-[var(--shadow-card)] px-5 py-4 hover:bg-accent/60 transition-colors"
     >
       <div className="shrink-0 w-9 h-9 rounded-lg bg-accent/60 text-muted-foreground flex items-center justify-center group-hover:text-foreground transition-colors">
         {icon}

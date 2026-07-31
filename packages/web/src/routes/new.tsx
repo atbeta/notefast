@@ -268,7 +268,7 @@ export default function NewDocPage() {
           <label
             onDragOver={(e) => e.preventDefault()}
             onDrop={onDrop}
-            className="block border border-dashed border-border-strong/60 rounded-xl text-center py-16 px-6 cursor-pointer hover:border-foreground/30 hover:bg-muted/40 transition-colors"
+            className="block border border-dashed border-border-strong/60 rounded-lg text-center py-16 px-6 cursor-pointer hover:border-foreground/30 hover:bg-muted/40 transition-colors"
           >
             <div className="empty-icon-tile mx-auto">
               <Upload className="w-5 h-5" strokeWidth={1.75} />

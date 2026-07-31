@@ -10,8 +10,6 @@
 import { describe, test, expect } from 'bun:test'
 import {
   PRESETS,
-  PRESETS_BY_REGION,
-  REGION_ORDER,
   definitionFromPreset,
 } from '../ai/presets'
 import {
@@ -34,14 +32,13 @@ describe('PRESETS — shape contract', () => {
       expect(p.id, `${id} missing id`).toBe(id)
       expect(typeof p.label).toBe('string')
       expect(p.label.length).toBeGreaterThan(0)
-      expect(typeof p.hint).toBe('string')
-      expect(p.hint.length).toBeGreaterThan(0)
       expect(typeof p.baseUrl).toBe('string')
       if (id !== 'custom') expect(p.baseUrl.length, `${id} baseUrl empty`).toBeGreaterThan(0)
       expect(typeof p.embeddingModel).toBe('string')
       expect(typeof p.chatModel).toBe('string')
       expect(typeof p.requiresKey).toBe('boolean')
       expect(typeof p.extraHeaders).toBe('object')
+      expect(Array.isArray(p.supportedModes)).toBe(true)
     }
   })
 
@@ -85,15 +82,11 @@ describe('PRESETS — shape contract', () => {
 
   test('需要 key 的 preset 应该用 https 开头的官方域名', () => {
     for (const id of PRESET_IDS) {
-      if (id === 'ollama' || id === 'custom') continue
+      if (id === 'custom') continue
       const p = preset(id)
       expect(p.requiresKey, `${id} says requiresKey`).toBe(true)
       expect(p.baseUrl.startsWith('https://'), `${id} should use https`).toBe(true)
     }
-  })
-
-  test('本地类 preset 不强制 API key', () => {
-    expect(PRESETS.ollama.requiresKey).toBe(false)
   })
 
   test('每个 preset 可生成 ProviderDefinition；除 custom 之外通过 validateConfig', () => {
@@ -159,37 +152,13 @@ describe('PRESETS — shape contract', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  test('每个 preset 都有 region 字段且属于已知值', () => {
+  test('每个 preset 都有 signupUrl（requiresKey=true 的服务）', () => {
     for (const id of PRESET_IDS) {
       const p = preset(id)
-      expect(['cn', 'global', 'local']).toContain(p.region)
-    }
-  })
-
-  test('每个 preset 都有 signupUrl（requiresKey=true 的非本地服务）', () => {
-    for (const id of PRESET_IDS) {
-      const p = preset(id)
-      if (p.requiresKey && p.region !== 'local') {
+      if (p.requiresKey && id !== 'custom') {
         expect(typeof p.signupUrl, `${id} 缺 signupUrl`).toBe('string')
         expect(p.signupUrl!.length).toBeGreaterThan(0)
       }
-    }
-  })
-})
-
-describe('PRESETS_BY_REGION', () => {
-  test('按区域正确分组且不重复', () => {
-    const counted: Record<string, number> = {}
-    for (const region of REGION_ORDER) {
-      for (const p of PRESETS_BY_REGION[region]) {
-        expect(p.region, `${p.id} 误分组到 ${region}`).toBe(region)
-        counted[p.id] = (counted[p.id] || 0) + 1
-        expect(counted[p.id], `${p.id} 出现在多个 region`).toBe(1)
-      }
-    }
-    // 每个 preset 都至少出现一次
-    for (const id of PRESET_IDS) {
-      expect(counted[id], `${id} 缺失`).toBeTruthy()
     }
   })
 })

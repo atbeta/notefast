@@ -1,40 +1,32 @@
-import { Eye, EyeOff, Plus, X, ExternalLink } from 'lucide-react'
+import { Plus, X, ExternalLink } from 'lucide-react'
 import {
   PRESETS,
-  PRESETS_BY_REGION,
-  REGION_LABELS,
-  REGION_ORDER,
+  PROVIDER_PRESET_IDS,
   KEY_MASK,
   type ProviderDefinition,
   type ProviderPresetId,
-  type Region,
 } from '@notefast/core'
 import { FieldRow } from '../ui'
+import { InlineField } from '../settings/ui'
 import type { FieldErrors } from './validation'
 
-// ───────────── Provider Form（Chat 和 Embedding 共用）─────────────
+// ───────────── Provider Form（Chat、Embedding 和 Reranker 共用）─────────────
 
 export function ProviderForm({
   value,
   onChange,
   mode,
   onRemove,
-  keyShown,
-  onToggleKey,
   knownModels,
   modelLabel,
-  modelRequired,
   fieldErrors,
 }: {
   value: ProviderDefinition
   onChange: (v: ProviderDefinition) => void
-  mode: 'chat' | 'embedding'
+  mode: 'chat' | 'embedding' | 'reranker'
   onRemove: () => void
-  keyShown: boolean
-  onToggleKey: () => void
   knownModels: string[]
   modelLabel: string
-  modelRequired: boolean
   fieldErrors?: FieldErrors
 }) {
   const preset = PRESETS[value.preset]
@@ -44,10 +36,11 @@ export function ProviderForm({
   const inputErrClass = 'border-destructive focus-visible:ring-destructive/30'
   const inputOkClass = 'border-border'
 
+  const availablePresets = PROVIDER_PRESET_IDS.filter(id => PRESETS[id].supportedModes.includes(mode))
+
   const handlePresetChange = (newPreset: ProviderPresetId) => {
     const p = PRESETS[newPreset]
     if (value.preset === newPreset) {
-      // 同 preset：只更新 baseUrl 之类的元数据，保留用户已填的 key/models
       onChange({
         ...value,
         preset: newPreset,
@@ -56,13 +49,12 @@ export function ProviderForm({
       })
       return
     }
-    // 换供应商：清空 key（避免把 A 的 Key 发给 B），但 baseUrl + 默认模型直接套用 preset
     onChange({
       ...value,
       preset: newPreset,
       baseUrl: p.baseUrl,
-      embeddingModel: p.embeddingModel,
-      chatModel: p.chatModel,
+      embeddingModel: mode === 'chat' ? '' : p.embeddingModel,
+      chatModel: mode === 'chat' ? p.chatModel : '',
       extraHeaders: { ...p.extraHeaders },
       apiKey: '',
       label: p.label,
@@ -78,18 +70,15 @@ export function ProviderForm({
             onChange={(e) => handlePresetChange(e.target.value as ProviderPresetId)}
             className="flex-1 min-w-0 px-3 py-1.5 text-sm rounded-md border border-border bg-background truncate"
           >
-            {REGION_ORDER.map((region) => (
-              <optgroup key={region} label={REGION_LABELS[region as Region]}>
-                {PRESETS_BY_REGION[region as Region].map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label} — {p.hint}
-                  </option>
-                ))}
-              </optgroup>
+            {availablePresets.map((id) => (
+              <option key={id} value={id}>
+                {id === 'custom' 
+                  ? (mode === 'reranker' ? '自定义 (TEI / Jina 兼容)' : '自定义 (OpenAI 兼容)')
+                  : PRESETS[id].label}
+              </option>
             ))}
           </select>
-          <RegionBadge region={preset.region} />
-          {preset.signupUrl && preset.region !== 'local' && (
+          {preset?.signupUrl && (
             <a
               href={preset.signupUrl}
               target="_blank"
@@ -102,91 +91,73 @@ export function ProviderForm({
             </a>
           )}
         </div>
-        <p className="text-[10px] text-muted-foreground mt-1">{preset.hint}</p>
       </FieldRow>
-      <FieldRow label="API Key">
-        <div className="flex items-center gap-2">
-          <input
-            type={keyShown ? 'text' : 'password'}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
+        <div className="md:col-span-2">
+          <InlineField
+            label="API Key"
+            description="留空保持不变"
             value={value.apiKey === KEY_MASK ? '' : value.apiKey}
-            onChange={(e) => {
-              const v = e.target.value
-              onChange({ ...value, apiKey: v === '' && value.apiKey === KEY_MASK ? KEY_MASK : v })
-            }}
-            placeholder={value.apiKey === KEY_MASK ? '已保存 Key（留空保持不变，输入新 Key 替换）' : 'sk-...'}
-            className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background font-mono"
+            onChange={(v) => onChange({ ...value, apiKey: v === '' && value.apiKey === KEY_MASK ? KEY_MASK : v })}
+            placeholder={value.apiKey === KEY_MASK ? '已保存 Key' : 'sk-...'}
+            type="password"
+            mono
           />
-          <button
-            type="button"
-            onClick={onToggleKey}
-            className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-accent"
-          >
-            {keyShown ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          </button>
         </div>
-      </FieldRow>
-      <FieldRow label="Base URL" error={errBaseUrl}>
-        <input
-          type="text"
-          value={value.baseUrl}
-          onChange={(e) => onChange({ ...value, baseUrl: e.target.value })}
-          placeholder={mode === 'chat' ? 'https://api.openai.com/v1' : 'https://api.openai.com/v1'}
-          aria-invalid={!!errBaseUrl}
-          className={`w-full px-3 py-1.5 text-sm rounded-md border bg-background font-mono ${errBaseUrl ? inputErrClass : inputOkClass}`}
-        />
-      </FieldRow>
-      <FieldRow label={modelLabel} error={errModel}>
-        <input
-          type="text"
-          value={mode === 'chat' ? value.chatModel : value.embeddingModel}
-          onChange={(e) =>
-            onChange(
-              mode === 'chat'
-                ? { ...value, chatModel: e.target.value }
-                : { ...value, embeddingModel: e.target.value },
-            )
-          }
-          list={`known-${mode}-models`}
-          placeholder={mode === 'chat' ? 'gpt-5-mini / deepseek-v4-flash / glm-5' : 'text-embedding-3-small / voyage-4-large / Qwen/Qwen3-Embedding-8B'}
-          aria-invalid={!!errModel}
-          className={`w-full px-3 py-1.5 text-sm rounded-md border bg-background font-mono ${errModel ? inputErrClass : inputOkClass}`}
-        />
-        <datalist id={`known-${mode}-models`}>
-          {knownModels.map((m) => <option key={m} value={m} />)}
-        </datalist>
-        {modelRequired && (
-          <p className="text-[10px] text-muted-foreground mt-1">
-            {mode === 'chat'
-              ? 'Chat 模型必填（用于对话 / 标题 / AutoLink）'
-              : 'Embedding 模型必填（用于语义搜索）'}
-          </p>
-        )}
-      </FieldRow>
-      <FieldRow label="超时（毫秒）" error={errTimeout}>
-        <input
+        <div className="md:col-span-2">
+          <InlineField
+            label="Base URL"
+            value={value.baseUrl}
+            onChange={(v) => onChange({ ...value, baseUrl: v })}
+            placeholder={mode === 'reranker' ? 'http://127.0.0.1:8080' : 'https://api.openai.com/v1'}
+            status={errBaseUrl ? 'error' : undefined}
+            statusMessage={errBaseUrl}
+            mono
+          />
+        </div>
+        <div className="md:col-span-2">
+          <FieldRow label={modelLabel} error={errModel}>
+            <input
+              type="text"
+              value={mode === 'chat' ? value.chatModel : value.embeddingModel}
+              onChange={(e) =>
+                onChange(
+                  mode === 'chat'
+                    ? { ...value, chatModel: e.target.value }
+                    : { ...value, embeddingModel: e.target.value },
+                )
+              }
+              list={`known-${mode}-models`}
+              placeholder={mode === 'chat' ? 'deepseek-chat / gpt-4o-mini' : mode === 'embedding' ? 'jina-embeddings-v3 / voyage-3' : 'jina-reranker-v3 / voyage-rerank-2'}
+              aria-invalid={!!errModel}
+              className={`w-full px-3 py-1.5 text-sm rounded-md border bg-background font-mono ${errModel ? inputErrClass : inputOkClass}`}
+            />
+            <datalist id={`known-${mode}-models`}>
+              {knownModels.map((m) => <option key={m} value={m} />)}
+            </datalist>
+          </FieldRow>
+        </div>
+        <InlineField
+          label="超时限制"
+          description="单位：毫秒"
+          value={String(value.timeoutMs)}
+          onChange={(v) => onChange({ ...value, timeoutMs: parseInt(v, 10) || 60000 })}
           type="number"
-          min={1000}
-          max={600000}
-          step={1000}
-          value={value.timeoutMs}
-          onChange={(e) => onChange({ ...value, timeoutMs: parseInt(e.target.value, 10) || 60000 })}
-          aria-invalid={!!errTimeout}
-          className={`w-40 px-3 py-1.5 text-sm rounded-md border bg-background font-mono ${errTimeout ? inputErrClass : inputOkClass}`}
+          status={errTimeout ? 'error' : undefined}
+          statusMessage={errTimeout}
+          mono
         />
-      </FieldRow>
-      <FieldRow label="额外 Header（OpenRouter 等需要 HTTP-Referer）">
-        <ExtraHeadersEditor
-          entries={Object.entries(value.extraHeaders)}
-          onChange={(entries) => onChange({ ...value, extraHeaders: Object.fromEntries(entries) })}
-        />
-      </FieldRow>
-      <FieldRow label="Provider 显示名">
-        <input
-          type="text"
+        <InlineField
+          label="Provider 显示名"
           value={value.label}
-          onChange={(e) => onChange({ ...value, label: e.target.value })}
+          onChange={(v) => onChange({ ...value, label: v })}
           placeholder={mode === 'chat' ? '我的 OpenRouter' : '我的 Voyage Embedding'}
-          className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background"
+        />
+      </div>
+      <FieldRow label="额外 Header" hint="如 HTTP-Referer，某些 Provider 需要">
+        <ExtraHeadersEditor
+          entries={Object.entries(value.extraHeaders || {})}
+          onChange={(entries) => onChange({ ...value, extraHeaders: Object.fromEntries(entries) })}
         />
       </FieldRow>
       <button
@@ -195,23 +166,9 @@ export function ProviderForm({
         className="text-xs text-muted-foreground hover:text-destructive inline-flex items-center gap-1"
       >
         <X className="w-3 h-3" />
-        移除{mode === 'chat' ? ' Chat Provider' : ' Embedding Provider'}
+        移除{mode === 'chat' ? ' Chat Provider' : mode === 'embedding' ? ' Embedding Provider' : ' Reranker Provider'}
       </button>
     </div>
-  )
-}
-
-function RegionBadge({ region }: { region: Region }) {
-  const map: Record<Region, { tone: string; short: string }> = {
-    cn: { tone: 'bg-amber-500/15 text-amber-700 dark:text-amber-300', short: '国内' },
-    global: { tone: 'bg-sky-500/15 text-sky-700 dark:text-sky-300', short: '全球' },
-    local: { tone: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', short: '本地' },
-  }
-  const v = map[region]
-  return (
-    <span className={`shrink-0 whitespace-nowrap text-[10px] px-1.5 py-0.5 rounded font-medium ${v.tone}`} title={REGION_LABELS[region]}>
-      {v.short}
-    </span>
   )
 }
 
