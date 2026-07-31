@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { BACKUP_SECRET_MASK, type BackupRuntimeStatus, type BackupRestorePoint } from '@notefast/core'
-import { ActionButton, useToast } from './ui'
+import { ActionButton, useToast, HelpTip } from './ui'
 import ConfirmDialog from './ConfirmDialog'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
 
@@ -172,9 +172,9 @@ export default function BackupPanel() {
       }
     >
       <div className="space-y-6">
-        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50">
-          完整灾备：在线生成一致 SQLite 快照并上传 S3。默认每小时一次、保留 30 天。
-          恢复须先停止服务，再执行 CLI（Web 不提供一键覆盖）。
+        <div className="flex items-center gap-1.5">
+          <span className="text-[13.5px] font-medium text-foreground">完整灾备</span>
+          <HelpTip label="在线生成一致 SQLite 快照并上传 S3。默认每小时一次、保留 30 天。恢复须先停止服务，再执行 CLI（Web 不提供一键覆盖）。" />
         </div>
 
         <div className="flex items-center justify-between">

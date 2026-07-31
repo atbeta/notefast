@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Shield, Monitor, Phone, Globe } from 'lucide-react'
 import { api } from '../hooks/useAPI'
+import { HelpTip } from './ui'
 import { SettingsCard } from './settings/ui'
 
 interface AuthEvent {
@@ -86,9 +87,10 @@ export default function AuthEventsPanel() {
       icon={<Shield className="w-4 h-4" strokeWidth={1.75} />}
       collapsible
     >
-      <p className="text-[12.5px] text-muted-foreground leading-relaxed">
-        最近 30 次登录记录。如果发现陌生的 IP 或设备，请立即修改密码。
-      </p>
+      <div className="flex items-center gap-1.5">
+        <p className="text-[12.5px] text-muted-foreground leading-relaxed">最近 30 次登录记录</p>
+        <HelpTip label="如果发现陌生的 IP 或设备，请立即修改密码。" />
+      </div>
 
       {events.length === 0 ? (
         <p className="text-[12px] text-muted-foreground">暂无登录记录。新登录后会出现在这里。</p>
