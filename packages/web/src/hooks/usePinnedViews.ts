@@ -64,10 +64,17 @@ export function usePinnedViews() {
     } catch { /* ignore */ }
   }, [])
 
+  const rename = useCallback(async (id: string, name: string) => {
+    try {
+      await api.patch(`/pinned-views/${id}`, { name: name.trim().slice(0, 50) })
+      bus.dispatchEvent(new Event(CHANGED))
+    } catch { /* ignore */ }
+  }, [])
+
   const isPinned = useCallback((query: string): boolean => {
     const target = canonicalViewQuery(query)
     return views.some((v) => canonicalViewQuery(v.query) === target)
   }, [views])
 
-  return { views, pin, unpin, isPinned }
+  return { views, pin, unpin, rename, isPinned }
 }
