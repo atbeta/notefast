@@ -631,6 +631,16 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
   }
 
   const currentDocTitle = opts.contextDocId ? lookupDocTitle(opts.contextDocId) : undefined
+  let currentDocContent: string | undefined
+  if (opts.contextDocId) {
+    try {
+      const docRows = fetchDocBlocks(getDb(), opts.contextDocId)
+      if (docRows.length > 0) {
+        const tree = buildBlockTree(docRows)
+        currentDocContent = blocksToMarkdown(tree)
+      }
+    } catch { /* 加载失败不计较 */ }
+  }
   const toolTrace: ToolTraceEntry[] = []
   const enableTools = opts.enableTools !== false
   const maxRounds = opts.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS
@@ -640,6 +650,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
     messages: opts.messages,
     citations: initialReport.citations,
     currentDocTitle,
+    currentDocContent,
     tools: enableTools ? getAllToolDefinitions() : undefined,
   })
 
