@@ -703,13 +703,25 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
             }
           }
           if (!recovered && toolCalls.length === 0) {
-            for await (const ev of emitStreamChunks(
-              runtime.streamChat(workingMessages, {
-                temperature: opts.temperature ?? 0.3,
-                maxTokens: opts.maxTokens ?? 2000,
-              }),
-            )) {
-              yield ev
+            try {
+              for await (const ev of emitStreamChunks(
+                runtime.streamChat(workingMessages, {
+                  temperature: opts.temperature ?? 0.3,
+                  maxTokens: opts.maxTokens ?? 2000,
+                }),
+              )) {
+                yield ev
+              }
+            } catch (e2) {
+              const msg = e2 instanceof Error ? e2.message : String(e2)
+              yield {
+                type: 'error',
+                error: {
+                  code: 'llm_error',
+                  message: `流式回答失败: ${msg}`,
+                },
+              }
+              yield { type: 'done', citations: finalCitations, retrieval: finalRetrieval, toolTrace }
             }
             break
           }

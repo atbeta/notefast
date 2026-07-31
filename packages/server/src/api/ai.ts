@@ -102,6 +102,7 @@ const configSchema = z.object({
       apiKey: z.string(),
       model: z.string().min(1),
       timeoutMs: z.number().int().min(1000).max(600_000),
+      preset: z.string().optional(),
     })
     .nullable()
     .optional(),
