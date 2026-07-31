@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.25.0](https://github.com/atbeta/notefast/compare/v0.24.0...v0.25.0) (2026-07-31)
+
+
+### Features
+
+* **ai:** include current doc content in chat prompt context ([873a4e3](https://github.com/atbeta/notefast/commit/873a4e373d9e1e5f8542b5432d878fd0675ae3e7))
+* **ui:** HelpTip compact tooltips for settings; guard image-only chats without vision ([b86a7e8](https://github.com/atbeta/notefast/commit/b86a7e8ce3159fc7277972be4065ada2687f18a7))
+
+
+### Bug Fixes
+
+* pinned views rename (API + inline edit) ([5e1db37](https://github.com/atbeta/notefast/commit/5e1db3768fbf6456c75429166fb97dfdf9e6ca68))
+* reranker preset persistence; catch image error in streamChat fallback ([5ddb91d](https://github.com/atbeta/notefast/commit/5ddb91da2a0ff6789fd74c9a411ca516f702c143))
+
 ## [0.24.0](https://github.com/atbeta/notefast/compare/v0.23.0...v0.24.0) (2026-07-31)
 
 
