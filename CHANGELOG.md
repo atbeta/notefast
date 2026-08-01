@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.0](https://github.com/atbeta/notefast/compare/v0.27.0...v0.28.0) (2026-08-01)
+
+
+### Features
+
+* **web:** replace textarea editor with CodeMirror 6 mixed renderer ([fa165bd](https://github.com/atbeta/notefast/commit/fa165bd3c90f127017a4bab417870a9148413680))
+
 ## [0.27.0](https://github.com/atbeta/notefast/compare/v0.26.0...v0.27.0) (2026-08-01)
 
 
