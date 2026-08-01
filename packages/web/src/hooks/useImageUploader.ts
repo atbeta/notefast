@@ -39,30 +39,6 @@ export function useImageUploader({ insertAtCursor }: UseImageUploaderOpts) {
     [uploading, insertAtCursor, toast],
   )
 
-  const handlePaste = useCallback(
-    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'))
-      if (file) {
-        e.preventDefault()
-        void uploadImage(file)
-      }
-    },
-    [uploadImage],
-  )
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLTextAreaElement>) => {
-      const file = Array.from(e.dataTransfer?.files ?? []).find((f) => f.type.startsWith('image/'))
-      if (file) {
-        e.preventDefault()
-        void uploadImage(file)
-      }
-    },
-    [uploadImage],
-  )
-
-  return useMemo(
-    () => ({ uploading, uploadImage, handlePaste, handleDrop }),
-    [uploading, uploadImage, handlePaste, handleDrop],
-  )
+  // 粘贴 / 拖拽的图片文件由编辑器（CodeMirror domEventHandlers）转交 uploadImage
+  return useMemo(() => ({ uploading, uploadImage }), [uploading, uploadImage])
 }

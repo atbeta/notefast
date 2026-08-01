@@ -17,6 +17,7 @@ import {
   ImagePlus,
 } from 'lucide-react'
 import { Tooltip, ShortcutKeys, shortcutLabel } from '../ui'
+import type { CodeMirrorEditorHandle } from './CodeMirrorEditor'
 
 type Mode = 'edit' | 'view'
 
@@ -33,8 +34,7 @@ interface EditorToolbarProps {
   insertAtCursor: (text: string, opts?: { cursorOffset?: number; selectStart?: number }) => void
   wrapSelection: (left: string, right?: string) => void
   uploadImage: (file: File) => void
-  content: string
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>
+  editorRef: React.RefObject<CodeMirrorEditorHandle | null>
 }
 
 export default function EditorToolbar({
@@ -50,13 +50,12 @@ export default function EditorToolbar({
   insertAtCursor,
   wrapSelection,
   uploadImage,
-  content,
-  textareaRef,
+  editorRef,
 }: EditorToolbarProps) {
   const imageInputRef = useRef<HTMLInputElement>(null)
 
   const handleInsertLink = () => {
-    const sel = content.slice(textareaRef.current?.selectionStart ?? 0, textareaRef.current?.selectionEnd ?? 0)
+    const sel = editorRef.current?.getSelectionText() ?? ''
     const hasSel = sel.length > 0
     const linkText = hasSel ? sel : 'text'
     const ins = `[${linkText}](url)`

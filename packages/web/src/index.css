@@ -737,3 +737,81 @@
 .hljs-addition {
   color: rgb(var(--code-string));
 }
+
+/* ────────────────────────────────────────────────────────────────
+   CodeMirror 编辑器附加样式（图片预览 widget / AI ghost text）
+   ──────────────────────────────────────────────────────────────── */
+.cm-image-preview {
+  padding: 6px 0;
+}
+.cm-image-preview img {
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid rgb(var(--border));
+  cursor: text;
+}
+.cm-image-preview .cm-image-caption {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgb(var(--muted-foreground) / 0.6);
+}
+
+/* 表格块内联预览（光标在块内时回退源码） */
+.cm-table-preview {
+  margin: 6px 0;
+  overflow-x: auto;
+  border: 1px solid rgb(var(--border));
+  border-radius: 8px;
+  cursor: text;
+}
+.cm-table-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  line-height: 1.6;
+  font-family: var(--font-sans);
+}
+.cm-table-preview th {
+  padding: 8px 12px;
+  font-weight: 600;
+  background: rgb(var(--muted) / 0.5);
+  border-bottom: 1px solid rgb(var(--border));
+  white-space: nowrap;
+}
+.cm-table-preview td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgb(var(--border) / 0.5);
+  color: rgb(var(--foreground) / 0.9);
+}
+.cm-table-preview tbody tr:last-child td {
+  border-bottom: none;
+}
+.cm-table-preview tbody tr:hover {
+  background: rgb(var(--muted) / 0.3);
+}
+.cm-table-preview code {
+  background: rgb(var(--muted-foreground) / 0.1);
+  border-radius: 3px;
+  padding: 0 3px;
+  font-size: 0.85em;
+}
+.cm-table-preview a {
+  color: rgb(var(--primary));
+}
+.cm-table-preview .cm-table-img {
+  max-height: 40px;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
+.cm-ai-ghost {
+  color: rgb(var(--muted-foreground) / 0.5);
+  white-space: pre-wrap;
+  animation: cm-ai-ghost-pulse 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes cm-ai-ghost-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}

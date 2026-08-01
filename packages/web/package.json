@@ -8,11 +8,21 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "oxlint src",
-    "test": "echo 'no tests yet'",
+    "test": "bun test src",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.10.4",
+    "@codemirror/lang-markdown": "^6.5.1",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/language-data": "^6.5.2",
+    "@codemirror/search": "^6.7.1",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.7",
+    "@lezer/highlight": "^1.2.3",
     "@notefast/core": "workspace:*",
+    "codemirror": "^6.0.2",
     "highlight.js": "^11.11.1",
     "lucide-react": "^0.475.0",
     "mermaid": "^11.16.0",
@@ -23,6 +33,7 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@types/bun": "latest",
     "@tailwindcss/typography": "^0.5.20",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",

@@ -9,12 +9,12 @@ import { api } from '../hooks/useAPI'
 import { useToast } from './ui'
 import { relativeTime } from '../lib/time'
 import { useEditorDraft } from '../hooks/useEditorDraft'
-import { useEditorKeyboard } from '../hooks/useEditorKeyboard'
 import { useImageUploader } from '../hooks/useImageUploader'
 import BlockRenderer from './BlockRenderer'
 import EditorToolbar, { ShortcutsHelp } from './editor/EditorToolbar'
 import EditorFooter from './editor/EditorFooter'
-import AiGhostOverlay from './editor/AiGhostOverlay'
+import CodeMirrorEditor from './editor/CodeMirrorEditor'
+import type { CodeMirrorEditorHandle } from './editor/CodeMirrorEditor'
 import { useAiWriting } from '../ai/useAiWriting'
 
 interface MarkdownEditorProps {
@@ -63,8 +63,7 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
   const [mode, setMode] = useState<Mode>('edit')
   const [showHelp, setShowHelp] = useState(false)
   const [ghostText, setGhostText] = useState('')
-  const [cursorLine, setCursorLine] = useState(1)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const editorRef = useRef<CodeMirrorEditorHandle>(null)
 
   const aiWriting = useAiWriting()
 
@@ -149,14 +148,6 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
   }, [docId, title])
 
   useEffect(() => {
-    if (!loading && textareaRef.current) {
-      textareaRef.current.focus()
-      const len = textareaRef.current.value.length
-      textareaRef.current.setSelectionRange(len, len)
-    }
-  }, [loading])
-
-  useEffect(() => {
     if (!loadedAt) return
     if (content === lastSavedContentRef.current) return
 
@@ -187,59 +178,16 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
     }
   }, [])
 
-  useEffect(() => {
-    const ta = textareaRef.current
-    if (!ta || mode !== 'edit') return
-    ta.style.height = 'auto'
-    ta.style.height = `${ta.scrollHeight}px`
-  }, [content, mode, loading])
-
   const insertAtCursor = useCallback(
     (text: string, opts?: { cursorOffset?: number; selectStart?: number }) => {
-      const ta = textareaRef.current
-      if (!ta) return
-      const start = ta.selectionStart
-      const end = ta.selectionEnd
-      const before = content.slice(0, start)
-      const after = content.slice(end)
-      const newValue = before + text + after
-      setContent(newValue)
-      const cursorOffset = opts?.cursorOffset ?? text.length
-      const cursorPos = start + cursorOffset
-      requestAnimationFrame(() => {
-        ta.focus()
-        if (opts?.selectStart !== undefined) {
-          ta.setSelectionRange(start + opts.selectStart, start + opts.selectStart)
-        } else {
-          ta.setSelectionRange(cursorPos, cursorPos)
-        }
-      })
+      editorRef.current?.insertAtCursor(text, opts)
     },
-    [content],
+    [],
   )
 
-  const wrapSelection = useCallback(
-    (leftWrap: string, rightWrap: string = leftWrap) => {
-      const ta = textareaRef.current
-      if (!ta) return
-      const start = ta.selectionStart
-      const end = ta.selectionEnd
-      const before = content.slice(0, start)
-      const middle = content.slice(start, end)
-      const after = content.slice(end)
-      const newValue = before + leftWrap + middle + rightWrap + after
-      setContent(newValue)
-      requestAnimationFrame(() => {
-        ta.focus()
-        if (start === end) {
-          ta.setSelectionRange(start + leftWrap.length, start + leftWrap.length)
-        } else {
-          ta.setSelectionRange(start + leftWrap.length, end + leftWrap.length)
-        }
-      })
-    },
-    [content],
-  )
+  const wrapSelection = useCallback((leftWrap: string, rightWrap: string = leftWrap) => {
+    editorRef.current?.wrapSelection(leftWrap, rightWrap)
+  }, [])
 
   const handleSave = useCallback(async () => {
     if (saving) return
@@ -297,49 +245,17 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
     })
   }, [content, aiWriting])
 
-  const { handleKeyDown } = useEditorKeyboard({
-    content,
-    mode,
-    onSave: handleSave,
-    onCancel: handleCancel,
-    onSetMode: setMode,
-    wrapSelection,
-    insertAtCursor,
-    setContent,
-    textareaRef,
-    onAiContinue: handleAiContinue,
-  })
+  // AI 续写 ghost：Tab 接受（插入光标处），Esc / 任意输入取消（由 CM keymap 与 updateListener 触发）
+  const handleGhostAccept = useCallback(() => {
+    if (!ghostText) return
+    editorRef.current?.insertAtCursor(ghostText)
+    setGhostText('')
+  }, [ghostText])
 
-  const handleKeyDownWithGhost = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (ghostText) {
-        if (e.key === 'Tab') {
-          e.preventDefault()
-          insertAtCursor(ghostText)
-          setGhostText('')
-          return
-        }
-        if (e.key === 'Escape') {
-          e.preventDefault()
-          aiWriting.cancel()
-          setGhostText('')
-          return
-        }
-        if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete' || (e.key === 'Enter' && !e.metaKey && !e.ctrlKey)) {
-          aiWriting.cancel()
-          setGhostText('')
-        }
-      }
-      handleKeyDown(e)
-    },
-    [ghostText, handleKeyDown, insertAtCursor, aiWriting],
-  )
-
-  const updateCursorLine = useCallback(() => {
-    const ta = textareaRef.current
-    if (!ta) return
-    setCursorLine(ta.value.slice(0, ta.selectionStart).split('\n').length)
-  }, [])
+  const handleGhostDismiss = useCallback(() => {
+    aiWriting.cancel()
+    setGhostText('')
+  }, [aiWriting])
 
   const lines = content === '' ? 1 : content.split('\n').length
   const charCount = content.length
@@ -401,8 +317,7 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
         insertAtCursor={insertAtCursor}
         wrapSelection={wrapSelection}
         uploadImage={imageUploader.uploadImage}
-        content={content}
-        textareaRef={textareaRef}
+        editorRef={editorRef}
       />
 
       {loading ? (
@@ -443,38 +358,21 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
               )}
             </div>
           ) : (
-            <div className="flex items-start relative">
-              <div
-                aria-hidden
-                className="shrink-0 w-7 pr-3 pt-[7px] text-right font-mono text-[11px] leading-[1.75] text-muted-foreground/35 select-none tabular-nums"
-              >
-                {Array.from({ length: lines }, (_, i) => (
-                  <div key={i + 1} className={i + 1 === cursorLine ? 'text-muted-foreground' : undefined}>
-                    {i + 1}
-                  </div>
-                ))}
-              </div>
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                onSelect={updateCursorLine}
-                onKeyDown={handleKeyDownWithGhost}
-                onPaste={imageUploader.handlePaste}
-                onDrop={imageUploader.handleDrop}
-                onDragOver={(e) => e.preventDefault()}
-                spellCheck={false}
-                rows={Math.max(lines, 5)}
-                className="flex-1 min-w-0 pt-[7px] pb-16 font-mono text-[14px] leading-[1.75] text-foreground bg-transparent resize-none overflow-hidden focus:outline-none placeholder:text-muted-foreground/40 selection:bg-primary/15"
-                placeholder="开始写…（⌘B 加粗 / ⌘I 斜体 / # 标题 / - 列表；⌘P 预览；⌘S 保存）"
-              />
-              <AiGhostOverlay
-                textareaRef={textareaRef}
-                content={content}
-                ghostText={ghostText}
-                visible={!!ghostText}
-              />
-            </div>
+            <CodeMirrorEditor
+              ref={editorRef}
+              value={content}
+              onChange={setContent}
+              onSave={handleSave}
+              onToggleMode={() => setMode((m) => (m === 'edit' ? 'view' : 'edit'))}
+              onAiContinue={handleAiContinue}
+              onCancel={handleCancel}
+              onImageFile={imageUploader.uploadImage}
+              ghostText={ghostText}
+              onGhostAccept={handleGhostAccept}
+              onGhostDismiss={handleGhostDismiss}
+              autoFocus
+              placeholder="开始写…（⌘B 加粗 / ⌘I 斜体 / # 标题 / - 列表；⌘P 预览；⌘S 保存）"
+            />
           )}
         </>
       )}
@@ -496,11 +394,13 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
         <div className="mt-3 pt-3 border-t border-border/50 text-[11.5px] text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-1.5">
           <ShortcutsHelp keys={['mod', 'S']} desc="保存" />
           <ShortcutsHelp keys={['mod', 'P']} desc="切换 预览 / 编辑" />
-          <ShortcutsHelp keys={['mod', 'B']} desc="加粗 / 斜体 / 行内代码" />
+          <ShortcutsHelp keys={['mod', 'B']} desc="加粗" />
+          <ShortcutsHelp keys={['mod', 'I']} desc="斜体" />
+          <ShortcutsHelp keys={['mod', 'E']} desc="行内代码" />
           <ShortcutsHelp keys={['mod', '⇧K']} desc="插入链接" />
           <ShortcutsHelp keys={['mod', 'Enter']} desc="AI 续写（需配置 AI）" />
-          <ShortcutsHelp keys={['#', 'Enter']} desc="自动加 heading 触发器" />
-          <ShortcutsHelp keys={['-', 'Enter']} desc="自动加 list 触发器" />
+          <ShortcutsHelp keys={['-', 'Enter']} desc="列表/引用续行（空项回车退出）" />
+          <ShortcutsHelp keys={['```', 'Enter']} desc="展开空代码块" />
           <ShortcutsHelp keys={['Esc']} desc="退出（保留草稿）" />
         </div>
       )}
