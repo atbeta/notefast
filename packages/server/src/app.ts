@@ -30,6 +30,7 @@ import { handleMcpRequest } from './mcp/server'
 import { startAutoExport } from './services/autoExport'
 import { initAiRuntime } from './services/aiRuntime'
 import { initSyncManager } from './sync/manager'
+import { initProtocolManager } from './sync/protocolManager'
 import { initBackupManager, stopBackupManager } from './backup/manager'
 import { initVectorStore } from './ai/indexer'
 import { initAssetStore } from './assets/store'
@@ -51,6 +52,7 @@ import apiTokens from './api/apiTokens'
 import pinnedViews from './api/pinnedViews'
 import statusRouter from './api/status'
 import eventsRouter from './api/events'
+import syncProtocolRouter from './api/syncProtocol'
 import sharePublic from './api/sharePublic'
 import { initDocEvents } from './services/docEvents'
 
@@ -231,6 +233,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   app.route('/api/v1/pinned-views', pinnedViews)
   app.route('/api/v1/status', statusRouter)
   app.route('/api/v1/events', eventsRouter)
+  app.route('/api/v1/sync/protocol', syncProtocolRouter)
 
   // 分享公开端点：挂在 /api/* 之外，无需鉴权
   app.route('/share', sharePublic)
@@ -259,6 +262,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     initAssetStore(dataDir)
     initSyncManager(dataDir)
     initBackupManager(dataDir)
+    initProtocolManager(dataDir)
     initAiRuntime(pluginSystem, dataDir)
 
     app.all('/mcp', authMiddleware, async (c) => {
