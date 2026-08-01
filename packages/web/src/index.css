@@ -498,32 +498,38 @@
 .reading-prose {
   font-family: var(--font-sans);
   color: rgb(var(--foreground));
-  line-height: 1.6;
+  line-height: 1.7;
   font-size: 16px;
+  letter-spacing: 0.005em;
 }
-.reading-prose > * + * { margin-top: 0.5em; }
+.reading-prose > * + * { margin-top: 0.65em; }
 .reading-prose blockquote {
-  margin: 1em 0;
-  padding: 0.25em 1em;
-  border-left: 3px solid rgb(var(--foreground));
-  color: rgb(var(--foreground));
-  font-size: 1.1em;
+  margin: 1.1em 0;
+  padding: 0.35em 1em;
+  border-left: 3px solid rgb(var(--border-strong));
+  color: rgb(var(--muted-foreground));
+  font-size: 0.98em;
+  background: rgb(var(--muted) / 0.35);
+  border-radius: 0 4px 4px 0;
 }
 .reading-prose code {
   font-family: var(--font-mono);
   font-size: 0.85em;
+  font-weight: 500;
   background: rgb(var(--muted));
-  color: rgb(var(--destructive));
-  padding: 0.2em 0.4em;
+  color: rgb(var(--foreground));
+  padding: 0.15em 0.4em;
   border-radius: 3px;
+  border: 1px solid rgb(var(--border) / 0.8);
 }
 .reading-prose pre {
   font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 1.5;
-  margin: 1.5em 0;
-  padding: 16px 20px;
-  background: rgb(var(--muted) / 0.5);
+  line-height: 1.55;
+  margin: 1.35em 0;
+  padding: 14px 18px;
+  background: rgb(var(--muted) / 0.55);
+  border: 1px solid rgb(var(--border) / 0.7);
   border-radius: 6px;
   overflow-x: auto;
   color: rgb(var(--foreground));

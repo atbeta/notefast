@@ -19,6 +19,7 @@ import {
   Hourglass,
   EyeOff,
   Waypoints,
+  ChevronDown,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
@@ -40,16 +41,67 @@ interface SidebarProps {
   onToggleAiChat?: () => void
 }
 
+const RECENT_PREVIEW = 6
+const RECENT_MAX = 15
+
+/** 侧栏折叠分组状态（localStorage 记忆） */
+function useSidebarSectionOpen(key: string, defaultOpen = true) {
+  const storageKey = `nf_sidebar_section_${key}`
+  const [open, setOpen] = useState(() => {
+    try {
+      const v = localStorage.getItem(storageKey)
+      if (v === '0') return false
+      if (v === '1') return true
+    } catch { /* ignore */ }
+    return defaultOpen
+  })
+  const toggle = useCallback(() => {
+    setOpen((prev) => {
+      const next = !prev
+      try { localStorage.setItem(storageKey, next ? '1' : '0') } catch { /* ignore */ }
+      return next
+    })
+  }, [storageKey])
+  return [open, toggle] as const
+}
+
 /**
  * Sidebar section 分组标签
  *
- * Notion 式纯文字 micro-label：无 hairline、无图标，
- * 与下方列表项同一左 padding，基线自然对齐。
+ * Notion 式纯文字 micro-label；可折叠时带 chevron，状态记忆在 localStorage。
  */
-function SidebarSectionLabel({ label }: { label: string }) {
+function SidebarSectionLabel({
+  label,
+  collapsible,
+  open,
+  onToggle,
+}: {
+  label: string
+  collapsible?: boolean
+  open?: boolean
+  onToggle?: () => void
+}) {
+  if (collapsible && onToggle) {
+    return (
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center gap-1 px-2.5 mb-1 select-none text-left group"
+        aria-expanded={open}
+      >
+        <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-sidebar-muted/70 group-hover:text-sidebar-muted transition-colors">
+          {label}
+        </span>
+        <ChevronDown
+          className={`w-3 h-3 text-sidebar-muted/50 transition-transform ${open ? '' : '-rotate-90'}`}
+          strokeWidth={2}
+        />
+      </button>
+    )
+  }
   return (
     <div className="px-2.5 mb-1 select-none">
-      <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-sidebar-muted/80">
+      <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-sidebar-muted/70">
         {label}
       </span>
     </div>
@@ -87,8 +139,8 @@ function PinnedViewItem({
         onClick={onNavigate}
         className={`flex-1 px-2.5 py-1 rounded-md text-[13px] truncate transition-colors ${
           active
-            ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-            : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+            ? 'bg-primary-soft text-primary font-medium'
+            : 'text-sidebar-foreground hover:bg-[var(--primary-softer)] hover:text-sidebar-accent-foreground'
         }`}
         title={view.name}
         onDoubleClick={(e) => {
@@ -143,6 +195,9 @@ export default function Sidebar({
   const location = useLocation()
   const [inboxCount, setInboxCount] = useState(0)
   const [archivedCount, setArchivedCount] = useState(0)
+  const [recentExpanded, setRecentExpanded] = useState(false)
+  const [smartOpen, toggleSmart] = useSidebarSectionOpen('smart', true)
+  const [pinnedOpen, togglePinned] = useSidebarSectionOpen('pinned', true)
   const { views: pinnedViews, unpin, rename } = usePinnedViews()
   const navFadeRef = useScrollFade<HTMLElement>()
 
@@ -158,17 +213,19 @@ export default function Sidebar({
     () => (collapsed ? new Promise<DocSummary[]>(() => {}) : api.get<DocSummary[]>('/docs/list')),
     [collapsed, location.pathname],
   )
-  const recentDocs = (docList ?? []).slice(0, 15)
+  const allRecent = (docList ?? []).slice(0, RECENT_MAX)
+  const recentDocs = recentExpanded ? allRecent : allRecent.slice(0, RECENT_PREVIEW)
+  const recentHasMore = allRecent.length > RECENT_PREVIEW
 
   // 草稿圆点：逐条同步探测 + 订阅草稿变更事件（编辑器防抖暂存后实时出现/消失）
   const [draftIds, setDraftIds] = useState<ReadonlySet<string>>(new Set())
   useEffect(() => {
     const compute = () => {
       const ids = new Set<string>()
-      for (const d of recentDocs) {
+      for (const d of allRecent) {
         if (hasDraftSync(d.id)) ids.add(d.id)
       }
-      // 内容相同就复用旧 Set——recentDocs 每次渲染都是新数组 identity，effect 会
+      // 内容相同就复用旧 Set——allRecent 每次渲染都是新数组 identity，effect 会
       // 随之反复触发，若无条件 setState 新 identity 将构成「渲染→effect→渲染」死循环
       setDraftIds((prev) =>
         prev.size === ids.size && [...ids].every((x) => prev.has(x)) ? prev : ids,
@@ -177,7 +234,7 @@ export default function Sidebar({
     compute()
     window.addEventListener(DRAFT_CHANGED_EVENT, compute)
     return () => window.removeEventListener(DRAFT_CHANGED_EVENT, compute)
-  }, [recentDocs])
+  }, [allRecent])
 
   // 外部 MCP / AI 聊天等任何通道写入文档 → 即时刷新最近列表（服务端已聚合去抖）
   useDocChanges(
@@ -229,7 +286,7 @@ export default function Sidebar({
                 onClick={onToggleAiChat}
                 className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
                   aiChatOpen
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                    ? 'bg-primary-soft text-primary'
                     : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                 }`}
               >
@@ -337,45 +394,49 @@ export default function Sidebar({
         )}
 
         <div className="mt-5">
-          <SidebarSectionLabel label="智能视图" />
-          <Link
-            to="/?updated_within=7d"
-            onClick={closeAfterNav}
-            className={location.search.includes('updated_within=7d') ? 'sidebar-link-active' : 'sidebar-link'}
-          >
-            <Clock className="w-[15px] h-[15px]" strokeWidth={1.75} />
-            最近 7 天更新
-          </Link>
-          <Link
-            to="/?stale_within=90d"
-            onClick={closeAfterNav}
-            className={location.search.includes('stale_within=90d') ? 'sidebar-link-active' : 'sidebar-link'}
-          >
-            <Hourglass className="w-[15px] h-[15px]" strokeWidth={1.75} />
-            90 天未更新
-          </Link>
-          <Link
-            to="/?ai_exclude=1"
-            onClick={closeAfterNav}
-            className={location.search.includes('ai_exclude=1') ? 'sidebar-link-active' : 'sidebar-link'}
-          >
-            <EyeOff className="w-[15px] h-[15px]" strokeWidth={1.75} />
-            对 AI 隐藏
-          </Link>
-          <Link
-            to="/?view=untagged"
-            onClick={closeAfterNav}
-            className={location.search.includes('untagged') || location.search.includes('view=untagged') ? 'sidebar-link-active' : 'sidebar-link'}
-          >
-            <Tag className="w-[15px] h-[15px]" strokeWidth={1.75} />
-            未加标签
-          </Link>
+          <SidebarSectionLabel label="智能视图" collapsible open={smartOpen} onToggle={toggleSmart} />
+          {smartOpen && (
+            <>
+              <Link
+                to="/?updated_within=7d"
+                onClick={closeAfterNav}
+                className={location.search.includes('updated_within=7d') ? 'sidebar-link-active' : 'sidebar-link'}
+              >
+                <Clock className="w-[15px] h-[15px]" strokeWidth={1.75} />
+                最近 7 天更新
+              </Link>
+              <Link
+                to="/?stale_within=90d"
+                onClick={closeAfterNav}
+                className={location.search.includes('stale_within=90d') ? 'sidebar-link-active' : 'sidebar-link'}
+              >
+                <Hourglass className="w-[15px] h-[15px]" strokeWidth={1.75} />
+                90 天未更新
+              </Link>
+              <Link
+                to="/?ai_exclude=1"
+                onClick={closeAfterNav}
+                className={location.search.includes('ai_exclude=1') ? 'sidebar-link-active' : 'sidebar-link'}
+              >
+                <EyeOff className="w-[15px] h-[15px]" strokeWidth={1.75} />
+                对 AI 隐藏
+              </Link>
+              <Link
+                to="/?view=untagged"
+                onClick={closeAfterNav}
+                className={location.search.includes('untagged') || location.search.includes('view=untagged') ? 'sidebar-link-active' : 'sidebar-link'}
+              >
+                <Tag className="w-[15px] h-[15px]" strokeWidth={1.75} />
+                未加标签
+              </Link>
+            </>
+          )}
         </div>
 
         {pinnedViews.length > 0 && (
           <div className="mt-5">
-            <SidebarSectionLabel label="固定视图" />
-            {pinnedViews.map((v) => (
+            <SidebarSectionLabel label="固定视图" collapsible open={pinnedOpen} onToggle={togglePinned} />
+            {pinnedOpen && pinnedViews.map((v) => (
               <PinnedViewItem
                 key={v.id}
                 view={v}
@@ -388,7 +449,7 @@ export default function Sidebar({
           </div>
         )}
 
-        {recentDocs.length > 0 && (
+        {allRecent.length > 0 && (
           <div className="mt-5">
             <SidebarSectionLabel label="最近文档" />
             <div className="flex flex-col gap-0.5">
@@ -430,6 +491,15 @@ export default function Sidebar({
                   </div>
                 )
               })}
+              {recentHasMore && (
+                <button
+                  type="button"
+                  onClick={() => setRecentExpanded((v) => !v)}
+                  className="px-2.5 py-1 text-[11.5px] text-sidebar-muted hover:text-sidebar-accent-foreground text-left transition-colors"
+                >
+                  {recentExpanded ? '收起' : `展开全部（${allRecent.length}）`}
+                </button>
+              )}
             </div>
           </div>
         )}

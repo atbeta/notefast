@@ -44,12 +44,19 @@ export default function App() {
   }
 
   // 探测未完成 → 不渲染内容（避免短暂闪现未鉴权页面）
-  // 探测完成 + 需要密码 + 本地没有可用密码（持久化/会话级均无）→ 显示登录弹框
+  // 探测完成 + 需要密码 + 本地没有可用密码（持久化/会话级均无）→ 仅登录页，不挂 Layout（避免「已进入被遮挡」）
   const showAuthPrompt = authMode?.passwordRequired === true && !getStoredPassword()
+
+  if (showAuthPrompt) {
+    return (
+      <ToastProvider>
+        <AuthPrompt />
+      </ToastProvider>
+    )
+  }
 
   return (
     <ToastProvider>
-      {showAuthPrompt && <AuthPrompt />}
       <Layout contentClassName={contentClassName}>
         <RouteTransition>
           <Routes>

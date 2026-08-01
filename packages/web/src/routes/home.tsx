@@ -153,16 +153,15 @@ export default function HomePage() {
 
         <section className="space-y-3 animate-fade-in">
           {loading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="card animate-pulse p-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-md bg-secondary shrink-0" />
-                    <div className="flex-1 space-y-1.5">
-                      <div className="h-3.5 bg-secondary rounded w-1/3" />
-                      <div className="h-3 bg-secondary rounded w-1/4" />
-                    </div>
+            <div className="space-y-0.5">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="animate-pulse px-3 py-2 flex items-center gap-3">
+                  <div className="w-7 h-7 rounded-md bg-secondary shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3.5 bg-secondary rounded w-1/3" />
+                    <div className="h-2.5 bg-secondary rounded w-1/5" />
                   </div>
+                  <div className="h-2.5 bg-secondary rounded w-12 shrink-0" />
                 </div>
               ))}
             </div>

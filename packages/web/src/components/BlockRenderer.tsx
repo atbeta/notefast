@@ -362,7 +362,7 @@ const BlockNode = memo(function BlockNode({ block }: BlockNodeProps) {
 
     case 'quote':
       return (
-        <blockquote id={block.id} className="scroll-mt-20 my-5 pl-4 border-l-[3px] border-foreground/80 text-foreground">
+        <blockquote id={block.id} className="scroll-mt-20 my-5 pl-4 border-l-[3px] border-border-strong text-muted-foreground bg-muted/35 rounded-r">
           <p className="leading-[1.65] text-[1.05em]">{renderInline(block.content || '', `q-${block.id}`)}</p>
           <ChildrenView children={block.children} />
         </blockquote>

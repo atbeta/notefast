@@ -25,7 +25,8 @@
   /* ───────────── 文字 ───────────── */
   --foreground: 55 53 47;
   --muted: 241 241 239;
-  --muted-foreground: 120 119 116;
+  /* 辅助文字略加深，保证小字号时间/数量在白底上可读（约 WCAG AA） */
+  --muted-foreground: 105 104 100;
   --accent: 235 236 237;
   --accent-foreground: 55 53 47;
   --secondary: 241 241 239;
@@ -66,7 +67,7 @@
   --sidebar-accent: 233 233 231;
   --sidebar-accent-foreground: 55 53 47;
   --sidebar-border: 233 233 231;
-  --sidebar-muted: 145 145 142;
+  --sidebar-muted: 130 129 126;
 
   /* ───────────── 半径 ───────────── */
   --radius: 6px;
@@ -86,8 +87,8 @@
 
   /* ───────────── 阅读列宽 ───────────── */
   /* 外层页面容器仍走 max-w-4xl（路由间导航不抖），仅 doc 路由的正文 prose
-     套内层阅读列；48rem ≈ max-w-3xl，是历史阅读列默认值，CJK 45字/行、EN 96字/行 */
-  --reading-max-w: 48rem;
+     套内层阅读列；46rem ≈ 736px，落在舒适阅读带（720–780），CJK ~42 字/行 */
+  --reading-max-w: 46rem;
 
   /* ───────────── 阴影（轻量、单层、克制） ───────────── */
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.02);
@@ -116,7 +117,7 @@
 
   --foreground: 255 255 255;
   --muted: 47 47 47;
-  --muted-foreground: 155 155 155;
+  --muted-foreground: 168 168 168;
   --accent: 47 47 47;
   --accent-foreground: 255 255 255;
   --secondary: 47 47 47;
@@ -142,11 +143,11 @@
   --ring: 149 164 198;
 
   --sidebar-background: 32 32 32;
-  --sidebar-foreground: 155 155 155;
+  --sidebar-foreground: 168 168 168;
   --sidebar-accent: 47 47 47;
   --sidebar-accent-foreground: 255 255 255;
   --sidebar-border: 47 47 47;
-  --sidebar-muted: 120 120 120;
+  --sidebar-muted: 140 140 140;
 
   --editor-bg: 25 25 25;
   --editor-gutter-bg: 32 32 32;

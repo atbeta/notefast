@@ -447,10 +447,16 @@ export default function AIChatPanel({
       `}
     >
       {/* Header */}
-      <div className="h-14 flex items-center justify-between px-4 border-b border-border shrink-0 bg-background/40">
+      <div className="h-14 flex items-center justify-between px-4 border-b border-border shrink-0 bg-primary-softer">
         <div className="flex items-center gap-2.5 text-foreground font-medium min-w-0">
-          <MessageSquareText className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
-          <span className="truncate">聊天 · 知识库</span>
+          <Sparkles className="w-4 h-4 text-primary shrink-0" strokeWidth={1.75} />
+          <span className="truncate">AI 助手</span>
+          <span
+            className="shrink-0 text-[10.5px] font-medium px-1.5 py-px rounded border border-primary/25 bg-primary-soft text-primary/90"
+            title={contextDocId ? '优先检索当前文档，必要时扩至知识库' : '检索全部知识库'}
+          >
+            {contextDocId ? '当前文档' : '知识库'}
+          </span>
           {capabilities && (
             <span className="flex items-center gap-1 text-muted-foreground shrink-0">
               {capabilities.embedding && (
@@ -516,10 +522,47 @@ export default function AIChatPanel({
             </a>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground space-y-3 opacity-80">
-            <MessageSquareText className="w-7 h-7 mb-1 opacity-50" strokeWidth={1.25} />
-            <p className="text-sm">准备就绪</p>
-            <p className="text-xs">向知识库提问，引用片段会自动回链到原文。</p>
+          <div className="flex flex-col h-full min-h-0 pt-2 pb-1">
+            <div className="text-center space-y-1.5 mb-5 shrink-0">
+              <div className="w-9 h-9 mx-auto rounded-lg bg-primary-soft text-primary grid place-items-center mb-2">
+                <Sparkles className="w-4 h-4" strokeWidth={1.5} />
+              </div>
+              <p className="text-[14px] font-medium text-foreground">向知识库提问</p>
+              <p className="text-[12px] text-muted-foreground leading-relaxed px-2">
+                {contextDocId
+                  ? '当前以本文为优先检索范围，回答会附带可回链的原文引用。'
+                  : '检索全部笔记；引用片段会自动回链到原文。'}
+              </p>
+            </div>
+            {skills.length > 0 && (
+              <div className="grid gap-2 flex-1 content-start">
+                {skills.map((s) => {
+                  const SkillIcon = SKILL_ICONS[s.icon] ?? MessageSquareText
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        setInput(s.prompt)
+                        inputRef.current?.focus()
+                      }}
+                      className="flex items-start gap-2.5 text-left rounded-lg border border-border/70 bg-card px-3 py-2.5 hover:border-primary/35 hover:bg-primary-softer transition-colors group"
+                    >
+                      <span className="mt-0.5 w-7 h-7 rounded-md bg-primary-soft text-primary grid place-items-center shrink-0 group-hover:bg-primary/15">
+                        <SkillIcon className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-medium text-foreground">{s.name}</span>
+                        <span className="block text-[11.5px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
+                          {s.description}
+                        </span>
+                      </span>
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 mt-1 shrink-0 group-hover:text-primary/60" strokeWidth={1.75} />
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -557,7 +600,7 @@ export default function AIChatPanel({
                         className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                           msg.role === 'user'
                             ? 'bg-ink text-ink-foreground rounded-tr-sm whitespace-pre-wrap'
-                            : 'bg-muted/50 text-foreground border border-border/50 rounded-tl-sm'
+                            : 'bg-muted/40 text-foreground border border-border/50 rounded-tl-sm'
                         }`}
                       >
                         {msg.role === 'user' ? (
@@ -577,51 +620,7 @@ export default function AIChatPanel({
                       </div>
                     )}
                     {isLastAssistant && groupedCitations.length > 0 && (
-                      <div className="rounded-lg border border-border/40 bg-background/40 px-3 py-2 space-y-2">
-                        <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                          引用 · {retrieval?.reranked ? `reranked (${retrieval.model})` : 'hybrid search'}
-                          {/* 召回候选数（非最终引用数），两路统一展示，避免 fts=0 时格式分叉 */}
-                          {retrieval && (retrieval.fts_hits > 0 || retrieval.semantic_hits > 0) &&
-                            ` · 召回 关键词 ${retrieval.fts_hits} + 语义 ${retrieval.semantic_hits}`}
-                          {retrieval?.timing && (
-                            <span className="tabular-nums text-muted-foreground/80">
-                              {` · 检索 ${retrieval.timing.total_ms}ms`}
-                              {retrieval.timing.fts_ms > 0 && ` · FTS ${retrieval.timing.fts_ms}ms`}
-                              {retrieval.timing.embed_query_ms > 0 && ` · 嵌入 ${retrieval.timing.embed_query_ms}ms`}
-                              {retrieval.timing.semantic_ms > 0 && ` · 向量 ${retrieval.timing.semantic_ms}ms`}
-                              {retrieval.timing.rerank_ms > 0 && ` · 精排 ${retrieval.timing.rerank_ms}ms`}
-                            </span>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          {groupedCitations.map((group) => (
-                            <div key={group.doc_id} className="text-[11px]">
-                              <div className="flex items-baseline gap-1.5">
-                                <Link
-                                  to={`/doc/${group.doc_id}`}
-                                  className="text-foreground hover:text-primary hover:underline font-medium line-clamp-1"
-                                >
-                                  {group.doc_title}
-                                </Link>
-                                <span className="text-muted-foreground/80 text-[10px] shrink-0">· {group.items.length} 段</span>
-                              </div>
-                              <ul className="mt-1 space-y-1">
-                                {group.items.map((c) => (
-                                  <li key={c.block_id}>
-                                    <Link
-                                      to={`/doc/${c.doc_id}#block-${c.block_id}`}
-                                      className="block rounded-md bg-muted/40 px-2 py-1.5 line-clamp-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                                      title="点击跳转到原文块"
-                                    >
-                                      {c.snippet}
-                                    </Link>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                      <CitationSources groups={groupedCitations} retrieval={retrieval} />
                     )}
                   </div>
                 </div>
@@ -673,7 +672,8 @@ export default function AIChatPanel({
 
       {/* Input */}
       <div className="p-4 border-t border-border bg-background">
-        {skills.length > 0 && !configMissing && (
+        {/* 有对话时保留技能 chip；空态已用任务卡片展示，避免重复 */}
+        {skills.length > 0 && !configMissing && messages.length > 0 && (
           <div className="flex gap-1.5 mb-2 overflow-x-auto pb-0.5">
             {skills.map((s) => {
               const SkillIcon = SKILL_ICONS[s.icon] ?? MessageSquareText
@@ -686,7 +686,7 @@ export default function AIChatPanel({
                     setInput(s.prompt)
                     inputRef.current?.focus()
                   }}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-border/60 text-[11px] text-muted-foreground hover:text-foreground hover:border-foreground/25 transition-colors whitespace-nowrap shrink-0"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-primary/20 bg-primary-softer text-[11px] text-primary hover:border-primary/40 hover:bg-primary-soft transition-colors whitespace-nowrap shrink-0"
                 >
                   <SkillIcon className="w-3 h-3" strokeWidth={1.75} />
                   {s.name}
@@ -806,6 +806,148 @@ export default function AIChatPanel({
           handleClear()
         }}
       />
+    </div>
+  )
+}
+
+/** 单文档下默认展示的片段数；超出折叠，避免引用区压过正文 */
+const CITATION_SNIPPET_PREVIEW = 3
+
+function CitationSources({
+  groups,
+  retrieval,
+}: {
+  groups: Array<{ doc_id: string; doc_title: string; items: Citation[] }>
+  retrieval: RetrievalInfo | null
+}) {
+  const [diagOpen, setDiagOpen] = useState(false)
+  const [expandedDocs, setExpandedDocs] = useState<ReadonlySet<string>>(() => new Set())
+  const totalSnippets = groups.reduce((n, g) => n + g.items.length, 0)
+
+  const hasDiag = Boolean(
+    retrieval && (
+      retrieval.reranked ||
+      retrieval.fts_hits > 0 ||
+      retrieval.semantic_hits > 0 ||
+      retrieval.timing
+    ),
+  )
+
+  const toggleDoc = (docId: string) => {
+    setExpandedDocs((prev) => {
+      const next = new Set(prev)
+      if (next.has(docId)) next.delete(docId)
+      else next.add(docId)
+      return next
+    })
+  }
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-card/60 overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
+        <span className="w-1 h-3.5 rounded-full bg-primary shrink-0" aria-hidden />
+        <span className="text-[12px] font-medium text-foreground">引用来源</span>
+        <span className="text-[11px] text-muted-foreground tabular-nums">
+          {groups.length} 篇 · {totalSnippets} 段
+        </span>
+        {hasDiag && (
+          <button
+            type="button"
+            onClick={() => setDiagOpen((v) => !v)}
+            className="ml-auto inline-flex items-center gap-0.5 text-[10.5px] text-muted-foreground hover:text-foreground transition-colors"
+            aria-expanded={diagOpen}
+          >
+            检索详情
+            <ChevronRight className={`w-3 h-3 transition-transform ${diagOpen ? 'rotate-90' : ''}`} strokeWidth={2} />
+          </button>
+        )}
+      </div>
+
+      {diagOpen && retrieval && (
+        <div className="px-3 py-1.5 border-b border-border/40 text-[10.5px] text-muted-foreground leading-relaxed tabular-nums font-mono">
+          {retrieval.reranked
+            ? `精排 ${retrieval.model || 'reranker'}`
+            : 'hybrid search'}
+          {(retrieval.fts_hits > 0 || retrieval.semantic_hits > 0) &&
+            ` · 召回 关键词 ${retrieval.fts_hits} + 语义 ${retrieval.semantic_hits}`}
+          {retrieval.timing && (
+            <>
+              {` · 总耗时 ${retrieval.timing.total_ms}ms`}
+              {retrieval.timing.fts_ms > 0 && ` · FTS ${retrieval.timing.fts_ms}ms`}
+              {retrieval.timing.embed_query_ms > 0 && ` · 嵌入 ${retrieval.timing.embed_query_ms}ms`}
+              {retrieval.timing.semantic_ms > 0 && ` · 向量 ${retrieval.timing.semantic_ms}ms`}
+              {retrieval.timing.rerank_ms > 0 && ` · 精排 ${retrieval.timing.rerank_ms}ms`}
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="divide-y divide-border/40">
+        {groups.map((group) => {
+          const expanded = expandedDocs.has(group.doc_id)
+          const visible = expanded
+            ? group.items
+            : group.items.slice(0, CITATION_SNIPPET_PREVIEW)
+          const hidden = group.items.length - visible.length
+          return (
+            <div key={group.doc_id} className="px-3 py-2.5">
+              <div className="flex items-center gap-1.5 min-w-0 mb-1.5">
+                <Link
+                  to={`/doc/${group.doc_id}`}
+                  className="min-w-0 truncate text-[12.5px] font-medium text-foreground hover:text-primary transition-colors"
+                >
+                  {group.doc_title || '无标题文档'}
+                </Link>
+                <span className="shrink-0 text-[10.5px] text-muted-foreground tabular-nums">
+                  {group.items.length} 段
+                </span>
+                <Link
+                  to={`/doc/${group.doc_id}`}
+                  className="ml-auto shrink-0 p-0.5 text-muted-foreground/50 hover:text-primary transition-colors"
+                  title="打开文档"
+                  aria-label="打开文档"
+                >
+                  <ExternalLink className="w-3 h-3" strokeWidth={1.75} />
+                </Link>
+              </div>
+              <ol className="space-y-0.5">
+                {visible.map((c, i) => (
+                  <li key={c.block_id}>
+                    <Link
+                      to={`/doc/${c.doc_id}#block-${c.block_id}`}
+                      className="flex gap-2 rounded-md px-1.5 py-1.5 -mx-0.5 text-[11.5px] text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-colors group/snip"
+                      title="跳转到原文块"
+                    >
+                      <span className="shrink-0 w-4 text-right font-mono text-[10px] text-muted-foreground/55 group-hover/snip:text-primary/70 tabular-nums pt-px">
+                        {i + 1}
+                      </span>
+                      <span className="min-w-0 line-clamp-2 leading-relaxed">{c.snippet}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ol>
+              {hidden > 0 && (
+                <button
+                  type="button"
+                  onClick={() => toggleDoc(group.doc_id)}
+                  className="mt-1 ml-5 text-[11px] text-primary/80 hover:text-primary transition-colors"
+                >
+                  展开其余 {hidden} 段
+                </button>
+              )}
+              {expanded && group.items.length > CITATION_SNIPPET_PREVIEW && (
+                <button
+                  type="button"
+                  onClick={() => toggleDoc(group.doc_id)}
+                  className="mt-1 ml-5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  收起
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

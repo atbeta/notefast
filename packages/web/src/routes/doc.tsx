@@ -126,6 +126,9 @@ export default function DocPage() {
   const [auxLoading, setAuxLoading] = useState(false)
   const [indexJob, setIndexJob] = useState<IndexJob | null>(null)
   const [showSkeleton, setShowSkeleton] = useState(false)
+  /** 桌面右栏：大纲 / 反向链接 / 实体 标签页 */
+  const [railTab, setRailTab] = useState<'outline' | 'backlinks' | 'entities'>('outline')
+  useEffect(() => { setRailTab('outline') }, [id])
   // 恢复 AI 可见触发的索引轮询（切换文档/重复点击时中止上一轮）
   const indexJobAcRef = useRef<AbortController | null>(null)
   useEffect(() => () => indexJobAcRef.current?.abort(), [])
@@ -425,7 +428,7 @@ export default function DocPage() {
             </div>
           </div>
         </div>
-        <div className="hidden lg:flex lg:flex-col w-72 shrink-0 bg-sidebar/30">
+        <div className="hidden lg:flex lg:flex-col w-56 shrink-0 bg-sidebar/30">
           <div className="h-14 shrink-0 border-b border-border/50" />
         </div>
       </div>
@@ -705,27 +708,50 @@ export default function DocPage() {
         </div>
       </div>
 
-      {/* Right Sidebar (Desktop only) — AI 聊天打开时让位，避免双栏堆叠的割裂感 */}
+      {/* Right Sidebar (Desktop only) — AI 聊天打开时让位（替换右栏，不额外压正文） */}
       {!aiChatOpen && (
-        <div className="hidden lg:flex flex-col w-72 shrink-0 bg-sidebar/30 h-full">
-          {/* 顶栏占位：三栏 h-14 水平基准线对齐 */}
-          <div className="h-14 shrink-0 border-b border-border/50" />
-          <div className="flex-1 overflow-y-auto p-6 space-y-5">
-            <section>
-              <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
-                大纲
-              </h3>
+        <div className="hidden lg:flex flex-col w-56 shrink-0 bg-sidebar/30 h-full">
+          {/* 顶栏：标签页切换，与主栏 h-14 对齐 */}
+          <div className="h-14 shrink-0 border-b border-border/50 flex items-end px-2 gap-0.5">
+            {(
+              [
+                { id: 'outline' as const, label: '大纲', count: flatHeadings.length },
+                { id: 'backlinks' as const, label: '链接', count: backlinks.length },
+                { id: 'entities' as const, label: '实体', count: null },
+              ] as const
+            ).map((tab) => {
+              const active = railTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setRailTab(tab.id)}
+                  className={`flex-1 pb-2.5 pt-3 text-[11.5px] font-medium transition-colors border-b-2 -mb-px ${
+                    active
+                      ? 'text-primary border-primary'
+                      : 'text-muted-foreground border-transparent hover:text-foreground'
+                  }`}
+                >
+                  {tab.label}
+                  {tab.count !== null && tab.count > 0 && (
+                    <span className={`ml-0.5 tabular-nums ${active ? 'text-primary/70' : 'text-muted-foreground/60'}`}>
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex-1 overflow-y-auto px-3.5 py-4">
+            {railTab === 'outline' && (
               <OutlineView headings={flatHeadings} loading={auxLoading} />
-            </section>
-
-            <section>
-              <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
-                反向链接
-              </h3>
+            )}
+            {railTab === 'backlinks' && (
               <BacklinksView backlinks={backlinks} loading={auxLoading} />
-            </section>
-
-            {id && <EntityPanel docId={id} variant="aside" />}
+            )}
+            {railTab === 'entities' && id && (
+              <EntityPanel docId={id} variant="bare" />
+            )}
           </div>
         </div>
       )}

@@ -2,20 +2,35 @@
  * 实体（Entities）— AI 在写入时自动识别的实体总览
  *
  * 概念 / 人物 / 工具 / 文档四类实体，按提及次数倒序。
- * 顶部搜索（q 参数，300ms 防抖）；点击实体展开相关笔记列表，再点跳转文档。
+ * 顶部搜索（q 参数，300ms 防抖）+ kind 筛选；点击实体展开相关笔记列表，再点跳转文档。
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Loader2, Search, Waypoints } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import PageHeader from '../components/PageHeader'
 import { EntityMentions } from '../components/EntityPanel'
-import { entityKindLabel, type EntitySummary } from '../lib/entities'
+import {
+  ENTITY_KIND_LABEL,
+  entityKindLabel,
+  type EntitySummary,
+} from '../lib/entities'
+
+const KIND_FILTERS = [
+  { id: 'all', label: '全部' },
+  { id: 'person', label: ENTITY_KIND_LABEL.person },
+  { id: 'tool', label: ENTITY_KIND_LABEL.tool },
+  { id: 'concept', label: ENTITY_KIND_LABEL.concept },
+  { id: 'doc', label: ENTITY_KIND_LABEL.doc },
+] as const
+
+type KindFilter = (typeof KIND_FILTERS)[number]['id']
 
 export default function EntitiesPage() {
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [openId, setOpenId] = useState<string | null>(null)
 
   // 300ms 防抖；空关键词回全量列表
@@ -34,6 +49,19 @@ export default function EntitiesPage() {
   const entities = error ? [] : (data?.entities ?? [])
   const searching = query.trim() !== debouncedQuery
 
+  const filtered = useMemo(() => {
+    if (kindFilter === 'all') return entities
+    return entities.filter((e) => e.kind === kindFilter)
+  }, [entities, kindFilter])
+
+  const kindCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: entities.length }
+    for (const e of entities) {
+      counts[e.kind] = (counts[e.kind] ?? 0) + 1
+    }
+    return counts
+  }, [entities])
+
   return (
     <div className="animate-fade-in">
       <PageHeader innerClassName="flex items-center justify-between gap-4">
@@ -42,7 +70,7 @@ export default function EntitiesPage() {
             实体
           </h1>
           {!loading && !debouncedQuery && (
-            <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
+            <span className="font-mono text-[11px] text-muted-foreground tabular-nums shrink-0">
               {entities.length}
             </span>
           )}
@@ -57,7 +85,7 @@ export default function EntitiesPage() {
         {loading ? (
           <div className="space-y-2">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="card animate-pulse p-3.5 h-16" />
+              <div key={i} className="card animate-pulse p-3.5 h-14" />
             ))}
           </div>
         ) : entities.length === 0 && !debouncedQuery ? (
@@ -79,23 +107,50 @@ export default function EntitiesPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="搜索实体…"
-                className="w-full rounded-lg border border-border bg-card pl-9 pr-8 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-foreground/20"
+                className="w-full rounded-lg border border-border bg-card pl-9 pr-8 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/40"
               />
               {searching && (
                 <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted-foreground/60" strokeWidth={1.75} />
               )}
             </div>
 
-            {entities.length === 0 ? (
+            <div className="flex flex-wrap gap-1.5 px-0.5">
+              {KIND_FILTERS.map((f) => {
+                const count = kindCounts[f.id] ?? 0
+                if (f.id !== 'all' && count === 0 && !debouncedQuery) return null
+                const active = kindFilter === f.id
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setKindFilter(f.id)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[12px] font-medium transition-colors ${
+                      active
+                        ? 'bg-primary-soft text-primary'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
+                    }`}
+                  >
+                    {f.label}
+                    <span className={`tabular-nums text-[10.5px] ${active ? 'text-primary/70' : 'text-muted-foreground/60'}`}>
+                      {count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {filtered.length === 0 ? (
               <p className="px-1 py-8 text-center text-[13px] text-muted-foreground">
-                没有匹配「{debouncedQuery}」的实体
+                {debouncedQuery
+                  ? `没有匹配「${debouncedQuery}」的实体`
+                  : `暂无「${entityKindLabel(kindFilter)}」类实体`}
               </p>
             ) : (
-              <div className="grid gap-1.5">
-                {entities.map((e) => {
+              <div className="grid gap-0.5">
+                {filtered.map((e) => {
                   const open = openId === e.id
                   return (
-                    <div key={e.id} className="card-interactive px-3.5 py-3">
+                    <div key={e.id} className="card-interactive px-3 py-2.5">
                       <button
                         type="button"
                         onClick={() => setOpenId(open ? null : e.id)}
@@ -103,14 +158,14 @@ export default function EntitiesPage() {
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <h3 className="font-medium text-[14.5px] text-foreground tracking-[-0.005em] truncate">
+                            <h3 className="font-medium text-[14px] text-foreground tracking-[-0.005em] truncate">
                               {e.display}
                             </h3>
-                            <span className="shrink-0 rounded border border-border/60 bg-muted/40 px-1.5 py-px text-[10.5px] text-muted-foreground/85">
+                            <span className="shrink-0 rounded border border-border/60 bg-muted/40 px-1.5 py-px text-[10.5px] text-muted-foreground">
                               {entityKindLabel(e.kind)}
                             </span>
                           </div>
-                          <p className="text-[11.5px] text-muted-foreground/80 mt-0.5 tabular-nums">
+                          <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
                             {e.mention_count} 篇笔记提及
                           </p>
                         </div>

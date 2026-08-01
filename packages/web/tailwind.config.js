@@ -22,6 +22,7 @@ export default {
           soft: 'rgb(var(--primary) / 0.06)',
         },
         'primary-soft': 'var(--primary-soft)',
+        'primary-softer': 'var(--primary-softer)',
         ink: {
           DEFAULT: 'rgb(var(--ink) / <alpha-value>)',
           foreground: 'rgb(var(--ink-foreground) / <alpha-value>)',

@@ -73,12 +73,12 @@ export function EntityMentions({ entityId }: { entityId: string }) {
 
 interface EntityPanelProps {
   docId: string
-  /** aside = 桌面右栏紧凑标题；stack = 移动端堆叠标题 */
-  variant: 'aside' | 'stack'
+  /** aside = 桌面右栏紧凑标题；stack = 移动端堆叠标题；bare = 标签页内无标题 */
+  variant: 'aside' | 'stack' | 'bare'
 }
 
 export default function EntityPanel({ docId, variant }: EntityPanelProps) {
-  const { data, error } = useApiQuery(
+  const { data, error, loading } = useApiQuery(
     () => api.get<{ entities: DocEntity[] }>(`/docs/${docId}/entities`),
     [docId],
   )
@@ -86,44 +86,59 @@ export default function EntityPanel({ docId, variant }: EntityPanelProps) {
   // 切换文档时收起展开态（右栏组件跨文档复用）
   useEffect(() => { setOpenId(null) }, [docId])
 
-  // 无实体 / 加载失败：面板完全隐藏，不影响文档页其余部分
-  if (error || !data || data.entities.length === 0) return null
+  const entities = data?.entities ?? []
+  const empty = !loading && (error || entities.length === 0)
+
+  // aside/stack：无实体时完全隐藏；bare（标签页）展示空态
+  if (variant !== 'bare' && (error || !data || entities.length === 0)) return null
 
   return (
     <section>
-      <h3
-        className={
-          variant === 'aside'
-            ? 'text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2'
-            : 'text-sm font-medium text-foreground mb-3'
-        }
-        title="AI 在写入时自动识别的实体"
-      >
-        实体
-      </h3>
-      <div className="flex flex-wrap gap-1.5">
-        {data.entities.map((e) => (
-          <button
-            key={e.id}
-            type="button"
-            onClick={() => setOpenId(openId === e.id ? null : e.id)}
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
-              openId === e.id
-                ? 'border-foreground/25 bg-accent text-foreground'
-                : 'border-border/70 text-muted-foreground hover:text-foreground hover:border-foreground/20'
-            }`}
-          >
-            {e.display}
-            <span className="text-[10px] text-muted-foreground/70 tabular-nums">
-              {e.mention_count}
-            </span>
-          </button>
-        ))}
-      </div>
-      {openId !== null && (
-        <div className="mt-2.5 border-t border-border/50 pt-2.5">
-          <EntityMentions entityId={openId} />
+      {variant !== 'bare' && (
+        <h3
+          className={
+            variant === 'aside'
+              ? 'text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2'
+              : 'text-sm font-medium text-foreground mb-3'
+          }
+          title="AI 在写入时自动识别的实体"
+        >
+          实体
+        </h3>
+      )}
+      {loading && entities.length === 0 ? (
+        <div className="px-1 text-[12px] text-muted-foreground/70">加载中…</div>
+      ) : empty ? (
+        <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
+          本文尚未识别到实体
         </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-1.5">
+            {entities.map((e) => (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => setOpenId(openId === e.id ? null : e.id)}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
+                  openId === e.id
+                    ? 'border-primary/40 bg-primary-soft text-primary'
+                    : 'border-border/70 text-muted-foreground hover:text-foreground hover:border-foreground/20'
+                }`}
+              >
+                {e.display}
+                <span className="text-[10px] text-muted-foreground/70 tabular-nums">
+                  {e.mention_count}
+                </span>
+              </button>
+            ))}
+          </div>
+          {openId !== null && (
+            <div className="mt-2.5 border-t border-border/50 pt-2.5">
+              <EntityMentions entityId={openId} />
+            </div>
+          )}
+        </>
       )}
     </section>
   )

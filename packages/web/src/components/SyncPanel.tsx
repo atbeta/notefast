@@ -184,18 +184,18 @@ export default function SyncPanel() {
                   disabled={a.status !== 'available'}
                   className={`flex flex-col gap-1.5 px-3 py-3 rounded-lg border text-left transition-all ${
                     isSelected
-                      ? 'border-foreground bg-accent/40 shadow-sm'
-                      : 'border-border bg-card hover:border-foreground/30'
+                      ? 'border-primary/45 bg-primary-soft shadow-sm'
+                      : 'border-border bg-card hover:border-border-strong'
                   } ${a.status !== 'available' ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2">
                       {a.kind === 'localfs' ? (
-                        <FolderOpen className={`w-4 h-4 ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`} />
+                        <FolderOpen className={`w-4 h-4 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
                       ) : a.kind === 'webdav' ? (
-                        <HardDrive className={`w-4 h-4 ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`} />
+                        <HardDrive className={`w-4 h-4 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
                       ) : (
-                        <Cloud className={`w-4 h-4 ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`} />
+                        <Cloud className={`w-4 h-4 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
                       )}
                       <span className={`font-medium text-[13px] ${isSelected ? 'text-foreground' : 'text-foreground/80'}`}>
                         {displayName}
@@ -205,7 +205,7 @@ export default function SyncPanel() {
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" title="当前启用"></span>
                     )}
                   </div>
-                  <span className={`text-[10px] uppercase tracking-wider ${isSelected ? 'text-foreground/70' : 'text-muted-foreground/70'}`}>
+                  <span className={`text-[10px] uppercase tracking-wider ${isSelected ? 'text-primary/70' : 'text-muted-foreground/70'}`}>
                     {a.status === 'available' ? '可用' : '计划中'}
                   </span>
                 </button>

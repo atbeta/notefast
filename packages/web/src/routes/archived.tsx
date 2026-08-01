@@ -78,21 +78,21 @@ export default function ArchivedPage() {
   const renderDocRow = (doc: DocSummary, snippet?: string) => (
     <div
       key={doc.id}
-      className="card-interactive px-3.5 py-3 group flex items-center gap-3.5"
+      className="card-interactive px-3 py-2 group flex items-center gap-3"
     >
-      <div className="w-9 h-9 rounded-lg bg-muted/70 text-foreground/55 grid place-items-center shrink-0">
-        <Archive className="w-4 h-4" strokeWidth={1.5} />
+      <div className="w-7 h-7 rounded-md bg-muted/70 text-foreground/55 grid place-items-center shrink-0">
+        <Archive className="w-3.5 h-3.5" strokeWidth={1.5} />
       </div>
       <div className="min-w-0 flex-1">
         <Link to={`/doc/${doc.id}`} className="block">
-          <h3 className="font-medium text-[14.5px] text-foreground tracking-[-0.005em] truncate">
+          <h3 className="font-medium text-[14px] text-foreground tracking-[-0.005em] truncate leading-snug">
             {doc.title || '未命名'}
           </h3>
         </Link>
         {snippet && (
           <p className="text-[12px] text-muted-foreground truncate mt-0.5">{snippet}</p>
         )}
-        <p className="text-[11.5px] text-muted-foreground/80 mt-0.5 font-mono tabular-nums">
+        <p className="text-[11.5px] text-muted-foreground mt-0.5 font-mono tabular-nums">
           归档于 {formatRelative(doc.updated_at)}
         </p>
       </div>
@@ -178,12 +178,12 @@ export default function ArchivedPage() {
                   没有匹配「{query.trim()}」的归档文档
                 </p>
               ) : (
-                <div className="grid gap-1.5">
+                <div className="grid gap-0.5">
                   {matchedDocs.map(({ doc, snippet }) => renderDocRow(doc, snippet))}
                 </div>
               )
             ) : (
-              <div className="grid gap-1.5">
+              <div className="grid gap-0.5">
                 {docs.map((doc) => renderDocRow(doc))}
               </div>
             )}
