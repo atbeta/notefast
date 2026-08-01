@@ -1,5 +1,6 @@
 import { useState, useEffect, ReactNode } from 'react'
 import { CheckCircle2, AlertCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { HelpTip } from '../ui'
 
 // --- Settings Layout & Navigation ---
 
@@ -108,6 +109,7 @@ export function SettingsCard({
   children,
   dangerZone,
   collapsible = true,
+  helpTip,
 }: {
   title: string
   icon?: ReactNode
@@ -116,6 +118,8 @@ export function SettingsCard({
   children: ReactNode
   dangerZone?: ReactNode
   collapsible?: boolean
+  /** 标题旁的提示图标（避免为提示单独占一行） */
+  helpTip?: string
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded)
 
@@ -128,6 +132,7 @@ export function SettingsCard({
         <div className="flex items-center gap-2.5">
           {icon && <div className="text-muted-foreground">{icon}</div>}
           <h3 className="text-[13.5px] font-medium text-foreground">{title}</h3>
+          {helpTip && <HelpTip label={helpTip} />}
         </div>
         <div className="flex items-center gap-3">
           {statusBadge}

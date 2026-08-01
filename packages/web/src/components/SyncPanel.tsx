@@ -151,15 +151,11 @@ export default function SyncPanel() {
     <SettingsCard
       title="Markdown 归档"
       icon={<SettingsIcon className="w-4 h-4" strokeWidth={1.75} />}
+      helpTip="将文档导出为 Markdown 推送到远端（本地文件 / S3 / WebDAV）。这是内容归档，不含内部 ID、引用关系、标签与向量数据。同名文档使用带 ID 的文件名确保不冲突，删除文档时会自动清理远端对应的旧文件。"
       statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? `已启用 · ${status.adapterName}` : '未启用'} />}
       defaultExpanded={!status?.configured}
     >
       <div className="space-y-6">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[13.5px] font-medium text-foreground">Markdown 归档</span>
-          <HelpTip label="将文档导出为 Markdown 推送到远端（本地文件 / S3 / WebDAV）。这是内容归档，不含内部 ID、引用关系、标签与向量数据。同名文档使用带 ID 的文件名确保不冲突，删除文档时会自动清理远端对应的旧文件。" />
-        </div>
-
         <div className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {adapters.map((a) => {

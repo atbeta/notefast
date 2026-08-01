@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { BACKUP_SECRET_MASK, type BackupRuntimeStatus, type BackupRestorePoint } from '@notefast/core'
-import { ActionButton, useToast, HelpTip } from './ui'
+import { ActionButton, useToast } from './ui'
 import ConfirmDialog from './ConfirmDialog'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
 
@@ -151,6 +151,7 @@ export default function BackupPanel() {
     <SettingsCard
       title="数据库备份 (SQLite → S3)"
       icon={<Database className="w-4 h-4" strokeWidth={1.75} />}
+      helpTip="在线生成数据库快照并上传 S3。默认每小时一次、保留 30 天。恢复须先停止服务，再通过命令行执行（Web 界面不提供一键恢复，以防止误操作覆盖当前数据）。"
       statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? '已启用' : '未启用'} />}
       defaultExpanded={!status?.configured}
       dangerZone={
@@ -172,11 +173,6 @@ export default function BackupPanel() {
       }
     >
       <div className="space-y-6">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[13.5px] font-medium text-foreground">完整灾备</span>
-          <HelpTip label="在线生成数据库快照并上传 S3。默认每小时一次、保留 30 天。恢复须先停止服务，再通过命令行执行（Web 界面不提供一键恢复，以防止误操作覆盖当前数据）。" />
-        </div>
-
         <div className="flex items-center justify-between">
           <div className="text-[13px] font-medium text-foreground">启用自动备份</div>
           <label className="relative inline-flex items-center cursor-pointer">
