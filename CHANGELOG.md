@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.29.0](https://github.com/atbeta/notefast/compare/v0.28.0...v0.29.0) (2026-08-01)
+
+
+### Features
+
+* **backup:** content-addressed media sync to S3 ([8c640ef](https://github.com/atbeta/notefast/commit/8c640ef06eacd9edc0e879958b90dcd38331a9ce))
+* **sync:** auto-sync after edits, status indicators, and syncPull ([4a261fe](https://github.com/atbeta/notefast/commit/4a261fec9caa89882fd5add7b035b7ce30a1fd9d))
+* **sync:** protocol manager orchestrating publish/consume with persisted state ([bfd2c0f](https://github.com/atbeta/notefast/commit/bfd2c0f3974f975a708a10c8e5da30551e0fd2cb))
+* **sync:** publish/consume change-log protocol over shared S3 ([353b5d3](https://github.com/atbeta/notefast/commit/353b5d31fbdd3097851f88841c21522f77b2814b))
+* **sync:** snapshot fallback, compaction, and auto-sync timer ([2d4c443](https://github.com/atbeta/notefast/commit/2d4c4430c1109a037114266a678834c770646f16))
+
+
+### Bug Fixes
+
+* **history:** local-time display, line diff, and change source ([e5d979c](https://github.com/atbeta/notefast/commit/e5d979c068d39f6da159593de339c9d63139468b))
+* **ui:** backup/archive panel fixes — save, timezone, prefix, help tips ([cd64796](https://github.com/atbeta/notefast/commit/cd64796e0eb3bc5f45595f9dc1b126fb7394a295))
+
 ## [0.28.0](https://github.com/atbeta/notefast/compare/v0.27.0...v0.28.0) (2026-08-01)
 
 
