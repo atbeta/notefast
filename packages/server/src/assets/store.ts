@@ -28,6 +28,11 @@ export function initAssetStore(dataDir: string): void {
   if (!existsSync(mediaDir)) mkdirSync(mediaDir, { recursive: true })
 }
 
+/** media 目录路径（initAssetStore 后可用）；未初始化时返回 null */
+export function getMediaDir(): string | null {
+  return mediaDir || null
+}
+
 export interface AssetMeta {
   id: string
   mime: string

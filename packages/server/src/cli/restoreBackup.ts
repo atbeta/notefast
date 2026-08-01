@@ -20,9 +20,11 @@ import {
   type BackupManifest,
   type BackupPersistedConfig,
 } from '@notefast/core'
+import { Database } from 'bun:sqlite'
 import { createS3Store } from '../backup/s3Store'
 import { durableReplaceFile } from '../backup/durableFs'
 import { hashFile, verifySnapshotFile } from '../backup/snapshot'
+import { restoreReferencedMedia } from '../backup/mediaBackup'
 
 function parseArgs(argv: string[]): Record<string, string | boolean> {
   const out: Record<string, string | boolean> = {}
@@ -144,6 +146,40 @@ async function main(): Promise<void> {
   verifySnapshotFile(targetDb)
   console.log(`恢复完成 → ${targetDb}`)
   console.log(`本地回滚副本 → ${rollbackDir}`)
+
+  // ── media 拉回：从恢复出的库推导被引用 sha256，只拉引用集合 ──
+  try {
+    const mediaDir = join(dataDir, 'media')
+    const refDb = new Database(targetDb, { readonly: true })
+    let refs: string[] = []
+    try {
+      const rows = refDb
+        .query("SELECT DISTINCT content FROM blocks WHERE content LIKE '%asset:%'")
+        .all() as Array<{ content: string }>
+      const set = new Set<string>()
+      for (const r of rows) {
+        for (const m of r.content.matchAll(/asset:([0-9a-f]{64})/g)) set.add(m[1]!)
+      }
+      refs = [...set]
+    } finally {
+      refDb.close()
+    }
+    console.log(`media 引用集合: ${refs.length} 张图`)
+    if (!dryRun) {
+      const mediaRes = await restoreReferencedMedia(cfg.s3, mediaDir, refs)
+      console.log(`media 恢复: 拉回 ${mediaRes.restored}，本地已有跳过，缺失 ${mediaRes.missing.length}`)
+      if (mediaRes.missing.length > 0) {
+        console.warn(`⚠️  以下图片在 S3 缺失（引用悬空）: ${mediaRes.missing.slice(0, 5).join(', ')}${mediaRes.missing.length > 5 ? '…' : ''}`)
+      }
+      if (mediaRes.errors.length > 0) console.warn(`media 恢复失败: ${mediaRes.errors.length} 个`)
+    } else {
+      console.log('[dry-run] media 未拉回（仅报告引用数量）')
+    }
+  } catch (e) {
+    // media 恢复失败不阻断库恢复本身（文字优先；图可后续手动补）
+    console.warn('media 恢复失败（库已恢复）:', e instanceof Error ? e.message : e)
+  }
+
   rmSync(workDir, { recursive: true, force: true })
 }
 

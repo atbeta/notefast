@@ -35,6 +35,8 @@ export interface S3StoreLike {
   downloadObject(key: string, destPath: string): Promise<void>
   getManifest(manifestKey: string): Promise<BackupManifest>
   pruneOlderThan(retentionDays: number): Promise<{ deleted: number; errors: string[] }>
+  /** 底层 S3Client（media 内容寻址上送复用同一凭据与连接；mock store 可省略以跳过 media） */
+  mediaClient?: S3Client
 }
 
 export function createS3Store(cfg: BackupS3Config, client?: S3Client): S3StoreLike {
@@ -52,6 +54,8 @@ export function createS3Store(cfg: BackupS3Config, client?: S3Client): S3StoreLi
     } satisfies S3ClientConfig)
 
   return {
+    mediaClient: s3,
+
     async testConnection() {
       try {
         await s3.send(new HeadBucketCommand({ Bucket: cfg.bucket }))

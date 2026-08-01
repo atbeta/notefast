@@ -74,6 +74,8 @@ export interface BackupRunResult {
   sizeBytes?: number
   sha256?: string
   schemaVersion?: number
+  /** media 内容寻址上送统计（有 media 且上送尝试过时存在） */
+  mediaUploaded?: { uploaded: number; skipped: number }
   error?: string
 }
 

@@ -22,6 +22,8 @@ import {
 } from './config'
 import { cleanupSnapshot, createLocalSnapshot } from './snapshot'
 import { createS3Store, type S3StoreLike } from './s3Store'
+import { uploadMissingMedia } from './mediaBackup'
+import { getMediaDir } from '../assets/store'
 
 let dataDir = ''
 let store: S3StoreLike | null = null
@@ -128,6 +130,24 @@ export async function runBackupNow(): Promise<BackupRunResult> {
       appVersion,
     })
 
+    // media 上送：内容寻址增量（幂等）。失败不阻断快照本身（库仍完整），单独记录。
+    // 复用 store 的底层 S3Client（同一凭据/连接）；mock store 无 mediaClient 时跳过
+    let mediaUploaded: { uploaded: number; skipped: number } | undefined
+    if (c.s3 && store.mediaClient) {
+      const mediaDir = getMediaDir()
+      if (mediaDir) {
+        try {
+          const media = await uploadMissingMedia(c.s3, mediaDir, { client: store.mediaClient })
+          mediaUploaded = { uploaded: media.uploaded, skipped: media.skipped }
+          if (media.errors.length > 0) {
+            console.warn(`[backup] media 上送 ${media.errors.length} 个失败，快照仍成功`)
+          }
+        } catch (e) {
+          console.warn('[backup] media 上送失败（快照仍成功）:', e instanceof Error ? e.message : e)
+        }
+      }
+    }
+
     phase = 'prune'
     if (c.retentionDays > 0) {
       await store.pruneOlderThan(c.retentionDays)
@@ -144,6 +164,7 @@ export async function runBackupNow(): Promise<BackupRunResult> {
       sizeBytes: snap.sizeBytes,
       sha256: snap.sha256,
       schemaVersion: snap.schemaVersion,
+      mediaUploaded,
     }
     lastResult = result
     lastSuccessAt = finishedAt

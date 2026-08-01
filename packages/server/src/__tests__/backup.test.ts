@@ -15,6 +15,7 @@ import {
   type BackupRestorePoint,
 } from '@notefast/core'
 import { initDb, closeDb, getDb } from '../db'
+import { initAssetStore } from '../assets/store'
 import backupRouter from '../api/backup'
 import {
   applyBackupManagerConfig,
@@ -106,6 +107,7 @@ function createMemoryStore(): S3StoreLike & {
 beforeAll(() => {
   testDir = mkdtempSync(join('/tmp', 'notefast-backup-'))
   initDb(testDir)
+  initAssetStore(testDir)
   const db = getDb()
   const nb = (db.query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }).id
   const docId = crypto.randomUUID()
@@ -173,6 +175,43 @@ describe('backup manager', () => {
     const points = await listBackupRestorePoints()
     expect(points.length).toBe(1)
     expect(backupStatus().lastSuccessAt).toBeTruthy()
+  })
+
+  test('store 暴露 mediaClient 时，runBackupNow 会上送 media 并计入结果', async () => {
+    // media 目录放一个合法 sha256 文件
+    const mediaDir = join(testDir, 'media')
+    mkdirSync(mediaDir, { recursive: true })
+    const sha = 'f'.repeat(64)
+    writeFileSync(join(mediaDir, sha), 'IMG')
+
+    // 内存 mock：提供 mediaClient（fake），PutObject 写入 objects，ListObjects 返回空
+    const mem = createMemoryStore()
+    mem.mediaClient = {
+      async send(command: unknown) {
+        const cmd = command as { constructor: { name: string }; input: Record<string, unknown> }
+        const name = cmd.constructor.name
+        if (name === 'ListObjectsV2Command') return { Contents: [], IsTruncated: false }
+        if (name === 'PutObjectCommand') {
+          mem.objects.set(cmd.input.Key as string, cmd.input.Body as Buffer)
+          return {}
+        }
+        throw new Error(`unexpected ${name}`)
+      },
+    } as never
+
+    initBackupManager(testDir, { storeFactory: () => mem })
+    await applyBackupManagerConfig({
+      version: 1,
+      enabled: true,
+      intervalMs: 0,
+      retentionDays: 30,
+      s3: { bucket: 'b', region: 'us-east-1', accessKeyId: 'k', secretAccessKey: 's', prefix: 'test' },
+    })
+    const result = await runBackupNow()
+    expect(result.ok).toBe(true)
+    expect(result.mediaUploaded).toBeDefined()
+    expect(result.mediaUploaded!.uploaded).toBe(1)
+    expect(mem.objects.has('test/media/' + sha)).toBe(true)
   })
 
   test('并发备份返回 backup_in_progress', async () => {
