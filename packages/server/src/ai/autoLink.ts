@@ -27,7 +27,7 @@ import {
   type ChatMessage,
 } from '@notefast/core'
 import { getDb } from '../db'
-import { getBlockById, fetchDocBlocks } from '../store/blocks'
+import { getBlockById, getLiveBlockById, fetchDocBlocks } from '../store/blocks'
 import { findRefByPair, insertRef } from '../store/refs'
 import { lexicalSearch } from '../lexicalSearch'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
@@ -140,6 +140,10 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
   // AI 软隔离：排除文档不分析、不送 LLM
   if (isBlockAiExcluded(opts.blockId)) return empty()
 
+  // 软删防护：块已被删除（整篇替换在抽取完成前发生）不再分析——
+  // 避免把 mentions / ai_auto refs 落在软删块上成为幽灵数据（见 registerMentions）
+  if (!getLiveBlockById(getDb(), opts.blockId)) return empty()
+
   const trimmed = opts.content.trim().slice(0, MAX_CONTENT_CHARS)
   // 文档根（标题）只登记实体：标题短，下限放宽到 3 字（抽取层 anchor 本身 ≥3 字）
   if (trimmed.length < (opts.entitiesOnly ? 3 : 10)) return empty()
@@ -230,6 +234,14 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
       if (findRefByPair(db, opts.blockId, top1.blockId)) {
         if (skippedAnchors.length < 10) {
           skippedAnchors.push({ anchor: m.anchor, reason: 'already_linked', confidence: top1.confidence })
+        }
+        continue
+      }
+
+      // 竞态防护：抽取期间源块被整篇替换软删 → 不建链（见 doAnalyze 顶部软删防护）
+      if (!getLiveBlockById(db, opts.blockId)) {
+        if (skippedAnchors.length < 10) {
+          skippedAnchors.push({ anchor: m.anchor, reason: 'source_deleted' })
         }
         continue
       }

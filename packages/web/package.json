@@ -23,6 +23,7 @@
     "@lezer/highlight": "^1.2.3",
     "@notefast/core": "workspace:*",
     "codemirror": "^6.0.2",
+    "d3-force": "^3.0.0",
     "highlight.js": "^11.11.1",
     "lucide-react": "^0.475.0",
     "mermaid": "^11.16.0",
@@ -33,8 +34,9 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
-    "@types/bun": "latest",
     "@tailwindcss/typography": "^0.5.20",
+    "@types/bun": "latest",
+    "@types/d3-force": "^3.0.10",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",

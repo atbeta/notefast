@@ -179,6 +179,14 @@
     @apply bg-muted/50;
     box-shadow: var(--shadow-card-hover);
   }
+  .graph-node-label {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    user-select: none;
+    pointer-events: none;
+  }
   .sidebar-link {
     @apply flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] text-sidebar-foreground
            transition-colors duration-150;

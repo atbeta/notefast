@@ -7,6 +7,7 @@ import SettingsPage from './routes/settings'
 import InboxPage from './routes/inbox'
 import ArchivedPage from './routes/archived'
 import EntitiesPage from './routes/entities'
+import GraphPage from './routes/graph'
 import SharePage from './routes/share'
 import Layout from './components/Layout'
 import RouteTransition from './components/RouteTransition'
@@ -66,6 +67,7 @@ export default function App() {
             <Route path="/inbox" element={<InboxPage />} />
             <Route path="/archived" element={<ArchivedPage />} />
             <Route path="/entities" element={<EntitiesPage />} />
+            <Route path="/graph" element={<GraphPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </RouteTransition>

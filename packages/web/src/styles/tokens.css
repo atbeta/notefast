@@ -103,6 +103,14 @@
   --code-number: 180 83 9;     /* amber-700 */
   --code-title: 55 53 47;      /* 近前景色 */
 
+  /* ───────────── 图谱节点（低饱和分类色，深浅主题均可读） ───────────── */
+  --graph-concept: 90 116 176; /* 概念 — 与品牌 primary 同值（石板靛蓝） */
+  --graph-person: 176 116 90;  /* 人物 — 暖赭 */
+  --graph-tool: 90 155 107;    /* 工具 — 苔绿 */
+  --graph-doc: 139 123 176;    /* 文档 — 雾紫 */
+  --graph-other: 105 104 100;  /* 未知 kind 兜底（近 muted-foreground） */
+  --graph-edge: 200 200 198;   /* 边 — 近 border-strong，随主题微调 */
+
   /* ───────────── 动效（全局统一） ───────────── */
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --dur: 150ms;
@@ -162,6 +170,14 @@
   --code-comment: 110 110 108;
   --code-number: 252 211 77;   /* amber-300 */
   --code-title: 240 240 240;
+
+  /* 图谱节点 — 深色主题提亮一档 */
+  --graph-concept: 149 164 198;
+  --graph-person: 201 161 136;
+  --graph-tool: 143 191 158;
+  --graph-doc: 179 166 206;
+  --graph-other: 140 140 140;
+  --graph-edge: 80 80 80;
 }
 
 

@@ -19,6 +19,7 @@ import {
   Hourglass,
   EyeOff,
   Waypoints,
+  Network,
   ChevronDown,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
@@ -381,6 +382,10 @@ export default function Sidebar({
         <Link to="/entities" onClick={closeAfterNav} className={location.pathname === '/entities' ? 'sidebar-link-active' : 'sidebar-link'}>
           <Waypoints className="w-[15px] h-[15px]" strokeWidth={1.75} />
           <span className="flex-1">实体</span>
+        </Link>
+        <Link to="/graph" onClick={closeAfterNav} className={location.pathname === '/graph' ? 'sidebar-link-active' : 'sidebar-link'}>
+          <Network className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <span className="flex-1">图谱</span>
         </Link>
         {onToggleAiChat && (
           <button
