@@ -7,7 +7,7 @@
  */
 
 import { Hono } from 'hono'
-import { protocolStatus, syncNow } from '../sync/protocolManager'
+import { protocolStatus, syncNow, syncPull } from '../sync/protocolManager'
 
 const syncProtocol = new Hono()
 
@@ -18,6 +18,21 @@ syncProtocol.get('/', (c) => {
 syncProtocol.post('/run', async (c) => {
   try {
     const result = await syncNow()
+    return c.json({ ok: true, ...result, status: protocolStatus() })
+  } catch (e) {
+    const code = (e as { code?: string }).code
+    const status = code === 'not_configured' ? 503 : code === 'sync_in_progress' ? 409 : 500
+    return c.json(
+      { error: code ?? 'sync_error', message: e instanceof Error ? e.message : String(e) },
+      status,
+    )
+  }
+})
+
+/** 消费端拉取：客户端从 S3 恢复数据到本地（首次全量 / 增量合并 + media） */
+syncProtocol.post('/pull', async (c) => {
+  try {
+    const result = await syncPull()
     return c.json({ ok: true, ...result, status: protocolStatus() })
   } catch (e) {
     const code = (e as { code?: string }).code

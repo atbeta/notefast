@@ -5,6 +5,7 @@ import { SettingsLayout, SettingsSection } from '../components/settings/ui'
 // Import the panels
 import AISettingsPanel from '../components/ai-settings/AISettingsPanel'
 import BackupPanel from '../components/BackupPanel'
+import SyncProtocolPanel from '../components/SyncProtocolPanel'
 import SyncPanel from '../components/SyncPanel'
 import ApiTokensPanel from '../components/ApiTokensPanel'
 import AuthEventsPanel from '../components/AuthEventsPanel'
@@ -34,6 +35,7 @@ export default function SettingsPage() {
 
       <SettingsSection id="backup" title="灾备与归档">
         <BackupPanel />
+        <SyncProtocolPanel />
         <SyncPanel />
       </SettingsSection>
 

@@ -16,9 +16,13 @@ import { join } from 'node:path'
 import type { S3Client } from '@aws-sdk/client-s3'
 import { getBackupConfig, initBackupConfig } from '../backup/config'
 import { createS3Store } from '../backup/s3Store'
-import { getDb } from '../db'
+import { initDb, closeDb, getDb, getDbPath } from '../db'
+import { collectReferencedAssetIds, getMediaDir } from '../assets/store'
+import { restoreReferencedMedia } from '../backup/mediaBackup'
 import {
   publishChanges,
+  consumeChanges,
+  consumeSnapshot,
   compactChanges,
   readManifest,
   updateManifest,
@@ -60,6 +64,10 @@ let lastError: string | null = null
 let autoTimer: ReturnType<typeof setInterval> | null = null
 let autoIntervalMs = 0
 let state: SyncProtocolState = { publishedSeq: 0, consumedSeq: 0, sinceSnapshot: 0 }
+/** 编辑后去抖同步定时器（合并多次写入为一次同步） */
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+/** 去抖窗口：写入后延迟触发，期间多次写入合并为一次 */
+const SYNC_DEBOUNCE_MS = 5_000
 
 /** 启动期初始化（dataDir + 复用 backup S3 配置） */
 export function initProtocolManager(dir: string, opts?: { autoSyncIntervalMs?: number }): void {
@@ -151,6 +159,78 @@ export async function syncNow(): Promise<{ published: number; snapshotCreated: b
   }
 }
 
+/**
+ * 消费端拉取（客户端「从 S3 恢复到本地」的入口）：
+ * 1. 读 manifest，判断全量 or 增量
+ * 2. 全量：本地落后于最近快照（consumedSeq < snapshot_seq）或本地无库 → closeDb + consumeSnapshot
+ *    重建库文件 → 重新 initDb → media 拉回 → consumedSeq = snapshot_seq
+ * 3. 增量：consumeChanges 合并到 snapshot_seq 之后的变更 → media 拉回
+ * 4. 持久化 state
+ *
+ * 语义：消费端在**独立进程/客户端**跑；server 内调用时，全量路径会 closeDb（库文件被替换），
+ * 调用方需理解这是「恢复到本地」而非「服务端自合并」。
+ */
+export async function syncPull(): Promise<{ mode: 'full' | 'incremental'; applied: number; mediaRestored: number; state: SyncProtocolState }> {
+  if (!client) {
+    throw Object.assign(new Error('同步协议未配置（backup S3 未配置）'), { code: 'not_configured' })
+  }
+  if (running) {
+    throw Object.assign(new Error('同步进行中'), { code: 'sync_in_progress' })
+  }
+  running = true
+  lastRunAt = new Date().toISOString()
+  try {
+    const cfg = s3Cfg()
+    const prefix = syncPrefix(cfg.prefix)
+    const manifest = await readManifest(client, { bucket: cfg.bucket, prefix })
+    if (!manifest) {
+      throw Object.assign(new Error('远端无同步数据（manifest 不存在）'), { code: 'no_remote' })
+    }
+    const snapshotSeq = manifest.snapshot_seq ?? 0
+    const needFull = state.consumedSeq < snapshotSeq
+
+    let mode: 'full' | 'incremental' = 'incremental'
+    let applied = 0
+    if (needFull) {
+      // 全量：重建本地库文件
+      mode = 'full'
+      const target = getDbPath()
+      try { closeDb() } catch { /* 未打开也 OK */ }
+      const snapSeq = await consumeSnapshot(client, { bucket: cfg.bucket, prefix }, target)
+      // 重新打开库（读引用集合 / 后续使用）
+      initDb(dataDir)
+      state.consumedSeq = snapSeq
+      applied = snapSeq
+    } else {
+      // 增量：合并 snapshot_seq 之后到 last_seq 的变更
+      const consumed = await consumeChanges(getDb(), client, { bucket: cfg.bucket, prefix }, state.consumedSeq, manifest.last_seq)
+      applied = consumed.applied
+      state.consumedSeq = consumed.nextSeq
+    }
+
+    // media 拉回（引用集合；内容寻址跳过已有，成本低）
+    let mediaRestored = 0
+    const mediaDir = getMediaDir()
+    if (mediaDir) {
+      const refs = collectReferencedAssetIds()
+      if (refs.size > 0) {
+        const mediaRes = await restoreReferencedMedia(cfg, mediaDir, refs, { client })
+        mediaRestored = mediaRes.restored
+      }
+    }
+
+    saveState()
+    lastSuccessAt = lastRunAt
+    lastError = null
+    return { mode, applied, mediaRestored, state }
+  } catch (e) {
+    lastError = e instanceof Error ? e.message : String(e)
+    throw e
+  } finally {
+    running = false
+  }
+}
+
 function startAutoTimer(): void {
   stopAutoTimer()
   if (!client || autoIntervalMs <= 0) return
@@ -168,6 +248,33 @@ function stopAutoTimer(): void {
   if (autoTimer) {
     clearInterval(autoTimer)
     autoTimer = null
+  }
+}
+
+/**
+ * 编辑后去抖自动同步（fire-and-forget）：
+ * 文档写入等变更后调用，延迟 SYNC_DEBOUNCE_MS 触发一次 syncNow；
+ * 窗口内多次写入合并为一次。未配置 S3 时静默跳过（不打扰用户）。
+ * 不阻塞写入响应；syncNow 的 running 互斥天然防重叠。
+ */
+export function scheduleSyncNow(): void {
+  if (debounceTimer) clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null
+    if (!client) return // 未配置同步：静默跳过
+    syncNow().catch((err) => {
+      const code = (err as { code?: string }).code
+      if (code !== 'sync_in_progress' && code !== 'not_configured') {
+        console.warn('[sync-protocol] debounced sync failed:', err instanceof Error ? err.message : err)
+      }
+    })
+  }, SYNC_DEBOUNCE_MS)
+}
+
+function stopDebounceTimer(): void {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
   }
 }
 
@@ -230,6 +337,7 @@ function saveState(): void {
 /** 测试钩子 */
 export function _resetProtocolManagerForTests(): void {
   stopAutoTimer()
+  stopDebounceTimer()
   dataDir = ''
   client = null
   running = false
@@ -243,4 +351,9 @@ export function _resetProtocolManagerForTests(): void {
 /** 测试钩子：注入 mock S3Client（覆盖 rebuild 内部创建的真实 client） */
 export function _setProtocolClientForTests(c: S3Client | null): void {
   client = c
+}
+
+/** 测试钩子：直接设置内存 state（模拟消费端断点续传，不触发 rebuild） */
+export function _setProtocolStateForTests(s: Partial<SyncProtocolState>): void {
+  state = { ...state, ...s }
 }

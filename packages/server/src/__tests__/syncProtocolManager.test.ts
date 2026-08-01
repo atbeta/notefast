@@ -1,14 +1,17 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test'
-import { mkdtempSync, rmSync, existsSync } from 'node:fs'
+import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { initDb, closeDb, getDb } from '../db'
 import { insertBlock, nowTimestamp } from '../store/blocks'
 import {
   initProtocolManager,
   syncNow,
+  syncPull,
+  scheduleSyncNow,
   protocolStatus,
   _resetProtocolManagerForTests,
   _setProtocolClientForTests,
+  _setProtocolStateForTests,
 } from '../sync/protocolManager'
 import { applyBackupConfig, _resetBackupConfigForTests } from '../backup/config'
 import { SYNC_S3_DIR } from '@notefast/core'
@@ -192,4 +195,69 @@ describe('sync protocol manager', () => {
     expect(manifest.snapshot_seq).toBeGreaterThan(0)
     expect(manifest.last_seq).toBeGreaterThan(0)
   })
+
+  test('syncPull 增量消费：远端 manifest 有变更且本地未落后快照时，走增量合并', async () => {
+    initProtocolManager(testDir)
+    applyBackupConfig({
+      version: 1,
+      enabled: true,
+      intervalMs: 0,
+      retentionDays: 30,
+      s3: { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's', prefix: 'test' },
+    })
+    const { client } = makeMockS3()
+    _setProtocolClientForTests(client)
+
+    // 先在本地发布一些变更（生成 changes 段 + manifest）
+    insertDoc(crypto.randomUUID(), '待拉取文档')
+    await syncNow()
+
+    // 模拟消费端：已有部分数据、想从远端拉增量（consumedSeq=0，无快照落后）
+    _setProtocolStateForTests({ publishedSeq: 0, consumedSeq: 0 })
+
+    const result = await syncPull()
+    expect(result.mode).toBe('incremental')
+    // 消费端锚点前进（>= 远端 last_seq）
+    expect(result.state.consumedSeq).toBeGreaterThan(0)
+    // 已持久化
+    const saved = JSON.parse(readFileSync(join(testDir, 'sync-state.json'), 'utf-8'))
+    expect(saved.consumedSeq).toBe(result.state.consumedSeq)
+  })
+
+  test('syncPull 无远端数据抛 no_remote', async () => {
+    initProtocolManager(testDir)
+    applyBackupConfig({
+      version: 1,
+      enabled: true,
+      intervalMs: 0,
+      retentionDays: 30,
+      s3: { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's', prefix: 'test' },
+    })
+    _setProtocolClientForTests(makeMockS3().client) // 空 S3
+    await expect(syncPull()).rejects.toMatchObject({ code: 'no_remote' })
+  })
+
+  test('scheduleSyncNow 去抖：写入后延迟触发一次 syncNow，publishedSeq 前进', async () => {
+    initProtocolManager(testDir)
+    applyBackupConfig({
+      version: 1,
+      enabled: true,
+      intervalMs: 0,
+      retentionDays: 30,
+      s3: { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's', prefix: 'test' },
+    })
+    const { client } = makeMockS3()
+    _setProtocolClientForTests(client)
+    _setProtocolStateForTests({ publishedSeq: 0, consumedSeq: 0 })
+
+    // 模拟写入 → 去抖自动同步
+    insertDoc(crypto.randomUUID(), '去抖同步文档')
+    scheduleSyncNow()
+    // 去抖窗口内 publishedSeq 未变（还没触发）
+    expect(protocolStatus().state.publishedSeq).toBe(0)
+    // 等去抖窗口 + 同步完成
+    await new Promise((r) => setTimeout(r, 6000))
+    expect(protocolStatus().state.publishedSeq).toBeGreaterThan(0)
+    expect(protocolStatus().lastSuccessAt).toBeTruthy()
+  }, 9000)
 })

@@ -29,6 +29,7 @@ import { useScrollFade } from '../hooks/useScrollFade'
 import { DRAFT_CHANGED_EVENT, hasDraftSync } from '../hooks/useEditorDraft'
 import type { DocSummary } from '@notefast/core'
 import DocActionsMenu from './DocActionsMenu'
+import SidebarSyncStatus from './SidebarSyncStatus'
 import { Tooltip, ShortcutKeys, shortcutLabel } from './ui'
 
 interface SidebarProps {
@@ -507,20 +508,23 @@ export default function Sidebar({
 
       <div className="border-t border-sidebar-border shrink-0">
         <div className="px-3 pt-2 pb-2.5 flex items-center justify-between gap-2">
-          <Tooltip label="设置">
-            <Link
-              to="/settings"
-              onClick={closeAfterNav}
-              aria-label="设置"
-              className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${
-                location.pathname.startsWith('/settings')
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-sidebar-muted/70 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent'
-              }`}
-            >
-              <Settings className="w-3.5 h-3.5" strokeWidth={1.75} />
-            </Link>
-          </Tooltip>
+          <div className="flex items-center gap-2">
+            <SidebarSyncStatus />
+            <Tooltip label="设置">
+              <Link
+                to="/settings"
+                onClick={closeAfterNav}
+                aria-label="设置"
+                className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${
+                  location.pathname.startsWith('/settings')
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                    : 'text-sidebar-muted/70 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent'
+                }`}
+              >
+                <Settings className="w-3.5 h-3.5" strokeWidth={1.75} />
+              </Link>
+            </Tooltip>
+          </div>
           {version && (
             <span className="text-[10px] font-mono tabular-nums text-sidebar-muted/55">v{version}</span>
           )}

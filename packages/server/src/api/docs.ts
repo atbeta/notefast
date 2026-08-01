@@ -31,6 +31,7 @@ import { reanalyzeDoc } from '../ai/autoLink'
 import { scheduleDocIndex } from '../ai/indexJobs'
 import { buildDocExportFile, contentDispositionAttachment } from '../services/docExport'
 import { emitAppEvent } from '../events'
+import { scheduleSyncNow } from '../sync/protocolManager'
 
 const docs = new Hono()
 
@@ -48,6 +49,8 @@ function auditDocAction(
     outcome: 'success',
     fields,
   })
+  // 文档写入后去抖自动同步（fire-and-forget，未配置同步时静默跳过）
+  scheduleSyncNow()
 }
 
 docs.get('/list', (c) => {
@@ -511,6 +514,8 @@ function applyMarkdownReplace(
   fireAfterCreateMany(getBlocksByIds(db, insertedIds).map(rowToBlock))
   const updatedDocRow = getBlockById(db, id)!
   fireAfterUpdate(rowToBlock(updatedDocRow))
+  // 编辑器整篇保存：去抖自动同步（fire-and-forget，未配置时静默跳过）
+  scheduleSyncNow()
 
   const tree = buildBlockTree(fetchDocBlocks(db, id))
   // asset 引用对账：悬空引用告警（不阻断保存）

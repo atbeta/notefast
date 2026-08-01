@@ -38,6 +38,7 @@ import { buildChatPrompt } from './prompt'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { insertDocFromMarkdown, appendMarkdownToDoc } from '../services/docImport'
 import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate, fireDocAfterCreate } from '../services/hooks'
+import { scheduleSyncNow } from '../sync/protocolManager'
 import { scheduleDocIndex } from './indexJobs'
 import { loadAiExcludedDocIds } from './aiExcludeQuery'
 import { searchWeb } from './webSearch'
@@ -443,6 +444,7 @@ export async function executeWriteTool(name: string, args: Record<string, unknow
       const docRow = getBlockById(db, result.docId)!
       const indexJob = scheduleDocIndex(result.docId, result.blockIds)
       fireAfterCreate(rowToBlock(docRow))
+      scheduleSyncNow()
       fireDocAfterCreate({
         doc: rowToBlock(docRow),
         meta: { status, source: 'ai' },
@@ -516,6 +518,7 @@ export async function executeWriteTool(name: string, args: Record<string, unknow
     }
     const updatedDocRow = getBlockById(db, docId)!
     fireAfterUpdate(rowToBlock(updatedDocRow))
+    scheduleSyncNow()
     emitAppEvent({
       source: 'mcp',
       actor: 'ai-agent',
@@ -554,6 +557,7 @@ export async function executeWriteTool(name: string, args: Record<string, unknow
       return { content: JSON.stringify({ error: `Block ${blockId} 所属文档已对 AI 隐藏` }), resultCount: 0 }
     }
     updateBlock(db, blockId, { content: newContent })
+    scheduleSyncNow()
     emitAppEvent({
       source: 'mcp',
       actor: 'ai-agent',

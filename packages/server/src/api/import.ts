@@ -5,6 +5,7 @@ import { getDb } from '../db'
 import { getBlockById, getBlocksByIds } from '../store/blocks'
 import { fireAfterCreate, fireAfterCreateMany, fireDocAfterCreate } from '../services/hooks'
 import { emitAppEvent } from '../events'
+import { scheduleSyncNow } from '../sync/protocolManager'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { EmptyMarkdownError, insertDocFromMarkdown, type InsertDocFromMarkdownResult } from '../services/docImport'
 import {
@@ -30,6 +31,7 @@ function respondCreated(
     doc: rowToBlock(docRow),
     meta: { status: readDocStatus(docRow), tags: readTags(docRow), source: 'import' },
   })
+  scheduleSyncNow()
   emitAppEvent({
     source: 'web',
     actor: 'admin',
