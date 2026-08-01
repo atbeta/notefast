@@ -1,9 +1,10 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { importMarkdownSchema, rowToBlock } from '@notefast/core'
+import { importMarkdownSchema, rowToBlock, readDocStatus, readTags } from '@notefast/core'
 import { getDb } from '../db'
 import { getBlockById, getBlocksByIds } from '../store/blocks'
-import { fireAfterCreate, fireAfterCreateMany } from '../services/hooks'
+import { fireAfterCreate, fireAfterCreateMany, fireDocAfterCreate } from '../services/hooks'
+import { emitAppEvent } from '../events'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { EmptyMarkdownError, insertDocFromMarkdown, type InsertDocFromMarkdownResult } from '../services/docImport'
 import {
@@ -25,6 +26,18 @@ function respondCreated(
   const indexJob = scheduleDocIndex(result.docId, result.blockIds)
   fireAfterCreate(rowToBlock(docRow))
   fireAfterCreateMany(getBlocksByIds(db, result.blockIds).map(rowToBlock))
+  fireDocAfterCreate({
+    doc: rowToBlock(docRow),
+    meta: { status: readDocStatus(docRow), tags: readTags(docRow), source: 'import' },
+  })
+  emitAppEvent({
+    source: 'web',
+    actor: 'admin',
+    action: 'doc.imported',
+    target: { type: 'doc', id: result.docId },
+    outcome: 'success',
+    fields: { status: readDocStatus(docRow), block_count: result.blockIds.length + 1 },
+  })
   const missingAssets = findMissingAssets(extractAssetRefs(markdown))
   return {
     doc: rowToBlock(docRow),

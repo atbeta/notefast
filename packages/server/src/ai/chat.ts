@@ -37,7 +37,7 @@ import { hybridSearch, type HybridSearchReport } from './hybridSearch'
 import { buildChatPrompt } from './prompt'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { insertDocFromMarkdown, appendMarkdownToDoc } from '../services/docImport'
-import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate } from '../services/hooks'
+import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate, fireDocAfterCreate } from '../services/hooks'
 import { scheduleDocIndex } from './indexJobs'
 import { loadAiExcludedDocIds } from './aiExcludeQuery'
 import { searchWeb } from './webSearch'
@@ -443,6 +443,18 @@ export async function executeWriteTool(name: string, args: Record<string, unknow
       const docRow = getBlockById(db, result.docId)!
       const indexJob = scheduleDocIndex(result.docId, result.blockIds)
       fireAfterCreate(rowToBlock(docRow))
+      fireDocAfterCreate({
+        doc: rowToBlock(docRow),
+        meta: { status, source: 'ai' },
+      })
+      emitAppEvent({
+        source: 'mcp',
+        actor: 'ai-agent',
+        action: 'doc.created_by_agent',
+        target: { type: 'doc', id: result.docId },
+        outcome: 'success',
+        fields: { title, status, block_count: result.parsedCount + 1 },
+      })
       if (result.blockIds.length > 0) {
         const childRows = getBlocksByIds(db, result.blockIds)
         fireAfterCreateMany(childRows.map(rowToBlock))
@@ -504,6 +516,14 @@ export async function executeWriteTool(name: string, args: Record<string, unknow
     }
     const updatedDocRow = getBlockById(db, docId)!
     fireAfterUpdate(rowToBlock(updatedDocRow))
+    emitAppEvent({
+      source: 'mcp',
+      actor: 'ai-agent',
+      action: 'doc.appended_by_agent',
+      target: { type: 'doc', id: docId },
+      outcome: 'success',
+      fields: { block_count: parsedCount },
+    })
 
     return {
       content: JSON.stringify({
@@ -534,6 +554,14 @@ export async function executeWriteTool(name: string, args: Record<string, unknow
       return { content: JSON.stringify({ error: `Block ${blockId} 所属文档已对 AI 隐藏` }), resultCount: 0 }
     }
     updateBlock(db, blockId, { content: newContent })
+    emitAppEvent({
+      source: 'mcp',
+      actor: 'ai-agent',
+      action: 'block.updated_by_agent',
+      target: { type: 'block', id: blockId },
+      outcome: 'success',
+      fields: { doc_id: row.root_id },
+    })
     return {
       content: JSON.stringify({
         success: true,

@@ -105,6 +105,36 @@ export interface NoteLifecycle {
   afterDelete: AsyncParallelHook<[blockId: string]>
 }
 
+/** 文档级生命周期事件的统一载荷：目标文档 + 操作上下文 */
+export interface DocumentEventPayload {
+  /** 文档根 block（type='document'） */
+  doc: Block
+  /** 变更前状态（afterStatusChange / afterTagChange 提供；其它可缺省） */
+  before?: { status?: string; tags?: string[] }
+  /** 操作附加信息（如分享 token / 新状态 / 来源渠道） */
+  meta?: Record<string, unknown>
+}
+
+/**
+ * 文档级生命周期钩子（区别于 NoteLifecycle 的 block 粒度）：
+ * 文档是第三方最自然的扩展挂点（归档/分享/标签/删除/创建），
+ * 粒度对齐「一个文档一个动作」，避免扩展者监听一堆 block 事件再自行聚合。
+ */
+export interface DocumentLifecycle {
+  /** 文档创建完成（含导入入库） */
+  afterCreate: AsyncParallelHook<[DocumentEventPayload]>
+  /** 文档状态变更（归档 / 升格 / 进收集箱）；payload.before.status 为旧状态 */
+  afterStatusChange: AsyncParallelHook<[DocumentEventPayload]>
+  /** 打标签完成；payload.before.tags 为旧标签，meta 含新增/删除集合 */
+  afterTagChange: AsyncParallelHook<[DocumentEventPayload]>
+  /** 公开分享开启；meta 含 token / path / expires_at */
+  afterShare: AsyncParallelHook<[DocumentEventPayload]>
+  /** 公开分享关闭；meta 含旧 token（若有关闭前的记录） */
+  afterShareRevoked: AsyncParallelHook<[DocumentEventPayload]>
+  /** 文档软删除完成 */
+  afterDelete: AsyncParallelHook<[DocumentEventPayload]>
+}
+
 export interface RenderLifecycle {
   beforeRenderBlock: SyncWaterfallHook<Block>
   afterRenderBlock: SyncHook<[Block]>
@@ -140,6 +170,7 @@ export interface Plugin {
 
 export interface PluginSystem {
   note: NoteLifecycle
+  doc: DocumentLifecycle
   render: RenderLifecycle
   search: SearchLifecycle
   ui: UILifecycle
@@ -157,6 +188,14 @@ export function createPluginSystem(): PluginSystem {
       beforeUpdate: new SyncBailHook(),
       afterUpdate: new AsyncParallelHook(),
       beforeDelete: new SyncBailHook(),
+      afterDelete: new AsyncParallelHook(),
+    },
+    doc: {
+      afterCreate: new AsyncParallelHook(),
+      afterStatusChange: new AsyncParallelHook(),
+      afterTagChange: new AsyncParallelHook(),
+      afterShare: new AsyncParallelHook(),
+      afterShareRevoked: new AsyncParallelHook(),
       afterDelete: new AsyncParallelHook(),
     },
     render: {

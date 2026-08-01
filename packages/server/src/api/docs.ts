@@ -23,15 +23,32 @@ import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
 import { getShareByDocId, createShare, deleteShare, setShareExpiry, deleteSharesByDocIds } from '../store/shares'
 import { insertDocFromMarkdown, insertChildBlocks } from '../services/docImport'
-import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany } from '../services/hooks'
+import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany, fireDocAfterCreate, fireDocAfterStatusChange, fireDocAfterTagChange, fireDocAfterShare, fireDocAfterShareRevoked, fireDocAfterDelete } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { writeDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
 import { readDocAiExclude } from '../ai/aiExcludeQuery'
 import { reanalyzeDoc } from '../ai/autoLink'
 import { scheduleDocIndex } from '../ai/indexJobs'
 import { buildDocExportFile, contentDispositionAttachment } from '../services/docExport'
+import { emitAppEvent } from '../events'
 
 const docs = new Hono()
+
+/** 文档级操作审计（写路径统一出口）：记录谁在何时对哪个文档做了什么 */
+function auditDocAction(
+  action: string,
+  docId: string,
+  fields?: Record<string, unknown>,
+): void {
+  emitAppEvent({
+    source: 'web',
+    actor: 'admin',
+    action,
+    target: { type: 'doc', id: docId },
+    outcome: 'success',
+    fields,
+  })
+}
 
 docs.get('/list', (c) => {
   const db = getDb()
@@ -163,6 +180,11 @@ docs.post('/', zValidator('json', createDocSchema), (c) => {
   const indexJob = scheduleDocIndex(docId, blockIds)
   fireAfterCreate(rowToBlock(row))
   fireAfterCreateMany(getBlocksByIds(db, blockIds).map(rowToBlock))
+  fireDocAfterCreate({
+    doc: rowToBlock(row),
+    meta: { status, tags: initialTags, source: 'http' },
+  })
+  auditDocAction('doc.created', docId, { status, tag_count: initialTags.length })
   return c.json({
     id: row.id,
     title: row.content,
@@ -202,6 +224,12 @@ docs.patch('/:id/status', zValidator('json', updateDocStatusSchema), (c) => {
 
   const updatedRow = getBlockById(db, id)!
   fireAfterUpdate(rowToBlock(updatedRow))
+  fireDocAfterStatusChange({
+    doc: rowToBlock(updatedRow),
+    before: { status: oldStatus },
+    meta: { status, share_revoked: shareRevoked },
+  })
+  auditDocAction('doc.status_changed', id, { from: oldStatus, to: status, share_revoked: shareRevoked })
   return c.json({
     doc_id: id,
     status: readDocStatus(updatedRow),
@@ -223,6 +251,7 @@ docs.patch('/:id/tags', async (c) => {
   }
 
   const provider = getTagProvider()
+  const oldTags = readTags(docRow)
   const updated = provider.setDocTags(docRow, newTags)
   updateBlock(db, id, { tags: updated.tags })
 
@@ -232,6 +261,20 @@ docs.patch('/:id/tags', async (c) => {
 
   const finalTags = provider.getDocTags(updated)
   const updatedRow = getBlockById(db, id)!
+  fireDocAfterTagChange({
+    doc: rowToBlock(updatedRow),
+    before: { tags: oldTags },
+    meta: {
+      tags: finalTags,
+      added: finalTags.filter((t) => !oldTags.includes(t)),
+      removed: oldTags.filter((t) => !finalTags.includes(t)),
+    },
+  })
+  auditDocAction('doc.tags_changed', id, {
+    tag_count: finalTags.length,
+    added: finalTags.filter((t) => !oldTags.includes(t)).length,
+    removed: oldTags.filter((t) => !finalTags.includes(t)).length,
+  })
   return c.json({
     doc_id: id,
     tags: finalTags,
@@ -313,6 +356,14 @@ docs.put('/:id/share', async (c) => {
     const created = createShare(db, id)
     return expiryDays !== undefined ? setShareExpiry(db, id, expiryDays)! : created
   })()
+  const docRow2 = getLiveDocById(db, id)
+  if (docRow2) {
+    fireDocAfterShare({
+      doc: rowToBlock(docRow2),
+      meta: { token: share.token, path: `/s/${share.token}`, expires_at: share.expires_at },
+    })
+  }
+  auditDocAction('doc.shared', id, { token: share.token, expires_at: share.expires_at })
   return c.json({
     token: share.token,
     path: `/s/${share.token}`,
@@ -330,7 +381,18 @@ docs.delete('/:id/share', (c) => {
   }
 
   // 幂等：本就没开启也返回成功；关闭后旧链接立即 404，重开生成全新 token
+  const existing = getShareByDocId(db, id)
   deleteShare(db, id)
+  const docRow3 = getLiveDocById(db, id)
+  if (docRow3 && existing) {
+    fireDocAfterShareRevoked({
+      doc: rowToBlock(docRow3),
+      meta: { token: existing.token },
+    })
+  }
+  if (existing) {
+    auditDocAction('doc.share_revoked', id, { token: existing.token })
+  }
   return c.json({ deleted: true })
 })
 
@@ -383,6 +445,8 @@ docs.delete('/:id', (c) => {
   })()
 
   fireAfterDelete(id)
+  fireDocAfterDelete({ doc: rowToBlock(docRow) })
+  auditDocAction('doc.deleted', id, { block_count: allIds.length })
   return c.json({ deleted: true, count: allIds.length })
 })
 
