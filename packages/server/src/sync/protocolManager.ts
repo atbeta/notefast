@@ -57,6 +57,8 @@ export interface SyncProtocolStatus {
 
 let dataDir = ''
 let client: S3Client | null = null
+/** 当前 client 对应的备份 S3 配置指纹（懒重建判断用） */
+let clientFingerprint = ''
 let running = false
 let lastRunAt: string | null = null
 let lastSuccessAt: string | null = null
@@ -87,6 +89,14 @@ export function isProtocolConfigured(): boolean {
 
 export function protocolStatus(): SyncProtocolStatus {
   const c = getBackupConfig()
+  // 懒重建：备份 S3 配置可在运行期（备份面板）更新，而 client 只在 init 时创建。
+  // 配置已就绪但 client 未建、或配置指纹变化（bucket/key/endpoint 等改动）时自动重建，
+  // 否则同步永远「未配置」或用着旧凭据。
+  const fingerprint = c.s3 ? backupFingerprint(c.s3) : ''
+  if (isProtocolConfigured() && (!client || clientFingerprint !== fingerprint)) {
+    rebuild()
+    clientFingerprint = client ? fingerprint : ''
+  }
   return {
     configured: isProtocolConfigured(),
     enabled: Boolean(client),
@@ -280,6 +290,11 @@ function stopDebounceTimer(): void {
 
 // ───────────────────── 内部 ─────────────────────
 
+/** S3 配置指纹：bucket/endpoint/region/prefix/凭据任一变化 → 指纹变 → 重建 client */
+function backupFingerprint(s3: NonNullable<ReturnType<typeof getBackupConfig>['s3']>): string {
+  return [s3.bucket, s3.endpoint, s3.region, s3.prefix, s3.accessKeyId, s3.secretAccessKey, s3.forcePathStyle].join('|')
+}
+
 function s3Cfg(): NonNullable<ReturnType<typeof getBackupConfig>['s3']> {
   const s3 = getBackupConfig().s3
   if (!s3) throw new Error('backup S3 未配置')
@@ -295,13 +310,19 @@ function syncPrefix(backupPrefix: string | undefined): string {
 function rebuild(): void {
   client = null
   stopAutoTimer()
-  if (!isProtocolConfigured()) return
+  if (!isProtocolConfigured()) {
+    clientFingerprint = ''
+    return
+  }
   try {
-    const store = createS3Store(s3Cfg())
+    const cfg = s3Cfg()
+    const store = createS3Store(cfg)
     client = store.mediaClient ?? null
+    clientFingerprint = backupFingerprint(cfg)
   } catch (e) {
     lastError = e instanceof Error ? e.message : String(e)
     client = null
+    clientFingerprint = ''
     return
   }
   if (autoIntervalMs > 0) startAutoTimer()
