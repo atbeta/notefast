@@ -12,7 +12,7 @@ import Layout from './components/Layout'
 import RouteTransition from './components/RouteTransition'
 import AuthPrompt from './components/AuthPrompt'
 import { ToastProvider } from './components/ui'
-import { getStoredPassword } from './hooks/useAPI'
+import { getStoredToken } from './hooks/useAPI'
 
 interface AuthMode {
   passwordRequired: boolean
@@ -45,7 +45,7 @@ export default function App() {
 
   // 探测未完成 → 不渲染内容（避免短暂闪现未鉴权页面）
   // 探测完成 + 需要密码 + 本地没有可用密码（持久化/会话级均无）→ 仅登录页，不挂 Layout（避免「已进入被遮挡」）
-  const showAuthPrompt = authMode?.passwordRequired === true && !getStoredPassword()
+  const showAuthPrompt = authMode?.passwordRequired === true && !getStoredToken()
 
   if (showAuthPrompt) {
     return (

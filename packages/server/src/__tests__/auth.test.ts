@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { Hono } from 'hono'
 import { authMiddleware, isAuthEnabled } from '../middleware/auth'
-import { createToken } from '../services/apiTokens'
+import { createToken, createWebSessionToken, revokeWebSessionTokens, listTokens } from '../services/apiTokens'
 import { getDb } from '../db'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -154,6 +154,88 @@ describe('authMiddleware', () => {
     const res = await app.fetch(
       new Request('http://localhost/api/v1/test', {
         headers: { Authorization: 'Basic ' + btoa('admin:mypassword') },
+      }),
+    )
+    expect(res.status).toBe(200)
+  })
+
+  test('会话 token 鉴权通过', async () => {
+    process.env.API_TOKEN = ''
+    process.env.AUTH_PASSWORD = 'test-pw'
+
+    const { plain } = createWebSessionToken(true) // remember=7d
+    const app = createApp()
+    const res = await app.fetch(
+      new Request('http://localhost/api/v1/test', {
+        headers: { Authorization: `Bearer ${plain}` },
+      }),
+    )
+    expect(res.status).toBe(200)
+  })
+
+  test('过期的会话 token 返回 401', async () => {
+    process.env.API_TOKEN = ''
+    process.env.AUTH_PASSWORD = 'test-pw'
+
+    const { tokenId, plain } = createWebSessionToken(true)
+    // 手动将 expires_at 设为过去时间
+    getDb().query("UPDATE api_tokens SET expires_at = datetime('now', '-1 day') WHERE token_id = ?")
+      .run(tokenId)
+
+    const app = createApp()
+    const res = await app.fetch(
+      new Request('http://localhost/api/v1/test', {
+        headers: { Authorization: `Bearer ${plain}` },
+      }),
+    )
+    expect(res.status).toBe(401)
+  })
+
+  test('revokeWebSessionTokens 撤销后 token 立即失效', async () => {
+    process.env.API_TOKEN = ''
+    process.env.AUTH_PASSWORD = 'test-pw'
+
+    const { plain } = createWebSessionToken(true)
+    revokeWebSessionTokens()
+
+    const app = createApp()
+    const res = await app.fetch(
+      new Request('http://localhost/api/v1/test', {
+        headers: { Authorization: `Bearer ${plain}` },
+      }),
+    )
+    expect(res.status).toBe(401)
+  })
+
+  test('listTokens 不包含 web-session token', async () => {
+    process.env.API_TOKEN = ''
+    process.env.AUTH_PASSWORD = 'test-pw'
+
+    // 清理残留的 web-session token（前序测试可能留下）
+    getDb().query("DELETE FROM api_tokens WHERE name = 'web-session'").run()
+
+    createWebSessionToken(true)
+    createToken('my-app', ['read'])
+
+    const tokens = listTokens()
+    // 排除 web-session 后只应看到用户创建的 token
+    const names = tokens.map((t) => t.name)
+    expect(names).toContain('my-app')
+    expect(names).not.toContain('web-session')
+  })
+
+  test('web-session token 的 scopes 为 admin', async () => {
+    process.env.API_TOKEN = ''
+    process.env.AUTH_PASSWORD = 'test-pw'
+
+    getDb().query("DELETE FROM api_tokens WHERE name = 'web-session'").run()
+
+    const { plain } = createWebSessionToken(true)
+    // 验证 admin scope：token 能通过 admin 级鉴权
+    const app = createApp()
+    const res = await app.fetch(
+      new Request('http://localhost/api/v1/test', {
+        headers: { Authorization: `Bearer ${plain}` },
       }),
     )
     expect(res.status).toBe(200)

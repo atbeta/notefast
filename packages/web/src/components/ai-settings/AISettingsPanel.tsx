@@ -377,7 +377,7 @@ export default function AISettingsPanel() {
             mode="chat"
             onRemove={() => setChat(null)}
             knownModels={KNOWN_CHAT_MODELS}
-             modelLabel="对话模型"
+            modelLabel="对话模型"
             fieldErrors={formErrors.chat}
           />
         )}
@@ -433,7 +433,7 @@ export default function AISettingsPanel() {
               onClick={() => setEmbedding(null)}
               className="text-xs text-muted-foreground hover:text-destructive"
             >
-               移除嵌入模型（回到纯关键词检索）
+              移除嵌入模型（回到纯关键词检索）
             </button>
           </div>
         )}
@@ -556,7 +556,7 @@ export default function AISettingsPanel() {
             mode="reranker"
             onRemove={() => setReranker(null)}
             knownModels={['BAAI/bge-reranker-v2-m3', 'jina-reranker-v3', 'voyage-rerank-2', 'voyage-rerank-2-lite']}
-             modelLabel="重排模型"
+            modelLabel="重排模型"
           />
         )}
       </SettingsCard>

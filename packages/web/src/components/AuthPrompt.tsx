@@ -2,33 +2,45 @@
  * 登录弹框
  *
  * 当服务端 /api/v1/auth/mode 返回 passwordRequired=true 时显示。
- * 用户输入密码 → 默认写 localStorage（7 天滑动过期）→ 刷新页面让所有 API 调用带 header；
- * 取消勾选「保持登录」则退回 sessionStorage 会话级存储。
+ * 用户输入密码 → 服务端返回会话 token → 客户端存 token（非密码）→ 后续请求走 Bearer。
+ * 勾选「保持登录」→ localStorage 7 天滑动过期；不勾选 → sessionStorage 会话级。
  */
 
 import { useState } from 'react'
 import { Lock, Loader2, Check } from 'lucide-react'
-import { setStoredPassword } from '../hooks/useAPI'
+import { saveSessionToken } from '../hooks/useAPI'
 
 export default function AuthPrompt() {
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!password.trim() || submitting) return
     setSubmitting(true)
+    setError('')
     const pw = password.trim()
-    setStoredPassword(pw, remember)
-    // 建立会话 cookie（<img> 无法携带 Authorization 头，asset 图片读取走 cookie）
     try {
-      await fetch(`/api/v1/auth/session?remember=${remember ? '1' : '0'}`, {
+      const res = await fetch(`/api/v1/auth/session?remember=${remember ? '1' : '0'}`, {
         method: 'POST',
         headers: { Authorization: 'Basic ' + btoa('admin:' + pw) },
       })
-    } catch { /* cookie 建立失败不阻塞登录（无密码实例也不需要） */ }
-    window.location.reload()
+      if (!res.ok) {
+        setError('密码错误，请重试')
+        setSubmitting(false)
+        return
+      }
+      const data = await res.json() as { session: boolean; token?: string }
+      if (data.token) {
+        saveSessionToken(data.token, remember)
+      }
+      window.location.reload()
+    } catch {
+      setError('网络错误，请检查连接后重试')
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -57,11 +69,14 @@ export default function AuthPrompt() {
             autoFocus
             autoComplete="current-password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => { setPassword(e.target.value); setError('') }}
             placeholder="••••••••"
             disabled={submitting}
             className="input-mono"
           />
+          {error && (
+            <p className="mt-1.5 text-[11.5px] text-destructive">{error}</p>
+          )}
           <button
             type="button"
             role="checkbox"

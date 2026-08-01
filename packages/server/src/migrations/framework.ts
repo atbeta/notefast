@@ -1,5 +1,6 @@
 import type { Database } from 'bun:sqlite'
 import * as m001 from './001_initial'
+import * as m002 from './002_web_session_tokens'
 
 interface Migration {
   id: string
@@ -9,7 +10,7 @@ interface Migration {
 }
 
 /** 唯一基线迁移。历史 002-010 已合并到此。 */
-const MIGRATIONS: Migration[] = [m001]
+const MIGRATIONS: Migration[] = [m001, m002]
 
 export function runMigrations(db: Database): { applied: string[]; skipped: string[] } {
   db.exec(`
@@ -19,7 +20,14 @@ export function runMigrations(db: Database): { applied: string[]; skipped: strin
       applied_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `)
-  db.exec(`DELETE FROM schema_migrations WHERE id != '001_initial'`)
+  /** 清理已合并到基线的历史条目（001-010），保留后续迁移记录不被误删 */
+  const knownIds = new Set(MIGRATIONS.map((m) => m.id))
+  const historicalDeleted = (db.query('SELECT id FROM schema_migrations').all() as Array<{ id: string }>)
+    .filter((r) => !knownIds.has(r.id))
+    .map((r) => r.id)
+  for (const id of historicalDeleted) {
+    db.query('DELETE FROM schema_migrations WHERE id = ?').run(id)
+  }
 
   const applied: string[] = []
   const skipped: string[] = []

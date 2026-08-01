@@ -5,8 +5,8 @@ import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/bun'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createPluginSystem } from '@notefast/core'
-import { safeLogWarn } from '@notefast/core'
+import { createPluginSystem, safeLogWarn } from '@notefast/core'
+import { createWebSessionToken, revokeWebSessionTokens } from './services/apiTokens'
 import { initDb, closeDb, getDb } from './db'
 import { authMiddleware, isAuthEnabled, SESSION_COOKIE, sessionTokenValue } from './middleware/auth'
 import { createRateLimit } from './middleware/rateLimit'
@@ -108,9 +108,8 @@ if (!appVersion) {
 
 app.get('/api/v1/version', (c) => c.json({ version: appVersion }))
 
-// Web 登录后建立会话 cookie：<img> 等无法携带 Authorization 头的读取场景用它鉴权。
-// cookie 值 = HMAC(密码)，不含密码本身；remember=0 时为会话 cookie（关浏览器即失效）。
-// HTTPS（直连或反代终止 TLS 经 X-Forwarded-Proto 传递）时加 Secure，防 HTTP 明文泄露。
+// Web 登录：密码验证通过后签发短期会话 token（Bearer），同时设 HttpOnly cookie 供图片等资源鉴权。
+// 会话 token 存在 api_tokens 表（可撤销），不再在客户端存密码原文。
 app.post('/api/v1/auth/session', (c) => {
   const token = sessionTokenValue()
   if (!token) return c.json({ session: false })
@@ -120,9 +119,12 @@ app.post('/api/v1/auth/session', (c) => {
     ? '; Secure'
     : ''
   c.header('Set-Cookie', `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax${maxAge}${secure}`)
-  // 记录登录事件（fire-and-forget，不阻塞 cookie 写入）
+
+  // 签发可撤销的会话 Bearer token
+  const session = createWebSessionToken(remember)
+
+  // 记录登录事件（fire-and-forget，不阻塞响应）
   try {
-    // CF-Connecting-IP 是 Cloudflare 代理传递真实客户端 IP 的专用头
     const ip = c.req.header('cf-connecting-ip')
       || c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
       || c.req.header('x-real-ip')
@@ -131,12 +133,19 @@ app.post('/api/v1/auth/session', (c) => {
     getDb().query(
       'INSERT INTO auth_events (id, event_type, ip, user_agent) VALUES (?, ?, ?, ?)',
     ).run(crypto.randomUUID(), 'login', ip, ua)
-    // 保留最近 1000 条审计记录
     getDb().query(
       'DELETE FROM auth_events WHERE id NOT IN (SELECT id FROM auth_events ORDER BY created_at DESC LIMIT 1000)',
     ).run()
   } catch (e) { safeLogWarn('auth_events.write_failed', { error: String(e) }) }
-  return c.json({ session: true })
+
+  return c.json({ session: true, token: session.plain })
+})
+
+// Web 登出：撤销当前会话 token、清 cookie。
+app.delete('/api/v1/auth/session', (c) => {
+  revokeWebSessionTokens()
+  c.header('Set-Cookie', `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`)
+  return c.json({ session: false })
 })
 
 // 鉴权模式探测：返回当前实例是否需要密码 / token。

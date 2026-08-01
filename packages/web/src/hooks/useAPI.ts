@@ -1,111 +1,85 @@
 const API_BASE = '/api/v1'
 
-/** 会话级密码（不保持登录时）：关闭浏览器自动清除 */
-const PASSWORD_KEY = 'notefast.password'
-/** 持久化登录（localStorage）：{ pw, exp }，7 天滑动过期 —— 每次有效读取自动顺延 */
-const AUTH_KEY = 'notefast.auth'
+/** 持久化登录（localStorage）：{ token, exp }，7 天滑动过期 */
+const TOKEN_KEY = 'notefast.session'
+/** 会话级 token（不保持登录时）：关闭浏览器自动清除 */
+const TOKEN_SESSION_KEY = 'notefast.session.temp'
 const AUTH_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
-interface PersistedAuth {
-  pw: string
-  /** 过期时间戳（ms） */
+interface PersistedSession {
+  token: string
   exp: number
 }
 
-/** 读持久化登录；过期/脏数据自动清除，有效则滑动续期 7 天 */
-function readPersisted(): string | null {
+function readPersistedToken(): string | null {
   try {
-    const raw = localStorage.getItem(AUTH_KEY)
+    const raw = localStorage.getItem(TOKEN_KEY)
     if (!raw) return null
-    const data = JSON.parse(raw) as PersistedAuth
-    if (typeof data.pw !== 'string' || !data.pw || typeof data.exp !== 'number') {
-      throw new Error('malformed auth entry')
+    const data = JSON.parse(raw) as PersistedSession
+    if (typeof data.token !== 'string' || !data.token || typeof data.exp !== 'number') {
+      throw new Error('malformed session entry')
     }
     if (data.exp <= Date.now()) {
-      localStorage.removeItem(AUTH_KEY)
+      localStorage.removeItem(TOKEN_KEY)
       return null
     }
-    localStorage.setItem(AUTH_KEY, JSON.stringify({ pw: data.pw, exp: Date.now() + AUTH_TTL_MS }))
-    return data.pw
+    // 滑动续期
+    localStorage.setItem(TOKEN_KEY, JSON.stringify({ token: data.token, exp: Date.now() + AUTH_TTL_MS }))
+    return data.token
   } catch {
-    try { localStorage.removeItem(AUTH_KEY) } catch { /* ignore */ }
+    try { localStorage.removeItem(TOKEN_KEY) } catch { /* ignore */ }
     return null
   }
 }
 
-/** 返回当前可用的密码（优先持久化登录，其次会话级），否则 null */
-export function getStoredPassword(): string | null {
-  const persisted = readPersisted()
+export function getStoredToken(): string | null {
+  const persisted = readPersistedToken()
   if (persisted) return persisted
   try {
-    return sessionStorage.getItem(PASSWORD_KEY)
+    return sessionStorage.getItem(TOKEN_SESSION_KEY)
   } catch {
     return null
   }
 }
 
-/**
- * 登录后写入；登出/清除时调用 clearStoredPassword()。
- * remember=true（默认）→ localStorage 7 天滑动过期；false → sessionStorage 会话级。
- */
-export function setStoredPassword(pw: string, remember = true): void {
-  clearStoredPassword()
+export function saveSessionToken(token: string, remember = true): void {
+  clearSession()
   if (remember) {
     try {
-      localStorage.setItem(AUTH_KEY, JSON.stringify({ pw, exp: Date.now() + AUTH_TTL_MS } satisfies PersistedAuth))
+      localStorage.setItem(TOKEN_KEY, JSON.stringify({ token, exp: Date.now() + AUTH_TTL_MS } satisfies PersistedSession))
       return
-    } catch {
-      // localStorage 不可用（隐私模式等）→ 退回到会话级
-    }
+    } catch { /* fall through to session-level */ }
   }
   try {
-    sessionStorage.setItem(PASSWORD_KEY, pw)
-  } catch {
-    // ignore — 隐私模式下 sessionStorage 也可能不可用
-  }
+    sessionStorage.setItem(TOKEN_SESSION_KEY, token)
+  } catch { /* ignore */ }
 }
 
-export function clearStoredPassword(): void {
+export function clearSession(): void {
+  try { sessionStorage.removeItem(TOKEN_SESSION_KEY) } catch { /* ignore */ }
+  try { localStorage.removeItem(TOKEN_KEY) } catch { /* ignore */ }
+  // 通知服务端撤销 token（fire-and-forget）
   try {
-    sessionStorage.removeItem(PASSWORD_KEY)
-  } catch {
-    // ignore
-  }
-  try {
-    localStorage.removeItem(AUTH_KEY)
-  } catch {
-    // ignore
-  }
+    fetch(`${API_BASE}/auth/session`, { method: 'DELETE' }).catch(() => {})
+  } catch { /* ignore */ }
 }
 
-/** 拼出当前会话的 Authorization header（如已登录），否则空 */
 function authHeader(): Record<string, string> {
-  const pw = getStoredPassword()
-  if (!pw) return {}
-  // 用户固定 admin（与服务端约定一致）；密码原值传给 btoa
-  return { Authorization: 'Basic ' + btoa('admin:' + pw) }
+  const token = getStoredToken()
+  if (token) return { Authorization: `Bearer ${token}` }
+  return {}
 }
 
-/**
- * 直接 fetch 但自动拼 Authorization header。给 SSE / streaming 这种
- * 不能用 request() 的场景用。返回原生 Response，由调用方读 body。
- *
- * 401 时也会清掉旧密码（与 request() 行为一致）。
- */
 export async function fetchWithAuth(path: string, options?: RequestInit): Promise<Response> {
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`
   const res = await fetch(url, {
     ...options,
     headers: { ...authHeader(), ...(options?.headers ?? {}) },
   })
-  if (res.status === 401) clearStoredPassword()
+  if (res.status === 401) clearSession()
   return res
 }
 
-/**
- * API 请求失败错误：在 message 之外保留 HTTP 状态码与已解析的响应体，
- * 供消费方读取服务端结构化错误（如 PUT /ai/config 400 的 errors[] 字段级校验）。
- */
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -123,7 +97,6 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...(options?.headers ?? {}) },
   })
   if (!res.ok) {
-    // 响应体解析失败时 body 为 null，message 退回 statusText
     const body: unknown = await res.json().catch(() => null)
     const message = (body as { message?: string } | null)?.message || res.statusText || `HTTP ${res.status}`
     throw new ApiError(message, res.status, body)
