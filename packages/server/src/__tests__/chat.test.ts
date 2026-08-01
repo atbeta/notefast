@@ -315,10 +315,12 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
   })
 
   /**
-   * notefast_create_note 必须触发 afterCreate hooks（doc 先、子块批量），
-   * 否则聊天创建的笔记跳过自动索引与 doc 变更广播（SSE 列表刷新）。
+   * 写工具在 chat agent loop 中不再直接执行（红1 边界修正）：
+   * - agent loop 只 yield write_proposal 事件，不触发 afterCreate
+   * - 真正的写入走 executeWriteTool（由前端确认卡片经 REST /ai/chat/write-confirm 调用），
+   *   此时才触发 afterCreate hooks（doc 先、子块批量，保证自动索引与 doc 变更广播）
    */
-  test('agent loop: notefast_create_note 创建文档并触发 afterCreate hooks', async () => {
+  test('agent loop: 写工具只发 write_proposal 提案，确认路径 executeWriteTool 才写库', async () => {
     applyNewConfig(
       {
         version: 1,
@@ -363,7 +365,7 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
         ]) as unknown as Response
       }
       return sseResponse([
-        'data: {"choices":[{"delta":{"content":"已保存"}}]}\n\n',
+        'data: {"choices":[{"delta":{"content":"已提交待确认"}}]}\n\n',
         'data: [DONE]\n\n',
       ]) as unknown as Response
     }) as unknown as typeof fetch
@@ -379,16 +381,28 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
       for await (const ev of runChat({ messages: [{ role: 'user', content: '记一下' }] })) {
         events.push(ev.type)
       }
-      expect(events).toContain('tool')
+      // 写工具 → 提案事件，而不是直接执行（tool 事件）
+      expect(events).toContain('write_proposal')
+      expect(events).not.toContain('tool')
+      // agent loop 阶段不写库：无 afterCreate
+      expect(created.length).toBe(0)
+
+      // 确认路径（前端确认后调 executeWriteTool）才真正写库 + 触发 hooks
+      const { executeWriteTool } = await import('../ai/chat')
+      const res = await executeWriteTool(
+        'notefast_create_note',
+        { title: '聊天建的笔记', markdown: '## 章节\n\n正文内容' },
+        {},
+      )
+      expect(res.resultCount).toBe(1)
+      // doc 根 + 子块（heading + paragraph）都触发了 afterCreate
+      const docBlock = created.find((b) => b.type === 'document')
+      expect(docBlock?.content).toBe('聊天建的笔记')
+      expect(created.some((b) => b.type === 'heading' && b.content === '章节')).toBe(true)
+      expect(created.some((b) => b.type === 'paragraph' && b.content === '正文内容')).toBe(true)
     } finally {
       pluginSystem.note.afterCreate.untap('test-create-note-spy')
     }
-
-    // doc 根 + 子块（heading + paragraph）都触发了 afterCreate
-    const docBlock = created.find((b) => b.type === 'document')
-    expect(docBlock?.content).toBe('聊天建的笔记')
-    expect(created.some((b) => b.type === 'heading' && b.content === '章节')).toBe(true)
-    expect(created.some((b) => b.type === 'paragraph' && b.content === '正文内容')).toBe(true)
   })
 
   /**

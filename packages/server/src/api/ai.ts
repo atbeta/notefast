@@ -48,7 +48,7 @@ import { getRebuildProgress } from '../ai/rebuildProgress'
 import { getIndexJob, getLatestIndexJobForDoc } from '../ai/indexJobs'
 import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
 import { loadAiExcludedDocIds } from '../ai/aiExcludeQuery'
-import { runChat, runChatSync } from '../ai/chat'
+import { runChat, runChatSync, executeWriteTool } from '../ai/chat'
 import { listSkills } from '../ai/skills'
 import { streamWrite } from '../ai/writeStream'
 import { getDb } from '../db'
@@ -605,6 +605,35 @@ ai.post('/chat', zValidator('json', chatSchema), async (c) => {
     const code = msg.includes('[未配置]') ? 'not_configured' : 'llm_error'
     return c.json({ error: code, message: msg, fix_hint: code === 'not_configured' ? FIX_HINT : undefined }, 500)
   }
+})
+
+// ───────────────────── write-confirm ─────────────────────
+// chat agent loop 的写工具（create_note / append_to_doc / update_block）不直接执行：
+// 前端收到 write_proposal SSE 事件后渲染确认卡片，用户批准后调本端点真正写入。
+// 保证「AI 建议、人确认」（AGENTS.md：人类负责阅读）。
+
+const writeConfirmSchema = z.object({
+  tool: z.enum(['notefast_create_note', 'notefast_append_to_doc', 'notefast_update_block']),
+  args: z.record(z.string(), z.unknown()),
+})
+
+ai.post('/chat/write-confirm', zValidator('json', writeConfirmSchema), async (c) => {
+  if (!runtimeSafe() || !getRuntime().hasChat()) {
+    return c.json(
+      { error: 'not_configured', message: 'AI chat 未配置', fix_hint: FIX_HINT },
+      400,
+    )
+  }
+  const body = c.req.valid('json')
+  const result = await executeWriteTool(body.tool, body.args, {})
+  if (result.resultCount === 0) {
+    let err: { error?: string; message?: string } | null = null
+    try { err = JSON.parse(result.content) } catch { /* ignore */ }
+    return c.json({ error: 'write_failed', message: err?.message ?? err?.error ?? '写入失败' }, 400)
+  }
+  let parsed: Record<string, unknown> = {}
+  try { parsed = JSON.parse(result.content) } catch { /* ignore */ }
+  return c.json({ ok: true, ...parsed })
 })
 
 ai.post('/suggest-title', zValidator('json', suggestSchema), async (c) => {

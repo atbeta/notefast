@@ -47,6 +47,7 @@ import { visionEnabled } from './imageCaptions'
 export type ChatEvent =
   | { type: 'retrieval'; report: HybridSearchReport }
   | { type: 'tool'; tool: string; args: Record<string, unknown>; resultCount: number }
+  | { type: 'write_proposal'; tool: string; args: Record<string, unknown> }
   | { type: 'reasoning'; content: string }
   | { type: 'token'; content: string }
   | { type: 'done'; citations: Citation[]; retrieval: HybridSearchReport['retrieval']; toolTrace: ToolTraceEntry[] }
@@ -236,6 +237,26 @@ function getAllToolDefinitions(): ToolDefinition[] {
 }
 
 /**
+ * 写工具（改库）集合：chat agent loop 中这些工具不直接执行，
+ * 而是返回「写入提案」（awaiting_confirm），由前端以确认卡片形式交用户决定；
+ * 用户确认后前端调 REST 写端点真正执行。保证 AI 写入经过人眼把关（AGENTS.md：人类负责阅读）。
+ */
+export const WRITE_TOOLS = new Set(['notefast_create_note', 'notefast_append_to_doc', 'notefast_update_block'])
+
+/** 写工具被调用的返回：不执行，改交提案 */
+function pendingWriteProposal(tool: string, args: Record<string, unknown>): ToolResult {
+  return {
+    content: JSON.stringify({
+      awaiting_confirm: true,
+      tool,
+      args,
+      message: '该操作需用户确认后执行，等待确认。',
+    }),
+    resultCount: 0,
+  }
+}
+
+/**
  * 执行 LLM 请求的工具调用。
  * 当前只支持 notefast_search_more；其它工具返回空结果，避免 LLM 调用未实现的工具。
  */
@@ -245,6 +266,9 @@ async function executeToolCall(
   fallbackQuery: string,
   ctx: { notebookId?: string; ctxDocId?: string; since?: string; until?: string; minScore?: number },
 ): Promise<ToolResult> {
+  // 写工具：不在此执行，返回提案（前端确认卡片决定最终写入）
+  if (WRITE_TOOLS.has(name)) return pendingWriteProposal(name, args)
+
   if (name === 'notefast_search_more') {
     const q = (typeof args.query === 'string' && args.query.trim()) || fallbackQuery
     const notebookId = (typeof args.notebook_id === 'string' ? args.notebook_id : undefined) || ctx.notebookId
@@ -348,6 +372,56 @@ async function executeToolCall(
     }
   }
 
+  if (name === 'notefast_web_search') {
+    const q = typeof args.query === 'string' ? args.query.trim() : ''
+    if (!q) {
+      return { content: JSON.stringify({ error: 'query 不能为空' }), resultCount: 0 }
+    }
+    if (!hasRuntime()) {
+      return { content: JSON.stringify({ error: 'AI runtime 未初始化' }), resultCount: 0 }
+    }
+    const runtime = getRuntime()
+    const apiKey = runtime.webSearchKey()
+    if (!apiKey) {
+      return { content: JSON.stringify({ error: '网页搜索未配置，请在 /settings 中设置 Brave Search API Key' }), resultCount: 0 }
+    }
+    const count = typeof args.count === 'number' ? Math.min(10, Math.max(1, args.count)) : 5
+    try {
+      const results = await searchWeb(q, apiKey, count)
+      return {
+        content: JSON.stringify({
+          query: q,
+          results: results.map((r, i) => ({
+            index: i + 1,
+            title: r.title,
+            url: r.url,
+            snippet: r.snippet,
+          })),
+        }),
+        resultCount: results.length,
+      }
+    } catch (e) {
+      return {
+        content: JSON.stringify({ error: `网页搜索失败: ${e instanceof Error ? e.message : e}` }),
+        resultCount: 0,
+      }
+    }
+  }
+
+  return { content: JSON.stringify({ error: `未知工具 ${name}` }), resultCount: 0 }
+}
+
+export interface WriteToolContext {
+  notebookId?: string
+}
+
+/**
+ * 执行写工具（create_note / append_to_doc / update_block）。
+ * 由前端确认卡片触发：用户批准后经 REST /ai/chat/write-confirm 调用。
+ * 与 executeToolCall 解耦：chat agent loop 不再直接写库（WRITE_TOOLS 拦截），
+ * 写库统一走这里，保证「AI 建议、人确认」与既有 MCP/REST 写路径行为一致。
+ */
+export async function executeWriteTool(name: string, args: Record<string, unknown>, ctx: WriteToolContext): Promise<ToolResult> {
   if (name === 'notefast_create_note') {
     const title = typeof args.title === 'string' ? args.title.trim() : ''
     const markdown = typeof args.markdown === 'string' ? args.markdown : ''
@@ -470,43 +544,7 @@ async function executeToolCall(
     }
   }
 
-  if (name === 'notefast_web_search') {
-    const q = typeof args.query === 'string' ? args.query.trim() : ''
-    if (!q) {
-      return { content: JSON.stringify({ error: 'query 不能为空' }), resultCount: 0 }
-    }
-    if (!hasRuntime()) {
-      return { content: JSON.stringify({ error: 'AI runtime 未初始化' }), resultCount: 0 }
-    }
-    const runtime = getRuntime()
-    const apiKey = runtime.webSearchKey()
-    if (!apiKey) {
-      return { content: JSON.stringify({ error: '网页搜索未配置，请在 /settings 中设置 Brave Search API Key' }), resultCount: 0 }
-    }
-    const count = typeof args.count === 'number' ? Math.min(10, Math.max(1, args.count)) : 5
-    try {
-      const results = await searchWeb(q, apiKey, count)
-      return {
-        content: JSON.stringify({
-          query: q,
-          results: results.map((r, i) => ({
-            index: i + 1,
-            title: r.title,
-            url: r.url,
-            snippet: r.snippet,
-          })),
-        }),
-        resultCount: results.length,
-      }
-    } catch (e) {
-      return {
-        content: JSON.stringify({ error: `网页搜索失败: ${e instanceof Error ? e.message : e}` }),
-        resultCount: 0,
-      }
-    }
-  }
-
-  return { content: JSON.stringify({ error: `未知工具 ${name}` }), resultCount: 0 }
+  return { content: JSON.stringify({ error: `未知写工具 ${name}` }), resultCount: 0 }
 }
 
 function guessNotebookId(db: ReturnType<typeof getDb>): string {
@@ -750,6 +788,28 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
           })
 
           for (const tc of toolCalls) {
+            // 写工具：不在此执行。向客户端发 write_proposal 事件（前端渲染确认卡片），
+            // 客户端确认后调 REST /ai/chat/write-confirm 执行 executeWriteTool。
+            // tool 结果回填「待确认」占位，避免 LLM 误以为写入已发生。
+            if (WRITE_TOOLS.has(tc.name)) {
+              yield { type: 'write_proposal', tool: tc.name, args: tc.args }
+              toolTrace.push({
+                tool: tc.name,
+                args: tc.args,
+                result_count: 0,
+                result_text: JSON.stringify({ awaiting_confirm: true }),
+              })
+              workingMessages.push({
+                role: 'tool',
+                tool_call_id: tc.id,
+                content: JSON.stringify({
+                  awaiting_confirm: true,
+                  message: '该操作已提交给用户确认，等待用户在界面确认后执行。',
+                }),
+              })
+              continue
+            }
+
             const exec = await executeToolCall(tc.name, tc.args, lastUserText, {
               notebookId: opts.notebookId,
               ctxDocId: opts.contextDocId,
@@ -846,6 +906,7 @@ export async function runChatSync(opts: RunChatOptions): Promise<{
   citations: Citation[]
   retrieval: HybridSearchReport['retrieval']
   toolTrace: ToolTraceEntry[]
+  writeProposals?: Array<{ tool: string; args: Record<string, unknown> }>
 }> {
   let answer = ''
   let reasoning = ''
@@ -858,10 +919,12 @@ export async function runChatSync(opts: RunChatOptions): Promise<{
     timing: { fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
   }
   let toolTrace: ToolTraceEntry[] = []
+  const writeProposals: Array<{ tool: string; args: Record<string, unknown> }> = []
 
   for await (const ev of runChat(opts)) {
     if (ev.type === 'token') answer += ev.content
     else if (ev.type === 'reasoning') reasoning += ev.content
+    else if (ev.type === 'write_proposal') writeProposals.push({ tool: ev.tool, args: ev.args })
     else if (ev.type === 'done') {
       citations = ev.citations
       retrieval = ev.retrieval
@@ -877,5 +940,6 @@ export async function runChatSync(opts: RunChatOptions): Promise<{
     citations,
     retrieval,
     toolTrace,
+    ...(writeProposals.length > 0 ? { writeProposals } : {}),
   }
 }
