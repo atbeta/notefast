@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.27.0](https://github.com/atbeta/notefast/compare/v0.26.0...v0.27.0) (2026-08-01)
+
+
+### Features
+
+* **auth:** replace password-in-localStorage with revocable Bearer session tokens ([824c9a4](https://github.com/atbeta/notefast/commit/824c9a412021d12fbbeebc73572ea7e6f86556db))
+* **chat:** require human confirmation for AI write tools ([d72a89a](https://github.com/atbeta/notefast/commit/d72a89a8d631c5724253c57801b5e237344781bd))
+* **history:** block content revision history with undo/restore ([93cd61e](https://github.com/atbeta/notefast/commit/93cd61e5b1b954c35f977eb1cbbd4dfcaa32ac48))
+* **hooks:** document-level lifecycle hooks + write-path audit events ([8187301](https://github.com/atbeta/notefast/commit/8187301fd5c9c671c3a6b63cc95f8ccafacae17a))
+
+
+### Bug Fixes
+
+* **web:** mobile UX — adaptive padding, panel, title button and outline ([7d8fa53](https://github.com/atbeta/notefast/commit/7d8fa53efb8fb68d30dedd4888b3b12b3163bdb1))
+* **web:** polish UI copy — remove technical jargon and colloquial phrasing ([475037c](https://github.com/atbeta/notefast/commit/475037c67b9e18ac983fafae6aa6c0f9d4f1c535))
+
 ## [0.26.0](https://github.com/atbeta/notefast/compare/v0.25.1...v0.26.0) (2026-08-01)
 
 
