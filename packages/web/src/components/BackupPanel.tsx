@@ -12,6 +12,7 @@ import { BACKUP_SECRET_MASK, type BackupRuntimeStatus, type BackupRestorePoint }
 import { ActionButton, useToast } from './ui'
 import ConfirmDialog from './ConfirmDialog'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
+import { formatIsoDateTime } from '../lib/time'
 
 interface BackupConfig {
   enabled: boolean
@@ -36,7 +37,7 @@ export default function BackupPanel() {
   const [endpoint, setEndpoint] = useState('')
   const [accessKeyId, setAccessKeyId] = useState('')
   const [secretAccessKey, setSecretAccessKey] = useState('')
-  const [prefix, setPrefix] = useState('notefast-backup')
+  const [prefix, setPrefix] = useState('notefast')
   const [forcePathStyle, setForcePathStyle] = useState(false)
   const [intervalHours, setIntervalHours] = useState(1)
   const [retentionDays, setRetentionDays] = useState(30)
@@ -56,8 +57,10 @@ export default function BackupPanel() {
       setBucket(res.config.s3.bucket || '')
       setRegion(res.config.s3.region || 'auto')
       setEndpoint(res.config.s3.endpoint || '')
-      setAccessKeyId(res.config.s3.accessKeyId || '')
-      setSecretAccessKey(res.config.s3.secretAccessKey || '')
+      // 脱敏占位符 = 已有密钥：不填进输入框（placeholder 提示「已设置」），
+      // 提交留空时后端保留旧值；避免把 ***set*** 当真实值提交（首次配置时会被还原成空）
+      setAccessKeyId(res.config.s3.accessKeyId === BACKUP_SECRET_MASK ? '' : res.config.s3.accessKeyId || '')
+      setSecretAccessKey(res.config.s3.secretAccessKey === BACKUP_SECRET_MASK ? '' : res.config.s3.secretAccessKey || '')
       setPrefix(res.config.s3.prefix?.replace(/\/$/, '') || '')
       setForcePathStyle(Boolean(res.config.s3.forcePathStyle))
     }
@@ -82,17 +85,21 @@ export default function BackupPanel() {
   const handleSave = async () => {
     await toast.promise(
       async () => {
+        // 填了 bucket 即视为「要配置 S3 备份」——不受独立开关误伤（此前 enabled=false 时 s3 被发成 null，填了也存不上）
+        const hasS3 = Boolean(bucket.trim())
         await api.put('/backup/config', {
-          enabled,
+          enabled: enabled || hasS3,
           intervalMs: intervalHours * 3_600_000,
           retentionDays,
-          s3: enabled
+          s3: hasS3
             ? {
                 bucket,
                 region,
                 endpoint: endpoint || undefined,
-                accessKeyId,
-                secretAccessKey,
+                // 空字符串 = 未填 → undefined（JSON.stringify 省略），后端保留旧值；
+                // 首次配置旧值为空时保持空。避免把脱敏占位符或空串当真值提交。
+                accessKeyId: accessKeyId || undefined,
+                secretAccessKey: secretAccessKey || undefined,
                 prefix,
                 forcePathStyle,
               }
@@ -182,7 +189,7 @@ export default function BackupPanel() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
-          <InlineField label="Bucket" value={bucket} onChange={setBucket} mono placeholder="notefast-backup" />
+          <InlineField label="Bucket" value={bucket} onChange={setBucket} mono placeholder="notefast" />
           <InlineField label="Region" value={region} onChange={setRegion} mono placeholder="auto" />
           <InlineField
             label="Endpoint"
@@ -192,7 +199,7 @@ export default function BackupPanel() {
             mono
             placeholder="https://xxx.r2.cloudflarestorage.com"
           />
-          <InlineField label="Key 前缀" value={prefix} onChange={setPrefix} mono placeholder="notefast-backup" />
+          <InlineField label="Key 前缀" value={prefix} onChange={setPrefix} mono placeholder="notefast" />
           <InlineField
             label="Access Key ID"
             value={accessKeyId}
@@ -260,13 +267,13 @@ export default function BackupPanel() {
                 '空闲'
               )}
               {status.nextRunAt && (
-                <span className="ml-2">下次备份：<span className="font-mono">{status.nextRunAt}</span></span>
+                <span className="ml-2">下次备份：<span className="font-mono">{formatIsoDateTime(status.nextRunAt)}</span></span>
               )}
             </div>
             {status.lastSuccessAt && (
               <div className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                上次成功 {status.lastSuccessAt}
+                上次成功 {formatIsoDateTime(status.lastSuccessAt)}
                 {status.lastResult?.objectKey && (
                   <span className="font-mono ml-1 truncate max-w-[240px] text-[11.5px] opacity-80">{status.lastResult.objectKey}</span>
                 )}
@@ -293,7 +300,7 @@ export default function BackupPanel() {
                   className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border border-border/60 bg-accent/10 text-[12.5px] hover:border-border transition-colors"
                 >
                   <div className="min-w-0">
-                    <div className="font-mono truncate font-medium text-foreground">{p.createdAt}</div>
+                    <div className="font-mono truncate font-medium text-foreground">{formatIsoDateTime(p.createdAt)}</div>
                     <div className="text-muted-foreground truncate text-[11.5px] mt-0.5">
                       {(p.sizeBytes / 1024).toFixed(1)} KB · schema v{p.schemaVersion}
                     </div>

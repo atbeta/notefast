@@ -39,13 +39,13 @@ docker compose stop notefast   # 或等价操作
 # 2. 预演（可选）
 bun --filter @notefast/server backup:restore -- \
   --data-dir ./data \
-  --object-key notefast-backup/snapshots/....db \
+  --object-key notefast/snapshots/....db \
   --dry-run
 
 # 3. 正式恢复（需 --yes）
 bun --filter @notefast/server backup:restore -- \
   --data-dir ./data \
-  --object-key notefast-backup/snapshots/....db \
+  --object-key notefast/snapshots/....db \
   --yes
 
 # 4. 启动服务

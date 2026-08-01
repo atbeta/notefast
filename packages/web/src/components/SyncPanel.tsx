@@ -5,6 +5,7 @@ import { SYNC_SECRET_MASK, type LocalFsAdapterConfig, type S3AdapterConfig, type
 import { ActionButton, useToast, HelpTip } from './ui'
 import ConfirmDialog from './ConfirmDialog'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
+import { formatIsoDateTime } from '../lib/time'
 
 interface SyncRuntimeStatus {
   configured: boolean
@@ -403,7 +404,7 @@ export default function SyncPanel() {
           <div className="text-[12.5px] text-muted-foreground pt-4 border-t border-border/40 space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="font-medium text-foreground">上次归档：</span>
-              <span className="font-mono">{status?.lastRunAt || '尚未运行'}</span>
+              <span className="font-mono">{status?.lastRunAt ? formatIsoDateTime(status.lastRunAt) : '尚未运行'}</span>
             </div>
             {status?.lastSuccessAt && status.lastResult && (
               <div className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">

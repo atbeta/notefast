@@ -61,3 +61,19 @@ export function formatSqliteDateTime(dateStr: string): string {
         hour: '2-digit', minute: '2-digit',
       })
 }
+
+/**
+ * ISO 时间字符串（带 Z）的本地化显示：new Date() 按 UTC 解析后转系统时区。
+ * 备份/同步等后端返回 ISO 字符串的通用格式化。
+ */
+export function formatIsoDateTime(iso: string): string {
+  const date = new Date(iso)
+  if (!Number.isFinite(date.getTime())) return iso
+  const sameDay = date.toDateString() === new Date().toDateString()
+  return sameDay
+    ? date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : date.toLocaleString('zh-CN', {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      })
+}
