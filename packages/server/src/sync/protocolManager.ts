@@ -19,18 +19,22 @@ import { createS3Store } from '../backup/s3Store'
 import { getDb } from '../db'
 import {
   publishChanges,
-  consumeChanges,
+  compactChanges,
   readManifest,
   updateManifest,
 } from './protocol'
 
 const STATE_FILE = 'sync-state.json'
+/** 每 N 次同步生成一次快照（compaction 兜底阈值） */
+const SNAPSHOT_EVERY_N = 10
 
 export interface SyncProtocolState {
   /** 上次已发布到 S3 的 seq（不含；下一轮从此导出） */
   publishedSeq: number
   /** 已消费的远端 seq（不含；下一轮从此拉取） */
   consumedSeq: number
+  /** 自上次快照以来累计的同步轮数（触发 compaction） */
+  sinceSnapshot: number
 }
 
 export interface SyncProtocolStatus {
@@ -43,6 +47,8 @@ export interface SyncProtocolStatus {
   lastError?: string
   state: SyncProtocolState
   running: boolean
+  /** 自动同步间隔（ms）；0 = 不自动 */
+  autoSyncIntervalMs: number
 }
 
 let dataDir = ''
@@ -51,14 +57,18 @@ let running = false
 let lastRunAt: string | null = null
 let lastSuccessAt: string | null = null
 let lastError: string | null = null
-let state: SyncProtocolState = { publishedSeq: 0, consumedSeq: 0 }
+let autoTimer: ReturnType<typeof setInterval> | null = null
+let autoIntervalMs = 0
+let state: SyncProtocolState = { publishedSeq: 0, consumedSeq: 0, sinceSnapshot: 0 }
 
 /** 启动期初始化（dataDir + 复用 backup S3 配置） */
-export function initProtocolManager(dir: string): void {
+export function initProtocolManager(dir: string, opts?: { autoSyncIntervalMs?: number }): void {
   dataDir = dir
+  autoIntervalMs = Math.max(0, opts?.autoSyncIntervalMs ?? 0)
   initBackupConfig(dir)
   state = loadState()
   rebuild()
+  if (autoIntervalMs > 0) startAutoTimer()
 }
 
 /** 是否已配置（backup S3 可用） */
@@ -79,14 +89,15 @@ export function protocolStatus(): SyncProtocolStatus {
     lastError: lastError ?? undefined,
     state,
     running,
+    autoSyncIntervalMs: autoIntervalMs,
   }
 }
 
 /**
- * 执行一轮同步：发布本地增量 → 消费远端增量 → 持久化 state。
- * 双向都对账到当前锚点。幂等；失败抛错（调用方记录/上报）。
+ * 执行一轮同步（发布端语义）：发布本地增量 → 定期生成快照（compaction）→ 更新 manifest。
+ * 消费端合并由客户端复用 consumeChanges/consumeSnapshot（服务端是权威之一，不被快照覆盖）。
  */
-export async function syncNow(): Promise<{ published: number; applied: number; state: SyncProtocolState }> {
+export async function syncNow(): Promise<{ published: number; snapshotCreated: boolean; state: SyncProtocolState }> {
   if (!client) {
     throw Object.assign(new Error('同步协议未配置（backup S3 未配置）'), { code: 'not_configured' })
   }
@@ -99,29 +110,64 @@ export async function syncNow(): Promise<{ published: number; applied: number; s
     const db = getDb()
     const cfg = s3Cfg()
     const prefix = syncPrefix(cfg.prefix)
+    const workRoot = join(dataDir, '.sync-tmp')
+    if (!existsSync(workRoot)) mkdirSync(workRoot, { recursive: true })
 
     // 1) 发布本地增量（本端 → S3）
     const newPublished = await publishChanges(db, { bucket: cfg.bucket, prefix }, client, state.publishedSeq)
-    // 2) 读远端 manifest，决定消费到哪
-    const manifest = await readManifest(client, { bucket: cfg.bucket, prefix })
-    const upTo = manifest?.last_seq ?? newPublished
-    // 3) 消费远端增量（S3 → 本端；LWW 裁决，自己刚发布的内容会被跳过）
-    const consumed = await consumeChanges(db, client, { bucket: cfg.bucket, prefix }, state.consumedSeq, upTo)
-    // 4) 更新 manifest（本端也参与发布后，last_seq 前进到最新）
-    const anchor = newPublished > upTo ? newPublished : upTo
-    await updateManifest(client, { bucket: cfg.bucket, prefix }, anchor, manifest?.snapshot_seq ?? 0)
 
-    const published = newPublished - state.publishedSeq
-    state = { publishedSeq: newPublished, consumedSeq: consumed.nextSeq }
+    // 2) compaction 触发：累计轮数达阈值 → 新快照 + 清理旧增量
+    let snapshotCreated = false
+    let snapAnchor = 0
+    state.sinceSnapshot += 1
+    if (state.sinceSnapshot >= SNAPSHOT_EVERY_N) {
+      snapAnchor = await compactChanges(db, client, { bucket: cfg.bucket, prefix }, workRoot)
+      // compact 后旧增量已删，publishedSeq 应重置为快照锚点（快照已涵盖，无需再导出）
+      state.publishedSeq = snapAnchor
+      state.sinceSnapshot = 0
+      snapshotCreated = true
+    }
+
+    // 3) 更新 manifest（compaction 后 snapshot_seq = 新快照锚点）
+    const manifest = await readManifest(client, { bucket: cfg.bucket, prefix })
+    await updateManifest(
+      client,
+      { bucket: cfg.bucket, prefix },
+      newPublished,
+      snapshotCreated ? snapAnchor : (manifest?.snapshot_seq ?? 0),
+    )
+
+    const published = newPublished - (snapshotCreated ? snapAnchor : state.publishedSeq)
+    state.publishedSeq = newPublished
     saveState()
     lastSuccessAt = lastRunAt
     lastError = null
-    return { published, applied: consumed.applied, state }
+    return { published: Math.max(0, published), snapshotCreated, state }
   } catch (e) {
     lastError = e instanceof Error ? e.message : String(e)
     throw e
   } finally {
     running = false
+  }
+}
+
+function startAutoTimer(): void {
+  stopAutoTimer()
+  if (!client || autoIntervalMs <= 0) return
+  autoTimer = setInterval(() => {
+    syncNow().catch((err) => {
+      const code = (err as { code?: string }).code
+      if (code !== 'sync_in_progress') {
+        console.warn('[sync-protocol] auto run failed:', err instanceof Error ? err.message : err)
+      }
+    })
+  }, autoIntervalMs)
+}
+
+function stopAutoTimer(): void {
+  if (autoTimer) {
+    clearInterval(autoTimer)
+    autoTimer = null
   }
 }
 
@@ -141,6 +187,7 @@ function syncPrefix(backupPrefix: string | undefined): string {
 
 function rebuild(): void {
   client = null
+  stopAutoTimer()
   if (!isProtocolConfigured()) return
   try {
     const store = createS3Store(s3Cfg())
@@ -148,7 +195,9 @@ function rebuild(): void {
   } catch (e) {
     lastError = e instanceof Error ? e.message : String(e)
     client = null
+    return
   }
+  if (autoIntervalMs > 0) startAutoTimer()
 }
 
 // ───────────────────── state 持久化 ─────────────────────
@@ -158,15 +207,16 @@ function statePath(): string {
 }
 
 function loadState(): SyncProtocolState {
-  if (!dataDir) return { publishedSeq: 0, consumedSeq: 0 }
+  if (!dataDir) return { publishedSeq: 0, consumedSeq: 0, sinceSnapshot: 0 }
   try {
     const raw = JSON.parse(readFileSync(statePath(), 'utf-8')) as SyncProtocolState
     return {
       publishedSeq: Number.isFinite(raw?.publishedSeq) ? raw.publishedSeq : 0,
       consumedSeq: Number.isFinite(raw?.consumedSeq) ? raw.consumedSeq : 0,
+      sinceSnapshot: Number.isFinite(raw?.sinceSnapshot) ? raw.sinceSnapshot : 0,
     }
   } catch {
-    return { publishedSeq: 0, consumedSeq: 0 }
+    return { publishedSeq: 0, consumedSeq: 0, sinceSnapshot: 0 }
   }
 }
 
@@ -179,13 +229,15 @@ function saveState(): void {
 
 /** 测试钩子 */
 export function _resetProtocolManagerForTests(): void {
+  stopAutoTimer()
   dataDir = ''
   client = null
   running = false
   lastRunAt = null
   lastSuccessAt = null
   lastError = null
-  state = { publishedSeq: 0, consumedSeq: 0 }
+  autoIntervalMs = 0
+  state = { publishedSeq: 0, consumedSeq: 0, sinceSnapshot: 0 }
 }
 
 /** 测试钩子：注入 mock S3Client（覆盖 rebuild 内部创建的真实 client） */

@@ -14,6 +14,7 @@
 
 import type { S3Client } from '@aws-sdk/client-s3'
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
@@ -236,6 +237,32 @@ export async function consumeSnapshot(
   verifySnapshotFile(tmp)
   durableReplaceFile(tmp, targetDbPath, readFileSync(tmp))
   return snapshotSeq
+}
+
+/**
+ * Compaction：生成新快照（覆盖旧快照）后，删除所有旧 changes 段。
+ * 快照已涵盖到锚点 seq，旧增量不再需要（消费端首次/超窗直接拉快照）。
+ * 返回新快照锚点 seq。
+ */
+export async function compactChanges(
+  db: Db,
+  client: S3Client,
+  cfg: { bucket: string; prefix: string },
+  workDir: string,
+): Promise<number> {
+  // 1) 覆盖新快照（含当前锚点）
+  const anchor = await publishSnapshot(db, cfg, client, workDir)
+  // 2) 删除全部旧 changes 段（快照已兜底）
+  const changesPrefix = `${cfg.prefix}${SYNC_S3_DIR}/changes/`
+  const keys = await listKeys(client, cfg.bucket, changesPrefix)
+  for (const key of keys) {
+    try {
+      await client.send(new DeleteObjectCommand({ Bucket: cfg.bucket, Key: key }))
+    } catch (e) {
+      console.warn('[sync] compact 删除失败:', key, e instanceof Error ? e.message : e)
+    }
+  }
+  return anchor
 }
 
 /** LWW 裁决：incoming 是否应覆盖本地（本地缺失 → 覆盖；时间更晚 → 覆盖） */

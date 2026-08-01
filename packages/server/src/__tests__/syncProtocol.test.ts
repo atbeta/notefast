@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Database } from 'bun:sqlite'
 import { initDb, closeDb, getDb } from '../db'
@@ -9,6 +9,8 @@ import { configureSqliteForExtensions } from '../sqliteVec'
 import {
   publishChanges,
   consumeChanges,
+  consumeSnapshot,
+  compactChanges,
   readManifest,
   updateManifest,
 } from '../sync/protocol'
@@ -31,7 +33,7 @@ let sourceDb: ReturnType<typeof getDb>
 
 /** 内存 S3 mock（Put/Get/List） */
 function makeMockS3() {
-  const objects = new Map<string, string>()
+  const objects = new Map<string, string | Uint8Array>()
   const client = {
     async send(command: unknown) {
       const cmd = command as { constructor: { name: string }; input: Record<string, unknown> }
@@ -54,6 +56,10 @@ function makeMockS3() {
         const prefix = String(cmd.input.Prefix || '')
         const keys = [...objects.keys()].filter((k) => k.startsWith(prefix)).sort()
         return { Contents: keys.map((Key) => ({ Key })), IsTruncated: false }
+      }
+      if (name === 'DeleteObjectCommand') {
+        objects.delete(cmd.input.Key as string)
+        return {}
       }
       throw new Error(`unexpected ${name}`)
     },
@@ -187,5 +193,55 @@ describe('sync protocol (publish → consume)', () => {
     const count = target.query('SELECT COUNT(*) AS c FROM blocks WHERE is_deleted = 0').get() as { c: number }
     expect(count.c).toBeGreaterThanOrEqual(CHANGES_PER_SEGMENT)
     target.close()
+  })
+
+  test('compactChanges 生成快照 + 清理旧增量段', async () => {
+    const { client, objects } = makeMockS3()
+    const workDir = join(testDir, `compact-work-${crypto.randomUUID()}`)
+    // 造几条变更 → 发布成增量段
+    for (let i = 0; i < 5; i++) {
+      insertBlockRow(crypto.randomUUID(), `compact块${i}`)
+    }
+    const lastSeq = await publishChanges(sourceDb, CFG, client, 0)
+    expect([...objects.keys()].some((k) => k.includes(`${SYNC_S3_DIR}/changes/`))).toBe(true)
+
+    // compaction：快照 + 清空 changes 段
+    const anchor = await compactChanges(sourceDb, client, CFG, workDir)
+    expect(anchor).toBe(lastSeq)
+    // 快照对象存在
+    expect([...objects.keys()].some((k) => k.endsWith('snapshot.db'))).toBe(true)
+    // 旧增量段被清空
+    expect([...objects.keys()].some((k) => k.includes(`${SYNC_S3_DIR}/changes/`))).toBe(false)
+  })
+
+  test('consumeSnapshot 拉取快照写入目标文件（可校验）', async () => {
+    const { client, objects } = makeMockS3()
+    // 用与 makeTargetDb 相同的方式建源库，插入一行，VACUUM 成快照字节
+    const fresh = makeTargetDb()
+    const now = nowTimestamp()
+    fresh.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, tags, status, ai_exclude, sort, level, is_deleted, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', '快照源文档', '{}', '[]', 'note', 0, 0, 0, 0, ?, ?)`,
+    ).run('freshdoc', notebookId, 'freshdoc', now, now)
+
+    const snapPath = join(testDir, `snap-${crypto.randomUUID()}.db`)
+    fresh.exec(`VACUUM INTO '${snapPath.replace(/'/g, "''")}'`)
+    fresh.close()
+
+    const snapBytes = new Uint8Array(await Bun.file(snapPath).arrayBuffer())
+    objects.set('psync/snapshot.db', snapBytes)
+    objects.set('psync/snapshot.seq', '1')
+
+    // consume 到独立目标文件
+    const targetPath = join(testDir, `snapshot-target-${crypto.randomUUID()}.db`)
+    const seq = await consumeSnapshot(client, CFG, targetPath)
+    expect(seq).toBe(1)
+    // 目标文件是可校验的 SQLite 快照
+    expect(existsSync(targetPath)).toBe(true)
+    const db = new Database(targetPath, { readonly: true })
+    const count = db.query('SELECT COUNT(*) AS c FROM blocks').get() as { c: number }
+    expect(count.c).toBeGreaterThan(0)
+    db.close()
+    rmSync(targetPath, { force: true })
   })
 })

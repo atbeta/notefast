@@ -79,6 +79,10 @@ function makeMockS3() {
         const keys = [...objects.keys()].filter((k) => k.startsWith(prefix)).sort()
         return { Contents: keys.map((Key) => ({ Key })), IsTruncated: false }
       }
+      if (name === 'DeleteObjectCommand') {
+        objects.delete(cmd.input.Key as string)
+        return {}
+      }
       throw new Error(`unexpected ${name}`)
     },
   } as never
@@ -146,14 +150,46 @@ describe('sync protocol manager', () => {
       retentionDays: 30,
       s3: { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's', prefix: 'test' },
     })
-    _setProtocolClientForTests(makeMockS3().client)
+    const { client } = makeMockS3()
+    _setProtocolClientForTests(client)
 
-    // 模拟 running 状态（syncNow 内部置位；此处直接并发触发）
     insertDoc(crypto.randomUUID(), '并发文档')
     const p1 = syncNow()
     const p2 = syncNow().catch((e) => e)
     const [r1, r2] = await Promise.all([p1, p2])
     expect(r1.published).toBeGreaterThan(0)
     expect((r2 as { code?: string }).code).toBe('sync_in_progress')
+  })
+
+  test('累计达阈值触发 compaction：生成快照 + 清理旧增量', async () => {
+    initProtocolManager(testDir)
+    applyBackupConfig({
+      version: 1,
+      enabled: true,
+      intervalMs: 0,
+      retentionDays: 30,
+      s3: { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's', prefix: 'test' },
+    })
+    const { client, objects } = makeMockS3()
+    _setProtocolClientForTests(client)
+
+    // 每轮插入一个新文档，连续同步超过阈值
+    let sawSnapshot = false
+    for (let i = 0; i < 12; i++) {
+      insertDoc(crypto.randomUUID(), `文档${i}`)
+      const r = await syncNow()
+      if (r.snapshotCreated) sawSnapshot = true
+    }
+    expect(sawSnapshot).toBe(true)
+    // S3 有快照（snapshot.db + snapshot.seq）
+    expect([...objects.keys()].some((k) => k.endsWith('snapshot.db'))).toBe(true)
+    expect([...objects.keys()].some((k) => k.endsWith('snapshot.seq'))).toBe(true)
+    // manifest 记录快照锚点（compaction 后 snapshot_seq > 0）
+    const manifestKey = [...objects.keys()].find((k) => k.endsWith('manifest.json'))
+    expect(manifestKey).toBeTruthy()
+    const manifest = JSON.parse(objects.get(manifestKey!)!)
+    expect(manifest.kind).toBe('sync')
+    expect(manifest.snapshot_seq).toBeGreaterThan(0)
+    expect(manifest.last_seq).toBeGreaterThan(0)
   })
 })

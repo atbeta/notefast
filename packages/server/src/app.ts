@@ -262,7 +262,8 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     initAssetStore(dataDir)
     initSyncManager(dataDir)
     initBackupManager(dataDir)
-    initProtocolManager(dataDir)
+    const protoInterval = parseInt(process.env.SYNC_PROTOCOL_INTERVAL_MS || '0', 10)
+    initProtocolManager(dataDir, { autoSyncIntervalMs: Number.isFinite(protoInterval) ? protoInterval : 0 })
     initAiRuntime(pluginSystem, dataDir)
 
     app.all('/mcp', authMiddleware, async (c) => {
