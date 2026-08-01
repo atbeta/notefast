@@ -6,7 +6,7 @@
 /** SQLite datetime('now') 返回 "YYYY-MM-DD HH:MM:SS" 不带时区标记。
  *  JavaScript new Date(不带时区字符串) 会当成本地时间解析，在 UTC+8 产生 +8h 偏差。
  *  此处对无时区信息的日期字符串统一补齐 Z 按 UTC 解读。 */
-function toUTCDate(s: string): Date {
+export function toUTCDate(s: string): Date {
   const str = s.trim()
   if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(str)) {
     return new Date(str.replace(' ', 'T') + 'Z')
@@ -43,4 +43,21 @@ export function relativeTime(date: Date | null): string {
   if (diff < 60) return `${diff} 秒前`
   if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
+/**
+ * SQLite 时间字符串的本地化绝对时间（历史记录用）：
+ * 按 UTC 解读（toUTCDate）后转系统时区显示，避免 +8h 偏差。
+ * 当天显示 HH:MM:SS，跨天带日期；无效输入返回 '—'。
+ */
+export function formatSqliteDateTime(dateStr: string): string {
+  const date = toUTCDate(dateStr)
+  if (!Number.isFinite(date.getTime())) return '—'
+  const sameDay = date.toDateString() === new Date().toDateString()
+  return sameDay
+    ? date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : date.toLocaleString('zh-CN', {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      })
 }

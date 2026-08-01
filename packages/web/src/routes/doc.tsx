@@ -28,7 +28,7 @@ import PageHeader from '../components/PageHeader'
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
 import { useAiChatOpen } from '../components/Layout'
 import { scrollToElement, findScrollableAncestor } from '../lib/scroll'
-import { formatRelative, relativeTime } from '../lib/time'
+import { formatRelative, relativeTime, formatSqliteDateTime } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
 import { Kbd, Tooltip, useToast } from '../components/ui'
@@ -53,6 +53,63 @@ interface DocRevision {
 /** revision 在历史面板的稳定 key（block + rev 唯一） */
 function revisionKey(rev: DocRevision): string {
   return `${rev.block_id}#${rev.rev}`
+}
+
+/** 来源标签：actor → 可读文案（快照与块级都显示修改来源） */
+function actorLabel(rev: DocRevision): string {
+  switch (rev.actor) {
+    case 'revert': return '回退操作'
+    case 'ai': return 'AI 写入'
+    case 'mcp': return 'MCP 写入'
+    case 'editor': return 'Web 编辑器'
+    case 'user': return '直接编辑'
+    default: return rev.actor || '编辑'
+  }
+}
+
+/** 行级 diff（LCS）：对比两条 markdown，返回变化行（added=绿 / removed=红），用于历史快照对比 */
+interface DiffLine { type: 'same' | 'added' | 'removed'; text: string }
+function lineDiff(a: string, b: string): DiffLine[] {
+  const aLines = a.split('\n')
+  const bLines = b.split('\n')
+  const m = aLines.length
+  const n = bLines.length
+  // dp[i][j] = a[i..] 与 b[j..] 的 LCS 长度（从尾部递推，便于回溯）
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      dp[i][j] = aLines[i] === bLines[j] ? dp[i + 1][j + 1]! + 1 : Math.max(dp[i + 1][j]!, dp[i][j + 1]!)
+    }
+  }
+  const out: DiffLine[] = []
+  let i = 0
+  let j = 0
+  while (i < m && j < n) {
+    if (aLines[i] === bLines[j]) {
+      out.push({ type: 'same', text: aLines[i]! })
+      i++; j++
+    } else if (dp[i + 1]![j]! >= dp[i]![j + 1]!) {
+      out.push({ type: 'removed', text: aLines[i]! })
+      i++
+    } else {
+      out.push({ type: 'added', text: bLines[j]! })
+      j++
+    }
+  }
+  while (i < m) out.push({ type: 'removed', text: aLines[i++]! })
+  while (j < n) out.push({ type: 'added', text: bLines[j++]! })
+  return out
+}
+
+/** 折叠相同行（只显示变化及其上下文），控制展开体积 */
+function summarizeDiff(lines: DiffLine[], context = 2): DiffLine[] {
+  const changedIdx = new Set<number>()
+  lines.forEach((l, idx) => {
+    if (l.type !== 'same') {
+      for (let k = Math.max(0, idx - context); k <= Math.min(lines.length - 1, idx + context); k++) changedIdx.add(k)
+    }
+  })
+  return lines.filter((_, idx) => changedIdx.has(idx))
 }
 
 /** stale-while-revalidate 降透明的最短延迟：
@@ -995,17 +1052,23 @@ function HistoryView({
             整篇快照
           </h4>
           <div className="flex flex-col gap-1">
-            {snapshots.map((rev) => (
-              <RevisionItem
-                key={revisionKey(rev)}
-                rev={rev}
-                label="整篇"
-                expanded={expanded}
-                restoring={restoring}
-                onToggle={toggle}
-                onRestore={handleRestore}
-              />
-            ))}
+            {snapshots.map((rev, idx) => {
+              // 与该快照「更旧的下一条」做 diff，突出本次改了什么（最新一条无更旧对照 → null）
+              const prev = snapshots[idx + 1]
+              const diff = prev ? lineDiff(prev.content, rev.content) : null
+              return (
+                <RevisionItem
+                  key={revisionKey(rev)}
+                  rev={rev}
+                  label={actorLabel(rev)}
+                  diff={diff ? summarizeDiff(diff) : null}
+                  expanded={expanded}
+                  restoring={restoring}
+                  onToggle={toggle}
+                  onRestore={handleRestore}
+                />
+              )
+            })}
           </div>
         </section>
       )}
@@ -1021,15 +1084,7 @@ function HistoryView({
               <RevisionItem
                 key={revisionKey(rev)}
                 rev={rev}
-                label={
-                  rev.actor === 'revert'
-                    ? '回退操作'
-                    : rev.actor === 'ai'
-                      ? 'AI 写入'
-                      : rev.actor === 'mcp'
-                        ? '外部工具'
-                        : '编辑'
-                }
+                label={actorLabel(rev)}
                 expanded={expanded}
                 restoring={restoring}
                 onToggle={toggle}
@@ -1046,6 +1101,7 @@ function HistoryView({
 function RevisionItem({
   rev,
   label,
+  diff,
   expanded,
   restoring,
   onToggle,
@@ -1053,6 +1109,8 @@ function RevisionItem({
 }: {
   rev: DocRevision
   label: string
+  /** 整篇快照的变更 diff（相对更旧快照）；null = 无对照（最新）或非快照 */
+  diff?: DiffLine[] | null
   expanded: ReadonlySet<string>
   restoring: string | null
   onToggle: (key: string) => void
@@ -1070,7 +1128,7 @@ function RevisionItem({
         >
           <span className="block text-[11.5px] text-muted-foreground truncate">{label}</span>
           <span className="block text-[10.5px] text-muted-foreground/60 tabular-nums">
-            {relativeTime(new Date(rev.created_at))}
+            {formatSqliteDateTime(rev.created_at)}
           </span>
         </button>
         <button
@@ -1091,9 +1149,27 @@ function RevisionItem({
         </button>
       </div>
       {isOpen && (
-        <pre className="px-3 py-2 border-t border-border/40 text-[11px] leading-relaxed whitespace-pre-wrap font-sans text-muted-foreground bg-background/40 max-h-40 overflow-y-auto">
-          {rev.content || '（空内容）'}
-        </pre>
+        diff && diff.length > 0 ? (
+          <div className="px-3 py-2 border-t border-border/40 text-[11px] leading-relaxed font-mono max-h-40 overflow-y-auto">
+            {diff.map((l, i) => (
+              <div
+                key={i}
+                className={l.type === 'added'
+                  ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1 -mx-1'
+                  : l.type === 'removed'
+                    ? 'text-rose-700 dark:text-rose-400 bg-rose-500/10 px-1 -mx-1'
+                    : 'text-muted-foreground/60'}
+              >
+                {l.type === 'added' ? '+ ' : l.type === 'removed' ? '− ' : '  '}
+                {l.text || '⏎'}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <pre className="px-3 py-2 border-t border-border/40 text-[11px] leading-relaxed whitespace-pre-wrap font-sans text-muted-foreground bg-background/40 max-h-40 overflow-y-auto">
+            {rev.content || '（空内容）'}
+          </pre>
+        )
       )}
     </div>
   )
