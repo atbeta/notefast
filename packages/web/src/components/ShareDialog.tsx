@@ -153,7 +153,7 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
           (err.body as { error?: string } | null)?.error === 'ai_exclude_share_needs_confirm'
         if (!needsConfirm) throw err
         const confirmed = window.confirm(
-          '这篇文档已标记「对 AI 隐藏」。\n\n开启公开分享后，任何拿到链接的人无需登录即可阅读全文。确认仍要开启分享吗？',
+          '这篇文档已标记「对 AI 隐藏」。\n\n开启公开分享后，任何人获得链接均可阅读全文，无需登录。确认仍要开启分享吗？',
         )
         if (!confirmed) return
         body = { confirm_ai_exclude: true }
@@ -236,9 +236,9 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
                 <Globe className="w-3.5 h-3.5 text-foreground/80" strokeWidth={1.75} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-foreground">网上所有人可访问</p>
+                <p className="text-[13px] font-medium text-foreground">任何人可通过链接访问</p>
                 <p className="text-[12px] text-muted-foreground mt-0.5 leading-relaxed">
-                  拿到链接即可只读，无需登录
+                  获得链接即可阅读，无需登录
                 </p>
               </div>
               <span className="shrink-0 text-[11.5px] text-muted-foreground px-1.5 py-0.5 rounded border border-border/70">

@@ -102,7 +102,7 @@ export default function InboxPage() {
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="标题（可空，自动用时间）"
+              placeholder="标题（可选，留空则为当前时间）"
               className="w-full text-[14px] bg-transparent border-b border-border outline-none py-1.5 text-foreground placeholder:text-muted-foreground/50"
               autoFocus
             />

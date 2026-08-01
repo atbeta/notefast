@@ -174,7 +174,7 @@ export default function BackupPanel() {
       <div className="space-y-6">
         <div className="flex items-center gap-1.5">
           <span className="text-[13.5px] font-medium text-foreground">完整灾备</span>
-          <HelpTip label="在线生成一致 SQLite 快照并上传 S3。默认每小时一次、保留 30 天。恢复须先停止服务，再执行 CLI（Web 不提供一键覆盖）。" />
+          <HelpTip label="在线生成数据库快照并上传 S3。默认每小时一次、保留 30 天。恢复须先停止服务，再通过命令行执行（Web 界面不提供一键恢复，以防止误操作覆盖当前数据）。" />
         </div>
 
         <div className="flex items-center justify-between">

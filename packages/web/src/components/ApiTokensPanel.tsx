@@ -42,7 +42,7 @@ export default function ApiTokensPanel() {
     if (scopeRead) scopes.push('read')
     if (scopeWrite) scopes.push('write')
     if (scopes.length === 0) {
-      toast.error({ title: '请至少选择一个 scope' })
+      toast.error({ title: '请至少选择一项权限' })
       return
     }
     try {

@@ -82,8 +82,8 @@ export default function AuthPrompt() {
           </button>
           <p className="text-[10.5px] text-muted-foreground/70 mt-1.5 leading-relaxed">
             {remember
-              ? '密码保存在本浏览器 localStorage，7 天内每次打开自动续期；公共设备请勿勾选。'
-              : '密码仅保存在本浏览器会话（sessionStorage），关闭浏览器后自动清除。'}
+              ? '勾选后 7 天内无需重复输入；如在公共设备上使用，请勿勾选。'
+              : '不勾选时密码仅本次有效，关闭浏览器后即需重新输入。'}
           </p>
         </div>
 

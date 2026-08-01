@@ -157,7 +157,7 @@ export default function SyncPanel() {
       <div className="space-y-6">
         <div className="flex items-center gap-1.5">
           <span className="text-[13.5px] font-medium text-foreground">Markdown 归档</span>
-          <HelpTip label="将文档导出为 Markdown 推送到单一远端（LocalFS / S3 / WebDAV）。这是内容归档，不含 block ID、引用、标签与向量。同名文档使用带 ID 的文件名，删除会清理归档清单管理的陈旧文件。" />
+          <HelpTip label="将文档导出为 Markdown 推送到远端（本地文件 / S3 / WebDAV）。这是内容归档，不含内部 ID、引用关系、标签与向量数据。同名文档使用带 ID 的文件名确保不冲突，删除文档时会自动清理远端对应的旧文件。" />
         </div>
 
         <div className="space-y-3">

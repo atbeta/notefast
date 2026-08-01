@@ -645,7 +645,7 @@ export default function DocPage() {
                     onClick={handleToggleAiExclude}
                     disabled={aiExcludeSaving}
                     className="text-[11.5px] text-muted-foreground/75 hover:text-foreground transition-colors"
-                    title="隐藏后不进向量索引 / RAG / AutoLink / MCP（你仍可搜索与编辑）"
+                    title="隐藏后 AI 将无法索引或检索本文（你仍可在 Web 界面中搜索与编辑）"
                   >
                     对 AI 隐藏
                   </button>
@@ -659,7 +659,7 @@ export default function DocPage() {
                   <EyeOff className="w-3 h-3 shrink-0" strokeWidth={1.75} />
                   已对 AI 隐藏
                 </span>
-                <span>不会被索引、对话检索或 AutoLink；MCP 也无法读取。你仍可在 Web 中搜索与编辑。</span>
+                <span>不会被 AI 索引、检索或自动建链；外部工具也无法读取。你仍可在 Web 中搜索与编辑。</span>
                 <button
                   type="button"
                   onClick={handleToggleAiExclude}

@@ -377,7 +377,7 @@ export default function AISettingsPanel() {
             mode="chat"
             onRemove={() => setChat(null)}
             knownModels={KNOWN_CHAT_MODELS}
-            modelLabel="Chat 模型"
+             modelLabel="对话模型"
             fieldErrors={formErrors.chat}
           />
         )}
@@ -391,9 +391,9 @@ export default function AISettingsPanel() {
         defaultExpanded={true}
       >
         <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
-          提供语义搜索能力。
+          提供语义搜索能力，可理解近似含义和同义词。
           <span className="block mt-1 text-muted-foreground/80">
-            留空将回退至纯 FTS5 全文检索（失去语义召回能力）。
+            未配置时回退为纯关键词全文检索，无法进行语义理解。
           </span>
         </div>
         {!embedding && (
@@ -425,7 +425,7 @@ export default function AISettingsPanel() {
               mode="embedding"
               onRemove={() => setEmbedding(null)}
               knownModels={KNOWN_EMBEDDING_MODELS}
-            modelLabel="Embedding 模型"
+             modelLabel="嵌入模型"
             fieldErrors={formErrors.embedding}
           />
             <button
@@ -433,7 +433,7 @@ export default function AISettingsPanel() {
               onClick={() => setEmbedding(null)}
               className="text-xs text-muted-foreground hover:text-destructive"
             >
-              移除 Embedding（回到纯 FTS5 检索）
+               移除嵌入模型（回到纯关键词检索）
             </button>
           </div>
         )}
@@ -447,7 +447,7 @@ export default function AISettingsPanel() {
         defaultExpanded={true}
       >
         <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
-          新建 / 更新 block 时自动生成 embedding，支持语义搜索。
+          新建或更新笔记时自动生成语义索引，支持语义搜索。
         </div>
         <Toggle
           checked={autoIndex}
@@ -471,7 +471,7 @@ export default function AISettingsPanel() {
             }
           />
           <p className="mt-1.5 text-[12px] text-muted-foreground/80 leading-relaxed">
-            开启后，索引时为文档中的图片生成文字描述并纳入语义检索（每张图片一次视觉模型调用，图片内容会发送给你的 AI Provider）
+            开启后，索引时会为文档中的图片生成文字描述并纳入语义检索（每张图片会调用一次视觉模型，图片内容会发送给所配置的 AI 服务商）
           </p>
         </div>
         {status?.vectorStore && (
@@ -538,7 +538,7 @@ export default function AISettingsPanel() {
         defaultExpanded={!!reranker?.enabled}
       >
         <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
-          精排；在 Hybrid Search 召回后做二次排序。
+          精排；在混合检索的召回结果上做二次精准排序，提升引用相关性。
         </div>
         {!reranker?.enabled && (
           <button
@@ -556,7 +556,7 @@ export default function AISettingsPanel() {
             mode="reranker"
             onRemove={() => setReranker(null)}
             knownModels={['BAAI/bge-reranker-v2-m3', 'jina-reranker-v3', 'voyage-rerank-2', 'voyage-rerank-2-lite']}
-            modelLabel="Reranker 模型"
+             modelLabel="重排模型"
           />
         )}
       </SettingsCard>
@@ -569,7 +569,7 @@ export default function AISettingsPanel() {
         defaultExpanded={autoLink.enabled}
       >
         <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
-          写入后 AI 自动抽取关键概念，高置信（语义命中 ≥ minConfidence 且 top-1 领先 ≥ minMargin）时直接建立笔记间链接（ref_type=ai_auto）；低置信静默跳过，无需人工审核。
+          写入笔记后 AI 自动抽取关键概念，当相似度和区分度均达标时自动建立笔记间链接；不确定的链接会直接跳过，无需人工审核。
         </div>
         <Toggle
           checked={autoLink.enabled}
