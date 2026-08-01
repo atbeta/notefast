@@ -169,7 +169,7 @@ describe('queryGraph 中心模式', () => {
     seedCooccurrence()
     const idD = entityId(D)!
     const { nodes, edges, center } = queryGraph(getDb(), { center: { type: 'entity', id: idD } })
-    expect(center).toEqual({ type: 'entity', id: idD })
+    expect(center).toMatchObject({ type: 'entity', id: idD })
     const byName = nodesByName(nodes)
     expect(byName[norm(D)]!.distance).toBe(0) // 锚点即使 mention_count=1 也包含
     expect(byName[norm(C)]!.distance).toBe(1) // D 只在 D3，与 C 共现
@@ -191,7 +191,7 @@ describe('queryGraph 中心模式', () => {
   test('中心文档：锚点 = 该文档提及的全部实体', () => {
     const { d2 } = seedCooccurrence()
     const { nodes, edges, center } = queryGraph(getDb(), { center: { type: 'doc', id: d2 } })
-    expect(center).toEqual({ type: 'doc', id: d2 })
+    expect(center).toMatchObject({ type: 'doc', id: d2 })
     const byName = nodesByName(nodes)
     // D2 锚点 A/B（distance 0）+ 共现邻居 C
     expect(byName[norm(A)]!.distance).toBe(0)
@@ -260,6 +260,92 @@ describe('生命周期语义', () => {
     expect(findEntityByName(db, '概念一')).toBeNull()
     const { nodes } = queryGraph(getDb(), { maxNodes: 10, minMention: 1 })
     expect(nodes).toEqual([])
+  })
+})
+
+describe('queryGraph docs 模式（笔记关联图）', () => {
+  function seedDocGraph() {
+    seedDoc({ docTitle: 'D1', blocks: [{ id: 'g-d1-a' }, { id: 'g-d1-b' }] })
+    seedDoc({ docTitle: 'D2', blocks: [{ id: 'g-d2-a' }] })
+    seedDoc({ docTitle: 'D3', blocks: [{ id: 'g-d3-a' }] })
+    seedDoc({ docTitle: 'D4 孤立', blocks: [{ id: 'g-d4-a' }] })
+    registerMentions('g-d1-a', [{ anchor: A, kind: kind.A }])
+    registerMentions('g-d1-b', [{ anchor: B, kind: kind.B }])
+    registerMentions('g-d2-a', [{ anchor: A, kind: kind.A }, { anchor: C, kind: kind.C }])
+    registerMentions('g-d3-a', [{ anchor: C, kind: kind.C }])
+    // D1 → D2 一条 ai_auto 引用：D1-D2 权重 = 共享实体(A) + 引用 = 2
+    getDb()
+      .query('INSERT INTO block_refs (source_id, target_id, ref_type) VALUES (?, ?, ?)')
+      .run('g-d1-a', 'g-d2-a', 'ai_auto')
+  }
+
+  function docId(title: string): string {
+    return (
+      getDb()
+        .query('SELECT id FROM blocks WHERE type = ? AND is_deleted = 0 AND content = ?')
+        .get('document', title) as { id: string }
+    ).id
+  }
+
+  function edgeBetweenDocs(edges: GraphEdge[], a: string, b: string): GraphEdge | undefined {
+    const idA = docId(a)
+    const idB = docId(b)
+    return edges.find(
+      (e) => (e.source === idA && e.target === idB) || (e.source === idB && e.target === idA),
+    )
+  }
+
+  test('总览：关联度倒序，孤立笔记兜底；min_mention 忽略', () => {
+    seedDocGraph()
+    const { nodes, edges, truncated } = queryGraph(getDb(), { mode: 'docs', maxNodes: 10, minMention: 999 })
+    const byName = Object.fromEntries(nodes.map((n) => [n.display, n]))
+    expect(nodes.length).toBe(4)
+    expect(nodes[0]!.display).toBe('D2') // 关联度 2 最高
+    expect(nodes[nodes.length - 1]!.display).toBe('D4 孤立') // 孤立笔记兜底在最后
+    expect(nodes.every((n) => n.type === 'doc' && n.kind === 'doc')).toBe(true)
+    // 大小代理 = 活块数
+    expect(byName['D1']!.mention_count).toBe(2)
+    expect(edgeBetweenDocs(edges, 'D1', 'D2')!.weight).toBe(2) // 共享实体 1 + 引用 1
+    expect(edgeBetweenDocs(edges, 'D2', 'D3')!.weight).toBe(1) // 仅共享实体
+    expect(truncated).toBe(false)
+  })
+
+  test('中心文档：BFS 经共享实体 / 引用扩展邻居', () => {
+    seedDocGraph()
+    const { nodes, edges, center } = queryGraph(getDb(), {
+      mode: 'docs',
+      center: { type: 'doc', id: docId('D1') },
+    })
+    expect(center).toMatchObject({ type: 'doc', id: docId('D1') })
+    const byName = Object.fromEntries(nodes.map((n) => [n.display, n]))
+    expect(byName['D1']!.distance).toBe(0)
+    expect(byName['D2']!.distance).toBe(1)
+    expect(byName['D3']!.distance).toBe(2) // 经 D2 一跳
+    expect(byName['D4 孤立']).toBeUndefined()
+    expect(edgeBetweenDocs(edges, 'D1', 'D2')!.weight).toBe(2)
+  })
+
+  test('docs 模式 REST：总览 + 实体锚点 400', async () => {
+    seedDocGraph()
+    const res = await app.fetch(new Request('http://localhost/api/v1/graph?mode=docs'))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Record<string, unknown>
+    const nodes = body.nodes as Array<Record<string, unknown>>
+    expect(nodes.length).toBe(4)
+    expect(nodes[0]).toMatchObject({ type: 'doc', kind: 'doc', mention_count: expect.any(Number) })
+
+    const bad = await app.fetch(
+      new Request('http://localhost/api/v1/graph?mode=docs&center=x&center_type=entity'),
+    )
+    expect(bad.status).toBe(400)
+  })
+
+  test('docs 模式 q：总览按标题子串过滤（聚焦搜索）', async () => {
+    seedDocGraph()
+    const { nodes } = queryGraph(getDb(), { mode: 'docs', maxNodes: 10, q: 'D3' })
+    expect(nodes.map((n) => n.display)).toEqual(['D3'])
+    const { nodes: none } = queryGraph(getDb(), { mode: 'docs', maxNodes: 10, q: '不存在的标题' })
+    expect(none).toEqual([])
   })
 })
 

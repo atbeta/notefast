@@ -1,15 +1,22 @@
 /**
- * 图谱（Graph）— 实体共现图 API 契约类型（GET /api/v1/graph）
+ * 图谱（Graph）— API 契约类型（GET /api/v1/graph）
  *
- * 实体为节点、共现为边（两个实体在同一篇文档中被提及，权重 = 共享文档数）。
+ * 两种模式：
+ * - entities：实体为节点、共现为边（共享文档数）。节点 kind = 概念/人物/工具/文档。
+ * - docs：笔记为节点、关联为边（共享实体数 + 引用数）。节点 type='doc'。
  * center 为锚点（实体或文档），BFS 扩展邻居；无 center 为全库 top-N 总览。
  */
+
+export type GraphMode = 'entities' | 'docs'
 
 export interface GraphNode {
   id: string
   name: string
   display: string
+  /** entity = 实体（kind 着色）；doc = 笔记节点（方角样式） */
+  type: 'entity' | 'doc'
   kind: string
+  /** entities 模式 = 提及次数；docs 模式 = 活块数（节点大小代理） */
   mention_count: number
   /** 距锚点集合的跳数；无中心（总览）时恒为 0 */
   distance: number
@@ -18,11 +25,13 @@ export interface GraphNode {
 export interface GraphEdge {
   source: string
   target: string
-  /** 共享文档数（共现强度） */
+  /** entities：共享文档数；docs：共享实体 + 引用数 */
   weight: number
 }
 
-export type GraphCenter = { type: 'entity'; id: string } | { type: 'doc'; id: string }
+export type GraphCenter =
+  | { type: 'entity'; id: string; label?: string }
+  | { type: 'doc'; id: string; label?: string }
 
 export interface GraphData {
   nodes: GraphNode[]
@@ -32,7 +41,7 @@ export interface GraphData {
   truncated: boolean
 }
 
-/** kind → 图节点颜色（CSS 变量 + rgb() 包装，跟随深浅主题） */
+/** 实体 kind → 图节点颜色（CSS 变量 + rgb() 包装，跟随深浅主题） */
 const KIND_VAR: Record<string, string> = {
   concept: 'var(--graph-concept)',
   person: 'var(--graph-person)',
@@ -43,3 +52,6 @@ const KIND_VAR: Record<string, string> = {
 export function graphKindColor(kind: string): string {
   return `rgb(${KIND_VAR[kind] ?? 'var(--graph-other)'})`
 }
+
+/** 笔记节点颜色（中性墨色，深浅主题可读） */
+export const GRAPH_NOTE_COLOR = 'rgb(var(--ink))'

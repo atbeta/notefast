@@ -187,6 +187,21 @@
     user-select: none;
     pointer-events: none;
   }
+  .graph-tooltip {
+    position: absolute;
+    z-index: 20;
+    pointer-events: none;
+    padding: 4px 8px;
+    font-size: 11px;
+    line-height: 1.25;
+    color: rgb(var(--foreground));
+    background: rgb(var(--card) / 0.95);
+    border: 1px solid rgb(var(--border));
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-floating);
+    backdrop-filter: blur(4px);
+    white-space: nowrap;
+  }
   .sidebar-link {
     @apply flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] text-sidebar-foreground
            transition-colors duration-150;

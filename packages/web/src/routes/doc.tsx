@@ -17,6 +17,7 @@ import {
   ChevronRight,
   SquarePen,
   PencilLine,
+  Network,
 } from 'lucide-react'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
@@ -570,6 +571,14 @@ export default function DocPage() {
               </span>
             )}
             <div className="w-px h-4 bg-border/60 mx-1" />
+            <Tooltip label="查看笔记关联图谱">
+              <Link
+                to={`/graph?mode=docs&center=${encodeURIComponent(id ?? '')}&center_type=doc`}
+                className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent"
+              >
+                <Network className="w-3.5 h-3.5" strokeWidth={1.75} />
+              </Link>
+            </Tooltip>
             <Tooltip label={docShared ? '已公开分享' : '分享文档'}>
               <button
                 ref={shareBtnRef}

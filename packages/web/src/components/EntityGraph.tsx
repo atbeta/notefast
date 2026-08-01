@@ -1,14 +1,18 @@
 /**
- * 实体共现图 — d3-force 力导向 SVG 渲染
+ * 实体/笔记共现图 — d3-force 力导向 SVG 渲染
  *
- * 数据：实体为节点（大小 = 提及次数，颜色 = kind），共现为边（透明度/宽度 = 权重）。
+ * 数据：节点（大小 = 提及次数/块数，颜色 = kind，笔记为方角墨色节点），
+ * 边（透明度/宽度 = 权重）。
+ *
  * 交互：
  * - 画布：滚轮缩放（光标处）、空白拖拽平移、空白单击取消选中
- * - 节点：拖拽（fx/fy 固定到落点）、单击选中、双击聚焦（重新以该实体为中心）
- * - 悬停：高亮节点与其邻居、其余压暗
- * - 锚点节点（centerId）初始固定于画布中心
+ * - 节点：拖拽（fx/fy 固定到落点）、单击选中、双击聚焦（重新以该节点为中心）
+ * - 悬停：高亮节点与其邻居、其余压暗；tooltip 显示名称 / kind / 次数
+ * - 锚点节点（centerId）固定于画布中心，新节点从中心浮现（平滑聚焦过渡）
+ * - 图例覆盖（kind 颜色 / 笔记样式 + 大小与边的含义）
  *
- * 渲染：节点坐标由 d3-force 模拟维护（tick 经 rAF 节流触发重渲染）。
+ * 渲染：节点坐标由 d3-force 模拟维护（tick 经 rAF 节流触发重渲染）；
+ * 图结构（graphKey）变化时重建模拟，但**复用旧节点坐标**实现连续过渡。
  * kind 颜色走 CSS 变量（跟随深浅主题，见 styles/tokens.css 的 --graph-*）。
  */
 
@@ -21,7 +25,14 @@ import {
   forceSimulation,
   type Simulation,
 } from 'd3-force'
-import { graphKindColor, type GraphEdge, type GraphNode } from '../lib/graph'
+import {
+  GRAPH_NOTE_COLOR,
+  graphKindColor,
+  type GraphEdge,
+  type GraphMode,
+  type GraphNode,
+} from '../lib/graph'
+import { entityKindLabel } from '../lib/entities'
 
 interface SimNode extends GraphNode {
   x: number
@@ -40,11 +51,12 @@ type SimEdge = Omit<GraphEdge, 'source' | 'target'> & {
 interface EntityGraphProps {
   nodes: GraphNode[]
   edges: GraphEdge[]
-  /** 锚点实体 id（固定于画布中心） */
+  mode: GraphMode
+  /** 锚点节点 id（固定于画布中心） */
   centerId?: string | null
   selectedId: string | null
   onSelect: (id: string | null) => void
-  /** 聚焦：以该实体为中心重新拉取 */
+  /** 聚焦：以该节点为中心重新拉取 */
   onFocus: (id: string) => void
 }
 
@@ -56,9 +68,15 @@ function nodeRadius(mc: number, maxMc: number): number {
   return 5 + 13 * Math.min(1, Math.sqrt(mc) / Math.sqrt(Math.max(maxMc, 1)))
 }
 
+/** 笔记节点尺寸（宽；高 ≈ 0.6×，圆角矩形） */
+function docWidth(mc: number, maxMc: number): number {
+  return 34 + 46 * Math.min(1, Math.sqrt(mc) / Math.sqrt(Math.max(maxMc, 1)))
+}
+
 export default function EntityGraph({
   nodes,
   edges,
+  mode,
   centerId,
   selectedId,
   onSelect,
@@ -87,12 +105,6 @@ export default function EntityGraph({
     return () => ro.disconnect()
   }, [])
 
-  // 锚点/数据变化时重置视图（新图从居中开始）
-  useEffect(() => {
-    setView({ x: 0, y: 0, k: 1 })
-    setHoverId(null)
-  }, [centerId, nodes, edges])
-
   // 模拟节点：由 d3-force 直接写 x/y。用 ref 持有（避免每次渲染生成新数组
   // 触发模拟重建）；数据真变化时由下面的 effect 重写节点与重启模拟。
   const simNodesRef = useRef<SimNode[]>([])
@@ -110,20 +122,22 @@ export default function EntityGraph({
 
   // d3-force 力导向模拟：
   // - 只在「图结构（graphKey）或容器尺寸」真正变化时重建，绝不因渲染/重绘重启。
-  //   此前用 useMemo 生成节点数组，每次渲染换引用 → effect 反复 cleanup(sim.stop) →
-  //   模拟永远停在初始圆环布局，节点散开、连线未收敛（表现为整图散乱）。
-  // - tick 只 setTick 触发坐标重绘，不触发 effect 重建。
+  // - 平滑聚焦过渡：重建时复用旧节点坐标（旧图节点不动，新节点从中心浮现），
+  //   而非把所有节点重新摆到圆环（聚焦会「炸开」）。
   useEffect(() => {
     if (size.w === 0 || size.h === 0 || nodes.length === 0) return
     const cx = size.w / 2
     const cy = size.h / 2
     const ring = Math.max(40, Math.min(size.w, size.h) * 0.34)
+    const prev = new Map(simNodesRef.current.map((n) => [n.id, { x: n.x, y: n.y }]))
     simNodesRef.current = nodes.map((n, i) => {
+      const old = prev.get(n.id)
       const angle = (i / Math.max(nodes.length, 1)) * Math.PI * 2
       return {
         ...n,
-        x: cx + ring * Math.cos(angle) + (Math.random() - 0.5) * 30,
-        y: cy + ring * Math.sin(angle) + (Math.random() - 0.5) * 30,
+        // 旧节点保留坐标（连续过渡）；新节点从中心附近浮现
+        x: old?.x ?? cx + ring * 0.5 * Math.cos(angle) + (Math.random() - 0.5) * 60,
+        y: old?.y ?? cy + ring * 0.5 * Math.sin(angle) + (Math.random() - 0.5) * 60,
         vx: 0,
         vy: 0,
         fx: n.id === centerId ? cx : null,
@@ -132,17 +146,19 @@ export default function EntityGraph({
     })
     const simEdges: SimEdge[] = edges.map((e) => ({ ...e }))
     simEdgesRef.current = simEdges
+    const radiusOf = (d: SimNode) =>
+      (d.type === 'doc' ? docWidth(d.mention_count, maxMc) / 2 : nodeRadius(d.mention_count, maxMc)) + 10
     const sim: Simulation<SimNode, undefined> = forceSimulation<SimNode>(simNodesRef.current)
       .force(
         'link',
         forceLink<SimNode, SimEdge>(simEdges)
           .id((d) => d.id)
-          .distance(95)
+          .distance(mode === 'docs' ? 150 : 95)
           .strength(0.4),
       )
-      .force('charge', forceManyBody().strength(-200))
+      .force('charge', forceManyBody().strength(mode === 'docs' ? -300 : -200))
       .force('center', forceCenter(size.w / 2, size.h / 2))
-      .force('collide', forceCollide<SimNode>().radius((d) => nodeRadius(d.mention_count, maxMc) + 10))
+      .force('collide', forceCollide<SimNode>().radius(radiusOf))
     let raf = 0
     sim.on('tick', () => {
       if (raf) return
@@ -155,13 +171,9 @@ export default function EntityGraph({
       cancelAnimationFrame(raf)
       sim.stop()
     }
-    // 只依赖 graphKey 与容器尺寸：graphKey 是稳定字符串（数据真变才变），
-    // 渲染导致的节点数组引用变化不会进入依赖，模拟不再被反复重启。
-  }, [graphKey, size.w, size.h, centerId])
+  }, [graphKey, size.w, size.h, centerId, maxMc, mode])
 
   // 原生 wheel（passive:false 才能 preventDefault 缩放）。
-  // 依赖 [size.w, size.h]：svg 是条件渲染（size.w===0 时返回占位 div，svg 不存在），
-  // 首次挂载时 svgRef.current 为 null 绑不上 —— 必须在 svg 渲染后才绑定。
   useEffect(() => {
     const svg = svgRef.current
     if (!svg) return
@@ -280,8 +292,22 @@ export default function EntityGraph({
     return set
   }, [hoverId, selectedId, graphKey])
 
+  const hoverNode = hoverId ? (simNodesRef.current.find((n) => n.id === hoverId) ?? null) : null
+  // tooltip 屏幕坐标（在 pan/zoom 变换之外，随节点移动）
+  const tooltipPos =
+    hoverNode && !dragRef.current
+      ? {
+          x: hoverNode.x * view.k + view.x,
+          y: hoverNode.y * view.k + view.y,
+        }
+      : null
+
   const showLabel = (n: SimNode) =>
-    hoverId === n.id || selectedId === n.id || n.distance === 0 || nodeRadius(n.mention_count, maxMc) >= 8
+    mode === 'docs' ||
+    hoverId === n.id ||
+    selectedId === n.id ||
+    n.distance === 0 ||
+    nodeRadius(n.mention_count, maxMc) >= 8
 
   if (size.w === 0) {
     return (
@@ -292,6 +318,8 @@ export default function EntityGraph({
       </div>
     )
   }
+
+  const isDoc = mode === 'docs'
 
   return (
     <div ref={containerRef} className="h-full w-full relative overflow-hidden select-none">
@@ -331,7 +359,6 @@ export default function EntityGraph({
           })}
           {/* 节点 */}
           {simNodesRef.current.map((n) => {
-            const r = nodeRadius(n.mention_count, maxMc)
             const dim = hoverNeighbors !== null && !hoverNeighbors.has(n.id)
             const opacity = dim ? 0.16 : 1
             const isSelected = n.id === selectedId
@@ -347,38 +374,155 @@ export default function EntityGraph({
                 onPointerEnter={() => setHoverId(n.id)}
                 onPointerLeave={() => setHoverId((h) => (h === n.id ? null : h))}
               >
-                {isSelected && (
-                  <circle
-                    r={r + 4}
-                    fill="none"
-                    style={{ stroke: 'rgb(var(--primary))' }}
-                    strokeWidth={1.5}
-                    strokeDasharray="3 3"
-                  />
-                )}
-                <circle
-                  r={r}
-                  style={{
-                    fill: graphKindColor(n.kind),
-                    stroke: isHover ? 'rgb(var(--foreground))' : 'none',
-                  }}
-                  strokeWidth={isHover ? 1.5 : 0}
-                />
-                {showLabel(n) && (
-                  <text
-                    y={r + 13}
-                    textAnchor="middle"
-                    className="graph-node-label"
-                    style={{ fill: 'rgb(var(--foreground))' }}
-                  >
-                    {n.display.length > LABEL_MAX ? n.display.slice(0, LABEL_MAX) + '…' : n.display}
-                  </text>
+                {isDoc ? (
+                  <DocNodeShape n={n} maxMc={maxMc} isHover={isHover} isSelected={isSelected} showLabel={showLabel(n)} />
+                ) : (
+                  <EntityNodeShape n={n} maxMc={maxMc} isHover={isHover} isSelected={isSelected} showLabel={showLabel(n)} />
                 )}
               </g>
             )
           })}
         </g>
       </svg>
+
+      {/* hover tooltip（屏幕坐标，随节点移动） */}
+      {hoverNode && tooltipPos && (
+        <div
+          className="graph-tooltip"
+          style={{ left: tooltipPos.x, top: tooltipPos.y, transform: 'translate(-50%, -100%)' }}
+        >
+          <div className="max-w-[240px] truncate">{hoverNode.display}</div>
+          <div className="mt-0.5 text-[10px] text-muted-foreground tabular-nums">
+            {hoverNode.type === 'doc'
+              ? `${hoverNode.mention_count} 个块`
+              : `${entityKindLabel(hoverNode.kind)} · ${hoverNode.mention_count} 次提及`}
+          </div>
+        </div>
+      )}
+
+      {/* 图例 */}
+      <div className="absolute bottom-2.5 left-2.5 z-10 pointer-events-none rounded-lg border border-border bg-card/90 backdrop-blur px-2.5 py-1.5 text-[10.5px] text-muted-foreground leading-relaxed">
+        {isDoc ? (
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: GRAPH_NOTE_COLOR }} />
+              <span>笔记</span>
+            </div>
+            <div className="mt-1">大小 = 内容量 · 连线 = 关联（共享实体 / 引用）</div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-1.5">
+              {(['concept', 'person', 'tool', 'doc'] as const).map((k) => (
+                <span key={k} className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full" style={{ background: graphKindColor(k) }} />
+                  <span>{entityKindLabel(k)}</span>
+                </span>
+              ))}
+            </div>
+            <div className="mt-1">大小 = 提及次数 · 连线 = 共现</div>
+          </>
+        )}
+      </div>
     </div>
+  )
+}
+
+/** 实体节点：圆形 + kind 着色 + 虚线选中环 */
+function EntityNodeShape({
+  n,
+  maxMc,
+  isHover,
+  isSelected,
+  showLabel,
+}: {
+  n: SimNode
+  maxMc: number
+  isHover: boolean
+  isSelected: boolean
+  showLabel: boolean
+}) {
+  const r = nodeRadius(n.mention_count, maxMc)
+  return (
+    <>
+      {/* 隐形放大命中区（点击更易命中） */}
+      <circle r={r + 8} fill="transparent" />
+      {isSelected && (
+        <circle r={r + 4} fill="none" style={{ stroke: 'rgb(var(--primary))' }} strokeWidth={1.5} strokeDasharray="3 3" />
+      )}
+      <circle
+        r={r}
+        style={{
+          fill: graphKindColor(n.kind),
+          stroke: isHover ? 'rgb(var(--foreground))' : 'none',
+        }}
+        strokeWidth={isHover ? 1.5 : 0}
+      />
+      {showLabel && (
+        <text y={r + 13} textAnchor="middle" className="graph-node-label" style={{ fill: 'rgb(var(--foreground))' }}>
+          {n.display.length > LABEL_MAX ? n.display.slice(0, LABEL_MAX) + '…' : n.display}
+        </text>
+      )}
+    </>
+  )
+}
+
+/** 笔记节点：圆角矩形 + 墨色填充 + 右侧标题 */
+function DocNodeShape({
+  n,
+  maxMc,
+  isHover,
+  isSelected,
+  showLabel,
+}: {
+  n: SimNode
+  maxMc: number
+  isHover: boolean
+  isSelected: boolean
+  showLabel: boolean
+}) {
+  const w = docWidth(n.mention_count, maxMc)
+  const h = Math.max(24, w * 0.6)
+  return (
+    <>
+      {/* 隐形放大命中区 */}
+      <rect x={-w / 2 - 8} y={-h / 2 - 8} width={w + 16} height={h + 16} fill="transparent" />
+      {isSelected && (
+        <rect
+          x={-w / 2 - 4}
+          y={-h / 2 - 4}
+          width={w + 8}
+          height={h + 8}
+          rx={9}
+          fill="none"
+          style={{ stroke: 'rgb(var(--primary))' }}
+          strokeWidth={1.5}
+          strokeDasharray="3 3"
+        />
+      )}
+      <rect
+        x={-w / 2}
+        y={-h / 2}
+        width={w}
+        height={h}
+        rx={7}
+        style={{
+          fill: GRAPH_NOTE_COLOR,
+          stroke: isHover ? 'rgb(var(--foreground))' : 'none',
+        }}
+        strokeWidth={isHover ? 1.5 : 0}
+      />
+      {showLabel && (
+        <text
+          x={w / 2 + 7}
+          y={4}
+          textAnchor="start"
+          className="graph-node-label"
+          style={{ fill: 'rgb(var(--foreground))' }}
+        >
+          {n.display.length > LABEL_MAX ? n.display.slice(0, LABEL_MAX) + '…' : n.display}
+        </text>
+      )}
+    </>
   )
 }
