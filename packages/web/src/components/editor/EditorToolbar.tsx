@@ -68,7 +68,7 @@ export default function EditorToolbar({
   }
 
   return (
-    <div className="sticky top-14 z-10 -mx-8 px-8 mb-2 bg-background/85 backdrop-blur-md">
+    <div className="sticky top-14 z-10 -mx-4 sm:-mx-8 px-4 sm:px-8 mb-2 bg-background/85 backdrop-blur-md">
       <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1 py-1.5 border-b border-border/60">
         <IconBtn title="一级标题 (#)" onClick={() => insertAtCursor('\n# ')}>
           <Heading1 className="w-[15px] h-[15px]" strokeWidth={1.75} />

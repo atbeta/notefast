@@ -92,7 +92,7 @@ export default function InboxPage() {
         </button>
       </PageHeader>
 
-      <div className="w-full max-w-4xl mx-auto px-8 pt-7 pb-16 space-y-5">
+      <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
         <p className="text-[13px] text-muted-foreground leading-relaxed px-1">
           随手记下的素材、剪藏与草稿。整理后「加入笔记」才会出现在所有文档里。
         </p>

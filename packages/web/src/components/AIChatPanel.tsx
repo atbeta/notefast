@@ -441,7 +441,7 @@ export default function AIChatPanel({
     <div
       aria-hidden={!isOpen}
       className={`fixed top-0 right-0 h-screen bg-card border-l border-border shadow-[var(--shadow-floating)] z-40 flex flex-col
-        ${expanded ? 'w-[600px]' : 'w-[400px]'}
+        w-full md:w-[400px] ${expanded ? 'md:w-[600px]' : ''}
         transition-[transform,width] duration-[var(--dur)] ease-[var(--ease)]
         ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
       `}

@@ -148,7 +148,7 @@ export default function HomePage() {
         </button>
       </PageHeader>
 
-      <div className="w-full max-w-4xl mx-auto px-8 pt-7 pb-16 space-y-5 animate-fade-in">
+      <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5 animate-fade-in">
         <TagFilter />
 
         <section className="space-y-3 animate-fade-in">

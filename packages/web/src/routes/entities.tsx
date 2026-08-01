@@ -77,7 +77,7 @@ export default function EntitiesPage() {
         </div>
       </PageHeader>
 
-      <div className="w-full max-w-4xl mx-auto px-8 pt-7 pb-16 space-y-5">
+      <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
         <p className="text-[13px] text-muted-foreground leading-relaxed px-1">
           AI 在写入时自动识别的概念、人物、工具与文档，按提及次数排序。
         </p>

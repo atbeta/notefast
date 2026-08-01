@@ -135,7 +135,7 @@ export default function ArchivedPage() {
         </div>
       </PageHeader>
 
-      <div className="w-full max-w-4xl mx-auto px-8 pt-7 pb-16 space-y-5">
+      <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
         <p className="text-[13px] text-muted-foreground leading-relaxed px-1">
           已过时但想保留的内容（如已解决的问题记录）。归档后不出现在所有文档，AI 回答默认也不再引用。
         </p>

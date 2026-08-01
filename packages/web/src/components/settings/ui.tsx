@@ -53,7 +53,7 @@ export function SettingsLayout({
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-8 py-10 space-y-8 animate-fade-in pb-32">
+    <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 py-10 space-y-8 animate-fade-in pb-32">
       <header className="space-y-3">
         <h1 className="text-[28px] font-bold tracking-[-0.02em] text-foreground">{title}</h1>
         <p className="text-[13px] text-muted-foreground leading-relaxed">{description}</p>

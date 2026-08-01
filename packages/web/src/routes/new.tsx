@@ -151,7 +151,7 @@ export default function NewDocPage() {
         />
       </PageHeader>
 
-      <div className="w-full max-w-4xl mx-auto px-8 pt-8 pb-16">
+      <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-8 pb-16">
       {activeTab === 'create' && (
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>

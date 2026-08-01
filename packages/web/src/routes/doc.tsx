@@ -129,6 +129,9 @@ export default function DocPage() {
   /** 桌面右栏：大纲 / 反向链接 / 实体 标签页 */
   const [railTab, setRailTab] = useState<'outline' | 'backlinks' | 'entities'>('outline')
   useEffect(() => { setRailTab('outline') }, [id])
+  /** 移动端目录折叠 */
+  const [tocOpen, setTocOpen] = useState(false)
+  useEffect(() => { setTocOpen(false) }, [id])
   // 恢复 AI 可见触发的索引轮询（切换文档/重复点击时中止上一轮）
   const indexJobAcRef = useRef<AbortController | null>(null)
   useEffect(() => () => indexJobAcRef.current?.abort(), [])
@@ -417,7 +420,7 @@ export default function DocPage() {
         <div className="flex-1 min-w-0 flex flex-col h-full border-r border-border/50">
           <div className="h-14 shrink-0 border-b border-border/50" />
           <div className="flex-1 overflow-hidden">
-            <div className="w-full max-w-4xl mx-auto px-8 pt-10 space-y-3">
+            <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-10 space-y-3">
               <div className="mx-auto max-w-[var(--reading-max-w)] space-y-3">
                 <div className="h-9 bg-secondary rounded w-1/2" />
                 <div className="h-3.5 bg-secondary rounded w-28" />
@@ -445,7 +448,7 @@ export default function DocPage() {
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col h-full border-r border-border/50">
         {/* Global Sticky Header */}
-        <PageHeader bare className="shrink-0 flex items-center justify-between px-6">
+        <PageHeader bare className="shrink-0 flex items-center justify-between px-3 sm:px-6">
           <div className="flex items-center gap-4 text-sm">
             <Link
               to="/"
@@ -463,11 +466,10 @@ export default function DocPage() {
               <button
                 type="button"
                 onClick={handleStartEdit}
-                className="btn-ghost-custom text-muted-foreground hover:text-foreground"
+                className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent"
                 title="进入编辑"
               >
                 <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
-                <span>编辑</span>
               </button>
             )}
             {isEditing && (
@@ -517,7 +519,7 @@ export default function DocPage() {
         <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
           {/* 切换文档时保留旧内容完整展示，新数据到了直接替换 */}
           <div>
-            <div className="w-full max-w-4xl mx-auto px-8 pt-14 pb-32 animate-fade-in">
+            <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-14 pb-32 animate-fade-in">
             {indexJob && (indexJob.state === 'pending' || indexJob.state === 'running') && (
               <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
                 <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" strokeWidth={1.75} />
@@ -599,7 +601,7 @@ export default function DocPage() {
                 type="button"
                 onClick={handleSuggestTitle}
                 disabled={generatingTitle || aiExclude}
-                className="absolute -right-8 top-3 opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-foreground transition-all rounded disabled:opacity-30"
+                className="absolute right-1 sm:-right-8 top-3 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-50 p-1.5 text-muted-foreground hover:text-foreground transition-all rounded disabled:opacity-30"
                 title={aiExclude ? '已对 AI 隐藏，无法生成标题' : 'AI 生成标题'}
               >
                 {generatingTitle ? (
@@ -697,9 +699,34 @@ export default function DocPage() {
                   </div>
                 )}
 
-                 <article>
-                   <BlockRenderer block={doc} />
-                 </article>
+                {/* Mobile outline — 折叠目录置于正文前，方便快速导航 */}
+                {!isEditing && flatHeadings.length > 0 && (
+                  <div className="lg:hidden mb-6">
+                    <button
+                      type="button"
+                      onClick={() => setTocOpen((v) => !v)}
+                      className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 transition-transform ${tocOpen ? '' : '-rotate-90'}`}
+                        strokeWidth={2}
+                      />
+                      目录
+                      <span className="text-[11px] text-muted-foreground/60 tabular-nums ml-0.5">
+                        {flatHeadings.length}
+                      </span>
+                    </button>
+                    {tocOpen && (
+                      <div className="mt-2 pl-5">
+                        <OutlineView headings={flatHeadings} loading={auxLoading} />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <article>
+                  <BlockRenderer block={doc} />
+                </article>
                </div>
              )}
            </div>
@@ -755,21 +782,6 @@ export default function DocPage() {
           </div>
         </div>
       )}
-
-      {/* Right Sidebar (Mobile stack) */}
-      <div className="lg:hidden w-full space-y-8 mt-12 pt-8 border-t border-border">
-        <section>
-          <h3 className="text-sm font-medium text-foreground mb-3">大纲</h3>
-          <OutlineView headings={flatHeadings} loading={auxLoading} />
-        </section>
-
-        <section>
-          <h3 className="text-sm font-medium text-foreground mb-3">反向链接</h3>
-          <BacklinksView backlinks={backlinks} loading={auxLoading} />
-        </section>
-
-        {id && <EntityPanel docId={id} variant="stack" />}
-      </div>
 
       <ConfirmDialog
         open={showDelete}
