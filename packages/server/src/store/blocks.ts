@@ -13,7 +13,7 @@
  * autolink / assets / api_tokens 等自有表的 store。
  */
 
-import type { BlockRow } from '@notefast/core'
+import type { BlockRow, BlockRevision, DocSnapshot, DocRevisionEntry } from '@notefast/core'
 import type { getDb } from '../db'
 import { computeContentHash } from '../services/contentHash'
 
@@ -264,14 +264,56 @@ export interface BlockPatch {
   type?: string
   status?: string
   tags?: string
+  /** 变更来源（user/ai/mcp/sync 等）；仅影响 revision 的 actor 标注，缺省 'user' */
+  actor?: string
+  /**
+   * 跳过 content revision 记录（仅 server 内部整篇替换路径使用：replaceDocContent 已先
+   * recordDocSnapshot 整篇快照，标题变更不再单独记一条块级修订，避免重复历史）。
+   * 不在 updateBlockSchema（HTTP 校验层）暴露 —— 外部 API 无法绕过审计记录。
+   */
+  noRevision?: boolean
 }
 
-/** 统一 UPDATE：自动带 updated_at（毫秒精度当前时间）；空 patch 不执行 SQL */
+/** 每 block 保留的 revision 上限；超出删除最旧的（append-only 防膨胀） */
+export const MAX_REVISIONS_PER_BLOCK = 50
+
+/** 内容变更时把「旧值」写入 revision 历史；无历史表或变更为空/无变化时跳过 */
+function recordRevision(db: Db, id: string, oldContent: string, actor: string): void {
+  const now = nowTimestamp()
+  const rev =
+    (db
+      .query('SELECT COALESCE(MAX(rev), 0) + 1 AS next FROM block_revisions WHERE block_id = ?')
+      .get(id) as { next: number }).next
+  db.query(
+    `INSERT INTO block_revisions (block_id, rev, content, content_hash, actor, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(id, rev, oldContent, computeContentHash(oldContent), actor, now)
+  // 裁剪：保留最近 MAX_REVISIONS_PER_BLOCK 条（rev 小的先删）。
+  // LIMIT -1 = 无上限，OFFSET 50 = 取第 51 行及之后（SQLite 方言：负数 LIMIT 视为不限）。
+  // 只取第一行即可得到「应保留的最大 rev」，避免删到一半。
+  const overflow = db
+    .query('SELECT rev FROM block_revisions WHERE block_id = ? ORDER BY rev ASC LIMIT -1 OFFSET ?')
+    .all(id, MAX_REVISIONS_PER_BLOCK) as Array<{ rev: number }>
+  if (overflow.length > 0) {
+    const maxKeep = overflow[0]!.rev - 1
+    db.query('DELETE FROM block_revisions WHERE block_id = ? AND rev <= ?').run(id, maxKeep)
+  }
+}
+
+/** 统一 UPDATE：自动带 updated_at（毫秒精度当前时间）；空 patch 不执行 SQL。
+ * content 变更时自动同步 content_hash，并把旧内容写入 block_revisions（历史/回退）。 */
 export function updateBlock(db: Db, id: string, patch: BlockPatch): void {
   const updates: string[] = []
   const params: (string | number)[] = []
+  const actor = patch.actor ?? 'user'
 
   if (patch.content !== undefined) {
+    // 记录旧值：仅当内容确实变化（hash 不同）时写 revision，避免无操作保存污染历史；
+    // noRevision 时跳过（整篇替换路径由 recordDocSnapshot 负责整篇快照，标题不再单独记）
+    const current = getBlockById(db, id)
+    if (!patch.noRevision && current && current.content !== patch.content) {
+      recordRevision(db, id, current.content, actor)
+    }
     updates.push('content = ?', 'content_hash = ?')
     params.push(patch.content, computeContentHash(patch.content))
   }
@@ -303,6 +345,107 @@ export function updateBlock(db: Db, id: string, patch: BlockPatch): void {
   db.query(`UPDATE blocks SET ${updates.join(', ')} WHERE id = ?`).run(
     ...(params as [string, ...string[]]),
   )
+}
+
+/** block 的 revision 列表（新→旧）；内容来自历史表 */
+export function listBlockRevisions(db: Db, blockId: string, limit = 50): BlockRevision[] {
+  return db
+    .query(
+      `SELECT block_id, rev, content, content_hash, actor, created_at
+       FROM block_revisions WHERE block_id = ?
+       ORDER BY rev DESC LIMIT ?`,
+    )
+    .all(blockId, limit) as BlockRevision[]
+}
+
+/** 单条 revision；不存在返回 null */
+export function getBlockRevision(db: Db, blockId: string, rev: number): BlockRevision | null {
+  return (
+    (db
+      .query(
+        `SELECT block_id, rev, content, content_hash, actor, created_at
+         FROM block_revisions WHERE block_id = ? AND rev = ?`,
+      )
+      .get(blockId, rev) as BlockRevision | undefined) ?? null
+  )
+}
+
+/** 整篇文档快照上限（独立于块级修订）：按 doc_id 裁剪，避免快照挤占单块修订槽位 */
+export const MAX_DOC_SNAPSHOTS = 50
+
+/** 记录整篇文档「保存前快照」：旧整篇（标题 + 全部子块）合并为一条 Markdown 存 doc_snapshots。
+ * 供整篇替换入口（PUT /docs/:id/markdown 等）在事务内调用 —— 块级 updateBlock 管单块修订，
+ * 整篇替换会删旧子块 + 插新子块（绕过它），需在此显式快照才能保留整篇历史。 */
+export function recordDocSnapshot(
+  db: Db,
+  docId: string,
+  markdown: string,
+  actor = 'editor',
+): void {
+  const now = nowTimestamp()
+  const rev =
+    (db
+      .query('SELECT COALESCE(MAX(rev), 0) + 1 AS next FROM doc_snapshots WHERE doc_id = ?')
+      .get(docId) as { next: number }).next
+  db.query(
+    `INSERT INTO doc_snapshots (doc_id, rev, content, content_hash, actor, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(docId, rev, markdown, computeContentHash(markdown), actor, now)
+  // 按 doc_id 独立裁剪，保留最近 MAX_DOC_SNAPSHOTS 条（LIMIT -1 = SQLite 方言「不限上限」）
+  const overflow = db
+    .query('SELECT rev FROM doc_snapshots WHERE doc_id = ? ORDER BY rev ASC LIMIT -1 OFFSET ?')
+    .all(docId, MAX_DOC_SNAPSHOTS) as Array<{ rev: number }>
+  if (overflow.length > 0) {
+    const maxKeep = overflow[0]!.rev - 1
+    db.query('DELETE FROM doc_snapshots WHERE doc_id = ? AND rev <= ?').run(docId, maxKeep)
+  }
+}
+
+/** 单条整篇快照；不存在返回 null */
+export function getDocSnapshot(db: Db, docId: string, rev: number): DocSnapshot | null {
+  return (
+    (db
+      .query(
+        `SELECT doc_id, rev, content, content_hash, actor, created_at
+         FROM doc_snapshots WHERE doc_id = ? AND rev = ?`,
+      )
+      .get(docId, rev) as DocSnapshot | undefined) ?? null
+  )
+}
+
+/** 整篇快照列表（新→旧） */
+export function listDocSnapshots(db: Db, docId: string, limit = 50): DocSnapshot[] {
+  return db
+    .query(
+      `SELECT doc_id, rev, content, content_hash, actor, created_at
+       FROM doc_snapshots WHERE doc_id = ?
+       ORDER BY rev DESC LIMIT ?`,
+    )
+    .all(docId, limit) as DocSnapshot[]
+}
+
+/**
+ * 文档历史面板条目（kind 合并视图）：
+ * - kind='snapshot'：整篇快照（doc_snapshots，挂在 doc_id 上）
+ * - kind='block'：单块修订（block_revisions，跨本文档全部块）
+ * 新→旧。同毫秒多块同时写入会聚拢（created_at 相同 → rev DESC 兜底，与单块纯 rev 序略有差异，
+ * 未来做分页时需改为稳定序：created_at DESC + block_id + rev）。
+ */
+export function listDocRevisions(db: Db, docId: string, limit = 100): DocRevisionEntry[] {
+  const rows = db
+    .query(
+      `SELECT 'snapshot' AS kind, doc_id AS block_id, rev, content, actor, created_at
+       FROM doc_snapshots WHERE doc_id = ?
+       UNION ALL
+       SELECT 'block' AS kind, r.block_id, r.rev, r.content, r.actor, r.created_at
+       FROM block_revisions r
+       JOIN blocks b ON b.id = r.block_id
+       WHERE b.root_id = ? AND b.is_deleted = 0
+       ORDER BY created_at DESC, rev DESC
+       LIMIT ?`,
+    )
+    .all(docId, docId, limit) as DocRevisionEntry[]
+  return rows
 }
 
 /** 移动：更新自身 parent/root/level/sort（后代传播见 shiftDescendantLevels / reRootDescendants） */

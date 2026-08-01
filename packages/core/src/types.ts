@@ -51,6 +51,36 @@ export interface BlockRow {
   updated_at: string
 }
 
+/** Block 内容历史 revision（block_revisions 表） */
+export interface BlockRevision {
+  block_id: string
+  rev: number
+  content: string
+  content_hash: string
+  actor: string
+  created_at: string
+}
+
+/** 整篇文档快照（doc_snapshots 表）：编辑器整篇保存前的全文快照 */
+export interface DocSnapshot {
+  doc_id: string
+  rev: number
+  content: string
+  content_hash: string
+  actor: string
+  created_at: string
+}
+
+/** 文档历史面板条目：块级修订与整篇快照的合并视图（kind 区分来源） */
+export interface DocRevisionEntry {
+  kind: 'block' | 'snapshot'
+  block_id: string
+  rev: number
+  content: string
+  actor: string
+  created_at: string
+}
+
 /** 创建 Block 的输入 */
 export interface CreateBlockInput {
   id?: string

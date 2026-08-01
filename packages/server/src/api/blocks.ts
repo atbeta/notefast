@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
 import {
   createBlockSchema,
   updateBlockSchema,
@@ -24,6 +25,8 @@ import {
   softDeleteBlocks,
   restoreBlocks,
   listRecentlyDeletedBlocks,
+  listBlockRevisions,
+  getBlockRevision,
   nowTimestamp,
 } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
@@ -33,6 +36,11 @@ import { fireAfterCreate, fireAfterUpdate, fireAfterDelete } from '../services/h
 import { applyAiExcludeChange } from '../ai/aiExclude'
 
 const blocks = new Hono()
+
+/** 回退 revision 的请求体：仅 actor 可选（记录回退来源，缺省 'revert'） */
+const restoreRevisionSchema = z.object({
+  actor: z.string().max(40).optional(),
+})
 
 blocks.get('/:id', (c) => {
   const db = getDb()
@@ -272,6 +280,50 @@ blocks.post('/:id/restore', (c) => {
 
   return c.json({ restored: true, count: allIds.length })
 })
+
+/** 列出 block 的内容历史（新→旧）；软删除块的 revision 仍可查（回退/审计兜底） */
+blocks.get('/:id/revisions', (c) => {
+  const db = getDb()
+  const id = c.req.param('id')
+  const limit = Math.min(100, Math.max(1, Number(c.req.query('limit') ?? 50)))
+
+  const existing = getBlockById(db, id)
+  if (!existing) {
+    return c.json({ error: 'not_found', message: `Block ${id} 不存在` }, 404)
+  }
+  const revisions = listBlockRevisions(db, id, limit)
+  return c.json({ block_id: id, revisions })
+})
+
+/** 回退到指定 revision：把该版本内容写回（走 updateBlock，自动记为一次新修订 + 索引 + hooks） */
+blocks.post(
+  '/:id/revisions/:rev/restore',
+  zValidator('json', restoreRevisionSchema),
+  (c) => {
+    const db = getDb()
+    const id = c.req.param('id')
+    const rev = Number(c.req.param('rev'))
+    const input = c.req.valid('json')
+
+    const existing = getBlockById(db, id)
+    if (!existing) {
+      return c.json({ error: 'not_found', message: `Block ${id} 不存在` }, 404)
+    }
+    if (!Number.isInteger(rev) || rev < 1) {
+      return c.json({ error: 'invalid_params', message: `rev 必须是正整数` }, 400)
+    }
+    const revision = getBlockRevision(db, id, rev)
+    if (!revision) {
+      return c.json({ error: 'not_found', message: `Block ${id} 的 revision ${rev} 不存在` }, 404)
+    }
+
+    updateBlock(db, id, { content: revision.content, actor: input.actor ?? 'revert' })
+
+    const block = rowToBlock(getBlockById(db, id)!)
+    fireAfterUpdate(block)
+    return c.json({ restored: true, rev, block })
+  },
+)
 
 function limitDepth(blocks: import('@notefast/core').Block[], maxDepth: number, current: number): import('@notefast/core').Block[] {
   if (current >= maxDepth) {

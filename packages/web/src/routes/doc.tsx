@@ -14,6 +14,7 @@ import {
   Share2,
   Globe,
   ChevronDown,
+  ChevronRight,
   SquarePen,
   PencilLine,
 } from 'lucide-react'
@@ -38,6 +39,20 @@ interface Backlink {
   source_content: string
   source_type: string
   ref_type: string
+}
+
+interface DocRevision {
+  kind: 'block' | 'snapshot'
+  block_id: string
+  rev: number
+  content: string
+  actor: string
+  created_at: string
+}
+
+/** revision 在历史面板的稳定 key（block + rev 唯一） */
+function revisionKey(rev: DocRevision): string {
+  return `${rev.block_id}#${rev.rev}`
 }
 
 /** stale-while-revalidate 降透明的最短延迟：
@@ -126,8 +141,8 @@ export default function DocPage() {
   const [auxLoading, setAuxLoading] = useState(false)
   const [indexJob, setIndexJob] = useState<IndexJob | null>(null)
   const [showSkeleton, setShowSkeleton] = useState(false)
-  /** 桌面右栏：大纲 / 反向链接 / 实体 标签页 */
-  const [railTab, setRailTab] = useState<'outline' | 'backlinks' | 'entities'>('outline')
+  /** 桌面右栏：大纲 / 反向链接 / 实体 / 历史 标签页 */
+  const [railTab, setRailTab] = useState<'outline' | 'backlinks' | 'entities' | 'history'>('outline')
   useEffect(() => { setRailTab('outline') }, [id])
   /** 移动端目录折叠 */
   const [tocOpen, setTocOpen] = useState(false)
@@ -230,6 +245,21 @@ export default function DocPage() {
       .catch(() => setBacklinks([]))
       .finally(() => setAuxLoading(false))
   }, [id, refreshKey])
+
+  /** 文档历史 revision（跨块时间线）；历史面板打开时才拉取，避免每开文档都查 */
+  const [revisions, setRevisions] = useState<DocRevision[]>([])
+  const [revisionsLoading, setRevisionsLoading] = useState(false)
+  const loadRevisions = useCallback(() => {
+    if (!id) return
+    setRevisionsLoading(true)
+    request<{ revisions: DocRevision[] }>(`/docs/${id}/revisions`)
+      .then((r) => setRevisions(r.revisions ?? []))
+      .catch(() => setRevisions([]))
+      .finally(() => setRevisionsLoading(false))
+  }, [id])
+  useEffect(() => {
+    if (railTab === 'history') loadRevisions()
+  }, [railTab, loadRevisions])
 
   useEffect(() => {
     if (doc) {
@@ -745,6 +775,7 @@ export default function DocPage() {
                 { id: 'outline' as const, label: '大纲', count: flatHeadings.length },
                 { id: 'backlinks' as const, label: '链接', count: backlinks.length },
                 { id: 'entities' as const, label: '实体', count: null },
+                { id: 'history' as const, label: '历史', count: null },
               ] as const
             ).map((tab) => {
               const active = railTab === tab.id
@@ -778,6 +809,18 @@ export default function DocPage() {
             )}
             {railTab === 'entities' && id && (
               <EntityPanel docId={id} variant="bare" />
+            )}
+            {railTab === 'history' && (
+              <HistoryView
+                docId={id ?? ''}
+                revisions={revisions}
+                loading={revisionsLoading}
+                onRestored={() => {
+                  loadRevisions()
+                  // 恢复可能改了标题/正文 → 触发文档重新加载
+                  setRefreshKey((k) => k + 1)
+                }}
+              />
             )}
           </div>
         </div>
@@ -874,8 +917,189 @@ function BacklinksView({ backlinks, loading }: { backlinks: Backlink[]; loading:
   )
 }
 
-function ErrorState({ message }: { message: string }) {
+/** 文档历史面板：跨块 revision 时间线（新→旧），支持预览与回退 */
+function HistoryView({
+  docId,
+  revisions,
+  loading,
+  onRestored,
+}: {
+  docId: string
+  revisions: DocRevision[]
+  loading: boolean
+  onRestored: () => void
+}) {
+  const toast = useToast()
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
+  const [restoring, setRestoring] = useState<string | null>(null)
+
+  const toggle = (key: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const handleRestore = async (rev: DocRevision) => {
+    const isSnapshot = rev.kind === 'snapshot'
+    const ok = window.confirm(
+      isSnapshot
+        ? '确定回退到该整篇快照吗？正文与标题都会恢复为此版本，当前内容会作为新的历史版本保留。'
+        : '确定回退到该块版本吗？仅此内容块会恢复，当前内容会作为新的历史版本保留。',
+    )
+    if (!ok) return
+    setRestoring(revisionKey(rev))
+    try {
+      if (isSnapshot) {
+        // 整篇快照：走整篇替换端点（回退正文 + 标题，快照内容即完整 markdown）
+        await api.post(`/docs/${docId}/snapshots/${rev.rev}/restore`, {})
+      } else {
+        await api.post(`/blocks/${rev.block_id}/revisions/${rev.rev}/restore`, {})
+      }
+      toast.success({ title: '已回退' })
+      onRestored()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      toast.error({ title: '回退失败', description: msg })
+    } finally {
+      setRestoring(null)
+    }
+  }
+
+  if (loading && revisions.length === 0) {
+    return <div className="px-1 text-[12px] text-muted-foreground/70">加载中…</div>
+  }
+  if (revisions.length === 0) {
+    return (
+      <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
+        暂无历史记录。每次编辑会在此留下可回退的版本。
+      </div>
+    )
+  }
+
+  const snapshots = revisions.filter((r) => r.kind === 'snapshot')
+  const blockEdits = revisions.filter((r) => r.kind === 'block')
+
   return (
+    <div className="flex flex-col gap-3">
+      <p className="px-1 text-[11px] text-muted-foreground/60 leading-relaxed">
+        整篇快照回退正文与标题；块级修改仅回退该内容块。
+      </p>
+
+      {/* 整篇快照：文档级时间线 */}
+      {snapshots.length > 0 && (
+        <section>
+          <h4 className="px-1 pb-1.5 text-[10.5px] font-medium uppercase tracking-[0.05em] text-muted-foreground/50">
+            整篇快照
+          </h4>
+          <div className="flex flex-col gap-1">
+            {snapshots.map((rev) => (
+              <RevisionItem
+                key={revisionKey(rev)}
+                rev={rev}
+                label="整篇"
+                expanded={expanded}
+                restoring={restoring}
+                onToggle={toggle}
+                onRestore={handleRestore}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 块级修改：单块历史 */}
+      {blockEdits.length > 0 && (
+        <section>
+          <h4 className="px-1 pb-1.5 text-[10.5px] font-medium uppercase tracking-[0.05em] text-muted-foreground/50">
+            块级修改
+          </h4>
+          <div className="flex flex-col gap-1">
+            {blockEdits.map((rev) => (
+              <RevisionItem
+                key={revisionKey(rev)}
+                rev={rev}
+                label={
+                  rev.actor === 'revert'
+                    ? '回退操作'
+                    : rev.actor === 'ai'
+                      ? 'AI 写入'
+                      : rev.actor === 'mcp'
+                        ? '外部工具'
+                        : '编辑'
+                }
+                expanded={expanded}
+                restoring={restoring}
+                onToggle={toggle}
+                onRestore={handleRestore}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
+function RevisionItem({
+  rev,
+  label,
+  expanded,
+  restoring,
+  onToggle,
+  onRestore,
+}: {
+  rev: DocRevision
+  label: string
+  expanded: ReadonlySet<string>
+  restoring: string | null
+  onToggle: (key: string) => void
+  onRestore: (rev: DocRevision) => void
+}) {
+  const key = revisionKey(rev)
+  const isOpen = expanded.has(key)
+  return (
+    <div className="group rounded-lg border border-border/50 bg-card/50 overflow-hidden">
+      <div className="flex items-center gap-2 px-2.5 py-2">
+        <button
+          type="button"
+          onClick={() => onToggle(key)}
+          className="min-w-0 flex-1 text-left"
+        >
+          <span className="block text-[11.5px] text-muted-foreground truncate">{label}</span>
+          <span className="block text-[10.5px] text-muted-foreground/60 tabular-nums">
+            {relativeTime(new Date(rev.created_at))}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onToggle(key)}
+          className="shrink-0 p-1 text-muted-foreground/50 hover:text-foreground transition-colors"
+          title={isOpen ? '收起' : '预览'}
+        >
+          {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+        </button>
+        <button
+          type="button"
+          disabled={restoring === key}
+          onClick={() => onRestore(rev)}
+          className="shrink-0 px-1.5 py-1 text-[11px] font-medium text-primary/80 hover:text-primary disabled:opacity-50 transition-colors"
+        >
+          {restoring === key ? '…' : '回退'}
+        </button>
+      </div>
+      {isOpen && (
+        <pre className="px-3 py-2 border-t border-border/40 text-[11px] leading-relaxed whitespace-pre-wrap font-sans text-muted-foreground bg-background/40 max-h-40 overflow-y-auto">
+          {rev.content || '（空内容）'}
+        </pre>
+      )}
+    </div>
+  )
+}
+
+function ErrorState({ message }: { message: string }) {  return (
     <div className="card text-center py-16 px-6 animate-fade-in">
       <p className="text-destructive mb-4">{message}</p>
       <Link to="/" className="text-primary hover:underline text-sm inline-flex items-center gap-1">

@@ -14,6 +14,9 @@ import {
   listDocRows,
   updateBlock,
   softDeleteBlocks,
+  listDocRevisions,
+  recordDocSnapshot,
+  getDocSnapshot,
   nowTimestamp,
 } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
@@ -383,20 +386,32 @@ docs.delete('/:id', (c) => {
   return c.json({ deleted: true, count: allIds.length })
 })
 
-docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
-  const db = getDb()
-  const id = c.req.param('id')
-  const { markdown, title } = c.req.valid('json')
-
+/**
+ * 整篇替换（编辑器保存 / 整篇快照回退共用）：
+ * - 事务内先记「保存前整篇快照」（doc_snapshots），再删旧子块 + 插新子块 —— 原子，失败不留脏快照
+ * - 标题变更不单独记块级修订（快照已含旧标题）
+ * - 返回响应体数据 + 副作用（索引作业 / hooks 已在此触发）
+ */
+function applyMarkdownReplace(
+  db: ReturnType<typeof getDb>,
+  id: string,
+  markdown: string,
+  title: string | undefined,
+  actor: string,
+): { ok: true; body: Record<string, unknown> } | { ok: false; error: string } {
   const docRow = getDocById(db, id)
   if (!docRow) {
-    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
+    return { ok: false, error: `文档 ${id} 不存在` }
   }
 
   const rawInputs = parseMarkdownToBlocks(markdown, docRow.notebook_id)
   // 剥离与标题重复的首个 H1（导出的 markdown 首行是 `# {标题}`，直接回解析会重复入库）
   const newTitle = title || docRow.content
   const inputs = stripTitleHeading(rawInputs, newTitle)
+
+  // 整篇替换会删旧子块 + 插新子块（绕过块级 updateBlock 的 revision），
+  // 先把旧整篇合并为一条「保存前快照」（在事务内写入 —— 后续任一失败自动回滚，不留脏快照）
+  const oldMarkdown = blocksToMarkdown(buildBlockTree(fetchDocBlocks(db, id)))
 
   // 收集旧子块 ID（事务外保留引用，事务后触发 afterDelete）
   const oldChildRows = fetchSubtreeBlocks(db, id)
@@ -405,11 +420,13 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
   const insertedIds: string[] = []
 
   db.transaction(() => {
+    recordDocSnapshot(db, id, oldMarkdown, actor)
     deleteRefsTouchingBlocks(db, oldChildIds)
     deleteMentionsTouchingBlocks(db, oldChildIds)
     softDeleteBlocks(db, oldChildIds)
 
-    updateBlock(db, id, { content: newTitle })
+    // 标题变更不单独记 revision（整篇快照已含旧标题，见 recordDocSnapshot 上方注释）
+    updateBlock(db, id, { content: newTitle, noRevision: true })
 
     // 与 insertDocFromMarkdown / appendMarkdownToDoc 共用插入逻辑：
     // properties（headingLevel/language 等）与嵌套 level 不再丢失
@@ -434,13 +451,24 @@ docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
   const tree = buildBlockTree(fetchDocBlocks(db, id))
   // asset 引用对账：悬空引用告警（不阻断保存）
   const missingAssets = findMissingAssets(extractAssetRefs(markdown))
-  return c.json({
-    doc: tree.length > 0 ? tree[0] : null,
-    updated_at: updatedDocRow.updated_at,
-    ...(indexJob ? { index_job: indexJob } : {}),
-    ...(missingAssets.length > 0 ? { missing_assets: missingAssets } : {}),
-  })
+  return {
+    ok: true,
+    body: {
+      doc: tree.length > 0 ? tree[0] : null,
+      updated_at: updatedDocRow.updated_at,
+      ...(indexJob ? { index_job: indexJob } : {}),
+      ...(missingAssets.length > 0 ? { missing_assets: missingAssets } : {}),
+    },
+  }
+}
+
+docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
+  const { markdown, title } = c.req.valid('json')
+  const result = applyMarkdownReplace(getDb(), c.req.param('id'), markdown, title, 'editor')
+  return result.ok ? c.json(result.body) : c.json({ error: 'not_found', message: result.error }, 404)
 })
+
+
 
 docs.get('/:id/export/markdown', (c) => {
   const id = c.req.param('id')
@@ -455,6 +483,42 @@ docs.get('/:id/export/markdown', (c) => {
 
   const markdown = blocksToMarkdown(tree)
   return c.json({ markdown, updated_at: docRow.updated_at })
+})
+
+/** 文档级历史：跨块 revision 时间线（含标题与子块），按时间新→旧 */
+docs.get('/:id/revisions', (c) => {
+  const id = c.req.param('id')
+  const limit = Math.min(200, Math.max(1, Number(c.req.query('limit') ?? 100)))
+  const db = getDb()
+
+  const docRow = getDocById(db, id)
+  if (!docRow) {
+    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
+  }
+  return c.json({ doc_id: id, revisions: listDocRevisions(db, id, limit) })
+})
+
+/** 回退到指定整篇快照：以该快照内容做一次整篇替换（actor='revert'，同样留一条「回退前」快照） */
+docs.post('/:id/snapshots/:rev/restore', (c) => {
+  const db = getDb()
+  const id = c.req.param('id')
+  const rev = Number(c.req.param('rev'))
+
+  const docRow = getDocById(db, id)
+  if (!docRow) {
+    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
+  }
+  if (!Number.isInteger(rev) || rev < 1) {
+    return c.json({ error: 'invalid_params', message: `rev 必须是正整数` }, 400)
+  }
+  const snapshot = getDocSnapshot(db, id, rev)
+  if (!snapshot) {
+    return c.json({ error: 'not_found', message: `文档 ${id} 的快照 ${rev} 不存在` }, 404)
+  }
+
+  // 快照内容本身就是完整 markdown（含标题），整篇替换会解析并重建块树
+  const result = applyMarkdownReplace(db, id, snapshot.content, undefined, 'revert')
+  return result.ok ? c.json(result.body) : c.json({ error: 'not_found', message: result.error }, 404)
 })
 
 /**

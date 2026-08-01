@@ -1,6 +1,8 @@
 import type { Database } from 'bun:sqlite'
 import * as m001 from './001_initial'
 import * as m002 from './002_web_session_tokens'
+import * as m003 from './003_block_revisions'
+import * as m004 from './004_doc_snapshots'
 
 interface Migration {
   id: string
@@ -10,7 +12,7 @@ interface Migration {
 }
 
 /** 唯一基线迁移。历史 002-010 已合并到此。 */
-const MIGRATIONS: Migration[] = [m001, m002]
+const MIGRATIONS: Migration[] = [m001, m002, m003, m004]
 
 export function runMigrations(db: Database): { applied: string[]; skipped: string[] } {
   db.exec(`
