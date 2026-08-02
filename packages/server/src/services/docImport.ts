@@ -36,6 +36,8 @@ export interface InsertDocFromMarkdownOptions {
   rejectEmpty?: boolean
   /** 初始标签（已 normalize） */
   tags?: string[]
+  /** 指定文档根 id（导入自家导出档时复用 manifest 中的 docId，实现幂等还原） */
+  docId?: string
   /**
    * 来源溯源（连接器架构预留）：外部系统推入的文档记录来源标识，
    * 存于文档根 properties.source；后续同步按 (provider, external_id)
@@ -79,7 +81,7 @@ export function insertDocFromMarkdown(
   const inputs = stripTitleHeading(rawInputs, opts.title)
 
   const docStatus = opts.status === 'inbox' ? 'inbox' : 'note'
-  const docId = crypto.randomUUID()
+  const docId = opts.docId ?? crypto.randomUUID()
   const now = nowTimestamp()
 
   let blockIds: string[] = []

@@ -1,0 +1,260 @@
+/**
+ * 整库导出（/api/v1/export/archive）与 zip 导入（/api/v1/import/zip）闭环测试：
+ * - buildFullArchiveExport：多文档 + 图片 → 自包含 zip（md + media/ + manifest）
+ * - parseZip：STORE 与 DEFLATE 两条解压路径
+ * - importArchiveZip：自家档精确还原（docId 幂等、media 回写 asset:）、通用 md zip 兜底
+ * - 导出 → 清库 → 导入 的完整往返
+ */
+
+import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { Hono } from 'hono'
+import { initDb, closeDb, getDb } from '../db'
+import { initAssetStore, saveAsset, readAsset } from '../assets/store'
+import docs from '../api/docs'
+import importRouter from '../api/import'
+import exportArchive from '../api/exportArchive'
+import { buildZipStore, parseZip } from '../lib/zipStore'
+import { buildFullArchiveExport } from '../services/docExport'
+import { importArchiveZip } from '../services/zipImport'
+
+let testDir: string
+let app: Hono
+let notebookId: string
+
+const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4])
+
+beforeAll(() => {
+  testDir = mkdtempSync(join('/tmp', 'notefast-export-import-'))
+  const result = initDb(testDir)
+  notebookId = result.notebookId
+  initAssetStore(testDir)
+  app = new Hono()
+  app.route('/api/v1/docs', docs)
+  app.route('/api/v1/import', importRouter)
+  app.route('/api/v1/export', exportArchive)
+})
+
+afterAll(() => {
+  closeDb()
+  rmSync(testDir, { recursive: true, force: true })
+})
+
+beforeEach(() => {
+  const db = getDb()
+  db.query('DELETE FROM assets').run()
+  db.query('DELETE FROM blocks').run()
+  db.exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
+})
+
+async function createDoc(title: string, markdown: string): Promise<string> {
+  const res = await app.fetch(new Request('http://localhost/api/v1/docs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notebook_id: notebookId, title, markdown }),
+  }))
+  const body = await res.json() as { id: string }
+  expect(res.status).toBe(201)
+  return body.id
+}
+
+describe('parseZip', () => {
+  test('解析 buildZipStore 产出的 STORE zip', () => {
+    const buf = buildZipStore([
+      { name: 'a.md', data: new TextEncoder().encode('# A') },
+      { name: 'media/x.png', data: new Uint8Array(PNG_BYTES) },
+    ])
+    const entries = parseZip(new Uint8Array(buf))
+    expect(entries.length).toBe(2)
+    expect(entries[0]!.name).toBe('a.md')
+    expect(new TextDecoder().decode(entries[0]!.data)).toBe('# A')
+    expect(entries[1]!.name).toBe('media/x.png')
+    expect(Buffer.from(entries[1]!.data).equals(PNG_BYTES)).toBe(true)
+  })
+
+  test('解析 DEFLATE 压缩条目', () => {
+    const data = new TextEncoder().encode('deflated content 压缩内容')
+    const deflated = Bun.deflateSync(data)
+    const entry = deflateZipEntry('note.md', deflated, data)
+    const entries = parseZip(new Uint8Array(entry))
+    expect(entries.length).toBe(1)
+    expect(entries[0]!.name).toBe('note.md')
+    expect(new TextDecoder().decode(entries[0]!.data)).toBe(new TextDecoder().decode(data))
+  })
+
+  test('空/非 zip 输入抛错', () => {
+    expect(() => parseZip(new Uint8Array([1, 2, 3]))).toThrow()
+  })
+})
+
+describe('buildFullArchiveExport', () => {
+  test('多文档 + 图片 → zip（md + media/ + manifest），asset: 改写为相对路径', async () => {
+    const { meta } = saveAsset(PNG_BYTES, 'image/png')
+    const docA = await createDoc('文档甲', `甲正文\n\n![图](asset:${meta.id})\n`)
+    const docB = await createDoc('文档乙', '乙正文')
+
+    const file = buildFullArchiveExport()
+    expect(file.filename).toMatch(/^notefast-export-.*\.zip$/)
+
+    const entries = parseZip(file.body)
+    const names = entries.map((e) => e.name)
+    expect(names).toContain('notefast-archive.manifest.json')
+    expect(names.some((n) => n.includes(docA.replace(/-/g, '').slice(0, 12)))).toBe(true)
+    expect(names.some((n) => n.includes(docB.replace(/-/g, '').slice(0, 12)))).toBe(true)
+    expect(names).toContain(`media/${meta.id}.png`)
+
+    // md 内容：asset: 已改写为 media/ 相对路径，不再残留 asset:
+    const docAEntry = entries.find((e) => e.name.endsWith('.md') && e.name.includes(docA.replace(/-/g, '').slice(0, 12)))!
+    const mdText = new TextDecoder().decode(docAEntry.data)
+    expect(mdText).toContain(`media/${meta.id}.png`)
+    expect(mdText).not.toContain('asset:')
+
+    // manifest 结构与文档一一对应
+    const manifestEntry = entries.find((e) => e.name === 'notefast-archive.manifest.json')!
+    const manifest = JSON.parse(new TextDecoder().decode(manifestEntry.data))
+    expect(manifest.kind).toBe('markdown-archive')
+    expect(manifest.files.length).toBe(2)
+    expect(manifest.media).toContain(`media/${meta.id}.png`)
+  })
+
+  test('GET /api/v1/export/archive 返回 zip', async () => {
+    await createDoc('导出接口测试', '正文')
+    const res = await app.fetch(new Request('http://localhost/api/v1/export/archive'))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')).toBe('application/zip')
+    expect(res.headers.get('Content-Disposition')).toContain('attachment')
+    const body = await res.arrayBuffer()
+    expect(parseZip(new Uint8Array(body)).length).toBeGreaterThan(0)
+  })
+})
+
+describe('importArchiveZip', () => {
+  test('自家档导入：按 manifest docId 精确还原、media 回写 asset:', async () => {
+    const { meta } = saveAsset(PNG_BYTES, 'image/png')
+    const docId = await createDoc('还原文档', `正文甲\n\n![图](asset:${meta.id})\n`)
+    const exported = buildFullArchiveExport()
+
+    // 清库后再导入（保留 notebook）
+    const db = getDb()
+    db.query('DELETE FROM assets').run()
+    db.query('DELETE FROM blocks').run()
+    db.exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
+
+    const result = importArchiveZip(db, { notebookId, bytes: exported.body })
+    expect(result.imported).toBe(1)
+    expect(result.skipped).toBe(0)
+    expect(result.failed).toBe(0)
+    expect(result.mediaImported).toBe(1)
+
+    // docId 与导出前一致
+    const row = db.query('SELECT content FROM blocks WHERE id = ? AND type = \'document\'').get(docId) as { content: string } | undefined
+    expect(row?.content).toBe('还原文档')
+    // media 引用回写为 asset:<sha>
+    const bodyRows = db.query("SELECT content FROM blocks WHERE root_id = ? AND content LIKE '%asset:%'").all(docId) as Array<{ content: string }>
+    expect(bodyRows.some((r) => r.content.includes(`asset:${meta.id}`))).toBe(true)
+    // AssetStore 落盘
+    expect(readAsset(meta.id)).not.toBeNull()
+  })
+
+  test('自家档重复导入幂等（同一 docId 跳过）', async () => {
+    const { meta } = saveAsset(PNG_BYTES, 'image/png')
+    await createDoc('幂等文档', `![图](asset:${meta.id})`)
+    const exported = buildFullArchiveExport()
+
+    // 同一库直接再导一次 → 全部跳过
+    const result = importArchiveZip(getDb(), { notebookId, bytes: exported.body })
+    expect(result.imported).toBe(0)
+    expect(result.skipped).toBe(1)
+    expect(result.failed).toBe(0)
+  })
+
+  test('通用 md zip（无 manifest）→ 每个 md 建一个新文档', async () => {
+    const zip = buildZipStore([
+      { name: '笔记一.md', data: new TextEncoder().encode('# 笔记一\n\n内容甲') },
+      { name: '子目录/笔记二.md', data: new TextEncoder().encode('# 笔记二\n\n内容乙') },
+    ])
+    const result = importArchiveZip(getDb(), { notebookId, bytes: zip })
+    expect(result.imported).toBe(2)
+    expect(result.skipped).toBe(0)
+    const titles = getDb().query("SELECT content FROM blocks WHERE type = 'document' ORDER BY created_at").all() as Array<{ content: string }>
+    expect(titles.map((t) => t.content)).toContain('笔记一')
+    expect(titles.map((t) => t.content)).toContain('笔记二')
+  })
+
+  test('损坏的 zip → 抛错（调用方映射 400）', () => {
+    expect(() => importArchiveZip(getDb(), { notebookId, bytes: new Uint8Array([0x50, 0x4b, 0x00, 0x01]) })).toThrow()
+  })
+
+  test('POST /api/v1/import/zip 走 multipart 导入', async () => {
+    await createDoc('接口导入文档', '接口正文')
+    const exported = buildFullArchiveExport()
+
+    const db = getDb()
+    db.query('DELETE FROM blocks').run()
+    db.exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
+
+    const form = new FormData()
+    form.append('file', new File([new Uint8Array(exported.body)], 'export.zip'))
+    form.append('notebook_id', notebookId)
+    const res = await app.fetch(new Request('http://localhost/api/v1/import/zip', { method: 'POST', body: form }))
+    expect(res.status).toBe(200)
+    const body = await res.json() as { imported: number; skipped: number }
+    expect(body.imported).toBe(1)
+    expect(body.skipped).toBe(0)
+  })
+})
+
+/** 构造一个 DEFLATE 压缩的单条目 zip（测试 parseZip 的 method 8 路径） */
+function deflateZipEntry(name: string, deflated: Uint8Array, original: Uint8Array): Uint8Array {
+  const crc = crc32ForTest(original)
+  const nameBytes = new TextEncoder().encode(name)
+  const method = 8
+  const generalFlag = 0x0800
+  const localHeader = concatForTest([
+    u32ForTest(0x04034b50), u16ForTest(20), u16ForTest(generalFlag), u16ForTest(method),
+    u16ForTest(0), u16ForTest(0), u32ForTest(crc), u32ForTest(deflated.length), u32ForTest(deflated.length),
+    u16ForTest(nameBytes.length), u16ForTest(0), nameBytes,
+  ])
+  const central = concatForTest([
+    u32ForTest(0x02014b50), u16ForTest(20), u16ForTest(20), u16ForTest(generalFlag), u16ForTest(method),
+    u16ForTest(0), u16ForTest(0), u32ForTest(crc), u32ForTest(deflated.length), u32ForTest(deflated.length),
+    u16ForTest(nameBytes.length), u16ForTest(0), u16ForTest(0), u16ForTest(0), u16ForTest(0),
+    u32ForTest(0), u32ForTest(0), nameBytes,
+  ])
+  const eocd = concatForTest([
+    u32ForTest(0x06054b50), u16ForTest(0), u16ForTest(0), u16ForTest(1), u16ForTest(1),
+    u32ForTest(central.length), u32ForTest(localHeader.length + deflated.length), u16ForTest(0),
+  ])
+  return concatForTest([localHeader, deflated, central, eocd])
+}
+
+// ── 最小 zip 构造工具（测试内用）──
+const CRC_T = (() => {
+  const t = new Uint32Array(256)
+  for (let n = 0; n < 256; n++) {
+    let c = n
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+    t[n] = c >>> 0
+  }
+  return t
+})()
+function crc32ForTest(bytes: Uint8Array): number {
+  let c = 0xffffffff
+  for (let i = 0; i < bytes.length; i++) c = CRC_T[(c ^ bytes[i]!) & 0xff]! ^ (c >>> 8)
+  return (c ^ 0xffffffff) >>> 0
+}
+function u16ForTest(n: number): Uint8Array {
+  const b = new Uint8Array(2); b[0] = n & 0xff; b[1] = (n >>> 8) & 0xff; return b
+}
+function u32ForTest(n: number): Uint8Array {
+  const b = new Uint8Array(4); b[0] = n & 0xff; b[1] = (n >>> 8) & 0xff; b[2] = (n >>> 16) & 0xff; b[3] = (n >>> 24) & 0xff; return b
+}
+function concatForTest(parts: Uint8Array[]): Uint8Array {
+  let len = 0
+  for (const p of parts) len += p.length
+  const out = new Uint8Array(len)
+  let off = 0
+  for (const p of parts) { out.set(p, off); off += p.length }
+  return out
+}

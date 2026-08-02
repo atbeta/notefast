@@ -21,6 +21,22 @@ export function extForMime(mime: string): string {
   return MIME_EXT[mime.toLowerCase()] || '.bin'
 }
 
+const EXT_MIME: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  avif: 'image/avif',
+  bin: 'application/octet-stream',
+}
+
+/** 从扩展名推断 MIME（导入 media 时用；未知回落到 octet-stream） */
+export function mimeForExt(ext: string): string {
+  return EXT_MIME[ext.toLowerCase().replace(/^\./, '')] || 'application/octet-stream'
+}
+
 /** 归档 media 相对键：media/<sha><ext>（与 .md 并列于归档根目录下） */
 export function archiveMediaKey(sha: string, ext: string): string {
   return `media/${sha}${ext}`

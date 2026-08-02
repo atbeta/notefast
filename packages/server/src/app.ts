@@ -40,6 +40,7 @@ import blocks from './api/blocks'
 import docs from './api/docs'
 import search from './api/search'
 import importRouter from './api/import'
+import exportArchive from './api/exportArchive'
 import refs from './api/refs'
 import notebooks from './api/notebooks'
 import sync from './api/sync'
@@ -223,6 +224,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   app.route('/api/v1/docs', docs)
   app.route('/api/v1/search', search)
   app.route('/api/v1/import', importRouter)
+  app.route('/api/v1/export', exportArchive)
   app.route('/api/v1/refs', refs)
   app.route('/api/v1/notebooks', notebooks)
   app.route('/api/v1/sync', sync)

@@ -14,6 +14,7 @@ import {
   extractTitleFromMarkdown,
 } from '../services/docFileImport'
 import { MAX_MARKDOWN_IMPORT_BYTES } from '../services/markdownStage'
+import { MAX_ARCHIVE_IMPORT_BYTES, importArchiveZip } from '../services/zipImport'
 import { scheduleDocIndex } from '../ai/indexJobs'
 
 const importRouter = new Hono()
@@ -141,5 +142,74 @@ function parseTagsField(raw: unknown): string[] | undefined {
   }
   return s.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 64)
 }
+
+/** 解析 notebook_id：显式给出需存在；缺省用第一个笔记本（单 Notebook 场景） */
+function resolveNotebookId(raw: unknown): string | null {
+  if (typeof raw === 'string' && raw.trim()) {
+    const row = getDb().query('SELECT id FROM notebooks WHERE id = ?').get(raw.trim()) as { id: string } | undefined
+    return row?.id ?? null
+  }
+  const row = getDb()
+    .query('SELECT id FROM notebooks ORDER BY sort ASC, created_at ASC LIMIT 1')
+    .get() as { id: string } | undefined
+  return row?.id ?? null
+}
+
+/**
+ * 导入 zip 存档：自家导出档（manifest 精确还原）或通用 md zip。
+ * 入库后为新文档触发索引与 hooks（autolink / 实体抽取等）。
+ */
+importRouter.post('/zip', async (c) => {
+  const body = await c.req.parseBody({ all: true })
+  const fileField = body['file']
+  if (!fileField || typeof fileField === 'string') {
+    return c.json({ error: 'bad_request', message: '缺少 file 字段（multipart zip 文件）' }, 400)
+  }
+  const file = fileField as File
+  const buf = Buffer.from(await file.arrayBuffer())
+  if (buf.byteLength === 0) {
+    return c.json({ error: 'bad_request', message: '文件内容为空' }, 400)
+  }
+  if (buf.byteLength > MAX_ARCHIVE_IMPORT_BYTES) {
+    return c.json({
+      error: 'bad_request',
+      message: `文件不得超过 ${MAX_ARCHIVE_IMPORT_BYTES} 字节`,
+    }, 400)
+  }
+
+  const notebookId = resolveNotebookId(body['notebook_id'])
+  if (!notebookId) {
+    return c.json({ error: 'bad_request', message: '未找到可用的笔记本' }, 400)
+  }
+
+  let result: ReturnType<typeof importArchiveZip>
+  try {
+    result = importArchiveZip(getDb(), { notebookId, bytes: new Uint8Array(buf) })
+  } catch (e) {
+    return c.json({ error: 'bad_request', message: e instanceof Error ? e.message : String(e) }, 400)
+  }
+
+  // 新文档触发索引与 hooks（fire-and-forget，量级与单篇导入一致）
+  const db = getDb()
+  for (const doc of result.importedDocs) {
+    const docRow = getBlockById(db, doc.docId)
+    if (!docRow) continue
+    scheduleDocIndex(doc.docId, doc.blockIds)
+    fireAfterCreateMany(getBlocksByIds(db, doc.blockIds).map(rowToBlock))
+    fireDocAfterCreate({
+      doc: rowToBlock(docRow),
+      meta: { status: 'note', tags: readTags(docRow), source: 'import' },
+    })
+  }
+  if (result.importedDocs.length > 0) scheduleSyncNow()
+
+  return c.json({
+    imported: result.imported,
+    skipped: result.skipped,
+    failed: result.failed,
+    media_imported: result.mediaImported,
+    errors: result.errors.slice(0, 20),
+  }, 200)
+})
 
 export default importRouter

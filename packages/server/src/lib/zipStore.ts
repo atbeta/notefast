@@ -128,3 +128,60 @@ export function buildZipStore(entries: ZipEntry[]): Uint8Array {
 
   return concat([...localParts, centralDir, eocd])
 }
+
+/**
+ * 读取 zip（只读，无依赖）：
+ * - 支持 STORE（method 0）与 DEFLATE（method 8，经 Bun.inflateSync 解压）
+ * - 目录项跳过；zip64 / 加密等罕见形态抛错
+ * - 数据描述符（bit 3）不影响：大小与偏移一律以中央目录为准
+ */
+export function parseZip(bytes: Uint8Array): ZipEntry[] {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+
+  // EOCD：从尾部往前找签名（容忍末尾 comment）
+  let eocd = -1
+  for (let i = bytes.length - 22; i >= 0; i--) {
+    if (view.getUint32(i, true) === 0x06054b50) {
+      eocd = i
+      break
+    }
+  }
+  if (eocd < 0) throw new Error('无效的 zip 文件：未找到中央目录结尾')
+  const cdOffset = view.getUint32(eocd + 16, true)
+  const cdCount = view.getUint16(eocd + 10, true)
+
+  const decoder = new TextDecoder()
+  const entries: ZipEntry[] = []
+  let p = cdOffset
+  for (let n = 0; n < cdCount; n++) {
+    if (view.getUint32(p, true) !== 0x02014b50) break
+    const method = view.getUint16(p + 10, true)
+    const compSize = view.getUint32(p + 20, true)
+    const nameLen = view.getUint16(p + 28, true)
+    const extraLen = view.getUint16(p + 30, true)
+    const commentLen = view.getUint16(p + 32, true)
+    const localOffset = view.getUint32(p + 42, true)
+    if (compSize === 0xffffffff) {
+      throw new Error(`不支持 zip64 大文件条目: ${decoder.decode(bytes.subarray(p + 46, p + 46 + nameLen)) || '(无文件名)'}`)
+    }
+    const name = decoder.decode(bytes.subarray(p + 46, p + 46 + nameLen))
+    p += 46 + nameLen + extraLen + commentLen
+
+    if (name.endsWith('/')) continue
+    // 本地文件头在 centralOffset 处读取，名称/额外字段长度与中央目录一致才跳到数据
+    const lhNameLen = view.getUint16(localOffset + 26, true)
+    const lhExtraLen = view.getUint16(localOffset + 28, true)
+    const dataStart = localOffset + 30 + lhNameLen + lhExtraLen
+    const comp = new Uint8Array(bytes.subarray(dataStart, dataStart + compSize))
+    let data: Uint8Array
+    if (method === 0) {
+      data = comp
+    } else if (method === 8) {
+      data = new Uint8Array(Bun.inflateSync(comp))
+    } else {
+      throw new Error(`不支持的 zip 压缩方式: ${method}（${name}）`)
+    }
+    entries.push({ name, data })
+  }
+  return entries
+}

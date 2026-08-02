@@ -1,14 +1,15 @@
 /**
  * 单文档导出：无图 → Markdown 文件；有图 → zip（MD + media/，asset: 改写为相对路径）。
+ * 整库导出：与 Markdown 归档同构的自包含 zip（<slug>--<docId>.md + media/ + manifest）。
  */
 
 import { blocksToMarkdown, buildBlockTree } from '@notefast/core'
 import { extractAssetRefs, readAsset, readAssetBytes } from '../assets/store'
 import { getDb } from '../db'
-import { fetchDocBlocks, getDocById } from '../store/blocks'
-import { sanitizeFilename } from '../sync/archive'
-import { extForMime } from '../sync/archiveMedia'
-import { buildZipStore } from '../lib/zipStore'
+import { fetchDocBlocks, getDocById, listDocRows } from '../store/blocks'
+import { extForMime, archiveMediaKey } from '../sync/archiveMedia'
+import { buildZipStore, type ZipEntry } from '../lib/zipStore'
+import { sanitizeFilename, archiveFilename, buildArchiveManifest, ARCHIVE_MANIFEST_NAME, type ArchiveManifest } from '../sync/archive'
 
 /** Content-Disposition：ASCII fallback + UTF-8 filename* */
 export function contentDispositionAttachment(filename: string): string {
@@ -94,5 +95,52 @@ export function buildDocExportFile(docId: string): DocExportFile | null {
     filename: `${slug}.zip`,
     body: buildZipStore(zipEntries),
     contentType: 'application/zip',
+  }
+}
+
+/**
+ * 整库导出：全部活文档（含 inbox/archived，与归档推送口径一致）打包为自包含 zip。
+ * 输出与 Markdown 归档完全同构（<slug>--<docId>.md + media/<sha><ext> + manifest），
+ * 可被自家导入器精确还原，也符合「迁移到其他产品」的可读副本用途。
+ */
+export function buildFullArchiveExport(): { filename: string; body: Uint8Array } {
+  const db = getDb()
+  const docs = listDocRows(db, { order: 'updated_asc' })
+  const zipEntries: ZipEntry[] = []
+  const files: ArchiveManifest['files'] = []
+  // sha → 相对键（跨文档去重：同一图片只入包一次）
+  const idToRel = new Map<string, string>()
+  const mediaKeys: string[] = []
+
+  for (const doc of docs) {
+    const title = doc.content || 'untitled'
+    const filename = archiveFilename(title, doc.id)
+    const markdown = blocksToMarkdown(buildBlockTree(fetchDocBlocks(db, doc.id)))
+    const rewritten = markdown.replace(/asset:([0-9a-f]{64})/g, (full, id: string) => {
+      const rel = idToRel.get(id)
+      if (rel) return rel
+      const found = readAsset(id)
+      const bytes = readAssetBytes(id)
+      if (!found || !bytes) return full
+      const key = archiveMediaKey(id, extForMime(found.meta.mime))
+      idToRel.set(id, key)
+      mediaKeys.push(key)
+      zipEntries.push({ name: key, data: new Uint8Array(bytes) })
+      return key
+    })
+    zipEntries.push({ name: filename, data: new TextEncoder().encode(rewritten) })
+    files.push({ docId: doc.id, title, filename, key: filename })
+  }
+
+  const manifest = buildArchiveManifest({ adapter: 'export', files, media: mediaKeys })
+  zipEntries.push({
+    name: ARCHIVE_MANIFEST_NAME,
+    data: new TextEncoder().encode(JSON.stringify(manifest, null, 2) + '\n'),
+  })
+
+  const date = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  return {
+    filename: `notefast-export-${date}.zip`,
+    body: buildZipStore(zipEntries),
   }
 }
