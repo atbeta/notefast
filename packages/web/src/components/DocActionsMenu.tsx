@@ -448,7 +448,7 @@ export default function DocActionsMenu({
         <ShareDialog docId={doc.id} onClose={() => setShowShare(false)} />
       )}
 
-      {showRename && (
+      {showRename && createPortal(
         <div className="fixed inset-0 z-[90] flex items-center justify-center">
           <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowRename(false)} />
           <div className="relative bg-card rounded-lg shadow-2xl shadow-black/40 max-w-sm w-full mx-4 p-6 animate-fade-in">
@@ -483,7 +483,8 @@ export default function DocActionsMenu({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

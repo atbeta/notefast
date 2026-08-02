@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -39,7 +40,9 @@ export default function ConfirmDialog({
 
   if (!open) return null
 
-  return (
+  // portal 到 body：避免被带 mask/overflow 的祖先（如侧栏 scroll-fade 最近文档区）
+  // 裁剪，导致全屏弹窗不可见
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity" onClick={onCancel} />
       {/* 移除粗重边框，依靠阴影和色阶差异建立纵深；增加内边距带来呼吸感 */}
@@ -76,6 +79,7 @@ export default function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
