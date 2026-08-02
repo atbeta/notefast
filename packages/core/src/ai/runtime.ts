@@ -142,14 +142,14 @@ export class AiRuntime {
     this.chatLastError = undefined
     this.rerankLastError = undefined
 
-    if (cfg.embedding) {
+    if (cfg.embedding && cfg.embedding.enabled !== false) {
       const e = cfg.embedding
       if (e.embeddingModel.trim()) {
         this.embeddingProvider = createEmbeddingProvider(e, this.fetchImpl, this.batchSize)
       }
     }
 
-    if (cfg.chat) {
+    if (cfg.chat && cfg.chat.enabled !== false) {
       const c = cfg.chat
       if (c.chatModel.trim()) {
         this.chatProvider = createChatProvider(c, this.fetchImpl)
@@ -182,18 +182,21 @@ export class AiRuntime {
     const c = this.cfg.chat
     const e = this.cfg.embedding
     const r = this.cfg.reranker
+    // configured = 配置存在且未停用；停用对系统等同于未配置
+    const chatOn = Boolean(c && c.enabled !== false)
+    const embOn = Boolean(e && e.enabled !== false)
     return {
-      enabled: Boolean(c || e),
+      enabled: Boolean(this.chatProvider || this.embeddingProvider),
       embedding: {
-        configured: Boolean(e?.embeddingModel.trim()),
+        configured: embOn && Boolean(e?.embeddingModel.trim()),
         ok: Boolean(this.embeddingProvider) && !this.embeddingLastError,
         dim: this.embeddingDim,
         lastError: this.embeddingLastError,
       },
       chat: {
-        configured: Boolean(c?.chatModel.trim()),
+        configured: chatOn && Boolean(c?.chatModel.trim()),
         ok: Boolean(this.chatProvider) && !this.chatLastError,
-        model: c?.chatModel || undefined,
+        model: chatOn ? c?.chatModel || undefined : undefined,
         lastError: this.chatLastError,
       },
       reranker: {
@@ -203,7 +206,7 @@ export class AiRuntime {
         lastError: this.rerankLastError,
       },
       autoLink: {
-        configured: Boolean(this.cfg.autoLink?.enabled) && Boolean(c?.chatModel.trim()),
+        configured: Boolean(this.cfg.autoLink?.enabled) && chatOn && Boolean(c?.chatModel.trim()),
         enabled: Boolean(this.cfg.autoLink?.enabled),
         lastError: this.autoLinkLastError,
       },
@@ -218,7 +221,7 @@ export class AiRuntime {
     const hasChat = this.hasChat()
     const hasRerank = this.hasReranker()
     return {
-      ai_enabled: Boolean(this.cfg.chat || this.cfg.embedding),
+      ai_enabled: hasChat || hasEmb,
       embedding: hasEmb,
       chat: hasChat,
       reranker: hasRerank,
@@ -276,7 +279,7 @@ export class AiRuntime {
     opts?: { prompt?: string; maxTokens?: number },
   ): Promise<string> {
     const p = this.cfg.chat
-    if (!p) throw new Error('AI chat is not configured')
+    if (!p || p.enabled === false) throw new Error('AI chat is not configured')
     const url = joinUrl(p.baseUrl, '/chat/completions')
     const headers = buildHeaders(p.apiKey, p.extraHeaders)
     return this.track('chat', async () => {

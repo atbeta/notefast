@@ -140,6 +140,19 @@ describe('validateConfig', () => {
     }
     expect(validateConfig(cfg).length).toBeGreaterThan(0)
   })
+
+  test('停用的 chat/embedding（enabled=false）跳过字段校验', () => {
+    const cfg: AiConfig = {
+      ...makeChatConfig({ baseUrl: '', chatModel: '', enabled: false }),
+      embedding: makeProvider({ baseUrl: '', embeddingModel: '', enabled: false }),
+    }
+    expect(validateConfig(cfg)).toEqual([])
+  })
+
+  test('显式启用的 provider 仍校验字段', () => {
+    const errs = validateConfig(makeChatConfig({ baseUrl: '', enabled: true }))
+    expect(errs.some((e) => e.includes('Chat provider baseUrl'))).toBe(true)
+  })
 })
 
 describe('configFromEnv', () => {

@@ -84,6 +84,35 @@ describe('AiRuntime reload', () => {
     expect(r.status().enabled).toBe(false)
   })
 
+  test('provider enabled=false：不构建 provider，状态等同未配置但配置保留', () => {
+    const r = makeRuntime(makeFullConfig({ enabled: false }))
+    expect(r.hasChat()).toBe(false)
+    expect(r.hasEmbedding()).toBe(false)
+    const s = r.status()
+    expect(s.enabled).toBe(false)
+    expect(s.chat.configured).toBe(false)
+    expect(s.embedding.configured).toBe(false)
+    expect(r.capabilities().ai_enabled).toBe(false)
+    // 配置仍保留在脱敏视图中（UI 回填表单、可再次启用）
+    expect(s.config.chat).not.toBeNull()
+    expect(s.config.embedding).not.toBeNull()
+  })
+
+  test('缺省 enabled（旧配置）视为启用', () => {
+    const r = makeRuntime(makeFullConfig())
+    expect(r.hasChat()).toBe(true)
+    expect(r.hasEmbedding()).toBe(true)
+    expect(r.capabilities().ai_enabled).toBe(true)
+  })
+
+  test('reload 从启用切到停用立即生效', () => {
+    const r = makeRuntime(makeFullConfig())
+    expect(r.hasChat()).toBe(true)
+    r.reload(makeFullConfig({ enabled: false }), { silent: true })
+    expect(r.hasChat()).toBe(false)
+    expect(r.hasEmbedding()).toBe(false)
+  })
+
   test('reload 清空旧的 lastError', async () => {
     const failFetch = (async () => new Response('boom', { status: 500 })) as unknown as typeof fetch
     const r = makeRuntime(makeFullConfig(), failFetch)

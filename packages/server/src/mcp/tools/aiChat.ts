@@ -188,8 +188,8 @@ export function registerAiChatTools(ctx: ToolContext): void {
       return {
         content: [toText({
           enabled: s.enabled,
-          chat: cfg.chat ? { model: cfg.chat.chatModel, label: cfg.chat.label, baseUrl: cfg.chat.baseUrl } : null,
-          embedding: cfg.embedding ? { model: cfg.embedding.embeddingModel, label: cfg.embedding.label, baseUrl: cfg.embedding.baseUrl } : null,
+          chat: cfg.chat && cfg.chat.enabled !== false ? { model: cfg.chat.chatModel, label: cfg.chat.label, baseUrl: cfg.chat.baseUrl } : null,
+          embedding: cfg.embedding && cfg.embedding.enabled !== false ? { model: cfg.embedding.embeddingModel, label: cfg.embedding.label, baseUrl: cfg.embedding.baseUrl } : null,
           reranker: cfg.reranker?.enabled ? { model: cfg.reranker.model, baseUrl: cfg.reranker.baseUrl } : null,
           autoIndex: cfg.autoIndex,
           autoLink: cfg.autoLink

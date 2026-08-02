@@ -89,6 +89,8 @@ const providerSchema = z.object({
   chatModel: z.string(),
   timeoutMs: z.number().int().min(1000).max(600_000),
   extraHeaders: z.record(z.string(), z.string()),
+  /** 停用开关（缺省 = 启用；false = 停用但保留配置） */
+  enabled: z.boolean().optional(),
 })
 
 const configSchema = z.object({

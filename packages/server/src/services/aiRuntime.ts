@@ -180,7 +180,7 @@ export function applyNewConfig(
   const r = getRuntime()
   const result = r.reload(cfg)
   markVectorStoreStaleIfModelChanged(
-    cfg.embedding ? embeddingFingerprint(cfg.embedding) : null,
+    cfg.embedding && cfg.embedding.enabled !== false ? embeddingFingerprint(cfg.embedding) : null,
   )
   saveConfigToDisk(cfg)
   sys.note.afterCreate.untap(HOOK_NAME)

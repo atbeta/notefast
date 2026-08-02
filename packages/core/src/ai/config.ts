@@ -58,6 +58,12 @@ export function resolveApiKey(incoming: string | undefined, existing: string | u
 export interface ProviderDefinition {
   /** 唯一 id（前端 crypto.randomUUID() 生成）*/
   id: string
+  /**
+   * 是否启用；缺省（undefined）视为启用（向后兼容旧配置）。
+   * false = 停用但保留 baseUrl/apiKey/model，runtime 不构建 provider，
+   * 对系统等同于未配置（capabilities / status 均反映为不可用）。
+   */
+  enabled?: boolean
   /** 显示名（用户可改）*/
   label: string
   /** 预设标识，自定义为 'custom' */
@@ -347,8 +353,8 @@ export function validateConfig(cfg: AiConfig): string[] {
   const chat = cfg.chat
   const embedding = cfg.embedding
 
-  // Chat provider
-  if (chat) {
+  // Chat provider（停用时不校验字段完整性——允许先停用再慢慢改）
+  if (chat && chat.enabled !== false) {
     if (!chat.baseUrl.trim()) errs.push('Chat provider baseUrl 不能为空')
     if (!chat.chatModel.trim()) errs.push('Chat provider 必须填写 chatModel')
     if (chat.timeoutMs < 1000 || chat.timeoutMs > 600_000) {
@@ -356,8 +362,8 @@ export function validateConfig(cfg: AiConfig): string[] {
     }
   }
 
-  // Embedding provider（可选；但只要存在就必须填齐）
-  if (embedding) {
+  // Embedding provider（可选、可停用；启用状态才必须填齐）
+  if (embedding && embedding.enabled !== false) {
     if (!embedding.baseUrl.trim()) errs.push('Embedding provider baseUrl 不能为空')
     if (!embedding.embeddingModel.trim()) {
       errs.push('Embedding provider 必须填写 embeddingModel')
@@ -379,7 +385,7 @@ export function validateConfig(cfg: AiConfig): string[] {
 
   // AutoLink
   const al = cfg.autoLink ?? defaultAutoLinkConfig()
-  if (al.enabled && cfg.chat && !cfg.chat.chatModel.trim()) {
+  if (al.enabled && cfg.chat && cfg.chat.enabled !== false && !cfg.chat.chatModel.trim()) {
     errs.push('AutoLink 需要 Chat provider 已配置 chatModel')
   }
   if (al.maxPerBlock < 1 || al.maxPerBlock > 10) {
