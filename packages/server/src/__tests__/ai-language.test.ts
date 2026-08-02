@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { resolveAiLang } from '../ai/locale'
 import { buildChatPrompt } from '../ai/prompt'
 import { listSkills } from '../ai/skills'
-import { suggestTitle } from '@notefast/core'
+import { suggestTitle, messageText } from '@notefast/core'
 import type { LLMProvider } from '@notefast/core'
 
 describe('AI 语言跟随 UI', () => {
@@ -34,12 +34,13 @@ describe('AI 语言跟随 UI', () => {
     const provider: LLMProvider = {
       name: 'mock',
       chat: async (msgs) => {
-        seen = msgs[0]?.content ?? null
+        seen = messageText(msgs[0]!.content)
         return '{"title":"Hi","summary":"A note"}'
       },
     }
     await suggestTitle(provider, 'hello world note content', 'en')
-    expect(seen).toContain("You are NoteFast's AI assistant")
-    expect(seen).not.toContain('你是')
+    expect(seen).not.toBeNull()
+    expect(seen!).toContain("You are NoteFast's AI assistant")
+    expect(seen!).not.toContain('你是')
   })
 })
