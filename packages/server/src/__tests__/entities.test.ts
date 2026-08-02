@@ -554,4 +554,27 @@ describe('实体描述（E2）', () => {
     expect(await describeEntity(e3.id)).toBe(true)
     expect(getEntityById(getDb(), e3.id)!.description).toContain('概念一')
   })
+
+  test('POST /entities/:id/describe：手动重新生成描述', async () => {
+    mockChat(() => '「概念一」重生成后的新描述')
+    seedDocWithBlocks({
+      docTitle: 'T',
+      blocks: [
+        { id: 'de-2a', content: '首次提到概念一的内容' },
+        { id: 'de-2b', content: '再次提到概念一的内容' },
+        { id: 'de-2c', content: '第三次提到概念一的内容' },
+      ],
+    })
+    registerMentions('de-2a', [{ anchor: '概念一', kind: 'concept' }])
+    registerMentions('de-2b', [{ anchor: '概念一', kind: 'concept' }])
+    registerMentions('de-2c', [{ anchor: '概念一', kind: 'concept' }])
+    const e = findEntityByName(getDb(), '概念一')!
+    const { status, body } = await api('POST', `/api/v1/entities/${e.id}/describe`)
+    expect(status).toBe(200)
+    expect((body as { regenerated: boolean }).regenerated).toBe(true)
+    expect((body as { description: string | null }).description).toContain('重生成')
+
+    const missing = await api('POST', '/api/v1/entities/ghost/describe')
+    expect(missing.status).toBe(404)
+  })
 })

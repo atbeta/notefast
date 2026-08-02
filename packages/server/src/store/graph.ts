@@ -359,14 +359,36 @@ function docEdges(db: Db, docIds: string[], maxEdges: number): GraphEdge[] {
   return rows.map((r) => ({ source: r.source, target: r.target, weight: r.w }))
 }
 
+/** 度数池上限：无搜索时只对最近 DEGREE_POOL 篇文档算关联度（全库自连接是规模隐患） */
+const DEGREE_POOL = 400
+
 /** 全库活文档 + 关联度（连接其它文档数）；孤立笔记按 updated_at 兜底。q 过滤标题子串 */
 function overviewDocs(db: Db, maxNodes: number, q?: string): DocRow[] {
+  // 度数池截止线：取第 DEGREE_POOL 篇最近文档的 updated_at 作为池下界；
+  // 文档数不足池大小时无下界（全量）。q 搜索范围天然小，不受池限制。
+  let poolCutoff: string | null = null
+  if (!q) {
+    const row = db
+      .query(
+        `SELECT updated_at FROM blocks
+         WHERE type = 'document' AND is_deleted = 0
+         ORDER BY updated_at DESC LIMIT 1 OFFSET ?`,
+      )
+      .get(DEGREE_POOL - 1) as { updated_at: string } | undefined
+    poolCutoff = row?.updated_at ?? null
+  }
+  const poolWhere = poolCutoff ? ' AND updated_at >= ?' : ''
+  const docsPoolWhere = poolCutoff ? ' AND b.updated_at >= ?' : ''
+
   const degreeRows = db
     .query(
       `WITH ed AS (
          SELECT DISTINCT m.entity_id AS e, b.root_id AS d
          FROM entity_mentions m
          JOIN blocks b ON b.id = m.block_id AND b.is_deleted = 0
+         WHERE b.root_id IN (
+           SELECT id FROM blocks WHERE type = 'document' AND is_deleted = 0${poolWhere}
+         )
        ),
        pairs AS (
          SELECT a.d AS da, b.d AS db FROM ed a JOIN ed b ON a.e = b.e AND a.d < b.d
@@ -385,7 +407,7 @@ function overviewDocs(db: Db, maxNodes: number, q?: string): DocRow[] {
        SELECT doc_id, COUNT(DISTINCT other) AS degree
        FROM undirected GROUP BY doc_id`,
     )
-    .all() as Array<{ doc_id: string; degree: number }>
+    .all(...(poolCutoff ? [poolCutoff] : [])) as Array<{ doc_id: string; degree: number }>
   const degree = new Map(degreeRows.map((r) => [r.doc_id, r.degree]))
   const likeCond = q ? ` AND b.content LIKE ? ESCAPE '\\'` : ''
   const docs = db
@@ -393,9 +415,9 @@ function overviewDocs(db: Db, maxNodes: number, q?: string): DocRow[] {
       `SELECT b.id, b.content AS title, b.updated_at,
               (SELECT COUNT(*) FROM blocks c WHERE c.root_id = b.id AND c.is_deleted = 0 AND c.type != 'document') AS blocks
        FROM blocks b
-       WHERE b.type = 'document' AND b.is_deleted = 0${likeCond}`,
+       WHERE b.type = 'document' AND b.is_deleted = 0${docsPoolWhere}${likeCond}`,
     )
-    .all(...(q ? [`%${escapeLike(q)}%`] : [])) as DocRow[]
+    .all(...(poolCutoff ? [poolCutoff] : []), ...(q ? [`%${escapeLike(q)}%`] : [])) as DocRow[]
   docs.sort(
     (a, b) =>
       (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0) || b.updated_at.localeCompare(a.updated_at),

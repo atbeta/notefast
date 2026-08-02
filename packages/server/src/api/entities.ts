@@ -14,6 +14,7 @@ import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { getDb } from '../db'
 import { getLiveDocById } from '../store/blocks'
+import { describeEntity } from '../ai/entityDescribe'
 import {
   findPotentialDuplicates,
   getEntityById,
@@ -86,6 +87,19 @@ entities.post('/:id/merge', zValidator('json', mergeSchema), (c) => {
     },
     removed_id: id,
   })
+})
+
+/** 手动（重新）生成实体描述：清旧值后立即调 LLM，返回新描述或 null */
+entities.post('/:id/describe', async (c) => {
+  const db = getDb()
+  const id = c.req.param('id')
+  if (!getEntityById(db, id)) {
+    return c.json({ error: 'not_found', message: `实体 ${id} 不存在` }, 404)
+  }
+  db.query('UPDATE entities SET description = NULL WHERE id = ?').run(id)
+  const ok = await describeEntity(id)
+  const after = getEntityById(db, id)
+  return c.json({ regenerated: ok, description: after?.description ?? null })
 })
 
 entities.get('/:id', (c) => {

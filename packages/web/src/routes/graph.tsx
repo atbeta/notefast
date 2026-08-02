@@ -74,11 +74,15 @@ function DetailPanel({
   neighbors,
   onFocus,
   onClose,
+  onRegenerate,
+  regenerating,
 }: {
   node: GraphNode
   neighbors: GraphNode[]
   onFocus: (id: string) => void
   onClose: () => void
+  onRegenerate?: (id: string) => void
+  regenerating?: boolean
 }) {
   const isDoc = node.type === 'doc'
   return (
@@ -105,9 +109,24 @@ function DetailPanel({
             {isDoc ? `${node.mention_count} 个块` : `${node.mention_count} 篇笔记提及`}
           </p>
           {node.description && (
-            <p className="text-[12px] text-foreground/80 mt-1.5 leading-relaxed">
-              {node.description}
-            </p>
+            <div className="flex items-start gap-2 mt-1.5">
+              <p className="text-[12px] text-foreground/80 leading-relaxed">{node.description}</p>
+              {onRegenerate && (
+                <button
+                  type="button"
+                  onClick={() => onRegenerate(node.id)}
+                  disabled={regenerating}
+                  className="shrink-0 inline-flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                  title="重新生成描述"
+                >
+                  {regenerating ? (
+                    <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
+                  ) : (
+                    <RefreshCw className="w-3 h-3" strokeWidth={1.75} />
+                  )}
+                </button>
+              )}
+            </div>
           )}
         </div>
         <button
@@ -192,7 +211,7 @@ export default function GraphPage() {
   const [layoutKey, setLayoutKey] = useState(0)
 
   const kind = kindFilter === 'all' ? null : kindFilter
-  const { data, loading, error } = useApiQuery(
+  const { data, loading, error, refetch } = useApiQuery(
     () => api.get<GraphData>(buildQuery(mode, center, kind, minMention, titleQ)),
     [mode, center, kind, minMention, titleQ],
   )
@@ -255,6 +274,19 @@ export default function GraphPage() {
 
   const focusNode = (id: string) => {
     setCenter(mode === 'docs' ? { type: 'doc', id } : { type: 'entity', id })
+  }
+
+  const [regenerating, setRegenerating] = useState<string | null>(null)
+  const regenerateDescription = async (id: string) => {
+    setRegenerating(id)
+    try {
+      await api.post(`/entities/${id}/describe`, {})
+      refetch()
+    } catch {
+      /* 失败静默 */
+    } finally {
+      setRegenerating(null)
+    }
   }
 
   const resetView = () => {
@@ -489,6 +521,8 @@ export default function GraphPage() {
                 neighbors={neighbors}
                 onFocus={focusNode}
                 onClose={() => setSelectedId(null)}
+                onRegenerate={regenerateDescription}
+                regenerating={regenerating === selectedNode.id}
               />
             )}
           </div>

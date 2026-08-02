@@ -10,6 +10,7 @@ import { ChevronRight, GitMerge, Loader2, Search, Waypoints } from 'lucide-react
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import PageHeader from '../components/PageHeader'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { EntityMentions } from '../components/EntityPanel'
 import {
   ENTITY_KIND_LABEL,
@@ -39,6 +40,7 @@ export default function EntitiesPage() {
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [openId, setOpenId] = useState<string | null>(null)
   const [merging, setMerging] = useState<string | null>(null)
+  const [confirmMerge, setConfirmMerge] = useState<DuplicateGroup | null>(null)
 
   // 300ms 防抖；空关键词回全量列表
   useEffect(() => {
@@ -63,7 +65,7 @@ export default function EntitiesPage() {
   )
   const duplicates = !debouncedQuery ? (dupData?.groups ?? []) : []
 
-  const mergeGroup = async (g: DuplicateGroup) => {
+  const doMerge = async (g: DuplicateGroup) => {
     const [a, b] = g.entities
     if (!a || !b) return
     // 合并到提及数多的一方（少→多），保持知识面完整
@@ -197,7 +199,7 @@ export default function EntitiesPage() {
                         <button
                           type="button"
                           disabled={merging === (a.mention_count <= b.mention_count ? a.id : b.id)}
-                          onClick={() => mergeGroup(g)}
+                          onClick={() => setConfirmMerge(g)}
                           className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-md border border-border bg-background hover:bg-accent hover:border-foreground/20 px-2 py-1 text-[11.5px] text-foreground transition-colors disabled:opacity-50"
                         >
                           {merging === (a.mention_count <= b.mention_count ? a.id : b.id) ? (
@@ -267,6 +269,30 @@ export default function EntitiesPage() {
           </>
         )}
       </div>
+
+      {/* 合并确认（不可逆：源实体删除、旧名成为别名） */}
+      <ConfirmDialog
+        open={confirmMerge !== null}
+        title="确认合并实体？"
+        message={
+          confirmMerge
+            ? (() => {
+                const [a, b] = confirmMerge.entities
+                if (!a || !b) return ''
+                const from = a.mention_count <= b.mention_count ? a : b
+                const target = from === a ? b : a
+                return `将「${from.display}」(${from.mention_count}) 合并进「${target.display}」(${target.mention_count})。此操作不可撤销：源实体被删除，提及全部改挂到目标，旧实体名将作为别名。`
+              })()
+            : ''
+        }
+        confirmLabel="确认合并"
+        destructive
+        onConfirm={() => {
+          if (confirmMerge) void doMerge(confirmMerge)
+          setConfirmMerge(null)
+        }}
+        onCancel={() => setConfirmMerge(null)}
+      />
     </div>
   )
 }

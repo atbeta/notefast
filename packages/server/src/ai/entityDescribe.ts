@@ -104,7 +104,10 @@ export async function describeEntity(entityId: string): Promise<boolean> {
 // ───────────────────── 自重排循环 ─────────────────────
 
 async function runPass(): Promise<void> {
+  // 后台循环跟随 autoLink.enabled：用户关掉 autoLink 即不再主动消耗 LLM。
+  // 手动「重新生成描述」（POST describe）走 describeEntity，不受此 gate。
   if (!hasRuntime() || !getRuntime().hasChat()) return
+  if (!getRuntime().autoLinkConfig().enabled) return
   const ids = listEntitiesNeedingDescription(getDb(), BATCH)
   if (ids.length === 0) return
 

@@ -334,6 +334,35 @@ describe('queryGraph docs 模式（笔记关联图）', () => {
     expect(edgeBetweenDocs(edges, 'D1', 'D2')!.weight).toBe(2)
   })
 
+  test('docs 总览按最近活跃池裁剪（规模防护：度数自连接有上界）', () => {
+    const db = getDb()
+    const nb = 'pool-nb'
+    db.query('INSERT OR IGNORE INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const base = new Date('2020-01-01T00:00:00.000Z').getTime()
+    const insertDoc = (title: string, idx: number): string => {
+      const docId = crypto.randomUUID()
+      const ts = new Date(base + idx * 60_000).toISOString()
+      db.query(
+        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, status, sort, level, created_at, updated_at)
+         VALUES (?, ?, NULL, ?, 'document', ?, 'note', 0, 0, ?, ?)`,
+      ).run(docId, nb, docId, title, ts, ts)
+      return docId
+    }
+    // 401 篇：第 0 篇最老且带实体（有连接），其余 400 篇较新孤立 → 最老文档被池裁剪出总览
+    const oldDoc = insertDoc('最老文档', 0)
+    const oldB = crypto.randomUUID()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'paragraph', '提及甲的内容', 0, 1, ?, ?)`,
+    ).run(oldB, nb, oldDoc, oldDoc, new Date(base).toISOString(), new Date(base).toISOString())
+    registerMentions(oldB, [{ anchor: '概念甲', kind: 'concept' }])
+    for (let i = 1; i <= 400; i++) insertDoc(`文档${i}`, i)
+
+    const { nodes } = queryGraph(db, { mode: 'docs', maxNodes: 100 })
+    expect(nodes.length).toBeGreaterThan(0)
+    expect(nodes.some((n) => n.id === oldDoc)).toBe(false)
+  })
+
   test('docs 模式 REST：总览 + 实体锚点 400', async () => {
     seedDocGraph()
     const res = await app.fetch(new Request('http://localhost/api/v1/graph?mode=docs'))
