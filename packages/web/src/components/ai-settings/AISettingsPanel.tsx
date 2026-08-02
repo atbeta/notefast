@@ -26,7 +26,6 @@ import {
 } from '@notefast/core'
 import { api } from '../../hooks/useAPI'
 import { ActionButton, useToast, Toggle } from '../ui'
-import ConfirmDialog from '../ConfirmDialog'
 import { ProviderForm } from './ProviderForm'
 import { DiagnosePanel } from './DiagnosePanel'
 import { SettingsCard, InlineField, StatusBadge } from '../settings/ui'
@@ -97,10 +96,9 @@ export default function AISettingsPanel() {
   const [webSearchApiKey, setWebSearchApiKey] = useState('')
   const [visionEnabled, setVisionEnabled] = useState(false)
 
-  const [saving, setSaving] = useState(false)
+  const [, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [diagnose, setDiagnose] = useState<AiDiagnoseResult | null>(null)
-  const [showDisableConfirm, setShowDisableConfirm] = useState(false)
   const [rebuilding, setRebuilding] = useState(false)
   const toast = useToast()
   // 字段级错误（红色内嵌到表单）+ 保存成功的最近一次描述（持久化显示在按钮旁）
@@ -214,33 +212,6 @@ export default function AISettingsPanel() {
     }
   }
 
-  const handleDisable = async () => {
-    try {
-      await toast.promise(
-        async () => {
-          await api.put('/ai/config', {
-            chat: null,
-            embedding: null,
-            autoIndex: false,
-            reranker: null,
-            autoLink: defaultAutoLink(),
-          })
-          await refresh()
-        },
-        {
-          loading: '正在禁用 AI…',
-          success: 'AI 已禁用',
-          error: (e) => ({
-            title: '禁用失败',
-            description: e instanceof Error ? e.message : String(e),
-          }),
-        },
-      )
-    } catch {
-      // toast 已弹
-    }
-  }
-
   const handleDiagnose = async () => {
     setTesting(true)
     try {
@@ -284,7 +255,7 @@ export default function AISettingsPanel() {
     preset: 'jina',
   })
 
-  const rerankerAsProvider: ProviderDefinition | null = reranker?.enabled ? {
+  const rerankerAsProvider: ProviderDefinition | null = reranker ? {
     id: 'reranker',
     label: 'Reranker',
     preset: (reranker.preset as ProviderPresetId) || 'custom',
@@ -298,7 +269,7 @@ export default function AISettingsPanel() {
 
   const handleRerankerChange = (v: ProviderDefinition) => {
     setReranker({
-      enabled: true,
+      enabled: reranker?.enabled ?? true,
       baseUrl: v.baseUrl,
       apiKey: v.apiKey,
       model: v.embeddingModel,
@@ -351,51 +322,51 @@ export default function AISettingsPanel() {
         <DiagnosePanel result={diagnose} onClose={() => setDiagnose(null)} />
       )}
 
-      {/* Section 1: Chat Provider */}
+      {/* 分组：模型配置（Provider），功能卡均依赖这里的配置 */}
+      <GroupLabel>模型配置</GroupLabel>
+
+      {/* Section 1: 对话模型 */}
       <SettingsCard
         icon={<Sparkles className="w-4 h-4" />}
-        title="Chat Provider"
-        statusBadge={<StatusBadge active={!!chat} />}
-        defaultExpanded={true}
+        title="对话模型"
+        helpTip="标题生成、文档摘要、AI 聊天与 AutoLink 实体抽取都调用这个模型。"
+        statusBadge={<StatusBadge active={!!chat && chat.enabled !== false} label={chat && chat.enabled === false ? '已停用' : undefined} />}
       >
-        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
-          标题生成、文档摘要、聊天对话以及 AutoLink 实体抽取均依赖此模型。
-        </div>
         {!chat && (
           <button
             type="button"
             onClick={handleEnableChat}
             className="w-full py-3 text-sm rounded-md border border-dashed border-border text-muted-foreground hover:bg-accent"
           >
-            + 启用 Chat Provider
+            + 添加对话模型
           </button>
         )}
         {chat && (
-          <ProviderForm
-            value={chat}
-            onChange={setChat}
-            mode="chat"
-            onRemove={() => setChat(null)}
-            knownModels={KNOWN_CHAT_MODELS}
-            modelLabel="对话模型"
-            fieldErrors={formErrors.chat}
-          />
+          <div className="space-y-4">
+            <Toggle
+              checked={chat.enabled !== false}
+              onChange={(v) => setChat({ ...chat, enabled: v })}
+              label={chat.enabled !== false ? '已启用' : '已停用（保留配置，不参与调用）'}
+            />
+            <ProviderForm
+              value={chat}
+              onChange={setChat}
+              mode="chat"
+              knownModels={KNOWN_CHAT_MODELS}
+              modelLabel="对话模型"
+              fieldErrors={formErrors.chat}
+            />
+          </div>
         )}
       </SettingsCard>
 
-      {/* Section 2: Embedding Provider (optional, independent) */}
+      {/* Section 2: 嵌入模型（可选，独立配置） */}
       <SettingsCard
         icon={<FileSearch className="w-4 h-4" />}
-        title="Embedding Provider"
-        statusBadge={<StatusBadge active={!!embedding} />}
-        defaultExpanded={true}
+        title="嵌入模型"
+        helpTip="把文本转为向量，支撑语义搜索（理解近似含义与同义词）。未配置时检索退化为纯关键词匹配。"
+        statusBadge={<StatusBadge active={!!embedding && embedding.enabled !== false} label={embedding && embedding.enabled === false ? '已停用' : undefined} />}
       >
-        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
-          提供语义搜索能力，可理解近似含义和同义词。
-          <span className="block mt-1 text-muted-foreground/80">
-            未配置时回退为纯关键词全文检索，无法进行语义理解。
-          </span>
-        </div>
         {!embedding && (
           <div className="space-y-2">
             <button
@@ -403,7 +374,7 @@ export default function AISettingsPanel() {
               onClick={handleEnableEmbedding}
               className="w-full py-3 text-sm rounded-md border border-dashed border-border text-muted-foreground hover:bg-accent"
             >
-              + 启用 Embedding Provider
+              + 添加嵌入模型
             </button>
             {chat && (
               <button
@@ -412,43 +383,74 @@ export default function AISettingsPanel() {
                 className="w-full py-2 text-xs rounded-md border border-border text-muted-foreground hover:bg-accent inline-flex items-center justify-center gap-1.5"
               >
                 <Copy className="w-3 h-3" />
-                复用 Chat Provider 作为 Embedding（共用 baseUrl + apiKey）
+                复用对话模型的连接（共用 baseUrl + apiKey）
               </button>
             )}
           </div>
         )}
         {embedding && (
-          <div className="space-y-3">
+          <div className="space-y-4">
+            <Toggle
+              checked={embedding.enabled !== false}
+              onChange={(v) => setEmbedding({ ...embedding, enabled: v })}
+              label={embedding.enabled !== false ? '已启用' : '已停用（保留配置，回退为纯关键词检索）'}
+            />
             <ProviderForm
               value={embedding}
               onChange={setEmbedding}
               mode="embedding"
-              onRemove={() => setEmbedding(null)}
               knownModels={KNOWN_EMBEDDING_MODELS}
              modelLabel="嵌入模型"
             fieldErrors={formErrors.embedding}
           />
-            <button
-              type="button"
-              onClick={() => setEmbedding(null)}
-              className="text-xs text-muted-foreground hover:text-destructive"
-            >
-              移除嵌入模型（回到纯关键词检索）
-            </button>
           </div>
         )}
       </SettingsCard>
 
-      {/* Section 3: Auto-index + 向量库状态 */}
+      {/* Section 3: 精排模型（Reranker，可选） */}
+      <SettingsCard
+        icon={<GitBranch className="w-4 h-4" />}
+        title="精排模型 (Reranker)"
+        helpTip="对混合检索的召回结果做二次精准排序，让最相关的笔记排在前面。可选。"
+        statusBadge={<StatusBadge active={!!reranker?.enabled} label={reranker && !reranker.enabled ? '已停用' : undefined} />}
+      >
+        {!reranker && (
+          <button
+            type="button"
+            onClick={handleEnableReranker}
+            className="w-full py-3 text-sm rounded-md border border-dashed border-border text-muted-foreground hover:bg-accent"
+          >
+            + 添加精排模型
+          </button>
+        )}
+        {reranker && rerankerAsProvider && (
+          <div className="space-y-4">
+            <Toggle
+              checked={reranker.enabled}
+              onChange={(v) => setReranker({ ...reranker, enabled: v })}
+              label={reranker.enabled ? '已启用' : '已停用（保留配置，检索跳过精排）'}
+            />
+            <ProviderForm
+              value={rerankerAsProvider}
+              onChange={handleRerankerChange}
+              mode="reranker"
+              knownModels={['BAAI/bge-reranker-v2-m3', 'jina-reranker-v3', 'voyage-rerank-2', 'voyage-rerank-2-lite']}
+              modelLabel="重排模型"
+            />
+          </div>
+        )}
+      </SettingsCard>
+
+      {/* 分组：功能（依赖上方模型配置） */}
+      <GroupLabel>功能</GroupLabel>
+
+      {/* Section 4: 语义索引（自动索引 + 图片理解 + 向量库状态） */}
       <SettingsCard
         icon={<Database className="w-4 h-4" />}
-        title="Auto-Index"
+        title="语义索引"
+        helpTip="写入或更新笔记时自动生成向量索引，是语义搜索的数据来源。含图片理解与向量库状态。"
         statusBadge={<StatusBadge active={autoIndex} />}
-        defaultExpanded={true}
       >
-        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
-          新建或更新笔记时自动生成语义索引，支持语义搜索。
-        </div>
         <Toggle
           checked={autoIndex}
           onChange={setAutoIndex}
@@ -530,47 +532,13 @@ export default function AISettingsPanel() {
         )}
       </SettingsCard>
 
-      {/* Section 4: Reranker */}
-      <SettingsCard 
-        icon={<GitBranch className="w-4 h-4" />} 
-        title="Reranker 精排" 
-        statusBadge={<StatusBadge active={!!reranker?.enabled} />}
-        defaultExpanded={!!reranker?.enabled}
-      >
-        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
-          精排；在混合检索的召回结果上做二次精准排序，提升引用相关性。
-        </div>
-        {!reranker?.enabled && (
-          <button
-            type="button"
-            onClick={handleEnableReranker}
-            className="w-full py-3 text-sm rounded-md border border-dashed border-border text-muted-foreground hover:bg-accent"
-          >
-            + 添加 Reranker
-          </button>
-        )}
-        {reranker?.enabled && rerankerAsProvider && (
-          <ProviderForm
-            value={rerankerAsProvider}
-            onChange={handleRerankerChange}
-            mode="reranker"
-            onRemove={() => setReranker(null)}
-            knownModels={['BAAI/bge-reranker-v2-m3', 'jina-reranker-v3', 'voyage-rerank-2', 'voyage-rerank-2-lite']}
-            modelLabel="重排模型"
-          />
-        )}
-      </SettingsCard>
-
       {/* Section 5: AutoLink */}
-      <SettingsCard 
-        icon={<Link2 className="w-4 h-4" />} 
-        title="AutoLink 自动建链" 
+      <SettingsCard
+        icon={<Link2 className="w-4 h-4" />}
+        title="AutoLink 自动建链"
+        helpTip="写入笔记后自动抽取关键概念，置信度达标即建立笔记间链接；不达标静默跳过，无需人工审核。"
         statusBadge={<StatusBadge active={autoLink.enabled} />}
-        defaultExpanded={autoLink.enabled}
       >
-        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
-          写入笔记后 AI 自动抽取关键概念，当相似度和区分度均达标时自动建立笔记间链接；不确定的链接会直接跳过，无需人工审核。
-        </div>
         <Toggle
           checked={autoLink.enabled}
           onChange={(v) => setAutoLink({ ...autoLink, enabled: v })}
@@ -648,16 +616,9 @@ export default function AISettingsPanel() {
       <SettingsCard
         icon={<Globe className="w-4 h-4" />}
         title="网页搜索"
+        helpTip="知识库找不到答案时，AI 可联网用 Brave Search 补充信息；结果用 🌐 标注来源，与笔记引用 [n] 区分。"
         statusBadge={<StatusBadge active={webSearchEnabled} />}
-        defaultExpanded={webSearchEnabled}
       >
-        <div className="text-[12.5px] text-muted-foreground leading-relaxed bg-accent/30 p-3 rounded-lg border border-border/50 mb-2">
-          当知识库笔记不足以回答用户问题时，AI 可调用 Brave Search 联网补充信息。
-          搜索结果用 🌐 标注来源 URL，与笔记引用 [n] 区分。
-          <span className="block mt-1 text-muted-foreground/80">
-            需要 <a href="https://brave.com/search/api/" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Brave Search API Key</a>（免费额度 2000 次/月）
-          </span>
-        </div>
         <Toggle
           checked={webSearchEnabled}
           onChange={setWebSearchEnabled}
@@ -679,6 +640,9 @@ export default function AISettingsPanel() {
               type="password"
               mono
             />
+            <p className="text-[12px] text-muted-foreground/80 leading-relaxed">
+              需要 <a href="https://brave.com/search/api/" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Brave Search API Key</a>（免费额度 1000 次/月）
+            </p>
           </div>
         )}
       </SettingsCard>
@@ -707,30 +671,16 @@ export default function AISettingsPanel() {
           <RefreshCw className="w-4 h-4" />
           刷新状态
         </button>
-        {(chat || embedding) && (
-          <button
-            type="button"
-            onClick={() => setShowDisableConfirm(true)}
-            disabled={saving}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10 ml-auto"
-          >
-            禁用 AI
-          </button>
-        )}
       </div>
-
-      <ConfirmDialog
-        open={showDisableConfirm}
-        title="禁用 AI"
-        message="禁用 AI 会清空所有 Chat / Embedding / Reranker 配置。继续？"
-        confirmLabel="禁用"
-        destructive
-        onCancel={() => setShowDisableConfirm(false)}
-        onConfirm={() => {
-          setShowDisableConfirm(false)
-          void handleDisable()
-        }}
-      />
     </div>
+  )
+}
+
+/** 分组小标题（模型配置 / 功能） */
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="px-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70 select-none">
+      {children}
+    </h3>
   )
 }

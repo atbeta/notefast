@@ -61,21 +61,21 @@ export function serverValidationErrors(e: unknown): string[] {
   return Array.isArray(errors) ? errors.filter((x): x is string => typeof x === 'string') : []
 }
 
-/** 客户端快速校验（基于本地状态，避免不必要的网络往返） */
+/** 客户端快速校验（基于本地状态，避免不必要的网络往返）；停用的 provider 跳过 */
 export function localValidate(c: {
   chat: ProviderDefinition | null
   embedding: ProviderDefinition | null
   reranker: RerankerDefinition | null
 }): string[] {
   const errs: string[] = []
-  if (c.chat) {
+  if (c.chat && c.chat.enabled !== false) {
     if (!c.chat.baseUrl.trim()) errs.push('Chat provider baseUrl 不能为空')
     if (!c.chat.chatModel.trim()) errs.push('Chat provider 必须填写 chatModel')
     if (c.chat.timeoutMs < 1000 || c.chat.timeoutMs > 600_000) {
       errs.push('Chat provider timeoutMs 应在 1000-600000 之间')
     }
   }
-  if (c.embedding) {
+  if (c.embedding && c.embedding.enabled !== false) {
     if (!c.embedding.baseUrl.trim()) errs.push('Embedding provider baseUrl 不能为空')
     if (!c.embedding.embeddingModel.trim()) {
       errs.push('Embedding provider 必须填写 embeddingModel')

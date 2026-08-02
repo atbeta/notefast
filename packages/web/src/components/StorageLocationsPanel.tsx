@@ -100,8 +100,7 @@ export default function StorageLocationsPanel() {
     <SettingsCard
       title="存储连接"
       icon={<Cloud className="w-4 h-4" strokeWidth={1.75} />}
-      helpTip="备份、多端同步与 Markdown 归档共用这里的连接（S3 / WebDAV）。bucket、区域与凭据只需在此填一次，各能力只选择连接 + 自己的前缀（目录）即可。"
-      defaultExpanded={locations.length === 0}
+      helpTip="S3 / WebDAV 连接只需在此配置一次；备份、多端同步、Markdown 归档各自选用连接 + 自己的前缀。"
     >
       <div className="space-y-4">
         {locations.length === 0 && (

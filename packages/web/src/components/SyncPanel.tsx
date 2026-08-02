@@ -129,9 +129,8 @@ export default function SyncPanel() {
     <SettingsCard
       title="Markdown 归档"
       icon={<SettingsIcon className="w-4 h-4" strokeWidth={1.75} />}
-      helpTip="Markdown 归档 = 便捷迁移 / 便携副本：把文档连同引用的图片一起导出为 Markdown（.md + media/，图片引用改写为相对路径，拿到任何地方都能渲染）。仅手动触发，不含内部 ID、引用关系、标签与向量数据。同名文档用带 ID 的文件名避免覆盖，删除文档时会清理远端对应文件。"
+      helpTip="把文档连同引用的图片导出为 Markdown 副本（.md + media/），便于迁移与便携阅读。仅手动触发，不含内部 ID、引用关系与标签。"
       statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? `已启用 · ${status.adapterName === 'localfs' ? '本地目录' : status.adapterName === 'webdav' ? 'WebDAV' : 'S3 连接'}` : '未启用'} />}
-      defaultExpanded={!status?.configured}
     >
       <div className="space-y-6">
         <div className="space-y-3">

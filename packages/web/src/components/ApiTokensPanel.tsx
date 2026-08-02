@@ -88,7 +88,6 @@ export default function ApiTokensPanel() {
       title="API Token"
       icon={<Key className="w-4 h-4" strokeWidth={1.75} />}
       statusBadge={<StatusBadge active={tokens.length > 0} label={tokens.length > 0 ? `${tokens.length} 个活跃` : '无活跃'} />}
-      collapsible={false}
     >
       <div className="space-y-6">
         <div className="flex items-center justify-between">

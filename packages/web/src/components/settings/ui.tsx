@@ -60,8 +60,8 @@ export function SettingsLayout({
         <p className="text-[13px] text-muted-foreground leading-relaxed">{description}</p>
       </header>
 
-      {/* Sticky Capsule Tabs */}
-      <div className="sticky top-14 z-20 py-3 -mx-2 px-2 bg-background/80 backdrop-blur-md border-b border-border/50">
+      {/* Sticky Capsule Tabs（设置页无全局顶栏，吸顶位置为 0；top-14 会让上方滚过的内容露出） */}
+      <div className="sticky top-0 z-20 py-3 -mx-2 px-2 bg-background/80 backdrop-blur-md border-b border-border/50">
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar mask-edges">
           {tabs.map((tab) => (
             <button

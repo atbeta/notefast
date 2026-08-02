@@ -16,7 +16,6 @@ export function ProviderForm({
   value,
   onChange,
   mode,
-  onRemove,
   knownModels,
   modelLabel,
   fieldErrors,
@@ -24,7 +23,6 @@ export function ProviderForm({
   value: ProviderDefinition
   onChange: (v: ProviderDefinition) => void
   mode: 'chat' | 'embedding' | 'reranker'
-  onRemove: () => void
   knownModels: string[]
   modelLabel: string
   fieldErrors?: FieldErrors
@@ -160,14 +158,6 @@ export function ProviderForm({
           onChange={(entries) => onChange({ ...value, extraHeaders: Object.fromEntries(entries) })}
         />
       </FieldRow>
-      <button
-        type="button"
-        onClick={onRemove}
-        className="text-xs text-muted-foreground hover:text-destructive inline-flex items-center gap-1"
-      >
-        <X className="w-3 h-3" />
-        移除{mode === 'chat' ? ' Chat Provider' : mode === 'embedding' ? ' Embedding Provider' : ' Reranker Provider'}
-      </button>
     </div>
   )
 }
