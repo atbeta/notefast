@@ -1,5 +1,9 @@
 /**
  * SQLite 在线一致快照：VACUUM INTO + quick_check + SHA-256
+ *
+ * 快照剥离可重建的向量索引（block_vectors / vec_blocks / vector_entries…）：
+ * 向量是可从正文重算的二级索引，占比可达 99%（4096 维 JSON 文本时代 425M 库中 ~415M）；
+ * 剥离后备份/同步快照只含核心内容（KB~MB 级），恢复后经「重建索引」按需重建。
  */
 
 import { createHash } from 'node:crypto'
@@ -8,6 +12,7 @@ import { join } from 'node:path'
 import { Database } from 'bun:sqlite'
 import { CURRENT_SCHEMA_VERSION } from '@notefast/core'
 import { getDb, getSchemaVersion } from '../db'
+import { loadSqliteVec } from '../sqliteVec'
 
 export interface LocalSnapshot {
   path: string
@@ -26,6 +31,7 @@ export async function createLocalSnapshot(workDir: string): Promise<LocalSnapsho
   const live = getDb()
   // VACUUM INTO 生成与当前库一致的紧凑快照（不修改原库）
   live.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`)
+  stripVectorIndexFromSnapshot(dest)
 
   const check = verifySnapshotFile(dest)
   const sizeBytes = statSync(dest).size
@@ -37,6 +43,44 @@ export async function createLocalSnapshot(workDir: string): Promise<LocalSnapsho
     sha256,
     schemaVersion: check.schemaVersion,
     tempDir,
+  }
+}
+
+/** 备份/同步快照剥离向量索引：清空数据、置 stale、回收空间（保留表结构供恢复后重建） */
+function stripVectorIndexFromSnapshot(path: string): void {
+  const snap = new Database(path)
+  try {
+    const vecTables = snap.query(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'vec_blocks\\_%' ESCAPE '\\'",
+    ).all() as Array<{ name: string }>
+    if (vecTables.length > 0) {
+      try {
+        loadSqliteVec(snap)
+      } catch (e) {
+        console.warn('[backup] 快照剥离 vec_blocks 时加载 vec0 失败（保持原样）:', e instanceof Error ? e.message : e)
+      }
+    }
+    for (const t of vecTables) {
+      try {
+        snap.exec(`DELETE FROM "${t.name}"`)
+      } catch (e) {
+        console.warn('[backup] 清空 vec 表失败:', t.name, e instanceof Error ? e.message : e)
+      }
+    }
+    for (const t of ['block_vectors', 'vector_entries', 'vector_generations']) {
+      try { snap.exec(`DELETE FROM "${t}"`) } catch { /* 表可能不存在，忽略 */ }
+    }
+    try {
+      snap.exec(
+        `UPDATE vector_store_state
+         SET status = 'stale', indexed_count = 0, active_generation = NULL, staging_generation = NULL,
+             error = '快照不含向量索引，恢复后需重建', updated_at = datetime('now')
+         WHERE id = 'default'`,
+      )
+    } catch { /* 表可能不存在，忽略 */ }
+    snap.exec('VACUUM')
+  } finally {
+    snap.close()
   }
 }
 

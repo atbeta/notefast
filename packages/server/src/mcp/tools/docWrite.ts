@@ -42,6 +42,7 @@ import {
 } from '../../store/blocks'
 import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate } from '../../services/hooks'
 import { scheduleDocIndex } from '../../ai/indexJobs'
+import { scheduleSyncNow } from '../../sync/protocolManager'
 import { extractAssetRefs, findMissingAssets } from '../../assets/store'
 import { isDocRowAiExcluded } from '../../ai/aiExcludeQuery'
 import {
@@ -109,6 +110,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
 
       const row = getBlockById(db, id)!
       fireAfterCreate(rowToBlock(row))
+      scheduleSyncNow()
       return { content: [toText({ block: rowToBlock(row) })] }
     },
   )
@@ -134,6 +136,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
 
       const row = getBlockById(db, block_id)!
       fireAfterUpdate(rowToBlock(row))
+      scheduleSyncNow()
       return { content: [toText({ block: rowToBlock(row) })] }
     },
   )
@@ -167,6 +170,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
       const indexJob = scheduleDocIndex(docId, blockIds)
       fireAfterCreate(rowToBlock(docRow))
       fireAfterCreateMany(getBlocksByIds(db, blockIds).map(rowToBlock))
+      scheduleSyncNow()
 
       return {
         content: [toText({
@@ -249,6 +253,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
         const indexJob = scheduleDocIndex(result.docId, result.blockIds)
         fireAfterCreate(rowToBlock(docRow))
         fireAfterCreateMany(getBlocksByIds(db, result.blockIds).map(rowToBlock))
+        scheduleSyncNow()
         const missing = findMissingAssets(extractAssetRefs(result.markdown))
 
         return {
@@ -359,6 +364,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
       const provider = getTagProvider()
       const updated = provider.setDocTags(docRow, tags)
       updateBlock(db, doc_id, { tags: updated.tags })
+      scheduleSyncNow()
       const finalTags = provider.getDocTags(updated)
       return {
         content: [toText({ doc_id, tags: finalTags })],
@@ -382,6 +388,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
 
       const allIds = [block_id, ...fetchDeletedSubtreeIds(db, block_id)]
       restoreBlocks(db, allIds)
+      scheduleSyncNow()
 
       return { content: [toText({ restored: true, block_id, count: allIds.length })] }
     },

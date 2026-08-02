@@ -1,16 +1,9 @@
 /**
- * S3 备份对象存储：上传快照/manifest、列举恢复点、按保留策略清理
+ * 数据库备份对象存储：上传快照/manifest、列举恢复点、按保留策略清理。
+ *
+ * 构建在 ObjectStore 抽象之上（当前为 S3 实现），后续可换 WebDAV / LocalFS。
  */
 
-import {
-  DeleteObjectCommand,
-  GetObjectCommand,
-  HeadBucketCommand,
-  ListObjectsV2Command,
-  PutObjectCommand,
-  S3Client,
-  type S3ClientConfig,
-} from '@aws-sdk/client-s3'
 import { readFileSync, writeFileSync } from 'node:fs'
 import {
   buildManifestObjectKey,
@@ -21,8 +14,9 @@ import {
   type BackupRestorePoint,
   type BackupS3Config,
 } from '@notefast/core'
+import { createS3ObjectStore, getObjectText, type ObjectStore } from '../storage/objectStore'
 
-export interface S3StoreLike {
+export interface BackupStore {
   testConnection(): Promise<{ ok: boolean; error?: string }>
   uploadSnapshot(opts: {
     localPath: string
@@ -35,34 +29,28 @@ export interface S3StoreLike {
   downloadObject(key: string, destPath: string): Promise<void>
   getManifest(manifestKey: string): Promise<BackupManifest>
   pruneOlderThan(retentionDays: number): Promise<{ deleted: number; errors: string[] }>
-  /** 底层 S3Client（media 内容寻址上送复用同一凭据与连接；mock store 可省略以跳过 media） */
-  mediaClient?: S3Client
+  /** 底层对象存储（media 上送/拉回复用同一凭据与连接） */
+  objectStore: ObjectStore
 }
 
-export function createS3Store(cfg: BackupS3Config, client?: S3Client): S3StoreLike {
+export function createBackupStore(cfg: BackupS3Config, injected?: ObjectStore): BackupStore {
   const prefix = normalizeBackupPrefix(cfg.prefix)
-  const s3 =
-    client ??
-    new S3Client({
+  const objectStore =
+    injected ??
+    createS3ObjectStore({
+      bucket: cfg.bucket,
       region: cfg.region,
-      endpoint: cfg.endpoint || undefined,
-      forcePathStyle: cfg.forcePathStyle ?? false,
-      credentials: {
-        accessKeyId: cfg.accessKeyId,
-        secretAccessKey: cfg.secretAccessKey,
-      },
-    } satisfies S3ClientConfig)
+      endpoint: cfg.endpoint,
+      accessKeyId: cfg.accessKeyId,
+      secretAccessKey: cfg.secretAccessKey,
+      forcePathStyle: cfg.forcePathStyle,
+    })
 
   return {
-    mediaClient: s3,
+    objectStore,
 
     async testConnection() {
-      try {
-        await s3.send(new HeadBucketCommand({ Bucket: cfg.bucket }))
-        return { ok: true }
-      } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : String(e) }
-      }
+      return objectStore.testConnection()
     },
 
     async uploadSnapshot({ localPath, sha256, sizeBytes, schemaVersion, appVersion }) {
@@ -70,18 +58,7 @@ export function createS3Store(cfg: BackupS3Config, client?: S3Client): S3StoreLi
       const objectKey = buildSnapshotObjectKey(prefix, id)
       const manifestKey = buildManifestObjectKey(objectKey)
       const body = readFileSync(localPath)
-      await s3.send(
-        new PutObjectCommand({
-          Bucket: cfg.bucket,
-          Key: objectKey,
-          Body: body,
-          ContentType: 'application/x-sqlite3',
-          Metadata: {
-            sha256,
-            schemaversion: String(schemaVersion),
-          },
-        }),
-      )
+      await objectStore.putObject(objectKey, body)
       const manifest: BackupManifest = {
         app: 'notefast',
         kind: 'sqlite-snapshot',
@@ -93,14 +70,7 @@ export function createS3Store(cfg: BackupS3Config, client?: S3Client): S3StoreLi
         schemaVersion,
         appVersion,
       }
-      await s3.send(
-        new PutObjectCommand({
-          Bucket: cfg.bucket,
-          Key: manifestKey,
-          Body: JSON.stringify(manifest, null, 2),
-          ContentType: 'application/json; charset=utf-8',
-        }),
-      )
+      await objectStore.putObject(manifestKey, JSON.stringify(manifest, null, 2))
       return { objectKey, manifestKey, manifest }
     },
 
@@ -125,8 +95,7 @@ export function createS3Store(cfg: BackupS3Config, client?: S3Client): S3StoreLi
     },
 
     async downloadObject(key, destPath) {
-      const res = await s3.send(new GetObjectCommand({ Bucket: cfg.bucket, Key: key }))
-      const bytes = await res.Body?.transformToByteArray()
+      const bytes = await objectStore.getObject(key)
       if (!bytes) throw new Error(`空对象: ${key}`)
       writeFileSync(destPath, Buffer.from(bytes))
     },
@@ -144,38 +113,17 @@ export function createS3Store(cfg: BackupS3Config, client?: S3Client): S3StoreLi
       for (const p of points) {
         const t = Date.parse(p.createdAt)
         if (!Number.isFinite(t) || t >= cutoff) continue
-        for (const key of [p.objectKey, p.manifestKey]) {
-          try {
-            await s3.send(new DeleteObjectCommand({ Bucket: cfg.bucket, Key: key }))
-            deleted++
-          } catch (e) {
-            errors.push(`${key}: ${e instanceof Error ? e.message : String(e)}`)
-          }
-        }
+        const res = await objectStore.deleteObjects([p.objectKey, p.manifestKey])
+        deleted += res.deleted
+        errors.push(...res.errors)
       }
       return { deleted, errors }
     },
   }
 
   async function listAllManifestKeys(): Promise<string[]> {
-    const keys: string[] = []
-    let token: string | undefined
-    const listPrefix = `${prefix}snapshots/`
-    do {
-      const res = await s3.send(
-        new ListObjectsV2Command({
-          Bucket: cfg.bucket,
-          Prefix: listPrefix,
-          ContinuationToken: token,
-        }),
-      )
-      for (const obj of res.Contents ?? []) {
-        const key = obj.Key
-        if (key && key.endsWith('.manifest.json')) keys.push(key)
-      }
-      token = res.IsTruncated ? res.NextContinuationToken : undefined
-    } while (token)
-    return keys
+    const keys = await objectStore.listObjects(`${prefix}snapshots/`)
+    return keys.filter((key) => key.endsWith('.manifest.json'))
   }
 
   async function pointFromManifestKey(key: string): Promise<BackupRestorePoint> {
@@ -205,8 +153,7 @@ export function createS3Store(cfg: BackupS3Config, client?: S3Client): S3StoreLi
   }
 
   async function getManifestByKey(manifestKey: string): Promise<BackupManifest> {
-    const res = await s3.send(new GetObjectCommand({ Bucket: cfg.bucket, Key: manifestKey }))
-    const text = await res.Body?.transformToString()
+    const text = await getObjectText(objectStore, manifestKey)
     if (!text) throw new Error(`空 manifest: ${manifestKey}`)
     const parsed = JSON.parse(text) as unknown
     if (!isBackupManifest(parsed)) throw new Error(`无效 manifest: ${manifestKey}`)

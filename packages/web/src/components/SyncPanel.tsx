@@ -78,6 +78,8 @@ export default function SyncPanel() {
         setForm({
           ...EMPTY_S3,
           ...a,
+          // Key 前缀显示为不含尾斜杠的目录名（服务端归一化时自动补）
+          prefix: (a.prefix ?? '').replace(/\/$/, ''),
           accessKeyId: a.accessKeyId || SYNC_SECRET_MASK,
           secretAccessKey: a.secretAccessKey || SYNC_SECRET_MASK,
         })
@@ -88,7 +90,7 @@ export default function SyncPanel() {
           endpoint: a.endpoint ?? '',
           username: a.username || SYNC_SECRET_MASK,
           password: a.password || SYNC_SECRET_MASK,
-          prefix: a.prefix ?? '',
+          prefix: (a.prefix ?? '').replace(/\/$/, ''),
         })
       } else {
         setForm({ kind: 'none' })
@@ -261,7 +263,7 @@ export default function SyncPanel() {
                 label="Key 前缀"
                 value={form.prefix ?? ''}
                 onChange={(v) => setForm({ ...form, prefix: v })}
-                placeholder="notes/"
+                placeholder="notes"
                 mono
               />
               <InlineField

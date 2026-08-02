@@ -6,6 +6,7 @@ import { mkdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   emptyBackupConfig,
+  type BackupConfigInput,
   type BackupPersistedConfig,
   type BackupPhase,
   type BackupRestorePoint,
@@ -21,25 +22,23 @@ import {
   _resetBackupConfigForTests,
 } from './config'
 import { cleanupSnapshot, createLocalSnapshot } from './snapshot'
-import { createS3Store, type S3StoreLike } from './s3Store'
-import { uploadMissingMedia } from './mediaBackup'
+import { createBackupStore, type BackupStore } from './s3Store'
+import { uploadMissingMedia, mediaPrefixFor } from './mediaBackup'
 import { getMediaDir } from '../assets/store'
 
 let dataDir = ''
-let store: S3StoreLike | null = null
+let store: BackupStore | null = null
 let running = false
 let phase: BackupPhase = 'idle'
 let lastResult: BackupRunResult | null = null
 let lastRunAt: string | undefined
 let lastSuccessAt: string | undefined
 let lastError: string | undefined
-let timer: ReturnType<typeof setInterval> | null = null
-let nextRunAt: string | undefined
-let storeFactory: ((cfg: BackupPersistedConfig) => S3StoreLike | null) | null = null
+let storeFactory: ((cfg: BackupPersistedConfig) => BackupStore | null) | null = null
 
 export function initBackupManager(
   dir: string,
-  opts?: { storeFactory?: (cfg: BackupPersistedConfig) => S3StoreLike | null },
+  opts?: { storeFactory?: (cfg: BackupPersistedConfig) => BackupStore | null },
 ): void {
   dataDir = dir
   storeFactory = opts?.storeFactory ?? null
@@ -65,11 +64,10 @@ export function backupStatus(): BackupRuntimeStatus {
     lastResult,
     intervalMs: c.intervalMs,
     retentionDays: c.retentionDays,
-    nextRunAt,
   }
 }
 
-export async function applyBackupManagerConfig(incoming: BackupPersistedConfig): Promise<BackupRuntimeStatus> {
+export async function applyBackupManagerConfig(incoming: BackupConfigInput): Promise<BackupRuntimeStatus> {
   applyBackupConfig(incoming)
   rebuild()
   return backupStatus()
@@ -91,7 +89,7 @@ export async function listBackupRestorePoints(limit = 50): Promise<BackupRestore
   return store.listRestorePoints({ limit })
 }
 
-export function getBackupStore(): S3StoreLike | null {
+export function getBackupStore(): BackupStore | null {
   return store
 }
 
@@ -131,13 +129,13 @@ export async function runBackupNow(): Promise<BackupRunResult> {
     })
 
     // media 上送：内容寻址增量（幂等）。失败不阻断快照本身（库仍完整），单独记录。
-    // 复用 store 的底层 S3Client（同一凭据/连接）；mock store 无 mediaClient 时跳过
+    // 复用 store 的底层对象存储（同一凭据/连接）
     let mediaUploaded: { uploaded: number; skipped: number } | undefined
-    if (c.s3 && store.mediaClient) {
+    if (c.s3 && store) {
       const mediaDir = getMediaDir()
       if (mediaDir) {
         try {
-          const media = await uploadMissingMedia(c.s3, mediaDir, { client: store.mediaClient })
+          const media = await uploadMissingMedia(store.objectStore, mediaPrefixFor(c.s3.prefix), mediaDir)
           mediaUploaded = { uploaded: media.uploaded, skipped: media.skipped }
           if (media.errors.length > 0) {
             console.warn(`[backup] media 上送 ${media.errors.length} 个失败，快照仍成功`)
@@ -187,16 +185,13 @@ export async function runBackupNow(): Promise<BackupRunResult> {
     if (tempDir) cleanupSnapshot(tempDir)
     running = false
     if (phase !== 'error') phase = 'idle'
-    scheduleNext()
   }
 }
 
 function rebuild(): void {
-  stopTimer()
   store = null
   const c = getBackupConfig()
   if (!c.enabled || !c.s3) {
-    nextRunAt = undefined
     return
   }
   if (!c.s3.accessKeyId || !c.s3.secretAccessKey || !c.s3.bucket || !c.s3.region) {
@@ -204,68 +199,20 @@ function rebuild(): void {
     return
   }
   try {
-    store = storeFactory ? storeFactory(c) : createS3Store(c.s3)
+    store = storeFactory ? storeFactory(c) : createBackupStore(c.s3)
     console.log(`💾 Backup: S3 s3://${c.s3.bucket}/${c.s3.prefix || ''}`)
   } catch (e) {
     lastError = e instanceof Error ? e.message : String(e)
     console.error('💾 Backup 初始化失败:', lastError)
     return
   }
-  if (c.intervalMs > 0) {
-    timer = setInterval(() => {
-      runBackupNow().catch((err) => {
-        const code = (err as { code?: string } | null)?.code
-        if (code === 'backup_in_progress') {
-          // 重叠跳过：不记 lastError，只重排下次槽位，避免长事务期间连续丢 tick
-          scheduleNext()
-          return
-        }
-        console.warn('[backup] auto run failed:', err instanceof Error ? err.message : err)
-        // 未进入 run 主体的失败（如 not_configured）也没有 finally 重排
-        scheduleNext()
-      })
-    }, c.intervalMs)
-    scheduleNext()
-    if (!process.env.BACKUP_QUIET) {
-      console.log(`💾 Backup auto interval: ${c.intervalMs}ms`)
-    }
-  } else {
-    nextRunAt = undefined
-  }
-}
-
-/** 测试钩子：模拟自动 tick 的错误处理（重叠跳过 vs 真实错误） */
-export function _handleAutoBackupTickErrorForTests(err: unknown): void {
-  const code = (err as { code?: string } | null)?.code
-  if (code === 'backup_in_progress') {
-    scheduleNext()
-    return
-  }
-  scheduleNext()
-}
-
-function scheduleNext(): void {
-  const c = getBackupConfig()
-  if (c.intervalMs > 0 && store) {
-    nextRunAt = new Date(Date.now() + c.intervalMs).toISOString()
-  } else {
-    nextRunAt = undefined
-  }
-}
-
-function stopTimer(): void {
-  if (timer) {
-    clearInterval(timer)
-    timer = null
-  }
 }
 
 export function stopBackupManager(): void {
-  stopTimer()
+  // 备份仅支持手动，无定时器；保留此钩子以便进程退出时统一收尾
 }
 
 export function _resetBackupManagerForTests(): void {
-  stopTimer()
   dataDir = ''
   store = null
   running = false
@@ -274,7 +221,6 @@ export function _resetBackupManagerForTests(): void {
   lastRunAt = undefined
   lastSuccessAt = undefined
   lastError = undefined
-  nextRunAt = undefined
   storeFactory = null
   _resetBackupConfigForTests()
 }

@@ -21,10 +21,10 @@ import {
   type BackupPersistedConfig,
 } from '@notefast/core'
 import { Database } from 'bun:sqlite'
-import { createS3Store } from '../backup/s3Store'
+import { createBackupStore } from '../backup/s3Store'
 import { durableReplaceFile } from '../backup/durableFs'
 import { hashFile, verifySnapshotFile } from '../backup/snapshot'
-import { restoreReferencedMedia } from '../backup/mediaBackup'
+import { restoreReferencedMedia, mediaPrefixFor } from '../backup/mediaBackup'
 
 function parseArgs(argv: string[]): Record<string, string | boolean> {
   const out: Record<string, string | boolean> = {}
@@ -84,7 +84,7 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  const store = createS3Store(cfg.s3)
+  const store = createBackupStore(cfg.s3)
   const manifestKey = buildManifestObjectKey(objectKey)
   const workDir = join(dataDir, '.restore-tmp')
   mkdirSync(workDir, { recursive: true })
@@ -166,7 +166,7 @@ async function main(): Promise<void> {
     }
     console.log(`media 引用集合: ${refs.length} 张图`)
     if (!dryRun) {
-      const mediaRes = await restoreReferencedMedia(cfg.s3, mediaDir, refs)
+      const mediaRes = await restoreReferencedMedia(store.objectStore, mediaPrefixFor(cfg.s3.prefix), mediaDir, refs)
       console.log(`media 恢复: 拉回 ${mediaRes.restored}，本地已有跳过，缺失 ${mediaRes.missing.length}`)
       if (mediaRes.missing.length > 0) {
         console.warn(`⚠️  以下图片在 S3 缺失（引用悬空）: ${mediaRes.missing.slice(0, 5).join(', ')}${mediaRes.missing.length > 5 ? '…' : ''}`)

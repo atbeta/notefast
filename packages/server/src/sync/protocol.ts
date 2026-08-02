@@ -1,24 +1,17 @@
 /**
- * 同步协议数据面（方案 A：客户端与 Web 共享同一份 S3）
+ * 同步协议数据面（多端同步：客户端与 Web 共享同一份对象存储）
  *
- * publish（本端 → S3）：把本地 entity_changes 增量导出为 changes/ 分段 jsonl，
+ * publish（本端 → 存储）：把本地 entity_changes 增量导出为 changes/ 分段 jsonl，
  * 并维护 manifest（last_seq）；定期生成全量 snapshot.db 供首次/超窗端拉取。
- * consume（S3 → 本端）：按 manifest 决定「增量合并」或「全量快照重建」，
+ * consume（存储 → 本端）：按 manifest 决定「增量合并」或「全量快照重建」，
  * 增量按 updated_at LWW 裁决后 upsert / tombstone 进本地库。
  *
  * 设计：
  * - 增量行 = 变更事件 + 变更后块状态（entity_changes 不存内容，重放需块内容）
  * - 合并直接用 SQL（不经 store hooks），避免同步触发 change feed → 双向循环
- * - S3 操作经注入 client（复用 mediaBackup 的可测模式）
+ * - 存储操作经注入 ObjectStore（与备份 / media 共用抽象层）
  */
 
-import type { S3Client } from '@aws-sdk/client-s3'
-import {
-  DeleteObjectCommand,
-  GetObjectCommand,
-  ListObjectsV2Command,
-  PutObjectCommand,
-} from '@aws-sdk/client-s3'
 import { readFileSync, writeFileSync } from 'node:fs'
 import {
   buildChangesKey,
@@ -36,12 +29,9 @@ import { listChanges, getChangesAnchor } from '../store/changeFeed'
 import { nowTimestamp } from '../store/blocks'
 import { createLocalSnapshot, verifySnapshotFile } from '../backup/snapshot'
 import { durableReplaceFile } from '../backup/durableFs'
+import { getObjectText, type ObjectStore } from '../storage/objectStore'
 
 export type Db = ReturnType<typeof getDb>
-
-export interface SyncProtocolOptions {
-  client?: S3Client
-}
 
 export interface PublishResult {
   /** 本次导出的变更条数 */
@@ -71,70 +61,36 @@ export interface SyncState {
   consumedSeq: number
 }
 
-// ───────────────────── S3 对象操作（注入 client）─────────────────────
+// ───────────────────── 对象操作（注入 store）─────────────────────
 
-async function putText(client: S3Client, bucket: string, key: string, body: string): Promise<void> {
-  await client.send(
-    new PutObjectCommand({ Bucket: bucket, Key: key, Body: Buffer.from(body), ContentType: 'application/octet-stream' }),
-  )
-}
-
-async function getText(client: S3Client, bucket: string, key: string): Promise<string | null> {
-  try {
-    const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }))
-    const bytes = await res.Body?.transformToByteArray()
-    return bytes ? Buffer.from(bytes).toString('utf8') : null
-  } catch (e) {
-    if ((e as { name?: string }).name === 'NoSuchKey') return null
-    throw e
-  }
-}
-
-async function listKeys(client: S3Client, bucket: string, prefix: string): Promise<string[]> {
-  const keys: string[] = []
-  let token: string | undefined
-  do {
-    const res = await client.send(
-      new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: token }),
-    )
-    for (const obj of res.Contents ?? []) if (obj.Key) keys.push(obj.Key)
-    token = res.IsTruncated ? res.NextContinuationToken : undefined
-  } while (token)
-  return keys
+async function getText(store: ObjectStore, key: string): Promise<string | null> {
+  return getObjectText(store, key)
 }
 
 // ───────────────────── 快照（全量基线）─────────────────────
 
 /**
- * 生成全量快照并上传 S3（VACUUM INTO → verify → upload snapshot.db + snapshot.seq）。
+ * 生成全量快照并上传（VACUUM INTO → verify → upload snapshot.db + snapshot.seq）。
  * 供首次同步 / 增量超窗的端全量重建。返回快照锚点 seq。
  */
 export async function publishSnapshot(
   db: Db,
-  cfg: { bucket: string; prefix: string },
-  client: S3Client,
+  store: ObjectStore,
+  prefix: string,
   workDir: string,
 ): Promise<number> {
   const anchor = getChangesAnchor(db)
   const snap = await createLocalSnapshot(workDir)
   try {
-    const bytes = readFileSync(snap.path)
-    await client.send(
-      new PutObjectCommand({
-        Bucket: cfg.bucket,
-        Key: buildSnapshotKey(cfg.prefix),
-        Body: bytes,
-        ContentType: 'application/x-sqlite3',
-      }),
-    )
-    await putText(client, cfg.bucket, buildSnapshotSeqKey(cfg.prefix), String(anchor))
+    await store.putObject(buildSnapshotKey(prefix), readFileSync(snap.path))
+    await store.putObject(buildSnapshotSeqKey(prefix), String(anchor))
     return anchor
   } finally {
-    // 快照文件清理交给调用方（workDir 由 publishSync 统一清理）
+    // 快照文件清理交给调用方（workDir 由调用方统一清理）
   }
 }
 
-// ───────────────────── 发布（本端 → S3）─────────────────────
+// ───────────────────── 发布（本端 → 存储）─────────────────────
 
 /**
  * 发布增量：把 [publishedSeq, anchor] 区间导出为 changes/ 分段 jsonl。
@@ -143,8 +99,8 @@ export async function publishSnapshot(
  */
 export async function publishChanges(
   db: Db,
-  cfg: { bucket: string; prefix: string },
-  client: S3Client,
+  store: ObjectStore,
+  prefix: string,
   publishedSeq: number,
 ): Promise<number> {
   const anchor = getChangesAnchor(db)
@@ -174,15 +130,15 @@ export async function publishChanges(
     }
     const startSeq = rows[0]!.seq
     const endSeq = rows[rows.length - 1]!.seq
-    await putText(client, cfg.bucket, buildChangesKey(cfg.prefix, startSeq, endSeq), lines.join('\n'))
+    await store.putObject(buildChangesKey(prefix, startSeq, endSeq), lines.join('\n'))
   }
   return anchor
 }
 
-/** 更新 S3 manifest（last_seq = 发布后的锚点） */
+/** 更新 manifest（last_seq = 发布后的锚点） */
 export async function updateManifest(
-  client: S3Client,
-  cfg: { bucket: string; prefix: string },
+  store: ObjectStore,
+  prefix: string,
   lastSeq: number,
   snapshotSeq: number,
 ): Promise<SyncManifest> {
@@ -194,15 +150,12 @@ export async function updateManifest(
     snapshot_seq: snapshotSeq,
     updated_at: new Date().toISOString(),
   }
-  await putText(client, cfg.bucket, buildSyncManifestKey(cfg.prefix), JSON.stringify(manifest))
+  await store.putObject(buildSyncManifestKey(prefix), JSON.stringify(manifest))
   return manifest
 }
 
-export async function readManifest(
-  client: S3Client,
-  cfg: { bucket: string; prefix: string },
-): Promise<SyncManifest | null> {
-  const text = await getText(client, cfg.bucket, buildSyncManifestKey(cfg.prefix))
+export async function readManifest(store: ObjectStore, prefix: string): Promise<SyncManifest | null> {
+  const text = await getText(store, buildSyncManifestKey(prefix))
   if (!text) return null
   try {
     const m = JSON.parse(text) as SyncManifest
@@ -211,24 +164,21 @@ export async function readManifest(
   return null
 }
 
-// ───────────────────── 消费（S3 → 本端）─────────────────────
+// ───────────────────── 消费（存储 → 本端）─────────────────────
 
 /**
  * 全量消费：下载 snapshot.db 重建本地库文件（替换）。超窗/首次用。
  * 返回快照锚点 seq。
  */
 export async function consumeSnapshot(
-  client: S3Client,
-  cfg: { bucket: string; prefix: string },
+  store: ObjectStore,
+  prefix: string,
   targetDbPath: string,
 ): Promise<number> {
-  const seqText = await getText(client, cfg.bucket, buildSnapshotSeqKey(cfg.prefix))
+  const seqText = await getText(store, buildSnapshotSeqKey(prefix))
   const snapshotSeq = seqText ? parseInt(seqText, 10) || 0 : 0
 
-  const res = await client.send(
-    new GetObjectCommand({ Bucket: cfg.bucket, Key: buildSnapshotKey(cfg.prefix) }),
-  )
-  const bytes = await res.Body?.transformToByteArray()
+  const bytes = await store.getObject(buildSnapshotKey(prefix))
   if (!bytes) throw new Error('快照为空或不存在')
 
   // 临时文件校验后 durable 替换（与 backup restore 同模式）
@@ -246,21 +196,18 @@ export async function consumeSnapshot(
  */
 export async function compactChanges(
   db: Db,
-  client: S3Client,
-  cfg: { bucket: string; prefix: string },
+  store: ObjectStore,
+  prefix: string,
   workDir: string,
 ): Promise<number> {
   // 1) 覆盖新快照（含当前锚点）
-  const anchor = await publishSnapshot(db, cfg, client, workDir)
+  const anchor = await publishSnapshot(db, store, prefix, workDir)
   // 2) 删除全部旧 changes 段（快照已兜底）
-  const changesPrefix = `${cfg.prefix}${SYNC_S3_DIR}/changes/`
-  const keys = await listKeys(client, cfg.bucket, changesPrefix)
-  for (const key of keys) {
-    try {
-      await client.send(new DeleteObjectCommand({ Bucket: cfg.bucket, Key: key }))
-    } catch (e) {
-      console.warn('[sync] compact 删除失败:', key, e instanceof Error ? e.message : e)
-    }
+  const changesPrefix = `${prefix}${SYNC_S3_DIR}/changes/`
+  const keys = await store.listObjects(changesPrefix)
+  const res = await store.deleteObjects(keys)
+  if (res.errors.length > 0) {
+    console.warn('[sync] compact 部分删除失败:', res.errors.length, '个')
   }
   return anchor
 }
@@ -283,13 +230,13 @@ function shouldApply(
  */
 export async function consumeChanges(
   db: Db,
-  client: S3Client,
-  cfg: { bucket: string; prefix: string },
+  store: ObjectStore,
+  prefix: string,
   consumedSeq: number,
   upToSeq: number,
 ): Promise<{ applied: number; skipped: number; nextSeq: number }> {
-  const changesPrefix = `${cfg.prefix}${SYNC_S3_DIR}/changes/`
-  const keys = (await listKeys(client, cfg.bucket, changesPrefix)).sort()
+  const changesPrefix = `${prefix}${SYNC_S3_DIR}/changes/`
+  const keys = (await store.listObjects(changesPrefix)).sort()
 
   let applied = 0
   let skipped = 0
@@ -322,7 +269,7 @@ export async function consumeChanges(
     if (endSeq <= consumedSeq) continue // 已消费
     if (startSeq > upToSeq) break // 超出目标区间（按序已过）
 
-    const text = await getText(client, cfg.bucket, key)
+    const text = await getText(store, key)
     if (!text) continue
     for (const line of text.split('\n')) {
       if (!line.trim()) continue

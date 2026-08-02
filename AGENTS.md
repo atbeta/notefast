@@ -90,7 +90,7 @@ notefast/
 │   │       ├── api/         # REST 路由（blocks, docs, search, refs, import, ai, sync, backup, autolink…）
 │   │       ├── mcp/         # MCP Server 与 Tool 定义
 │   │       ├── ai/          # indexer / chat / hybridSearch / autoLink / vectorStore / aiExclude
-│   │       ├── sync/        # Markdown 归档适配器（LocalFS / S3 / WebDAV）
+│   │       ├── sync/        # Markdown 归档适配器（LocalFS / S3 / WebDAV）+ 多端同步协议（protocol / protocolManager / protocolConfig）
 │   │       ├── backup/      # SQLite→S3 快照备份
 │   │       ├── services/    # aiRuntime / docImport / autoExport / hooks
 │   │       ├── assets/      # 图片 AssetStore
@@ -179,6 +179,10 @@ docker compose up -d
 - Markdown 归档远端文件名为 `<slug>--<docId>.md`，并由 `notefast-archive.manifest.json` 跟踪与清理陈旧文件；S3 与 WebDAV 同步适配器同时只能启用一个，且仅为单向 push
 - 文档 markdown 导出在根写入 `# {title}` 为有意设计；编辑器加载需 strip 与标题同文的首 H1（含子块时提升其子块）
 - 数据库备份配置在 `data/backup.config.json`；恢复须停服后跑 `bun --filter @notefast/server backup:restore`
+- **对象存储抽象层** `server/src/storage/objectStore.ts`：`ObjectStore`（testConnection / putObject / getObject / listObjects / deleteObject / deleteObjects），备份（`backup/s3Store.ts` 的 `BackupStore` + `backup/mediaBackup.ts`）与多端同步（`sync/protocol.ts`）全部构建其上，现仅 S3 实现（`createS3ObjectStore`，key 为相对 bucket 的完整键）；加 WebDAV/LocalFS 只需新增 ObjectStore 实现。备份（全量快照，仅手动，独立配置 `backup.config.json`）、多端同步（双向增量，独立配置 `sync-protocol.config.json` + 状态 `sync-state.json`）、Markdown 归档（单向导出）三能力完全解耦，各自独立 S3 配置；多端同步 `syncNow` 会上送 media 使同步位置自包含；seq 游标绑定「存储位置指纹」，换 bucket/prefix 自动重置防漏发
+- **向量存储是二进制 float32**（`block_vectors.embedding` BLOB，migration 007 由 JSON 文本原地转换；`vectorStore.ts` 的 encode/decode 兼容旧 JSON 行）——JSON 文本是 float32 的 ~5 倍，Qwen3-Embedding-8B(4096 维) 曾让 425M 库中 ~415M 是向量
+- **快照剥离可重建的向量索引**（`backup/snapshot.ts` 的 `stripVectorIndexFromSnapshot`：清空 block_vectors/vec_blocks/vector_entries/generations + 置 stale + VACUUM，保留表结构）；备份与同步 compaction 快照均只含核心内容（KB~MB 级），恢复后语义搜索为空需手动 `POST /ai/index/rebuild` 重建
+- **多端同步完全自动，无用户间隔配置**：写路径去抖触发（5s，`scheduleSyncNow` 覆盖 Web REST / import / AI chat / MCP 写工具，同步消费合并不触发避免环）+ 固定 60s 心跳（`syncHeartbeat` = 推送 + `safeMergeRemote` 增量合并远端，落后快照时不恢复自身、交给客户端全量拉取）
 - 旧 Litestream Compose profile 与根目录 `litestream.yml` 均已移除（`-exec true` 会导致复制进程退出）；灾备统一走应用内 SQLite→S3 快照
 - 文档组织：tag 多选默认 AND（同时包含），`tag_match=any` 为包含任一；智能视图为内置预设 + URL 参数（无自定义命名视图表）
 - `properties.ai_exclude: true` 软隔离：不进向量/RAG/AutoLink/MCP 发现与按 ID 读取；人类 Web 列表/编辑/Cmd+K 仍可用；备份与 Markdown 归档仍含全文

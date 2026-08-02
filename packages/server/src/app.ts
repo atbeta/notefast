@@ -265,8 +265,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     initAssetStore(dataDir)
     initSyncManager(dataDir)
     initBackupManager(dataDir)
-    const protoInterval = parseInt(process.env.SYNC_PROTOCOL_INTERVAL_MS || '0', 10)
-    initProtocolManager(dataDir, { autoSyncIntervalMs: Number.isFinite(protoInterval) ? protoInterval : 0 })
+    initProtocolManager(dataDir)
     initAiRuntime(pluginSystem, dataDir)
     startEntityDescribe()
 

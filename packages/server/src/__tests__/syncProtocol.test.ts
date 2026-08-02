@@ -15,6 +15,7 @@ import {
   updateManifest,
 } from '../sync/protocol'
 import { getChangesAnchor } from '../store/changeFeed'
+import { createS3ObjectStore } from '../storage/objectStore'
 import {
   CHANGES_PER_SEGMENT,
   SYNC_S3_DIR,
@@ -68,6 +69,7 @@ function makeMockS3() {
 }
 
 const CFG = { bucket: 'b', prefix: 'p' }
+const S3_STORE_CFG = { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's' }
 
 beforeAll(() => {
   testDir = mkdtempSync(join('/tmp', 'notefast-sync-protocol-'))
@@ -106,6 +108,7 @@ function insertBlockRow(id: string, content: string, parentId: string | null = n
 describe('sync protocol (publish → consume)', () => {
   test('发布增量 → 消费端 LWW upsert，块内容一致', async () => {
     const { client } = makeMockS3()
+    const store = createS3ObjectStore(S3_STORE_CFG, client)
 
     // 源端：建 2 个块 + 改 1 个
     const a = crypto.randomUUID()
@@ -115,18 +118,18 @@ describe('sync protocol (publish → consume)', () => {
     updateBlock(sourceDb, b, { content: '段落B-改' })
 
     // 发布（从 0）
-    const lastSeq = await publishChanges(sourceDb, CFG, client, 0)
+    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0)
     expect(lastSeq).toBe(getChangesAnchor(sourceDb))
 
     // manifest
-    await updateManifest(client, CFG, lastSeq, 0)
-    const manifest = await readManifest(client, CFG)
+    await updateManifest(store, CFG.prefix, lastSeq, 0)
+    const manifest = await readManifest(store, CFG.prefix)
     expect(manifest).not.toBeNull()
     expect(manifest!.last_seq).toBe(lastSeq)
 
     // 目标端：空库增量合并
     const target = makeTargetDb()
-    const res = await consumeChanges(target, client, CFG, 0, lastSeq)
+    const res = await consumeChanges(target, store, CFG.prefix, 0, lastSeq)
     expect(res.nextSeq).toBe(lastSeq)
 
     // 校验目标库内容
@@ -139,13 +142,14 @@ describe('sync protocol (publish → consume)', () => {
 
   test('tombstone：源端软删 → 目标端同步软删', async () => {
     const { client } = makeMockS3()
+    const store = createS3ObjectStore(S3_STORE_CFG, client)
     const a = crypto.randomUUID()
     insertBlockRow(a, '待删除')
     softDeleteBlocks(sourceDb, [a])
 
-    const lastSeq = await publishChanges(sourceDb, CFG, client, 0)
+    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0)
     const target = makeTargetDb()
-    const res = await consumeChanges(target, client, CFG, 0, lastSeq)
+    const res = await consumeChanges(target, store, CFG.prefix, 0, lastSeq)
     expect(res.applied).toBeGreaterThan(0)
     // 目标库中该块 is_deleted = 1
     const row = target.query('SELECT is_deleted FROM blocks WHERE id = ?').get(a) as { is_deleted: number } | undefined
@@ -155,10 +159,11 @@ describe('sync protocol (publish → consume)', () => {
 
   test('LWW：目标已有更新的块不被旧值覆盖', async () => {
     const { client } = makeMockS3()
+    const store = createS3ObjectStore(S3_STORE_CFG, client)
     const a = crypto.randomUUID()
     insertBlockRow(a, '源端旧值')
 
-    const lastSeq = await publishChanges(sourceDb, CFG, client, 0)
+    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0)
 
     // 目标端：先手动建一个 updated_at 更新的块
     const target = makeTargetDb()
@@ -168,7 +173,7 @@ describe('sync protocol (publish → consume)', () => {
        VALUES (?, ?, NULL, ?, 'document', '目标端新值', '{}', '[]', 'note', 0, 0, 0, 0, ?, ?)`,
     ).run(a, notebookId, a, newer, newer)
 
-    const res = await consumeChanges(target, client, CFG, 0, lastSeq)
+    const res = await consumeChanges(target, store, CFG.prefix, 0, lastSeq)
     // 旧值被跳过
     expect(res.skipped).toBeGreaterThan(0)
     const row = target.query('SELECT content FROM blocks WHERE id = ?').get(a) as { content: string }
@@ -178,17 +183,18 @@ describe('sync protocol (publish → consume)', () => {
 
   test('分段：超过 CHANGES_PER_SEGMENT 产生多个 changes 对象', async () => {
     const { client, objects } = makeMockS3()
+    const store = createS3ObjectStore(S3_STORE_CFG, client)
     // 制造 CHANGES_PER_SEGMENT + 10 条变更
     for (let i = 0; i < CHANGES_PER_SEGMENT + 10; i++) {
       insertBlockRow(crypto.randomUUID(), `块${i}`)
     }
-    const lastSeq = await publishChanges(sourceDb, CFG, client, 0)
+    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0)
     const changesKeys = [...objects.keys()].filter((k) => k.includes(`${SYNC_S3_DIR}/changes/`))
     expect(changesKeys.length).toBeGreaterThanOrEqual(2)
 
     // 消费端完整合并
     const target = makeTargetDb()
-    const res = await consumeChanges(target, client, CFG, 0, lastSeq)
+    const res = await consumeChanges(target, store, CFG.prefix, 0, lastSeq)
     expect(res.applied).toBeGreaterThanOrEqual(CHANGES_PER_SEGMENT)
     const count = target.query('SELECT COUNT(*) AS c FROM blocks WHERE is_deleted = 0').get() as { c: number }
     expect(count.c).toBeGreaterThanOrEqual(CHANGES_PER_SEGMENT)
@@ -197,16 +203,17 @@ describe('sync protocol (publish → consume)', () => {
 
   test('compactChanges 生成快照 + 清理旧增量段', async () => {
     const { client, objects } = makeMockS3()
+    const store = createS3ObjectStore(S3_STORE_CFG, client)
     const workDir = join(testDir, `compact-work-${crypto.randomUUID()}`)
     // 造几条变更 → 发布成增量段
     for (let i = 0; i < 5; i++) {
       insertBlockRow(crypto.randomUUID(), `compact块${i}`)
     }
-    const lastSeq = await publishChanges(sourceDb, CFG, client, 0)
+    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0)
     expect([...objects.keys()].some((k) => k.includes(`${SYNC_S3_DIR}/changes/`))).toBe(true)
 
     // compaction：快照 + 清空 changes 段
-    const anchor = await compactChanges(sourceDb, client, CFG, workDir)
+    const anchor = await compactChanges(sourceDb, store, CFG.prefix, workDir)
     expect(anchor).toBe(lastSeq)
     // 快照对象存在
     expect([...objects.keys()].some((k) => k.endsWith('snapshot.db'))).toBe(true)
@@ -216,6 +223,7 @@ describe('sync protocol (publish → consume)', () => {
 
   test('consumeSnapshot 拉取快照写入目标文件（可校验）', async () => {
     const { client, objects } = makeMockS3()
+    const store = createS3ObjectStore(S3_STORE_CFG, client)
     // 用与 makeTargetDb 相同的方式建源库，插入一行，VACUUM 成快照字节
     const fresh = makeTargetDb()
     const now = nowTimestamp()
@@ -234,7 +242,7 @@ describe('sync protocol (publish → consume)', () => {
 
     // consume 到独立目标文件
     const targetPath = join(testDir, `snapshot-target-${crypto.randomUUID()}.db`)
-    const seq = await consumeSnapshot(client, CFG, targetPath)
+    const seq = await consumeSnapshot(store, CFG.prefix, targetPath)
     expect(seq).toBe(1)
     // 目标文件是可校验的 SQLite 快照
     expect(existsSync(targetPath)).toBe(true)

@@ -12,7 +12,7 @@
 
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { backupConfigSchema, type BackupPersistedConfig } from '@notefast/core'
+import { backupConfigSchema, type BackupConfigInput } from '@notefast/core'
 import {
   applyBackupManagerConfig,
   backupStatus,
@@ -36,11 +36,12 @@ backup.get('/config', (c) => {
 
 backup.put('/config', zValidator('json', backupConfigSchema), async (c) => {
   const body = c.req.valid('json')
-  const next: BackupPersistedConfig = {
+  const next: BackupConfigInput = {
     version: 1,
     enabled: body.enabled,
     s3: body.s3,
-    intervalMs: body.intervalMs ?? 3_600_000,
+    // 备份仅支持手动：不调度自动全量备份
+    intervalMs: 0,
     retentionDays: body.retentionDays ?? 30,
   }
   if (next.enabled && !next.s3) {

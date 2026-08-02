@@ -23,24 +23,49 @@ import {
   initBackupManager,
   listBackupRestorePoints,
   runBackupNow,
-  _handleAutoBackupTickErrorForTests,
   _resetBackupManagerForTests,
 } from '../backup/manager'
 import { createLocalSnapshot, cleanupSnapshot, hashFile, verifySnapshotFile } from '../backup/snapshot'
-import { createS3Store, type S3StoreLike } from '../backup/s3Store'
+import { createBackupStore, type BackupStore } from '../backup/s3Store'
+import { createS3ObjectStore, type ObjectStore } from '../storage/objectStore'
 import { durableReplaceFile } from '../backup/durableFs'
 import { assertSchemaCompatible, CURRENT_SCHEMA_VERSION } from '@notefast/core'
 
 let testDir: string
 let app: Hono
 
-function createMemoryStore(): S3StoreLike & {
+function createMemoryStore(): BackupStore & {
   objects: Map<string, Buffer | string>
   failUpload?: boolean
 } {
   const objects = new Map<string, Buffer | string>()
-  const store: S3StoreLike & { objects: Map<string, Buffer | string>; failUpload?: boolean } = {
+  const objectStore: ObjectStore = {
+    async testConnection() {
+      return { ok: true }
+    },
+    async putObject(key, body) {
+      objects.set(key, typeof body === 'string' ? body : Buffer.from(body))
+    },
+    async getObject(key) {
+      const v = objects.get(key)
+      if (v === undefined) return undefined
+      return Buffer.from(typeof v === 'string' ? v : v)
+    },
+    async listObjects(prefix) {
+      return [...objects.keys()].filter((k) => k.startsWith(prefix))
+    },
+    async deleteObject(key) {
+      objects.delete(key)
+    },
+    async deleteObjects(keys) {
+      let deleted = 0
+      for (const k of keys) if (objects.delete(k)) deleted++
+      return { deleted, errors: [] }
+    },
+  }
+  const store: BackupStore & { objects: Map<string, Buffer | string>; failUpload?: boolean } = {
     objects,
+    objectStore,
     failUpload: false,
     async testConnection() {
       return { ok: true }
@@ -177,27 +202,15 @@ describe('backup manager', () => {
     expect(backupStatus().lastSuccessAt).toBeTruthy()
   })
 
-  test('store 暴露 mediaClient 时，runBackupNow 会上送 media 并计入结果', async () => {
+  test('store 暴露对象存储时，runBackupNow 会上送 media 并计入结果', async () => {
     // media 目录放一个合法 sha256 文件
     const mediaDir = join(testDir, 'media')
     mkdirSync(mediaDir, { recursive: true })
     const sha = 'f'.repeat(64)
     writeFileSync(join(mediaDir, sha), 'IMG')
 
-    // 内存 mock：提供 mediaClient（fake），PutObject 写入 objects，ListObjects 返回空
+    // 内存 mock：objectStore 直接读写 mem.objects（ListObjects 空 → 全量上送）
     const mem = createMemoryStore()
-    mem.mediaClient = {
-      async send(command: unknown) {
-        const cmd = command as { constructor: { name: string }; input: Record<string, unknown> }
-        const name = cmd.constructor.name
-        if (name === 'ListObjectsV2Command') return { Contents: [], IsTruncated: false }
-        if (name === 'PutObjectCommand') {
-          mem.objects.set(cmd.input.Key as string, cmd.input.Body as Buffer)
-          return {}
-        }
-        throw new Error(`unexpected ${name}`)
-      },
-    } as never
 
     initBackupManager(testDir, { storeFactory: () => mem })
     await applyBackupManagerConfig({
@@ -337,6 +350,65 @@ describe('backup HTTP', () => {
     expect(list.status).toBe(200)
     expect(list.body.points.length).toBeGreaterThanOrEqual(1)
   })
+
+  test('PUT config 省略 s3 密钥仍可保存（intervalMs 0 持久化）', async () => {
+    const mem = createMemoryStore()
+    initBackupManager(testDir, { storeFactory: () => mem })
+    // 首次配置带真实密钥
+    const first = await api('PUT', '/config', {
+      enabled: true,
+      intervalMs: 3_600_000,
+      retentionDays: 30,
+      s3: {
+        bucket: 'b',
+        region: 'r',
+        accessKeyId: 'REAL_AK',
+        secretAccessKey: 'REAL_SK',
+        prefix: 'p',
+      },
+    })
+    expect(first.status).toBe(200)
+
+    // 二次保存：密钥已脱敏，UI 不再重发（省略）——只改间隔为 0
+    const second = await api('PUT', '/config', {
+      enabled: true,
+      intervalMs: 0,
+      retentionDays: 30,
+      s3: { bucket: 'b', region: 'r', prefix: 'p' },
+    })
+    expect(second.status).toBe(200)
+    expect(second.body.config.intervalMs).toBe(0)
+
+    const get = await api('GET', '/config')
+    expect(get.status).toBe(200)
+    expect(get.body.config.intervalMs).toBe(0)
+    // 磁盘仍保留真实密钥
+    const disk = JSON.parse(readFileSync(join(testDir, 'backup.config.json'), 'utf-8'))
+    expect(disk.s3.accessKeyId).toBe('REAL_AK')
+    expect(disk.s3.secretAccessKey).toBe('REAL_SK')
+  })
+
+  test('备份仅支持手动：即使带上 intervalMs 也持久化为 0', async () => {
+    const mem = createMemoryStore()
+    initBackupManager(testDir, { storeFactory: () => mem })
+    const put = await api('PUT', '/config', {
+      enabled: true,
+      intervalMs: 60_000,
+      retentionDays: 30,
+      s3: {
+        bucket: 'b',
+        region: 'r',
+        accessKeyId: 'k',
+        secretAccessKey: 's',
+      },
+    })
+    expect(put.status).toBe(200)
+    expect(put.body.config.intervalMs).toBe(0)
+    expect(backupStatus().intervalMs).toBe(0)
+    // 磁盘也清零
+    const disk = JSON.parse(readFileSync(join(testDir, 'backup.config.json'), 'utf-8'))
+    expect(disk.intervalMs).toBe(0)
+  })
 })
 
 describe('restore 兼容性', () => {
@@ -430,7 +502,7 @@ describe('prune 全量列举', () => {
       },
     }
 
-    const store = createS3Store(
+    const store = createBackupStore(
       {
         bucket: 'b',
         region: 'r',
@@ -438,7 +510,10 @@ describe('prune 全量列举', () => {
         secretAccessKey: 's',
         prefix: 'p',
       },
-      client as never,
+      createS3ObjectStore(
+        { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's' },
+        client as never,
+      ),
     )
 
     // UI 只看 50 条时看不到 2020 的老点
@@ -450,34 +525,5 @@ describe('prune 全量列举', () => {
     expect(deleted.some((k) => k.includes('2020-01-01'))).toBe(true)
     // 近期点仍在
     expect([...objects.keys()].some((k) => k.includes(recentDay))).toBe(true)
-  })
-})
-
-describe('自动备份重叠跳过', () => {
-  test('backup_in_progress 时重排 nextRunAt 且不记 lastError', async () => {
-    const mem = createMemoryStore()
-    initBackupManager(testDir, { storeFactory: () => mem })
-    await applyBackupManagerConfig({
-      version: 1,
-      enabled: true,
-      intervalMs: 60_000,
-      retentionDays: 30,
-      s3: {
-        bucket: 'b',
-        region: 'r',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-      },
-    })
-    const before = backupStatus().nextRunAt
-    expect(before).toBeTruthy()
-    await Bun.sleep(5)
-    _handleAutoBackupTickErrorForTests(
-      Object.assign(new Error('备份任务正在进行中'), { code: 'backup_in_progress' }),
-    )
-    const after = backupStatus().nextRunAt
-    expect(after).toBeTruthy()
-    expect(Date.parse(after!)).toBeGreaterThanOrEqual(Date.parse(before!))
-    expect(backupStatus().lastError).toBeUndefined()
   })
 })

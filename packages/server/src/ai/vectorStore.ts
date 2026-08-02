@@ -87,6 +87,31 @@ function cosine(a: Float64Array | number[], b: Float64Array | number[]): number 
   return denominator === 0 ? 0 : dot / denominator
 }
 
+/** 编码为 little-endian float32 BLOB（体积约为 JSON 文本的 1/5） */
+function encodeEmbedding(vector: Float64Array): Uint8Array {
+  const f32 = Float32Array.from(vector)
+  return new Uint8Array(f32.buffer, f32.byteOffset, f32.byteLength)
+}
+
+/** 解码：新格式 BLOB（float32）或旧格式 JSON 文本（迁移前存量） */
+function decodeEmbedding(raw: string | Uint8Array): Float64Array {
+  if (typeof raw !== 'string') {
+    const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw)
+    if (bytes.byteLength % 4 === 0) {
+      // bun:sqlite 返回的 BLOB 可能是大共享 buffer 的视图，先复制到独立 buffer 再构造
+      const f32 = new Float32Array(bytes.byteLength / 4)
+      new Uint8Array(f32.buffer).set(bytes)
+      return Float64Array.from(f32)
+    }
+    return new Float64Array(0)
+  }
+  try {
+    return Float64Array.from(JSON.parse(raw) as number[])
+  } catch {
+    return new Float64Array(0)
+  }
+}
+
 interface StateRow {
   active_backend: string
   status: VectorStoreStatus['status']
@@ -121,7 +146,7 @@ export class JsonVectorStore implements VectorStore {
       throw new Error('向量索引与当前 embedding 模型不兼容，请先重建索引')
     }
 
-    const embedding = JSON.stringify(Array.from(record.vector))
+    const embedding = encodeEmbedding(record.vector)
     db.transaction(() => {
       db.query(
         `INSERT INTO block_vectors
@@ -201,18 +226,14 @@ export class JsonVectorStore implements VectorStore {
 
     const rows = db.query(sql).all(...params as [string, ...Array<string | number>]) as Array<{
       block_id: string
-      embedding: string
+      embedding: string | Uint8Array
       content: string
       root_id: string
     }>
     const scored = rows
       .map((row) => {
-        try {
-          const vector = JSON.parse(row.embedding) as number[]
-          return { ...row, score: cosine(vector, query) }
-        } catch {
-          return { ...row, score: 0 }
-        }
+        const vector = decodeEmbedding(row.embedding)
+        return { ...row, score: vector.length > 0 ? cosine(vector, query) : 0 }
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, options.limit)
@@ -255,13 +276,10 @@ export class JsonVectorStore implements VectorStore {
       query.length,
       VECTOR_INDEX_VERSION,
       ...blockIds,
-    ) as Array<{ block_id: string; embedding: string }>
+    ) as Array<{ block_id: string; embedding: string | Uint8Array }>
     for (const row of rows) {
-      try {
-        scores.set(row.block_id, cosine(JSON.parse(row.embedding) as number[], query))
-      } catch {
-        // 损坏的派生索引不参与评分。
-      }
+      const vector = decodeEmbedding(row.embedding)
+      if (vector.length > 0) scores.set(row.block_id, cosine(vector, query))
     }
     return scores
   }

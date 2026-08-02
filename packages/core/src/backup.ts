@@ -42,6 +42,17 @@ export interface BackupPersistedConfig {
   retentionDays: number
 }
 
+/** mergeBackupConfig 入参的 s3 片段：密钥可省略，由 merge 沿用旧值 */
+export type BackupS3Input = Omit<BackupS3Config, 'accessKeyId' | 'secretAccessKey'> & {
+  accessKeyId?: string
+  secretAccessKey?: string
+}
+
+/** mergeBackupConfig / applyBackupConfig 入参形态（与持久化配置同形，仅 s3 密钥可省略） */
+export type BackupConfigInput = Omit<BackupPersistedConfig, 's3'> & {
+  s3: BackupS3Input | null
+}
+
 export type BackupPhase =
   | 'idle'
   | 'snapshot'
@@ -62,7 +73,6 @@ export interface BackupRuntimeStatus {
   lastResult?: BackupRunResult | null
   intervalMs: number
   retentionDays: number
-  nextRunAt?: string
 }
 
 export interface BackupRunResult {
@@ -136,19 +146,18 @@ export function publicBackupView(cfg: BackupPersistedConfig): BackupPersistedCon
 
 /** 合并 PUT 请求与磁盘配置（密钥省略/脱敏时沿用旧值） */
 export function mergeBackupConfig(
-  incoming: BackupPersistedConfig,
+  incoming: BackupConfigInput,
   existing: BackupPersistedConfig,
 ): BackupPersistedConfig {
   const prevS3 = existing.s3
-  let nextS3 = incoming.s3
-  if (nextS3) {
-    nextS3 = {
-      ...nextS3,
-      accessKeyId: resolveBackupSecret(nextS3.accessKeyId, prevS3?.accessKeyId),
-      secretAccessKey: resolveBackupSecret(nextS3.secretAccessKey, prevS3?.secretAccessKey),
-      prefix: normalizeBackupPrefix(nextS3.prefix),
-    }
-  }
+  const nextS3: BackupS3Config | null = incoming.s3
+    ? {
+        ...incoming.s3,
+        accessKeyId: resolveBackupSecret(incoming.s3.accessKeyId, prevS3?.accessKeyId),
+        secretAccessKey: resolveBackupSecret(incoming.s3.secretAccessKey, prevS3?.secretAccessKey),
+        prefix: normalizeBackupPrefix(incoming.s3.prefix),
+      }
+    : null
   return {
     version: 1,
     enabled: incoming.enabled,
@@ -189,8 +198,9 @@ export const backupS3ConfigSchema = z.object({
   bucket: z.string().min(1),
   region: z.string().min(1),
   endpoint: z.string().optional(),
-  accessKeyId: z.string(),
-  secretAccessKey: z.string(),
+  // 密钥可省略（已有配置时 UI 不重发，merge 沿用旧值）
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
   prefix: z.string().optional(),
   forcePathStyle: z.boolean().optional(),
 })

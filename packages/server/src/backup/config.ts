@@ -8,6 +8,7 @@ import {
   emptyBackupConfig,
   mergeBackupConfig,
   publicBackupView,
+  type BackupConfigInput,
   type BackupPersistedConfig,
 } from '@notefast/core'
 
@@ -19,6 +20,11 @@ let cfg: BackupPersistedConfig = emptyBackupConfig()
 export function initBackupConfig(dir: string): BackupPersistedConfig {
   dataDir = dir
   cfg = loadFromDisk()
+  // 备份仅支持手动：清掉遗留的自动间隔，避免旧配置重启后继续定时全量备份
+  if (cfg.intervalMs > 0) {
+    cfg = { ...cfg, intervalMs: 0 }
+    saveToDisk(cfg)
+  }
   return cfg
 }
 
@@ -30,8 +36,9 @@ export function getBackupPublicConfig(): BackupPersistedConfig {
   return publicBackupView(cfg)
 }
 
-export function applyBackupConfig(incoming: BackupPersistedConfig): BackupPersistedConfig {
-  cfg = mergeBackupConfig(incoming, cfg)
+export function applyBackupConfig(incoming: BackupConfigInput): BackupPersistedConfig {
+  // 备份仅支持手动：无论入参间隔如何，持久化时恒为 0（不调度）
+  cfg = { ...mergeBackupConfig(incoming, cfg), intervalMs: 0 }
   saveToDisk(cfg)
   return cfg
 }
@@ -39,7 +46,7 @@ export function applyBackupConfig(incoming: BackupPersistedConfig): BackupPersis
 export function disableBackupConfig(): BackupPersistedConfig {
   cfg = {
     ...emptyBackupConfig(),
-    intervalMs: cfg.intervalMs,
+    intervalMs: 0,
     retentionDays: cfg.retentionDays,
   }
   saveToDisk(cfg)

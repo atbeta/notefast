@@ -39,7 +39,6 @@ export default function BackupPanel() {
   const [secretAccessKey, setSecretAccessKey] = useState('')
   const [prefix, setPrefix] = useState('notefast')
   const [forcePathStyle, setForcePathStyle] = useState(false)
-  const [intervalHours, setIntervalHours] = useState(1)
   const [retentionDays, setRetentionDays] = useState(30)
   const [points, setPoints] = useState<BackupRestorePoint[]>([])
   const [showDisableConfirm, setShowDisableConfirm] = useState(false)
@@ -51,7 +50,6 @@ export default function BackupPanel() {
     )
     setStatus(res.status)
     setEnabled(res.config.enabled)
-    setIntervalHours(Math.max(0, Math.round((res.config.intervalMs || 0) / 3_600_000)))
     setRetentionDays(res.config.retentionDays || 30)
     if (res.config.s3) {
       setBucket(res.config.s3.bucket || '')
@@ -89,7 +87,7 @@ export default function BackupPanel() {
         const hasS3 = Boolean(bucket.trim())
         await api.put('/backup/config', {
           enabled: enabled || hasS3,
-          intervalMs: intervalHours * 3_600_000,
+          intervalMs: 0,
           retentionDays,
           s3: hasS3
             ? {
@@ -158,8 +156,7 @@ export default function BackupPanel() {
     <SettingsCard
       title="数据库备份 (SQLite → S3)"
       icon={<Database className="w-4 h-4" strokeWidth={1.75} />}
-      helpTip="在线生成数据库快照并上传 S3。默认每小时一次、保留 30 天。恢复须先停止服务，再通过命令行执行（Web 界面不提供一键恢复，以防止误操作覆盖当前数据）。"
-      statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? '已启用' : '未启用'} />}
+      helpTip="在线生成数据库快照并上传 S3，仅支持手动触发（不自动调度）。快照不含可重建的向量索引（体积大幅缩小），恢复后语义搜索需重建索引。恢复须先停止服务，再通过命令行执行（Web 界面不提供一键恢复，以防止误操作覆盖当前数据）。日常跨端同步请用「多端同步」。"      statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? '已启用' : '未启用'} />}
       defaultExpanded={!status?.configured}
       dangerZone={
         status?.configured && (
@@ -181,7 +178,7 @@ export default function BackupPanel() {
     >
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div className="text-[13px] font-medium text-foreground">启用自动备份</div>
+          <div className="text-[13px] font-medium text-foreground">启用数据库备份</div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" className="sr-only peer" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
             <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
@@ -214,13 +211,6 @@ export default function BackupPanel() {
             mono
             type="password"
             placeholder={BACKUP_SECRET_MASK}
-          />
-          <InlineField
-            label="自动备份间隔"
-            description="单位：小时，设为 0 表示仅手动备份"
-            value={String(intervalHours)}
-            onChange={(v) => setIntervalHours(parseInt(v, 10) || 0)}
-            type="number"
           />
           <InlineField
             label="保留天数"
@@ -265,9 +255,6 @@ export default function BackupPanel() {
                 <span className="text-amber-500 flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5 animate-spin"/> 进行中 ({status.phase})</span>
               ) : (
                 '空闲'
-              )}
-              {status.nextRunAt && (
-                <span className="ml-2">下次备份：<span className="font-mono">{formatIsoDateTime(status.nextRunAt)}</span></span>
               )}
             </div>
             {status.lastSuccessAt && (

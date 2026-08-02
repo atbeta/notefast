@@ -3,6 +3,7 @@ import {
   BACKUP_SECRET_MASK,
   CURRENT_SCHEMA_VERSION,
   assertSchemaCompatible,
+  backupConfigSchema,
   buildManifestObjectKey,
   buildSnapshotObjectKey,
   emptyBackupConfig,
@@ -81,6 +82,46 @@ describe('backup 领域模型', () => {
     expect(merged.s3?.secretAccessKey).toBe('OLD_SK')
     expect(merged.s3?.prefix).toBe('nf/')
     expect(merged.intervalMs).toBe(7200_000)
+  })
+
+  test('mergeBackupConfig 密钥整体省略（undefined）时沿用旧值', () => {
+    const existing = {
+      version: 1 as const,
+      enabled: true,
+      intervalMs: 3_600_000,
+      retentionDays: 30,
+      s3: {
+        bucket: 'b',
+        region: 'r',
+        accessKeyId: 'REAL_AK',
+        secretAccessKey: 'REAL_SK',
+      },
+    }
+    const merged = mergeBackupConfig(
+      {
+        version: 1,
+        enabled: true,
+        intervalMs: 0,
+        retentionDays: 7,
+        s3: { bucket: 'b', region: 'r' },
+      },
+      existing,
+    )
+    expect(merged.s3?.accessKeyId).toBe('REAL_AK')
+    expect(merged.s3?.secretAccessKey).toBe('REAL_SK')
+    expect(merged.intervalMs).toBe(0)
+  })
+
+  test('backupConfigSchema 允许省略 s3 密钥（intervalMs 0 保留）', () => {
+    const parsed = backupConfigSchema.parse({
+      enabled: true,
+      intervalMs: 0,
+      retentionDays: 7,
+      s3: { bucket: 'b', region: 'r', prefix: 'p' },
+    })
+    expect(parsed.intervalMs).toBe(0)
+    expect(parsed.s3?.accessKeyId).toBeUndefined()
+    expect(parsed.s3?.secretAccessKey).toBeUndefined()
   })
 
   test('normalizeBackupPrefix / object keys', () => {

@@ -7,6 +7,8 @@
  * - 生命周期钩子可在 sync 前后注入自定义逻辑
  */
 
+import { z } from 'zod'
+
 export type SyncAdapterKind = 'localfs' | 's3' | 'webdav'
 
 export interface LocalFsAdapterConfig {
@@ -177,3 +179,100 @@ export function publicSyncView(cfg: SyncPersistedConfig): SyncPersistedConfig {
   }
   return cfg
 }
+
+// ───────────────────── 多端同步协议（双向增量）独立配置 ─────────────────────
+// 与「数据库备份」完全解耦：各自独立的 S3 配置、开关与调度。
+
+export interface SyncProtocolS3Config {
+  /** 桶名 */
+  bucket: string
+  /** 区域 */
+  region: string
+  /** 自定义 endpoint（MinIO / R2 / 阿里云 OSS） */
+  endpoint?: string
+  /** 凭证 */
+  accessKeyId: string
+  secretAccessKey: string
+  /** 对象键前缀；归一化后带尾斜杠 */
+  prefix?: string
+  /** MinIO 自建需要 true */
+  forcePathStyle?: boolean
+}
+
+/** 持久化到 data/sync-protocol.config.json */
+export interface SyncProtocolPersistedConfig {
+  version: 1
+  enabled: boolean
+  s3: SyncProtocolS3Config | null
+}
+
+/** PUT 入参的 s3 片段：密钥可省略，由 merge 沿用旧值 */
+export type SyncProtocolS3Input = Omit<SyncProtocolS3Config, 'accessKeyId' | 'secretAccessKey'> & {
+  accessKeyId?: string
+  secretAccessKey?: string
+}
+
+/** mergeSyncProtocolConfig / applyProtocolConfig 入参形态（仅 s3 密钥可省略） */
+export type SyncProtocolConfigInput = Omit<SyncProtocolPersistedConfig, 's3'> & {
+  s3: SyncProtocolS3Input | null
+}
+
+export function emptySyncProtocolConfig(): SyncProtocolPersistedConfig {
+  return { version: 1, enabled: false, s3: null }
+}
+
+export function normalizeSyncProtocolPrefix(prefix?: string): string {
+  if (!prefix) return ''
+  const p = prefix.replace(/^\/+/, '').replace(/\/+$/, '')
+  return p === '' ? '' : `${p}/`
+}
+
+/** 合并 PUT 配置与磁盘配置（密钥省略/脱敏时沿用旧值；前缀归一化） */
+export function mergeSyncProtocolConfig(
+  incoming: SyncProtocolConfigInput,
+  existing: SyncProtocolPersistedConfig,
+): SyncProtocolPersistedConfig {
+  const prevS3 = existing.s3
+  const nextS3: SyncProtocolS3Config | null = incoming.s3
+    ? {
+        ...incoming.s3,
+        accessKeyId: resolveSecret(incoming.s3.accessKeyId, prevS3?.accessKeyId),
+        secretAccessKey: resolveSecret(incoming.s3.secretAccessKey, prevS3?.secretAccessKey),
+        prefix: normalizeSyncProtocolPrefix(incoming.s3.prefix),
+      }
+    : null
+  return {
+    version: 1,
+    enabled: incoming.enabled,
+    s3: nextS3,
+  }
+}
+
+/** 对外展示时移除密钥 */
+export function publicSyncProtocolView(cfg: SyncProtocolPersistedConfig): SyncProtocolPersistedConfig {
+  if (!cfg.s3) return cfg
+  return {
+    ...cfg,
+    s3: {
+      ...cfg.s3,
+      accessKeyId: cfg.s3.accessKeyId ? SYNC_SECRET_MASK : '',
+      secretAccessKey: cfg.s3.secretAccessKey ? SYNC_SECRET_MASK : '',
+    },
+  }
+}
+
+export const syncProtocolS3ConfigSchema = z.object({
+  bucket: z.string().min(1),
+  region: z.string().min(1),
+  endpoint: z.string().optional(),
+  // 密钥可省略（已有配置时 UI 不重发，merge 沿用旧值）
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
+  prefix: z.string().optional(),
+  forcePathStyle: z.boolean().optional(),
+})
+
+export const syncProtocolConfigSchema = z.object({
+  enabled: z.boolean(),
+  s3: syncProtocolS3ConfigSchema.nullable(),
+})
