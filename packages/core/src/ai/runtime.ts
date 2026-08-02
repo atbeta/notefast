@@ -96,6 +96,8 @@ const USAGE_KEYS = {
 } as const
 
 type TrackKind = keyof typeof USAGE_KEYS
+/** 所有拥有 lastError 的子系统：track() 三类 + autoLink（独立记账） */
+type ErrorKind = TrackKind | 'autoLink'
 
 export class AiRuntime {
   private cfg: AiConfig
@@ -118,10 +120,14 @@ export class AiRuntime {
     autoLinkErrors: 0,
     lastSuccessAt: undefined as string | undefined,
   }
-  private embeddingLastError?: string
-  private chatLastError?: string
-  private rerankLastError?: string
-  private autoLinkLastError?: string
+  /** 各子系统最后一次错误（chat/embedding/reranker 走 track；autoLink 走 recordAutoLink）。
+   * 私有：对外通过 status() 摊平为 embedding.lastError / chat.lastError / reranker.lastError / autoLink.lastError */
+  private lastError: Record<ErrorKind, string | undefined> = {
+    embedding: undefined,
+    chat: undefined,
+    rerank: undefined,
+    autoLink: undefined,
+  }
 
   constructor(initial: AiConfig, opts: AiRuntimeOptions = {}) {
     this.cfg = initial
@@ -138,9 +144,10 @@ export class AiRuntime {
     this.chatProvider = undefined
     this.rerankerProvider = undefined
     this.embeddingDim = undefined
-    this.embeddingLastError = undefined
-    this.chatLastError = undefined
-    this.rerankLastError = undefined
+    // reload 时清三 track 通道的 lastError；autoLink 历史由调用方负责
+    this.lastError.embedding = undefined
+    this.lastError.chat = undefined
+    this.lastError.rerank = undefined
 
     if (cfg.embedding && cfg.embedding.enabled !== false) {
       const e = cfg.embedding
@@ -189,26 +196,26 @@ export class AiRuntime {
       enabled: Boolean(this.chatProvider || this.embeddingProvider),
       embedding: {
         configured: embOn && Boolean(e?.embeddingModel.trim()),
-        ok: Boolean(this.embeddingProvider) && !this.embeddingLastError,
+        ok: Boolean(this.embeddingProvider) && !this.lastError.embedding,
         dim: this.embeddingDim,
-        lastError: this.embeddingLastError,
+        lastError: this.lastError.embedding,
       },
       chat: {
         configured: chatOn && Boolean(c?.chatModel.trim()),
-        ok: Boolean(this.chatProvider) && !this.chatLastError,
+        ok: Boolean(this.chatProvider) && !this.lastError.chat,
         model: chatOn ? c?.chatModel || undefined : undefined,
-        lastError: this.chatLastError,
+        lastError: this.lastError.chat,
       },
       reranker: {
         configured: Boolean(r && r.enabled),
-        ok: Boolean(this.rerankerProvider) && !this.rerankLastError,
+        ok: Boolean(this.rerankerProvider) && !this.lastError.rerank,
         model: r?.model || undefined,
-        lastError: this.rerankLastError,
+        lastError: this.lastError.rerank,
       },
       autoLink: {
         configured: Boolean(this.cfg.autoLink?.enabled) && chatOn && Boolean(c?.chatModel.trim()),
         enabled: Boolean(this.cfg.autoLink?.enabled),
-        lastError: this.autoLinkLastError,
+        lastError: this.lastError.autoLink,
       },
       usage: { ...this.usage },
       config: publicView(this.cfg),
@@ -321,11 +328,9 @@ export class AiRuntime {
     }
   }
 
-  /** 记录某类调用的 lastError（undefined 表示清除） */
-  private setTrackError(kind: TrackKind, msg?: string): void {
-    if (kind === 'embedding') this.embeddingLastError = msg
-    else if (kind === 'chat') this.chatLastError = msg
-    else this.rerankLastError = msg
+  /** 记录某类调用的 lastError（undefined 表示清除）。覆盖 track 三类 + autoLink */
+  private setError(kind: ErrorKind, msg: string | undefined): void {
+    this.lastError[kind] = msg
   }
 
   /**
@@ -343,12 +348,12 @@ export class AiRuntime {
       const r = await fn()
       this.usage[keys.calls]++
       this.usage.lastSuccessAt = new Date().toISOString()
-      this.setTrackError(kind, undefined)
+      this.setError(kind, undefined)
       onSuccess?.(r)
       return r
     } catch (e) {
       this.usage[keys.errors]++
-      this.setTrackError(kind, e instanceof Error ? e.message : String(e))
+      this.setError(kind, e instanceof Error ? e.message : String(e))
       throw e
     }
   }
@@ -381,7 +386,7 @@ export class AiRuntime {
     const provider = this.chatProvider
     if (!provider) {
       const err = new Error('AI chat is not configured')
-      this.chatLastError = err.message
+      this.setError('chat', err.message)
       throw err
     }
     return this.track('chat', () => provider.chat(messages, options))
@@ -412,8 +417,8 @@ export class AiRuntime {
     options?: ChatCompletionOptions,
   ): AsyncGenerator<StreamChatChunk> {
     if (!this.chatProvider) {
-      this.chatLastError = 'AI chat is not configured'
-      throw new Error(this.chatLastError)
+      this.setError('chat', 'AI chat is not configured')
+      throw new Error(this.lastError.chat!)
     }
     yield* this.streamCompletions(messages, {
       temperature: options?.temperature,
@@ -432,8 +437,8 @@ export class AiRuntime {
     options?: ChatWithToolsOptions,
   ): AsyncGenerator<StreamChatChunk> {
     if (!this.chatProvider) {
-      this.chatLastError = 'AI chat is not configured'
-      throw new Error(this.chatLastError)
+      this.setError('chat', 'AI chat is not configured')
+      throw new Error(this.lastError.chat!)
     }
     yield* this.streamCompletions(messages, {
       temperature: options?.temperature,
@@ -458,8 +463,8 @@ export class AiRuntime {
     // chatProvider 存在 ⟺ cfg.chat 已配置（reload 时同步重建），此处为防御性取值
     const p = this.cfg.chat
     if (!p) {
-      this.chatLastError = 'AI chat is not configured'
-      throw new Error(this.chatLastError)
+      this.setError('chat', 'AI chat is not configured')
+      throw new Error(this.lastError.chat!)
     }
     const url = joinUrl(p.baseUrl, '/chat/completions')
     const headers = buildHeaders(p.apiKey, p.extraHeaders)
@@ -484,7 +489,7 @@ export class AiRuntime {
       const finish = (): StreamChatChunk => {
         this.usage.chatCalls++
         this.usage.lastSuccessAt = new Date().toISOString()
-        this.chatLastError = undefined
+        this.setError('chat', undefined)
         const tool_calls = [...toolAcc.entries()]
           .sort((a, b) => a[0] - b[0])
           .map(([, tc]) => ({
@@ -536,7 +541,7 @@ export class AiRuntime {
       yield finish()
     } catch (e) {
       this.usage.chatErrors++
-      this.chatLastError = e instanceof Error ? e.message : String(e)
+      this.setError('chat', e instanceof Error ? e.message : String(e))
       throw e
     }
   }
@@ -546,7 +551,7 @@ export class AiRuntime {
     const provider = this.rerankerProvider
     if (!provider) {
       const err = new Error('Reranker is not configured')
-      this.rerankLastError = err.message
+      this.setError('rerank', err.message)
       throw err
     }
     return this.track('rerank', () => provider.rerank(input))
@@ -561,11 +566,11 @@ export class AiRuntime {
   recordAutoLink(success: boolean, err?: string): void {
     this.usage.autoLinkAnalyses++
     if (success) {
-      this.autoLinkLastError = undefined
+      this.setError('autoLink', undefined)
       this.usage.lastSuccessAt = new Date().toISOString()
     } else {
       this.usage.autoLinkErrors++
-      this.autoLinkLastError = err
+      this.setError('autoLink', err)
     }
   }
 
@@ -578,7 +583,7 @@ export class AiRuntime {
       this.embeddingDim = dim
       return dim
     } catch (e) {
-      this.embeddingLastError = e instanceof Error ? e.message : String(e)
+      this.setError('embedding', e instanceof Error ? e.message : String(e))
       return null
     }
   }
@@ -596,7 +601,7 @@ export class AiRuntime {
       return { ok: true, message: `连通正常 (${reply.slice(0, 30)}…)` }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      this.chatLastError = msg
+      this.setError('chat', msg)
       return { ok: false, message: msg }
     }
   }
