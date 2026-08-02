@@ -9,7 +9,7 @@ import { STORAGE_SECRET_MASK, type StorageLocation } from '@notefast/core'
 
 /**
  * 存储连接管理面板：备份 / 多端同步 / Markdown 归档 共用的连接（bucket/凭据）只填一次。
- * 支持 S3（含 R2/MinIO）与 WebDAV。
+ * 支持 S3 兼容（AWS / R2 / MinIO 等）与 WebDAV。
  */
 export default function StorageLocationsPanel() {
   const { t } = useTranslation()
@@ -140,7 +140,7 @@ export default function StorageLocationsPanel() {
                 onClick={() => setKind('s3')}
                 className={`px-3 py-1.5 rounded-md text-[12.5px] font-medium transition-colors ${kind === 's3' ? 'bg-primary-soft text-primary' : 'bg-muted text-muted-foreground'}`}
               >
-                S3 / R2 / MinIO
+                S3 兼容
               </button>
               <button
                 type="button"

@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { RefreshCw, FolderOpen, Cloud, CheckCircle2, AlertCircle, Settings as SettingsIcon } from 'lucide-react'
-import { api } from '../hooks/useAPI'
-import { type LocalFsAdapterConfig } from '@notefast/core'
+import { RefreshCw, FolderOpen, Cloud, CheckCircle2, AlertCircle, Download, Upload, Settings as SettingsIcon } from 'lucide-react'
+import { api, fetchWithAuth } from '../hooks/useAPI'
+import { parseContentDispositionFilename, triggerBlobDownload } from '../lib/download'
+import { type LocalFsAdapterConfig, type SyncAdapterConfig } from '@notefast/core'
 import LocationSelect from './LocationSelect'
 import { useStorageLocations } from '../hooks/useStorageLocations'
-import { ActionButton, useToast } from './ui'
-import ConfirmDialog from './ConfirmDialog'
+import { ActionButton, useToast, Toggle } from './ui'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
 import { formatIsoDateTime } from '../lib/time'
 
@@ -39,7 +39,8 @@ export default function SyncPanel() {
   const [status, setStatus] = useState<SyncRuntimeStatus | null>(null)
   const [form, setForm] = useState<FormState>({ kind: 'none' })
   const [info, setInfo] = useState<{ remoteDocCount?: number; extra: Record<string, unknown> } | null>(null)
-  const [showDisableConfirm, setShowDisableConfirm] = useState(false)
+  /** 已持久化的适配器配置（原样保留，供开关翻转 enabled 而无需重填表单） */
+  const [activeConfig, setActiveConfig] = useState<SyncAdapterConfig | null>(null)
   const toast = useToast()
   const { locations } = useStorageLocations()
 
@@ -48,6 +49,7 @@ export default function SyncPanel() {
       const res = await api.get<{ configured: boolean; status: SyncRuntimeStatus; config: { active: unknown } }>('/sync/config')
       setStatus(res.status)
       const active = res.config.active as { kind?: string; locationId?: string; prefix?: string } | null
+      setActiveConfig((res.config.active as SyncAdapterConfig | null) ?? null)
       if (active?.kind === 'localfs') {
         const a = active as LocalFsAdapterConfig
         setForm({ ...EMPTY_LOCALFS, dir: a.dir ?? '', prefix: a.prefix ?? '' })
@@ -94,19 +96,60 @@ export default function SyncPanel() {
     ).catch(() => undefined)
   }
 
-  const handleDisable = async () => {
+  /** 开关：暂停/恢复归档（翻转已保存配置的 enabled，配置本身保留） */
+  const handleToggleEnabled = async (next: boolean) => {
+    if (!activeConfig) return
+    setStatus((s) => (s ? { ...s, enabled: next } : s))
     await toast.promise(
       async () => {
-        await api.del('/sync/config')
+        await api.put('/sync/config', { active: { ...activeConfig, enabled: next } })
         await refresh()
-        setForm({ kind: 'none' })
       },
       {
-        loading: t('sync.disabling'),
-        success: t('sync.disabled'),
-        error: (e) => ({ title: t('sync.disableFailed'), description: e instanceof Error ? e.message : String(e) }),
-      }
+        loading: t('sync.savingConfig'),
+        success: next ? t('sync.enabled') : t('sync.pausedRetainConfig'),
+        error: (e) => ({ title: t('sync.saveFailed'), description: e instanceof Error ? e.message : String(e) }),
+      },
     ).catch(() => undefined)
+  }
+
+  /** 整库导出存档：下载自包含 zip（md + media/ + manifest） */
+  const importRef = useRef<HTMLInputElement>(null)
+  const handleExportArchive = async () => {
+    try {
+      const res = await fetchWithAuth('/export/archive')
+      if (!res.ok) {
+        toast.error({ title: t('sync.exportFailed') })
+        return
+      }
+      const blob = await res.blob()
+      const filename =
+        parseContentDispositionFilename(res.headers.get('Content-Disposition'))
+        || 'notefast-export.zip'
+      triggerBlobDownload(blob, filename)
+      toast.success({ title: t('sync.exportDone') })
+    } catch {
+      toast.error({ title: t('sync.exportFailed') })
+    }
+  }
+
+  const handleImportArchiveFile = async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const id = toast.loading({ title: t('sync.importing') })
+    try {
+      const res = await fetchWithAuth('/import/zip', { method: 'POST', body: form })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null) as { message?: string } | null
+        throw new Error(body?.message ?? t('sync.importFailed'))
+      }
+      const r = await res.json() as { imported: number; skipped: number; failed: number }
+      toast.dismiss(id)
+      toast.success({ title: t('sync.importDone', { imported: r.imported, skipped: r.skipped, failed: r.failed }) })
+    } catch (e) {
+      toast.dismiss(id)
+      toast.error({ title: t('sync.importFailed'), description: e instanceof Error ? e.message : String(e) })
+    }
   }
 
   const handleRun = async () => {
@@ -126,6 +169,12 @@ export default function SyncPanel() {
       })
     }
   }
+
+  /** 当前表单所选目标是否正是已配置的归档适配器（connection 对应 s3/webdav） */
+  const formMatchesConfigured = !!status?.configured && (
+    (form.kind === 'localfs' && status.adapterName === 'localfs') ||
+    (form.kind === 'connection' && (status.adapterName === 's3' || status.adapterName === 'webdav'))
+  )
 
   return (
     <SettingsCard
@@ -220,6 +269,18 @@ export default function SyncPanel() {
             </p>
           )}
 
+          {activeConfig && (
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[13px] font-medium text-foreground">
+                {status?.enabled ? t('sync.enabled') : t('sync.pausedRetainConfig')}
+              </span>
+              <Toggle
+                checked={status?.enabled === true}
+                onChange={handleToggleEnabled}
+              />
+            </div>
+          )}
+
           {form.kind !== 'none' && (
             <div className="flex items-center gap-3 pt-4 border-t border-border/40">
               <ActionButton
@@ -231,12 +292,12 @@ export default function SyncPanel() {
                   return true
                 }}
                 onAction={handleSave}
-                successToast={{ title: status?.configured && status.adapterName === form.kind ? t('sync.configSaved') : t('sync.enabled') }}
+                successToast={{ title: formMatchesConfigured ? t('sync.configSaved') : t('sync.enabled') }}
                 errorToast={(e) => ({ title: t('sync.saveFailed'), description: e instanceof Error ? e.message : String(e) })}
               >
-                {status?.configured && (form.kind === 'localfs' ? status.adapterName === 'localfs' : status.adapterName === 's3' || status.adapterName === 'webdav') ? t('sync.saveChanges') : t('sync.enableAdapter', { kind: form.kind === 'localfs' ? t('sync.kindLocal') : t('sync.kindConnection') })}
+                {formMatchesConfigured ? t('sync.saveChanges') : t('sync.enableAdapter', { kind: form.kind === 'localfs' ? t('sync.kindLocal') : t('sync.kindConnection') })}
               </ActionButton>
-              {status?.configured && status.adapterName === form.kind ? (
+              {formMatchesConfigured ? (
                 <>
                   <ActionButton
                     variant="secondary"
@@ -245,7 +306,7 @@ export default function SyncPanel() {
                     errorToast={(e) => ({ title: t('sync.archiveFailed'), description: e instanceof Error ? e.message : String(e) })}
                   >
                     <RefreshCw className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
-                    {t('sync.syncNow')}
+                    {t('sync.archiveNow')}
                   </ActionButton>
                   <ActionButton
                     variant="secondary"
@@ -253,17 +314,9 @@ export default function SyncPanel() {
                   >
                     {t('sync.probeRemote')}
                   </ActionButton>
-                  <div className="w-px h-4 bg-border mx-1"></div>
-                  <ActionButton
-                    variant="ghost"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onAction={() => setShowDisableConfirm(true)}
-                  >
-                    {t('sync.disableArchive')}
-                  </ActionButton>
                 </>
               ) : null}
-              {status?.configured && status.adapterName !== form.kind && (
+              {status?.configured && !formMatchesConfigured && (
                 <span className="text-[12px] text-muted-foreground ml-2">
                   {t('sync.replaceAdapter', { adapter: status.adapterName })}
                 </span>
@@ -310,20 +363,40 @@ export default function SyncPanel() {
             )}
           </div>
         )}
-      </div>
 
-      <ConfirmDialog
-        open={showDisableConfirm}
-        title={t('sync.confirmDisableTitle')}
-        message={t('sync.confirmDisableMessage')}
-        confirmLabel={t('sync.disable')}
-        destructive
-        onCancel={() => setShowDisableConfirm(false)}
-        onConfirm={() => {
-          setShowDisableConfirm(false)
-          void handleDisable()
-        }}
-      />
+        {/* 便携副本：整库导出 / 导入（与归档推送同构的 zip，无需配置存储连接） */}
+        <div className="flex items-center gap-3 pt-4 border-t border-border/40">
+          <ActionButton
+            variant="secondary"
+            onAction={handleExportArchive}
+            errorToast={(e) => ({ title: t('sync.exportFailed'), description: e instanceof Error ? e.message : String(e) })}
+          >
+            <Download className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
+            {t('sync.exportArchive')}
+          </ActionButton>
+          <ActionButton
+            variant="secondary"
+            onAction={() => importRef.current?.click()}
+          >
+            <Upload className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
+            {t('sync.importArchive')}
+          </ActionButton>
+          <input
+            ref={importRef}
+            type="file"
+            accept=".zip"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) void handleImportArchiveFile(file)
+              e.target.value = ''
+            }}
+          />
+          <span className="text-[11px] text-muted-foreground/60">
+            {t('sync.exportHint')}
+          </span>
+        </div>
+      </div>
     </SettingsCard>
   )
 }
