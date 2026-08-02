@@ -13,7 +13,8 @@
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createS3ObjectStore, type ObjectStore } from '../storage/objectStore'
+import { hostname } from 'node:os'
+import { createS3ObjectStore, getObjectText, type ObjectStore } from '../storage/objectStore'
 import { initDb, closeDb, getDb, getDbPath } from '../db'
 import { collectReferencedAssetIds, getMediaDir } from '../assets/store'
 import { restoreReferencedMedia, uploadMissingMedia, mediaPrefixFor } from '../backup/mediaBackup'
@@ -24,7 +25,7 @@ import {
   initProtocolConfig,
   _resetProtocolConfigForTests,
 } from './protocolConfig'
-import type { SyncProtocolConfigInput } from '@notefast/core'
+import { SYNC_S3_DIR, type SyncDevice, type SyncProtocolConfigInput } from '@notefast/core'
 import {
   publishChanges,
   consumeChanges,
@@ -35,6 +36,7 @@ import {
 } from './protocol'
 
 const STATE_FILE = 'sync-state.json'
+const DEVICE_ID_FILE = 'device.id'
 /** 每 N 次同步生成一次快照（compaction 兜底阈值） */
 const SNAPSHOT_EVERY_N = 10
 
@@ -150,8 +152,8 @@ export async function syncNow(): Promise<{ published: number; snapshotCreated: b
     const workRoot = join(dataDir, '.sync-tmp')
     if (!existsSync(workRoot)) mkdirSync(workRoot, { recursive: true })
 
-    // 1) 发布本地增量（本端 → 存储）
-    const newPublished = await publishChanges(db, store, prefix, state.publishedSeq)
+    // 1) 发布本地增量（本端 → 存储；每条变更带 device_id）
+    const newPublished = await publishChanges(db, store, prefix, state.publishedSeq, getDeviceId())
 
     // 2) media 上送：让同步位置自包含（内容寻址增量幂等；失败不阻断变更发布）
     const mediaDir = getMediaDir()
@@ -161,6 +163,13 @@ export async function syncNow(): Promise<{ published: number; snapshotCreated: b
       } catch (e) {
         console.warn('[sync] media 上送失败（变更仍发布）:', e instanceof Error ? e.message : e)
       }
+    }
+
+    // 3) 设备注册上报（每设备一对象，无并发写冲突；失败不阻断）
+    try {
+      await updateDeviceRegistry(store, prefix)
+    } catch (e) {
+      console.warn('[sync] 设备注册上报失败:', e instanceof Error ? e.message : e)
     }
 
     // 3) compaction 触发：累计轮数达阈值 → 新快照 + 清理旧增量
@@ -370,6 +379,67 @@ function s3Cfg(): NonNullable<ReturnType<typeof getProtocolConfig>['s3']> {
 function syncPrefix(prefix: string | undefined): string {
   const p = (prefix || '').replace(/^\/+/, '').replace(/\/+$/, '')
   return p === '' ? '' : `${p}/`
+}
+
+// ───────────────────── 设备身份与注册（peer 模型：无中心，注册=写共享存储）─────────────────────
+
+let cachedDeviceId: string | null = null
+
+/** 本端持久设备 id（data/device.id，首用生成）；客户端同理自持，互不依赖 */
+export function getDeviceId(): string {
+  if (cachedDeviceId) return cachedDeviceId
+  const path = join(dataDir, DEVICE_ID_FILE)
+  if (existsSync(path)) {
+    cachedDeviceId = readFileSync(path, 'utf-8').trim()
+  } else {
+    cachedDeviceId = crypto.randomUUID()
+    writeFileSync(path, cachedDeviceId, 'utf-8')
+  }
+  return cachedDeviceId
+}
+
+function getDeviceName(): string {
+  const h = (process.env.HOSTNAME || hostname() || '').trim()
+  return h ? `服务器 ${h}` : 'NoteFast 服务器'
+}
+
+function devicesDir(prefix: string): string {
+  return `${prefix}${SYNC_S3_DIR}/devices/`
+}
+
+async function updateDeviceRegistry(store: ObjectStore, prefix: string): Promise<void> {
+  const record: SyncDevice = {
+    device_id: getDeviceId(),
+    name: getDeviceName(),
+    last_seen: new Date().toISOString(),
+  }
+  await store.putObject(`${devicesDir(prefix)}${record.device_id}.json`, JSON.stringify(record))
+}
+
+/** 列出共享存储中注册的设备（按最近同步倒序） */
+export async function listSyncDevices(): Promise<SyncDevice[]> {
+  if (!store) return []
+  const prefix = syncPrefix(s3Cfg().prefix)
+  const keys = (await store.listObjects(devicesDir(prefix))).filter((k) => k.endsWith('.json'))
+  const devices: SyncDevice[] = []
+  for (const key of keys) {
+    const text = await getObjectText(store, key)
+    if (!text) continue
+    try {
+      const d = JSON.parse(text) as SyncDevice
+      if (d?.device_id) devices.push(d)
+    } catch { /* 损坏记录忽略 */ }
+  }
+  devices.sort((a, b) => (b.last_seen ?? '').localeCompare(a.last_seen ?? ''))
+  return devices
+}
+
+/** 从注册表移除设备记录（展示性操作；真实拦截靠更换 S3 凭证） */
+export async function removeSyncDevice(deviceId: string): Promise<boolean> {
+  if (!store) return false
+  const prefix = syncPrefix(s3Cfg().prefix)
+  await store.deleteObject(`${devicesDir(prefix)}${deviceId}.json`)
+  return true
 }
 
 function rebuild(): void {

@@ -107,7 +107,7 @@ function insertBlockRow(id: string, content: string, parentId: string | null = n
 
 describe('sync protocol (publish → consume)', () => {
   test('发布增量 → 消费端 LWW upsert，块内容一致', async () => {
-    const { client } = makeMockS3()
+    const { client, objects } = makeMockS3()
     const store = createS3ObjectStore(S3_STORE_CFG, client)
 
     // 源端：建 2 个块 + 改 1 个
@@ -117,9 +117,15 @@ describe('sync protocol (publish → consume)', () => {
     insertBlockRow(b, '段落B', a)
     updateBlock(sourceDb, b, { content: '段落B-改' })
 
-    // 发布（从 0）
-    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0)
+    // 发布（从 0），带设备标识
+    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0, 'dev-test')
     expect(lastSeq).toBe(getChangesAnchor(sourceDb))
+
+    // 每条变更带发布端 device_id
+    const changeKey = [...objects.keys()].find((k) => k.includes(`${SYNC_S3_DIR}/changes/`))
+    expect(changeKey).toBeTruthy()
+    const firstLine = String(objects.get(changeKey!)).split('\n')[0]!
+    expect(JSON.parse(firstLine).device_id).toBe('dev-test')
 
     // manifest
     await updateManifest(store, CFG.prefix, lastSeq, 0)
@@ -147,7 +153,7 @@ describe('sync protocol (publish → consume)', () => {
     insertBlockRow(a, '待删除')
     softDeleteBlocks(sourceDb, [a])
 
-    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0)
+    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0, 'dev-test')
     const target = makeTargetDb()
     const res = await consumeChanges(target, store, CFG.prefix, 0, lastSeq)
     expect(res.applied).toBeGreaterThan(0)
@@ -163,7 +169,7 @@ describe('sync protocol (publish → consume)', () => {
     const a = crypto.randomUUID()
     insertBlockRow(a, '源端旧值')
 
-    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0)
+    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0, 'dev-test')
 
     // 目标端：先手动建一个 updated_at 更新的块
     const target = makeTargetDb()
@@ -188,7 +194,7 @@ describe('sync protocol (publish → consume)', () => {
     for (let i = 0; i < CHANGES_PER_SEGMENT + 10; i++) {
       insertBlockRow(crypto.randomUUID(), `块${i}`)
     }
-    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0)
+    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0, 'dev-test')
     const changesKeys = [...objects.keys()].filter((k) => k.includes(`${SYNC_S3_DIR}/changes/`))
     expect(changesKeys.length).toBeGreaterThanOrEqual(2)
 
@@ -209,7 +215,7 @@ describe('sync protocol (publish → consume)', () => {
     for (let i = 0; i < 5; i++) {
       insertBlockRow(crypto.randomUUID(), `compact块${i}`)
     }
-    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0)
+    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0, 'dev-test')
     expect([...objects.keys()].some((k) => k.includes(`${SYNC_S3_DIR}/changes/`))).toBe(true)
 
     // compaction：快照 + 清空 changes 段

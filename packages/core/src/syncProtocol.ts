@@ -1,7 +1,7 @@
 /**
- * 同步协议类型（方案 A：客户端与 Web 共享同一份 S3）
+ * 同步协议类型（多端：客户端与 Web 共享同一份对象存储）
  *
- * 无账号体系：身份 = 存储位置 + 凭据，不做设备级区分。S3 布局：
+ * 无中心账号体系，身份 = 存储位置 + 凭据 + 设备自持标识。S3 布局：
  *
  *   {prefix}sync/
  *   ├── snapshot.db            # 全量基线（VACUUM INTO，复用 backup 快照逻辑）
@@ -10,12 +10,15 @@
  *   │   ├── 0000000001-0000000500.jsonl
  *   │   ├── 0000000501-0000001200.jsonl
  *   │   └── ...
+ *   ├── devices/               # 设备注册（每设备一对象，无并发写冲突）
+ *   │   └── <device_id>.json   # { device_id, name, last_seen }
  *   └── manifest.json          # { last_seq, snapshot_seq, updated_at }
  *
  * 语义：
  * - seq = entity_changes.seq（AUTOINCREMENT 单调递增，blocks 表 trigger 驱动）
  * - 增量文件每行 = 一条变更 + 该块变更后的完整状态（content/parent/sort/level），
  *   接收端按 updated_at LWW 裁决后 upsert；delete = tombstone（is_erased）
+ * - 每条变更带发布端 device_id（自持身份；从日志可推导设备集合）
  * - 超窗（增量被清理）或首次同步 → 拉 snapshot.db 全量重建本地库
  */
 
@@ -35,8 +38,17 @@ export interface SyncChange {
   is_erased: number
   actor: string
   changed_at: string
+  /** 发布端设备自持标识（无中心注册；从日志推导设备集合） */
+  device_id?: string
   /** 变更后的块状态（is_erased=1 时省略，只发 tombstone） */
   block?: SyncBlockState
+}
+
+/** 设备注册记录（{prefix}sync/devices/<id>.json，每设备一对象） */
+export interface SyncDevice {
+  device_id: string
+  name?: string
+  last_seen?: string
 }
 
 /** 块的可同步状态（重放时用于 upsert；缺省字段由接收端按缺省值补全） */

@@ -95,6 +95,7 @@ export async function publishSnapshot(
 /**
  * 发布增量：把 [publishedSeq, anchor] 区间导出为 changes/ 分段 jsonl。
  * 每段 CHANGES_PER_SEGMENT 条；追加 = 写新对象（文件名含 seq 区间，无需读改写）。
+ * 每条变更带发布端 device_id（自持身份，供审计与设备集合推导）。
  * 返回新锚点（应写回本地 state）。
  */
 export async function publishChanges(
@@ -102,6 +103,7 @@ export async function publishChanges(
   store: ObjectStore,
   prefix: string,
   publishedSeq: number,
+  deviceId: string,
 ): Promise<number> {
   const anchor = getChangesAnchor(db)
   if (anchor <= publishedSeq) return publishedSeq
@@ -113,7 +115,7 @@ export async function publishChanges(
 
     const lines: string[] = []
     for (const r of rows) {
-      const change: SyncChange = { ...r }
+      const change: SyncChange = { ...r, device_id: deviceId }
       // 非 tombstone：附加块当前状态（join blocks；块可能已被软删 → 状态为空则发 tombstone）
       if (!r.is_erased) {
         const block = db

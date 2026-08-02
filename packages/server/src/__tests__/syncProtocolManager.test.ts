@@ -10,6 +10,9 @@ import {
   scheduleSyncNow,
   applyProtocolManagerConfig,
   protocolStatus,
+  getDeviceId,
+  listSyncDevices,
+  removeSyncDevice,
   _resetProtocolManagerForTests,
   _setProtocolStoreForTests,
   _setProtocolStateForTests,
@@ -232,6 +235,26 @@ describe('sync protocol manager', () => {
     expect(protocolStatus().state.publishedSeq).toBeGreaterThan(0)
     expect(protocolStatus().lastSuccessAt).toBeTruthy()
   }, 9000)
+
+  test('syncNow 后设备写入注册表，可列出与移除', async () => {
+    initProtocolManager(testDir)
+    await configureProtocol()
+    const { client } = makeMockS3()
+    _setProtocolStoreForTests(createS3ObjectStore(S3_CFG, client))
+    insertDoc(crypto.randomUUID(), '注册表文档')
+    await syncNow()
+
+    const devices = await listSyncDevices()
+    expect(devices.length).toBeGreaterThanOrEqual(1)
+    const self = devices.find((d) => d.device_id === getDeviceId())
+    expect(self).toBeTruthy()
+    expect(self!.last_seen).toBeTruthy()
+
+    // 移除本端记录（展示性操作）
+    await removeSyncDevice(getDeviceId())
+    const after = await listSyncDevices()
+    expect(after.find((d) => d.device_id === getDeviceId())).toBeUndefined()
+  })
 
   test('S3 位置变化时重置 seq 锚点，避免换位置后跳过早期变更', async () => {
     initProtocolManager(testDir)

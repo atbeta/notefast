@@ -29,6 +29,12 @@ interface SyncProtocolStatus {
   running: boolean
 }
 
+interface SyncDevice {
+  device_id: string
+  name?: string
+  last_seen?: string
+}
+
 const EMPTY_STATUS: SyncProtocolStatus = {
   configured: false,
   enabled: false,
@@ -38,6 +44,7 @@ const EMPTY_STATUS: SyncProtocolStatus = {
 
 export default function SyncProtocolPanel() {
   const [status, setStatus] = useState<SyncProtocolStatus>(EMPTY_STATUS)
+  const [devices, setDevices] = useState<SyncDevice[]>([])
   const [enabled, setEnabled] = useState(false)
   const [bucket, setBucket] = useState('')
   const [region, setRegion] = useState('us-east-1')
@@ -64,12 +71,30 @@ export default function SyncProtocolPanel() {
         setPrefix((res.config.s3.prefix ?? '').replace(/\/$/, ''))
         setForcePathStyle(Boolean(res.config.s3.forcePathStyle))
       }
+      // 设备列表（共享存储注册表；可能因未配置/远端不可达失败，忽略）
+      api.get<{ devices: SyncDevice[] }>('/sync/protocol/devices')
+        .then((r) => setDevices(r.devices ?? []))
+        .catch(() => setDevices([]))
     } catch {
       setStatus(EMPTY_STATUS)
     }
   }, [])
 
   useEffect(() => { refresh() }, [refresh])
+
+  const removeDevice = async (id: string) => {
+    await toast.promise(
+      async () => {
+        await api.del(`/sync/protocol/devices/${encodeURIComponent(id)}`)
+        await refresh()
+      },
+      {
+        loading: '正在移除设备…',
+        success: '设备已从同步注册表移除（若仍在同步，请更换 S3 凭证才能真正拦截）',
+        error: (e) => ({ title: '移除失败', description: e instanceof Error ? e.message : String(e) }),
+      },
+    ).catch(() => undefined)
+  }
 
   const handleSave = async () => {
     await toast.promise(
@@ -256,6 +281,42 @@ export default function SyncProtocolPanel() {
         <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
           首次拉取会从 S3 快照全量恢复到本地；日常为增量合并。此能力主要为客户端多端同步设计，Web 端可作为手动对账入口。
         </p>
+
+        {status.enabled && devices.length > 0 && (
+          <div className="space-y-2 pt-2 border-t border-border/40">
+            <h4 className="text-[11.5px] uppercase tracking-[0.08em] text-muted-foreground font-semibold">
+              已连接设备
+            </h4>
+            <div className="space-y-2">
+              {devices.map((d) => (
+                <div
+                  key={d.device_id}
+                  className="flex items-center justify-between gap-3 px-3.5 py-2 rounded-lg border border-border/60 bg-accent/10 text-[12.5px]"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium text-foreground truncate">
+                      {d.name || '未命名设备'}
+                    </div>
+                    <div className="text-muted-foreground text-[11px] mt-0.5 font-mono truncate">
+                      {d.device_id.slice(0, 8)}…{d.last_seen ? ` · ${formatIsoDateTime(d.last_seen)}` : ''}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeDevice(d.device_id)}
+                    className="px-2 py-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                    title="移除（展示性；真实拦截需更换 S3 凭证）"
+                  >
+                    移除
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground/60">
+              设备注册存放在共享存储中（每设备一记录）；「移除」仅移除注册记录，已持有 S3 凭证的设备仍需更换凭证才能真正拦截。
+            </p>
+          </div>
+        )}
       </div>
 
       <ConfirmDialog

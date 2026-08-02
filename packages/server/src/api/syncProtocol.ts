@@ -2,12 +2,14 @@
  * 多端同步 API（双向增量同步，独立于「数据库备份」）
  *
  * 路由：
- * - GET    /api/v1/sync/protocol       状态（configured / state / lastRun）
- * - GET    /api/v1/sync/protocol/config 独立配置（密钥脱敏）
- * - PUT    /api/v1/sync/protocol/config 保存独立配置（enabled + s3）
- * - DELETE /api/v1/sync/protocol/config 停用多端同步
- * - POST   /api/v1/sync/protocol/run    手动触发一轮同步（publish + consume）
- * - POST   /api/v1/sync/protocol/pull   消费端拉取（恢复）
+ * - GET    /api/v1/sync/protocol         状态（configured / state / lastRun）
+ * - GET    /api/v1/sync/protocol/config   独立配置（密钥脱敏）
+ * - PUT    /api/v1/sync/protocol/config   保存独立配置（enabled + s3）
+ * - DELETE /api/v1/sync/protocol/config   停用多端同步
+ * - GET    /api/v1/sync/protocol/devices  列出共享存储中注册的设备
+ * - DELETE /api/v1/sync/protocol/devices/:id 移除设备注册（展示性）
+ * - POST   /api/v1/sync/protocol/run      手动触发一轮同步（publish + consume）
+ * - POST   /api/v1/sync/protocol/pull     消费端拉取（恢复）
  */
 
 import { Hono } from 'hono'
@@ -16,7 +18,9 @@ import { syncProtocolConfigSchema } from '@notefast/core'
 import {
   applyProtocolManagerConfig,
   disableProtocolManager,
+  listSyncDevices,
   protocolStatus,
+  removeSyncDevice,
   syncNow,
   syncPull,
 } from '../sync/protocolManager'
@@ -49,6 +53,30 @@ syncProtocol.put('/config', zValidator('json', syncProtocolConfigSchema), async 
 syncProtocol.delete('/config', async (c) => {
   const status = await disableProtocolManager()
   return c.json({ ok: true, status })
+})
+
+syncProtocol.get('/devices', async (c) => {
+  try {
+    const devices = await listSyncDevices()
+    return c.json({ devices })
+  } catch (e) {
+    return c.json(
+      { error: 'list_devices_failed', message: e instanceof Error ? e.message : String(e) },
+      500,
+    )
+  }
+})
+
+syncProtocol.delete('/devices/:id', async (c) => {
+  try {
+    await removeSyncDevice(c.req.param('id'))
+    return c.json({ ok: true })
+  } catch (e) {
+    return c.json(
+      { error: 'remove_device_failed', message: e instanceof Error ? e.message : String(e) },
+      500,
+    )
+  }
 })
 
 syncProtocol.post('/run', async (c) => {

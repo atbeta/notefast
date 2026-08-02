@@ -183,6 +183,7 @@ docker compose up -d
 - **向量存储是二进制 float32**（`block_vectors.embedding` BLOB，migration 007 由 JSON 文本原地转换；`vectorStore.ts` 的 encode/decode 兼容旧 JSON 行）——JSON 文本是 float32 的 ~5 倍，Qwen3-Embedding-8B(4096 维) 曾让 425M 库中 ~415M 是向量
 - **快照剥离可重建的向量索引**（`backup/snapshot.ts` 的 `stripVectorIndexFromSnapshot`：清空 block_vectors/vec_blocks/vector_entries/generations + 置 stale + VACUUM，保留表结构）；备份与同步 compaction 快照均只含核心内容（KB~MB 级），恢复后语义搜索为空需手动 `POST /ai/index/rebuild` 重建
 - **多端同步完全自动，无用户间隔配置**：写路径去抖触发（5s，`scheduleSyncNow` 覆盖 Web REST / import / AI chat / MCP 写工具，同步消费合并不触发避免环）+ 固定 60s 心跳（`syncHeartbeat` = 推送 + `safeMergeRemote` 增量合并远端，落后快照时不恢复自身、交给客户端全量拉取）
+- **设备身份自持、无中心注册（peer 模型）**：Server 与客户端是对等写入者，共享同一份对象存储，不存在「向服务器注册」——身份=存储位置+凭据+自持 `device_id`（Server 存 `data/device.id`）；每条同步变更带 `device_id`（审计/推导设备集合），注册表=共享存储 `{prefix}sync/devices/<id>.json`（每设备一对象，无并发写冲突），API `GET/DELETE /sync/protocol/devices` 仅展示/移除记录，真实拦截靠用户更换 S3 凭证（scoped 由用户在存储控制台签发）
 - 旧 Litestream Compose profile 与根目录 `litestream.yml` 均已移除（`-exec true` 会导致复制进程退出）；灾备统一走应用内 SQLite→S3 快照
 - 文档组织：tag 多选默认 AND（同时包含），`tag_match=any` 为包含任一；智能视图为内置预设 + URL 参数（无自定义命名视图表）
 - `properties.ai_exclude: true` 软隔离：不进向量/RAG/AutoLink/MCP 发现与按 ID 读取；人类 Web 列表/编辑/Cmd+K 仍可用；备份与 Markdown 归档仍含全文
