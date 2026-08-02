@@ -144,11 +144,17 @@ describe('block revisions (store)', () => {
     updateBlock(db, p2, { content: '段落二改' })
 
     const revs = listDocRevisions(db, docId)
-    // 3 次变更 → 3 条 revision（跨块，全部 kind='block'）
-    expect(revs.length).toBe(3)
-    expect(revs.every((r) => r.kind === 'block')).toBe(true)
+    // 首位合成「当前版本」（实时序列化，不可回退），其后为 3 次变更的块级修订
+    expect(revs.length).toBe(4)
+    expect(revs[0]!.is_current).toBe(true)
+    expect(revs[0]!.kind).toBe('snapshot')
+    expect(revs[0]!.actor).toBe('current')
+    expect(revs[0]!.content).toContain('新标题')
+    expect(revs[0]!.content).toContain('段落一改')
+    expect(revs[0]!.content).toContain('段落二改')
+    expect(revs.slice(1).every((r) => r.kind === 'block')).toBe(true)
     // 各块旧值都在
-    const byBlock = new Map(revs.map((r) => [r.block_id, r.content]))
+    const byBlock = new Map(revs.slice(1).map((r) => [r.block_id, r.content]))
     expect(byBlock.get(docId)).toBe('标题')
     expect(byBlock.get(p1)).toBe('段落一')
     expect(byBlock.get(p2)).toBe('段落二')
@@ -165,17 +171,22 @@ describe('block revisions (store)', () => {
     recordDocSnapshot(db, docId, '# 标题\n\n段落')
 
     const revs = listDocRevisions(db, docId)
-    expect(revs.length).toBe(1)
+    // 首位合成「当前版本」+ 手动记录的旧快照
+    expect(revs.length).toBe(2)
+    expect(revs[0]!.is_current).toBe(true)
     expect(revs[0]!.kind).toBe('snapshot')
-    expect(revs[0]!.actor).toBe('editor')
-    expect(revs[0]!.content).toBe('# 标题\n\n段落')
+    expect(revs[0]!.actor).toBe('current')
+    expect(revs[1]!.kind).toBe('snapshot')
+    expect(revs[1]!.actor).toBe('editor')
+    expect(revs[1]!.content).toBe('# 标题\n\n段落')
 
-    // 再次保存 → 两条快照，新→旧
+    // 再次保存 → 两条快照，新→旧（「当前版本」仍置顶）
     recordDocSnapshot(db, docId, '# 新标题\n\n段落已改')
     const revs2 = listDocRevisions(db, docId)
-    expect(revs2.length).toBe(2)
-    expect(revs2[0]!.content).toBe('# 新标题\n\n段落已改')
-    expect(revs2[1]!.content).toBe('# 标题\n\n段落')
+    expect(revs2.length).toBe(3)
+    expect(revs2[0]!.is_current).toBe(true)
+    expect(revs2[1]!.content).toBe('# 新标题\n\n段落已改')
+    expect(revs2[2]!.content).toBe('# 标题\n\n段落')
   })
 
   test('整篇快照与块级修订共存于文档历史，kind 区分来源', () => {
@@ -191,10 +202,12 @@ describe('block revisions (store)', () => {
     recordDocSnapshot(db, docId, '# 标题\n\n段落改')
 
     const revs = listDocRevisions(db, docId)
-    expect(revs.length).toBe(2)
+    expect(revs.length).toBe(3)
+    // 首位为合成「当前版本」
+    expect(revs[0]!.is_current).toBe(true)
     // kind 区分：快照 + 块级
-    expect(revs.some((r) => r.kind === 'snapshot' && r.actor === 'editor')).toBe(true)
-    expect(revs.some((r) => r.kind === 'block' && r.block_id === p && r.actor === 'user')).toBe(true)
+    expect(revs.slice(1).some((r) => r.kind === 'snapshot' && r.actor === 'editor')).toBe(true)
+    expect(revs.slice(1).some((r) => r.kind === 'block' && r.block_id === p && r.actor === 'user')).toBe(true)
   })
 })
 
@@ -268,9 +281,10 @@ describe('revisions API', () => {
 
     const res = await app.request(`/docs/${docId}/revisions`)
     expect(res.status).toBe(200)
-    const body = (await res.json()) as { doc_id: string; revisions: Array<{ block_id: string }> }
+    const body = (await res.json()) as { doc_id: string; revisions: Array<{ block_id: string; is_current?: boolean }> }
     expect(body.doc_id).toBe(docId)
-    expect(body.revisions.length).toBe(2)
+    expect(body.revisions.length).toBe(3)
+    expect(body.revisions[0]!.is_current).toBe(true)
 
     const missing = await app.request(`/docs/${crypto.randomUUID()}/revisions`)
     expect(missing.status).toBe(404)
@@ -297,8 +311,8 @@ describe('revisions API', () => {
     expect(snapshots.length).toBe(1)
     expect(snapshots[0]!.content).toContain('旧标题')
     expect(snapshots[0]!.content).toContain('旧段落')
-    // 无标题块的 user/回退 等额外记录
-    expect(revs.filter((r) => r.actor !== 'editor').length).toBe(0)
+    // 除合成「当前版本」外无标题块的 user/回退 等额外记录
+    expect(revs.filter((r) => r.actor !== 'editor' && !r.is_current).length).toBe(0)
   })
 
   test('POST /docs/:id/snapshots/:rev/restore 回退整篇快照（actor=revert，且回退本身留一条新快照）', async () => {

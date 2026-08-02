@@ -1,6 +1,7 @@
 {
   "doc": {
     "revisionActionRevert": "Revert",
+    "revisionActionCurrent": "Current version",
     "revisionActionAi": "AI write",
     "revisionActionMcp": "MCP write",
     "revisionActionEditor": "Web editor",

@@ -1,6 +1,7 @@
 {
   "doc": {
     "revisionActionRevert": "回退操作",
+    "revisionActionCurrent": "当前版本",
     "revisionActionAi": "AI 写入",
     "revisionActionMcp": "MCP 写入",
     "revisionActionEditor": "Web 编辑器",

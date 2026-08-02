@@ -79,6 +79,11 @@ export interface DocRevisionEntry {
   content: string
   actor: string
   created_at: string
+  /**
+   * 合成条目：当前文档最新状态（非真实存储的修订）。
+   * 仅用于展示「当前 vs 上一次保存」的 diff，不参与回退。
+   */
+  is_current?: boolean
 }
 
 /** 创建 Block 的输入 */

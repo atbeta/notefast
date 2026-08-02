@@ -51,6 +51,8 @@ interface DocRevision {
   content: string
   actor: string
   created_at: string
+  /** 合成条目：当前文档最新状态，仅展示 diff、不可回退 */
+  is_current?: boolean
 }
 
 /** revision 在历史面板的稳定 key（block + rev 唯一） */
@@ -61,6 +63,7 @@ function revisionKey(rev: DocRevision): string {
 /** 来源标签：actor → 可读文案（快照与块级都显示修改来源） */
 function actorLabel(rev: DocRevision): string {
   switch (rev.actor) {
+    case 'current': return i18next.t('doc.revisionActionCurrent')
     case 'revert': return i18next.t('doc.revisionActionRevert')
     case 'ai': return i18next.t('doc.revisionActionAi')
     case 'mcp': return i18next.t('doc.revisionActionMcp')
@@ -322,6 +325,11 @@ export default function DocPage() {
     if (railTab === 'history') loadRevisions()
   }, [railTab, loadRevisions])
 
+  /** 历史面板打开时，任何写入（显式/自动保存）后即刻刷新——面板收起时为空操作 */
+  const reloadHistoryIfOpen = useCallback(() => {
+    if (railTab === 'history') loadRevisions()
+  }, [railTab, loadRevisions])
+
   useEffect(() => {
     if (doc) {
       setHeadings(buildHeadingTree(doc.children || []))
@@ -370,7 +378,10 @@ export default function DocPage() {
     return () => timers.forEach(clearTimeout)
   }, [doc, location.hash])
 
-  const handleEditSaved = useCallback(() => { setRefreshKey((k) => k + 1) }, [])
+  const handleEditSaved = useCallback(() => {
+    setRefreshKey((k) => k + 1)
+    reloadHistoryIfOpen()
+  }, [reloadHistoryIfOpen])
 
   const saveTitle = async () => {
     if (!id || !doc || titleDraft.trim() === doc.content) return
@@ -780,6 +791,7 @@ export default function DocPage() {
                 docId={id}
                 title={doc.content}
                 onSaved={handleEditSaved}
+                onAutoSaved={reloadHistoryIfOpen}
                 autoEdit={true}
                 onActiveChange={handleEditorActiveChange}
               />
@@ -1161,14 +1173,16 @@ function RevisionItem({
         >
           {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
         </button>
-        <button
-          type="button"
-          disabled={restoring === key}
-          onClick={() => onRestore(rev)}
-          className="shrink-0 px-1.5 py-1 text-[11px] font-medium text-primary/80 hover:text-primary disabled:opacity-50 transition-colors"
-        >
-          {restoring === key ? '…' : t('doc.revert')}
-        </button>
+        {!rev.is_current && (
+          <button
+            type="button"
+            disabled={restoring === key}
+            onClick={() => onRestore(rev)}
+            className="shrink-0 px-1.5 py-1 text-[11px] font-medium text-primary/80 hover:text-primary disabled:opacity-50 transition-colors"
+          >
+            {restoring === key ? '…' : t('doc.revert')}
+          </button>
+        )}
       </div>
       {isOpen && (
         diff && diff.length > 0 ? (

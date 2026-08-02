@@ -22,13 +22,15 @@ interface MarkdownEditorProps {
   docId: string
   title?: string
   onSaved: () => void
+  /** 每次保存成功（含自动保存）后回调，供历史面板等即时刷新 */
+  onAutoSaved?: () => void
   autoEdit?: boolean
   onActiveChange?: (editing: boolean) => void
 }
 
 const CJK_WORDS_PER_MIN = 320
 
-export default function MarkdownEditor({ docId, title, onSaved, autoEdit = false, onActiveChange }: MarkdownEditorProps) {
+export default function MarkdownEditor({ docId, title, onSaved, onAutoSaved, autoEdit = false, onActiveChange }: MarkdownEditorProps) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(autoEdit)
 
@@ -48,12 +50,12 @@ export default function MarkdownEditor({ docId, title, onSaved, autoEdit = false
     )
   }
 
-  return <EditorInline docId={docId} title={title} onSaved={onSaved} onClose={() => setEditing(false)} />
+  return <EditorInline docId={docId} title={title} onSaved={onSaved} onAutoSaved={onAutoSaved} onClose={() => setEditing(false)} />
 }
 
 type Mode = 'edit' | 'view'
 
-function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title?: string; onSaved: () => void; onClose: () => void }) {
+function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: string; title?: string; onSaved: () => void; onAutoSaved?: () => void; onClose: () => void }) {
   const { t } = useTranslation()
   const toast = useToast()
   const draft = useEditorDraft(docId)
@@ -84,13 +86,14 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
       if (r.updated_at) serverUpdatedAtRef.current = r.updated_at
       draft.clearDraft()
       setAutoSaveStatus('saved')
+      onAutoSaved?.()
       return true
     } catch {
       draft.saveDraft(markdown, serverUpdatedAtRef.current)
       setAutoSaveStatus('error')
       return false
     }
-  }, [docId, draft])
+  }, [docId, draft, onAutoSaved])
 
   const triggerAutoSave = useCallback((markdown: string) => {
     if (markdown === lastSavedContentRef.current) return

@@ -14,6 +14,7 @@
  */
 
 import type { BlockRow, BlockRevision, DocSnapshot, DocRevisionEntry } from '@notefast/core'
+import { buildBlockTree, blocksToMarkdown } from '@notefast/core'
 import type { getDb } from '../db'
 import { computeContentHash } from '../services/contentHash'
 
@@ -430,6 +431,9 @@ export function listDocSnapshots(db: Db, docId: string, limit = 50): DocSnapshot
  * - kind='block'：单块修订（block_revisions，跨本文档全部块）
  * 新→旧。同毫秒多块同时写入会聚拢（created_at 相同 → rev DESC 兜底，与单块纯 rev 序略有差异，
  * 未来做分页时需改为稳定序：created_at DESC + block_id + rev）。
+ *
+ * 首位追加一条 is_current 合成条目（当前整篇 markdown）：让「当前 vs 上一次保存」的
+ * diff 可见（否则最新快照只能对更旧的快照比）。该条目无对应存储行，调用方不得对其回退。
  */
 export function listDocRevisions(db: Db, docId: string, limit = 100): DocRevisionEntry[] {
   const rows = db
@@ -444,8 +448,21 @@ export function listDocRevisions(db: Db, docId: string, limit = 100): DocRevisio
        ORDER BY created_at DESC, rev DESC
        LIMIT ?`,
     )
-    .all(docId, docId, limit) as DocRevisionEntry[]
-  return rows
+    .all(docId, docId, Math.max(1, limit - 1)) as DocRevisionEntry[]
+  const current = blocksToMarkdown(buildBlockTree(fetchDocBlocks(db, docId)))
+  return [
+    {
+      kind: 'snapshot',
+      block_id: docId,
+      // 合成条目：rev 取极大值不与真实修订冲突；前端按 is_current 隐藏回退，不会触发 restore
+      rev: Number.MAX_SAFE_INTEGER,
+      content: current,
+      actor: 'current',
+      created_at: nowTimestamp(),
+      is_current: true,
+    },
+    ...rows,
+  ]
 }
 
 /** 移动：更新自身 parent/root/level/sort（后代传播见 shiftDescendantLevels / reRootDescendants） */
