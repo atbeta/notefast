@@ -12,7 +12,7 @@ export interface TitleSuggestion {
   summary: string
 }
 
-const SYSTEM_PROMPT = `你是 NoteFast 的 AI 助手。根据用户的笔记内容，生成简洁的标题和一句话摘要。
+const SYSTEM_PROMPT_ZH = `你是 NoteFast 的 AI 助手。根据用户的笔记内容，生成简洁的标题和一句话摘要。
 
 规则：
 1. 标题 5-15 字，抓住核心主题
@@ -21,18 +21,32 @@ const SYSTEM_PROMPT = `你是 NoteFast 的 AI 助手。根据用户的笔记内�
 4. 不要加引号、不要序号、不要前缀
 5. 必须返回合法 JSON：{"title": "...", "summary": "..."}`
 
-const SYSTEM_PROMPT_FALLBACK = `你是 NoteFast 的 AI 助手。根据笔记内容生成标题和摘要。
+const SYSTEM_PROMPT_EN = `You are NoteFast's AI assistant. Given the user's note content, generate a concise title and a one-line summary.
+
+Rules:
+1. Title of 5-15 characters, capturing the core topic
+2. Summary is a single sentence of no more than 30 words
+3. If the content is very short, the title is the content itself
+4. No quotes, no numbering, no prefixes
+5. Must return valid JSON: {"title": "...", "summary": "..."}`
+
+const SYSTEM_PROMPT_FALLBACK_ZH = `你是 NoteFast 的 AI 助手。根据笔记内容生成标题和摘要。
 返回两行：第一行标题（5-15 字），第二行一句话摘要（不超过 30 字）。`
+
+const SYSTEM_PROMPT_FALLBACK_EN = `You are NoteFast's AI assistant. Generate a title and summary for the note content.
+Return two lines: first the title (5-15 characters), then a one-line summary (no more than 30 words).`
 
 export async function suggestTitle(
   provider: LLMProvider,
   content: string,
+  lang: 'zh' | 'en' = 'zh',
 ): Promise<TitleSuggestion> {
   const trimmed = content.trim().slice(0, 3000)
   if (!trimmed) return { title: '', summary: '' }
 
+  const zh = lang !== 'en'
   const messages: ChatMessage[] = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: zh ? SYSTEM_PROMPT_ZH : SYSTEM_PROMPT_EN },
     { role: 'user', content: trimmed },
   ]
 
@@ -52,7 +66,7 @@ export async function suggestTitle(
   // 降级方案
   const raw = await provider.chat(
     [
-      { role: 'system', content: SYSTEM_PROMPT_FALLBACK },
+      { role: 'system', content: zh ? SYSTEM_PROMPT_FALLBACK_ZH : SYSTEM_PROMPT_FALLBACK_EN },
       { role: 'user', content: trimmed },
     ],
     { temperature: 0.3, maxTokens: 100 },

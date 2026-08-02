@@ -10,6 +10,7 @@
 
 import type { ChatMessage, ToolDefinition } from '@notefast/core'
 import type { Citation } from './hybridSearch'
+import type { AiLang } from './locale'
 
 export interface ChatPromptInput {
   /** 完整对话历史（已包含当前用户消息） */
@@ -24,9 +25,11 @@ export interface ChatPromptInput {
   maxHistoryTurns?: number
   /** 可用工具定义；为空时不在 system prompt 描述工具能力 */
   tools?: ToolDefinition[]
+  /** 助手语言：zh / en（默认 zh） */
+  lang?: AiLang
 }
 
-const SYSTEM_PROMPT = `你是 NoteFast 的 AI 助手，正在与用户讨论他的个人知识库。
+const SYSTEM_PROMPT_ZH = `你是 NoteFast 的 AI 助手，正在与用户讨论他的个人知识库。
 
 规则：
 1. 回答必须严格基于下方"检索到的笔记"。严禁凭空编造任何信息、文档标题、内容或事实。如果笔记中没有任何相关内容，请直接说明"我的笔记里没有找到相关内容"，不要尝试推测或补全。
@@ -41,17 +44,33 @@ const SYSTEM_PROMPT = `你是 NoteFast 的 AI 助手，正在与用户讨论他�
 10. 如果用户的问题在你的知识库笔记中找不到答案（如问外部新闻、最新资讯、技术动态），且 notefast_web_search 可用，调用它搜索互联网补充信息。来自网络的搜索结果用 🌐 标注来源 URL，与笔记引用 [n] 区分开。
 11. 检索结果只是 block 级片段，不是完整文档。当用户问的是某篇文章的整体内容（"那篇文章具体说了什么""总结一下这篇"）或片段不足以回答时，调用 notefast_read_doc 拉取整篇 Markdown，不要仅凭片段猜测全文。`
 
+const SYSTEM_PROMPT_EN = `You are NoteFast's AI assistant, discussing the user's personal knowledge base with them.
+
+Rules:
+1. Base your answers strictly on the "Retrieved notes" below. Never fabricate any information, document titles, content, or facts. If the notes contain nothing relevant, say directly "I couldn't find anything relevant in my notes" — do not guess or fill in.
+2. When citing specific content, mark the source with bracketed numbers like [1], [2], matching the order of the "Retrieved notes" below.
+3. Answer concisely and directly; avoid filler and repeating the question. If you're unsure, say so — don't invent content to pad the answer.
+4. If the user asks about a method or procedure, cite the relevant notes rather than speaking generally. If nothing relevant was retrieved, don't offer "common practice" or "general advice" — say it wasn't found.
+5. The document the user is currently viewing (if any) has higher priority — you may cite it, but don't assume it's the only document they care about.
+6. If the initial retrieval is insufficient, the user gets more specific, or a time dimension is needed ("what did I write last week"), call notefast_search_more to re-search instead of guessing.
+7. When the user says "note this down", "save this", "create a note", or "create a document", call notefast_create_note to write a new note. After creating, briefly tell the user it's saved and provide the doc_id.
+8. When the user says "add this to note XX", "append to document XX", or "append", call notefast_append_to_doc. You need an accurate doc_id (from block.doc_id in the retrieval results). After the operation, tell the user whether it succeeded.
+9. Confirm before writing: if the user refers to a vague name rather than a concrete doc_id, search to find the target document first, then write. Don't guess doc_id.
+10. If the user's question can't be answered from your knowledge base notes (e.g. external news, latest updates, tech trends) and notefast_web_search is available, call it to search the internet for supplementary info. Mark web-search results with 🌐 and the source URL to distinguish them from note citations [n].
+11. Retrieval results are block-level snippets, not full documents. When the user asks about a document's overall content ("what did that article say exactly", "summarize this") or the snippets are insufficient, call notefast_read_doc to pull the full Markdown instead of guessing from snippets.`
+
 export function buildChatPrompt(input: ChatPromptInput): ChatMessage[] {
-  const { messages, citations, currentDocTitle, currentDocContent, tools } = input
+  const { messages, citations, currentDocTitle, currentDocContent, tools, lang = 'zh' } = input
   const maxTurns = input.maxHistoryTurns ?? 6
+  const system = lang === 'en' ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT_ZH
 
   const systemContent = citations.length > 0
-    ? `${SYSTEM_PROMPT}\n\n${buildContextBlock(citations, currentDocTitle, currentDocContent)}`
-    : `${SYSTEM_PROMPT}\n\n${buildContextBlock([], currentDocTitle, currentDocContent)}`
+    ? `${system}\n\n${buildContextBlock(citations, currentDocTitle, currentDocContent, lang)}`
+    : `${system}\n\n${buildContextBlock([], currentDocTitle, currentDocContent, lang)}`
 
   let withTools = systemContent
   if (tools && tools.length > 0) {
-    withTools += `\n\n${buildToolsBlock(tools)}`
+    withTools += `\n\n${buildToolsBlock(tools, lang)}`
   }
 
   const history = compressHistory(messages, maxTurns)
@@ -59,42 +78,52 @@ export function buildChatPrompt(input: ChatPromptInput): ChatMessage[] {
   return [{ role: 'system', content: withTools }, ...history]
 }
 
-function buildContextBlock(citations: Citation[], currentDocTitle?: string, currentDocContent?: string): string {
+function buildContextBlock(citations: Citation[], currentDocTitle?: string, currentDocContent?: string, lang: AiLang = 'zh'): string {
+  const en = lang === 'en'
   let docBlock = ''
   if (currentDocTitle || currentDocContent) {
-    docBlock = currentDocTitle ? `用户当前查看文档：《${currentDocTitle}》\n` : '用户当前正在浏览一篇文档\n'
+    docBlock = currentDocTitle
+      ? (en ? `The document the user is currently viewing: "${currentDocTitle}"\n` : `用户当前查看文档：《${currentDocTitle}》\n`)
+      : (en ? 'The user is currently browsing a document\n' : '用户当前正在浏览一篇文档\n')
     if (currentDocContent) {
       // 截断过长内容，为检索结果留空间
       const maxLen = 4000
       const truncated = currentDocContent.length > maxLen
-        ? currentDocContent.slice(0, maxLen) + '\n\n... (文档过长，已截断。可使用 notefast_read_doc 读取全文)'
+        ? currentDocContent.slice(0, maxLen) + (en ? '\n\n... (document too long, truncated. Use notefast_read_doc for the full text)' : '\n\n... (文档过长，已截断。可使用 notefast_read_doc 读取全文)')
         : currentDocContent
-      docBlock += `\n完整内容：\n---\n${truncated}\n---\n\n`
+      docBlock += en ? `\nFull content:\n---\n${truncated}\n---\n\n` : `\n完整内容：\n---\n${truncated}\n---\n\n`
     } else {
       docBlock += '\n'
     }
   }
   if (citations.length === 0) {
-    return `${docBlock}(本次未检索到相关笔记。请直接告知用户未找到相关内容，不要编造或猜测。若用户的问题涉及"有哪些""列出所有"等列表性查询，建议调用 notefast_list_docs 获取文档列表。)`
+    return en
+      ? `${docBlock}(No relevant notes were retrieved this time. Tell the user directly that nothing relevant was found — do not fabricate or guess. If the question is a listing query like "what documents are there" or "list all", consider calling notefast_list_docs to fetch the document list.)`
+      : `${docBlock}(本次未检索到相关笔记。请直接告知用户未找到相关内容，不要编造或猜测。若用户的问题涉及"有哪些""列出所有"等列表性查询，建议调用 notefast_list_docs 获取文档列表。)`
   }
   const items = citations
     .map((c, i) => {
-      const head = `[${i + 1}] 文档《${c.doc_title}》 · ${c.type}`
+      const head = en ? `[${i + 1}] Document "${c.doc_title}" · ${c.type}` : `[${i + 1}] 文档《${c.doc_title}》 · ${c.type}`
       const body = c.content
       const tail = c.type === 'code' ? '\n```' : ''
       const prefix = c.type === 'code' ? '```\n' : ''
       return `${head}\n${prefix}${body}${tail}`
     })
     .join('\n\n')
-  return `${docBlock}检索到的笔记（共 ${citations.length} 条）：\n\n${items}`
+  return en
+    ? `${docBlock}Retrieved notes (${citations.length} total):\n\n${items}`
+    : `${docBlock}检索到的笔记（共 ${citations.length} 条）：\n\n${items}`
 }
 
-function buildToolsBlock(tools: ToolDefinition[]): string {
+function buildToolsBlock(tools: ToolDefinition[], lang: AiLang = 'zh'): string {
+  const en = lang === 'en'
   const lines = tools.map((t) => {
     const params = JSON.stringify(t.function.parameters, null, 2)
-    return `- **${t.function.name}**: ${t.function.description}\n  参数:\n  \`\`\`json\n  ${params}\n  \`\`\``
+    return `- **${t.function.name}**: ${t.function.description}\n  ${en ? 'Parameters:' : '参数:'}\n  \`\`\`json\n  ${params}\n  \`\`\``
   })
-  return `可用工具（必要时调用；最多连续 3 轮）：\n\n${lines.join('\n\n')}\n\n调用方式：返回 tool_calls 字段，参数用 JSON 对象。每次只调 1~2 个工具，避免噪音。写工具执行后不需要二次确认。`
+  return en
+    ? `Available tools (call when needed; at most 3 consecutive rounds):\n\n${lines.join('\n\n')}\n\nCall by returning a tool_calls field with JSON parameter objects. Call only 1–2 tools at a time to avoid noise. Write tools don't need a second confirmation.`
+    : `可用工具（必要时调用；最多连续 3 轮）：\n\n${lines.join('\n\n')}\n\n调用方式：返回 tool_calls 字段，参数用 JSON 对象。每次只调 1~2 个工具，避免噪音。写工具执行后不需要二次确认。`
 }
 
 /**

@@ -76,7 +76,12 @@ export async function fetchWithAuth(path: string, options?: RequestInit): Promis
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`
   const res = await fetch(url, {
     ...options,
-    headers: { ...authHeader(), ...(options?.headers ?? {}) },
+    headers: {
+      // 服务端据此本地化 AI 提示词（chat 系统提示/工具描述/skills/标题生成）
+      'Accept-Language': i18next.resolvedLanguage || i18next.language || 'zh-CN',
+      ...authHeader(),
+      ...(options?.headers ?? {}),
+    },
   })
   if (res.status === 401) clearSession()
   return res

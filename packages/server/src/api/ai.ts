@@ -45,6 +45,7 @@ import { indexBlock, indexAllBlocks, semanticSearch } from '../ai/indexer'
 import { getVectorStore } from '../ai/vectorStore'
 import { startVectorRebuild } from '../ai/vectorRebuild'
 import { getRebuildProgress } from '../ai/rebuildProgress'
+import { resolveAiLang } from '../ai/locale'
 import { getIndexJob, getLatestIndexJobForDoc } from '../ai/indexJobs'
 import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
 import { loadAiExcludedDocIds } from '../ai/aiExcludeQuery'
@@ -359,7 +360,7 @@ ai.post('/diagnose', async (c) => {
 
 /** GET /ai/skills — 内置技能列表（聊天面板快捷入口；prompt 已插值当天日期） */
 ai.get('/skills', (c) => {
-  return c.json({ skills: listSkills() })
+  return c.json({ skills: listSkills(resolveAiLang(c.req.header('accept-language'))) })
 })
 
 ai.get('/search', async (c) => {
@@ -558,6 +559,7 @@ ai.post('/chat', zValidator('json', chatSchema), async (c) => {
           rerankWindow: body.rerank_window,
           temperature: body.temperature,
           maxTokens: body.max_tokens,
+          lang: resolveAiLang(c.req.header('accept-language')),
         })) {
           if (ev.type === 'retrieval') {
             await sse.writeSSE({ event: 'retrieval', data: JSON.stringify(ev.report) })
@@ -656,7 +658,7 @@ ai.post('/suggest-title', zValidator('json', suggestSchema), async (c) => {
       name: 'notefast-runtime',
       chat: (msgs, opts) => r.chat(msgs, opts),
     }
-    const suggestion = await suggestTitle(provider, content)
+    const suggestion = await suggestTitle(provider, content, resolveAiLang(c.req.header('accept-language')))
     return c.json(suggestion)
   } catch (e) {
     return c.json({ error: 'llm_error', message: eMsg(e) }, 500)

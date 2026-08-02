@@ -35,6 +35,7 @@ import {
 } from '../store/blocks'
 import { hybridSearch, type HybridSearchReport } from './hybridSearch'
 import { buildChatPrompt } from './prompt'
+import type { AiLang } from './locale'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { insertDocFromMarkdown, appendMarkdownToDoc } from '../services/docImport'
 import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate, fireDocAfterCreate } from '../services/hooks'
@@ -92,31 +93,39 @@ export interface RunChatOptions {
   enableTools?: boolean
   /** agent loop 最大轮数，默认 3 */
   maxToolRounds?: number
+  /** 助手语言：zh / en（默认 zh） */
+  lang?: AiLang
 }
 
-const FIX_HINT = '请在 Web UI /settings 页面配置 Chat 模型（API Key + Base URL + 模型名）'
+function fixHint(lang: AiLang): string {
+  return lang === 'en'
+    ? 'Configure a Chat model in the Web UI /settings page (API Key + Base URL + model name)'
+    : '请在 Web UI /settings 页面配置 Chat 模型（API Key + Base URL + 模型名）'
+}
 const DEFAULT_MAX_TOOL_ROUNDS = 3
 
 /**
  * 暴露给 LLM 的工具定义。
- * 当前只有 notefast_search_more：让 LLM 在初始检索结果不满意时主动重检。
+ * 描述随 lang 本地化（英文助手让 LLM 用英文理解工具语义）。
  */
-function getSearchToolDefinition(): ToolDefinition {
+function getSearchToolDefinition(lang: AiLang): ToolDefinition {
+  const en = lang === 'en'
   return {
     type: 'function',
     function: {
       name: 'notefast_search_more',
-      description:
-        '用不同的关键词、缩小范围、加时间窗等条件重新检索知识库。当初始结果不够、用户问得更具体、或需要时间维度（"上次我写过什么"）时调用。',
+      description: en
+        ? 'Re-search the knowledge base with different keywords, a narrower scope, or a time window. Call it when the initial results are insufficient, the user gets more specific, or a time dimension is needed (e.g. "what did I write last week").'
+        : '用不同的关键词、缩小范围、加时间窗等条件重新检索知识库。当初始结果不够、用户问得更具体、或需要时间维度（"上次我写过什么"）时调用。',
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: '新关键词；留空则用当前对话最后一条 user 消息' },
-          notebook_id: { type: 'string', description: '限定到某个 notebook（可选）' },
-          since: { type: 'string', description: 'ISO 时间字符串，只返回 blocks.updated_at >= since 的块' },
-          until: { type: 'string', description: 'ISO 时间字符串，只返回 blocks.updated_at <= until 的块' },
-          limit: { type: 'number', description: '返回的引用数量（1-20）', default: 5 },
-          include_archived: { type: 'boolean', description: '是否包含已归档文档（默认 false；仅当用户明确要找过时/历史内容时置 true）' },
+          query: { type: 'string', description: en ? 'New keywords; leave empty to use the last user message' : '新关键词；留空则用当前对话最后一条 user 消息' },
+          notebook_id: { type: 'string', description: en ? 'Scope to a notebook (optional)' : '限定到某个 notebook（可选）' },
+          since: { type: 'string', description: en ? 'ISO time string; only blocks with updated_at >= since' : 'ISO 时间字符串，只返回 blocks.updated_at >= since 的块' },
+          until: { type: 'string', description: en ? 'ISO time string; only blocks with updated_at <= until' : 'ISO 时间字符串，只返回 blocks.updated_at <= until 的块' },
+          limit: { type: 'number', description: en ? 'Number of citations to return (1-20)' : '返回的引用数量（1-20）', default: 5 },
+          include_archived: { type: 'boolean', description: en ? 'Include archived documents (default false; set true only when the user explicitly wants old/historical content)' : '是否包含已归档文档（默认 false；仅当用户明确要找过时/历史内容时置 true）' },
         },
       },
     },
@@ -124,20 +133,22 @@ function getSearchToolDefinition(): ToolDefinition {
 }
 
 /** 文档列表工具：让 LLM 能回答"有哪些笔记/收集箱里有什么/哪些长期没更新"类问题 */
-function getListDocsToolDefinition(): ToolDefinition {
+function getListDocsToolDefinition(lang: AiLang): ToolDefinition {
+  const en = lang === 'en'
   return {
     type: 'function',
     function: {
       name: 'notefast_list_docs',
-      description:
-        '列出知识库文档（标题/状态/标签/更新时间）。用于"我有哪些笔记""收集箱里有什么""找长期未更新的文档"等列表性场景；需要具体内容时再调用 notefast_search_more。',
+      description: en
+        ? 'List knowledge base documents (title/status/tags/updated time). Use for listing scenarios like "what notes do I have", "what is in the inbox", or "find documents not updated for a long time"; call notefast_search_more when you need actual content.'
+        : '列出知识库文档（标题/状态/标签/更新时间）。用于"我有哪些笔记""收集箱里有什么""找长期未更新的文档"等列表性场景；需要具体内容时再调用 notefast_search_more。',
       parameters: {
         type: 'object',
         properties: {
-          status: { type: 'string', enum: ['note', 'inbox', 'archived', 'all'], description: 'note=正式笔记（默认）；inbox=收集箱；archived=归档；all=全部' },
-          stale_within: { type: 'string', enum: ['30d', '90d'], description: '仅返回超过该时长未更新的文档（找过时内容用）' },
-          updated_within: { type: 'string', enum: ['24h', '7d'], description: '仅返回最近更新的文档' },
-          limit: { type: 'number', description: '返回数量（1-50），默认 20' },
+          status: { type: 'string', enum: ['note', 'inbox', 'archived', 'all'], description: en ? 'note=notes (default); inbox=inbox; archived=archive; all=everything' : 'note=正式笔记（默认）；inbox=收集箱；archived=归档；all=全部' },
+          stale_within: { type: 'string', enum: ['30d', '90d'], description: en ? 'Only documents not updated for longer than this' : '仅返回超过该时长未更新的文档（找过时内容用）' },
+          updated_within: { type: 'string', enum: ['24h', '7d'], description: en ? 'Only recently updated documents' : '仅返回最近更新的文档' },
+          limit: { type: 'number', description: en ? 'Number of results (1-50), default 20' : '返回数量（1-50），默认 20' },
         },
       },
     },
@@ -145,17 +156,19 @@ function getListDocsToolDefinition(): ToolDefinition {
 }
 
 /** 读全文工具：检索只给片段，需要完整文章时让 LLM 主动拉取整篇 Markdown */
-function getReadDocToolDefinition(): ToolDefinition {
+function getReadDocToolDefinition(lang: AiLang): ToolDefinition {
+  const en = lang === 'en'
   return {
     type: 'function',
     function: {
       name: 'notefast_read_doc',
-      description:
-        '读取一篇文档的完整内容（Markdown）。检索结果只是 block 级片段，当需要完整文章、总结全文、或片段不足以回答时调用。doc_id 从检索结果或 notefast_list_docs 获取。',
+      description: en
+        ? 'Read the full content of a document (Markdown). Retrieval only returns block-level snippets — call this when the user needs the whole article, a full summary, or the snippets are insufficient. Get doc_id from the retrieval results or notefast_list_docs.'
+        : '读取一篇文档的完整内容（Markdown）。检索结果只是 block 级片段，当需要完整文章、总结全文、或片段不足以回答时调用。doc_id 从检索结果或 notefast_list_docs 获取。',
       parameters: {
         type: 'object',
         properties: {
-          doc_id: { type: 'string', description: '目标文档 ID' },
+          doc_id: { type: 'string', description: en ? 'Target document ID' : '目标文档 ID' },
         },
         required: ['doc_id'],
       },
@@ -163,19 +176,22 @@ function getReadDocToolDefinition(): ToolDefinition {
   }
 }
 
-function getWriteToolDefinitions(): ToolDefinition[] {
+function getWriteToolDefinitions(lang: AiLang): ToolDefinition[] {
+  const en = lang === 'en'
   return [
     {
       type: 'function',
       function: {
         name: 'notefast_create_note',
-        description: '在知识库中创建一篇新笔记。标题必须简洁（5-20字），内容用 Markdown。当用户要求"记下来""保存这段""新建笔记"时调用。',
+        description: en
+          ? 'Create a new note in the knowledge base. The title must be concise (5-20 characters), the body in Markdown. Call when the user says "note this down", "save this", or "create a note".'
+          : '在知识库中创建一篇新笔记。标题必须简洁（5-20字），内容用 Markdown。当用户要求"记下来""保存这段""新建笔记"时调用。',
         parameters: {
           type: 'object',
           properties: {
-            title: { type: 'string', description: '笔记标题，5-20字' },
-            markdown: { type: 'string', description: '笔记正文，Markdown 格式' },
-            status: { type: 'string', enum: ['note', 'inbox'], description: 'note=正式笔记，inbox=收集箱；默认 note' },
+            title: { type: 'string', description: en ? 'Note title, 5-20 characters' : '笔记标题，5-20字' },
+            markdown: { type: 'string', description: en ? 'Note body, Markdown format' : '笔记正文，Markdown 格式' },
+            status: { type: 'string', enum: ['note', 'inbox'], description: en ? 'note=notes, inbox=inbox; default note' : 'note=正式笔记，inbox=收集箱；默认 note' },
           },
           required: ['title', 'markdown'],
         },
@@ -185,13 +201,15 @@ function getWriteToolDefinitions(): ToolDefinition[] {
       type: 'function',
       function: {
         name: 'notefast_append_to_doc',
-        description: '向已有文档末尾追加一段内容。doc_id 从检索结果中的 block.doc_id 获取。当用户要求"加到那篇笔记里""补充到 XX 文档"时调用。',
+        description: en
+          ? 'Append a section to the end of an existing document. Get doc_id from block.doc_id in the retrieval results. Call when the user says "add this to note XX" or "append to document XX".'
+          : '向已有文档末尾追加一段内容。doc_id 从检索结果中的 block.doc_id 获取。当用户要求"加到那篇笔记里""补充到 XX 文档"时调用。',
         parameters: {
           type: 'object',
           properties: {
-            doc_id: { type: 'string', description: '目标文档 ID（从检索结果或之前的对话中获取）' },
-            content: { type: 'string', description: '要追加的内容，Markdown 格式' },
-            heading: { type: 'string', description: '追加内容前先插入的标题（可选），如"## 补充"' },
+            doc_id: { type: 'string', description: en ? 'Target document ID (from retrieval results or the conversation)' : '目标文档 ID（从检索结果或之前的对话中获取）' },
+            content: { type: 'string', description: en ? 'Content to append, Markdown format' : '要追加的内容，Markdown 格式' },
+            heading: { type: 'string', description: en ? 'Optional heading to insert before the content, e.g. "## Addendum"' : '追加内容前先插入的标题（可选），如"## 补充"' },
           },
           required: ['doc_id', 'content'],
         },
@@ -201,12 +219,14 @@ function getWriteToolDefinitions(): ToolDefinition[] {
       type: 'function',
       function: {
         name: 'notefast_update_block',
-        description: '更新已有 block 的内容。block_id 从检索结果的 citation.block_id 获取。当用户要求"修改那段""改成 XX"时调用。',
+        description: en
+          ? 'Update the content of an existing block. Get block_id from citation.block_id in the retrieval results. Call when the user says "change that part" or "rewrite it as XX".'
+          : '更新已有 block 的内容。block_id 从检索结果的 citation.block_id 获取。当用户要求"修改那段""改成 XX"时调用。',
         parameters: {
           type: 'object',
           properties: {
-            block_id: { type: 'string', description: '目标 block ID（从检索结果的 citation.block_id 获取）' },
-            content: { type: 'string', description: '新内容，Markdown 格式' },
+            block_id: { type: 'string', description: en ? 'Target block ID (from citation.block_id in the retrieval results)' : '目标 block ID（从检索结果的 citation.block_id 获取）' },
+            content: { type: 'string', description: en ? 'New content, Markdown format' : '新内容，Markdown 格式' },
           },
           required: ['block_id', 'content'],
         },
@@ -215,19 +235,22 @@ function getWriteToolDefinitions(): ToolDefinition[] {
   ]
 }
 
-function getAllToolDefinitions(): ToolDefinition[] {
-  const tools: ToolDefinition[] = [getSearchToolDefinition(), getListDocsToolDefinition(), getReadDocToolDefinition(), ...getWriteToolDefinitions()]
+function getAllToolDefinitions(lang: AiLang): ToolDefinition[] {
+  const en = lang === 'en'
+  const tools: ToolDefinition[] = [getSearchToolDefinition(lang), getListDocsToolDefinition(lang), getReadDocToolDefinition(lang), ...getWriteToolDefinitions(lang)]
   if (hasRuntime() && getRuntime().webSearchKey()) {
     tools.push({
       type: 'function',
       function: {
         name: 'notefast_web_search',
-        description: '搜索互联网获取最新信息。当用户的问题在知识库笔记中找不到答案、需要外部最新资讯时调用。结果来自网络，与笔记引用分开标注。',
+        description: en
+          ? 'Search the internet for the latest information. Call when the user\'s question can\'t be answered from the knowledge base notes and needs external/current info. Results come from the web and are marked separately from note citations.'
+          : '搜索互联网获取最新信息。当用户的问题在知识库笔记中找不到答案、需要外部最新资讯时调用。结果来自网络，与笔记引用分开标注。',
         parameters: {
           type: 'object',
           properties: {
-            query: { type: 'string', description: '搜索关键词' },
-            count: { type: 'number', description: '返回条数（1-10），默认 5' },
+            query: { type: 'string', description: en ? 'Search keywords' : '搜索关键词' },
+            count: { type: 'number', description: en ? 'Number of results (1-10), default 5' : '返回条数（1-10），默认 5' },
           },
           required: ['query'],
         },
@@ -245,13 +268,15 @@ function getAllToolDefinitions(): ToolDefinition[] {
 export const WRITE_TOOLS = new Set(['notefast_create_note', 'notefast_append_to_doc', 'notefast_update_block'])
 
 /** 写工具被调用的返回：不执行，改交提案 */
-function pendingWriteProposal(tool: string, args: Record<string, unknown>): ToolResult {
+function pendingWriteProposal(tool: string, args: Record<string, unknown>, lang: AiLang): ToolResult {
   return {
     content: JSON.stringify({
       awaiting_confirm: true,
       tool,
       args,
-      message: '该操作需用户确认后执行，等待确认。',
+      message: lang === 'en'
+        ? 'This operation requires your confirmation; waiting for it.'
+        : '该操作需用户确认后执行，等待确认。',
     }),
     resultCount: 0,
   }
@@ -265,10 +290,10 @@ async function executeToolCall(
   name: string,
   args: Record<string, unknown>,
   fallbackQuery: string,
-  ctx: { notebookId?: string; ctxDocId?: string; since?: string; until?: string; minScore?: number },
+  ctx: { notebookId?: string; ctxDocId?: string; since?: string; until?: string; minScore?: number; lang?: AiLang },
 ): Promise<ToolResult> {
   // 写工具：不在此执行，返回提案（前端确认卡片决定最终写入）
-  if (WRITE_TOOLS.has(name)) return pendingWriteProposal(name, args)
+  if (WRITE_TOOLS.has(name)) return pendingWriteProposal(name, args, ctx.lang ?? 'zh')
 
   if (name === 'notefast_search_more') {
     const q = (typeof args.query === 'string' && args.query.trim()) || fallbackQuery
@@ -620,13 +645,15 @@ function* emitCompleteAnswer(content: string, reasoning?: string): Generator<Cha
  * 生成完整事件流。调用方通过 for-await 消费并写入 Hono streamSSE。
  */
 export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> {
+  const lang = opts.lang ?? 'zh'
+  const hint = fixHint(lang)
   if (!hasRuntime()) {
     yield {
       type: 'error',
       error: {
         code: 'not_configured',
-        message: 'AI runtime 未初始化',
-        fix_hint: FIX_HINT,
+        message: lang === 'en' ? 'AI runtime not initialized' : 'AI runtime 未初始化',
+        fix_hint: hint,
       },
     }
     return
@@ -637,8 +664,8 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
       type: 'error',
       error: {
         code: 'not_configured',
-        message: 'AI chat 未配置',
-        fix_hint: FIX_HINT,
+        message: lang === 'en' ? 'AI chat is not configured' : 'AI chat 未配置',
+        fix_hint: hint,
       },
     }
     return
@@ -649,7 +676,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
   if (!lastUser || !lastUserText.trim()) {
     yield {
       type: 'error',
-      error: { code: 'no_user_message', message: '未提供用户消息' },
+      error: { code: 'no_user_message', message: lang === 'en' ? 'No user message provided' : '未提供用户消息' },
     }
     return
   }
@@ -663,7 +690,9 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
       type: 'error',
       error: {
         code: 'llm_error',
-        message: '当前模型不支持图片输入。请在设置中开启视觉（vision）能力并配置支持多模态的模型。',
+        message: lang === 'en'
+          ? 'The current model does not support image input. Enable vision in settings and configure a multimodal model.'
+          : '当前模型不支持图片输入。请在设置中开启视觉（vision）能力并配置支持多模态的模型。',
       },
     }
     return
@@ -721,7 +750,8 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
     citations: initialReport.citations,
     currentDocTitle,
     currentDocContent,
-    tools: enableTools ? getAllToolDefinitions() : undefined,
+    lang,
+    tools: enableTools ? getAllToolDefinitions(lang) : undefined,
   })
 
   yield { type: 'retrieval', report: initialReport }
@@ -742,7 +772,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
             runtime.streamChatWithTools(workingMessages, {
               temperature: opts.temperature ?? 0.3,
               maxTokens: opts.maxTokens ?? 2000,
-              tools: getAllToolDefinitions(),
+              tools: getAllToolDefinitions(lang),
             }),
           )
           let next = await gen.next()
@@ -770,7 +800,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
               const result = await runtime.chatWithTools(workingMessages, {
                 temperature: opts.temperature ?? 0.3,
                 maxTokens: opts.maxTokens ?? 2000,
-                tools: getAllToolDefinitions(),
+                tools: getAllToolDefinitions(lang),
               })
               if (result && result.tool_calls.length > 0 && round < maxRounds) {
                 toolCalls = result.tool_calls
@@ -848,6 +878,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
               since: opts.since,
               until: opts.until,
               minScore: opts.minScore,
+              lang,
             })
             toolTrace.push({
               tool: tc.name,
@@ -914,7 +945,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
       error: {
         code,
         message: msg,
-        fix_hint: code === 'not_configured' ? FIX_HINT : undefined,
+        fix_hint: code === 'not_configured' ? fixHint(lang) : undefined,
       },
     }
   }
@@ -962,7 +993,7 @@ export async function runChatSync(opts: RunChatOptions): Promise<{
       retrieval = ev.retrieval
       toolTrace = ev.toolTrace
     } else if (ev.type === 'error') {
-      const prefix = ev.error.code === 'not_configured' ? '[未配置] ' : ''
+      const prefix = ev.error.code === 'not_configured' ? (opts.lang === 'en' ? '[not configured] ' : '[未配置] ') : ''
       throw new Error(prefix + ev.error.message)
     }
   }
