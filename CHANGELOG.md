@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.31.0](https://github.com/atbeta/notefast/compare/v0.30.0...v0.31.0) (2026-08-02)
+
+
+### Features
+
+* **ai:** make the assistant language follow the UI language ([281cdf9](https://github.com/atbeta/notefast/commit/281cdf90a151f1977f89040396e0a96a77c1a5b5))
+* **server:** full-KB archive export and own-format zip import ([b46a0ab](https://github.com/atbeta/notefast/commit/b46a0ab9efe551354f52d9303ad2073b60904399))
+* **web,server:** show current doc state in history and refresh on save ([001d079](https://github.com/atbeta/notefast/commit/001d0791306913608c1caed22ce5247703e67817))
+* **web:** add English locale pack, making the language picker functional ([ae56489](https://github.com/atbeta/notefast/commit/ae56489f66c6bae0ebf55388b891d77c31f1140c))
+* **web:** add i18n with language picker and full UI string extraction ([5f70efb](https://github.com/atbeta/notefast/commit/5f70efb2ab024545718fe16b379aef5ae48f4398))
+* **web:** archive panel — S3-compatible label, enable toggle, export/import ([a7ebf12](https://github.com/atbeta/notefast/commit/a7ebf12156feaa05b275b21d37847a512cc3c20b))
+* **web:** localize server errors via error code mapping ([3df922d](https://github.com/atbeta/notefast/commit/3df922d9d9affda87c65eea74425b5c5881495b3))
+
+
+### Bug Fixes
+
+* **web:** portal confirm dialog and rename modal to body ([2f8ac87](https://github.com/atbeta/notefast/commit/2f8ac8723918e1400ab384beca549634152c3975))
+
 ## [0.30.0](https://github.com/atbeta/notefast/compare/v0.29.0...v0.30.0) (2026-08-02)
 
 
