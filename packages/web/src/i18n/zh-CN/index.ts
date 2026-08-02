@@ -8,6 +8,7 @@ import chrome from './chrome.json'
 import panels from './panels.json'
 import editor from './editor.json'
 import util from './util.json'
+import errors from './errors.json'
 
 /** 深度合并（各域语言包顶层 key 若冲突，后者覆盖） */
 function deepMerge(...objs: Record<string, unknown>[]): Record<string, unknown> {
@@ -27,4 +28,4 @@ function deepMerge(...objs: Record<string, unknown>[]): Record<string, unknown> 
 }
 
 /** 简体中文语言包（单一 translation namespace，按域分文件便于并行维护） */
-export default deepMerge(common, settings, doc, routes, graph, aichat, chrome, panels, editor, util)
+export default deepMerge(common, settings, doc, routes, graph, aichat, chrome, panels, editor, util, errors)

@@ -88,8 +88,19 @@ export class ApiError extends Error {
     public status: number,
     public body: unknown,
   ) {
-    super(message)
+    // 服务端错误带稳定 code（error 字段）时，非中文 UI 用 code→本地化文案替换 message，
+    // 避免英文界面混入中文；中文 UI 保留服务端富消息（带参数详情）。
+    const code = (body as { error?: string } | null)?.error
+    const lng = i18next.resolvedLanguage || i18next.language || 'zh-CN'
+    super(lng !== 'zh-CN' && code && i18next.exists(`errors.${code}`)
+      ? i18next.t(`errors.${code}`)
+      : message)
     this.name = 'ApiError'
+  }
+
+  /** 服务端错误码（body.error）；未知或缺失时为 undefined */
+  get code(): string | undefined {
+    return (this.body as { error?: string } | null)?.error
   }
 }
 

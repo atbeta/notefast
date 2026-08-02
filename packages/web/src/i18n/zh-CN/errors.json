@@ -1,0 +1,30 @@
+{
+  "errors": {
+    "not_found": "未找到",
+    "bad_request": "请求参数有误",
+    "not_configured": "尚未配置",
+    "forbidden": "无权访问",
+    "push_failed": "推送失败",
+    "invalid_params": "参数不合法",
+    "index_error": "索引出错",
+    "write_failed": "写入失败",
+    "too_large": "内容过大",
+    "search_error": "搜索出错",
+    "remove_device_failed": "移除设备失败",
+    "overridden": "配置被覆盖",
+    "llm_error": "LLM 调用失败",
+    "list_failed": "获取列表失败",
+    "list_devices_failed": "获取设备列表失败",
+    "invalid_session": "会话无效",
+    "invalid_config": "配置不合法",
+    "internal": "服务器内部错误",
+    "info_failed": "获取信息失败",
+    "embedding_failed": "Embedding 失败",
+    "backup_in_progress": "备份进行中",
+    "backup_failed": "备份失败",
+    "apply_failed": "应用失败",
+    "already_rebuilding": "已在重建中",
+    "ai_not_configured": "AI 未配置",
+    "ai_exclude_share_needs_confirm": "请先确认分享对 AI 隐藏的文档"
+  }
+}

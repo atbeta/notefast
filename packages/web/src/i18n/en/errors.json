@@ -1,0 +1,30 @@
+{
+  "errors": {
+    "not_found": "Not found",
+    "bad_request": "Invalid request",
+    "not_configured": "Not configured",
+    "forbidden": "Forbidden",
+    "push_failed": "Push failed",
+    "invalid_params": "Invalid parameters",
+    "index_error": "Indexing error",
+    "write_failed": "Write failed",
+    "too_large": "Content too large",
+    "search_error": "Search error",
+    "remove_device_failed": "Failed to remove device",
+    "overridden": "Overridden",
+    "llm_error": "LLM call failed",
+    "list_failed": "Failed to load the list",
+    "list_devices_failed": "Failed to load device list",
+    "invalid_session": "Invalid session",
+    "invalid_config": "Invalid configuration",
+    "internal": "Internal server error",
+    "info_failed": "Failed to load info",
+    "embedding_failed": "Embedding failed",
+    "backup_in_progress": "Backup in progress",
+    "backup_failed": "Backup failed",
+    "apply_failed": "Apply failed",
+    "already_rebuilding": "Rebuild already in progress",
+    "ai_not_configured": "AI not configured",
+    "ai_exclude_share_needs_confirm": "Please confirm sharing a document that is hidden from AI"
+  }
+}

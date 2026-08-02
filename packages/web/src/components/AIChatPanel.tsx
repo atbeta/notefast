@@ -23,7 +23,7 @@ import {
   User,
   Sparkles,
 } from 'lucide-react'
-import { request, fetchWithAuth } from '../hooks/useAPI'
+import { request, fetchWithAuth, ApiError } from '../hooks/useAPI'
 import { useScrollFade } from '../hooks/useScrollFade'
 import ChatMarkdown from './ChatMarkdown'
 import ConfirmDialog from './ConfirmDialog'
@@ -436,7 +436,8 @@ export default function AIChatPanel({
         // 用户停止：保留已生成内容
       } else {
         setMessages((prev) => [...prev, { role: 'assistant', content: t('chat.requestFailed', { msg }) }])
-        if (msg.includes('未配置') || msg.includes('not_configured')) {
+        // 未配置：err.code 是稳定判据（不再依赖中文/英文 message 子串）
+        if (err instanceof ApiError && err.code === 'not_configured') {
           setConfigMissing(true)
         }
       }
