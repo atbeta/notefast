@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronRight, GitMerge, Loader2, Search, Waypoints } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
@@ -14,21 +15,19 @@ import { ListRowsSkeleton } from '../components/ui'
 import { graphKindColor } from '../lib/graph'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { EntityMentions } from '../components/EntityPanel'
-import {
-  ENTITY_KIND_LABEL,
-  entityKindLabel,
-  type EntitySummary,
-} from '../lib/entities'
+import { entityKindLabel, type EntitySummary } from '../lib/entities'
 
-const KIND_FILTERS = [
-  { id: 'all', label: '全部' },
-  { id: 'person', label: ENTITY_KIND_LABEL.person },
-  { id: 'tool', label: ENTITY_KIND_LABEL.tool },
-  { id: 'concept', label: ENTITY_KIND_LABEL.concept },
-  { id: 'doc', label: ENTITY_KIND_LABEL.doc },
-] as const
+function kindFilters(t: (key: string) => string) {
+  return [
+    { id: 'all', label: t('entities.kindAll') },
+    { id: 'person', label: entityKindLabel('person') },
+    { id: 'tool', label: entityKindLabel('tool') },
+    { id: 'concept', label: entityKindLabel('concept') },
+    { id: 'doc', label: entityKindLabel('doc') },
+  ] as const
+}
 
-type KindFilter = (typeof KIND_FILTERS)[number]['id']
+type KindFilter = 'all' | 'person' | 'tool' | 'concept' | 'doc'
 
 /** 近义重复候选（/entities/duplicates） */
 interface DuplicateGroup {
@@ -37,6 +36,7 @@ interface DuplicateGroup {
 }
 
 export default function EntitiesPage() {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
@@ -90,6 +90,8 @@ export default function EntitiesPage() {
     return entities.filter((e) => e.kind === kindFilter)
   }, [entities, kindFilter])
 
+  const KIND_FILTERS = kindFilters(t)
+
   const kindCounts = useMemo(() => {
     const counts: Record<string, number> = { all: entities.length }
     for (const e of entities) {
@@ -103,7 +105,7 @@ export default function EntitiesPage() {
       <PageHeader innerClassName="flex items-center justify-between gap-4">
         <div className="min-w-0 flex items-center gap-2">
           <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
-            实体
+            {t('entities.pageTitle')}
           </h1>
           {!loading && !debouncedQuery && entities.length > 0 && (
             <span className="font-mono text-[11px] text-muted-foreground tabular-nums shrink-0">
@@ -115,7 +117,7 @@ export default function EntitiesPage() {
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
         <p className="text-[13px] text-muted-foreground leading-relaxed px-1">
-          AI 在写入时自动识别的概念、人物、工具与文档，按提及次数排序。
+          {t('entities.description')}
         </p>
 
         {loading ? (
@@ -125,9 +127,9 @@ export default function EntitiesPage() {
             <div className="empty-icon-tile">
               <Waypoints className="w-5 h-5" />
             </div>
-            <h3 className="text-[15px] font-medium text-foreground mb-1.5">还没有实体</h3>
+            <h3 className="text-[15px] font-medium text-foreground mb-1.5">{t('entities.emptyTitle')}</h3>
             <p className="text-[13px] text-muted-foreground mb-5 max-w-[300px] leading-relaxed">
-              写入文档后，AI 会自动识别其中的概念、人物与工具，在这里逐步沉淀知识关联。
+              {t('entities.emptyDesc')}
             </p>
           </div>
         ) : (
@@ -138,7 +140,7 @@ export default function EntitiesPage() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="搜索实体…"
+                placeholder={t('entities.searchPlaceholder')}
                 className="w-full rounded-lg border border-border bg-card pl-9 pr-8 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/40"
               />
               {searching && (
@@ -178,7 +180,7 @@ export default function EntitiesPage() {
               <div className="rounded-xl border border-warn/25 bg-warn/5 px-3.5 py-3">
                 <div className="flex items-center gap-1.5 text-[12px] font-medium text-foreground mb-2">
                   <GitMerge className="w-3.5 h-3.5 text-warn" strokeWidth={1.75} />
-                  可能重复的实体（合并后旧实体名将作为别名自动路由）
+                  {t('entities.duplicatesTitle')}
                 </div>
                 <div className="flex flex-col gap-2">
                   {duplicates.map((g, i) => {
@@ -208,7 +210,7 @@ export default function EntitiesPage() {
                           ) : (
                             <GitMerge className="w-3 h-3" strokeWidth={1.75} />
                           )}
-                          合并（少→多）
+                          {t('entities.mergeButton')}
                         </button>
                       </div>
                     )
@@ -220,8 +222,8 @@ export default function EntitiesPage() {
             {filtered.length === 0 ? (
               <p className="px-1 py-8 text-center text-[13px] text-muted-foreground">
                 {debouncedQuery
-                  ? `没有匹配「${debouncedQuery}」的实体`
-                  : `暂无「${entityKindLabel(kindFilter)}」类实体`}
+                  ? t('entities.noMatch', { query: debouncedQuery })
+                  : t('entities.noKind', { kind: entityKindLabel(kindFilter) })}
               </p>
             ) : (
               <div className="grid gap-0.5">
@@ -245,7 +247,7 @@ export default function EntitiesPage() {
                             </span>
                           </div>
                           <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
-                            {e.mention_count} 篇笔记提及
+                            {t('entities.notesMentioned', { n: e.mention_count })}
                           </p>
                           {e.description && (
                             <p className="text-[12px] text-muted-foreground/80 mt-1 line-clamp-1 leading-relaxed">
@@ -275,7 +277,7 @@ export default function EntitiesPage() {
       {/* 合并确认（不可逆：源实体删除、旧名成为别名） */}
       <ConfirmDialog
         open={confirmMerge !== null}
-        title="确认合并实体？"
+        title={t('entities.confirmMergeTitle')}
         message={
           confirmMerge
             ? (() => {
@@ -283,11 +285,16 @@ export default function EntitiesPage() {
                 if (!a || !b) return ''
                 const from = a.mention_count <= b.mention_count ? a : b
                 const target = from === a ? b : a
-                return `将「${from.display}」(${from.mention_count}) 合并进「${target.display}」(${target.mention_count})。此操作不可撤销：源实体被删除，提及全部改挂到目标，旧实体名将作为别名。`
+                return t('entities.confirmMergeMessage', {
+                  from: from.display,
+                  fromCount: from.mention_count,
+                  to: target.display,
+                  toCount: target.mention_count,
+                })
               })()
             : ''
         }
-        confirmLabel="确认合并"
+        confirmLabel={t('entities.confirmMergeButton')}
         destructive
         onConfirm={() => {
           if (confirmMerge) void doMerge(confirmMerge)

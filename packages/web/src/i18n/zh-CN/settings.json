@@ -1,0 +1,30 @@
+{
+  "settings": {
+    "title": "设置",
+    "description": "配置 NoteFast 的可选项。本地优先；数据库备份、Markdown 归档与 AI 均为可选能力。",
+    "tabs": {
+      "general": "通用与外观",
+      "ai": "AI 能力与模型",
+      "backup": "灾备与归档",
+      "tokens": "API Tokens",
+      "security": "账户安全"
+    },
+    "language": {
+      "title": "界面语言",
+      "system": "跟随浏览器",
+      "systemHint": "根据浏览器语言自动匹配",
+      "current": "当前生效"
+    },
+    "theme": {
+      "title": "主题风格",
+      "current": "当前生效",
+      "systemSuffix": "（跟随系统）",
+      "light": "浅色",
+      "lightHint": "始终亮色",
+      "dark": "深色",
+      "darkHint": "始终暗色",
+      "system": "跟随系统",
+      "systemHint": "随 OS 自动切换"
+    }
+  }
+}

@@ -10,6 +10,7 @@
 import { useState } from 'react'
 import { Tag as TagIcon, X, Plus, Loader2 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
+import { useTranslation } from 'react-i18next'
 
 export interface TagEditorProps {
   docId: string
@@ -18,6 +19,7 @@ export interface TagEditorProps {
 }
 
 export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
+  const { t } = useTranslation()
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -55,19 +57,19 @@ export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <TagIcon className="w-3.5 h-3.5 text-muted-foreground/50 mr-0.5" strokeWidth={1.75} />
-      {tags.map((t) => (
+      {tags.map((tag) => (
         <span
-          key={t}
+          key={tag}
           className="group/chip inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11.5px] bg-muted/60 hover:bg-muted text-foreground/85 hover:text-foreground transition-colors"
-          title={t}
+          title={tag}
         >
-          <span className="font-mono">{t}</span>
+          <span className="font-mono">{tag}</span>
           <button
             type="button"
-            onClick={() => handleRemove(t)}
+            onClick={() => handleRemove(tag)}
             disabled={saving}
             className="w-4 h-4 rounded-full grid place-items-center text-muted-foreground/50 hover:text-destructive hover:bg-background/60 transition-colors disabled:opacity-40"
-            aria-label={`移除标签 ${t}`}
+            aria-label={t('tagEditor.removeTag', { tag })}
           >
             <X className="w-3 h-3" strokeWidth={2} />
           </button>
@@ -90,7 +92,7 @@ export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
           onBlur={() => {
             if (draft.trim()) handleAdd()
           }}
-          placeholder="加标签"
+          placeholder={t('tagEditor.addTag')}
           disabled={saving}
           className="bg-transparent border-none outline-none text-[11.5px] w-16 placeholder:text-muted-foreground/40 focus:w-28 transition-[width] duration-200"
         />

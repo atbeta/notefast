@@ -1,3 +1,5 @@
+import i18next from '../i18n'
+
 const API_BASE = '/api/v1'
 
 /** 持久化登录（localStorage）：{ token, exp }，7 天滑动过期 */
@@ -98,7 +100,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const body: unknown = await res.json().catch(() => null)
-    const message = (body as { message?: string } | null)?.message || res.statusText || `HTTP ${res.status}`
+    const message = (body as { message?: string } | null)?.message || res.statusText || i18next.t('common.httpError', { status: res.status })
     throw new ApiError(message, res.status, body)
   }
   return res.json()

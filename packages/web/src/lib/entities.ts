@@ -5,6 +5,8 @@
  * 类型仅按 API 契约定义在 web 侧，不依赖 core 新类型。
  */
 
+import i18next from '../i18n'
+
 export interface EntitySummary {
   id: string
   name: string
@@ -40,21 +42,22 @@ export interface EntityDetail {
   mentions: EntityMention[]
 }
 
-/** kind → 中文标签；未知 kind 原样展示 */
-export const ENTITY_KIND_LABEL: Record<string, string> = {
-  concept: '概念',
-  person: '人物',
-  tool: '工具',
-  doc: '文档',
-}
-
+/** kind → 本地化标签；未知 kind 原样展示 */
 export function entityKindLabel(kind: string): string {
-  return ENTITY_KIND_LABEL[kind] ?? kind
+  switch (kind) {
+    case 'concept': return i18next.t('entities.kindConcept')
+    case 'person': return i18next.t('entities.kindPerson')
+    case 'tool': return i18next.t('entities.kindTool')
+    case 'doc': return i18next.t('entities.kindDoc')
+    default: return kind
+  }
 }
 
 /** 提及所在文档状态标签（note 为常态不展示） */
-export const ENTITY_DOC_STATUS_LABEL: Record<EntityDocStatus, string> = {
-  note: '笔记',
-  inbox: '收集箱',
-  archived: '归档',
+export function entityDocStatusLabel(status: EntityDocStatus): string {
+  switch (status) {
+    case 'note': return i18next.t('entities.docStatusNote')
+    case 'inbox': return i18next.t('entities.docStatusInbox')
+    case 'archived': return i18next.t('entities.docStatusArchived')
+  }
 }

@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { nextMermaidId, renderMermaidSvg } from '../lib/mermaid'
 import { CopyButton } from './ui'
 
@@ -39,6 +40,7 @@ export default function MermaidDiagram({
   label = 'mermaid',
   className = '',
 }: MermaidDiagramProps) {
+  const { t } = useTranslation()
   const theme = useDataTheme()
   const reactId = useId().replace(/:/g, '')
   const [svg, setSvg] = useState<string | null>(null)
@@ -54,7 +56,7 @@ export default function MermaidDiagram({
     const trimmed = code.trim()
     if (!trimmed) {
       setLoading(false)
-      setError('空图表')
+      setError(t('mermaid.emptyDiagram'))
       return
     }
 
@@ -69,7 +71,7 @@ export default function MermaidDiagram({
       .catch((err: unknown) => {
         if (!cancelled) {
           const msg = err instanceof Error ? err.message : String(err)
-          setError(msg || 'Mermaid 渲染失败')
+          setError(msg || t('mermaid.renderFailed'))
           setSvg(null)
           setLoading(false)
         }
@@ -78,7 +80,7 @@ export default function MermaidDiagram({
     return () => {
       cancelled = true
     }
-  }, [code, theme, reactId])
+  }, [code, theme, reactId, t])
 
   return (
     <div className={`my-5 rounded-lg border border-border bg-muted/30 overflow-hidden ${className}`.trim()}>
@@ -93,12 +95,12 @@ export default function MermaidDiagram({
       </div>
 
       {loading && (
-        <div className="px-4 py-8 text-center text-[13px] text-muted-foreground">图表加载中…</div>
+        <div className="px-4 py-8 text-center text-[13px] text-muted-foreground">{t('mermaid.loading')}</div>
       )}
 
       {!loading && error && (
         <div className="p-4 space-y-3">
-          <p className="text-[13px] text-destructive">Mermaid 渲染失败：{error}</p>
+          <p className="text-[13px] text-destructive">{t('mermaid.renderFailedWith', { error })}</p>
           <pre className="overflow-x-auto text-[13px] font-mono leading-[1.6] text-foreground whitespace-pre-wrap">
             <code>{code}</code>
           </pre>

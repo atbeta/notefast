@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Plus, Pencil, Trash2, Cloud } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { ActionButton, useToast } from './ui'
@@ -11,6 +12,7 @@ import { STORAGE_SECRET_MASK, type StorageLocation } from '@notefast/core'
  * 支持 S3（含 R2/MinIO）与 WebDAV。
  */
 export default function StorageLocationsPanel() {
+  const { t } = useTranslation()
   const { locations, refresh } = useStorageLocations()
   const toast = useToast()
   const [editing, setEditing] = useState<StorageLocation | 'new' | null>(null)
@@ -75,9 +77,9 @@ export default function StorageLocationsPanel() {
         setEditing(null)
       },
       {
-        loading: '正在保存存储连接…',
-        success: '存储连接已保存',
-        error: (e) => ({ title: '保存失败', description: e instanceof Error ? e.message : String(e) }),
+        loading: t('storageLoc.saving'),
+        success: t('storageLoc.saved'),
+        error: (e) => ({ title: t('storageLoc.saveFailed'), description: e instanceof Error ? e.message : String(e) }),
       },
     ).catch(() => undefined)
   }
@@ -89,23 +91,23 @@ export default function StorageLocationsPanel() {
         await refresh()
       },
       {
-        loading: '正在删除连接…',
-        success: '连接已删除（引用它的能力将显示未配置）',
-        error: (e) => ({ title: '删除失败', description: e instanceof Error ? e.message : String(e) }),
+        loading: t('storageLoc.deleting'),
+        success: t('storageLoc.deleted'),
+        error: (e) => ({ title: t('storageLoc.deleteFailed'), description: e instanceof Error ? e.message : String(e) }),
       },
     ).catch(() => undefined)
   }
 
   return (
     <SettingsCard
-      title="存储连接"
+      title={t('storageLoc.title')}
       icon={<Cloud className="w-4 h-4" strokeWidth={1.75} />}
-      helpTip="S3 / WebDAV 连接只需在此配置一次；备份、多端同步、Markdown 归档各自选用连接 + 自己的前缀。"
+      helpTip={t('storageLoc.helpTip')}
     >
       <div className="space-y-4">
         {locations.length === 0 && (
           <p className="text-[12.5px] text-muted-foreground">
-            还没有存储连接。创建第一个后，即可在备份 / 多端同步 / Markdown 归档中选用。
+            {t('storageLoc.empty')}
           </p>
         )}
 
@@ -120,10 +122,10 @@ export default function StorageLocationsPanel() {
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <button type="button" onClick={() => startEdit(loc)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title="编辑">
+              <button type="button" onClick={() => startEdit(loc)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title={t('storageLoc.edit')}>
                 <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
               </button>
-              <button type="button" onClick={() => handleDelete(loc)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="删除">
+              <button type="button" onClick={() => handleDelete(loc)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title={t('storageLoc.delete')}>
                 <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
               </button>
             </div>
@@ -148,30 +150,30 @@ export default function StorageLocationsPanel() {
                 WebDAV
               </button>
             </div>
-            <InlineField label="名称" value={name} onChange={setName} placeholder="如：我的 R2 / 群晖 NAS" />
+            <InlineField label={t('storageLoc.name')} value={name} onChange={setName} placeholder={t('storageLoc.namePlaceholder')} />
             {kind === 's3' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                 <InlineField label="Bucket" value={bucket} onChange={setBucket} mono placeholder="my-notefast-bucket" />
                 <InlineField label="Region" value={region} onChange={setRegion} mono placeholder="auto" />
-                <InlineField label="Endpoint" description="R2 / MinIO 必填" value={endpoint} onChange={setEndpoint} mono placeholder="https://xxx.r2.cloudflarestorage.com" />
+                <InlineField label={t('storageLoc.endpoint')} description={t('storageLoc.endpointRequired')} value={endpoint} onChange={setEndpoint} mono placeholder="https://xxx.r2.cloudflarestorage.com" />
                 <InlineField label="Access Key ID" value={accessKeyId} onChange={setAccessKeyId} mono placeholder={STORAGE_SECRET_MASK} />
                 <InlineField label="Secret Access Key" value={secretAccessKey} onChange={setSecretAccessKey} mono type="password" placeholder={STORAGE_SECRET_MASK} />
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox" checked={forcePathStyle} onChange={(e) => setForcePathStyle(e.target.checked)} className="rounded border-border" />
-                  <span className="text-[13px] text-foreground">Path-style endpoint</span>
-                  <span className="text-[11px] text-muted-foreground/60">MinIO 必需，AWS / R2 默认关闭</span>
+                  <span className="text-[13px] text-foreground">{t('storageLoc.pathStyle')}</span>
+                  <span className="text-[11px] text-muted-foreground/60">{t('storageLoc.pathStyleHint')}</span>
                 </label>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                <InlineField label="WebDAV 端点" value={davEndpoint} onChange={setDavEndpoint} mono placeholder="https://dav.example.com/remote.php/webdav" />
-                <InlineField label="用户名" value={davUsername} onChange={setDavUsername} mono placeholder={STORAGE_SECRET_MASK} />
-                <InlineField label="密码" value={davPassword} onChange={setDavPassword} mono type="password" placeholder={STORAGE_SECRET_MASK} />
+                <InlineField label={t('storageLoc.davEndpoint')} value={davEndpoint} onChange={setDavEndpoint} mono placeholder="https://dav.example.com/remote.php/webdav" />
+                <InlineField label={t('storageLoc.username')} value={davUsername} onChange={setDavUsername} mono placeholder={STORAGE_SECRET_MASK} />
+                <InlineField label={t('storageLoc.password')} value={davPassword} onChange={setDavPassword} mono type="password" placeholder={STORAGE_SECRET_MASK} />
               </div>
             )}
             <div className="flex items-center gap-3 pt-2">
-              <ActionButton onAction={handleSave}>保存连接</ActionButton>
-              <ActionButton variant="secondary" onAction={() => setEditing(null)}>取消</ActionButton>
+              <ActionButton onAction={handleSave}>{t('storageLoc.save')}</ActionButton>
+              <ActionButton variant="secondary" onAction={() => setEditing(null)}>{t('common.cancel')}</ActionButton>
             </div>
           </div>
         ) : (
@@ -181,7 +183,7 @@ export default function StorageLocationsPanel() {
             className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-border text-[12.5px] text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
-            新增存储连接
+            {t('storageLoc.addNew')}
           </button>
         )}
       </div>

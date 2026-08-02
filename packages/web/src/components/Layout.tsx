@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Menu, Sparkles } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
@@ -13,6 +14,7 @@ const AiChatOpenContext = createContext(false)
 export const useAiChatOpen = () => useContext(AiChatOpenContext)
 
 export default function Layout({ children, contentClassName }: { children: ReactNode; contentClassName?: string }) {
+  const { t } = useTranslation()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -117,7 +119,7 @@ export default function Layout({ children, contentClassName }: { children: React
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
         <div className="md:hidden flex items-center h-12 px-4 border-b border-border bg-card gap-3 shrink-0">
-          <button onClick={toggleMobileSidebar} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-foreground transition-colors" aria-label="打开菜单">
+          <button onClick={toggleMobileSidebar} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-foreground transition-colors" aria-label={t('layout.openMenu')}>
             <Menu className="w-5 h-5" />
           </button>
           <span className="font-semibold text-sm">NoteFast</span>
@@ -125,7 +127,7 @@ export default function Layout({ children, contentClassName }: { children: React
             <button
               onClick={() => setAiChatOpen(!aiChatOpen)}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="聊天 / 知识库问答"
+              aria-label={t('layout.openAiChat')}
             >
               <Sparkles className="w-4 h-4" strokeWidth={1.75} />
             </button>
@@ -133,7 +135,7 @@ export default function Layout({ children, contentClassName }: { children: React
               type="button"
               onClick={openPalette}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="搜索"
+              aria-label={t('layout.search')}
             >
               <SearchIcon />
             </button>

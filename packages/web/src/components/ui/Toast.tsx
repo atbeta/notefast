@@ -25,6 +25,8 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { useTranslation } from 'react-i18next'
+import i18next from '../../i18n'
 import { CheckCircle2, AlertCircle, Info, AlertTriangle, X, Loader2 } from 'lucide-react'
 
 export type ToastVariant = 'success' | 'error' | 'info' | 'warning' | 'loading'
@@ -80,7 +82,7 @@ const DEFAULT_DURATION: Record<ToastVariant, number> = {
 
 export function useToast(): ToastApi {
   const ctx = useContext(ToastContext)
-  if (!ctx) throw new Error('useToast 必须在 <ToastProvider> 内使用')
+  if (!ctx) throw new Error(i18next.t('toastUI.mustBeInProvider'))
   return ctx
 }
 
@@ -235,6 +237,7 @@ function ToastCard({
   toast: ToastRecord
   onDismiss: (id: string) => void
 }) {
+  const { t } = useTranslation()
   const { id, title, description, variant, action } = toast
   const exiting = (toast as ToastRecord & { _exiting?: boolean })._exiting === true
 
@@ -277,7 +280,7 @@ function ToastCard({
         <button
           type="button"
           onClick={() => onDismiss(id)}
-          aria-label="关闭"
+          aria-label={t('toastUI.close')}
           className="shrink-0 p-0.5 rounded text-muted-foreground/40 hover:text-foreground transition-colors"
         >
           <X className="w-3 h-3" />

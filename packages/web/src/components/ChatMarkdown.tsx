@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm'
 import { highlightCode } from '../lib/highlight'
 import MermaidDiagram from './MermaidDiagram'
 import { CopyButton } from './ui'
+import { useTranslation } from 'react-i18next'
 
 interface ChatMarkdownProps {
   content: string
@@ -63,6 +64,7 @@ export default function ChatMarkdown({ content, className = '' }: ChatMarkdownPr
 
 function ChatCodeBlock({ code, language }: { code: string; language: string }) {
   const [html, setHtml] = useState<string | null>(null)
+  const { t } = useTranslation()
 
   useEffect(() => {
     let cancelled = false
@@ -82,7 +84,7 @@ function ChatCodeBlock({ code, language }: { code: string; language: string }) {
     <div className="chat-code-block">
       <div className="chat-code-block-bar">
         <span className="chat-code-lang">{language || 'text'}</span>
-        <CopyButton text={code} className="chat-code-copy" title="复制" iconClassName="w-3 h-3" />
+        <CopyButton text={code} className="chat-code-copy" title={t('chat.copy')} iconClassName="w-3 h-3" />
       </div>
       <pre>
         {html

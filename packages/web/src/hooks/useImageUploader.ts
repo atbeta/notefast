@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
+import i18next from '../i18n'
 import { fetchWithAuth } from './useAPI'
 import { useToast } from '../components/ui'
 
@@ -29,7 +30,7 @@ export function useImageUploader({ insertAtCursor }: UseImageUploaderOpts) {
         insertAtCursor(`\n![${alt}](${data.ref})\n`)
       } catch (e) {
         toast.error({
-          title: '图片上传失败',
+          title: i18next.t('imageUploader.uploadFailed'),
           description: e instanceof Error ? e.message : String(e),
         })
       } finally {

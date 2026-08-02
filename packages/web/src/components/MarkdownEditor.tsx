@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Loader2,
   Pencil,
@@ -28,6 +29,7 @@ interface MarkdownEditorProps {
 const CJK_WORDS_PER_MIN = 320
 
 export default function MarkdownEditor({ docId, title, onSaved, autoEdit = false, onActiveChange }: MarkdownEditorProps) {
+  const { t } = useTranslation()
   const [editing, setEditing] = useState(autoEdit)
 
   useEffect(() => {
@@ -41,7 +43,7 @@ export default function MarkdownEditor({ docId, title, onSaved, autoEdit = false
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground bg-card border border-border rounded-md transition-colors"
       >
         <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
-        编辑
+        {t('mdEditor.edit')}
       </button>
     )
   }
@@ -52,6 +54,7 @@ export default function MarkdownEditor({ docId, title, onSaved, autoEdit = false
 type Mode = 'edit' | 'view'
 
 function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title?: string; onSaved: () => void; onClose: () => void }) {
+  const { t } = useTranslation()
   const toast = useToast()
   const draft = useEditorDraft(docId)
   const [content, setContent] = useState('')
@@ -199,12 +202,12 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
       onClose()
     } else {
       toast.error({
-        title: '保存失败',
-        description: '请检查网络连接后重试',
+        title: t('mdEditor.saveFailed'),
+        description: t('mdEditor.checkNetwork'),
       })
       setSaving(false)
     }
-  }, [saving, content, doSave, onSaved, onClose, toast])
+  }, [saving, content, doSave, onSaved, onClose, toast, t])
 
   const handleCancel = useCallback(() => {
     if (content !== lastSavedContentRef.current) {
@@ -323,28 +326,28 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
       {loading ? (
         <div className="py-16 flex items-center justify-center text-muted-foreground text-sm">
           <Loader2 className="w-4 h-4 animate-spin mr-2 text-primary" />
-          加载文档…
+          {t('mdEditor.loadingDoc')}
         </div>
       ) : (
         <>
           {showRecoverDraft && (
             <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[12.5px]">
               <span className="flex-1 text-muted-foreground">
-                有未保存的本地草稿（可能在其他设备编辑前遗留）
+                {t('mdEditor.draftNotice')}
               </span>
               <button
                 type="button"
                 onClick={handleRecoverDraft}
                 className="font-medium text-primary hover:text-primary/80 transition-colors"
               >
-                恢复草稿
+                {t('mdEditor.recoverDraft')}
               </button>
               <button
                 type="button"
                 onClick={handleDismissRecoverDraft}
                 className="text-muted-foreground/60 hover:text-destructive transition-colors"
               >
-                丢弃
+                {t('mdEditor.discard')}
               </button>
             </div>
           )}
@@ -354,7 +357,7 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
               {previewTree ? (
                 <BlockRenderer block={previewTree} />
               ) : (
-                <div className="text-sm text-muted-foreground/70 italic py-4">（空文档，无法预览）</div>
+                <div className="text-sm text-muted-foreground/70 italic py-4">{t('mdEditor.emptyPreview')}</div>
               )}
             </div>
           ) : (
@@ -371,7 +374,7 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
               onGhostAccept={handleGhostAccept}
               onGhostDismiss={handleGhostDismiss}
               autoFocus
-              placeholder="开始写…（⌘B 加粗 / ⌘I 斜体 / # 标题 / - 列表；⌘P 预览；⌘S 保存）"
+              placeholder={t('mdEditor.placeholder')}
             />
           )}
         </>
@@ -392,16 +395,16 @@ function EditorInline({ docId, title, onSaved, onClose }: { docId: string; title
 
       {showHelp && (
         <div className="mt-3 pt-3 border-t border-border/50 text-[11.5px] text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-1.5">
-          <ShortcutsHelp keys={['mod', 'S']} desc="保存" />
-          <ShortcutsHelp keys={['mod', 'P']} desc="切换 预览 / 编辑" />
-          <ShortcutsHelp keys={['mod', 'B']} desc="加粗" />
-          <ShortcutsHelp keys={['mod', 'I']} desc="斜体" />
-          <ShortcutsHelp keys={['mod', 'E']} desc="行内代码" />
-          <ShortcutsHelp keys={['mod', '⇧K']} desc="插入链接" />
-          <ShortcutsHelp keys={['mod', 'Enter']} desc="AI 续写（需配置 AI）" />
-          <ShortcutsHelp keys={['-', 'Enter']} desc="列表/引用续行（空项回车退出）" />
-          <ShortcutsHelp keys={['```', 'Enter']} desc="展开空代码块" />
-          <ShortcutsHelp keys={['Esc']} desc="退出（保留草稿）" />
+          <ShortcutsHelp keys={['mod', 'S']} desc={t('mdEditor.helpSave')} />
+          <ShortcutsHelp keys={['mod', 'P']} desc={t('mdEditor.helpTogglePreview')} />
+          <ShortcutsHelp keys={['mod', 'B']} desc={t('mdEditor.helpBold')} />
+          <ShortcutsHelp keys={['mod', 'I']} desc={t('mdEditor.helpItalic')} />
+          <ShortcutsHelp keys={['mod', 'E']} desc={t('mdEditor.helpInlineCode')} />
+          <ShortcutsHelp keys={['mod', '⇧K']} desc={t('mdEditor.helpInsertLink')} />
+          <ShortcutsHelp keys={['mod', 'Enter']} desc={t('mdEditor.helpAiContinue')} />
+          <ShortcutsHelp keys={['-', 'Enter']} desc={t('mdEditor.helpListContinue')} />
+          <ShortcutsHelp keys={['```', 'Enter']} desc={t('mdEditor.helpCodeBlock')} />
+          <ShortcutsHelp keys={['Esc']} desc={t('mdEditor.helpExit')} />
         </div>
       )}
     </div>

@@ -1,5 +1,6 @@
 import { useCallback, useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   BookOpen,
   Search,
@@ -123,6 +124,7 @@ function PinnedViewItem({
   onRename: (id: string, name: string) => void
   onUnpin: (id: string) => void
 }) {
+  const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(view.name)
 
@@ -177,7 +179,7 @@ function PinnedViewItem({
           onUnpin(view.id)
         }}
         className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 transition-all shrink-0"
-        title="取消固定"
+        title={t('sidebar.unpin')}
       >
         <X className="w-3 h-3" strokeWidth={2} />
       </button>
@@ -193,6 +195,7 @@ export default function Sidebar({
   aiChatOpen,
   onToggleAiChat,
 }: SidebarProps) {
+  const { t } = useTranslation()
   const location = useLocation()
   const [inboxCount, setInboxCount] = useState(0)
   const [archivedCount, setArchivedCount] = useState(0)
@@ -268,20 +271,20 @@ export default function Sidebar({
     return (
       <aside className="w-14 flex flex-col items-center py-3 shrink-0 h-full relative bg-sidebar border-r border-border/50">
         <div className="h-14 w-full flex items-center justify-center border-b border-border/50 shrink-0 absolute top-0 left-0">
-          <Tooltip label="展开侧边栏">
+          <Tooltip label={t('sidebar.expandSidebar')}>
             <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group">
               <PanelLeft className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
             </button>
           </Tooltip>
         </div>
         <div className="mt-14 w-full flex-1 flex flex-col items-center pt-4 gap-1">
-          <Tooltip label="文档">
+          <Tooltip label={t('sidebar.docs')}>
             <Link to="/" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-primary transition-colors">
               <FileText className="w-4 h-4" strokeWidth={1.75} />
             </Link>
           </Tooltip>
           {onToggleAiChat && (
-            <Tooltip label="AI 助手">
+            <Tooltip label={t('sidebar.aiAssistant')}>
               <button
                 type="button"
                 onClick={onToggleAiChat}
@@ -296,7 +299,7 @@ export default function Sidebar({
             </Tooltip>
           )}
           <div className="flex-1" />
-          <Tooltip label="设置">
+          <Tooltip label={t('sidebar.settings')}>
             <Link
               to="/settings"
               className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
@@ -330,7 +333,7 @@ export default function Sidebar({
             Beta
           </span>
         </div>
-        <Tooltip label="折叠侧边栏">
+        <Tooltip label={t('sidebar.collapseSidebar')}>
           <button onClick={onToggle} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group">
             <PanelLeftClose className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
           </button>
@@ -342,27 +345,27 @@ export default function Sidebar({
           type="button"
           onClick={onOpenPalette}
           className="group w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background text-muted-foreground hover:text-foreground hover:border-foreground/15 transition-colors text-[13px]"
-          aria-label="打开命令面板"
+          aria-label={t('sidebar.openPalette')}
         >
           <Search className="w-3.5 h-3.5" strokeWidth={1.75} />
-          <span className="flex-1 text-left">搜索文档…</span>
+          <span className="flex-1 text-left">{t('sidebar.searchPlaceholder')}</span>
           <ShortcutKeys keys={['mod', 'K']} />
         </button>
       </div>
 
       <nav ref={navFadeRef} className="scroll-fade px-2 pt-2 pb-1 flex-1 overflow-y-auto">
-        <SidebarSectionLabel label="导航" />
+        <SidebarSectionLabel label={t('sidebar.navigation')} />
         <Link to="/" onClick={closeAfterNav} className={location.pathname === '/' && !location.search ? 'sidebar-link-active' : 'sidebar-link'}>
           <LayoutGrid className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          所有文档
+          {t('sidebar.allDocs')}
         </Link>
-        <Link to="/new" onClick={closeAfterNav} className={location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'} title={`新建文档 (${shortcutLabel(['mod', 'N'])})`}>
+        <Link to="/new" onClick={closeAfterNav} className={location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'} title={t('sidebar.newDocTitle', { shortcut: shortcutLabel(['mod', 'N']) })}>
           <Plus className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          新建
+          {t('sidebar.newDoc')}
         </Link>
         <Link to="/inbox" onClick={closeAfterNav} className={location.pathname === '/inbox' ? 'sidebar-link-active' : 'sidebar-link'}>
           <Inbox className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          <span className="flex-1">收集箱</span>
+          <span className="flex-1">{t('sidebar.inbox')}</span>
           {inboxCount > 0 && (
             <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-foreground text-background tabular-nums">
               {inboxCount > 99 ? '99+' : inboxCount}
@@ -371,7 +374,7 @@ export default function Sidebar({
         </Link>
         <Link to="/archived" onClick={closeAfterNav} className={location.pathname === '/archived' ? 'sidebar-link-active' : 'sidebar-link'}>
           <Archive className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          <span className="flex-1">归档</span>
+          <span className="flex-1">{t('sidebar.archived')}</span>
           {archivedCount > 0 && (
             <span className="ml-auto text-[10px] text-sidebar-muted/70 tabular-nums">
               {archivedCount > 99 ? '99+' : archivedCount}
@@ -380,11 +383,11 @@ export default function Sidebar({
         </Link>
         <Link to="/entities" onClick={closeAfterNav} className={location.pathname === '/entities' ? 'sidebar-link-active' : 'sidebar-link'}>
           <Waypoints className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          <span className="flex-1">实体</span>
+          <span className="flex-1">{t('sidebar.entities')}</span>
         </Link>
         <Link to="/graph" onClick={closeAfterNav} className={location.pathname === '/graph' ? 'sidebar-link-active' : 'sidebar-link'}>
           <Network className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          <span className="flex-1">图谱</span>
+          <span className="flex-1">{t('sidebar.graph')}</span>
         </Link>
         {onToggleAiChat && (
           <button
@@ -393,13 +396,13 @@ export default function Sidebar({
             className={`w-full text-left ${aiChatOpen ? 'sidebar-link-active' : 'sidebar-link'}`}
           >
             <Sparkles className="w-[15px] h-[15px]" strokeWidth={1.75} />
-            <span className="flex-1">AI 助手</span>
+            <span className="flex-1">{t('sidebar.aiAssistant')}</span>
             <ShortcutKeys keys={['mod', 'J']} className="ml-auto" />
           </button>
         )}
 
         <div className="mt-5">
-          <SidebarSectionLabel label="智能视图" collapsible open={smartOpen} onToggle={toggleSmart} />
+          <SidebarSectionLabel label={t('sidebar.smartViews')} collapsible open={smartOpen} onToggle={toggleSmart} />
           {smartOpen && (
             <>
               <Link
@@ -408,7 +411,7 @@ export default function Sidebar({
                 className={location.search.includes('updated_within=7d') ? 'sidebar-link-active' : 'sidebar-link'}
               >
                 <Clock className="w-[15px] h-[15px]" strokeWidth={1.75} />
-                最近 7 天更新
+                {t('sidebar.recent7Days')}
               </Link>
               <Link
                 to="/?stale_within=90d"
@@ -416,7 +419,7 @@ export default function Sidebar({
                 className={location.search.includes('stale_within=90d') ? 'sidebar-link-active' : 'sidebar-link'}
               >
                 <Hourglass className="w-[15px] h-[15px]" strokeWidth={1.75} />
-                90 天未更新
+                {t('sidebar.stale90Days')}
               </Link>
               <Link
                 to="/?ai_exclude=1"
@@ -424,7 +427,7 @@ export default function Sidebar({
                 className={location.search.includes('ai_exclude=1') ? 'sidebar-link-active' : 'sidebar-link'}
               >
                 <EyeOff className="w-[15px] h-[15px]" strokeWidth={1.75} />
-                对 AI 隐藏
+                {t('sidebar.aiHidden')}
               </Link>
               <Link
                 to="/?view=untagged"
@@ -432,7 +435,7 @@ export default function Sidebar({
                 className={location.search.includes('untagged') || location.search.includes('view=untagged') ? 'sidebar-link-active' : 'sidebar-link'}
               >
                 <Tag className="w-[15px] h-[15px]" strokeWidth={1.75} />
-                未加标签
+                {t('sidebar.untagged')}
               </Link>
             </>
           )}
@@ -440,7 +443,7 @@ export default function Sidebar({
 
         {pinnedViews.length > 0 && (
           <div className="mt-5">
-            <SidebarSectionLabel label="固定视图" collapsible open={pinnedOpen} onToggle={togglePinned} />
+            <SidebarSectionLabel label={t('sidebar.pinnedViews')} collapsible open={pinnedOpen} onToggle={togglePinned} />
             {pinnedOpen && pinnedViews.map((v) => (
               <PinnedViewItem
                 key={v.id}
@@ -456,7 +459,7 @@ export default function Sidebar({
 
         {allRecent.length > 0 && (
           <div className="mt-5">
-            <SidebarSectionLabel label="最近文档" />
+            <SidebarSectionLabel label={t('sidebar.recentDocs')} />
             <div className="flex flex-col gap-0.5">
               {recentDocs.map(doc => {
                 const isActive = location.pathname === `/doc/${doc.id}`
@@ -477,11 +480,11 @@ export default function Sidebar({
                       }`}
                       title={doc.title}
                     >
-                      <span className="truncate">{doc.title || '无标题文档'}</span>
+                      <span className="truncate">{doc.title || t('sidebar.untitled')}</span>
                       {draftIds.has(doc.id) && (
                         <span
-                          aria-label="有未保存草稿"
-                          title="有未保存草稿"
+                          aria-label={t('sidebar.hasDraft')}
+                          title={t('sidebar.hasDraft')}
                           className="w-1.5 h-1.5 rounded-full bg-warn shrink-0"
                         />
                       )}
@@ -502,7 +505,7 @@ export default function Sidebar({
                   onClick={() => setRecentExpanded((v) => !v)}
                   className="px-2.5 py-1 text-[11.5px] text-sidebar-muted hover:text-sidebar-accent-foreground text-left transition-colors"
                 >
-                  {recentExpanded ? '收起' : `展开全部（${allRecent.length}）`}
+                  {recentExpanded ? t('sidebar.collapse') : t('sidebar.expandAll', { n: allRecent.length })}
                 </button>
               )}
             </div>
@@ -513,11 +516,11 @@ export default function Sidebar({
       <div className="border-t border-sidebar-border shrink-0">
         <div className="px-3 pt-2 pb-2.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Tooltip label="设置">
+            <Tooltip label={t('sidebar.settings')}>
               <Link
                 to="/settings"
                 onClick={closeAfterNav}
-                aria-label="设置"
+                aria-label={t('sidebar.settings')}
                 className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${
                   location.pathname.startsWith('/settings')
                     ? 'bg-sidebar-accent text-sidebar-accent-foreground'

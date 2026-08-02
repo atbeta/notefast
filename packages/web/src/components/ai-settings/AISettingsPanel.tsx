@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
+import i18next from '../../i18n'
 import {
   Loader2,
   Sparkles,
@@ -25,6 +27,7 @@ import {
   type Capabilities,
 } from '@notefast/core'
 import { api } from '../../hooks/useAPI'
+import { currentLocale } from '../../lib/time'
 import { ActionButton, useToast, Toggle } from '../ui'
 import { ProviderForm } from './ProviderForm'
 import { DiagnosePanel } from './DiagnosePanel'
@@ -81,10 +84,11 @@ function describeSaved(
   if (chat) bits.push(`Chat @ ${chat.baseUrl.replace(/^https?:\/\//, '')}`)
   if (embedding) bits.push(`Embedding @ ${embedding.baseUrl.replace(/^https?:\/\//, '')}`)
   if (reranker?.enabled) bits.push(`Reranker @ ${reranker.baseUrl.replace(/^https?:\/\//, '')}`)
-  return bits.length > 0 ? bits.join(' · ') : '已清空所有 Provider'
+  return bits.length > 0 ? bits.join(' · ') : i18next.t('aiSettings.savedCleared')
 }
 
 export default function AISettingsPanel() {
+  const { t } = useTranslation()
   const [status, setStatus] = useState<AIStatus | null>(null)
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
   const [chat, setChat] = useState<ProviderDefinition | null>(null)
@@ -121,9 +125,9 @@ export default function AISettingsPanel() {
       setWebSearchApiKey(s.config.webSearch?.apiKey ?? '')
       setVisionEnabled(s.config.vision?.enabled ?? false)
     } catch (e) {
-      toast.error({ title: '加载 AI 状态失败', description: e instanceof Error ? e.message : String(e) })
+      toast.error({ title: t('aiSettings.loadStatusFailed'), description: e instanceof Error ? e.message : String(e) })
     }
-  }, [toast])
+  }, [toast, t])
 
   useEffect(() => {
     refresh()
@@ -144,11 +148,11 @@ export default function AISettingsPanel() {
     setRebuilding(true)
     try {
       await api.post('/ai/index/rebuild', {})
-      toast.info({ title: '已开始重建向量索引' })
+      toast.info({ title: t('aiSettings.rebuildStarted') })
       await refresh()
     } catch (e) {
       toast.error({
-        title: '重建失败',
+        title: t('aiSettings.rebuildFailed'),
         description: e instanceof Error ? e.message : String(e),
       })
     } finally {
@@ -165,8 +169,8 @@ export default function AISettingsPanel() {
       setFormErrors(errorsToFields(localErrs))
       const first = localErrs[0]!
       toast.error({
-        title: `表单校验失败（${localErrs.length} 项）`,
-        description: `${first}${localErrs.length > 1 ? `……还有 ${localErrs.length - 1} 项，见下方红字` : ''}`,
+        title: t('aiSettings.validationFailed', { n: localErrs.length }),
+        description: `${first}${localErrs.length > 1 ? t('aiSettings.validationMore', { n: localErrs.length - 1 }) : ''}`,
         durationMs: 5500,
       })
       return
@@ -186,7 +190,7 @@ export default function AISettingsPanel() {
       })
       setStatus(r.status)
       toast.success({
-        title: '配置已保存并热重载',
+        title: t('aiSettings.configSaved'),
         description: describeSaved(chat, embedding, reranker),
       })
       refresh()
@@ -196,13 +200,13 @@ export default function AISettingsPanel() {
       if (list.length > 0) {
         setFormErrors(errorsToFields(list))
         toast.error({
-          title: `服务端校验失败（${list.length} 项）`,
-          description: `${list[0]}${list.length > 1 ? `……还有 ${list.length - 1} 项，见下方红字` : ''}`,
+          title: t('aiSettings.serverValidationFailed', { n: list.length }),
+          description: `${list[0]}${list.length > 1 ? t('aiSettings.serverValidationMore', { n: list.length - 1 }) : ''}`,
           durationMs: 6000,
         })
       } else {
         toast.error({
-          title: '保存失败',
+          title: t('aiSettings.saveFailed'),
           description: e instanceof Error ? e.message : String(e),
           durationMs: 6000,
         })
@@ -219,7 +223,7 @@ export default function AISettingsPanel() {
       setDiagnose(r)
     } catch (e) {
       toast.error({
-        title: '诊断失败',
+        title: t('aiSettings.diagnosisFailed'),
         description: e instanceof Error ? e.message : String(e),
       })
     } finally {
@@ -283,7 +287,7 @@ export default function AISettingsPanel() {
       {/* Top status bar */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg border border-border bg-background/40">
         <div className="flex items-center gap-2 text-sm">
-          <span className="font-medium">AI 能力</span>
+          <span className="font-medium">{t('aiSettings.aiCapabilities')}</span>
           {capabilities && (
             <div className="flex items-center gap-1.5 text-[10px]">
               <CapabilityBadge ok={capabilities.chat} label="Chat" />
@@ -301,7 +305,7 @@ export default function AISettingsPanel() {
               {status.usage.autoLinkAnalyses > 0 && <span>link: {status.usage.autoLinkAnalyses}</span>}
               {status.usage.lastSuccessAt && (
                 <span className="opacity-60">
-                  上次 {new Date(status.usage.lastSuccessAt).toLocaleTimeString()}
+                  {t('aiSettings.lastSuccess', { time: new Date(status.usage.lastSuccessAt).toLocaleTimeString(currentLocale()) })}
                 </span>
               )}
             </div>
@@ -313,7 +317,7 @@ export default function AISettingsPanel() {
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-border bg-background hover:bg-accent disabled:opacity-50"
           >
             {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-            一键诊断
+            {t('aiSettings.oneClickDiagnose')}
           </button>
         </div>
       </div>
@@ -323,14 +327,14 @@ export default function AISettingsPanel() {
       )}
 
       {/* 分组：模型配置（Provider），功能卡均依赖这里的配置 */}
-      <GroupLabel>模型配置</GroupLabel>
+      <GroupLabel>{t('aiSettings.modelConfig')}</GroupLabel>
 
       {/* Section 1: 对话模型 */}
       <SettingsCard
         icon={<Sparkles className="w-4 h-4" />}
-        title="对话模型"
-        helpTip="标题生成、文档摘要、AI 聊天与 AutoLink 实体抽取都调用这个模型。"
-        statusBadge={<StatusBadge active={!!chat && chat.enabled !== false} label={chat && chat.enabled === false ? '已停用' : undefined} />}
+        title={t('aiSettings.chatModel')}
+        helpTip={t('aiSettings.chatModelTip')}
+        statusBadge={<StatusBadge active={!!chat && chat.enabled !== false} label={chat && chat.enabled === false ? t('aiSettings.disabled') : undefined} />}
       >
         {!chat && (
           <button
@@ -338,7 +342,7 @@ export default function AISettingsPanel() {
             onClick={handleEnableChat}
             className="w-full py-3 text-sm rounded-md border border-dashed border-border text-muted-foreground hover:bg-accent"
           >
-            + 添加对话模型
+            + {t('aiSettings.addChatModel')}
           </button>
         )}
         {chat && (
@@ -346,14 +350,14 @@ export default function AISettingsPanel() {
             <Toggle
               checked={chat.enabled !== false}
               onChange={(v) => setChat({ ...chat, enabled: v })}
-              label={chat.enabled !== false ? '已启用' : '已停用（保留配置，不参与调用）'}
+              label={chat.enabled !== false ? t('aiSettings.enabled') : t('aiSettings.disabledRetainConfig')}
             />
             <ProviderForm
               value={chat}
               onChange={setChat}
               mode="chat"
               knownModels={KNOWN_CHAT_MODELS}
-              modelLabel="对话模型"
+              modelLabel={t('aiSettings.chatModelLabel')}
               fieldErrors={formErrors.chat}
             />
           </div>
@@ -363,9 +367,9 @@ export default function AISettingsPanel() {
       {/* Section 2: 嵌入模型（可选，独立配置） */}
       <SettingsCard
         icon={<FileSearch className="w-4 h-4" />}
-        title="嵌入模型"
-        helpTip="把文本转为向量，支撑语义搜索（理解近似含义与同义词）。未配置时检索退化为纯关键词匹配。"
-        statusBadge={<StatusBadge active={!!embedding && embedding.enabled !== false} label={embedding && embedding.enabled === false ? '已停用' : undefined} />}
+        title={t('aiSettings.embeddingModel')}
+        helpTip={t('aiSettings.embeddingModelTip')}
+        statusBadge={<StatusBadge active={!!embedding && embedding.enabled !== false} label={embedding && embedding.enabled === false ? t('aiSettings.disabled') : undefined} />}
       >
         {!embedding && (
           <div className="space-y-2">
@@ -374,7 +378,7 @@ export default function AISettingsPanel() {
               onClick={handleEnableEmbedding}
               className="w-full py-3 text-sm rounded-md border border-dashed border-border text-muted-foreground hover:bg-accent"
             >
-              + 添加嵌入模型
+              + {t('aiSettings.addEmbeddingModel')}
             </button>
             {chat && (
               <button
@@ -383,7 +387,7 @@ export default function AISettingsPanel() {
                 className="w-full py-2 text-xs rounded-md border border-border text-muted-foreground hover:bg-accent inline-flex items-center justify-center gap-1.5"
               >
                 <Copy className="w-3 h-3" />
-                复用对话模型的连接（共用 baseUrl + apiKey）
+                {t('aiSettings.reuseChatConnection')}
               </button>
             )}
           </div>
@@ -393,16 +397,16 @@ export default function AISettingsPanel() {
             <Toggle
               checked={embedding.enabled !== false}
               onChange={(v) => setEmbedding({ ...embedding, enabled: v })}
-              label={embedding.enabled !== false ? '已启用' : '已停用（保留配置，回退为纯关键词检索）'}
+              label={embedding.enabled !== false ? t('aiSettings.enabled') : t('aiSettings.disabledFallbackKeyword')}
             />
             <ProviderForm
               value={embedding}
               onChange={setEmbedding}
               mode="embedding"
               knownModels={KNOWN_EMBEDDING_MODELS}
-             modelLabel="嵌入模型"
-            fieldErrors={formErrors.embedding}
-          />
+              modelLabel={t('aiSettings.embeddingModelLabel')}
+              fieldErrors={formErrors.embedding}
+            />
           </div>
         )}
       </SettingsCard>
@@ -410,9 +414,9 @@ export default function AISettingsPanel() {
       {/* Section 3: 精排模型（Reranker，可选） */}
       <SettingsCard
         icon={<GitBranch className="w-4 h-4" />}
-        title="精排模型 (Reranker)"
-        helpTip="对混合检索的召回结果做二次精准排序，让最相关的笔记排在前面。可选。"
-        statusBadge={<StatusBadge active={!!reranker?.enabled} label={reranker && !reranker.enabled ? '已停用' : undefined} />}
+        title={t('aiSettings.rerankerModel')}
+        helpTip={t('aiSettings.rerankerModelTip')}
+        statusBadge={<StatusBadge active={!!reranker?.enabled} label={reranker && !reranker.enabled ? t('aiSettings.disabled') : undefined} />}
       >
         {!reranker && (
           <button
@@ -420,7 +424,7 @@ export default function AISettingsPanel() {
             onClick={handleEnableReranker}
             className="w-full py-3 text-sm rounded-md border border-dashed border-border text-muted-foreground hover:bg-accent"
           >
-            + 添加精排模型
+            + {t('aiSettings.addRerankerModel')}
           </button>
         )}
         {reranker && rerankerAsProvider && (
@@ -428,27 +432,27 @@ export default function AISettingsPanel() {
             <Toggle
               checked={reranker.enabled}
               onChange={(v) => setReranker({ ...reranker, enabled: v })}
-              label={reranker.enabled ? '已启用' : '已停用（保留配置，检索跳过精排）'}
+              label={reranker.enabled ? t('aiSettings.enabled') : t('aiSettings.disabledSkipRerank')}
             />
             <ProviderForm
               value={rerankerAsProvider}
               onChange={handleRerankerChange}
               mode="reranker"
               knownModels={['BAAI/bge-reranker-v2-m3', 'jina-reranker-v3', 'voyage-rerank-2', 'voyage-rerank-2-lite']}
-              modelLabel="重排模型"
+              modelLabel={t('aiSettings.rerankerModelLabel')}
             />
           </div>
         )}
       </SettingsCard>
 
       {/* 分组：功能（依赖上方模型配置） */}
-      <GroupLabel>功能</GroupLabel>
+      <GroupLabel>{t('aiSettings.feature')}</GroupLabel>
 
       {/* Section 4: 语义索引（自动索引 + 图片理解 + 向量库状态） */}
       <SettingsCard
         icon={<Database className="w-4 h-4" />}
-        title="语义索引"
-        helpTip="写入或更新笔记时自动生成向量索引，是语义搜索的数据来源。含图片理解与向量库状态。"
+        title={t('aiSettings.semanticIndex')}
+        helpTip={t('aiSettings.semanticIndexTip')}
         statusBadge={<StatusBadge active={autoIndex} />}
       >
         <Toggle
@@ -457,8 +461,8 @@ export default function AISettingsPanel() {
           disabled={!capabilities?.embedding}
           label={
             capabilities?.embedding
-              ? autoIndex ? '开启' : '关闭'
-              : '需先配 Embedding'
+              ? autoIndex ? t('aiSettings.on') : t('aiSettings.off')
+              : t('aiSettings.requiresEmbedding')
           }
         />
         <div className="mt-3 pt-3 border-t border-border/50">
@@ -468,30 +472,30 @@ export default function AISettingsPanel() {
             disabled={!capabilities?.chat}
             label={
               capabilities?.chat
-                ? visionEnabled ? '图片理解 · 开启' : '图片理解 · 关闭'
-                : '图片理解 · 需先配 Chat'
+                ? visionEnabled ? t('aiSettings.visionEnabled') : t('aiSettings.visionDisabled')
+                : t('aiSettings.visionRequiresChat')
             }
           />
           <p className="mt-1.5 text-[12px] text-muted-foreground/80 leading-relaxed">
-            开启后，索引时会为文档中的图片生成文字描述并纳入语义检索（每张图片会调用一次视觉模型，图片内容会发送给所配置的 AI 服务商）
+            {t('aiSettings.visionDescription')}
           </p>
         </div>
         {status?.vectorStore && (
           <div className="mt-3 rounded-md border border-border/70 bg-muted/20 px-3 py-2.5 space-y-2 text-[12.5px]">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="font-medium text-foreground">
-                {status.vectorStore.status === 'ready' && '就绪'}
-                {status.vectorStore.status === 'stale' && '需重建'}
-                {status.vectorStore.status === 'rebuilding' && '重建中'}
-                {status.vectorStore.status === 'failed' && '失败'}
+                {status.vectorStore.status === 'ready' && t('aiSettings.vectorReady')}
+                {status.vectorStore.status === 'stale' && t('aiSettings.vectorStale')}
+                {status.vectorStore.status === 'rebuilding' && t('aiSettings.vectorRebuilding')}
+                {status.vectorStore.status === 'failed' && t('aiSettings.vectorFailed')}
               </span>
               <span className="text-muted-foreground">
-                · {status.vectorStore.count.toLocaleString()} 向量 · {status.vectorStore.backend}
+                {t('aiSettings.vectorCount', { n: status.vectorStore.count.toLocaleString(currentLocale()), backend: status.vectorStore.backend })}
               </span>
             </div>
             {status.vectorStore.status === 'stale' && (
               <p className="text-amber-700 dark:text-amber-400">
-                模型已变 · 旧向量未参与检索 · 请重建
+                {t('aiSettings.vectorStaleWarning')}
               </p>
             )}
             {status.vectorStore.error && status.vectorStore.status !== 'ready' && (
@@ -503,7 +507,7 @@ export default function AISettingsPanel() {
                 {' · '}
                 {(status.vectorStore.rebuild.elapsed_ms / 1000).toFixed(1)}s
                 {status.vectorStore.rebuild.eta_ms != null && status.vectorStore.rebuild.eta_ms > 0
-                  ? ` · 约 ${(status.vectorStore.rebuild.eta_ms / 1000).toFixed(1)}s`
+                  ? t('aiSettings.rebuildEta', { sec: (status.vectorStore.rebuild.eta_ms / 1000).toFixed(1) })
                   : ''}
               </p>
             )}
@@ -517,7 +521,7 @@ export default function AISettingsPanel() {
                 {(rebuilding || status.vectorStore.status === 'rebuilding') && (
                   <Loader2 className="w-3 h-3 animate-spin" />
                 )}
-                重建索引
+                {t('aiSettings.rebuildIndex')}
               </button>
               <button
                 type="button"
@@ -525,7 +529,7 @@ export default function AISettingsPanel() {
                 className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md text-muted-foreground hover:text-foreground"
               >
                 <RefreshCw className="w-3 h-3" />
-                刷新
+                {t('aiSettings.refresh')}
               </button>
             </div>
           </div>
@@ -535,8 +539,8 @@ export default function AISettingsPanel() {
       {/* Section 5: AutoLink */}
       <SettingsCard
         icon={<Link2 className="w-4 h-4" />}
-        title="AutoLink 自动建链"
-        helpTip="写入笔记后自动抽取关键概念，置信度达标即建立笔记间链接；不达标静默跳过，无需人工审核。"
+        title={t('aiSettings.autoLinkTitle')}
+        helpTip={t('aiSettings.autoLinkTip')}
         statusBadge={<StatusBadge active={autoLink.enabled} />}
       >
         <Toggle
@@ -545,8 +549,8 @@ export default function AISettingsPanel() {
           disabled={!capabilities?.chat}
           label={
             capabilities?.chat
-              ? autoLink.enabled ? '启用' : '禁用'
-              : '需先配 Chat'
+              ? autoLink.enabled ? t('aiSettings.enable') : t('aiSettings.disable')
+              : t('aiSettings.requiresChat')
           }
         />
         {autoLink.enabled && (
@@ -567,7 +571,7 @@ export default function AISettingsPanel() {
                 mono
               />
               <InlineField
-                label="每块最大建链数"
+                label={t('aiSettings.maxLinksPerBlock')}
                 type="number"
                 value={String(autoLink.maxPerBlock)}
                 onChange={(v) => setAutoLink({ ...autoLink, maxPerBlock: Math.min(10, Math.max(1, parseInt(v, 10) || 5)) })}
@@ -576,11 +580,11 @@ export default function AISettingsPanel() {
             </div>
 
             <div className="flex items-center justify-between pt-2">
-              <h4 className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">Notebook 范围</h4>
+              <h4 className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">{t('aiSettings.notebookScope')}</h4>
               <div
                 className="inline-flex items-center rounded-md border border-border/60 bg-muted/30 p-0.5 text-[12px]"
                 role="group"
-                aria-label="Notebook 范围"
+                aria-label={t('aiSettings.notebookScope')}
               >
                 <button
                   type="button"
@@ -592,7 +596,7 @@ export default function AISettingsPanel() {
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  全部
+                  {t('aiSettings.all')}
                 </button>
                 <button
                   type="button"
@@ -604,7 +608,7 @@ export default function AISettingsPanel() {
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  仅同 Notebook
+                  {t('aiSettings.sameNotebook')}
                 </button>
               </div>
             </div>
@@ -615,8 +619,8 @@ export default function AISettingsPanel() {
       {/* Section 6: Web Search */}
       <SettingsCard
         icon={<Globe className="w-4 h-4" />}
-        title="网页搜索"
-        helpTip="知识库找不到答案时，AI 可联网用 Brave Search 补充信息；结果用 🌐 标注来源，与笔记引用 [n] 区分。"
+        title={t('aiSettings.webSearch')}
+        helpTip={t('aiSettings.webSearchTip')}
         statusBadge={<StatusBadge active={webSearchEnabled} />}
       >
         <Toggle
@@ -625,23 +629,23 @@ export default function AISettingsPanel() {
           disabled={!capabilities?.chat}
           label={
             capabilities?.chat
-              ? webSearchEnabled ? '启用' : '禁用'
-              : '需先配 Chat'
+              ? webSearchEnabled ? t('aiSettings.enable') : t('aiSettings.disable')
+              : t('aiSettings.requiresChat')
           }
         />
         {webSearchEnabled && (
           <div className="mt-3 space-y-4 pt-2">
             <InlineField
               label="Brave Search API Key"
-              description="留空保持不变"
+              description={t('aiSettings.keepUnchanged')}
               value={webSearchApiKey === KEY_MASK ? '' : webSearchApiKey}
               onChange={(v) => setWebSearchApiKey(v === '' && webSearchApiKey === KEY_MASK ? KEY_MASK : v)}
-              placeholder={webSearchApiKey === KEY_MASK ? '已保存 Key' : 'BSA-...'}
+              placeholder={webSearchApiKey === KEY_MASK ? t('aiSettings.savedKey') : 'BSA-...'}
               type="password"
               mono
             />
             <p className="text-[12px] text-muted-foreground/80 leading-relaxed">
-              需要 <a href="https://brave.com/search/api/" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Brave Search API Key</a>（免费额度 1000 次/月）
+              {t('aiSettings.braveApiHint1')} <a href="https://brave.com/search/api/" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">{t('aiSettings.braveApiKey')}</a>{t('aiSettings.braveApiHint2')}
             </p>
           </div>
         )}
@@ -653,15 +657,15 @@ export default function AISettingsPanel() {
             if (!chat && !embedding) return
             await handleSave()
           }}
-          successToast={{ title: '配置已保存并热重载' }}
+          successToast={{ title: t('aiSettings.configSaved') }}
           errorToast={(e) => ({
-            title: '保存失败',
+            title: t('aiSettings.saveFailed'),
             description: e instanceof Error ? e.message : String(e),
             durationMs: 6000,
           })}
           disabled={!chat && !embedding}
         >
-          保存配置
+          {t('aiSettings.saveConfig')}
         </ActionButton>
         <button
           type="button"
@@ -669,7 +673,7 @@ export default function AISettingsPanel() {
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border bg-background hover:bg-accent"
         >
           <RefreshCw className="w-4 h-4" />
-          刷新状态
+          {t('aiSettings.refreshStatus')}
         </button>
       </div>
     </div>

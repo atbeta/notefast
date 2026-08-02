@@ -8,11 +8,12 @@
 
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import {
-  ENTITY_DOC_STATUS_LABEL,
+  entityDocStatusLabel,
   type DocEntity,
   type EntityDetail,
   type EntityMention,
@@ -20,6 +21,7 @@ import {
 
 /** 单条提及：笔记标题 + 非常态状态标注 + 所在块摘要，点击跳转文档 */
 export function MentionRow({ mention }: { mention: EntityMention }) {
+  const { t } = useTranslation()
   return (
     <Link
       to={'/doc/' + mention.doc_id}
@@ -27,11 +29,11 @@ export function MentionRow({ mention }: { mention: EntityMention }) {
     >
       <div className="flex items-center gap-1.5">
         <span className="min-w-0 truncate text-[12.5px] text-muted-foreground group-hover:text-foreground transition-colors">
-          {mention.doc_title || '无标题文档'}
+          {mention.doc_title || t('entityPanel.untitled')}
         </span>
         {mention.doc_status !== 'note' && (
           <span className="shrink-0 rounded border border-border/60 bg-muted/40 px-1 py-px text-[10px] text-muted-foreground/80">
-            {ENTITY_DOC_STATUS_LABEL[mention.doc_status] ?? mention.doc_status}
+            {entityDocStatusLabel(mention.doc_status) ?? mention.doc_status}
           </span>
         )}
       </div>
@@ -46,6 +48,7 @@ export function MentionRow({ mention }: { mention: EntityMention }) {
 
 /** 实体的相关笔记列表（EntityPanel 与实体列表页共用）；失败静默 */
 export function EntityMentions({ entityId }: { entityId: string }) {
+  const { t } = useTranslation()
   const { data, loading, error } = useApiQuery(
     () => api.get<EntityDetail>(`/entities/${entityId}`),
     [entityId],
@@ -54,13 +57,13 @@ export function EntityMentions({ entityId }: { entityId: string }) {
     return (
       <div className="flex items-center gap-1.5 px-1 py-2 text-[12px] text-muted-foreground/70">
         <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
-        加载中…
+        {t('common.loading')}
       </div>
     )
   }
   if (error || !data) return null
   if (data.mentions.length === 0) {
-    return <div className="px-1 py-1 text-[12px] text-muted-foreground/60">暂无相关笔记</div>
+    return <div className="px-1 py-1 text-[12px] text-muted-foreground/60">{t('entityPanel.noRelatedNotes')}</div>
   }
   return (
     <div className="flex flex-col gap-1">
@@ -78,6 +81,7 @@ interface EntityPanelProps {
 }
 
 export default function EntityPanel({ docId, variant }: EntityPanelProps) {
+  const { t } = useTranslation()
   const { data, error, loading } = useApiQuery(
     () => api.get<{ entities: DocEntity[] }>(`/docs/${docId}/entities`),
     [docId],
@@ -101,16 +105,16 @@ export default function EntityPanel({ docId, variant }: EntityPanelProps) {
               ? 'text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2'
               : 'text-sm font-medium text-foreground mb-3'
           }
-          title="AI 在写入时自动识别的实体"
+          title={t('entityPanel.aiRecognize')}
         >
-          实体
+          {t('entityPanel.title')}
         </h3>
       )}
       {loading && entities.length === 0 ? (
-        <div className="px-1 text-[12px] text-muted-foreground/70">加载中…</div>
+        <div className="px-1 text-[12px] text-muted-foreground/70">{t('common.loading')}</div>
       ) : empty ? (
         <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
-          本文尚未识别到实体
+          {t('entityPanel.noEntitiesYet')}
         </div>
       ) : (
         <>

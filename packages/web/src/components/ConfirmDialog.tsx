@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -15,11 +16,12 @@ export default function ConfirmDialog({
   open,
   title,
   message,
-  confirmLabel = '确认',
+  confirmLabel,
   destructive = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation()
   const cancelRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -60,7 +62,7 @@ export default function ConfirmDialog({
             onClick={onCancel}
             className="px-3.5 py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-secondary/60 rounded-md transition-colors"
           >
-            取消
+            {t('confirm.cancel')}
           </button>
           <button
             onClick={onConfirm}
@@ -70,7 +72,7 @@ export default function ConfirmDialog({
                 : 'bg-foreground text-background shadow-sm hover:bg-foreground/90'
             }`}
           >
-            {confirmLabel}
+            {confirmLabel ?? t('common.confirm')}
           </button>
         </div>
       </div>

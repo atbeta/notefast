@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Search,
   FileText,
@@ -34,6 +35,7 @@ type PaletteItem = {
 }
 
 export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -84,8 +86,8 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       {
         id: 'cmd-new',
         icon: Plus,
-        title: '新建文档',
-        hint: '创建一个新的 Markdown 文档',
+        title: t('command.newDoc'),
+        hint: t('command.newDocHint'),
         section: 'command',
         shortcut: ['mod', 'N'],
         keywords: ['create', 'doc', 'new', '新建'],
@@ -94,8 +96,8 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       {
         id: 'cmd-home',
         icon: Hash,
-        title: '回到首页',
-        hint: '所有文档列表',
+        title: t('command.goHome'),
+        hint: t('command.goHomeHint'),
         section: 'command',
         keywords: ['home', 'list', 'index', '首页'],
         action: () => { onClose(); navigate('/') },
@@ -103,15 +105,15 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       {
         id: 'cmd-theme',
         icon: dark ? Sun : Moon,
-        title: dark ? '切换到浅色' : '切换到深色',
-        hint: '切换应用主题',
+        title: dark ? t('command.switchToLight') : t('command.switchToDark'),
+        hint: t('command.toggleThemeHint'),
         section: 'command',
         shortcut: ['mod', '⇧D'],
         keywords: ['theme', 'dark', 'light', '主题'],
         action: toggleDark,
       },
     ]
-  }, [dark, navigate, onClose])
+  }, [dark, navigate, onClose, t])
 
   const docItems: PaletteItem[] = useMemo(() => results.map((r) => ({
     id: 'doc-' + r.block.id,
@@ -170,7 +172,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       className={`fixed inset-0 z-[100] flex items-start justify-center pt-[12vh] px-4 transition-opacity duration-[var(--dur)] ease-[var(--ease)] ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       role="dialog"
       aria-modal="true"
-      aria-label="命令面板"
+      aria-label={t('command.dialogLabel')}
     >
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -184,7 +186,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索文档、命令或文件…"
+            placeholder={t('command.placeholder')}
             className="flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground outline-none"
           />
           <Kbd className="text-[11px]">esc</Kbd>
@@ -193,12 +195,12 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         <div ref={listRef} className="max-h-[60vh] overflow-y-auto p-2">
           {allItems.length === 0 && (
             <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-              {searching ? '搜索中…' : query ? '没有匹配的结果' : '试试搜索文档名或执行命令'}
+              {searching ? t('command.searching') : query ? t('command.noResults') : t('command.hint')}
             </div>
           )}
 
           {commandSection.length > 0 && (
-            <SectionLabel>操作</SectionLabel>
+            <SectionLabel>{t('command.commands')}</SectionLabel>
           )}
           {commandSection.map((item) => {
             const index = allItems.indexOf(item)
@@ -215,7 +217,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           })}
 
           {documentSection.length > 0 && (
-            <SectionLabel>{query ? '文档' : '最近文档'}</SectionLabel>
+            <SectionLabel>{query ? t('command.docs') : t('command.recentDocs')}</SectionLabel>
           )}
           {documentSection.map((item) => {
             const index = allItems.indexOf(item)
@@ -237,15 +239,15 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
             <span className="inline-flex items-center gap-1">
               <ArrowUp className="w-3 h-3" />
               <ArrowDown className="w-3 h-3" />
-              选择
+              {t('command.select')}
             </span>
             <span className="inline-flex items-center gap-1">
               <CornerDownLeft className="w-3 h-3" />
-              打开
+              {t('command.open')}
             </span>
             <span className="inline-flex items-center gap-1">
               <Kbd>esc</Kbd>
-              关闭
+              {t('command.close')}
             </span>
           </div>
           <span>⌘K</span>

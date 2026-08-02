@@ -5,6 +5,7 @@ import { FileText, Check, X, EyeOff } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { formatRelative } from '../lib/time'
 import DocActionsMenu from './DocActionsMenu'
+import { useTranslation } from 'react-i18next'
 
 interface DocListProps {
   docs: DocSummary[]
@@ -12,6 +13,7 @@ interface DocListProps {
 }
 
 function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void }) {
+  const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(doc.title)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -68,10 +70,10 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
         ) : (
           <Link to={'/doc/' + doc.id} className="block">
             <h3 className="font-medium text-[14px] text-foreground tracking-[-0.005em] truncate flex items-center gap-1.5 leading-snug">
-              <span className="truncate">{doc.title || '未命名文档'}</span>
+              <span className="truncate">{doc.title || t('docList.untitled')}</span>
               {aiExclude && (
                 <span className="shrink-0 text-[10px] font-medium px-1.5 py-px rounded border border-border/70 text-muted-foreground">
-                  AI 隐藏
+                  {t('docList.aiExclude')}
                 </span>
               )}
             </h3>
@@ -100,7 +102,7 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
           <time
             className="text-[11.5px] text-muted-foreground font-mono tabular-nums whitespace-nowrap text-right min-w-[4.5rem]"
             dateTime={doc.updated_at}
-            title={`更新于 ${doc.updated_at}`}
+            title={t('docList.updatedAt', { date: doc.updated_at })}
           >
             {formatRelative(doc.updated_at)}
           </time>

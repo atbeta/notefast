@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import i18next from '../i18n'
 import {
   Send,
   X,
@@ -129,6 +131,7 @@ export default function AIChatPanel({
   expanded,
   onToggleExpand,
 }: AIChatPanelProps) {
+  const { t } = useTranslation()
   const [messages, setMessages] = useState<Message[]>([])
   const [citations, setCitations] = useState<Citation[]>([])
   const [retrieval, setRetrieval] = useState<RetrievalInfo | null>(null)
@@ -160,7 +163,7 @@ export default function AIChatPanel({
     const Ctor = speechRecognitionCtor()
     if (!Ctor) return
     const rec = new Ctor()
-    rec.lang = 'zh-CN'
+    rec.lang = i18next.resolvedLanguage || 'zh-CN'
     rec.interimResults = true
     rec.continuous = true
     speechBaseRef.current = input.trim() ? input.trim() + ' ' : ''
@@ -290,7 +293,7 @@ export default function AIChatPanel({
     if (listening) recognitionRef.current?.stop()
 
     // 纯图片消息给一段兜底文本：服务端检索与校验都需要非空文本
-    const userMessage = input.trim() || '请描述这张图片的内容'
+    const userMessage = input.trim() || t('chat.visionFallbackText')
     const sentAttachments = attachments
     setInput('')
     setAttachments([])
@@ -375,7 +378,7 @@ export default function AIChatPanel({
               })
               setCitations(payload.citations || [])
             } else if (eventName === 'tool') {
-              setToolStatus(`正在调用 ${payload.tool || '工具'}…`)
+              setToolStatus(t('chat.callingTool', { tool: payload.tool || t('chat.tool') }))
             } else if (eventName === 'write_proposal') {
               setToolStatus(null)
               setProposals((prev) => [
@@ -407,10 +410,10 @@ export default function AIChatPanel({
                 })
               }
             } else if (eventName === 'error') {
-              throw new Error(payload.message || 'LLM 错误')
+              throw new Error(payload.message || t('chat.llmError'))
             }
           } catch (parseErr) {
-            if (parseErr instanceof Error && parseErr.message !== 'LLM 错误') {
+            if (parseErr instanceof Error && parseErr.message !== t('chat.llmError')) {
               // 单帧解析失败：SSE keep-alive 注释行或 provider 心跳多见，warn 即可
               console.warn('[chat-sse] drop unparseable frame:', parseErr.message)
             } else if (parseErr instanceof Error) {
@@ -432,7 +435,7 @@ export default function AIChatPanel({
       if ((err as { name?: string })?.name === 'AbortError') {
         // 用户停止：保留已生成内容
       } else {
-        setMessages((prev) => [...prev, { role: 'assistant', content: `请求失败: ${msg}` }])
+        setMessages((prev) => [...prev, { role: 'assistant', content: t('chat.requestFailed', { msg }) }])
         if (msg.includes('未配置') || msg.includes('not_configured')) {
           setConfigMissing(true)
         }
@@ -482,9 +485,12 @@ export default function AIChatPanel({
       setProposals((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'done' } : p)))
       // 写入成功 → 追加一条确认消息（引用新文档可跳转）
       if (data.doc_id) {
-        upsertAssistantDone(`已写入：**[${data.message || '打开文档'}](/doc/${data.doc_id})**`)
+        upsertAssistantDone(t('chat.writtenDocLink', {
+          label: data.message || t('chat.openDoc'),
+          docId: data.doc_id,
+        }))
       } else {
-        upsertAssistantDone(data.message ? `已写入：${data.message}` : '已写入知识库。')
+        upsertAssistantDone(data.message ? t('chat.writtenWithMessage', { message: data.message }) : t('chat.writtenToKb'))
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -512,23 +518,23 @@ export default function AIChatPanel({
       <div className="h-14 flex items-center justify-between px-4 border-b border-border shrink-0 bg-primary-softer">
         <div className="flex items-center gap-2.5 text-foreground font-medium min-w-0">
           <Sparkles className="w-4 h-4 text-primary shrink-0" strokeWidth={1.75} />
-          <span className="truncate">AI 助手</span>
+          <span className="truncate">{t('chat.title')}</span>
           <span
             className="shrink-0 text-[10.5px] font-medium px-1.5 py-px rounded border border-primary/25 bg-primary-soft text-primary/90"
-            title={contextDocId ? '优先检索当前文档，必要时扩至知识库' : '检索全部知识库'}
+            title={contextDocId ? t('chat.contextDocTitle') : t('chat.contextAllTitle')}
           >
-            {contextDocId ? '当前文档' : '知识库'}
+            {contextDocId ? t('chat.contextDoc') : t('chat.contextAll')}
           </span>
           {capabilities && (
             <span className="flex items-center gap-1 text-muted-foreground shrink-0">
               {capabilities.embedding && (
-                <span title="Embedding 已配置">
-                  <Binary className="w-3 h-3" strokeWidth={1.75} aria-label="Embedding 已配置" />
+                <span title={t('chat.embeddingConfigured')}>
+                  <Binary className="w-3 h-3" strokeWidth={1.75} aria-label={t('chat.embeddingConfigured')} />
                 </span>
               )}
               {capabilities.reranker && (
-                <span title="Rerank 已配置">
-                  <ArrowUpDown className="w-3 h-3" strokeWidth={1.75} aria-label="Rerank 已配置" />
+                <span title={t('chat.rerankConfigured')}>
+                  <ArrowUpDown className="w-3 h-3" strokeWidth={1.75} aria-label={t('chat.rerankConfigured')} />
                 </span>
               )}
             </span>
@@ -539,15 +545,15 @@ export default function AIChatPanel({
               <button
                 onClick={() => setShowClearConfirm(true)}
                 className="text-[11px] text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                title="清空对话（二次确认）"
+                title={t('chat.clearTitle')}
               >
-                清空
+                {t('chat.clear')}
               </button>
             </>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <Tooltip label={expanded ? '收起' : '展开'}>
+          <Tooltip label={expanded ? t('chat.collapse') : t('chat.expand')}>
             <button
               onClick={onToggleExpand}
               className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
@@ -555,7 +561,7 @@ export default function AIChatPanel({
               {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
           </Tooltip>
-          <Tooltip label="关闭面板">
+          <Tooltip label={t('chat.closePanel')}>
             <button
               onClick={onClose}
               className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
@@ -571,16 +577,15 @@ export default function AIChatPanel({
         {configMissing ? (
           <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground space-y-3">
             <MessageSquareText className="w-7 h-7 mb-1 opacity-50" strokeWidth={1.25} />
-            <p className="text-sm">聊天未配置</p>
+            <p className="text-sm">{t('chat.notConfigured')}</p>
             <p className="text-xs max-w-[260px]">
-              需要在 Web UI <span className="text-primary font-medium">/settings/ai</span> 配置 Chat 模型
-              （API Key + Base URL + 模型名）。
+              {t('chat.notConfiguredDesc1')} <span className="text-primary font-medium">/settings/ai</span> {t('chat.notConfiguredDesc2')}
             </p>
             <a
               href="/settings/ai"
               className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
             >
-              打开设置 <ExternalLink className="w-3 h-3" />
+              {t('chat.openSettings')} <ExternalLink className="w-3 h-3" />
             </a>
           </div>
         ) : messages.length === 0 ? (
@@ -589,11 +594,9 @@ export default function AIChatPanel({
               <div className="w-9 h-9 mx-auto rounded-lg bg-primary-soft text-primary grid place-items-center mb-2">
                 <Sparkles className="w-4 h-4" strokeWidth={1.5} />
               </div>
-              <p className="text-[14px] font-medium text-foreground">向知识库提问</p>
+              <p className="text-[14px] font-medium text-foreground">{t('chat.askKb')}</p>
               <p className="text-[12px] text-muted-foreground leading-relaxed px-2">
-                {contextDocId
-                  ? '当前以本文为优先检索范围，回答会附带可回链的原文引用。'
-                  : '检索全部笔记；引用片段会自动回链到原文。'}
+                {contextDocId ? t('chat.emptyDocHint') : t('chat.emptyAllHint')}
               </p>
             </div>
             {skills.length > 0 && (
@@ -670,7 +673,7 @@ export default function AIChatPanel({
                             {msg.images && msg.images.length > 0 && (
                               <div className="flex flex-wrap gap-1.5 mb-1.5">
                                 {msg.images.map((src, i) => (
-                                  <img key={i} src={src} alt="附件图片" className="max-h-32 max-w-full rounded-md border border-border/40 object-contain" />
+                                  <img key={i} src={src} alt={t('chat.attachmentImageAlt')} className="max-h-32 max-w-full rounded-md border border-border/40 object-contain" />
                                 ))}
                               </div>
                             )}
@@ -720,13 +723,13 @@ export default function AIChatPanel({
                 >
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
                   <span className="text-xs text-muted-foreground">
-                    {toolStatus || (retrieval ? '生成中…' : '检索中…')}
+                    {toolStatus || (retrieval ? t('chat.generating') : t('chat.retrieving'))}
                   </span>
                   <button
                     onClick={handleStop}
                     className="ml-1 text-[10px] text-muted-foreground hover:text-foreground"
                   >
-                    停止
+                    {t('chat.stop')}
                   </button>
                 </div>
               </>
@@ -736,7 +739,7 @@ export default function AIChatPanel({
                 onClick={handleStop}
                 className="ml-11 text-[10px] text-muted-foreground hover:text-foreground"
               >
-                停止生成
+                {t('chat.stopGenerating')}
               </button>
             )}
           </div>
@@ -778,7 +781,7 @@ export default function AIChatPanel({
                   type="button"
                   onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
                   className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-ink text-ink-foreground text-[10px] leading-none flex items-center justify-center opacity-80 hover:opacity-100"
-                  title="移除"
+                  title={t('chat.removeAttachment')}
                 >
                   <X className="w-2.5 h-2.5" />
                 </button>
@@ -803,13 +806,13 @@ export default function AIChatPanel({
                   e.target.value = ''
                 }}
               />
-              <Tooltip label="添加图片（或直接粘贴）">
+              <Tooltip label={t('chat.addImageTitle')}>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={configMissing}
                   className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-40"
-                  aria-label="添加图片"
+                  aria-label={t('chat.addImage')}
                 >
                   <ImagePlus className="w-4 h-4" strokeWidth={1.75} />
                 </button>
@@ -834,13 +837,13 @@ export default function AIChatPanel({
                 handleSubmit(e)
               }
             }}
-            placeholder="向知识库提问…"
+            placeholder={t('chat.inputPlaceholder')}
             rows={1}
             disabled={configMissing}
             className="flex-1 resize-none bg-transparent border-0 outline-none text-sm px-2 py-1.5 max-h-32 placeholder:text-muted-foreground disabled:opacity-50"
           />
           {speechSupported && (
-            <Tooltip label={listening ? '停止语音输入' : '语音输入（中文）'}>
+            <Tooltip label={listening ? t('chat.stopVoice') : t('chat.startVoiceZh')}>
               <button
                 type="button"
                 onClick={toggleListen}
@@ -850,18 +853,18 @@ export default function AIChatPanel({
                     ? 'text-destructive bg-destructive/10 animate-pulse'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                 }`}
-                aria-label={listening ? '停止语音输入' : '语音输入'}
+                aria-label={listening ? t('chat.stopVoice') : t('chat.startVoice')}
               >
                 {listening ? <MicOff className="w-4 h-4" strokeWidth={1.75} /> : <Mic className="w-4 h-4" strokeWidth={1.75} />}
               </button>
             </Tooltip>
           )}
-          <Tooltip label="发送 (Enter)">
+          <Tooltip label={t('chat.sendTitle')}>
             <button
               type="submit"
               disabled={(!input.trim() && attachments.length === 0) || loading || configMissing}
               className="p-2 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] disabled:opacity-40 hover:bg-[rgb(var(--primary-hover))] transition-colors"
-              aria-label={loading ? '正在生成回复' : '发送'}
+              aria-label={loading ? t('chat.generatingReply') : t('chat.send')}
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </button>
@@ -870,9 +873,9 @@ export default function AIChatPanel({
 
       <ConfirmDialog
         open={showClearConfirm}
-        title="清空对话"
-        message="清空后会丢失当前的对话历史与引用上下文，是否继续？"
-        confirmLabel="清空"
+        title={t('chat.clearDialogTitle')}
+        message={t('chat.clearDialogMessage')}
+        confirmLabel={t('chat.clear')}
         destructive
         onCancel={() => setShowClearConfirm(false)}
         onConfirm={() => {
@@ -894,6 +897,7 @@ function CitationSources({
   groups: Array<{ doc_id: string; doc_title: string; items: Citation[] }>
   retrieval: RetrievalInfo | null
 }) {
+  const { t } = useTranslation()
   const [diagOpen, setDiagOpen] = useState(false)
   const [expandedDocs, setExpandedDocs] = useState<ReadonlySet<string>>(() => new Set())
   const totalSnippets = groups.reduce((n, g) => n + g.items.length, 0)
@@ -920,9 +924,9 @@ function CitationSources({
     <div className="rounded-lg border border-border/60 bg-card/60 overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
         <span className="w-1 h-3.5 rounded-full bg-primary shrink-0" aria-hidden />
-        <span className="text-[12px] font-medium text-foreground">引用来源</span>
+        <span className="text-[12px] font-medium text-foreground">{t('chat.citationTitle')}</span>
         <span className="text-[11px] text-muted-foreground tabular-nums">
-          {groups.length} 篇 · {totalSnippets} 段
+          {t('chat.citationStats', { docs: groups.length, segments: totalSnippets })}
         </span>
         {hasDiag && (
           <button
@@ -931,7 +935,7 @@ function CitationSources({
             className="ml-auto inline-flex items-center gap-0.5 text-[10.5px] text-muted-foreground hover:text-foreground transition-colors"
             aria-expanded={diagOpen}
           >
-            检索详情
+            {t('chat.retrievalDetail')}
             <ChevronRight className={`w-3 h-3 transition-transform ${diagOpen ? 'rotate-90' : ''}`} strokeWidth={2} />
           </button>
         )}
@@ -940,17 +944,17 @@ function CitationSources({
       {diagOpen && retrieval && (
         <div className="px-3 py-1.5 border-b border-border/40 text-[10.5px] text-muted-foreground leading-relaxed tabular-nums font-mono">
           {retrieval.reranked
-            ? `精排 ${retrieval.model || 'reranker'}`
-            : 'hybrid search'}
+            ? t('chat.rerankedWith', { model: retrieval.model || 'reranker' })
+            : t('chat.hybridSearch')}
           {(retrieval.fts_hits > 0 || retrieval.semantic_hits > 0) &&
-            ` · 召回 关键词 ${retrieval.fts_hits} + 语义 ${retrieval.semantic_hits}`}
+            t('chat.recall', { fts: retrieval.fts_hits, sem: retrieval.semantic_hits })}
           {retrieval.timing && (
             <>
-              {` · 总耗时 ${retrieval.timing.total_ms}ms`}
-              {retrieval.timing.fts_ms > 0 && ` · FTS ${retrieval.timing.fts_ms}ms`}
-              {retrieval.timing.embed_query_ms > 0 && ` · 嵌入 ${retrieval.timing.embed_query_ms}ms`}
-              {retrieval.timing.semantic_ms > 0 && ` · 向量 ${retrieval.timing.semantic_ms}ms`}
-              {retrieval.timing.rerank_ms > 0 && ` · 精排 ${retrieval.timing.rerank_ms}ms`}
+              {t('chat.totalTime', { ms: retrieval.timing.total_ms })}
+              {retrieval.timing.fts_ms > 0 && t('chat.ftsTime', { ms: retrieval.timing.fts_ms })}
+              {retrieval.timing.embed_query_ms > 0 && t('chat.embedTime', { ms: retrieval.timing.embed_query_ms })}
+              {retrieval.timing.semantic_ms > 0 && t('chat.vectorTime', { ms: retrieval.timing.semantic_ms })}
+              {retrieval.timing.rerank_ms > 0 && t('chat.rerankTime', { ms: retrieval.timing.rerank_ms })}
             </>
           )}
         </div>
@@ -970,16 +974,16 @@ function CitationSources({
                   to={`/doc/${group.doc_id}`}
                   className="min-w-0 truncate text-[12.5px] font-medium text-foreground hover:text-primary transition-colors"
                 >
-                  {group.doc_title || '无标题文档'}
+                  {group.doc_title || t('chat.untitledDoc')}
                 </Link>
                 <span className="shrink-0 text-[10.5px] text-muted-foreground tabular-nums">
-                  {group.items.length} 段
+                  {t('chat.segments', { n: group.items.length })}
                 </span>
                 <Link
                   to={`/doc/${group.doc_id}`}
                   className="ml-auto shrink-0 p-0.5 text-muted-foreground/50 hover:text-primary transition-colors"
-                  title="打开文档"
-                  aria-label="打开文档"
+                  title={t('chat.openDoc')}
+                  aria-label={t('chat.openDoc')}
                 >
                   <ExternalLink className="w-3 h-3" strokeWidth={1.75} />
                 </Link>
@@ -990,7 +994,7 @@ function CitationSources({
                     <Link
                       to={`/doc/${c.doc_id}#block-${c.block_id}`}
                       className="flex gap-2 rounded-md px-1.5 py-1.5 -mx-0.5 text-[11.5px] text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-colors group/snip"
-                      title="跳转到原文块"
+                      title={t('chat.jumpToBlock')}
                     >
                       <span className="shrink-0 w-4 text-right font-mono text-[10px] text-muted-foreground/55 group-hover/snip:text-primary/70 tabular-nums pt-px">
                         {i + 1}
@@ -1006,7 +1010,7 @@ function CitationSources({
                   onClick={() => toggleDoc(group.doc_id)}
                   className="mt-1 ml-5 text-[11px] text-primary/80 hover:text-primary transition-colors"
                 >
-                  展开其余 {hidden} 段
+                  {t('chat.expandMore', { n: hidden })}
                 </button>
               )}
               {expanded && group.items.length > CITATION_SNIPPET_PREVIEW && (
@@ -1015,7 +1019,7 @@ function CitationSources({
                   onClick={() => toggleDoc(group.doc_id)}
                   className="mt-1 ml-5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  收起
+                  {t('chat.collapse')}
                 </button>
               )}
             </div>
@@ -1033,6 +1037,7 @@ function ThinkBlock({
   text: string
   streaming: boolean
 }) {
+  const { t } = useTranslation()
   // 默认折叠，且不做任何自动开合——思考期自动展开、正文到达自动收起的生命周期
   // 切换本身就是对话流中的一次高度跳变；展开与否完全交给用户
   const [open, setOpen] = useState(false)
@@ -1047,7 +1052,7 @@ function ThinkBlock({
       >
         <ChevronRight className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`} />
         <Brain className="w-3 h-3 opacity-70" />
-        <span>{streaming ? '思考中…' : '思考过程'}</span>
+        <span>{streaming ? t('chat.thinking') : t('chat.thinkProcess')}</span>
         {streaming && <Loader2 className="w-3 h-3 animate-spin opacity-60" />}
       </button>
       {open && <div className="chat-think-body whitespace-pre-wrap">{text}</div>}
@@ -1060,15 +1065,15 @@ function proposalSummary(p: WriteProposal): { title: string; body: string } {
   if (p.tool === 'notefast_create_note') {
     const title = String(p.args.title ?? '')
     const md = String(p.args.markdown ?? '')
-    return { title: `创建笔记「${title}」`, body: md }
+    return { title: i18next.t('chat.proposalCreate', { title }), body: md }
   }
   if (p.tool === 'notefast_append_to_doc') {
     const heading = String(p.args.heading ?? '')
     const content = String(p.args.content ?? '')
-    return { title: `向文档追加内容`, body: [heading, content].filter(Boolean).join('\n\n') }
+    return { title: i18next.t('chat.proposalAppend'), body: [heading, content].filter(Boolean).join('\n\n') }
   }
   // update_block
-  return { title: `更新内容片段`, body: String(p.args.content ?? '') }
+  return { title: i18next.t('chat.proposalUpdate'), body: String(p.args.content ?? '') }
 }
 
 function WriteProposalCard({
@@ -1080,6 +1085,7 @@ function WriteProposalCard({
   onConfirm: () => void
   onReject: () => void
 }) {
+  const { t } = useTranslation()
   const { title, body } = proposalSummary(proposal)
 
   return (
@@ -1095,7 +1101,7 @@ function WriteProposalCard({
           )}
           {proposal.status === 'pending' && (
             <pre className="mt-1.5 text-[11.5px] leading-relaxed whitespace-pre-wrap font-sans text-muted-foreground bg-background/60 border border-border/50 rounded-md p-2.5 max-h-36 overflow-y-auto">
-              {body || '（无内容预览）'}
+              {body || t('chat.noPreview')}
             </pre>
           )}
         </div>
@@ -1107,28 +1113,28 @@ function WriteProposalCard({
             onClick={onReject}
             className="px-3 py-1.5 text-[12.5px] font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-secondary/60 rounded-md transition-colors"
           >
-            拒绝
+            {t('chat.reject')}
           </button>
           <button
             type="button"
             onClick={onConfirm}
             className="px-3 py-1.5 text-[12.5px] font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary-hover transition-colors"
           >
-            确认写入
+            {t('chat.confirmWrite')}
           </button>
         </div>
       )}
       {proposal.status === 'executing' && (
         <div className="flex items-center gap-2 pl-8 text-[12px] text-muted-foreground">
           <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-          正在写入…
+          {t('chat.writing')}
         </div>
       )}
       {proposal.status === 'done' && (
-        <p className="pl-8 text-[12px] text-muted-foreground">✓ 已写入</p>
+        <p className="pl-8 text-[12px] text-muted-foreground">{t('chat.written')}</p>
       )}
       {proposal.status === 'dismissed' && (
-        <p className="pl-8 text-[12px] text-muted-foreground">已拒绝，未写入。</p>
+        <p className="pl-8 text-[12px] text-muted-foreground">{t('chat.rejected')}</p>
       )}
     </div>
   )

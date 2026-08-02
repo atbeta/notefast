@@ -3,6 +3,13 @@
  * 阈值与文案逐字符保持各调用点现状；差异用参数区分，不改行为。
  */
 
+import i18next from '../i18n'
+
+/** 当前生效语言（i18next 切换后实时反映；组件侧随 useTranslation/useLocale 重渲染） */
+export function currentLocale(): string {
+  return i18next.resolvedLanguage || i18next.language || 'zh-CN'
+}
+
 /** SQLite datetime('now') 返回 "YYYY-MM-DD HH:MM:SS" 不带时区标记。
  *  JavaScript new Date(不带时区字符串) 会当成本地时间解析，在 UTC+8 产生 +8h 偏差。
  *  此处对无时区信息的日期字符串统一补齐 Z 按 UTC 解读。 */
@@ -26,23 +33,23 @@ export function formatRelative(dateStr: string, dateStyle: 'plain' | 'long' = 'p
   const diffMin = Math.floor(diffMs / 60000)
   const diffHr = Math.floor(diffMs / 3600000)
   const diffDay = Math.floor(diffMs / 86400000)
-  if (diffMin < 1) return '刚刚'
-  if (diffMin < 60) return `${diffMin} 分钟前`
-  if (diffHr < 24) return `${diffHr} 小时前`
-  if (diffDay < 7) return `${diffDay} 天前`
+  if (diffMin < 1) return i18next.t('time.justNow')
+  if (diffMin < 60) return i18next.t('time.minutesAgo', { n: diffMin })
+  if (diffHr < 24) return i18next.t('time.hoursAgo', { n: diffHr })
+  if (diffDay < 7) return i18next.t('time.daysAgo', { n: diffDay })
   return dateStyle === 'long'
-    ? date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })
-    : date.toLocaleDateString('zh-CN')
+    ? date.toLocaleDateString(currentLocale(), { year: 'numeric', month: 'short', day: 'numeric' })
+    : date.toLocaleDateString(currentLocale())
 }
 
 /** 编辑器加载/草稿时间的秒级相对时间：刚刚 → N 秒前 → N 分钟前 → 当天 HH:MM */
 export function relativeTime(date: Date | null): string {
   if (!date) return '—'
   const diff = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (diff < 5) return '刚刚'
-  if (diff < 60) return `${diff} 秒前`
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
-  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  if (diff < 5) return i18next.t('time.justNow')
+  if (diff < 60) return i18next.t('time.secondsAgo', { n: diff })
+  if (diff < 3600) return i18next.t('time.minutesAgo', { n: Math.floor(diff / 60) })
+  return date.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })
 }
 
 /**
@@ -55,8 +62,8 @@ export function formatSqliteDateTime(dateStr: string): string {
   if (!Number.isFinite(date.getTime())) return '—'
   const sameDay = date.toDateString() === new Date().toDateString()
   return sameDay
-    ? date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    : date.toLocaleString('zh-CN', {
+    ? date.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : date.toLocaleString(currentLocale(), {
         year: 'numeric', month: 'short', day: 'numeric',
         hour: '2-digit', minute: '2-digit',
       })
@@ -71,8 +78,8 @@ export function formatIsoDateTime(iso: string): string {
   if (!Number.isFinite(date.getTime())) return iso
   const sameDay = date.toDateString() === new Date().toDateString()
   return sameDay
-    ? date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    : date.toLocaleString('zh-CN', {
+    ? date.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : date.toLocaleString(currentLocale(), {
         year: 'numeric', month: 'short', day: 'numeric',
         hour: '2-digit', minute: '2-digit',
       })

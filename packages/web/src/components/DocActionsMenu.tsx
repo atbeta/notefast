@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Archive,
   ArchiveRestore,
@@ -65,6 +66,7 @@ export default function DocActionsMenu({
   className = '',
   compact = false,
 }: DocActionsMenuProps) {
+  const { t } = useTranslation()
   const toast = useToast()
   const menuId = useId()
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -81,7 +83,7 @@ export default function DocActionsMenu({
 
   const status = doc.status === 'inbox' || doc.status === 'archived' ? doc.status : 'note'
   const aiExclude = doc.ai_exclude === true
-  const title = doc.title || '未命名文档'
+  const title = doc.title || t('docActions.untitled')
 
   const close = useCallback(() => setOpen(false), [])
 
@@ -158,7 +160,7 @@ export default function DocActionsMenu({
       setShowRename(false)
       afterMutation()
     } catch {
-      toast.error({ title: '重命名失败' })
+      toast.error({ title: t('docActions.renameFailed') })
     } finally {
       setBusy(false)
     }
@@ -171,24 +173,28 @@ export default function DocActionsMenu({
       await api.patch(`/docs/${doc.id}/status`, { status: next })
       afterMutation()
       toast.success({
-        title: next === 'archived' ? '已归档' : status === 'inbox' ? '已加入笔记' : '已恢复为笔记',
+        title: next === 'archived'
+          ? t('docActions.archived')
+          : status === 'inbox'
+            ? t('docActions.addedToNotes')
+            : t('docActions.restoredToNotes'),
         durationMs: 6000,
         action: {
-          label: '撤销',
+          label: t('docActions.undo'),
           onClick: () => {
             void (async () => {
               try {
                 await api.patch(`/docs/${doc.id}/status`, { status })
                 afterMutation()
               } catch {
-                toast.error({ title: '撤销失败' })
+                toast.error({ title: t('docActions.undoFailed') })
               }
             })()
           },
         },
       })
     } catch {
-      toast.error({ title: '操作失败' })
+      toast.error({ title: t('docActions.operationFailed') })
     } finally {
       setBusy(false)
     }
@@ -200,9 +206,9 @@ export default function DocActionsMenu({
     try {
       await api.patch(`/docs/${doc.id}/ai-exclude`, { ai_exclude: !aiExclude })
       afterMutation()
-      toast.success({ title: aiExclude ? '已恢复对 AI 可见' : '已对 AI 隐藏' })
+      toast.success({ title: aiExclude ? t('docActions.aiRestore') : t('docActions.aiHide') })
     } catch {
-      toast.error({ title: '操作失败' })
+      toast.error({ title: t('docActions.operationFailed') })
     } finally {
       setBusy(false)
     }
@@ -214,7 +220,7 @@ export default function DocActionsMenu({
     try {
       const res = await fetchWithAuth(`/docs/${doc.id}/export/file`)
       if (!res.ok) {
-        toast.error({ title: '导出失败' })
+        toast.error({ title: t('docActions.exportFailed') })
         return
       }
       const blob = await res.blob()
@@ -223,10 +229,10 @@ export default function DocActionsMenu({
         || (blob.type.includes('zip') ? `${title}.zip` : `${title}.md`)
       triggerBlobDownload(blob, filename)
       toast.success({
-        title: filename.endsWith('.zip') ? '已导出（含图片）' : '已导出 Markdown',
+        title: filename.endsWith('.zip') ? t('docActions.exportedWithImages') : t('docActions.exportedMarkdown'),
       })
     } catch {
-      toast.error({ title: '导出失败' })
+      toast.error({ title: t('docActions.exportFailed') })
     } finally {
       setBusy(false)
     }
@@ -240,25 +246,25 @@ export default function DocActionsMenu({
       afterMutation()
       // 软删除 + restore 端点：Undo toast 是 Web 上唯一的恢复入口
       toast.success({
-        title: surface === 'inbox' ? '已丢弃' : '已删除',
+        title: surface === 'inbox' ? t('docActions.discarded') : t('docActions.deleted'),
         durationMs: 6000,
         action: {
-          label: '撤销',
+          label: t('docActions.undo'),
           onClick: () => {
             void (async () => {
               try {
                 await api.post(`/blocks/${doc.id}/restore`, {})
                 afterMutation()
-                toast.success({ title: '已恢复' })
+                toast.success({ title: t('docActions.restored') })
               } catch {
-                toast.error({ title: '撤销失败' })
+                toast.error({ title: t('docActions.undoFailed') })
               }
             })()
           },
         },
       })
     } catch {
-      toast.error({ title: '删除失败' })
+      toast.error({ title: t('docActions.deleteFailed') })
       setBusy(false)
       setShowDelete(false)
     }
@@ -268,7 +274,7 @@ export default function DocActionsMenu({
 
   items.push({
     id: 'open-tab',
-    label: '在新标签打开',
+    label: t('docActions.openInNewTab'),
     icon: <ExternalLink className={iconCls} strokeWidth={iconStroke} />,
     onSelect: () => {
       close()
@@ -278,7 +284,7 @@ export default function DocActionsMenu({
 
   items.push({
     id: 'rename',
-    label: '重命名',
+    label: t('docActions.rename'),
     icon: <Pencil className={iconCls} strokeWidth={iconStroke} />,
     onSelect: () => {
       close()
@@ -290,7 +296,7 @@ export default function DocActionsMenu({
   if (surface === 'inbox') {
     items.push({
       id: 'promote',
-      label: '加入笔记',
+      label: t('docActions.addToNotes'),
       icon: <ArrowUpRight className={iconCls} strokeWidth={iconStroke} />,
       onSelect: () => { void patchStatus('note') },
       disabled: busy,
@@ -298,7 +304,7 @@ export default function DocActionsMenu({
   } else if (surface === 'archived' || status === 'archived') {
     items.push({
       id: 'restore',
-      label: '恢复为笔记',
+      label: t('docActions.restoreToNotes'),
       icon: <ArchiveRestore className={iconCls} strokeWidth={iconStroke} />,
       onSelect: () => { void patchStatus('note') },
       disabled: busy,
@@ -306,7 +312,7 @@ export default function DocActionsMenu({
   } else if (status !== 'inbox') {
     items.push({
       id: 'archive',
-      label: '归档',
+      label: t('docActions.archive'),
       icon: <Archive className={iconCls} strokeWidth={iconStroke} />,
       onSelect: () => { void patchStatus('archived') },
       disabled: busy,
@@ -315,7 +321,7 @@ export default function DocActionsMenu({
 
   items.push({
     id: 'share',
-    label: '分享…',
+    label: t('docActions.share'),
     icon: <Share2 className={iconCls} strokeWidth={iconStroke} />,
     onSelect: () => {
       close()
@@ -325,7 +331,7 @@ export default function DocActionsMenu({
 
   items.push({
     id: 'export',
-    label: '导出',
+    label: t('docActions.export'),
     icon: <Download className={iconCls} strokeWidth={iconStroke} />,
     onSelect: () => { void handleExport() },
     disabled: busy,
@@ -333,7 +339,7 @@ export default function DocActionsMenu({
 
   items.push({
     id: 'ai-exclude',
-    label: aiExclude ? '恢复对 AI 可见' : '对 AI 隐藏',
+    label: aiExclude ? t('docActions.restoreAiVisibility') : t('docActions.hideFromAi'),
     icon: aiExclude
       ? <Eye className={iconCls} strokeWidth={iconStroke} />
       : <EyeOff className={iconCls} strokeWidth={iconStroke} />,
@@ -343,7 +349,7 @@ export default function DocActionsMenu({
 
   items.push({
     id: 'delete',
-    label: surface === 'inbox' ? '丢弃' : '删除',
+    label: surface === 'inbox' ? t('docActions.discard') : t('docActions.delete'),
     icon: <Trash2 className={iconCls} strokeWidth={iconStroke} />,
     onSelect: () => {
       close()
@@ -369,7 +375,7 @@ export default function DocActionsMenu({
           aria-haspopup="menu"
           aria-expanded={open}
           aria-controls={open ? menuId : undefined}
-          aria-label={`「${title}」的更多操作`}
+          aria-label={t('docActions.moreActionsFor', { title })}
           disabled={busy}
           onClick={(e) => {
             e.preventDefault()
@@ -388,7 +394,7 @@ export default function DocActionsMenu({
           ref={panelRef}
           id={menuId}
           role="menu"
-          aria-label="文档操作"
+          aria-label={t('docActions.menuLabel')}
           className="fixed z-[80] min-w-[180px] max-w-[240px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in "
           style={{
             top: pos.openUp ? undefined : pos.top,
@@ -426,13 +432,13 @@ export default function DocActionsMenu({
 
       <ConfirmDialog
         open={showDelete}
-        title={surface === 'inbox' ? '丢弃收集项' : '删除文档'}
+        title={surface === 'inbox' ? t('docActions.confirmDiscardTitle') : t('docActions.confirmDeleteTitle')}
         message={
           surface === 'inbox'
-            ? `确定丢弃「${title}」吗？丢弃后可在右下角提示中撤销。`
-            : `确定要删除「${title}」吗？删除后可在右下角提示中撤销。`
+            ? t('docActions.confirmDiscardMsg', { title })
+            : t('docActions.confirmDeleteMsg', { title })
         }
-        confirmLabel={busy ? (surface === 'inbox' ? '丢弃中…' : '删除中…') : (surface === 'inbox' ? '丢弃' : '删除')}
+        confirmLabel={busy ? (surface === 'inbox' ? t('docActions.discarding') : t('docActions.deleting')) : (surface === 'inbox' ? t('docActions.discard') : t('docActions.delete'))}
         destructive
         onConfirm={() => { void handleDelete() }}
         onCancel={() => setShowDelete(false)}
@@ -446,7 +452,7 @@ export default function DocActionsMenu({
         <div className="fixed inset-0 z-[90] flex items-center justify-center">
           <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowRename(false)} />
           <div className="relative bg-card rounded-lg shadow-2xl shadow-black/40 max-w-sm w-full mx-4 p-6 animate-fade-in">
-            <h3 className="text-[15px] font-medium text-foreground tracking-tight mb-3">重命名</h3>
+            <h3 className="text-[15px] font-medium text-foreground tracking-tight mb-3">{t('docActions.renameTitle')}</h3>
             <input
               ref={renameInputRef}
               value={renameDraft}
@@ -456,7 +462,7 @@ export default function DocActionsMenu({
                 if (e.key === 'Escape') setShowRename(false)
               }}
               className="w-full px-3 py-2 text-[14px] rounded-md border border-border bg-background text-foreground outline-none focus:border-foreground/30"
-              placeholder="文档标题"
+              placeholder={t('docActions.titlePlaceholder')}
               disabled={busy}
             />
             <div className="flex justify-end gap-2.5 mt-5">
@@ -465,7 +471,7 @@ export default function DocActionsMenu({
                 onClick={() => setShowRename(false)}
                 className="px-3.5 py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 rounded-md transition-colors"
               >
-                取消
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -473,7 +479,7 @@ export default function DocActionsMenu({
                 onClick={() => { void handleRenameSubmit() }}
                 className="px-3.5 py-1.5 text-[13px] font-medium rounded-md bg-foreground text-background shadow-sm hover:bg-foreground/90 disabled:opacity-40 transition-all"
               >
-                保存
+                {t('common.save')}
               </button>
             </div>
           </div>

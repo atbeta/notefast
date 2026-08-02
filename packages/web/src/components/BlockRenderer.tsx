@@ -1,5 +1,6 @@
 import { useState, useEffect, createElement, memo } from 'react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, Link2 } from 'lucide-react'
 import type { Block } from '@notefast/core'
 import { scrollToElement } from '../lib/scroll'
@@ -91,6 +92,7 @@ function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
 // ───────────────────────── Heading ─────────────────────────
 
 function HeadingTag({ block }: { block: Block }) {
+  const { t } = useTranslation()
   // 兼容历史数据：新数据存 headingLevel，早期可能存 level
   const level =
     (block.properties.headingLevel as number) ||
@@ -117,7 +119,7 @@ function HeadingTag({ block }: { block: Block }) {
         <>
           <a
             href={`#${block.id}`}
-            aria-label="定位到本节"
+            aria-label={t('block.navigateToSection')}
             className="absolute -left-6 top-1/2 -translate-y-1/2 p-1 rounded text-muted-foreground/70 opacity-0 group-hover:opacity-100 hover:text-foreground transition-all"
             onClick={(e) => {
               e.preventDefault()
@@ -333,6 +335,8 @@ function ChildrenView({ children }: { children: Block[] }) {
 // ───────────────────────── 树遍历 ─────────────────────────
 
 const BlockNode = memo(function BlockNode({ block }: BlockNodeProps) {
+  const { t } = useTranslation()
+  // ⚠️ hooks 必须在 switch 之前调用（memo 组件内 hooks 顺序不可变）
   switch (block.type) {
     case 'heading':
       return <HeadingTag block={block} />
@@ -344,7 +348,7 @@ const BlockNode = memo(function BlockNode({ block }: BlockNodeProps) {
       }
       return (
         <p id={block.id} className={`scroll-mt-20 leading-[1.75] text-foreground/95${block.content && HANGING_OPEN_PUNCT_RE.test(block.content) ? ' hanging-punct' : ''}`}>
-          {block.content ? renderInline(block.content, `p-${block.id}`) : <span className="text-muted-foreground">（空白段落）</span>}
+          {block.content ? renderInline(block.content, `p-${block.id}`) : <span className="text-muted-foreground">{t('block.emptyParagraph')}</span>}
         </p>
       )
 
@@ -369,13 +373,14 @@ const BlockNode = memo(function BlockNode({ block }: BlockNodeProps) {
       )
 
     default:
-      return <p className="text-muted-foreground italic">[未识别块类型：{block.type}]</p>
+      return <p className="text-muted-foreground italic">{t('block.unknownBlockType', { type: block.type })}</p>
   }
 })
 
 export default function BlockRenderer({ block, depth = 0 }: BlockRendererProps) {
+  const { t } = useTranslation()
   if (!block) {
-    return <p className="text-muted-foreground italic">空白文档</p>
+    return <p className="text-muted-foreground italic">{t('block.emptyDocument')}</p>
   }
 
   if (depth > 20) return null

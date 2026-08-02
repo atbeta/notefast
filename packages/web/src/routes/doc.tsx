@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import type { Block, HeadingNode } from '@notefast/core'
 import { buildHeadingTree } from '@notefast/core'
 import {
@@ -19,6 +20,7 @@ import {
   PencilLine,
   Network,
 } from 'lucide-react'
+import i18next from '../i18n'
 import { api, request } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
 import MarkdownEditor from '../components/MarkdownEditor'
@@ -29,7 +31,7 @@ import PageHeader from '../components/PageHeader'
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
 import { useAiChatOpen } from '../components/Layout'
 import { scrollToElement, findScrollableAncestor } from '../lib/scroll'
-import { formatRelative, relativeTime, formatSqliteDateTime } from '../lib/time'
+import { formatRelative, relativeTime, formatSqliteDateTime, currentLocale } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
 import { Kbd, Tooltip, useToast } from '../components/ui'
@@ -59,12 +61,12 @@ function revisionKey(rev: DocRevision): string {
 /** 来源标签：actor → 可读文案（快照与块级都显示修改来源） */
 function actorLabel(rev: DocRevision): string {
   switch (rev.actor) {
-    case 'revert': return '回退操作'
-    case 'ai': return 'AI 写入'
-    case 'mcp': return 'MCP 写入'
-    case 'editor': return 'Web 编辑器'
-    case 'user': return '直接编辑'
-    default: return rev.actor || '编辑'
+    case 'revert': return i18next.t('doc.revisionActionRevert')
+    case 'ai': return i18next.t('doc.revisionActionAi')
+    case 'mcp': return i18next.t('doc.revisionActionMcp')
+    case 'editor': return i18next.t('doc.revisionActionEditor')
+    case 'user': return i18next.t('doc.revisionActionDirect')
+    default: return rev.actor || i18next.t('doc.revisionActionEdit')
   }
 }
 
@@ -140,6 +142,7 @@ function flattenHeadings(nodes: HeadingNode[]): Array<HeadingNode & { depth: num
 }
 
 export default function DocPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const location = useLocation()
@@ -361,7 +364,7 @@ export default function DocPage() {
         if (inPlace()) return
         if (findTarget()) jump()
         // 锚点失效（回答生成后文档被编辑/删除，或过期引用）：明确告知而非沉默停在顶部
-        else toast.info({ title: '原文块已不存在', description: '该内容可能在此之后被编辑或删除' })
+        else toast.info({ title: t('doc.blockNotFound'), description: t('doc.blockNotFoundDescription') })
       }, 900),
     ]
     return () => timers.forEach(clearTimeout)
@@ -371,7 +374,7 @@ export default function DocPage() {
 
   const saveTitle = async () => {
     if (!id || !doc || titleDraft.trim() === doc.content) return
-    const newTitle = titleDraft.trim() || '未命名文档'
+    const newTitle = titleDraft.trim() || t('doc.untitledDocument')
     try {
       await api.patch('/blocks/' + id, { content: newTitle })
       setRefreshKey((k) => k + 1)
@@ -405,7 +408,7 @@ export default function DocPage() {
         method: 'POST',
         body: JSON.stringify({ content: body.slice(0, 4000) }),
       })
-      if (res.title && (!doc.content || doc.content === '未命名文档' || doc.content.match(/^\d+月\d+日$/))) {
+      if (res.title && (!doc.content || doc.content === t('doc.untitledDocument') || doc.content.match(/^\d+月\d+日$/))) {
         await api.patch('/blocks/' + id, { content: res.title })
         setRefreshKey((k) => k + 1)
       }
@@ -474,17 +477,17 @@ export default function DocPage() {
       navigate('/')
       // 软删除 + restore 端点：Undo toast 是 Web 上唯一的恢复入口
       toast.success({
-        title: '已删除',
+        title: t('doc.deleted'),
         durationMs: 6000,
         action: {
-          label: '撤销',
+          label: t('doc.undo'),
           onClick: () => {
             void (async () => {
               try {
                 await api.post(`/blocks/${id}/restore`, {})
-                toast.success({ title: '已恢复' })
+                toast.success({ title: t('doc.restored') })
               } catch {
-                toast.error({ title: '撤销失败' })
+                toast.error({ title: t('doc.undoFailed') })
               }
             })()
           },
@@ -529,7 +532,7 @@ export default function DocPage() {
   // 加载中但还没到骨架延迟：空 div 撑住布局，避免 Error 态闪现
   if (!doc && loading) return <div className="flex-1" />
 
-  if (!doc) return <ErrorState message={error || '文档不存在'} />
+  if (!doc) return <ErrorState message={error || t('doc.docNotFound')} />
 
   return (
     <div className="flex flex-col lg:flex-row h-full">
@@ -542,11 +545,11 @@ export default function DocPage() {
               to="/"
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
-              所有文档
+              {t('doc.allDocs')}
             </Link>
             <span className="text-border-strong">/</span>
             <span className="font-medium text-foreground truncate max-w-[200px] lg:max-w-[400px]">
-              {doc.content || '无标题文档'}
+              {doc.content || t('doc.untitledDocument')}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -555,7 +558,7 @@ export default function DocPage() {
                 type="button"
                 onClick={handleStartEdit}
                 className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent"
-                title="进入编辑"
+                title={t('doc.enterEdit')}
               >
                 <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
               </button>
@@ -563,14 +566,14 @@ export default function DocPage() {
             {isEditing && (
               <span
                 className="flex items-center gap-1.5 text-[12px] text-muted-foreground"
-                title="编辑内容会自动保存到本地草稿，⌘S 写入知识库"
+                title={t('doc.editSaveHint')}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                编辑中
+                {t('doc.editing')}
               </span>
             )}
             <div className="w-px h-4 bg-border/60 mx-1" />
-            <Tooltip label="查看笔记关联图谱">
+            <Tooltip label={t('doc.viewGraph')}>
               <Link
                 to={`/graph?mode=docs&center=${encodeURIComponent(id ?? '')}&center_type=doc`}
                 className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -578,7 +581,7 @@ export default function DocPage() {
                 <Network className="w-3.5 h-3.5" strokeWidth={1.75} />
               </Link>
             </Tooltip>
-            <Tooltip label={docShared ? '已公开分享' : '分享文档'}>
+            <Tooltip label={docShared ? t('doc.alreadyShared') : t('doc.shareDoc')}>
               <button
                 ref={shareBtnRef}
                 type="button"
@@ -599,7 +602,7 @@ export default function DocPage() {
                 )}
               </button>
             </Tooltip>
-            <Tooltip label="删除文档">
+            <Tooltip label={t('doc.deleteDoc')}>
               <button
                 type="button"
                 onClick={() => setShowDelete(true)}
@@ -629,55 +632,57 @@ export default function DocPage() {
               <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
                 <PencilLine className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
                 <span className="flex-1">
-                  有未保存的草稿{draftInfo.updatedAt > 0 ? `（${relativeTime(new Date(draftInfo.updatedAt))}编辑）` : ''}
+                  {draftInfo.updatedAt > 0
+                    ? t('doc.draftWarningWithTime', { time: relativeTime(new Date(draftInfo.updatedAt)) })
+                    : t('doc.draftWarning')}
                 </span>
                 <button
                   type="button"
                   onClick={handleStartEdit}
                   className="font-medium text-primary hover:text-primary/80 transition-colors"
                 >
-                  继续编辑
+                  {t('doc.continueEdit')}
                 </button>
                 <button
                   type="button"
                   onClick={() => { editorDraft.clearDraft(); setDraftInfo(null) }}
                   className="text-muted-foreground/70 hover:text-destructive transition-colors"
                 >
-                  丢弃
+                  {t('doc.discard')}
                 </button>
               </div>
             )}
             {docStatus === 'inbox' && (
               <div className="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
                 <Inbox className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
-                <span className="flex-1 min-w-[12rem]">此篇在收集箱中，不会出现在「所有文档」。整理好后可加入笔记。</span>
+                <span className="flex-1 min-w-[12rem]">{t('doc.inboxDescription')}</span>
                 <button
                   type="button"
                   onClick={handlePromoteFromInbox}
                   disabled={statusSaving}
                   className="shrink-0 text-foreground underline underline-offset-2 hover:text-foreground/80"
                 >
-                  加入笔记
+                  {t('doc.addToNotes')}
                 </button>
                 <Link to="/inbox" className="shrink-0 text-muted-foreground hover:text-foreground">
-                  返回收集箱
+                  {t('doc.backToInbox')}
                 </Link>
               </div>
             )}
             {docStatus === 'archived' && (
               <div className="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
                 <Archive className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
-                <span className="flex-1 min-w-[12rem]">此篇已归档，不出现在「所有文档」，AI 回答默认也不再引用。</span>
+                <span className="flex-1 min-w-[12rem]">{t('doc.archivedDescription')}</span>
                 <button
                   type="button"
                   onClick={handleToggleArchive}
                   disabled={statusSaving}
                   className="shrink-0 text-foreground underline underline-offset-2 hover:text-foreground/80"
                 >
-                  恢复为笔记
+                  {t('doc.restoreToNotes')}
                 </button>
                 <Link to="/archived" className="shrink-0 text-muted-foreground hover:text-foreground">
-                  查看归档
+                  {t('doc.viewArchived')}
                 </Link>
               </div>
             )}
@@ -691,14 +696,14 @@ export default function DocPage() {
                 onBlur={saveTitle}
                 onKeyDown={handleTitleKeyDown}
                 className="input-underline font-bold text-foreground"
-                placeholder="无标题文档"
+                placeholder={t('doc.untitledDocument')}
               />
               <button
                 type="button"
                 onClick={handleSuggestTitle}
                 disabled={generatingTitle || aiExclude}
                 className="absolute right-1 sm:-right-8 top-3 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-50 p-1.5 text-muted-foreground hover:text-foreground transition-all rounded disabled:opacity-30"
-                title={aiExclude ? '已对 AI 隐藏，无法生成标题' : 'AI 生成标题'}
+                title={aiExclude ? t('doc.aiHiddenNoTitle') : t('doc.generateTitleAi')}
               >
                 {generatingTitle ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -711,11 +716,11 @@ export default function DocPage() {
             {/* Meta row — 阅读态展示，融入标题与正文之间 */}
             {!isEditing && (
               <div className="mt-2 mb-8 text-[12px] text-muted-foreground/70 tabular-nums select-none">
-                {wordCount.toLocaleString('zh-CN')} 字
+                {wordCount.toLocaleString(currentLocale())} {t('doc.charCount')}
                 {updatedAt && (
                   <>
                     <span className="mx-2 text-border-strong">·</span>
-                    更新于 {updatedAt}
+                    {t('doc.updatedAtLabel', { time: updatedAt })}
                   </>
                 )}
               </div>
@@ -732,9 +737,9 @@ export default function DocPage() {
                     onClick={handleToggleArchive}
                     disabled={statusSaving}
                     className="text-[11.5px] text-muted-foreground/75 hover:text-foreground transition-colors"
-                    title="归档后不出现在「所有文档」，AI 回答默认不再引用；可随时恢复"
+                    title={t('doc.archiveTooltip')}
                   >
-                    归档
+                    {t('doc.archive')}
                   </button>
                 )}
                 {!aiExclude && (
@@ -743,9 +748,9 @@ export default function DocPage() {
                     onClick={handleToggleAiExclude}
                     disabled={aiExcludeSaving}
                     className="text-[11.5px] text-muted-foreground/75 hover:text-foreground transition-colors"
-                    title="隐藏后 AI 将无法索引或检索本文（你仍可在 Web 界面中搜索与编辑）"
+                    title={t('doc.aiExcludeTooltip')}
                   >
-                    对 AI 隐藏
+                    {t('doc.aiExclude')}
                   </button>
                 )}
               </div>
@@ -755,16 +760,16 @@ export default function DocPage() {
               <div className="mb-4 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground/80 leading-relaxed">
                 <span className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-foreground/80">
                   <EyeOff className="w-3 h-3 shrink-0" strokeWidth={1.75} />
-                  已对 AI 隐藏
+                  {t('doc.aiExcluded')}
                 </span>
-                <span>不会被 AI 索引、检索或自动建链；外部工具也无法读取。你仍可在 Web 中搜索与编辑。</span>
+                <span>{t('doc.aiExcludeDescription')}</span>
                 <button
                   type="button"
                   onClick={handleToggleAiExclude}
                   disabled={aiExcludeSaving}
                   className="text-foreground/90 underline underline-offset-2 hover:text-foreground"
                 >
-                  恢复对 AI 可见
+                  {t('doc.restoreAiVisible')}
                 </button>
               </div>
             )}
@@ -788,9 +793,13 @@ export default function DocPage() {
                     <div className="empty-icon-tile">
                       <SquarePen className="w-5 h-5" />
                     </div>
-                    <h3 className="text-[15px] font-medium text-foreground mb-1.5">空白文档</h3>
+                    <h3 className="text-[15px] font-medium text-foreground mb-1.5">{t('doc.emptyDocument')}</h3>
                     <p className="text-[13px] text-muted-foreground max-w-[300px] leading-relaxed flex items-center justify-center gap-1.5 flex-wrap">
-                      按下 <Kbd>⌘E</Kbd> 开始写作，或 <Kbd>⌘J</Kbd> 向 AI 提问。
+                      <span>{t('doc.emptyDocumentHintStart')}</span>
+                      <Kbd>⌘E</Kbd>
+                      <span>{t('doc.emptyDocumentHintMid')}</span>
+                      <Kbd>⌘J</Kbd>
+                      <span>{t('doc.emptyDocumentHintEnd')}</span>
                     </p>
                   </div>
                 )}
@@ -807,7 +816,7 @@ export default function DocPage() {
                         className={`w-3.5 h-3.5 transition-transform ${tocOpen ? '' : '-rotate-90'}`}
                         strokeWidth={2}
                       />
-                      目录
+                      {t('doc.tableOfContents')}
                       <span className="text-[11px] text-muted-foreground/60 tabular-nums ml-0.5">
                         {flatHeadings.length}
                       </span>
@@ -838,10 +847,10 @@ export default function DocPage() {
           <div className="h-14 shrink-0 border-b border-border/50 flex items-end px-2 gap-0.5">
             {(
               [
-                { id: 'outline' as const, label: '大纲', count: flatHeadings.length },
-                { id: 'backlinks' as const, label: '链接', count: backlinks.length },
-                { id: 'entities' as const, label: '实体', count: null },
-                { id: 'history' as const, label: '历史', count: null },
+                { id: 'outline' as const, label: t('doc.outline'), count: flatHeadings.length },
+                { id: 'backlinks' as const, label: t('doc.backlinks'), count: backlinks.length },
+                { id: 'entities' as const, label: t('doc.entities'), count: null },
+                { id: 'history' as const, label: t('doc.history'), count: null },
               ] as const
             ).map((tab) => {
               const active = railTab === tab.id
@@ -894,9 +903,9 @@ export default function DocPage() {
 
       <ConfirmDialog
         open={showDelete}
-        title="删除文档"
-        message="确定要删除这篇文档吗？删除后可在右下角提示中撤销。"
-        confirmLabel={deleting ? '删除中...' : '删除'}
+        title={t('doc.confirmDeleteTitle')}
+        message={t('doc.confirmDeleteDescription')}
+        confirmLabel={deleting ? t('doc.deleting') : t('common.delete')}
         destructive
         onConfirm={handleDelete}
         onCancel={() => setShowDelete(false)}
@@ -917,14 +926,15 @@ export default function DocPage() {
 function OutlineView({
   headings, loading
 }: { headings: Array<HeadingNode & { depth: number }>; loading: boolean }) {
+  const { t } = useTranslation()
   // 仅首次加载（无数据）时显示加载态；切换文档时保留旧大纲直至新数据到达，避免闪烁
   if (loading && headings.length === 0) {
-    return <div className="px-1 text-[12px] text-muted-foreground/70">加载中…</div>
+    return <div className="px-1 text-[12px] text-muted-foreground/70">{t('common.loading')}</div>
   }
   if (headings.length === 0) {
     return (
       <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
-        无标题章节
+        {t('doc.noHeadings')}
       </div>
     )
   }
@@ -953,13 +963,14 @@ function OutlineView({
 }
 
 function BacklinksView({ backlinks, loading }: { backlinks: Backlink[]; loading: boolean }) {
+  const { t } = useTranslation()
   if (loading && backlinks.length === 0) {
-    return <div className="px-1 text-[12px] text-muted-foreground/70">加载中…</div>
+    return <div className="px-1 text-[12px] text-muted-foreground/70">{t('common.loading')}</div>
   }
   if (backlinks.length === 0) {
     return (
       <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
-        还没有文档引用此处
+        {t('doc.noBacklinks')}
       </div>
     )
   }
@@ -996,6 +1007,7 @@ function HistoryView({
   onRestored: () => void
 }) {
   const toast = useToast()
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
   const [restoring, setRestoring] = useState<string | null>(null)
 
@@ -1012,8 +1024,8 @@ function HistoryView({
     const isSnapshot = rev.kind === 'snapshot'
     const ok = window.confirm(
       isSnapshot
-        ? '确定回退到该整篇快照吗？正文与标题都会恢复为此版本，当前内容会作为新的历史版本保留。'
-        : '确定回退到该块版本吗？仅此内容块会恢复，当前内容会作为新的历史版本保留。',
+        ? t('doc.confirmRevertSnapshot')
+        : t('doc.confirmRevertBlock'),
     )
     if (!ok) return
     setRestoring(revisionKey(rev))
@@ -1024,23 +1036,23 @@ function HistoryView({
       } else {
         await api.post(`/blocks/${rev.block_id}/revisions/${rev.rev}/restore`, {})
       }
-      toast.success({ title: '已回退' })
+      toast.success({ title: t('doc.reverted') })
       onRestored()
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      toast.error({ title: '回退失败', description: msg })
+      toast.error({ title: t('doc.revertFailed'), description: msg })
     } finally {
       setRestoring(null)
     }
   }
 
   if (loading && revisions.length === 0) {
-    return <div className="px-1 text-[12px] text-muted-foreground/70">加载中…</div>
+    return <div className="px-1 text-[12px] text-muted-foreground/70">{t('common.loading')}</div>
   }
   if (revisions.length === 0) {
     return (
       <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
-        暂无历史记录。每次编辑会在此留下可回退的版本。
+        {t('doc.noHistory')}
       </div>
     )
   }
@@ -1051,14 +1063,14 @@ function HistoryView({
   return (
     <div className="flex flex-col gap-3">
       <p className="px-1 text-[11px] text-muted-foreground/60 leading-relaxed">
-        整篇快照回退正文与标题；块级修改仅回退该内容块。
+        {t('doc.historyDescription')}
       </p>
 
       {/* 整篇快照：文档级时间线 */}
       {snapshots.length > 0 && (
         <section>
           <h4 className="px-1 pb-1.5 text-[10.5px] font-medium uppercase tracking-[0.05em] text-muted-foreground/50">
-            整篇快照
+            {t('doc.snapshotSection')}
           </h4>
           <div className="flex flex-col gap-1">
             {snapshots.map((rev, idx) => {
@@ -1086,7 +1098,7 @@ function HistoryView({
       {blockEdits.length > 0 && (
         <section>
           <h4 className="px-1 pb-1.5 text-[10.5px] font-medium uppercase tracking-[0.05em] text-muted-foreground/50">
-            块级修改
+            {t('doc.blockEditSection')}
           </h4>
           <div className="flex flex-col gap-1">
             {blockEdits.map((rev) => (
@@ -1127,6 +1139,7 @@ function RevisionItem({
 }) {
   const key = revisionKey(rev)
   const isOpen = expanded.has(key)
+  const { t } = useTranslation()
   return (
     <div className="group rounded-lg border border-border/50 bg-card/50 overflow-hidden">
       <div className="flex items-center gap-2 px-2.5 py-2">
@@ -1144,7 +1157,7 @@ function RevisionItem({
           type="button"
           onClick={() => onToggle(key)}
           className="shrink-0 p-1 text-muted-foreground/50 hover:text-foreground transition-colors"
-          title={isOpen ? '收起' : '预览'}
+          title={isOpen ? t('doc.collapse') : t('doc.preview')}
         >
           {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
         </button>
@@ -1154,7 +1167,7 @@ function RevisionItem({
           onClick={() => onRestore(rev)}
           className="shrink-0 px-1.5 py-1 text-[11px] font-medium text-primary/80 hover:text-primary disabled:opacity-50 transition-colors"
         >
-          {restoring === key ? '…' : '回退'}
+          {restoring === key ? '…' : t('doc.revert')}
         </button>
       </div>
       {isOpen && (
@@ -1176,7 +1189,7 @@ function RevisionItem({
           </div>
         ) : (
           <pre className="px-3 py-2 border-t border-border/40 text-[11px] leading-relaxed whitespace-pre-wrap font-sans text-muted-foreground bg-background/40 max-h-40 overflow-y-auto">
-            {rev.content || '（空内容）'}
+            {rev.content || t('doc.emptyContent')}
           </pre>
         )
       )}
@@ -1184,12 +1197,14 @@ function RevisionItem({
   )
 }
 
-function ErrorState({ message }: { message: string }) {  return (
+function ErrorState({ message }: { message: string }) {
+  const { t } = useTranslation()
+  return (
     <div className="card text-center py-16 px-6 animate-fade-in">
       <p className="text-destructive mb-4">{message}</p>
       <Link to="/" className="text-primary hover:underline text-sm inline-flex items-center gap-1">
         <ArrowLeft className="w-4 h-4" />
-        返回首页
+        {t('doc.backToHome')}
       </Link>
     </div>
   )

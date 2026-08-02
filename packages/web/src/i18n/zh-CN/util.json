@@ -1,0 +1,20 @@
+{
+  "indexJob": {
+    "eta": " · 约 {{sec}}s",
+    "ready": "索引完成 · {{total}} 块 · {{elapsed}}s",
+    "partial": "索引部分完成 · {{done}}/{{total}} 成功 · {{errors}} 失败 · {{elapsed}}s",
+    "failed": "索引失败{{error}}",
+    "progress": "正在向量化 {{processed}}/{{total}}（{{pct}}%）{{eta}}"
+  },
+  "imageUploader": {
+    "uploadFailed": "图片上传失败"
+  },
+  "toastUI": {
+    "mustBeInProvider": "useToast 必须在 <ToastProvider> 内使用",
+    "close": "关闭"
+  },
+  "copyBtn": {
+    "copied": "已复制",
+    "copy": "复制"
+  }
+}

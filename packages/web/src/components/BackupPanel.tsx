@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Database,
   RefreshCw,
@@ -22,6 +23,7 @@ interface BackupConfig {
 }
 
 export default function BackupPanel() {
+  const { t } = useTranslation()
   const [status, setStatus] = useState<BackupRuntimeStatus | null>(null)
   const [enabled, setEnabled] = useState(false)
   const [locationId, setLocationId] = useState('')
@@ -53,9 +55,9 @@ export default function BackupPanel() {
 
   useEffect(() => {
     refresh().catch((e) => {
-      toast.error({ title: '加载备份配置失败', description: e instanceof Error ? e.message : String(e) })
+      toast.error({ title: t('backup.loadConfigFailed'), description: e instanceof Error ? e.message : String(e) })
     })
-  }, [refresh, toast])
+  }, [refresh, toast, t])
 
   const handleSave = async () => {
     await toast.promise(
@@ -71,9 +73,9 @@ export default function BackupPanel() {
         await refresh()
       },
       {
-        loading: '正在保存备份配置…',
-        success: '备份配置已保存',
-        error: (e) => ({ title: '保存失败', description: e instanceof Error ? e.message : String(e) }),
+        loading: t('backup.savingConfig'),
+        success: t('backup.configSaved'),
+        error: (e) => ({ title: t('backup.saveFailed'), description: e instanceof Error ? e.message : String(e) }),
       },
     ).catch(() => undefined)
   }
@@ -82,12 +84,12 @@ export default function BackupPanel() {
     await toast.promise(
       async () => {
         const r = await api.post<{ ok: boolean; error?: string }>('/backup/test', {})
-        if (!r.ok) throw new Error(r.error || '连接失败')
+        if (!r.ok) throw new Error(r.error || t('backup.connectFailed'))
       },
       {
-        loading: '正在测试 S3 连接…',
-        success: 'S3 连接正常',
-        error: (e) => ({ title: '连接失败', description: e instanceof Error ? e.message : String(e) }),
+        loading: t('backup.testingConnection'),
+        success: t('backup.connectionOk'),
+        error: (e) => ({ title: t('backup.connectFailed'), description: e instanceof Error ? e.message : String(e) }),
       },
     ).catch(() => undefined)
   }
@@ -99,9 +101,9 @@ export default function BackupPanel() {
         await refresh()
       },
       {
-        loading: '正在创建备份…',
-        success: '备份完成',
-        error: (e) => ({ title: '备份失败', description: e instanceof Error ? e.message : String(e) }),
+        loading: t('backup.creatingBackup'),
+        success: t('backup.backupDone'),
+        error: (e) => ({ title: t('backup.backupFailed'), description: e instanceof Error ? e.message : String(e) }),
       },
     ).catch(() => undefined)
   }
@@ -109,18 +111,18 @@ export default function BackupPanel() {
   const copyRestoreCmd = async (objectKey: string) => {
     const cmd = `bun --filter @notefast/server backup:restore -- --data-dir ./data --object-key ${objectKey} --yes`
     await navigator.clipboard.writeText(cmd)
-    toast.success({ title: '已复制恢复命令', description: '请先停止 NoteFast 服务再执行' })
+    toast.success({ title: t('backup.copiedRestoreCmd'), description: t('backup.stopServiceFirst') })
   }
 
   return (
     <SettingsCard
-      title="数据库备份"
+      title={t('backup.title')}
       icon={<Database className="w-4 h-4" strokeWidth={1.75} />}
-      helpTip="手动生成 SQLite 快照并上传 S3（不含可重建的向量索引）。恢复须停服后执行命令行，Web 不提供一键恢复以防误覆盖。"      statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? '已启用' : '未启用'} />}
+      helpTip={t('backup.helpTip')}      statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? t('backup.enabled') : t('backup.notEnabled')} />}
     >
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div className="text-[13px] font-medium text-foreground">启用数据库备份</div>
+          <div className="text-[13px] font-medium text-foreground">{t('backup.enableBackup')}</div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" className="sr-only peer" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
             <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
@@ -129,19 +131,19 @@ export default function BackupPanel() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
           <div>
-            <label className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">存储连接</label>
+            <label className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">{t('backup.storageConnection')}</label>
             <div className="mt-1.5"><LocationSelect value={locationId} onChange={setLocationId} kind="s3" /></div>
           </div>
           <InlineField
-            label="前缀（目录）"
-            description="快照与 media 存放在此前缀下"
+            label={t('backup.prefix')}
+            description={t('backup.prefixDesc')}
             value={prefix}
             onChange={setPrefix}
             mono
             placeholder="backup"
           />
           <InlineField
-            label="保留天数"
+            label={t('backup.retentionDays')}
             value={String(retentionDays)}
             onChange={(v) => setRetentionDays(parseInt(v, 10) || 30)}
             type="number"
@@ -149,16 +151,16 @@ export default function BackupPanel() {
         </div>
 
         <div className="flex items-center gap-3 pt-4 border-t border-border/40">
-          <ActionButton onAction={handleSave}>保存全部更改</ActionButton>
+          <ActionButton onAction={handleSave}>{t('backup.saveAll')}</ActionButton>
           {status?.configured && (
             <>
               <ActionButton variant="secondary" onAction={handleTest}>
                 <Plug className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
-                测试连接
+                {t('backup.testConnection')}
               </ActionButton>
               <ActionButton variant="secondary" onAction={handleRun}>
                 <RefreshCw className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
-                立即备份
+                {t('backup.runNow')}
               </ActionButton>
             </>
           )}
@@ -167,17 +169,17 @@ export default function BackupPanel() {
         {status && (
           <div className="text-[12.5px] text-muted-foreground pt-4 space-y-1.5">
             <div className="flex items-center gap-2">
-              <span className="font-medium text-foreground">状态：</span>
+              <span className="font-medium text-foreground">{t('backup.statusLabel')}</span>
               {status.running ? (
-                <span className="text-amber-500 flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5 animate-spin"/> 进行中 ({status.phase})</span>
+                <span className="text-amber-500 flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5 animate-spin"/> {t('backup.running', { phase: status.phase })}</span>
               ) : (
-                '空闲'
+                t('backup.idle')
               )}
             </div>
             {status.lastSuccessAt && (
               <div className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                上次成功 {formatIsoDateTime(status.lastSuccessAt)}
+                {t('backup.lastSuccess', { time: formatIsoDateTime(status.lastSuccessAt) })}
                 {status.lastResult?.objectKey && (
                   <span className="font-mono ml-1 truncate max-w-[240px] text-[11.5px] opacity-80">{status.lastResult.objectKey}</span>
                 )}
@@ -186,7 +188,7 @@ export default function BackupPanel() {
             {status.lastError && (
               <div className="text-destructive flex items-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5" />
-                上次失败：{status.lastError}
+                {t('backup.lastErrorLabel', { error: status.lastError })}
               </div>
             )}
           </div>
@@ -195,7 +197,7 @@ export default function BackupPanel() {
         {points.length > 0 && (
           <div className="space-y-3 pt-4 border-t border-border/40">
             <h4 className="text-[11.5px] uppercase tracking-[0.08em] text-muted-foreground font-semibold">
-              最近恢复点
+              {t('backup.recentPoints')}
             </h4>
             <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
               {points.map((p) => (
@@ -213,16 +215,16 @@ export default function BackupPanel() {
                     type="button"
                     onClick={() => copyRestoreCmd(p.objectKey)}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-accent hover:text-foreground text-muted-foreground shrink-0 transition-colors border border-transparent hover:border-border/50"
-                    title="复制恢复命令"
+                    title={t('backup.copyRestoreCmdTitle')}
                   >
                     <Copy className="w-3.5 h-3.5" />
-                    <span>命令</span>
+                    <span>{t('backup.command')}</span>
                   </button>
                 </div>
               ))}
             </div>
             <p className="text-[11.5px] text-muted-foreground">
-              恢复前请停止服务。可用 <code className="font-mono bg-accent/50 px-1 py-0.5 rounded text-[10.5px]">--dry-run</code> 预演。
+              {t('backup.restoreHint1')} <code className="font-mono bg-accent/50 px-1 py-0.5 rounded text-[10.5px]">--dry-run</code> {t('backup.restoreHint2')}
             </p>
           </div>
         )}

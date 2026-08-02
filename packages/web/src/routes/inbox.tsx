@@ -6,16 +6,18 @@
 
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Inbox, Plus, ArrowUpRight, Loader2 } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
-import { formatRelative } from '../lib/time'
+import { formatRelative, currentLocale } from '../lib/time'
 import DocActionsMenu from '../components/DocActionsMenu'
 import PageHeader from '../components/PageHeader'
 import { ListRowsSkeleton } from '../components/ui'
 
 export default function InboxPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [notebookId, setNotebookId] = useState('')
   const [title, setTitle] = useState('')
@@ -39,7 +41,7 @@ export default function InboxPage() {
   const handleCapture = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!notebookId || capturing) return
-    const finalTitle = title.trim() || new Date().toLocaleString('zh-CN', {
+    const finalTitle = title.trim() || new Date().toLocaleString(currentLocale(), {
       month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
     })
     setCapturing(true)
@@ -75,7 +77,7 @@ export default function InboxPage() {
       <PageHeader innerClassName="flex items-center justify-between gap-4">
         <div className="min-w-0 flex items-center gap-2">
           <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
-            收集箱
+            {t('inbox.title')}
           </h1>
           {!loading && docs.length > 0 && (
             <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
@@ -89,13 +91,13 @@ export default function InboxPage() {
           className="btn-primary-custom shrink-0"
         >
           <Plus className="w-3.5 h-3.5" strokeWidth={2.25} />
-          快速采集
+          {t('inbox.capture')}
         </button>
       </PageHeader>
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
         <p className="text-[13px] text-muted-foreground leading-relaxed px-1">
-          随手记下的素材、剪藏与草稿。整理后「加入笔记」才会出现在所有文档里。
+          {t('inbox.description')}
         </p>
 
         {showCapture && (
@@ -103,14 +105,14 @@ export default function InboxPage() {
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="标题（可选，留空则为当前时间）"
+              placeholder={t('inbox.titlePlaceholder')}
               className="w-full text-[14px] bg-transparent border-b border-border outline-none py-1.5 text-foreground placeholder:text-muted-foreground/50"
               autoFocus
             />
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="粘贴内容或链接备注（Markdown）…"
+              placeholder={t('inbox.bodyPlaceholder')}
               rows={5}
               className="w-full text-[13px] bg-muted/30 rounded-md border border-border/60 px-3 py-2 outline-none resize-y text-foreground placeholder:text-muted-foreground/50"
             />
@@ -120,7 +122,7 @@ export default function InboxPage() {
                 onClick={() => setShowCapture(false)}
                 className="text-[13px] px-3 py-1.5 text-muted-foreground hover:text-foreground"
               >
-                取消
+                {t('common.cancel')}
               </button>
               <button
                 type="submit"
@@ -128,7 +130,7 @@ export default function InboxPage() {
                 className="btn-primary-custom"
               >
                 {capturing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                存入收集箱
+                {t('inbox.save')}
               </button>
             </div>
           </form>
@@ -141,9 +143,9 @@ export default function InboxPage() {
             <div className="empty-icon-tile">
               <Inbox className="w-5 h-5" />
             </div>
-            <h3 className="text-[15px] font-medium text-foreground mb-1.5">收集箱是空的</h3>
+            <h3 className="text-[15px] font-medium text-foreground mb-1.5">{t('inbox.emptyTitle')}</h3>
             <p className="text-[13px] text-muted-foreground mb-5 max-w-[280px] leading-relaxed">
-              先快速采集一段文字或链接；整理完成后再加入正式笔记。
+              {t('inbox.emptyDesc')}
             </p>
           </div>
         ) : (
@@ -159,12 +161,12 @@ export default function InboxPage() {
                 <div className="min-w-0 flex-1">
                   <Link to={`/doc/${doc.id}`} className="block">
                     <h3 className="font-medium text-[14px] text-foreground tracking-[-0.005em] truncate leading-snug">
-                      {doc.title || '未命名'}
+                      {doc.title || t('common.unnamed')}
                     </h3>
                   </Link>
                   <p className="text-[11.5px] text-muted-foreground mt-0.5 font-mono tabular-nums">
-                    采集于 {formatRelative(doc.created_at)}
-                    {doc.updated_at !== doc.created_at && ` · 更新 ${formatRelative(doc.updated_at)}`}
+                    {t('inbox.capturedAt', { time: formatRelative(doc.created_at) })}
+                    {doc.updated_at !== doc.created_at && t('inbox.updatedSuffix', { time: formatRelative(doc.updated_at) })}
                   </p>
                 </div>
                 <div className="flex items-center gap-0.5 shrink-0">
@@ -173,10 +175,10 @@ export default function InboxPage() {
                     disabled={busyId === doc.id}
                     onClick={() => promote(doc.id)}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-                    title="加入笔记（离开收集箱）"
+                    title={t('inbox.addToNotesTitle')}
                   >
                     <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={1.75} />
-                    加入笔记
+                    {t('inbox.addToNotes')}
                   </button>
                   <DocActionsMenu
                     doc={{ ...doc, status: 'inbox' }}

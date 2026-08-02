@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { FileWarning, Globe } from 'lucide-react'
 import ChatMarkdown from '../components/ChatMarkdown'
+import { currentLocale } from '../lib/time'
 
 /**
  * 公开分享阅读页（/s/:token）—— 无鉴权、无侧栏、无登录弹框。
@@ -34,6 +36,7 @@ function stripLeadingTitleHeading(markdown: string, title: string): string {
 }
 
 export default function SharePage() {
+  const { t } = useTranslation()
   const { token = '' } = useParams()
   const [state, setState] = useState<PageState>({ kind: 'loading' })
 
@@ -66,8 +69,8 @@ export default function SharePage() {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center text-center px-6">
         <FileWarning className="w-8 h-8 text-muted-foreground/60 mb-4" strokeWidth={1.5} />
-        <h1 className="text-[17px] font-medium text-foreground mb-1.5">链接不存在或已关闭</h1>
-        <p className="text-[13.5px] text-muted-foreground">这篇文档的分享可能已被作者关闭。</p>
+        <h1 className="text-[17px] font-medium text-foreground mb-1.5">{t('share.notFoundTitle')}</h1>
+        <p className="text-[13.5px] text-muted-foreground">{t('share.notFoundDesc')}</p>
       </div>
     )
   }
@@ -77,7 +80,7 @@ export default function SharePage() {
     .replace(/asset:([0-9a-f]{64})/g, `/share/${token}/assets/$1`)
   const updatedAt = new Date(doc.updated_at.replace(' ', 'T') + 'Z')
   const dateText = Number.isFinite(updatedAt.getTime())
-    ? updatedAt.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+    ? updatedAt.toLocaleDateString(currentLocale(), { year: 'numeric', month: 'long', day: 'numeric' })
     : ''
 
   return (
@@ -86,21 +89,21 @@ export default function SharePage() {
       <div className="border-b border-border/60 bg-muted/40">
         <div className="max-w-[var(--reading-max-w,42rem)] mx-auto px-6 py-2 flex items-center gap-1.5 text-[12px] text-muted-foreground">
           <Globe className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
-          这是公开分享页面，任何获得链接的人无需登录即可阅读
+          {t('share.publicBanner')}
         </div>
       </div>
       <article className="max-w-[var(--reading-max-w,42rem)] mx-auto px-6 pt-12 pb-24">
         <header className="mb-8">
           <h1 className="text-[28px] font-bold text-foreground leading-snug tracking-[-0.01em]">
-            {doc.title || '无标题文档'}
+            {doc.title || t('share.untitled')}
           </h1>
           {dateText && (
-            <p className="mt-2 text-[12.5px] text-muted-foreground/80">更新于 {dateText}</p>
+            <p className="mt-2 text-[12.5px] text-muted-foreground/80">{t('share.updatedAt', { time: dateText })}</p>
           )}
         </header>
         <ChatMarkdown content={markdown} />
         <footer className="mt-16 pt-6 border-t border-border/60 text-center">
-          <span className="text-[12px] text-muted-foreground/70">由 NoteFast 分享</span>
+          <span className="text-[12px] text-muted-foreground/70">{t('share.byNoteFast')}</span>
         </footer>
       </article>
     </div>

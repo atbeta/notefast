@@ -1,4 +1,6 @@
+import { useTranslation } from 'react-i18next'
 import { FilePlus2, Loader2, Check, AlertTriangle } from 'lucide-react'
+import { currentLocale } from '../../lib/time'
 
 interface EditorFooterProps {
   charCount: number
@@ -25,10 +27,15 @@ export default function EditorFooter({
   relativeTime,
   autoSaveStatus,
 }: EditorFooterProps) {
+  const { t } = useTranslation()
   return (
     <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground/70 tabular-nums">
       <span>
-        {charCount.toLocaleString('zh-CN')} 字 · {lines.toLocaleString('zh-CN')} 行 · 约 {readMin} 分钟
+        {t('editorFooter.stats', {
+          chars: charCount.toLocaleString(currentLocale()),
+          lines: lines.toLocaleString(currentLocale()),
+          minutes: readMin,
+        })}
       </span>
 
       <span className="flex items-center gap-1">
@@ -42,16 +49,16 @@ export default function EditorFooter({
           <span className={`w-1.5 h-1.5 rounded-full ${dirty ? 'bg-amber-500' : 'bg-border'}`} />
         )}
         {autoSaveStatus === 'saving'
-          ? '自动保存中…'
+          ? t('editorFooter.autoSaving')
           : autoSaveStatus === 'saved'
-          ? '已自动保存'
+          ? t('editorFooter.autoSaved')
           : autoSaveStatus === 'error'
-          ? '自动保存失败'
+          ? t('editorFooter.autoSaveFailed')
           : dirty
           ? draftedAt
-            ? `未保存 · 草稿 ${relativeTime(draftedAt)}`
-            : '未保存'
-          : '已是最新'}
+            ? t('editorFooter.unsavedDraft', { time: relativeTime(draftedAt) })
+            : t('editorFooter.unsaved')
+          : t('editorFooter.upToDate')}
       </span>
 
       <span className="ml-auto flex items-center gap-1">
@@ -59,11 +66,11 @@ export default function EditorFooter({
           <button
             type="button"
             onClick={onClearDraft}
-            title="丢弃本地草稿并重新加载"
+            title={t('editorFooter.discardDraftTitle')}
             className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-muted-foreground/80 hover:text-destructive transition-colors"
           >
             <Loader2 className="w-3 h-3" strokeWidth={1.75} />
-            丢弃草稿
+            {t('editorFooter.discardDraft')}
           </button>
         )}
         {onAppendFile && (
@@ -81,8 +88,8 @@ export default function EditorFooter({
               }
               input.click()
             }}
-            title="追加本地 Markdown 文件 (.md)"
-            aria-label="追加本地 Markdown 文件"
+            title={t('editorFooter.appendFileTitle')}
+            aria-label={t('editorFooter.appendFile')}
             className="inline-flex items-center justify-center w-6 h-6 rounded text-muted-foreground/80 hover:text-foreground hover:bg-accent transition-colors"
           >
             <FilePlus2 className="w-3.5 h-3.5" strokeWidth={1.75} />

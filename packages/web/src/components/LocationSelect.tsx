@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useStorageLocations } from '../hooks/useStorageLocations'
 import { STORAGE_SECRET_MASK } from '@notefast/core'
 
@@ -16,6 +17,7 @@ export default function LocationSelect({
   kind?: 's3' | 'webdav'
   allowEmpty?: boolean
 }) {
+  const { t } = useTranslation()
   const { locations } = useStorageLocations()
   const filtered = kind ? locations.filter((l) => l.kind === kind) : locations
 
@@ -25,7 +27,7 @@ export default function LocationSelect({
       onChange={(e) => onChange(e.target.value)}
       className="w-full px-3 py-1.5 rounded-md border border-border bg-background outline-none transition-all focus:ring-1 focus:ring-primary/30 focus:border-primary/50 text-[14px]"
     >
-      {allowEmpty && <option value="">（选择存储连接）</option>}
+      {allowEmpty && <option value="">{t('locationSelect.placeholder')}</option>}
       {filtered.map((l) => (
         <option key={l.id} value={l.id}>
           {l.name} · {l.kind === 's3' ? 'S3' : 'WebDAV'}
@@ -34,7 +36,7 @@ export default function LocationSelect({
       ))}
       {filtered.length === 0 && (
         <option value="" disabled>
-          暂无连接，请先在「存储连接」面板创建
+          {t('locationSelect.empty')}
         </option>
       )}
     </select>

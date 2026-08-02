@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   forceCenter,
   forceCollide,
@@ -85,6 +86,7 @@ export default function EntityGraph({
   onSelect,
   onFocus,
 }: EntityGraphProps) {
+  const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
@@ -377,7 +379,7 @@ export default function EntityGraph({
     return (
       <div ref={containerRef} className="h-full w-full">
         <div className="flex h-full items-center justify-center text-[12px] text-muted-foreground/60">
-          计算布局…
+          {t('entityGraph.layoutComputing')}
         </div>
       </div>
     )
@@ -483,8 +485,8 @@ export default function EntityGraph({
           )}
           <div className="mt-0.5 text-[10px] text-muted-foreground tabular-nums">
             {hoverNode.type === 'doc'
-              ? `${hoverNode.mention_count} 个块`
-              : `${entityKindLabel(hoverNode.kind)} · ${hoverNode.mention_count} 次提及`}
+              ? t('entityGraph.tooltipBlocks', { n: hoverNode.mention_count })
+              : t('entityGraph.tooltipMentions', { kind: entityKindLabel(hoverNode.kind), n: hoverNode.mention_count })}
           </div>
         </div>
       )}
@@ -494,13 +496,12 @@ export default function EntityGraph({
         {isDoc ? (
           <>
             <div className="flex items-center gap-1.5">
-              <span
-                className="inline-block w-3.5 h-3 rounded-[3px] border"
+              <span className="inline-block w-3.5 h-3 rounded-[3px] border"
                 style={{ background: 'rgb(var(--graph-note-fill))', borderColor: 'rgb(var(--border-strong))' }}
               />
-              <span>笔记</span>
+              <span>{t('entityGraph.legendDoc')}</span>
             </div>
-            <div className="mt-1">大小 = 内容量 · 连线 = 关联（共享实体 / 引用）</div>
+            <div className="mt-1">{t('entityGraph.legendSizeContent')}</div>
           </>
         ) : (
           <>
@@ -512,7 +513,7 @@ export default function EntityGraph({
                 </span>
               ))}
             </div>
-            <div className="mt-1">大小 = 提及次数 · 连线 = 共现</div>
+            <div className="mt-1">{t('entityGraph.legendSizeMentions')}</div>
           </>
         )}
       </div>

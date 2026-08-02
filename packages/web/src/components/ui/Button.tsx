@@ -12,6 +12,7 @@
 
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { Loader2, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 export type ButtonSize = 'sm' | 'md' | 'lg'
@@ -57,6 +58,7 @@ export function Button({
   className = '',
   ...rest
 }: ButtonProps) {
+  const { t } = useTranslation()
   const isEffectivelyDisabled = disabled || loading
 
   // 主按钮才有 justSaved 视觉强调；其他变体保持简洁
@@ -77,7 +79,7 @@ export function Button({
     (fullWidth ? 'w-full ' : '') +
     visualCls + ' ' + className
 
-  const label = loading ? '处理中…' : justSaved ? '已完成' : children
+  const label = loading ? t('btn.processing') : justSaved ? t('btn.done') : children
   const leading = loading ? (
     <Loader2 className="w-3.5 h-3.5 animate-spin" />
   ) : justSaved ? (

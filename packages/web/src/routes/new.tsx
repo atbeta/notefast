@@ -1,16 +1,19 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Check, X, Upload, Sparkles, Loader2, Tag, Plus } from 'lucide-react'
 import type { Notebook } from '@notefast/core'
 import { request } from '../hooks/useAPI'
+import { currentLocale } from '../lib/time'
 import PageHeader from '../components/PageHeader'
 import SubNavTabs from '../components/SubNavTabs'
 
-function normalizeTag(t: string): string {
-  return t.toLowerCase().replace(/\s+/g, '-').slice(0, 64)
+function normalizeTag(tag: string): string {
+  return tag.toLowerCase().replace(/\s+/g, '-').slice(0, 64)
 }
 
 export default function NewDocPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [notebookId, setNotebookId] = useState('')
   const [title, setTitle] = useState('')
@@ -38,7 +41,7 @@ export default function NewDocPage() {
     setCreating(true)
     setError('')
 
-    const finalTitle = title.trim() || new Date().toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+    const finalTitle = title.trim() || new Date().toLocaleDateString(currentLocale(), { month: 'short', day: 'numeric' })
 
     try {
       let docId: string
@@ -64,7 +67,7 @@ export default function NewDocPage() {
       const qs = q.toString()
       navigate('/doc/' + docId + (qs ? '?' + qs : ''))
     } catch (err) {
-      setError(err instanceof Error ? err.message : '创建失败')
+      setError(err instanceof Error ? err.message : t('newDoc.createFailed'))
       setCreating(false)
     }
   }
@@ -82,7 +85,7 @@ export default function NewDocPage() {
   }
 
   const handleRemoveTag = (tag: string) => {
-    setTags((prev) => prev.filter((t) => t !== tag))
+    setTags((prev) => prev.filter((item) => item !== tag))
   }
 
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -136,8 +139,8 @@ export default function NewDocPage() {
           activeKey={activeTab}
           onChange={(k) => setActiveTab(k as 'create' | 'import')}
           tabs={[
-            { key: 'create', label: '新建文档' },
-            { key: 'import', label: '导入 Markdown' },
+            { key: 'create', label: t('newDoc.tabCreate') },
+            { key: 'import', label: t('newDoc.tabImport') },
           ]}
           trailing={
             <Link
@@ -145,7 +148,7 @@ export default function NewDocPage() {
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>返回</span>
+              <span>{t('common.back')}</span>
             </Link>
           }
         />
@@ -156,20 +159,20 @@ export default function NewDocPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <div className="flex items-baseline justify-between mb-1">
-              <label htmlFor="doc-title" className="text-[12px] font-medium text-muted-foreground">标题</label>
+              <label htmlFor="doc-title" className="text-[12px] font-medium text-muted-foreground">{t('common.title')}</label>
               <button
                 type="button"
                 onClick={handleSuggestTitle}
                 disabled={generating || (!markdown.trim() && !title.trim())}
                 className="inline-flex items-center gap-1 text-[11.5px] text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
-                title="AI 生成标题"
+                title={t('newDoc.aiTitleHint')}
               >
                 {generating ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
                 ) : (
                   <Sparkles className="w-3 h-3" strokeWidth={1.75} />
                 )}
-                {generating ? '生成中…' : 'AI 标题'}
+                {generating ? t('newDoc.generating') : t('newDoc.aiTitle')}
               </button>
             </div>
             <input
@@ -178,21 +181,21 @@ export default function NewDocPage() {
               type="text"
               value={title}
               onChange={(e) => { setTitle(e.target.value); if (error) setError('') }}
-              placeholder="无标题文档"
+              placeholder={t('newDoc.untitledPlaceholder')}
               className={'input-underline ' + (error ? 'error' : '')}
             />
           </div>
 
           <div>
             <div className="flex items-baseline justify-between mb-2">
-              <label htmlFor="doc-markdown" className="text-[12px] font-medium text-muted-foreground">Markdown 内容</label>
-              <span className="text-[11.5px] text-muted-foreground/60">可选</span>
+              <label htmlFor="doc-markdown" className="text-[12px] font-medium text-muted-foreground">{t('newDoc.markdownLabel')}</label>
+              <span className="text-[11.5px] text-muted-foreground/60">{t('newDoc.optional')}</span>
             </div>
             <textarea
               id="doc-markdown"
               value={markdown}
               onChange={(e) => setMarkdown(e.target.value)}
-              placeholder={'# 从这里开始写\n\n支持 **粗体**、代码块与 [[双向链接]] 占位符\n\n占位符语法会在保存时解析为 block 节点'}
+              placeholder={t('newDoc.markdownPlaceholder')}
               rows={9}
               className="input-mono"
             />
@@ -200,20 +203,20 @@ export default function NewDocPage() {
 
           <div>
             <div className="flex items-baseline justify-between mb-2">
-              <label className="text-[12px] font-medium text-muted-foreground">标签</label>
-              <span className="text-[11.5px] text-muted-foreground/60">可选</span>
+              <label className="text-[12px] font-medium text-muted-foreground">{t('newDoc.tagsLabel')}</label>
+              <span className="text-[11.5px] text-muted-foreground/60">{t('newDoc.optional')}</span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <Tag className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" strokeWidth={1.75} />
-              {tags.map((t) => (
+              {tags.map((tag) => (
                 <span
-                  key={t}
+                  key={tag}
                   className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11.5px] bg-muted/60 text-foreground/85"
                 >
-                  <span className="font-mono">{t}</span>
+                  <span className="font-mono">{tag}</span>
                   <button
                     type="button"
-                    onClick={() => handleRemoveTag(t)}
+                    onClick={() => handleRemoveTag(tag)}
                     className="w-4 h-4 rounded-full grid place-items-center text-muted-foreground/50 hover:text-destructive hover:bg-background/60 transition-colors"
                   >
                     <X className="w-3 h-3" strokeWidth={2} />
@@ -229,7 +232,7 @@ export default function NewDocPage() {
                   onBlur={() => {
                     if (tagDraft.trim()) handleAddTag()
                   }}
-                  placeholder="加标签"
+                  placeholder={t('tagEditor.addTag')}
                   className="bg-transparent border-none outline-none text-[11.5px] w-16 placeholder:text-muted-foreground/40 focus:w-28 transition-[width] duration-200"
                 />
               </div>
@@ -249,7 +252,7 @@ export default function NewDocPage() {
               className="btn-ghost-custom"
             >
               <X className="w-3.5 h-3.5" />
-              取消
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
@@ -257,7 +260,7 @@ export default function NewDocPage() {
               className="btn-primary-custom"
             >
               <Check className="w-3.5 h-3.5" strokeWidth={2.25} />
-              {creating ? '创建中…' : '创建并打开'}
+              {creating ? t('newDoc.creating') : t('newDoc.createAndOpen')}
             </button>
           </div>
         </form>
@@ -273,8 +276,8 @@ export default function NewDocPage() {
             <div className="empty-icon-tile mx-auto">
               <Upload className="w-5 h-5" strokeWidth={1.75} />
             </div>
-            <p className="text-sm font-medium text-foreground mb-1">拖入 .md 文件到此处</p>
-            <p className="text-xs text-muted-foreground">或点击选择文件 · 文件名自动作为标题</p>
+            <p className="text-sm font-medium text-foreground mb-1">{t('newDoc.dropHint')}</p>
+            <p className="text-xs text-muted-foreground">{t('newDoc.dropHintSub')}</p>
             <input
               type="file"
               accept=".md,.markdown,text/markdown"

@@ -1,8 +1,10 @@
 import { useEffect, useCallback, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Plus, FileText, Clock, Tag, Star } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
 import { parseTagMatchMode } from '@notefast/core'
+import i18next from '../i18n'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import { useDocChanges } from '../hooks/useDocEvents'
@@ -13,37 +15,37 @@ import TagFilter from '../components/TagFilter'
 import { ListRowsSkeleton } from '../components/ui'
 
 function viewTitle(params: URLSearchParams): string {
-  if (params.get('untagged') === '1' || params.get('view') === 'untagged') return '未加标签'
+  if (params.get('untagged') === '1' || params.get('view') === 'untagged') return i18next.t('home.viewUntagged')
   const within = params.get('within') || params.get('updated_within') || ''
   if (params.get('view') === 'recent' || within) {
-    if (within === '7d') return '最近 7 天更新'
-    if (within === '30d') return '最近 30 天更新'
-    return '最近 24 小时更新'
+    if (within === '7d') return i18next.t('home.viewRecent7d')
+    if (within === '30d') return i18next.t('home.viewRecent30d')
+    return i18next.t('home.viewRecent24h')
   }
   if (params.get('created_within')) {
     const v = params.get('created_within')!
-    return `新建于 ${v} 内`
+    return i18next.t('home.viewCreatedWithin', { v })
   }
   if (params.get('stale_within')) {
     const v = params.get('stale_within')!
-    if (v === '30d') return '30 天未更新'
-    if (v === '90d') return '90 天未更新'
-    return '许久未更新'
+    if (v === '30d') return i18next.t('home.viewStale30d')
+    if (v === '90d') return i18next.t('home.viewStale90d')
+    return i18next.t('home.viewStaleLong')
   }
-  if (params.get('ai_exclude') === '1') return '对 AI 隐藏'
-  if (params.get('status') === 'archived') return '归档'
-  if (params.get('status') === 'inbox') return '收集箱'
+  if (params.get('ai_exclude') === '1') return i18next.t('home.viewAiExclude')
+  if (params.get('status') === 'archived') return i18next.t('home.viewArchived')
+  if (params.get('status') === 'inbox') return i18next.t('home.viewInbox')
   const tags = params.get('tags') || params.get('tag')
   if (tags) {
     const parts = tags.split(',').filter(Boolean)
     if (parts.length >= 2) {
       const mode = parseTagMatchMode(params.get('tag_match'))
-      const suffix = mode === 'any' ? '（任一）' : '（同时）'
-      return `标签${suffix}：${tags}`
+      const suffix = mode === 'any' ? i18next.t('home.tagMatchAnySuffix') : i18next.t('home.tagMatchAllSuffix')
+      return i18next.t('home.tagsTitle', { mode: suffix, tags })
     }
-    return `标签：${tags}`
+    return i18next.t('home.tagsTitleSimple', { tags })
   }
-  return '所有文档'
+  return i18next.t('home.allDocs')
 }
 
 function buildListQuery(params: URLSearchParams): string {
@@ -83,6 +85,7 @@ function buildListQuery(params: URLSearchParams): string {
 }
 
 export default function HomePage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const listQuery = useMemo(() => buildListQuery(searchParams), [searchParams])
@@ -105,6 +108,10 @@ export default function HomePage() {
     searchParams.get('ai_exclude') === '1' ||
     searchParams.get('untagged') === '1' || searchParams.get('view') === 'untagged' ||
     searchParams.get('view') === 'recent'
+
+  // 空状态视觉区分：全量 / 标签筛选 / 其它智能视图
+  const viewKind: 'all' | 'tag' | 'other' =
+    !hasFilter ? 'all' : searchParams.get('tags') || searchParams.get('tag') ? 'tag' : 'other'
 
   const { data, loading, error, refetch } = useApiQuery(
     () => api.get<DocSummary[]>(`/docs/list${listQuery}`),
@@ -132,7 +139,7 @@ export default function HomePage() {
             <button
               onClick={() => { setPinName(title); setShowPinModal(true) }}
               className="p-1 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              title="固定到侧边栏"
+              title={t('home.pinTitle')}
             >
               <Star className="w-3.5 h-3.5" strokeWidth={1.75} fill={isPinned(listQuery) ? 'currentColor' : 'none'} />
             </button>
@@ -145,7 +152,7 @@ export default function HomePage() {
         </div>
         <button onClick={goNew} className="btn-primary-custom shrink-0">
           <Plus className="w-3.5 h-3.5" strokeWidth={2.25} />
-          新建文档
+          {t('home.newDoc')}
         </button>
       </PageHeader>
 
@@ -156,7 +163,7 @@ export default function HomePage() {
           {loading ? (
             <ListRowsSkeleton rows={5} />
           ) : docs.length === 0 ? (
-            <EmptyState onCreate={goNew} title={title} />
+            <EmptyState onCreate={goNew} title={title} kind={viewKind} />
           ) : (
             <DocList docs={docs} onRefresh={handleRefresh} />
           )}
@@ -166,13 +173,13 @@ export default function HomePage() {
       {showPinModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowPinModal(false)}>
           <div className="bg-card border border-border rounded-lg p-5 w-80 shadow-xl space-y-3" onClick={(e) => e.stopPropagation()}>
-            <div className="text-[14px] font-medium text-foreground">固定视图</div>
+            <div className="text-[14px] font-medium text-foreground">{t('home.pinViewTitle')}</div>
             <input
               type="text"
               value={pinName}
               onChange={(e) => setPinName(e.target.value)}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-foreground/20"
-              placeholder="视图名称"
+              placeholder={t('home.pinViewPlaceholder')}
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -183,8 +190,8 @@ export default function HomePage() {
               }}
             />
             <div className="flex items-center justify-end gap-2">
-              <button onClick={() => setShowPinModal(false)} className="px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors">取消</button>
-              <button onClick={() => { pin(pinName || title, listQuery); setShowPinModal(false) }} className="px-3 py-1.5 text-[12px] font-medium bg-foreground text-background rounded-md hover:opacity-90 transition-opacity">固定</button>
+              <button onClick={() => setShowPinModal(false)} className="px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors">{t('common.cancel')}</button>
+              <button onClick={() => { pin(pinName || title, listQuery); setShowPinModal(false) }} className="px-3 py-1.5 text-[12px] font-medium bg-foreground text-background rounded-md hover:opacity-90 transition-opacity">{t('home.pin')}</button>
             </div>
           </div>
         </div>
@@ -193,11 +200,9 @@ export default function HomePage() {
       {showWelcome && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-card border border-border rounded-lg p-8 w-[420px] shadow-2xl space-y-5 text-center">
-            <h2 className="text-[22px] font-bold text-foreground tracking-[-0.02em]">欢迎使用 NoteFast</h2>
+            <h2 className="text-[22px] font-bold text-foreground tracking-[-0.02em]">{t('home.welcomeTitle')}</h2>
             <p className="text-[14px] text-muted-foreground leading-relaxed">
-              基础功能开箱即用：标签、文档、智能视图、全文搜索。
-              <br />
-              配置 AI 后可解锁语义搜索、自动链接与 AI 对话。
+              {t('home.welcomeDesc')}
             </p>
             <div className="flex items-center justify-center gap-3">
               <button
@@ -208,7 +213,7 @@ export default function HomePage() {
                 }}
                 className="px-4 py-2 text-[13px] font-medium bg-foreground text-background rounded-lg hover:opacity-90 transition-opacity"
               >
-                配置 AI
+                {t('home.welcomeConfigureAi')}
               </button>
               <button
                 onClick={() => {
@@ -218,7 +223,7 @@ export default function HomePage() {
                 }}
                 className="px-4 py-2 text-[13px] font-medium border border-border rounded-lg hover:bg-muted transition-colors"
               >
-                创建 API Token
+                {t('home.welcomeCreateToken')}
               </button>
               <button
                 onClick={() => {
@@ -227,7 +232,7 @@ export default function HomePage() {
                 }}
                 className="px-4 py-2 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
               >
-                先看看
+                {t('home.welcomeSkip')}
               </button>
             </div>
           </div>
@@ -238,20 +243,19 @@ export default function HomePage() {
   )
 }
 
-function EmptyState({ onCreate, title }: { onCreate: () => void; title: string }) {
-  const isAll = title === '所有文档'
+function EmptyState({ onCreate, title, kind }: { onCreate: () => void; title: string; kind: 'all' | 'tag' | 'other' }) {
+  const { t } = useTranslation()
+  const isAll = kind === 'all'
   return (
     <div className="px-3 py-12 flex flex-col items-center text-center">
       <div className="empty-icon-tile">
-        {isAll ? <FileText className="w-5 h-5" /> : title.includes('标签') ? <Tag className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+        {isAll ? <FileText className="w-5 h-5" /> : kind === 'tag' ? <Tag className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
       </div>
       <h3 className="text-[15px] font-medium text-foreground mb-1.5 tracking-[-0.005em]">
-        {isAll ? '这里还没有文档' : `「${title}」暂无文档`}
+        {isAll ? t('home.emptyAllTitle') : t('home.emptyFilteredTitle', { title })}
       </h3>
       <p className="text-[13px] text-muted-foreground mb-5 max-w-[280px] leading-relaxed">
-        {isAll
-          ? '点一下下方按钮，新建你的第一篇 Markdown 文档。也可以把现有 .md 文件拖进编辑器直接导入。'
-          : '试试切换其他智能视图，或新建一篇文档。'}
+        {isAll ? t('home.emptyAllDesc') : t('home.emptyFilteredDesc')}
       </p>
       <button
         type="button"
@@ -259,7 +263,7 @@ function EmptyState({ onCreate, title }: { onCreate: () => void; title: string }
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-card hover:border-foreground/30 hover:text-foreground text-foreground text-sm font-medium transition-colors"
       >
         <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
-        新建文档
+        {t('home.newDoc')}
       </button>
     </div>
   )

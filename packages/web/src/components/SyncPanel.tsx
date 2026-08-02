@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { RefreshCw, FolderOpen, Cloud, CheckCircle2, AlertCircle, Settings as SettingsIcon } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { type LocalFsAdapterConfig } from '@notefast/core'
@@ -34,6 +35,7 @@ const EMPTY_LOCALFS: LocalFsAdapterConfig = { kind: 'localfs', dir: '', prefix: 
 const EMPTY_CONNECTION = { kind: 'connection' as const, locationId: '', prefix: '', enabled: true as const }
 
 export default function SyncPanel() {
+  const { t } = useTranslation()
   const [status, setStatus] = useState<SyncRuntimeStatus | null>(null)
   const [form, setForm] = useState<FormState>({ kind: 'none' })
   const [info, setInfo] = useState<{ remoteDocCount?: number; extra: Record<string, unknown> } | null>(null)
@@ -59,9 +61,9 @@ export default function SyncPanel() {
         setForm({ kind: 'none' })
       }
     } catch (e) {
-      toast.error({ title: '加载归档配置失败', description: e instanceof Error ? e.message : String(e) })
+      toast.error({ title: t('sync.loadConfigFailed'), description: e instanceof Error ? e.message : String(e) })
     }
-  }, [toast])
+  }, [toast, t])
 
   useEffect(() => {
     refresh()
@@ -74,7 +76,7 @@ export default function SyncPanel() {
         let active: unknown = form
         if (form.kind === 'connection') {
           const loc = locations.find((l) => l.id === form.locationId)
-          if (!loc) throw new Error('请选择存储连接')
+          if (!loc) throw new Error(t('sync.chooseConnection'))
           active = loc.kind === 's3'
             ? { kind: 's3', locationId: form.locationId, prefix: form.prefix, enabled: true }
             : { kind: 'webdav', locationId: form.locationId, prefix: form.prefix, enabled: true }
@@ -85,9 +87,9 @@ export default function SyncPanel() {
         await refresh()
       },
       {
-        loading: '正在保存归档配置…',
-        success: 'Markdown 归档已保存',
-        error: (e) => ({ title: '保存失败', description: e instanceof Error ? e.message : String(e) }),
+        loading: t('sync.savingConfig'),
+        success: t('sync.configSaved'),
+        error: (e) => ({ title: t('sync.saveFailed'), description: e instanceof Error ? e.message : String(e) }),
       },
     ).catch(() => undefined)
   }
@@ -100,9 +102,9 @@ export default function SyncPanel() {
         setForm({ kind: 'none' })
       },
       {
-        loading: '正在禁用…',
-        success: 'Markdown 归档已禁用',
-        error: (e) => ({ title: '禁用失败', description: e instanceof Error ? e.message : String(e) }),
+        loading: t('sync.disabling'),
+        success: t('sync.disabled'),
+        error: (e) => ({ title: t('sync.disableFailed'), description: e instanceof Error ? e.message : String(e) }),
       }
     ).catch(() => undefined)
   }
@@ -119,7 +121,7 @@ export default function SyncPanel() {
     } catch (e) {
       setInfo(null)
       toast.error({
-        title: '探测远端失败',
+        title: t('sync.probeFailed'),
         description: e instanceof Error ? e.message : String(e),
       })
     }
@@ -127,17 +129,17 @@ export default function SyncPanel() {
 
   return (
     <SettingsCard
-      title="Markdown 归档"
+      title={t('sync.title')}
       icon={<SettingsIcon className="w-4 h-4" strokeWidth={1.75} />}
-      helpTip="把文档连同引用的图片导出为 Markdown 副本（.md + media/），便于迁移与便携阅读。仅手动触发，不含内部 ID、引用关系与标签。"
-      statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? `已启用 · ${status.adapterName === 'localfs' ? '本地目录' : status.adapterName === 'webdav' ? 'WebDAV' : 'S3 连接'}` : '未启用'} />}
+      helpTip={t('sync.helpTip')}
+      statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? t('sync.enabledWith', { adapter: status.adapterName === 'localfs' ? t('sync.adapterLocalfs') : status.adapterName === 'webdav' ? 'WebDAV' : t('sync.adapterS3') }) : t('sync.notEnabled')} />}
     >
       <div className="space-y-6">
         <div className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {([
-              { key: 'localfs', name: '本地目录', desc: '导出到服务器本地文件夹', icon: <FolderOpen className="w-4 h-4" /> },
-              { key: 'connection', name: '存储连接', desc: 'S3 / WebDAV，由连接类型决定', icon: <Cloud className="w-4 h-4" /> },
+              { key: 'localfs', name: t('sync.optLocalfs'), desc: t('sync.optLocalfsDesc'), icon: <FolderOpen className="w-4 h-4" /> },
+              { key: 'connection', name: t('sync.optConnection'), desc: t('sync.optConnectionDesc'), icon: <Cloud className="w-4 h-4" /> },
             ] as const).map((opt) => {
               const isSelected = form.kind === opt.key
               const isActive = status?.configured && ((opt.key === 'localfs' && status.adapterName === 'localfs') || (opt.key === 'connection' && (status.adapterName === 's3' || status.adapterName === 'webdav')))
@@ -159,7 +161,7 @@ export default function SyncPanel() {
                       <span className={`font-medium text-[13px] ${isSelected ? 'text-foreground' : 'text-foreground/80'}`}>{opt.name}</span>
                     </div>
                     {isActive && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" title="当前启用"></span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" title={t('sync.currentlyActive')}></span>
                     )}
                   </div>
                   <span className="text-[11px] text-muted-foreground/80">{opt.desc}</span>
@@ -173,16 +175,16 @@ export default function SyncPanel() {
           {form.kind === 'localfs' && (
             <div className="grid grid-cols-1 gap-y-4 pt-2">
               <InlineField
-                label="导出目录"
-                description="绝对路径"
+                label={t('sync.exportDir')}
+                description={t('sync.absolutePath')}
                 value={form.dir}
                 onChange={(v) => setForm({ ...form, dir: v })}
                 placeholder="/path/to/your/notes"
                 mono
               />
               <InlineField
-                label="文件名前缀"
-                description="可选"
+                label={t('sync.filePrefix')}
+                description={t('sync.optional')}
                 value={form.prefix ?? ''}
                 onChange={(v) => setForm({ ...form, prefix: v })}
                 placeholder="notes/"
@@ -194,7 +196,7 @@ export default function SyncPanel() {
           {form.kind === 'connection' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
               <div className="md:col-span-2">
-                <label className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">存储连接</label>
+                <label className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">{t('sync.storageConnection')}</label>
                 <div className="mt-1.5">
                   <LocationSelect
                     value={form.locationId}
@@ -203,7 +205,7 @@ export default function SyncPanel() {
                 </div>
               </div>
               <InlineField
-                label="远端子目录前缀（可选）"
+                label={t('sync.remotePrefix')}
                 value={form.prefix ?? ''}
                 onChange={(v) => setForm({ ...form, prefix: v })}
                 placeholder="notes/"
@@ -214,7 +216,7 @@ export default function SyncPanel() {
 
           {form.kind !== 'none' && (
             <p className="text-[11px] text-muted-foreground/60 pt-1">
-              归档仅手动触发（界面「立即同步」或 API），不会自动推送。
+              {t('sync.manualOnly')}
             </p>
           )}
 
@@ -223,33 +225,33 @@ export default function SyncPanel() {
               <ActionButton
                 before={() => {
                   if (form.kind === 'localfs' && !form.dir.trim()) {
-                    toast.warning({ title: '请输入本地导出目录绝对路径' })
+                    toast.warning({ title: t('sync.requireDir') })
                     return false
                   }
                   return true
                 }}
                 onAction={handleSave}
-                successToast={{ title: status?.configured && status.adapterName === form.kind ? '归档配置已保存' : '归档已启用' }}
-                errorToast={(e) => ({ title: '保存失败', description: e instanceof Error ? e.message : String(e) })}
+                successToast={{ title: status?.configured && status.adapterName === form.kind ? t('sync.configSaved') : t('sync.enabled') }}
+                errorToast={(e) => ({ title: t('sync.saveFailed'), description: e instanceof Error ? e.message : String(e) })}
               >
-                {status?.configured && (form.kind === 'localfs' ? status.adapterName === 'localfs' : status.adapterName === 's3' || status.adapterName === 'webdav') ? '保存更改' : `启用 ${form.kind === 'localfs' ? '本地' : '连接'} 归档`}
+                {status?.configured && (form.kind === 'localfs' ? status.adapterName === 'localfs' : status.adapterName === 's3' || status.adapterName === 'webdav') ? t('sync.saveChanges') : t('sync.enableAdapter', { kind: form.kind === 'localfs' ? t('sync.kindLocal') : t('sync.kindConnection') })}
               </ActionButton>
               {status?.configured && status.adapterName === form.kind ? (
                 <>
                   <ActionButton
                     variant="secondary"
                     onAction={handleRun}
-                    successToast={{ title: '归档完成' }}
-                    errorToast={(e) => ({ title: '归档失败', description: e instanceof Error ? e.message : String(e) })}
+                    successToast={{ title: t('sync.archiveDone') }}
+                    errorToast={(e) => ({ title: t('sync.archiveFailed'), description: e instanceof Error ? e.message : String(e) })}
                   >
                     <RefreshCw className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
-                    立即同步
+                    {t('sync.syncNow')}
                   </ActionButton>
                   <ActionButton
                     variant="secondary"
                     onAction={handleInfo}
                   >
-                    探测远端
+                    {t('sync.probeRemote')}
                   </ActionButton>
                   <div className="w-px h-4 bg-border mx-1"></div>
                   <ActionButton
@@ -257,13 +259,13 @@ export default function SyncPanel() {
                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
                     onAction={() => setShowDisableConfirm(true)}
                   >
-                    禁用归档
+                    {t('sync.disableArchive')}
                   </ActionButton>
                 </>
               ) : null}
               {status?.configured && status.adapterName !== form.kind && (
                 <span className="text-[12px] text-muted-foreground ml-2">
-                  注意：启用将会替换当前使用的 {status.adapterName} 适配器。
+                  {t('sync.replaceAdapter', { adapter: status.adapterName })}
                 </span>
               )}
             </div>
@@ -273,13 +275,13 @@ export default function SyncPanel() {
         {(status?.lastRunAt || status?.lastResult || info) && (
           <div className="text-[12.5px] text-muted-foreground pt-4 border-t border-border/40 space-y-1.5">
             <div className="flex items-center gap-2">
-              <span className="font-medium text-foreground">上次归档：</span>
-              <span className="font-mono">{status?.lastRunAt ? formatIsoDateTime(status.lastRunAt) : '尚未运行'}</span>
+              <span className="font-medium text-foreground">{t('sync.lastArchive')}</span>
+              <span className="font-mono">{status?.lastRunAt ? formatIsoDateTime(status.lastRunAt) : t('sync.neverRun')}</span>
             </div>
             {status?.lastSuccessAt && status.lastResult && (
               <div className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                成功上传 {status.lastResult.pushed} 个文档
+                {t('sync.pushedDocs', { n: status.lastResult.pushed })}
               </div>
             )}
             {status?.lastError && (
@@ -299,7 +301,7 @@ export default function SyncPanel() {
             {info && (
               <div className="mt-3 bg-accent/20 p-3 rounded-lg border border-border/30 space-y-1 text-[11.5px]">
                 {typeof info.remoteDocCount === 'number' && (
-                  <div>远端 .md 文件数：<span className="font-mono font-medium text-foreground ml-1">{info.remoteDocCount}</span></div>
+                  <div>{t('sync.remoteMdCount')}<span className="font-mono font-medium text-foreground ml-1">{info.remoteDocCount}</span></div>
                 )}
                 {Object.entries(info.extra).map(([k, v]) => (
                   <div key={k}>{k}：<span className="font-mono ml-1">{String(v)}</span></div>
@@ -312,9 +314,9 @@ export default function SyncPanel() {
 
       <ConfirmDialog
         open={showDisableConfirm}
-        title="禁用 Markdown 归档"
-        message="禁用后归档配置都会被清空。继续？"
-        confirmLabel="禁用"
+        title={t('sync.confirmDisableTitle')}
+        message={t('sync.confirmDisableMessage')}
+        confirmLabel={t('sync.disable')}
         destructive
         onCancel={() => setShowDisableConfirm(false)}
         onConfirm={() => {

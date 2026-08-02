@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Archive, ArchiveRestore, Loader2, Search } from 'lucide-react'
 import type { DocSummary, SearchResult } from '@notefast/core'
 import { api } from '../hooks/useAPI'
@@ -18,6 +19,7 @@ import PageHeader from '../components/PageHeader'
 import { ListRowsSkeleton } from '../components/ui'
 
 export default function ArchivedPage() {
+  const { t } = useTranslation()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   // hits === null 表示未在搜索（展示全量列表）
@@ -87,14 +89,14 @@ export default function ArchivedPage() {
       <div className="min-w-0 flex-1">
         <Link to={`/doc/${doc.id}`} className="block">
           <h3 className="font-medium text-[14px] text-foreground tracking-[-0.005em] truncate leading-snug">
-            {doc.title || '未命名'}
+            {doc.title || t('common.unnamed')}
           </h3>
         </Link>
         {snippet && (
           <p className="text-[12px] text-muted-foreground truncate mt-0.5">{snippet}</p>
         )}
         <p className="text-[11.5px] text-muted-foreground mt-0.5 font-mono tabular-nums">
-          归档于 {formatRelative(doc.updated_at)}
+          {t('archived.archivedAt', { time: formatRelative(doc.updated_at) })}
         </p>
       </div>
       <div className="flex items-center gap-0.5 shrink-0">
@@ -103,14 +105,14 @@ export default function ArchivedPage() {
           disabled={busyId === doc.id}
           onClick={() => restore(doc.id)}
           className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-          title="恢复为笔记（回到所有文档）"
+          title={t('archived.restoreTitle')}
         >
           {busyId === doc.id ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
           ) : (
             <ArchiveRestore className="w-3.5 h-3.5" strokeWidth={1.75} />
           )}
-          恢复为笔记
+          {t('archived.restore')}
         </button>
         <DocActionsMenu
           doc={{ ...doc, status: 'archived' }}
@@ -126,7 +128,7 @@ export default function ArchivedPage() {
       <PageHeader innerClassName="flex items-center justify-between gap-4">
         <div className="min-w-0 flex items-center gap-2">
           <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
-            归档
+            {t('archived.title')}
           </h1>
           {!loading && docs.length > 0 && (
             <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
@@ -138,7 +140,7 @@ export default function ArchivedPage() {
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
         <p className="text-[13px] text-muted-foreground leading-relaxed px-1">
-          已过时但想保留的内容（如已解决的问题记录）。归档后不出现在所有文档，AI 回答默认也不再引用。
+          {t('archived.description')}
         </p>
 
         {loading ? (
@@ -148,9 +150,9 @@ export default function ArchivedPage() {
             <div className="empty-icon-tile">
               <Archive className="w-5 h-5" />
             </div>
-            <h3 className="text-[15px] font-medium text-foreground mb-1.5">没有归档文档</h3>
+            <h3 className="text-[15px] font-medium text-foreground mb-1.5">{t('archived.emptyTitle')}</h3>
             <p className="text-[13px] text-muted-foreground mb-5 max-w-[280px] leading-relaxed">
-              在文档页点「归档」，把过时但想保留的内容收进来。
+              {t('archived.emptyDesc')}
             </p>
           </div>
         ) : (
@@ -161,7 +163,7 @@ export default function ArchivedPage() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="搜索归档内容…"
+                placeholder={t('archived.searchPlaceholder')}
                 className="w-full rounded-lg border border-border bg-card pl-9 pr-8 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-foreground/20"
               />
               {searching && (
@@ -172,7 +174,7 @@ export default function ArchivedPage() {
             {matchedDocs ? (
               matchedDocs.length === 0 ? (
                 <p className="px-1 py-8 text-center text-[13px] text-muted-foreground">
-                  没有匹配「{query.trim()}」的归档文档
+                  {t('archived.noMatch', { query: query.trim() })}
                 </p>
               ) : (
                 <div className="grid gap-0.5">

@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Crosshair, FileText, Loader2, Network, RefreshCw, Scan, Search, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { api } from '../hooks/useAPI'
@@ -18,7 +19,7 @@ import { useApiQuery } from '../hooks/useApiQuery'
 import PageHeader from '../components/PageHeader'
 import EntityGraph from '../components/EntityGraph'
 import { EntityMentions } from '../components/EntityPanel'
-import { ENTITY_KIND_LABEL, entityKindLabel, type EntitySummary } from '../lib/entities'
+import { entityKindLabel, type EntitySummary } from '../lib/entities'
 import {
   GRAPH_NOTE_COLOR,
   graphKindColor,
@@ -28,15 +29,17 @@ import {
   type GraphNode,
 } from '../lib/graph'
 
-const KIND_FILTERS = [
-  { id: 'all', label: '全部' },
-  { id: 'concept', label: ENTITY_KIND_LABEL.concept },
-  { id: 'person', label: ENTITY_KIND_LABEL.person },
-  { id: 'tool', label: ENTITY_KIND_LABEL.tool },
-  { id: 'doc', label: ENTITY_KIND_LABEL.doc },
-] as const
+function kindFilters(t: (key: string) => string) {
+  return [
+    { id: 'all', label: t('graph.kindAll') },
+    { id: 'concept', label: entityKindLabel('concept') },
+    { id: 'person', label: entityKindLabel('person') },
+    { id: 'tool', label: entityKindLabel('tool') },
+    { id: 'doc', label: entityKindLabel('doc') },
+  ] as const
+}
 
-type KindFilter = (typeof KIND_FILTERS)[number]['id']
+type KindFilter = 'all' | 'concept' | 'person' | 'tool' | 'doc'
 
 /** 最低提及密度：1 = 全部，2 = ≥2（默认），3 = ≥3 */
 const MIN_MENTION_OPTS = [1, 2, 3] as const
@@ -88,6 +91,7 @@ function DetailPanel({
   onRegenerate?: (id: string) => void
   regenerating?: boolean
 }) {
+  const { t } = useTranslation()
   const isDoc = node.type === 'doc'
   return (
     <aside className="lg:w-80 shrink-0 flex flex-col min-h-0 overflow-y-auto rounded-xl border border-border bg-card">
@@ -100,7 +104,7 @@ function DetailPanel({
             {isDoc ? (
               <span className="shrink-0 inline-flex items-center gap-1 rounded border border-border/60 bg-muted/40 px-1.5 py-px text-[10.5px] text-muted-foreground">
                 <FileText className="w-3 h-3" strokeWidth={1.75} />
-                笔记
+                {t('graph.docLabel')}
               </span>
             ) : (
               <span className="shrink-0 inline-flex items-center gap-1 rounded border border-border/60 bg-muted/40 px-1.5 py-px text-[10.5px] text-muted-foreground">
@@ -110,7 +114,7 @@ function DetailPanel({
             )}
           </div>
           <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
-            {isDoc ? `${node.mention_count} 个块` : `${node.mention_count} 篇笔记提及`}
+            {isDoc ? t('graph.blocksCount', { n: node.mention_count }) : t('graph.notesMentioned', { n: node.mention_count })}
           </p>
           {node.description && (
             <div className="flex items-start gap-2 mt-1.5">
@@ -121,7 +125,7 @@ function DetailPanel({
                   onClick={() => onRegenerate(node.id)}
                   disabled={regenerating}
                   className="shrink-0 inline-flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                  title="重新生成描述"
+                  title={t('graph.regenerateDescription')}
                 >
                   {regenerating ? (
                     <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
@@ -137,7 +141,7 @@ function DetailPanel({
           type="button"
           onClick={onClose}
           className="shrink-0 p-1 -m-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          aria-label="关闭详情"
+          aria-label={t('graph.closeDetail')}
         >
           <X className="w-4 h-4" strokeWidth={1.75} />
         </button>
@@ -150,7 +154,7 @@ function DetailPanel({
             className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background hover:bg-accent hover:border-foreground/20 text-[12.5px] text-foreground py-1.5 px-2.5 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
-            打开笔记
+            {t('graph.openNote')}
           </a>
         </div>
       )}
@@ -158,7 +162,7 @@ function DetailPanel({
       {neighbors.length > 0 && (
         <div className="px-4 pb-3">
           <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
-            {isDoc ? '相关笔记' : '相关实体'}
+            {isDoc ? t('graph.relatedNotes') : t('graph.relatedEntities')}
           </h3>
           <div className="flex flex-wrap gap-1.5">
             {neighbors.map((nb) => (
@@ -183,7 +187,7 @@ function DetailPanel({
       {!isDoc && (
         <div className="px-4 pb-4 border-t border-border/50 pt-3">
           <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
-            相关笔记
+            {t('graph.relatedNotes')}
           </h3>
           <EntityMentions entityId={node.id} />
         </div>
@@ -193,6 +197,7 @@ function DetailPanel({
 }
 
 export default function GraphPage() {
+  const { t } = useTranslation()
   const location = useLocation()
   const initial = useMemo(() => parseGraphUrl(location.search), [location.search])
   const [mode, setMode] = useState<GraphMode>(initial.mode)
@@ -293,6 +298,7 @@ export default function GraphPage() {
 
   const empty = !loading && !error && nodes.length === 0
   const centerLabel = data?.center?.label
+  const KIND_FILTERS = kindFilters(t)
 
   return (
     <div className="h-full flex flex-col">
@@ -300,17 +306,17 @@ export default function GraphPage() {
       <PageHeader bare className="flex items-center gap-3 px-4 sm:px-8">
         <div className="min-w-0 flex items-center gap-2">
           <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
-            图谱
+            {t('graph.pageTitle')}
           </h1>
           {!loading && nodes.length > 0 && (
             <span className="font-mono text-[11px] text-muted-foreground tabular-nums shrink-0">
-              {nodes.length} {mode === 'docs' ? '笔记' : '实体'} · {edges.length} 关联
+              {nodes.length} {mode === 'docs' ? t('graph.noteKind') : t('graph.entityKind')} · {edges.length} {t('graph.edgeCount')}
             </span>
           )}
         </div>
         {centerLabel && (
           <span className="hidden md:inline-flex items-center gap-1 min-w-0 text-[12px] text-muted-foreground">
-            聚焦
+            {t('graph.focus')}
             <span className="font-medium text-foreground truncate max-w-[160px]">{centerLabel}</span>
           </span>
         )}
@@ -334,7 +340,7 @@ export default function GraphPage() {
                   mode === m ? 'bg-primary-soft text-primary' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {m === 'entities' ? '实体图谱' : '笔记图谱'}
+                {m === 'entities' ? t('graph.modeEntities') : t('graph.modeDocs')}
               </button>
             ))}
           </div>
@@ -346,7 +352,7 @@ export default function GraphPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={mode === 'docs' ? '筛选笔记…' : '聚焦某个实体…'}
+              placeholder={mode === 'docs' ? t('graph.searchPlaceholderDocs') : t('graph.searchPlaceholderEntities')}
               className="w-48 rounded-lg border border-border bg-card pl-8 pr-7 py-1.5 text-[12.5px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/40"
             />
             {searching && (
@@ -357,7 +363,7 @@ export default function GraphPage() {
                 type="button"
                 onClick={() => setSearch('')}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground transition-colors"
-                aria-label="清除"
+                aria-label={t('graph.clear')}
               >
                 <X className="w-3 h-3" strokeWidth={2} />
               </button>
@@ -387,7 +393,7 @@ export default function GraphPage() {
                     )}
                     <span className="min-w-0 flex-1 truncate">{s.display}</span>
                     <span className="shrink-0 text-[10.5px] text-muted-foreground tabular-nums">
-                      {mode === 'docs' ? '笔记' : (s as EntitySummary).mention_count}
+                      {mode === 'docs' ? t('graph.noteKind') : (s as EntitySummary).mention_count}
                     </span>
                   </button>
                 ))}
@@ -423,12 +429,12 @@ export default function GraphPage() {
               <select
                 value={minMention}
                 onChange={(e) => setMinMention(Number(e.target.value))}
-                title="最低提及次数（密度）"
+                title={t('graph.mentionThreshold')}
                 className="rounded-md border border-border bg-card px-2 py-1 text-[12px] text-muted-foreground focus:outline-none"
               >
                 {MIN_MENTION_OPTS.map((n) => (
                   <option key={n} value={n}>
-                    提及 ≥ {n}
+                    {t('graph.mentionThresholdOption', { n })}
                   </option>
                 ))}
               </select>
@@ -441,8 +447,8 @@ export default function GraphPage() {
               type="button"
               onClick={() => focusNode(selectedNode.id)}
               className="inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors"
-              title={`以「${selectedNode.display}」为中心展开图谱`}
-              aria-label={`以「${selectedNode.display}」为中心`}
+              title={t('graph.focusNodeTooltip', { nodeName: selectedNode.display })}
+              aria-label={t('graph.focusNodeAria', { nodeName: selectedNode.display })}
             >
               <Crosshair className="w-4 h-4" strokeWidth={1.75} />
             </button>
@@ -456,14 +462,14 @@ export default function GraphPage() {
               setLayoutKey((k) => k + 1)
             }}
             className="inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors"
-            title="重置：返回总览，节点重新排布，缩放/平移复位"
-            aria-label="重置布局与视角"
+            title={t('graph.resetTooltip')}
+            aria-label={t('graph.resetAria')}
           >
             <Scan className="w-4 h-4" strokeWidth={1.75} />
           </button>
 
           <span className="ml-auto hidden sm:inline text-[11px] text-muted-foreground/60">
-            滚轮缩放 · 拖拽平移 · 双击聚焦
+            {t('graph.zoomTip')}
           </span>
         </div>
 
@@ -471,7 +477,7 @@ export default function GraphPage() {
         {loading && !data ? (
           <div className="flex-1 min-h-[55vh] card rounded-xl flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.75} />
-            正在计算图谱…
+            {t('graph.loading')}
           </div>
         ) : empty ? (
           <div className="flex-1 min-h-[55vh] card rounded-xl flex flex-col items-center justify-center text-center px-6">
@@ -481,20 +487,20 @@ export default function GraphPage() {
             <h3 className="text-[15px] font-medium text-foreground mb-1.5">
               {mode === 'docs'
                 ? titleQ
-                  ? '没有匹配的笔记'
-                  : '图谱还是空的'
+                  ? t('graph.emptyNoResults')
+                  : t('graph.emptyInitial')
                 : center
-                  ? '未找到相关实体'
-                  : '图谱还是空的'}
+                  ? t('graph.emptyNoRelated')
+                  : t('graph.emptyInitial')}
             </h3>
             <p className="text-[13px] text-muted-foreground mb-5 max-w-[340px] leading-relaxed">
               {mode === 'docs'
                 ? titleQ
-                  ? '换个标题关键词试试。'
-                  : '写入文档后，共享实体与引用会把笔记连成关联图谱。'
+                  ? t('graph.emptyNoResultsDesc')
+                  : t('graph.emptyInitialDesc')
                 : center
-                  ? '该实体还没有足够的共现关联，换个实体聚焦试试。'
-                  : '写入文档后，AI 会自动识别其中的概念、人物与工具，共现关系会在这里织成一张知识图谱。'}
+                  ? t('graph.emptyNoRelatedDesc')
+                  : t('graph.emptyInitialEntityDesc')}
             </p>
             {center && (
               <button
@@ -502,13 +508,13 @@ export default function GraphPage() {
                 onClick={resetView}
                 className="rounded-md bg-primary px-3 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:bg-primary-hover transition-colors"
               >
-                返回总览
+                {t('graph.backToOverview')}
               </button>
             )}
           </div>
         ) : error ? (
           <div className="flex-1 min-h-[55vh] card rounded-xl flex items-center justify-center text-[13px] text-destructive">
-            图谱加载失败：{error.message}
+            {t('graph.error', { message: error.message })}
           </div>
         ) : (
           <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3">
@@ -539,8 +545,7 @@ export default function GraphPage() {
 
         {data?.truncated && (
           <p className="shrink-0 text-[11px] text-muted-foreground/70">
-            图谱较大，仅展示部分节点与关联（{nodes.length} 个）。
-            使用搜索聚焦，或「重新布局」重置视图。
+            {t('graph.truncated', { n: nodes.length })}
           </p>
         )}
       </div>

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Key, Plus, Trash2, Copy, Check, X } from 'lucide-react'
 import { api } from '../hooks/useAPI'
+import { currentLocale } from '../lib/time'
 import { ActionButton, useToast } from './ui'
 import { SettingsCard, StatusBadge } from './settings/ui'
 
@@ -13,6 +15,7 @@ interface ApiTokenView {
 }
 
 export default function ApiTokensPanel() {
+  const { t } = useTranslation()
   const [tokens, setTokens] = useState<ApiTokenView[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -42,7 +45,7 @@ export default function ApiTokensPanel() {
     if (scopeRead) scopes.push('read')
     if (scopeWrite) scopes.push('write')
     if (scopes.length === 0) {
-      toast.error({ title: '请至少选择一项权限' })
+      toast.error({ title: t('apiTokens.scopeRequired') })
       return
     }
     try {
@@ -56,7 +59,7 @@ export default function ApiTokensPanel() {
         loadTokens()
       }
     } catch {
-      toast.error({ title: '创建失败' })
+      toast.error({ title: t('apiTokens.createFailed') })
     }
   }
 
@@ -65,7 +68,7 @@ export default function ApiTokensPanel() {
       await api.del(`/api-tokens/${tokenId}`)
       loadTokens()
     } catch {
-      toast.error({ title: '撤销失败' })
+      toast.error({ title: t('apiTokens.revokeFailed') })
     }
   }
 
@@ -81,22 +84,22 @@ export default function ApiTokensPanel() {
     setCopied(false)
   }
 
-  if (loading) return <div className="rounded-lg border border-border bg-card px-5 py-4 text-[12px] text-muted-foreground">加载中...</div>
+  if (loading) return <div className="rounded-lg border border-border bg-card px-5 py-4 text-[12px] text-muted-foreground">{t('common.loading')}</div>
 
   return (
     <SettingsCard
-      title="API Token"
+      title={t('apiTokens.title')}
       icon={<Key className="w-4 h-4" strokeWidth={1.75} />}
-      statusBadge={<StatusBadge active={tokens.length > 0} label={tokens.length > 0 ? `${tokens.length} 个活跃` : '无活跃'} />}
+      statusBadge={<StatusBadge active={tokens.length > 0} label={tokens.length > 0 ? t('apiTokens.activeCount', { n: tokens.length }) : t('apiTokens.noActive')} />}
     >
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="text-[12.5px] text-muted-foreground leading-relaxed">
-            为外部工具、MCP 客户端或脚本创建独立 Token，支持读写权限拆分与独立撤销。
+            {t('apiTokens.description')}
           </div>
           <ActionButton onAction={() => setShowForm(!showForm)} variant="secondary" size="sm">
             <Plus className="w-3.5 h-3.5 mr-1" />
-            新建 Token
+            {t('apiTokens.createNew')}
           </ActionButton>
         </div>
 
@@ -104,7 +107,7 @@ export default function ApiTokensPanel() {
           <div className="rounded-lg border border-border p-4 space-y-4 bg-accent/20">
             <input
               type="text"
-              placeholder="Token 名称 (例如 desktop-mac)"
+              placeholder={t('apiTokens.namePlaceholder')}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
@@ -121,8 +124,8 @@ export default function ApiTokensPanel() {
               </label>
             </div>
             <div className="flex items-center gap-2 pt-2 border-t border-border/40">
-              <ActionButton onAction={handleCreate} disabled={!name.trim()}>创建</ActionButton>
-              <ActionButton onAction={() => setShowForm(false)} variant="ghost">取消</ActionButton>
+              <ActionButton onAction={handleCreate} disabled={!name.trim()}>{t('apiTokens.create')}</ActionButton>
+              <ActionButton onAction={() => setShowForm(false)} variant="ghost">{t('common.cancel')}</ActionButton>
             </div>
           </div>
         )}
@@ -132,7 +135,7 @@ export default function ApiTokensPanel() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-[13px] font-medium text-emerald-700 dark:text-emerald-400">
                 <Key className="w-3.5 h-3.5" />
-                新 Token 已生成（仅显示一次）
+                {t('apiTokens.generatedOnce')}
               </div>
               <button onClick={dismissNewToken} className="text-emerald-600/60 hover:text-emerald-600 p-1">
                 <X className="w-3.5 h-3.5" />
@@ -147,36 +150,36 @@ export default function ApiTokensPanel() {
               </ActionButton>
             </div>
             <p className="text-[11px] text-emerald-600/80 dark:text-emerald-500/80">
-              请立即复制并安全保存。关闭此提示后无法再次查看完整 Token。
+              {t('apiTokens.saveNow')}
             </p>
           </div>
         )}
 
         {tokens.length > 0 ? (
           <div className="rounded-lg border border-border overflow-hidden">
-            {tokens.map((t, i) => (
-              <div key={t.token_id} className={`flex items-center justify-between gap-4 px-4 py-3 ${i !== tokens.length - 1 ? 'border-b border-border/50' : ''} bg-background`}>
+            {tokens.map((tok, i) => (
+              <div key={tok.token_id} className={`flex items-center justify-between gap-4 px-4 py-3 ${i !== tokens.length - 1 ? 'border-b border-border/50' : ''} bg-background`}>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <div className="text-[13px] font-medium text-foreground truncate">{t.name}</div>
+                    <div className="text-[13px] font-medium text-foreground truncate">{tok.name}</div>
                     <div className="flex gap-1">
-                      {t.scopes.map(s => <span key={s} className="px-1.5 py-0.5 rounded text-[9.5px] uppercase tracking-wider font-mono bg-accent text-muted-foreground border border-border/50">{s}</span>)}
+                      {tok.scopes.map(s => <span key={s} className="px-1.5 py-0.5 rounded text-[9.5px] uppercase tracking-wider font-mono bg-accent text-muted-foreground border border-border/50">{s}</span>)}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground font-mono">
-                    <span>创建: {new Date(t.created_at).toLocaleDateString()}</span>
-                    {t.last_used_at && (
+                    <span>{t('apiTokens.createdAt', { date: new Date(tok.created_at).toLocaleDateString(currentLocale()) })}</span>
+                    {tok.last_used_at && (
                       <>
                         <span>·</span>
-                        <span>最后使用: {new Date(t.last_used_at).toLocaleDateString()}</span>
+                        <span>{t('apiTokens.lastUsed', { date: new Date(tok.last_used_at).toLocaleDateString(currentLocale()) })}</span>
                       </>
                     )}
                   </div>
                 </div>
                 <button 
-                  onClick={() => handleRevoke(t.token_id)} 
+                  onClick={() => handleRevoke(tok.token_id)} 
                   className="p-2 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive shrink-0 transition-colors"
-                  title="撤销 Token"
+                  title={t('apiTokens.revokeTitle')}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -185,7 +188,7 @@ export default function ApiTokensPanel() {
           </div>
         ) : !showForm && (
           <div className="rounded-lg border border-border border-dashed p-8 text-center text-[12.5px] text-muted-foreground">
-            暂无已授权的 Token。点击「新建 Token」创建第一个。
+            {t('apiTokens.empty')}
           </div>
         )}
       </div>

@@ -7,10 +7,12 @@
  */
 
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Lock, Loader2, Check } from 'lucide-react'
 import { saveSessionToken } from '../hooks/useAPI'
 
 export default function AuthPrompt() {
+  const { t } = useTranslation()
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -28,7 +30,7 @@ export default function AuthPrompt() {
         headers: { Authorization: 'Basic ' + btoa('admin:' + pw) },
       })
       if (!res.ok) {
-        setError('密码错误，请重试')
+        setError(t('auth.wrongPassword'))
         setSubmitting(false)
         return
       }
@@ -38,7 +40,7 @@ export default function AuthPrompt() {
       }
       window.location.reload()
     } catch {
-      setError('网络错误，请检查连接后重试')
+      setError(t('auth.networkError'))
       setSubmitting(false)
     }
   }
@@ -54,15 +56,15 @@ export default function AuthPrompt() {
             <Lock className="w-4 h-4" strokeWidth={1.75} />
           </div>
           <div>
-            <h1 className="text-[15px] font-semibold tracking-[-0.01em]">NoteFast 登录</h1>
+            <h1 className="text-[15px] font-semibold tracking-[-0.01em]">{t('auth.loginTitle')}</h1>
             <p className="text-[11.5px] text-muted-foreground mt-0.5">
-              此实例已开启访问密码
+              {t('auth.passwordRequired')}
             </p>
           </div>
         </div>
 
         <div>
-          <label className="field-label" htmlFor="auth-pw">密码</label>
+          <label className="field-label" htmlFor="auth-pw">{t('auth.password')}</label>
           <input
             id="auth-pw"
             type="password"
@@ -93,12 +95,12 @@ export default function AuthPrompt() {
             >
               {remember && <Check className="w-3 h-3" strokeWidth={3} />}
             </span>
-            <span className="text-[12px] text-foreground/80">保持登录 7 天</span>
+            <span className="text-[12px] text-foreground/80">{t('auth.rememberMe')}</span>
           </button>
           <p className="text-[10.5px] text-muted-foreground/70 mt-1.5 leading-relaxed">
             {remember
-              ? '勾选后 7 天内无需重复输入；如在公共设备上使用，请勿勾选。'
-              : '不勾选时密码仅本次有效，关闭浏览器后即需重新输入。'}
+              ? t('auth.rememberDesc')
+              : t('auth.noRememberDesc')}
           </p>
         </div>
 
@@ -110,10 +112,10 @@ export default function AuthPrompt() {
           {submitting ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              登录中…
+              {t('auth.loggingIn')}
             </>
           ) : (
-            '登录'
+            t('auth.login')
           )}
         </button>
       </form>

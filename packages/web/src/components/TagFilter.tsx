@@ -12,6 +12,7 @@ import type { TagInfo, TagMatchMode } from '@notefast/core'
 import { parseTagMatchMode } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
+import { useTranslation } from 'react-i18next'
 
 export interface TagFilterProps {
   onChange?: (tags: string[]) => void
@@ -35,6 +36,7 @@ function TagMatchToggle({
   mode: TagMatchMode
   onChange: (mode: TagMatchMode) => void
 }) {
+  const { t } = useTranslation()
   const btn = (active: boolean) =>
     `px-2 py-0.5 rounded-[5px] transition-colors ${
       active
@@ -46,7 +48,7 @@ function TagMatchToggle({
     <div
       className="inline-flex items-center rounded-md border border-border/60 bg-muted/30 p-0.5 text-[11px] shrink-0"
       role="group"
-      aria-label="标签匹配方式"
+      aria-label={t('tagFilter.tagMatchMode')}
     >
       <button
         type="button"
@@ -54,7 +56,7 @@ function TagMatchToggle({
         aria-pressed={mode === 'all'}
         onClick={() => onChange('all')}
       >
-        同时包含
+        {t('tagFilter.matchAll')}
       </button>
       <button
         type="button"
@@ -62,7 +64,7 @@ function TagMatchToggle({
         aria-pressed={mode === 'any'}
         onClick={() => onChange('any')}
       >
-        包含任一
+        {t('tagFilter.matchAny')}
       </button>
     </div>
   )

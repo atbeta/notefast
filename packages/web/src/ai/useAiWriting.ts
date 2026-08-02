@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
+import i18next from '../i18n'
 import { streamSSE } from '../lib/streaming'
 import type { WriteMode } from '@notefast/core'
 
@@ -56,9 +57,9 @@ export function useAiWriting(): UseAiWritingResult {
               } else if (eventName === 'error') {
                 const err = data as { message?: string }
                 setIsStreaming(false)
-                setError(err.message || 'AI 写作失败')
+                setError(err.message || i18next.t('aiWrite.failed'))
                 abortRef.current = null
-                reject(new Error(err.message || 'AI 写作失败'))
+                reject(new Error(err.message || i18next.t('aiWrite.failed')))
               }
             },
             onError: (err) => {

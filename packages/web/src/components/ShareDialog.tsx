@@ -8,9 +8,12 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
+import { useTranslation } from 'react-i18next'
+import i18next from '../i18n'
 import { Check, Globe, Loader2, Link2, Trash2 } from 'lucide-react'
 import { api, ApiError } from '../hooks/useAPI'
 import { useToast } from './ui'
+import { currentLocale } from '../lib/time'
 
 type ExpiryChoice = 'never' | '1' | '7' | '30'
 
@@ -45,14 +48,15 @@ function formatExpiry(expiresAt: string | null | undefined): string | null {
   if (!expiresAt) return null
   const d = new Date(expiresAt.replace(' ', 'T') + 'Z')
   if (!Number.isFinite(d.getTime())) return null
-  const dateText = d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const dateText = d.toLocaleString(currentLocale(), { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   const daysLeft = Math.max(0, Math.round((d.getTime() - Date.now()) / 86_400_000))
-  return `${dateText} 失效（还剩 ${daysLeft} 天）`
+  return i18next.t('share.expiryText', { date: dateText, days: daysLeft })
 }
 
 const PANEL_W = 360
 
 export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange }: ShareDialogProps) {
+  const { t } = useTranslation()
   const toast = useToast()
   const panelRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
@@ -153,7 +157,7 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
           (err.body as { error?: string } | null)?.error === 'ai_exclude_share_needs_confirm'
         if (!needsConfirm) throw err
         const confirmed = window.confirm(
-          '这篇文档已标记「对 AI 隐藏」。\n\n开启公开分享后，任何人获得链接均可阅读全文，无需登录。确认仍要开启分享吗？',
+          t('share.aiExcludeConfirm'),
         )
         if (!confirmed) return
         body = { confirm_ai_exclude: true }
@@ -162,11 +166,11 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
       setSharedState({ ...r, shared: true })
       setExpiry(inferExpiryChoice(r.expires_at))
     } catch {
-      toast.error({ title: '开启分享失败' })
+      toast.error({ title: t('share.enableFailed') })
     } finally {
       setBusy(false)
     }
-  }, [docId, toast, setSharedState])
+  }, [docId, toast, setSharedState, t])
 
   const handleDisable = useCallback(async () => {
     setBusy(true)
@@ -175,11 +179,11 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
       setSharedState({ shared: false })
       setCopied(false)
     } catch {
-      toast.error({ title: '关闭分享失败' })
+      toast.error({ title: t('share.disableFailed') })
     } finally {
       setBusy(false)
     }
-  }, [docId, toast, setSharedState])
+  }, [docId, toast, setSharedState, t])
 
   const handleExpiryChange = useCallback(async (choice: ExpiryChoice) => {
     setExpiry(choice)
@@ -190,11 +194,11 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
       })
       setSharedState({ ...r, shared: true })
     } catch {
-      toast.error({ title: '调整有效期失败' })
+      toast.error({ title: t('share.expiryFailed') })
     } finally {
       setBusy(false)
     }
-  }, [docId, toast, setSharedState])
+  }, [docId, toast, setSharedState, t])
 
   const handleCopy = useCallback(async () => {
     try {
@@ -202,9 +206,9 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error({ title: '复制失败', description: '请手动选择链接复制' })
+      toast.error({ title: t('share.copyFailed'), description: t('share.copyManual') })
     }
-  }, [shareUrl, toast])
+  }, [shareUrl, toast, t])
 
   const expiryText = formatExpiry(info?.expires_at)
 
@@ -214,20 +218,20 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
     <div
       ref={panelRef}
       role="dialog"
-      aria-label="分享文档"
+      aria-label={t('share.dialogLabel')}
       className="fixed z-[80] w-[360px] max-w-[calc(100vw-16px)] rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
       style={{ top: pos.top, left: pos.left }}
     >
       <div className="px-3.5 pt-3 pb-2 flex items-center gap-2 border-b border-border/60">
         <Globe className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.75} />
-        <span className="text-[13px] font-medium text-foreground">分享</span>
+        <span className="text-[13px] font-medium text-foreground">{t('share.title')}</span>
       </div>
 
       <div className="p-3.5 space-y-3">
         {info === null ? (
           <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground py-2">
             <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
-            加载中…
+            {t('common.loading')}
           </div>
         ) : info.shared ? (
           <>
@@ -236,13 +240,13 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
                 <Globe className="w-3.5 h-3.5 text-foreground/80" strokeWidth={1.75} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-foreground">任何人可通过链接访问</p>
+                <p className="text-[13px] font-medium text-foreground">{t('share.anyoneAccess')}</p>
                 <p className="text-[12px] text-muted-foreground mt-0.5 leading-relaxed">
-                  获得链接即可阅读，无需登录
+                  {t('share.noLoginNeeded')}
                 </p>
               </div>
               <span className="shrink-0 text-[11.5px] text-muted-foreground px-1.5 py-0.5 rounded border border-border/70">
-                可查看
+                {t('share.canView')}
               </span>
             </div>
 
@@ -257,31 +261,31 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
                 type="button"
                 onClick={handleCopy}
                 className="shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-border text-[12px] text-foreground hover:bg-muted transition-colors"
-                title="复制链接"
+                title={t('share.copyLink')}
               >
                 {copied
                   ? <Check className="w-3.5 h-3.5 text-green-600" strokeWidth={2} />
                   : <Link2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
-                {copied ? '已复制' : '复制'}
+                {copied ? t('common.copied') : t('common.copy')}
               </button>
             </div>
 
             <div className="flex items-center justify-between gap-2 text-[12.5px]">
-              <span className="text-muted-foreground">有效期</span>
+              <span className="text-muted-foreground">{t('share.expiry')}</span>
               <select
                 value={expiry}
                 disabled={busy}
                 onChange={(e) => handleExpiryChange(e.target.value as ExpiryChoice)}
                 className="rounded-md border border-border bg-background px-2 py-1 text-[12.5px] text-foreground focus:outline-none focus:ring-1 focus:ring-foreground/20 disabled:opacity-50"
               >
-                <option value="never">永不过期</option>
-                <option value="1">1 天</option>
-                <option value="7">7 天</option>
-                <option value="30">30 天</option>
+                <option value="never">{t('share.expiryNever')}</option>
+                <option value="1">{t('share.expiryDays', { n: 1 })}</option>
+                <option value="7">{t('share.expiryDays', { n: 7 })}</option>
+                <option value="30">{t('share.expiryDays', { n: 30 })}</option>
               </select>
             </div>
             {expiryText && (
-              <p className="text-[11.5px] text-muted-foreground/70 -mt-1">将于 {expiryText}</p>
+              <p className="text-[11.5px] text-muted-foreground/70 -mt-1">{t('share.expiresAt', { time: expiryText })}</p>
             )}
 
             <div className="pt-1 border-t border-border/60 flex justify-end">
@@ -292,14 +296,14 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-destructive rounded-md hover:bg-destructive/10 transition-colors disabled:opacity-50"
               >
                 <Trash2 className="w-3 h-3" strokeWidth={1.75} />
-                关闭分享
+                {t('share.disable')}
               </button>
             </div>
           </>
         ) : (
           <>
             <p className="text-[12.5px] text-muted-foreground leading-relaxed">
-              开启后生成公开只读链接，任何人无需登录即可阅读。可随时关闭。
+              {t('share.enableDesc')}
             </p>
             <button
               type="button"
@@ -308,7 +312,7 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
               className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[13px] font-medium bg-foreground text-background rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2} />}
-              开启公开链接
+              {t('share.enable')}
             </button>
           </>
         )}

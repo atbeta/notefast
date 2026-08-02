@@ -1,5 +1,8 @@
-import { Sun, Moon, Monitor } from 'lucide-react'
+import { Sun, Moon, Monitor, Globe } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useTheme } from '../hooks/useTheme'
+import { useLocale } from '../hooks/useLocale'
+import { SUPPORTED_LOCALES } from '../i18n/locales'
 import { SettingsLayout, SettingsSection } from '../components/settings/ui'
 
 // Import the panels
@@ -12,40 +15,42 @@ import ApiTokensPanel from '../components/ApiTokensPanel'
 import AuthEventsPanel from '../components/AuthEventsPanel'
 
 export default function SettingsPage() {
+  const { t } = useTranslation()
   const tabs = [
-    { id: 'general', label: '通用与外观' },
-    { id: 'ai', label: 'AI 能力与模型' },
-    { id: 'backup', label: '灾备与归档' },
-    { id: 'tokens', label: 'API Tokens' },
-    { id: 'security', label: '账户安全' },
+    { id: 'general', label: t('settings.tabs.general') },
+    { id: 'ai', label: t('settings.tabs.ai') },
+    { id: 'backup', label: t('settings.tabs.backup') },
+    { id: 'tokens', label: t('settings.tabs.tokens') },
+    { id: 'security', label: t('settings.tabs.security') },
   ]
 
   return (
     <SettingsLayout
-      title="设置"
-      description="配置 NoteFast 的可选项。本地优先；数据库备份、Markdown 归档与 AI 均为可选能力。"
+      title={t('settings.title')}
+      description={t('settings.description')}
       tabs={tabs}
     >
-      <SettingsSection id="general" title="通用与外观">
+      <SettingsSection id="general" title={t('settings.tabs.general')}>
         <ThemePicker />
+        <LanguagePicker />
       </SettingsSection>
 
-      <SettingsSection id="ai" title="AI 能力与模型">
+      <SettingsSection id="ai" title={t('settings.tabs.ai')}>
         <AISettingsPanel />
       </SettingsSection>
 
-      <SettingsSection id="backup" title="灾备与归档">
+      <SettingsSection id="backup" title={t('settings.tabs.backup')}>
         <StorageLocationsPanel />
         <BackupPanel />
         <SyncProtocolPanel />
         <SyncPanel />
       </SettingsSection>
 
-      <SettingsSection id="tokens" title="API Tokens">
+      <SettingsSection id="tokens" title={t('settings.tabs.tokens')}>
         <ApiTokensPanel />
       </SettingsSection>
 
-      <SettingsSection id="security" title="账户安全">
+      <SettingsSection id="security" title={t('settings.tabs.security')}>
         <AuthEventsPanel />
       </SettingsSection>
     </SettingsLayout>
@@ -53,17 +58,18 @@ export default function SettingsPage() {
 }
 
 function ThemePicker() {
+  const { t } = useTranslation()
   const { theme, resolvedTheme, setTheme } = useTheme()
   return (
     <div className="rounded-lg border border-border/60 bg-card shadow-[var(--shadow-card)] p-5 space-y-4">
       <div className="flex items-baseline justify-between gap-3">
         <div>
-          <div className="text-[13.5px] font-medium text-foreground">主题风格</div>
+          <div className="text-[13.5px] font-medium text-foreground">{t('settings.theme.title')}</div>
           <p className="text-[12px] text-muted-foreground mt-1">
-            当前生效：
-            <span className="text-foreground">{resolvedTheme === 'dark' ? '深色' : '浅色'}</span>
+            {t('settings.theme.current')}：
+            <span className="text-foreground">{resolvedTheme === 'dark' ? t('settings.theme.dark') : t('settings.theme.light')}</span>
             {theme === 'system' && (
-              <span className="ml-1.5 text-muted-foreground/80">（跟随系统）</span>
+              <span className="ml-1.5 text-muted-foreground/80">{t('settings.theme.systemSuffix')}</span>
             )}
           </p>
         </div>
@@ -73,23 +79,64 @@ function ThemePicker() {
           active={theme === 'light'}
           onClick={() => setTheme('light')}
           icon={<Sun className="w-4 h-4" strokeWidth={1.75} />}
-          label="浅色"
-          hint="始终亮色"
+          label={t('settings.theme.light')}
+          hint={t('settings.theme.lightHint')}
         />
         <ThemeOption
           active={theme === 'dark'}
           onClick={() => setTheme('dark')}
           icon={<Moon className="w-4 h-4" strokeWidth={1.75} />}
-          label="深色"
-          hint="始终暗色"
+          label={t('settings.theme.dark')}
+          hint={t('settings.theme.darkHint')}
         />
         <ThemeOption
           active={theme === 'system'}
           onClick={() => setTheme('system')}
           icon={<Monitor className="w-4 h-4" strokeWidth={1.75} />}
-          label="跟随系统"
-          hint="随 OS 自动切换"
+          label={t('settings.theme.system')}
+          hint={t('settings.theme.systemHint')}
         />
+      </div>
+    </div>
+  )
+}
+
+function LanguagePicker() {
+  const { t } = useTranslation()
+  const { choice, locale, setLocale } = useLocale()
+  const currentName = SUPPORTED_LOCALES.find((l) => l.code === locale)?.nativeName ?? locale
+  return (
+    <div className="rounded-lg border border-border/60 bg-card shadow-[var(--shadow-card)] p-5 space-y-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <div>
+          <div className="text-[13.5px] font-medium text-foreground">{t('settings.language.title')}</div>
+          <p className="text-[12px] text-muted-foreground mt-1">
+            {t('settings.language.current')}：
+            <span className="text-foreground">{currentName}</span>
+            {choice === 'system' && (
+              <span className="ml-1.5 text-muted-foreground/80">{t('settings.language.systemHint')}</span>
+            )}
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <ThemeOption
+          active={choice === 'system'}
+          onClick={() => setLocale('system')}
+          icon={<Globe className="w-4 h-4" strokeWidth={1.75} />}
+          label={t('settings.language.system')}
+          hint={t('settings.language.systemHint')}
+        />
+        {SUPPORTED_LOCALES.map((l) => (
+          <ThemeOption
+            key={l.code}
+            active={choice === l.code}
+            onClick={() => setLocale(l.code)}
+            icon={<Globe className="w-4 h-4" strokeWidth={1.75} />}
+            label={l.nativeName}
+            hint={l.code}
+          />
+        ))}
       </div>
     </div>
   )

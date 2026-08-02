@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Copy, Check } from 'lucide-react'
 
 /**
@@ -26,6 +27,7 @@ export function CopyButton({
   /** 图标尺寸类名 */
   iconClassName?: string
 }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
   const handleCopy = async () => {
@@ -43,18 +45,18 @@ export function CopyButton({
       type="button"
       onClick={handleCopy}
       className={className}
-      aria-label={ariaLabel ? (copied ? 'Copied' : ariaLabel) : undefined}
+      aria-label={ariaLabel ? (copied ? t('copyBtn.copied') : ariaLabel) : undefined}
       title={title}
     >
       {copied ? (
         <>
           <Check className={iconClassName} strokeWidth={showText ? 2 : undefined} />
-          {showText && <span>Copied</span>}
+          {showText && <span>{t('copyBtn.copied')}</span>}
         </>
       ) : (
         <>
           <Copy className={iconClassName} strokeWidth={showText ? 1.75 : undefined} />
-          {showText && <span>Copy</span>}
+          {showText && <span>{t('copyBtn.copy')}</span>}
         </>
       )}
     </button>

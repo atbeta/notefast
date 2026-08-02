@@ -1,4 +1,5 @@
 import { Plus, X, ExternalLink } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import {
   PRESETS,
   PROVIDER_PRESET_IDS,
@@ -27,6 +28,7 @@ export function ProviderForm({
   modelLabel: string
   fieldErrors?: FieldErrors
 }) {
+  const { t } = useTranslation()
   const preset = PRESETS[value.preset]
   const errBaseUrl = fieldErrors?.baseUrl
   const errModel = mode === 'chat' ? fieldErrors?.chatModel : fieldErrors?.embeddingModel
@@ -61,7 +63,7 @@ export function ProviderForm({
 
   return (
     <div className="space-y-3">
-      <FieldRow label="预设">
+      <FieldRow label={t('providerForm.preset')}>
         <div className="flex items-center gap-2 min-w-0">
           <select
             value={value.preset}
@@ -71,7 +73,7 @@ export function ProviderForm({
             {availablePresets.map((id) => (
               <option key={id} value={id}>
                 {id === 'custom' 
-                  ? (mode === 'reranker' ? '自定义 (TEI / Jina 兼容)' : '自定义 (OpenAI 兼容)')
+                  ? (mode === 'reranker' ? t('providerForm.customReranker') : t('providerForm.customOpenai'))
                   : PRESETS[id].label}
               </option>
             ))}
@@ -82,10 +84,10 @@ export function ProviderForm({
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-              title="获取 API Key"
+              title={t('providerForm.getApiKeyTitle')}
             >
               <ExternalLink className="w-3 h-3" />
-              获取 Key
+              {t('providerForm.getApiKey')}
             </a>
           )}
         </div>
@@ -94,10 +96,10 @@ export function ProviderForm({
         <div className="md:col-span-2">
           <InlineField
             label="API Key"
-            description="留空保持不变"
+            description={t('aiSettings.keepUnchanged')}
             value={value.apiKey === KEY_MASK ? '' : value.apiKey}
             onChange={(v) => onChange({ ...value, apiKey: v === '' && value.apiKey === KEY_MASK ? KEY_MASK : v })}
-            placeholder={value.apiKey === KEY_MASK ? '已保存 Key' : 'sk-...'}
+            placeholder={value.apiKey === KEY_MASK ? t('aiSettings.savedKey') : 'sk-...'}
             type="password"
             mono
           />
@@ -136,8 +138,8 @@ export function ProviderForm({
           </FieldRow>
         </div>
         <InlineField
-          label="超时限制"
-          description="单位：毫秒"
+          label={t('providerForm.timeout')}
+          description={t('providerForm.timeoutUnit')}
           value={String(value.timeoutMs)}
           onChange={(v) => onChange({ ...value, timeoutMs: parseInt(v, 10) || 60000 })}
           type="number"
@@ -146,13 +148,13 @@ export function ProviderForm({
           mono
         />
         <InlineField
-          label="Provider 显示名"
+          label={t('providerForm.displayName')}
           value={value.label}
           onChange={(v) => onChange({ ...value, label: v })}
           placeholder={mode === 'chat' ? '我的 OpenRouter' : '我的 Voyage Embedding'}
         />
       </div>
-      <FieldRow label="额外 Header" hint="如 HTTP-Referer，某些 Provider 需要">
+      <FieldRow label={t('providerForm.extraHeaders')} hint={t('providerForm.extraHeadersHint')}>
         <ExtraHeadersEditor
           entries={Object.entries(value.extraHeaders || {})}
           onChange={(entries) => onChange({ ...value, extraHeaders: Object.fromEntries(entries) })}
@@ -169,6 +171,7 @@ function ExtraHeadersEditor({
   entries: [string, string][]
   onChange: (entries: [string, string][]) => void
 }) {
+  const { t } = useTranslation()
   const update = (idx: number, patch: Partial<[string, string]>) => {
     const next = [...entries]
     const cur = next[idx]!
@@ -208,7 +211,7 @@ function ExtraHeadersEditor({
         className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
       >
         <Plus className="w-3 h-3" />
-        添加 Header
+        {t('providerForm.addHeader')}
       </button>
     </div>
   )

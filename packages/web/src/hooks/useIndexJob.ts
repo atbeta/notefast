@@ -2,6 +2,7 @@
  * 轮询文档向量索引作业，用于创建/导入后的进度感知。
  */
 
+import i18next from '../i18n'
 import { request } from '../hooks/useAPI'
 
 export interface IndexJob {
@@ -25,18 +26,23 @@ export function formatIndexProgress(job: IndexJob): string {
   const pct = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 100
   const eta =
     job.eta_ms != null && job.eta_ms > 0
-      ? ` · 约 ${(job.eta_ms / 1000).toFixed(1)}s`
+      ? i18next.t('indexJob.eta', { sec: (job.eta_ms / 1000).toFixed(1) })
       : ''
   if (job.state === 'ready') {
-    return `索引完成 · ${total} 块 · ${(job.elapsed_ms / 1000).toFixed(1)}s`
+    return i18next.t('indexJob.ready', { total, elapsed: (job.elapsed_ms / 1000).toFixed(1) })
   }
   if (job.state === 'partial') {
-    return `索引部分完成 · ${job.done}/${total} 成功 · ${job.errors} 失败 · ${(job.elapsed_ms / 1000).toFixed(1)}s`
+    return i18next.t('indexJob.partial', {
+      done: job.done,
+      total,
+      errors: job.errors,
+      elapsed: (job.elapsed_ms / 1000).toFixed(1),
+    })
   }
   if (job.state === 'failed') {
-    return `索引失败${job.error ? `：${job.error}` : ''}`
+    return i18next.t('indexJob.failed', { error: job.error ? `：${job.error}` : '' })
   }
-  return `正在向量化 ${processed}/${total}（${pct}%）${eta}`
+  return i18next.t('indexJob.progress', { processed, total, pct, eta })
 }
 
 export async function fetchIndexJob(jobId: string): Promise<IndexJob> {

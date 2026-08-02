@@ -1,0 +1,44 @@
+{
+  "common": {
+    "save": "保存",
+    "saving": "保存中…",
+    "saved": "已保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "close": "关闭",
+    "confirm": "确定",
+    "back": "返回",
+    "edit": "编辑",
+    "copy": "复制",
+    "copied": "已复制",
+    "loading": "加载中…",
+    "more": "更多",
+    "error": "出错了",
+    "retry": "重试",
+    "name": "名称",
+    "title": "标题",
+    "description": "描述",
+    "type": "类型",
+    "status": "状态",
+    "actions": "操作",
+    "none": "无",
+    "untitled": "无标题",
+    "unnamed": "未命名",
+    "unknown": "未知",
+    "confirmDeleteTitle": "确认删除",
+    "confirmDeleteDescription": "此操作不可撤销。",
+    "httpError": "HTTP {{status}}"
+  },
+  "time": {
+    "justNow": "刚刚",
+    "secondsAgo": "{{n}} 秒前",
+    "minutesAgo": "{{n}} 分钟前",
+    "hoursAgo": "{{n}} 小时前",
+    "daysAgo": "{{n}} 天前"
+  },
+  "toast": {
+    "saved": "已保存",
+    "deleteFailed": "删除失败",
+    "copyFailed": "复制失败"
+  }
+}

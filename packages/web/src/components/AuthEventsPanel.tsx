@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
+import i18next from '../i18n'
 import { Shield, Monitor, Phone, Globe } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { HelpTip } from './ui'
@@ -13,13 +15,13 @@ interface AuthEvent {
 }
 
 function guessDevice(ua: string | null): { label: string; icon: typeof Monitor } {
-  if (!ua) return { label: '未知设备', icon: Monitor }
+  if (!ua) return { label: i18next.t('authEvents.deviceUnknown'), icon: Monitor }
   const lower = ua.toLowerCase()
   if (lower.includes('mobile') || lower.includes('android') || lower.includes('iphone'))
-    return { label: '手机', icon: Phone }
+    return { label: i18next.t('authEvents.devicePhone'), icon: Phone }
   if (lower.includes('ipad') || lower.includes('tablet'))
-    return { label: '平板', icon: Phone }
-  return { label: '桌面', icon: Monitor }
+    return { label: i18next.t('authEvents.deviceTablet'), icon: Phone }
+  return { label: i18next.t('authEvents.deviceDesktop'), icon: Monitor }
 }
 
 // 顺序敏感：Edge UA 含 'Chrome'，Chrome UA 含 'Safari'
@@ -39,17 +41,18 @@ function formatTime(iso: string): string {
   const diffMs = now.getTime() - d.getTime()
   const diffMin = Math.floor(diffMs / 60000)
   const diffHr = Math.floor(diffMs / 3600000)
-  if (diffMin < 1) return '刚刚'
-  if (diffMin < 60) return `${diffMin} 分钟前`
-  if (diffHr < 24) return `${diffHr} 小时前`
+  if (diffMin < 1) return i18next.t('time.justNow')
+  if (diffMin < 60) return i18next.t('time.minutesAgo', { n: diffMin })
+  if (diffHr < 24) return i18next.t('time.hoursAgo', { n: diffHr })
   const month = d.getMonth() + 1
   const day = d.getDate()
   const hour = d.getHours().toString().padStart(2, '0')
   const minute = d.getMinutes().toString().padStart(2, '0')
-  return `${month}月${day}日 ${hour}:${minute}`
+  return i18next.t('authEvents.dateTime', { month, day, hour, minute })
 }
 
 export default function AuthEventsPanel() {
+  const { t } = useTranslation()
   const [events, setEvents] = useState<AuthEvent[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -73,27 +76,27 @@ export default function AuthEventsPanel() {
 
   if (loading) return (
     <SettingsCard
-      title="登录活动"
+      title={t('authEvents.title')}
       icon={<Shield className="w-4 h-4" strokeWidth={1.75} />}
       collapsible
     >
-      <p className="text-[12px] text-muted-foreground">加载中...</p>
+      <p className="text-[12px] text-muted-foreground">{t('common.loading')}</p>
     </SettingsCard>
   )
 
   return (
     <SettingsCard
-      title="登录活动"
+      title={t('authEvents.title')}
       icon={<Shield className="w-4 h-4" strokeWidth={1.75} />}
       collapsible
     >
       <div className="flex items-center gap-1.5">
-        <p className="text-[12.5px] text-muted-foreground leading-relaxed">最近 30 次登录记录</p>
-        <HelpTip label="如果发现陌生的 IP 或设备，请立即修改密码。" />
+        <p className="text-[12.5px] text-muted-foreground leading-relaxed">{t('authEvents.recentCount')}</p>
+        <HelpTip label={t('authEvents.helpTip')} />
       </div>
 
       {events.length === 0 ? (
-        <p className="text-[12px] text-muted-foreground">暂无登录记录。新登录后会出现在这里。</p>
+        <p className="text-[12px] text-muted-foreground">{t('authEvents.empty')}</p>
       ) : (
         <div className="rounded-lg border border-border overflow-hidden">
           {events.map((ev, i) => {
@@ -118,7 +121,7 @@ export default function AuthEventsPanel() {
                     {browser && <span className="text-[11px] text-muted-foreground">{browser}</span>}
                     {isLatest && (
                       <span className="px-1.5 py-0.5 rounded text-[9.5px] font-medium bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/20">
-                        最近
+                        {t('authEvents.latest')}
                       </span>
                     )}
                   </div>

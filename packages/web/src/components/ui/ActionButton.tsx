@@ -21,6 +21,7 @@ import { useState } from 'react'
 import { Button, type ButtonVariant, type ButtonSize } from './Button'
 import { useToast } from './Toast'
 import type { ToastInput } from './Toast'
+import { useTranslation } from 'react-i18next'
 
 export interface ActionButtonProps {
   onAction: () => Promise<unknown> | unknown
@@ -63,6 +64,7 @@ export function ActionButton({
   onAfter,
   children,
 }: ActionButtonProps) {
+  const { t } = useTranslation()
   const toast = useToast()
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -90,17 +92,17 @@ export function ActionButton({
         onAfter?.(true, value)
       } catch (err) {
         if (!silentError) {
-          let t: ToastInput | undefined
+          let toastInput: ToastInput | undefined
           if (errorToast) {
-            t = typeof errorToast === 'function' ? errorToast(err) : errorToast
-            if (typeof t === 'string') t = { title: t }
+            toastInput = typeof errorToast === 'function' ? errorToast(err) : errorToast
+            if (typeof toastInput === 'string') toastInput = { title: toastInput }
           } else {
-            t = {
-              title: '操作失败',
+            toastInput = {
+              title: t('common.error'),
               description: err instanceof Error ? err.message : String(err),
             }
           }
-          if (t) toast.error(t)
+          if (toastInput) toast.error(toastInput)
         }
         onAfter?.(false, err)
       } finally {
@@ -121,7 +123,7 @@ export function ActionButton({
       onClick={handleClick}
       className={className}
     >
-      {children ?? '保存'}
+      {children ?? t('common.save')}
     </Button>
   )
 }

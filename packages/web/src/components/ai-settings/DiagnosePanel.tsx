@@ -1,4 +1,6 @@
 import { CheckCircle2, AlertCircle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import i18next from '../../i18n'
 import type { AiDiagnoseResult } from '@notefast/core'
 
 type DiagR = {
@@ -17,6 +19,7 @@ type DiagR = {
 
 /** 一键诊断结果面板：overall 状态点 + 各能力逐行结果（Embedding / Chat / Reranker / AutoLink） */
 export function DiagnosePanel({ result, onClose }: { result: AiDiagnoseResult; onClose: () => void }) {
+  const { t } = useTranslation()
   return (
     <div className="text-xs rounded-md bg-muted/40 border border-border overflow-hidden">
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-background/40">
@@ -24,12 +27,12 @@ export function DiagnosePanel({ result, onClose }: { result: AiDiagnoseResult; o
           <OverallDot overall={result.overall} />
           <span className="font-medium text-foreground">
             {result.overall === 'healthy'
-              ? '一切正常'
+              ? t('diagnose.healthy')
               : result.overall === 'partial'
-                ? '部分能力可用'
+                ? t('diagnose.partial')
                 : result.overall === 'degraded'
-                  ? '已配置但都不可达'
-                  : '尚未启用任何 AI 能力'}
+                  ? t('diagnose.degraded')
+                  : t('diagnose.none')}
           </span>
           {result.elapsedMs != null && (
             <span className="text-[10px] text-muted-foreground/70 font-mono">
@@ -42,7 +45,7 @@ export function DiagnosePanel({ result, onClose }: { result: AiDiagnoseResult; o
           onClick={onClose}
           className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
         >
-          关闭
+          {t('common.close')}
         </button>
       </div>
       <div className="divide-y divide-border/60">
@@ -82,12 +85,13 @@ function DiagRow({
   r: DiagR
   autoLink?: boolean
 }) {
+  const { t } = useTranslation()
   if (!r.configured) {
     return (
       <div className="flex items-center gap-3 px-3 py-2 text-muted-foreground/70">
         <span className="w-5 text-center text-foreground/60 text-[13px]">{icon}</span>
         <span className="w-16 font-medium text-foreground/80">{label}</span>
-        <span className="text-[11px] italic">未配置</span>
+        <span className="text-[11px] italic">{t('diagnose.notConfigured')}</span>
       </div>
     )
   }
@@ -122,9 +126,9 @@ function DiagRow({
 function autoLinkFormat(r: DiagR): string {
   const prereq = r.prerequisites?.chat
   if (!prereq) return ''
-  if (!prereq.configured) return '需要 Chat 模型已配置'
-  if (!prereq.ok) return '依赖 Chat 不可达，自动建链不会触发'
-  return '依赖 Chat 已通（高置信自动建链）'
+  if (!prereq.configured) return i18next.t('diagnose.autolinkRequiresChat')
+  if (!prereq.ok) return i18next.t('diagnose.autolinkChatDown')
+  return i18next.t('diagnose.autolinkChatOk')
 }
 
 function describeMeta(r: DiagR): string {

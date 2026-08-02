@@ -1,0 +1,148 @@
+{
+  "chat": {
+    "copy": "复制"
+  },
+  "settingsSub": {
+    "settings": "设置"
+  },
+  "confirm": {
+    "cancel": "取消"
+  },
+  "tagEditor": {
+    "addTag": "加标签",
+    "removeTag": "移除标签 {{tag}}"
+  },
+  "tagFilter": {
+    "tagMatchMode": "标签匹配方式",
+    "matchAll": "同时包含",
+    "matchAny": "包含任一"
+  },
+  "docList": {
+    "untitled": "未命名文档",
+    "aiExclude": "AI 隐藏",
+    "updatedAt": "更新于 {{date}}"
+  },
+  "btn": {
+    "processing": "处理中…",
+    "done": "已完成"
+  },
+  "sidebar": {
+    "unpin": "取消固定",
+    "expandSidebar": "展开侧边栏",
+    "collapseSidebar": "折叠侧边栏",
+    "docs": "文档",
+    "aiAssistant": "AI 助手",
+    "settings": "设置",
+    "openPalette": "打开命令面板",
+    "searchPlaceholder": "搜索文档…",
+    "navigation": "导航",
+    "allDocs": "所有文档",
+    "newDocTitle": "新建文档 ({{shortcut}})",
+    "newDoc": "新建",
+    "inbox": "收集箱",
+    "archived": "归档",
+    "entities": "实体",
+    "graph": "图谱",
+    "smartViews": "智能视图",
+    "recent7Days": "最近 7 天更新",
+    "stale90Days": "90 天未更新",
+    "aiHidden": "对 AI 隐藏",
+    "untagged": "未加标签",
+    "pinnedViews": "固定视图",
+    "recentDocs": "最近文档",
+    "untitled": "无标题文档",
+    "hasDraft": "有未保存草稿",
+    "collapse": "收起",
+    "expandAll": "展开全部（{{n}}）"
+  },
+  "layout": {
+    "openMenu": "打开菜单",
+    "openAiChat": "聊天 / 知识库问答",
+    "search": "搜索"
+  },
+  "command": {
+    "newDoc": "新建文档",
+    "newDocHint": "创建一个新的 Markdown 文档",
+    "goHome": "回到首页",
+    "goHomeHint": "所有文档列表",
+    "switchToLight": "切换到浅色",
+    "switchToDark": "切换到深色",
+    "toggleThemeHint": "切换应用主题",
+    "dialogLabel": "命令面板",
+    "placeholder": "搜索文档、命令或文件…",
+    "searching": "搜索中…",
+    "noResults": "没有匹配的结果",
+    "hint": "试试搜索文档名或执行命令",
+    "commands": "操作",
+    "docs": "文档",
+    "recentDocs": "最近文档",
+    "select": "选择",
+    "open": "打开",
+    "close": "关闭"
+  },
+  "auth": {
+    "wrongPassword": "密码错误，请重试",
+    "networkError": "网络错误，请检查连接后重试",
+    "loginTitle": "NoteFast 登录",
+    "passwordRequired": "此实例已开启访问密码",
+    "password": "密码",
+    "rememberMe": "保持登录 7 天",
+    "rememberDesc": "勾选后 7 天内无需重复输入；如在公共设备上使用，请勿勾选。",
+    "noRememberDesc": "不勾选时密码仅本次有效，关闭浏览器后即需重新输入。",
+    "loggingIn": "登录中…",
+    "login": "登录"
+  },
+  "docActions": {
+    "untitled": "未命名文档",
+    "renameFailed": "重命名失败",
+    "archived": "已归档",
+    "addedToNotes": "已加入笔记",
+    "restoredToNotes": "已恢复为笔记",
+    "undo": "撤销",
+    "undoFailed": "撤销失败",
+    "operationFailed": "操作失败",
+    "aiRestore": "已恢复对 AI 可见",
+    "aiHide": "已对 AI 隐藏",
+    "exportFailed": "导出失败",
+    "exportedWithImages": "已导出（含图片）",
+    "exportedMarkdown": "已导出 Markdown",
+    "discarded": "已丢弃",
+    "deleted": "已删除",
+    "restored": "已恢复",
+    "deleteFailed": "删除失败",
+    "openInNewTab": "在新标签打开",
+    "rename": "重命名",
+    "addToNotes": "加入笔记",
+    "restoreToNotes": "恢复为笔记",
+    "archive": "归档",
+    "share": "分享…",
+    "export": "导出",
+    "restoreAiVisibility": "恢复对 AI 可见",
+    "hideFromAi": "对 AI 隐藏",
+    "discard": "丢弃",
+    "delete": "删除",
+    "moreActionsFor": "「{{title}}」的更多操作",
+    "menuLabel": "文档操作",
+    "confirmDiscardTitle": "丢弃收集项",
+    "confirmDeleteTitle": "删除文档",
+    "confirmDiscardMsg": "确定丢弃「{{title}}」吗？丢弃后可在右下角提示中撤销。",
+    "confirmDeleteMsg": "确定要删除「{{title}}」吗？删除后可在右下角提示中撤销。",
+    "discarding": "丢弃中…",
+    "deleting": "删除中…",
+    "renameTitle": "重命名",
+    "titlePlaceholder": "文档标题"
+  },
+  "syncStatus": {
+    "syncing": "同步中",
+    "syncingTooltip": "正在同步",
+    "syncFailed": "同步失败",
+    "syncFailedWithError": "同步失败：{{error}}",
+    "pendingChanges": "{{n}} 条待同步",
+    "hasPendingChanges": "有变更待同步，稍后自动推送",
+    "synced": "已同步",
+    "pending": "待同步",
+    "syncedAt": "已同步 {{time}}",
+    "neverSynced": "尚未同步",
+    "statusLabel": "同步状态：{{status}}"
+  }
+}

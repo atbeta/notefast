@@ -1,4 +1,5 @@
 import { useRef, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Edit3,
   Loader2,
@@ -52,6 +53,7 @@ export default function EditorToolbar({
   uploadImage,
   editorRef,
 }: EditorToolbarProps) {
+  const { t } = useTranslation()
   const imageInputRef = useRef<HTMLInputElement>(null)
 
   const handleInsertLink = () => {
@@ -69,43 +71,43 @@ export default function EditorToolbar({
   return (
     <div className="sticky top-14 z-10 -mx-4 sm:-mx-8 px-4 sm:px-8 mb-2 bg-background/85 backdrop-blur-md">
       <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1 py-1.5 border-b border-border/60">
-        <IconBtn title="一级标题 (#)" onClick={() => insertAtCursor('\n# ')}>
+        <IconBtn title={t('editorToolbar.h1')} onClick={() => insertAtCursor('\n# ')}>
           <Heading1 className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn title="二级标题 (##)" onClick={() => insertAtCursor('\n## ')}>
+        <IconBtn title={t('editorToolbar.h2')} onClick={() => insertAtCursor('\n## ')}>
           <Heading2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn title="三级标题 (###)" onClick={() => insertAtCursor('\n### ')}>
+        <IconBtn title={t('editorToolbar.h3')} onClick={() => insertAtCursor('\n### ')}>
           <Heading3 className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
         <ToolbarDivider />
-        <IconBtn title="无序列表 (-)" onClick={() => insertAtCursor('\n- ')}>
+        <IconBtn title={t('editorToolbar.bulletList')} onClick={() => insertAtCursor('\n- ')}>
           <List className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn title="有序列表 (1.)" onClick={() => insertAtCursor('\n1. ')}>
+        <IconBtn title={t('editorToolbar.orderedList')} onClick={() => insertAtCursor('\n1. ')}>
           <ListOrdered className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn title="引用 (>)" onClick={() => insertAtCursor('\n> ')}>
+        <IconBtn title={t('editorToolbar.quote')} onClick={() => insertAtCursor('\n> ')}>
           <Quote className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn title="代码块 (```)" onClick={() => insertAtCursor('\n```\n\n```\n', { cursorOffset: 5 })}>
+        <IconBtn title={t('editorToolbar.codeBlock')} onClick={() => insertAtCursor('\n```\n\n```\n', { cursorOffset: 5 })}>
           <Code className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
         <ToolbarDivider />
-        <IconBtn title={`加粗 (${shortcutLabel(['mod', 'B'])})`} onClick={() => wrapSelection('**')}>
+        <IconBtn title={t('editorToolbar.bold', { shortcut: shortcutLabel(['mod', 'B']) })} onClick={() => wrapSelection('**')}>
           <Bold className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn title={`斜体 (${shortcutLabel(['mod', 'I'])})`} onClick={() => wrapSelection('*')}>
+        <IconBtn title={t('editorToolbar.italic', { shortcut: shortcutLabel(['mod', 'I']) })} onClick={() => wrapSelection('*')}>
           <Italic className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn title={`行内代码 (${shortcutLabel(['mod', 'E'])})`} onClick={() => wrapSelection('`')}>
+        <IconBtn title={t('editorToolbar.inlineCode', { shortcut: shortcutLabel(['mod', 'E']) })} onClick={() => wrapSelection('`')}>
           <Code className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn title={`链接 (${shortcutLabel(['mod', '⇧K'])})`} onClick={handleInsertLink}>
+        <IconBtn title={t('editorToolbar.link', { shortcut: shortcutLabel(['mod', '⇧K']) })} onClick={handleInsertLink}>
           <Link2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
         <IconBtn
-          title={uploadingImage ? '上传中…' : '插入图片（也可直接粘贴/拖入）'}
+          title={uploadingImage ? t('editorToolbar.uploading') : t('editorToolbar.insertImage')}
           onClick={() => imageInputRef.current?.click()}
         >
           {uploadingImage ? (
@@ -128,17 +130,17 @@ export default function EditorToolbar({
 
         <div className="flex items-center gap-1 ml-auto">
           <IconBtn
-            title={mode === 'view' ? `返回编辑 (${shortcutLabel(['mod', 'P'])})` : `预览 (${shortcutLabel(['mod', 'P'])})`}
+            title={mode === 'view' ? t('editorToolbar.backToEdit', { shortcut: shortcutLabel(['mod', 'P']) }) : t('editorToolbar.preview', { shortcut: shortcutLabel(['mod', 'P']) })}
             onClick={() => onModeToggle(mode === 'edit' ? 'view' : 'edit')}
             active={mode === 'view'}
           >
             {mode === 'view' ? <Edit3 className="w-[15px] h-[15px]" strokeWidth={1.75} /> : <Eye className="w-[15px] h-[15px]" strokeWidth={1.75} />}
           </IconBtn>
-          <IconBtn title="快捷键" onClick={() => onToggleHelp(!showHelp)} active={showHelp}>
+          <IconBtn title={t('editorToolbar.shortcuts')} onClick={() => onToggleHelp(!showHelp)} active={showHelp}>
             <span className="text-[12px] font-medium leading-none">?</span>
           </IconBtn>
           <ToolbarDivider />
-          <Tooltip label={saving ? '保存中…' : `保存并返回阅读 (${shortcutLabel(['mod', 'S'])})`}>
+          <Tooltip label={saving ? t('editorToolbar.saving') : t('editorToolbar.saveAndReturn', { shortcut: shortcutLabel(['mod', 'S']) })}>
             <button
               type="button"
               onClick={onSave}
@@ -146,10 +148,10 @@ export default function EditorToolbar({
               className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border transition-all active:scale-[0.97] disabled:cursor-not-allowed bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] border-[rgb(var(--primary))] shadow-[var(--shadow-btn)] hover:bg-[rgb(var(--primary-hover))] hover:border-[rgb(var(--primary-hover))] ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
             >
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-              {saving ? '保存中' : '保存'}
+              {saving ? t('editorToolbar.savingShort') : t('editorToolbar.save')}
             </button>
           </Tooltip>
-          <IconBtn title="退出编辑 (Esc)" onClick={onCancel}>
+          <IconBtn title={t('editorToolbar.exitEdit')} onClick={onCancel}>
             <X className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
         </div>
