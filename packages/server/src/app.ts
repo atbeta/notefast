@@ -13,7 +13,7 @@
  */
 
 import { Hono } from 'hono'
-import type { MiddlewareHandler } from 'hono'
+import type { Context, MiddlewareHandler } from 'hono'
 import type { Server } from 'bun'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/bun'
@@ -82,6 +82,12 @@ export interface CreateAppOptions {
   trustedLocal?: boolean
 }
 
+/** True if the request originates from the local loopback (no proxy headers set).
+ *  反代场景下 X-Forwarded-For / CF-Connecting-IP 任一非空即视为非本地，不信任。 */
+function isLoopbackRequest(c: Context): boolean {
+  return !c.req.header('x-forwarded-for')?.trim() && !c.req.header('cf-connecting-ip')?.trim()
+}
+
 export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   const dataDir = opts.dataDir || process.env.DATA_DIR || './data'
 
@@ -107,17 +113,10 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   // 本地免鉴权通道：原生内嵌 / 仅本机回环时，跳过 token/密码校验（走 admin）。
   // 在 authMiddleware 之前注册（auth 内部也已对未配置鉴权全放行；此分支覆盖「配置了但本地信任」场景）
   const localTrust: MiddlewareHandler = async (c, next) => {
-    if (opts.trustedLocal) {
-      // 仅信任本机回环来源；经反代（X-Forwarded-For 非空）时视为非本地，不信任
-      const xff = c.req.header('x-forwarded-for')?.trim()
-      const remote = c.req.header('cf-connecting-ip')?.trim()
-      if (!xff && !remote) {
-        c.set('authScopes', ['admin'])
-        await next()
-        return
-      }
+    if (opts.trustedLocal && isLoopbackRequest(c)) {
+      c.set('authScopes', ['admin'])
     }
-    await next()
+    return next()
   }
   app.use('/api/*', localTrust)
   app.use('/api/*', authMiddleware)
