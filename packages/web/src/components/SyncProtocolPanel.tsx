@@ -120,7 +120,7 @@ export default function SyncProtocolPanel() {
 
   return (
     <SettingsCard
-      title="多端同步 (S3)"
+      title="多端同步"
       icon={<Cloud className="w-4 h-4" strokeWidth={1.75} />}
       helpTip="在 Web 端与客户端之间共享同一份存储：本端变更发布到共享存储，同时拉取远端变更合并进本地（LWW 按更新时间裁决）。复用「存储连接」面板的连接 + 独立前缀。同步完全自动：任何写入（Web/MCP/导入/AI）都会立即触发发布，并定期心跳拉取远端变更。"
       statusBadge={

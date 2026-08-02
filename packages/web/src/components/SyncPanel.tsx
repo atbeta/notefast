@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, FolderOpen, Cloud, HardDrive, CheckCircle2, AlertCircle, Settings as SettingsIcon } from 'lucide-react'
+import { RefreshCw, FolderOpen, Cloud, CheckCircle2, AlertCircle, Settings as SettingsIcon } from 'lucide-react'
 import { api } from '../hooks/useAPI'
-import { type LocalFsAdapterConfig, type S3AdapterConfig, type WebDavAdapterConfig } from '@notefast/core'
+import { type LocalFsAdapterConfig } from '@notefast/core'
 import LocationSelect from './LocationSelect'
-import { ActionButton, useToast, HelpTip } from './ui'
+import { useStorageLocations } from '../hooks/useStorageLocations'
+import { ActionButton, useToast } from './ui'
 import ConfirmDialog from './ConfirmDialog'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
 import { formatIsoDateTime } from '../lib/time'
@@ -23,54 +24,37 @@ interface SyncRuntimeStatus {
   autoSyncIntervalMs?: number
 }
 
-interface AdapterInfo {
-  kind: string
-  label: string
-  fields: Array<{ name: string; label: string; type: string; required: boolean; secret?: boolean }>
-  status: 'available' | 'planned'
-}
-
+/** 归档目标：本地目录 或 存储连接（S3 / WebDAV，由连接类型决定） */
 type FormState =
   | { kind: 'none' }
   | LocalFsAdapterConfig
-  | S3AdapterConfig
-  | WebDavAdapterConfig
+  | { kind: 'connection'; locationId: string; prefix: string; enabled: true }
 
 const EMPTY_LOCALFS: LocalFsAdapterConfig = { kind: 'localfs', dir: '', prefix: '', enabled: true }
-const EMPTY_S3: S3AdapterConfig = { kind: 's3', locationId: '', prefix: '', enabled: true }
-const EMPTY_WEBDAV: WebDavAdapterConfig = { kind: 'webdav', locationId: '', prefix: '', enabled: true }
+const EMPTY_CONNECTION = { kind: 'connection' as const, locationId: '', prefix: '', enabled: true as const }
 
 export default function SyncPanel() {
   const [status, setStatus] = useState<SyncRuntimeStatus | null>(null)
-  const [adapters, setAdapters] = useState<AdapterInfo[]>([])
   const [form, setForm] = useState<FormState>({ kind: 'none' })
   const [interval, setInterval] = useState(3600)
   const [info, setInfo] = useState<{ remoteDocCount?: number; extra: Record<string, unknown> } | null>(null)
   const [showDisableConfirm, setShowDisableConfirm] = useState(false)
   const toast = useToast()
+  const { locations } = useStorageLocations()
 
   const refresh = useCallback(async () => {
     try {
       const res = await api.get<{ configured: boolean; status: SyncRuntimeStatus; config: { active: unknown } }>('/sync/config')
       setStatus(res.status)
-      const active = res.config.active as { kind?: string } | null
+      const active = res.config.active as { kind?: string; locationId?: string; prefix?: string } | null
       if (active?.kind === 'localfs') {
         const a = active as LocalFsAdapterConfig
         setForm({ ...EMPTY_LOCALFS, dir: a.dir ?? '', prefix: a.prefix ?? '' })
-      } else if (active?.kind === 's3') {
-        const a = active as S3AdapterConfig
+      } else if (active?.kind === 's3' || active?.kind === 'webdav') {
         setForm({
-          ...EMPTY_S3,
-          ...a,
-          // Key 前缀显示为不含尾斜杠的目录名（服务端归一化时自动补）
-          prefix: (a.prefix ?? '').replace(/\/$/, ''),
-        })
-      } else if (active?.kind === 'webdav') {
-        const a = active as WebDavAdapterConfig
-        setForm({
-          ...EMPTY_WEBDAV,
-          locationId: a.locationId ?? '',
-          prefix: (a.prefix ?? '').replace(/\/$/, ''),
+          ...EMPTY_CONNECTION,
+          locationId: active.locationId ?? '',
+          prefix: (active.prefix ?? '').replace(/\/$/, ''),
         })
       } else {
         setForm({ kind: 'none' })
@@ -85,16 +69,32 @@ export default function SyncPanel() {
 
   useEffect(() => {
     refresh()
-    // 适配器目录只在挂载时拉一次；refresh() 只刷主数据（/sync/config），不再重复拉取
-    api.get<{ adapters: AdapterInfo[] }>('/sync/adapters').then((r) => setAdapters(r.adapters)).catch(() => undefined)
   }, [refresh])
 
   const handleSave = async () => {
-    await api.put('/sync/config', {
-      active: form,
-      autoSyncIntervalMs: interval * 1000,
-    })
-    await refresh()
+    await toast.promise(
+      async () => {
+        // 存储连接 → 按连接类型落地为 s3 / webdav adapter 配置
+        let active: unknown = form
+        if (form.kind === 'connection') {
+          const loc = locations.find((l) => l.id === form.locationId)
+          if (!loc) throw new Error('请选择存储连接')
+          active = loc.kind === 's3'
+            ? { kind: 's3', locationId: form.locationId, prefix: form.prefix, enabled: true }
+            : { kind: 'webdav', locationId: form.locationId, prefix: form.prefix, enabled: true }
+        }
+        await api.put('/sync/config', {
+          active,
+          autoSyncIntervalMs: interval * 1000,
+        })
+        await refresh()
+      },
+      {
+        loading: '正在保存归档配置…',
+        success: 'Markdown 归档已保存',
+        error: (e) => ({ title: '保存失败', description: e instanceof Error ? e.message : String(e) }),
+      },
+    ).catch(() => undefined)
   }
 
   const handleDisable = async () => {
@@ -135,58 +135,40 @@ export default function SyncPanel() {
       title="Markdown 归档"
       icon={<SettingsIcon className="w-4 h-4" strokeWidth={1.75} />}
       helpTip="将文档导出为 Markdown 推送到远端（本地文件 / S3 / WebDAV）。这是内容归档，不含内部 ID、引用关系、标签与向量数据。同名文档使用带 ID 的文件名确保不冲突，删除文档时会自动清理远端对应的旧文件。"
-      statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? `已启用 · ${status.adapterName}` : '未启用'} />}
+      statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? `已启用 · ${status.adapterName === 'localfs' ? '本地目录' : status.adapterName === 'webdav' ? 'WebDAV' : 'S3 连接'}` : '未启用'} />}
       defaultExpanded={!status?.configured}
     >
       <div className="space-y-6">
         <div className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {adapters.map((a) => {
-              const isSelected = form.kind === a.kind
-              const isActive = status?.configured && status.adapterName === a.kind
-              
-              let displayName = a.label.replace(/\s*\(?Markdown\s*归档\)?\s*$/i, '')
-              if (a.kind === 'localfs') displayName = '本地文件'
-              else if (a.kind === 's3') displayName = 'S3 兼容'
-              else if (a.kind === 'webdav') displayName = 'WebDAV'
-
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {([
+              { key: 'localfs', name: '本地目录', desc: '导出到服务器本地文件夹', icon: <FolderOpen className="w-4 h-4" /> },
+              { key: 'connection', name: '存储连接', desc: 'S3 / WebDAV，由连接类型决定', icon: <Cloud className="w-4 h-4" /> },
+            ] as const).map((opt) => {
+              const isSelected = form.kind === opt.key
+              const isActive = status?.configured && ((opt.key === 'localfs' && status.adapterName === 'localfs') || (opt.key === 'connection' && (status.adapterName === 's3' || status.adapterName === 'webdav')))
               return (
                 <button
-                  key={a.kind}
+                  key={opt.key}
                   type="button"
                   onClick={() => {
-                    if (a.status !== 'available') return
-                    if (a.kind === 'localfs') setForm({ ...EMPTY_LOCALFS })
-                    else if (a.kind === 's3') setForm({ ...EMPTY_S3 })
-                    else if (a.kind === 'webdav') setForm({ ...EMPTY_WEBDAV })
+                    if (opt.key === 'localfs') setForm({ ...EMPTY_LOCALFS })
+                    else setForm({ ...EMPTY_CONNECTION })
                   }}
-                  disabled={a.status !== 'available'}
                   className={`flex flex-col gap-1.5 px-3 py-3 rounded-lg border text-left transition-all ${
-                    isSelected
-                      ? 'border-primary/45 bg-primary-soft shadow-sm'
-                      : 'border-border bg-card hover:border-border-strong'
-                  } ${a.status !== 'available' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    isSelected ? 'border-primary/45 bg-primary-soft shadow-sm' : 'border-border bg-card hover:border-border-strong'
+                  }`}
                 >
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2">
-                      {a.kind === 'localfs' ? (
-                        <FolderOpen className={`w-4 h-4 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
-                      ) : a.kind === 'webdav' ? (
-                        <HardDrive className={`w-4 h-4 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
-                      ) : (
-                        <Cloud className={`w-4 h-4 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
-                      )}
-                      <span className={`font-medium text-[13px] ${isSelected ? 'text-foreground' : 'text-foreground/80'}`}>
-                        {displayName}
-                      </span>
+                      <span className={`${isSelected ? 'text-primary' : 'text-muted-foreground'}`}>{opt.icon}</span>
+                      <span className={`font-medium text-[13px] ${isSelected ? 'text-foreground' : 'text-foreground/80'}`}>{opt.name}</span>
                     </div>
                     {isActive && (
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" title="当前启用"></span>
                     )}
                   </div>
-                  <span className={`text-[10px] uppercase tracking-wider ${isSelected ? 'text-primary/70' : 'text-muted-foreground/70'}`}>
-                    {a.status === 'available' ? '可用' : '计划中'}
-                  </span>
+                  <span className="text-[11px] text-muted-foreground/80">{opt.desc}</span>
                 </button>
               )
             })}
@@ -215,7 +197,7 @@ export default function SyncPanel() {
             </div>
           )}
 
-          {form.kind === 's3' && (
+          {form.kind === 'connection' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
               <div className="md:col-span-2">
                 <label className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">存储连接</label>
@@ -223,33 +205,6 @@ export default function SyncPanel() {
                   <LocationSelect
                     value={form.locationId}
                     onChange={(v) => setForm({ ...form, locationId: v })}
-                    kind="s3"
-                  />
-                </div>
-              </div>
-              <InlineField
-                label="Key 前缀"
-                value={form.prefix ?? ''}
-                onChange={(v) => setForm({ ...form, prefix: v })}
-                placeholder="notes"
-                mono
-              />
-            </div>
-          )}
-
-          {form.kind === 'webdav' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
-              <div className="md:col-span-2 flex items-center gap-1.5">
-                <span className="text-[12px] text-muted-foreground">WebDAV</span>
-                <HelpTip label="支持 NextCloud / ownCloud / 群晖 / 坚果云等 WebDAV。第一次推送时前缀不存在会创建中间目录。" />
-              </div>
-              <div className="md:col-span-2">
-                <label className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">存储连接</label>
-                <div className="mt-1.5">
-                  <LocationSelect
-                    value={form.locationId}
-                    onChange={(v) => setForm({ ...form, locationId: v })}
-                    kind="webdav"
                   />
                 </div>
               </div>
@@ -290,7 +245,7 @@ export default function SyncPanel() {
                 successToast={{ title: status?.configured && status.adapterName === form.kind ? '归档配置已保存' : '归档已启用' }}
                 errorToast={(e) => ({ title: '保存失败', description: e instanceof Error ? e.message : String(e) })}
               >
-                {status?.configured && status.adapterName === form.kind ? '保存更改' : `启用 ${form.kind === 'localfs' ? '本地' : form.kind === 's3' ? 'S3' : 'WebDAV'} 归档`}
+                {status?.configured && (form.kind === 'localfs' ? status.adapterName === 'localfs' : status.adapterName === 's3' || status.adapterName === 'webdav') ? '保存更改' : `启用 ${form.kind === 'localfs' ? '本地' : '连接'} 归档`}
               </ActionButton>
               {status?.configured && status.adapterName === form.kind ? (
                 <>

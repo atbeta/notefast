@@ -114,7 +114,7 @@ export default function BackupPanel() {
 
   return (
     <SettingsCard
-      title="数据库备份 (SQLite → S3)"
+      title="数据库备份"
       icon={<Database className="w-4 h-4" strokeWidth={1.75} />}
       helpTip="在线生成数据库快照并上传 S3，仅支持手动触发（不自动调度）。快照不含可重建的向量索引（体积大幅缩小），恢复后语义搜索需重建索引。恢复须先停止服务，再通过命令行执行（Web 界面不提供一键恢复，以防止误操作覆盖当前数据）。日常跨端同步请用「多端同步」。"      statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? '已启用' : '未启用'} />}
       defaultExpanded={!status?.configured}
