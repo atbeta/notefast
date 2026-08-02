@@ -1,13 +1,15 @@
 /**
  * 实体/笔记共现图 — d3-force 力导向 SVG 渲染
  *
- * 数据：节点（大小 = 提及次数/块数，颜色 = kind，笔记为方角墨色节点），
- * 边（透明度/宽度 = 权重）。
+ * 数据：节点（大小 = 提及次数/块数；实体 = kind 着色圆形带高光与光晕，
+ * 笔记 = 迷你卡片：卡片底色 + 细边 + primary 竖条 + 文本行 glyph），
+ * 边（透明度/宽度 = 权重，悬停/选中时相关边染焦点节点颜色）。
+ * 画布为屏幕空间点阵背景；标签带卡片色 halo 保证可读性。
  *
  * 交互：
  * - 画布：滚轮缩放（光标处）、空白拖拽平移、空白单击取消选中
  * - 节点：拖拽（fx/fy 固定到落点）、单击选中、双击聚焦（重新以该节点为中心）
- * - 悬停：高亮节点与其邻居、其余压暗；tooltip 显示名称 / kind / 次数
+ * - 悬停/选中：高亮该节点与其邻居、其余压暗（悬停优先于选中）；tooltip 显示名称 / kind / 次数
  * - 锚点节点（centerId）固定于画布中心，新节点从中心浮现（平滑聚焦过渡）
  * - 图例覆盖（kind 颜色 / 笔记样式 + 大小与边的含义）
  *
@@ -23,10 +25,11 @@ import {
   forceLink,
   forceManyBody,
   forceSimulation,
+  forceX,
+  forceY,
   type Simulation,
 } from 'd3-force'
 import {
-  GRAPH_NOTE_COLOR,
   graphKindColor,
   type GraphEdge,
   type GraphMode,
@@ -68,9 +71,9 @@ function nodeRadius(mc: number, maxMc: number): number {
   return 5 + 13 * Math.min(1, Math.sqrt(mc) / Math.sqrt(Math.max(maxMc, 1)))
 }
 
-/** 笔记节点尺寸（宽；高 ≈ 0.6×，圆角矩形） */
+/** 笔记节点尺寸（宽；高 ≈ 0.55×，迷你卡片） */
 function docWidth(mc: number, maxMc: number): number {
-  return 34 + 46 * Math.min(1, Math.sqrt(mc) / Math.sqrt(Math.max(maxMc, 1)))
+  return 46 + 54 * Math.min(1, Math.sqrt(mc) / Math.sqrt(Math.max(maxMc, 1)))
 }
 
 export default function EntityGraph({
@@ -90,6 +93,38 @@ export default function EntityGraph({
   viewRef.current = view
   const [hoverId, setHoverId] = useState<string | null>(null)
   const [, setTick] = useState(0)
+  // 自动 fit-to-view：图重建后跟随布局收敛持续取景，用户缩放/平移/拖节点即停
+  const autoFitRef = useRef(false)
+  const prevGraphKeyRef = useRef('')
+
+  // 当前所有节点的取景框 → 视图变换（留边距，允许小图略微放大）
+  const fitView = () => {
+    const ns = simNodesRef.current
+    if (ns.length === 0) return
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const n of ns) {
+      minX = Math.min(minX, n.x)
+      minY = Math.min(minY, n.y)
+      maxX = Math.max(maxX, n.x)
+      maxY = Math.max(maxY, n.y)
+    }
+    const pad = 70
+    const bw = Math.max(1, maxX - minX)
+    const bh = Math.max(1, maxY - minY)
+    const k = Math.min(
+      MAX_ZOOM,
+      1.15,
+      Math.max(MIN_ZOOM, Math.min((size.w - pad * 2) / bw, (size.h - pad * 2) / bh)),
+    )
+    setView({
+      k,
+      x: size.w / 2 - (minX + bw / 2) * k,
+      y: size.h / 2 - (minY + bh / 2) * k,
+    })
+  }
 
   const maxMc = useMemo(() => Math.max(1, ...nodes.map((n) => n.mention_count)), [nodes])
 
@@ -148,22 +183,31 @@ export default function EntityGraph({
     simEdgesRef.current = simEdges
     const radiusOf = (d: SimNode) =>
       (d.type === 'doc' ? docWidth(d.mention_count, maxMc) / 2 : nodeRadius(d.mention_count, maxMc)) + 10
-    const sim: Simulation<SimNode, undefined> = forceSimulation<SimNode>(simNodesRef.current)
+  const sim: Simulation<SimNode, undefined> = forceSimulation<SimNode>(simNodesRef.current)
       .force(
         'link',
         forceLink<SimNode, SimEdge>(simEdges)
           .id((d) => d.id)
-          .distance(mode === 'docs' ? 150 : 95)
+          .distance(mode === 'docs' ? 120 : 95)
           .strength(0.4),
       )
-      .force('charge', forceManyBody().strength(mode === 'docs' ? -300 : -200))
+      .force('charge', forceManyBody().strength(mode === 'docs' ? -160 : -200))
       .force('center', forceCenter(size.w / 2, size.h / 2))
+      // 弱向心力：收紧孤立节点组成的稀疏点云（笔记模式大量无关联笔记），
+      // 让 fit-to-view 落在更高缩放级别；锚点 fx/fy 固定不受影响
+      .force('x', forceX(size.w / 2).strength(mode === 'docs' ? 0.06 : 0.03))
+      .force('y', forceY(size.h / 2).strength(mode === 'docs' ? 0.06 : 0.03))
       .force('collide', forceCollide<SimNode>().radius(radiusOf))
+    // 图结构重建后自动缩放至全图可见（用户交互即停止，见 wheel/pointerdown）；
+    // 仅图结构变化时触发——容器 resize（如详情面板开合）不重置用户视角
+    autoFitRef.current = graphKey !== prevGraphKeyRef.current
+    prevGraphKeyRef.current = graphKey
     let raf = 0
     sim.on('tick', () => {
       if (raf) return
       raf = requestAnimationFrame(() => {
         raf = 0
+        if (autoFitRef.current) fitView()
         setTick((t) => t + 1)
       })
     })
@@ -179,6 +223,7 @@ export default function EntityGraph({
     if (!svg) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
+      autoFitRef.current = false
       const rect = svg.getBoundingClientRect()
       const mx = e.clientX - rect.left
       const my = e.clientY - rect.top
@@ -204,6 +249,7 @@ export default function EntityGraph({
 
   const onSvgPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
+    autoFitRef.current = false
     panRef.current = { sx: e.clientX, sy: e.clientY, vx: viewRef.current.x, vy: viewRef.current.y, moved: false }
     svgRef.current?.setPointerCapture(e.pointerId)
   }
@@ -245,6 +291,7 @@ export default function EntityGraph({
 
   const onNodePointerDown = (e: React.PointerEvent, id: string) => {
     e.stopPropagation()
+    autoFitRef.current = false
     dragRef.current = { id, moved: false }
     const node = simNodesRef.current.find((n) => n.id === id)
     if (node) {
@@ -268,16 +315,20 @@ export default function EntityGraph({
   // ───────────────────── 派生渲染数据 ─────────────────────
   const maxWeight = useMemo(() => Math.max(1, ...edges.map((e) => e.weight)), [edges])
 
-  // 悬停邻居集合（含自身）
-  const hoverNeighbors = useMemo(() => {
-    if (!hoverId) return null
-    const set = new Set<string>([hoverId])
+  // 焦点邻居集合（含自身）：悬停优先，无悬停时回落到选中节点——
+  // 选中实体后图中仅它与相关实体保持全亮，其余压暗
+  const focusNeighbors = useMemo(() => {
+    const fid = hoverId ?? selectedId
+    if (!fid) return null
+    // 焦点节点已不在当前图（如切换 kind 筛选后选中态未清）时不压暗
+    if (!simNodesRef.current.some((n) => n.id === fid)) return null
+    const set = new Set<string>([fid])
     for (const e of edges) {
-      if (e.source === hoverId) set.add(e.target as string)
-      if (e.target === hoverId) set.add(e.source as string)
+      if (e.source === fid) set.add(e.target as string)
+      if (e.target === fid) set.add(e.source as string)
     }
     return set
-  }, [hoverId, edges])
+  }, [hoverId, selectedId, edges, graphKey])
 
   // 与选中/悬停节点相邻的边集合
   const focusEdges = useMemo(() => {
@@ -293,6 +344,15 @@ export default function EntityGraph({
   }, [hoverId, selectedId, graphKey])
 
   const hoverNode = hoverId ? (simNodesRef.current.find((n) => n.id === hoverId) ?? null) : null
+
+  // 焦点（悬停优先，其次选中）节点的主题色：相关边用它染色，增强关联感
+  const focusColor = useMemo(() => {
+    const fid = hoverId ?? selectedId
+    if (!fid) return null
+    const n = simNodesRef.current.find((nd) => nd.id === fid)
+    if (!n) return null
+    return n.type === 'doc' ? 'rgb(var(--primary))' : graphKindColor(n.kind)
+  }, [hoverId, selectedId, graphKey])
   // tooltip 屏幕坐标（在 pan/zoom 变换之外，随节点移动）
   const tooltipPos =
     hoverNode && !dragRef.current
@@ -302,12 +362,16 @@ export default function EntityGraph({
         }
       : null
 
+  // 标签按缩放级别显隐：缩得太小时全部标签只会糊成噪点，
+  // 只保留悬停/选中节点的标签（tooltip 仍在）
+  const labelsOn = view.k >= 0.55
   const showLabel = (n: SimNode) =>
-    mode === 'docs' ||
     hoverId === n.id ||
     selectedId === n.id ||
-    n.distance === 0 ||
-    nodeRadius(n.mention_count, maxMc) >= 8
+    (labelsOn &&
+      (mode === 'docs' ||
+        n.distance === 0 ||
+        nodeRadius(n.mention_count, maxMc) >= 8))
 
   if (size.w === 0) {
     return (
@@ -334,7 +398,23 @@ export default function EntityGraph({
         onPointerUp={onSvgPointerUp}
         onPointerCancel={onSvgPointerUp}
       >
-        <rect width={size.w} height={size.h} fill="transparent" />
+        <defs>
+          {/* 节点柔和投影（共享，深浅主题通用——阴影本就是暗色） */}
+          <filter id="graphNodeShadow" x="-60%" y="-60%" width="220%" height="220%">
+            <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodColor="#141412" floodOpacity="0.14" />
+          </filter>
+          {/* 节点顶部高光：白色径向渐隐，叠在 kind 底色上形成通透感 */}
+          <radialGradient id="graphSheen" cx="35%" cy="28%" r="80%">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.42" />
+            <stop offset="55%" stopColor="#fff" stopOpacity="0.12" />
+            <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+          </radialGradient>
+          {/* 画布点阵背景（屏幕空间，不随平移缩放） */}
+          <pattern id="graphDots" width="26" height="26" patternUnits="userSpaceOnUse">
+            <circle cx="1.1" cy="1.1" r="1.1" style={{ fill: 'rgb(var(--graph-edge))' }} opacity="0.55" />
+          </pattern>
+        </defs>
+        <rect width={size.w} height={size.h} fill="url(#graphDots)" />
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
           {/* 边 */}
           {simEdgesRef.current.map((e, i) => {
@@ -343,6 +423,7 @@ export default function EntityGraph({
             if (!s || !t) return null
             const incident = focusEdges ? focusEdges.has(e) : true
             const dim = focusEdges !== null && !incident
+            const highlighted = incident && focusColor !== null
             const w = e.weight / maxWeight
             return (
               <line
@@ -351,15 +432,16 @@ export default function EntityGraph({
                 y1={s.y}
                 x2={t.x}
                 y2={t.y}
-                style={{ stroke: 'rgb(var(--graph-edge))' }}
-                strokeWidth={0.6 + 1.5 * w}
-                strokeOpacity={dim ? 0.04 : incident ? 0.85 : 0.2 + 0.4 * w}
+                strokeLinecap="round"
+                style={{ stroke: highlighted ? focusColor : 'rgb(var(--graph-edge))' }}
+                strokeWidth={highlighted ? 1 + 1.5 * w : 0.6 + 1.2 * w}
+                strokeOpacity={dim ? 0.05 : highlighted ? 0.55 : 0.24 + 0.32 * w}
               />
             )
           })}
           {/* 节点 */}
           {simNodesRef.current.map((n) => {
-            const dim = hoverNeighbors !== null && !hoverNeighbors.has(n.id)
+            const dim = focusNeighbors !== null && !focusNeighbors.has(n.id)
             const opacity = dim ? 0.16 : 1
             const isSelected = n.id === selectedId
             const isHover = n.id === hoverId
@@ -412,7 +494,10 @@ export default function EntityGraph({
         {isDoc ? (
           <>
             <div className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: GRAPH_NOTE_COLOR }} />
+              <span
+                className="inline-block w-3.5 h-3 rounded-[3px] border"
+                style={{ background: 'rgb(var(--graph-note-fill))', borderColor: 'rgb(var(--border-strong))' }}
+              />
               <span>笔记</span>
             </div>
             <div className="mt-1">大小 = 内容量 · 连线 = 关联（共享实体 / 引用）</div>
@@ -435,7 +520,7 @@ export default function EntityGraph({
   )
 }
 
-/** 实体节点：圆形 + kind 着色 + 选中光晕/虚线环 + 锚点光晕 */
+/** 实体节点：kind 色圆 + 顶部高光 + 常驻淡光晕；悬停/选中为实色光环 */
 function EntityNodeShape({
   n,
   maxMc,
@@ -452,28 +537,28 @@ function EntityNodeShape({
   showLabel: boolean
 }) {
   const r = nodeRadius(n.mention_count, maxMc)
+  const color = graphKindColor(n.kind)
   return (
     <>
       {/* 隐形放大命中区（点击更易命中） */}
       <circle r={r + 8} fill="transparent" />
-      {(isSelected || isAnchor || isHover) && (
-        <circle
-          r={r + (isSelected ? 7 : 4)}
-          fill="rgb(var(--primary))"
-          opacity={isSelected ? 0.22 : isHover ? 0.18 : 0.12}
-        />
+      {/* 常驻柔光晕，让节点从点阵背景上浮起 */}
+      <circle r={r + 3} fill={color} opacity={0.14} />
+      {(isHover || isAnchor) && !isSelected && (
+        <circle r={r + 6} fill={color} opacity={isHover ? 0.28 : 0.18} />
       )}
-      {isSelected && (
-        <circle r={r + 4} fill="none" style={{ stroke: 'rgb(var(--primary))' }} strokeWidth={1.5} strokeDasharray="3 3" />
-      )}
+      {isSelected && <circle r={r + 8} fill={color} opacity={0.26} />}
       <circle
         r={r}
-        style={{
-          fill: graphKindColor(n.kind),
-          stroke: isHover ? 'rgb(var(--foreground))' : 'none',
-        }}
-        strokeWidth={isHover ? 1.5 : 0}
+        fill={color}
+        style={{ stroke: 'rgb(var(--card))' }}
+        strokeWidth={1.4}
+        filter="url(#graphNodeShadow)"
       />
+      <circle r={r} fill="url(#graphSheen)" pointerEvents="none" />
+      {isSelected && (
+        <circle r={r + 3.5} fill="none" style={{ stroke: 'rgb(var(--primary))' }} strokeWidth={1.5} />
+      )}
       {showLabel && (
         <text y={r + 13} textAnchor="middle" className="graph-node-label" style={{ fill: 'rgb(var(--foreground))' }}>
           {n.display.length > LABEL_MAX ? n.display.slice(0, LABEL_MAX) + '…' : n.display}
@@ -483,7 +568,7 @@ function EntityNodeShape({
   )
 }
 
-/** 笔记节点：圆角矩形 + 墨色填充 + 右侧标题 + 选中/锚点光晕 */
+/** 笔记节点：迷你笔记卡片 — 卡片底色 + 细边 + 投影 + primary 竖条 + 文本行 glyph，标题在卡片下方 */
 function DocNodeShape({
   n,
   maxMc,
@@ -500,33 +585,32 @@ function DocNodeShape({
   showLabel: boolean
 }) {
   const w = docWidth(n.mention_count, maxMc)
-  const h = Math.max(24, w * 0.6)
+  const h = Math.max(26, w * 0.55)
+  const glyphX = -w / 2 + 10 // 竖条右侧起点
   return (
     <>
       {/* 隐形放大命中区 */}
       <rect x={-w / 2 - 8} y={-h / 2 - 8} width={w + 16} height={h + 16} fill="transparent" />
-      {(isSelected || isAnchor || isHover) && (
-        <rect
-          x={-w / 2 - (isSelected ? 7 : 4)}
-          y={-h / 2 - (isSelected ? 7 : 4)}
-          width={w + (isSelected ? 14 : 8)}
-          height={h + (isSelected ? 14 : 8)}
-          rx={isSelected ? 12 : 10}
-          fill="rgb(var(--primary))"
-          opacity={isSelected ? 0.22 : isHover ? 0.18 : 0.12}
-        />
-      )}
-      {isSelected && (
+      {(isHover || isAnchor) && !isSelected && (
         <rect
           x={-w / 2 - 4}
           y={-h / 2 - 4}
           width={w + 8}
           height={h + 8}
-          rx={9}
-          fill="none"
-          style={{ stroke: 'rgb(var(--primary))' }}
-          strokeWidth={1.5}
-          strokeDasharray="3 3"
+          rx={11}
+          fill="rgb(var(--primary))"
+          opacity={isHover ? 0.2 : 0.12}
+        />
+      )}
+      {isSelected && (
+        <rect
+          x={-w / 2 - 6}
+          y={-h / 2 - 6}
+          width={w + 12}
+          height={h + 12}
+          rx={13}
+          fill="rgb(var(--primary))"
+          opacity={0.2}
         />
       )}
       <rect
@@ -534,18 +618,35 @@ function DocNodeShape({
         y={-h / 2}
         width={w}
         height={h}
-        rx={7}
+        rx={8}
         style={{
-          fill: GRAPH_NOTE_COLOR,
-          stroke: isHover ? 'rgb(var(--foreground))' : 'none',
+          fill: 'rgb(var(--graph-note-fill))',
+          stroke: isHover ? 'rgb(var(--border-strong))' : 'rgb(var(--border))',
         }}
-        strokeWidth={isHover ? 1.5 : 0}
+        strokeWidth={1}
+        filter="url(#graphNodeShadow)"
       />
+      {/* 左侧 primary 竖条：笔记的标识色 */}
+      <rect x={-w / 2 + 4} y={-h / 2 + 5} width={3} height={h - 10} rx={1.5} fill="rgb(var(--primary))" opacity={0.7} />
+      {/* 文本行 glyph：标题行 + 正文行，暗示「这是一篇笔记」 */}
+      <rect x={glyphX} y={-h / 2 + 7} width={w - 24} height={3.5} rx={1.75} fill="rgb(var(--foreground))" opacity={0.4} />
+      <rect x={glyphX} y={-h / 2 + 13.5} width={(w - 24) * 0.62} height={2.5} rx={1.25} fill="rgb(var(--foreground))" opacity={0.2} />
+      {isSelected && (
+        <rect
+          x={-w / 2 - 3}
+          y={-h / 2 - 3}
+          width={w + 6}
+          height={h + 6}
+          rx={11}
+          fill="none"
+          style={{ stroke: 'rgb(var(--primary))' }}
+          strokeWidth={1.5}
+        />
+      )}
       {showLabel && (
         <text
-          x={w / 2 + 7}
-          y={4}
-          textAnchor="start"
+          y={h / 2 + 13}
+          textAnchor="middle"
           className="graph-node-label"
           style={{ fill: 'rgb(var(--foreground))' }}
         >

@@ -55,5 +55,5 @@ export function graphKindColor(kind: string): string {
   return `rgb(${KIND_VAR[kind] ?? 'var(--graph-other)'})`
 }
 
-/** 笔记节点颜色（中性墨色，深浅主题可读） */
-export const GRAPH_NOTE_COLOR = 'rgb(var(--ink))'
+/** 笔记节点标识色（强调竖条 / 列表 swatch；节点本体为卡片样式，见 EntityGraph） */
+export const GRAPH_NOTE_COLOR = 'rgb(var(--primary))'

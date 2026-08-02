@@ -110,6 +110,7 @@
   --graph-doc: 139 123 176;    /* 文档 — 雾紫 */
   --graph-other: 105 104 100;  /* 未知 kind 兜底（近 muted-foreground） */
   --graph-edge: 200 200 198;   /* 边 — 近 border-strong，随主题微调 */
+  --graph-note-fill: 247 247 245; /* 笔记节点卡片底色 — 白画布上的纸感灰 */
 
   /* ───────────── 动效（全局统一） ───────────── */
   --ease: cubic-bezier(0.2, 0, 0, 1);
@@ -178,6 +179,7 @@
   --graph-doc: 179 166 206;
   --graph-other: 140 140 140;
   --graph-edge: 80 80 80;
+  --graph-note-fill: 42 42 42;    /* 深色下比画布（32）亮一档，节点浮起 */
 }
 
 

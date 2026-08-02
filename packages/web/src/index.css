@@ -186,6 +186,11 @@
     letter-spacing: -0.005em;
     user-select: none;
     pointer-events: none;
+    /* 卡片色 halo：压住处在线条/点阵背景上，保证标签可读 */
+    paint-order: stroke;
+    stroke: rgb(var(--card));
+    stroke-width: 3px;
+    stroke-linejoin: round;
   }
   .graph-tooltip {
     position: absolute;
