@@ -104,6 +104,11 @@ function DetailPanel({
           <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
             {isDoc ? `${node.mention_count} 个块` : `${node.mention_count} 篇笔记提及`}
           </p>
+          {node.description && (
+            <p className="text-[12px] text-foreground/80 mt-1.5 leading-relaxed">
+              {node.description}
+            </p>
+          )}
         </div>
         <button
           type="button"

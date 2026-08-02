@@ -18,6 +18,8 @@ export interface GraphNode {
   kind: string
   /** entities 模式 = 提及次数；docs 模式 = 活块数（节点大小代理） */
   mention_count: number
+  /** 实体一句话描述（E2，可能为 null） */
+  description?: string | null
   /** 距锚点集合的跳数；无中心（总览）时恒为 0 */
   distance: number
 }

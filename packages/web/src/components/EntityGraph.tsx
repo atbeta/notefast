@@ -374,11 +374,13 @@ export default function EntityGraph({
                 onPointerEnter={() => setHoverId(n.id)}
                 onPointerLeave={() => setHoverId((h) => (h === n.id ? null : h))}
               >
-                {isDoc ? (
-                  <DocNodeShape n={n} maxMc={maxMc} isHover={isHover} isSelected={isSelected} showLabel={showLabel(n)} />
-                ) : (
-                  <EntityNodeShape n={n} maxMc={maxMc} isHover={isHover} isSelected={isSelected} showLabel={showLabel(n)} />
-                )}
+                <g className="graph-node-enter">
+                  {isDoc ? (
+                    <DocNodeShape n={n} maxMc={maxMc} isAnchor={n.id === centerId} isHover={isHover} isSelected={isSelected} showLabel={showLabel(n)} />
+                  ) : (
+                    <EntityNodeShape n={n} maxMc={maxMc} isAnchor={n.id === centerId} isHover={isHover} isSelected={isSelected} showLabel={showLabel(n)} />
+                  )}
+                </g>
               </g>
             )
           })}
@@ -392,6 +394,11 @@ export default function EntityGraph({
           style={{ left: tooltipPos.x, top: tooltipPos.y, transform: 'translate(-50%, -100%)' }}
         >
           <div className="max-w-[240px] truncate">{hoverNode.display}</div>
+          {hoverNode.description && (
+            <div className="max-w-[240px] truncate text-[10px] text-muted-foreground/80">
+              {hoverNode.description}
+            </div>
+          )}
           <div className="mt-0.5 text-[10px] text-muted-foreground tabular-nums">
             {hoverNode.type === 'doc'
               ? `${hoverNode.mention_count} 个块`
@@ -428,16 +435,18 @@ export default function EntityGraph({
   )
 }
 
-/** 实体节点：圆形 + kind 着色 + 虚线选中环 */
+/** 实体节点：圆形 + kind 着色 + 选中光晕/虚线环 + 锚点光晕 */
 function EntityNodeShape({
   n,
   maxMc,
+  isAnchor,
   isHover,
   isSelected,
   showLabel,
 }: {
   n: SimNode
   maxMc: number
+  isAnchor: boolean
   isHover: boolean
   isSelected: boolean
   showLabel: boolean
@@ -447,6 +456,13 @@ function EntityNodeShape({
     <>
       {/* 隐形放大命中区（点击更易命中） */}
       <circle r={r + 8} fill="transparent" />
+      {(isSelected || isAnchor || isHover) && (
+        <circle
+          r={r + (isSelected ? 7 : 4)}
+          fill="rgb(var(--primary))"
+          opacity={isSelected ? 0.22 : isHover ? 0.18 : 0.12}
+        />
+      )}
       {isSelected && (
         <circle r={r + 4} fill="none" style={{ stroke: 'rgb(var(--primary))' }} strokeWidth={1.5} strokeDasharray="3 3" />
       )}
@@ -467,16 +483,18 @@ function EntityNodeShape({
   )
 }
 
-/** 笔记节点：圆角矩形 + 墨色填充 + 右侧标题 */
+/** 笔记节点：圆角矩形 + 墨色填充 + 右侧标题 + 选中/锚点光晕 */
 function DocNodeShape({
   n,
   maxMc,
+  isAnchor,
   isHover,
   isSelected,
   showLabel,
 }: {
   n: SimNode
   maxMc: number
+  isAnchor: boolean
   isHover: boolean
   isSelected: boolean
   showLabel: boolean
@@ -487,6 +505,17 @@ function DocNodeShape({
     <>
       {/* 隐形放大命中区 */}
       <rect x={-w / 2 - 8} y={-h / 2 - 8} width={w + 16} height={h + 16} fill="transparent" />
+      {(isSelected || isAnchor || isHover) && (
+        <rect
+          x={-w / 2 - (isSelected ? 7 : 4)}
+          y={-h / 2 - (isSelected ? 7 : 4)}
+          width={w + (isSelected ? 14 : 8)}
+          height={h + (isSelected ? 14 : 8)}
+          rx={isSelected ? 12 : 10}
+          fill="rgb(var(--primary))"
+          opacity={isSelected ? 0.22 : isHover ? 0.18 : 0.12}
+        />
+      )}
       {isSelected && (
         <rect
           x={-w / 2 - 4}

@@ -202,6 +202,15 @@
     backdrop-filter: blur(4px);
     white-space: nowrap;
   }
+  @keyframes graph-pop {
+    from { transform: scale(0.3); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  /* 新节点入场：内层 g 只做缩放/淡入（外层 g 承担位置，逐 tick 更新不冲突） */
+  .graph-node-enter {
+    animation: graph-pop 0.35s var(--ease);
+    transform-origin: center;
+  }
   .sidebar-link {
     @apply flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] text-sidebar-foreground
            transition-colors duration-150;

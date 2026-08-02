@@ -43,6 +43,8 @@ export interface GraphNode {
   mention_count: number
   /** 距锚点集合的跳数；无中心（总览）时恒为 0 */
   distance: number
+  /** 实体一句话描述（E2，可能为 null） */
+  description?: string | null
 }
 
 export interface GraphEdge {
@@ -90,6 +92,7 @@ interface EntityRow {
   display: string
   kind: string
   mention_count: number
+  description?: string | null
 }
 
 interface DocRow {
@@ -136,7 +139,7 @@ function cooccurringEntities(
 
   return db
     .query(
-      `SELECT e.id, e.name, e.display, e.kind, e.mention_count
+      `SELECT e.id, e.name, e.display, e.kind, e.mention_count, e.description
        FROM entity_mentions m
        JOIN (
          SELECT DISTINCT b2.id AS block_id
@@ -219,7 +222,7 @@ function queryEntityGraph(db: Db, opts: GraphQueryOptions): GraphQueryResult {
     args.push(maxNodes)
     const rows = db
       .query(
-        `SELECT e.id, e.name, e.display, e.kind, e.mention_count
+        `SELECT e.id, e.name, e.display, e.kind, e.mention_count, e.description
          FROM entities e
          WHERE ${conds.join(' AND ')}
          ORDER BY e.mention_count DESC, e.updated_at DESC
@@ -256,7 +259,7 @@ function queryEntityGraph(db: Db, opts: GraphQueryOptions): GraphQueryResult {
   const ids = [...dist.keys()]
   const nodeRows = db
     .query(
-      `SELECT id, name, display, kind, mention_count FROM entities WHERE id IN (${ids.map(() => '?').join(',')})`,
+      `SELECT id, name, display, kind, mention_count, description FROM entities WHERE id IN (${ids.map(() => '?').join(',')})`,
     )
     .all(...(ids as [string, ...string[]])) as EntityRow[]
   const nodes: GraphNode[] = nodeRows.map((r) => ({ ...r, type: 'entity', distance: dist.get(r.id)! }))

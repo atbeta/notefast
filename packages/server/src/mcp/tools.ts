@@ -20,6 +20,7 @@ import { registerDocReadTools } from './tools/docRead'
 import { registerDocWriteTools } from './tools/docWrite'
 import { registerAiChatTools } from './tools/aiChat'
 import { registerAutoLinkTools } from './tools/autoLink'
+import { registerEntityTools } from './tools/entityTools'
 
 export function registerMcpTools(server: McpServer, notebookId: string): void {
   const ctx: ToolContext = {
@@ -34,4 +35,5 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
   registerDocWriteTools(ctx)
   registerAiChatTools(ctx)
   registerAutoLinkTools(ctx)
+  registerEntityTools(ctx)
 }

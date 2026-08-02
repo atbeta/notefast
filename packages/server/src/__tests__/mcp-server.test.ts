@@ -111,7 +111,7 @@ describe('createSession', () => {
     const msg = list.body[0] as Record<string, unknown>
     expect(msg.result).toBeDefined()
     const tools = (msg.result as Record<string, unknown>).tools as { name: string }[]
-    expect(tools.length).toBe(21)
+    expect(tools.length).toBe(23)
 
     const toolNames = tools.map((t) => t.name)
     expect(toolNames).toContain('notefast_search')
@@ -517,5 +517,88 @@ describe('notefast_chat top_k 边界（Bug 6 附验）', () => {
       const result = msg.result as { isError?: boolean } | undefined
       expect(result?.isError).toBe(true)
     }
+  })
+})
+
+describe('notefast 实体工具（E3）', () => {
+  async function setupEntity() {
+    const { getDb } = await import('../db')
+    const db = getDb()
+    const nbRow = db.query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const nb = nbRow.id
+    const docId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, status, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', '向量检索实践', 'note', 0, 0, ?, ?)`,
+    ).run(docId, nb, docId, now, now)
+    const bid = crypto.randomUUID()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'paragraph', '向量数据库与混合检索的选型对比', 0, 1, ?, ?)`,
+    ).run(bid, nb, docId, docId, now, now)
+    const eid = crypto.randomUUID()
+    db.query(
+      `INSERT INTO entities (id, name, display, kind, mention_count, description)
+       VALUES (?, '向量数据库', '向量数据库', 'concept', 1, NULL)`,
+    ).run(eid)
+    db.query(
+      `INSERT INTO entity_mentions (entity_id, block_id, surface) VALUES (?, ?, '向量数据库')`,
+    ).run(eid, bid)
+    return { nb, docId, entityId: eid }
+  }
+
+  async function callTool(name: string, args: Record<string, unknown>) {
+    const { getDb } = await import('../db')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { transport } = await createSession(nb.id)
+    const init = await mcpRequest(transport, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    await mcpRequest(transport, 'notifications/initialized', undefined, undefined, init.sessionId)
+    const call = await mcpRequest(transport, 'tools/call', { name, arguments: args }, 2, init.sessionId)
+    await transport.close()
+    const msg = call.body[0] as Record<string, unknown>
+    const result = msg.result as { isError?: boolean; content: Array<{ text: string }> }
+    const payload = result?.content?.[0]?.text ? JSON.parse(result.content[0].text) : null
+    return { result, payload }
+  }
+
+  test('工具已注册', async () => {
+    const { getDb } = await import('../db')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { transport } = await createSession(nb.id)
+    const init = await mcpRequest(transport, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    const call = await mcpRequest(transport, 'tools/list', {}, 2, init.sessionId)
+    await transport.close()
+    const msg = call.body[0] as { result?: { tools?: Array<{ name: string }> } }
+    const names = (msg.result?.tools ?? []).map((t) => t.name)
+    expect(names).toContain('notefast_search_entities')
+    expect(names).toContain('notefast_get_entity_notes')
+  })
+
+  test('search_entities 返回实体（含描述）；get_entity_notes 返回笔记；实体不存在 404', async () => {
+    await setupEntity()
+    const search = await callTool('notefast_search_entities', { query: '向量' })
+    expect(search.result.isError).toBeFalsy()
+    const found = search.payload.entities as Array<{ id: string; display: string; mention_count: number }>
+    expect(found.length).toBe(1)
+    expect(found[0]!.display).toBe('向量数据库')
+
+    const notes = await callTool('notefast_get_entity_notes', { entity_id: found[0]!.id })
+    expect(notes.result.isError).toBeFalsy()
+    const noteList = notes.payload.notes as Array<{ doc_id: string; doc_status: string; snippet: string }>
+    expect(noteList.length).toBe(1)
+    expect(noteList[0]!.doc_status).toBe('note')
+
+    const missing = await callTool('notefast_get_entity_notes', { entity_id: 'ghost' })
+    expect(missing.result.isError).toBe(true)
+    expect((missing.payload.error as { code: string }).code).toBe('not_found')
   })
 })

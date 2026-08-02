@@ -13,7 +13,9 @@ import { getDb } from '../db'
 import { getLiveBlockById } from '../store/blocks'
 import {
   addMention,
+  getEntityById,
   normalizeEntityName,
+  resolveAlias,
   upsertEntity,
 } from '../store/entities'
 
@@ -29,6 +31,8 @@ export interface MentionInput {
  * 软删防护：登记前校验 block 仍是活块（is_deleted = 0）。afterCreate 抽取是
  * fire-and-forget + 限速（延迟可达数秒），若文档在抽取完成前被整篇替换，替换路径
  * 的清理先跑、抽取后到，会把 mention 落在已软删块上成为「幽灵数据」——此处拒绝。
+ *
+ * 别名路由：规范化名命中别名字典（手工合并过）→ 直接挂到规范实体，不再新建。
  */
 export function registerMentions(blockId: string, mentions: MentionInput[]): number {
   if (mentions.length === 0) return 0
@@ -41,7 +45,11 @@ export function registerMentions(blockId: string, mentions: MentionInput[]): num
     const name = normalizeEntityName(m.anchor)
     if (name.length < 2 || seen.has(name)) continue
     seen.add(name)
-    const entity = upsertEntity(db, { name, display: m.anchor.trim(), kind: m.kind })
+    const aliasTarget = resolveAlias(db, name)
+    const entity = aliasTarget
+      ? getEntityById(db, aliasTarget)
+      : upsertEntity(db, { name, display: m.anchor.trim(), kind: m.kind })
+    if (!entity) continue
     addMention(db, entity.id, blockId, m.anchor.trim())
     registered++
   }

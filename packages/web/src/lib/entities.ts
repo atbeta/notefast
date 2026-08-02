@@ -11,6 +11,8 @@ export interface EntitySummary {
   display: string
   kind: string
   mention_count: number
+  /** 一句话描述（后台 LLM 生成；null = 未生成） */
+  description?: string | null
 }
 
 /** 文档级实体（GET /docs/:id/entities），比 EntitySummary 少 name、多 surface */

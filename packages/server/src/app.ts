@@ -56,6 +56,7 @@ import eventsRouter from './api/events'
 import syncProtocolRouter from './api/syncProtocol'
 import sharePublic from './api/sharePublic'
 import { initDocEvents } from './services/docEvents'
+import { startEntityDescribe } from './ai/entityDescribe'
 
 export interface NoteFastServer {
   /** Hono app（未 serve 的纯处理器；可直接 app.fetch(req) 或自建 Bun.serve） */
@@ -267,6 +268,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     const protoInterval = parseInt(process.env.SYNC_PROTOCOL_INTERVAL_MS || '0', 10)
     initProtocolManager(dataDir, { autoSyncIntervalMs: Number.isFinite(protoInterval) ? protoInterval : 0 })
     initAiRuntime(pluginSystem, dataDir)
+    startEntityDescribe()
 
     app.all('/mcp', authMiddleware, async (c) => {
       return handleMcpRequest(notebookId, c)

@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronRight, Loader2, Search, Waypoints } from 'lucide-react'
+import { ChevronRight, GitMerge, Loader2, Search, Waypoints } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import PageHeader from '../components/PageHeader'
@@ -27,11 +27,18 @@ const KIND_FILTERS = [
 
 type KindFilter = (typeof KIND_FILTERS)[number]['id']
 
+/** 近义重复候选（/entities/duplicates） */
+interface DuplicateGroup {
+  reason: string
+  entities: Array<{ id: string; display: string; kind: string; mention_count: number }>
+}
+
 export default function EntitiesPage() {
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [openId, setOpenId] = useState<string | null>(null)
+  const [merging, setMerging] = useState<string | null>(null)
 
   // 300ms 防抖；空关键词回全量列表
   useEffect(() => {
@@ -39,7 +46,7 @@ export default function EntitiesPage() {
     return () => clearTimeout(t)
   }, [query])
 
-  const { data, loading, error } = useApiQuery(
+  const { data, loading, error, refetch } = useApiQuery(
     () =>
       api.get<{ entities: EntitySummary[] }>(
         '/entities?limit=200' + (debouncedQuery ? `&q=${encodeURIComponent(debouncedQuery)}` : ''),
@@ -48,6 +55,31 @@ export default function EntitiesPage() {
   )
   const entities = error ? [] : (data?.entities ?? [])
   const searching = query.trim() !== debouncedQuery
+
+  // 近义重复候选（仅总览、无搜索词时显示）
+  const { data: dupData, refetch: refetchDuplicates } = useApiQuery(
+    () => api.get<{ groups: DuplicateGroup[] }>('/entities/duplicates'),
+    [debouncedQuery],
+  )
+  const duplicates = !debouncedQuery ? (dupData?.groups ?? []) : []
+
+  const mergeGroup = async (g: DuplicateGroup) => {
+    const [a, b] = g.entities
+    if (!a || !b) return
+    // 合并到提及数多的一方（少→多），保持知识面完整
+    const from = a.mention_count <= b.mention_count ? a : b
+    const target = from === a ? b : a
+    setMerging(from.id)
+    try {
+      await api.post(`/entities/${from.id}/merge`, { target_id: target.id })
+      refetch()
+      refetchDuplicates()
+    } catch {
+      /* 失败静默（可加 toast） */
+    } finally {
+      setMerging(null)
+    }
+  }
 
   const filtered = useMemo(() => {
     if (kindFilter === 'all') return entities
@@ -139,6 +171,49 @@ export default function EntitiesPage() {
               })}
             </div>
 
+            {duplicates.length > 0 && (
+              <div className="rounded-xl border border-warn/25 bg-warn/5 px-3.5 py-3">
+                <div className="flex items-center gap-1.5 text-[12px] font-medium text-foreground mb-2">
+                  <GitMerge className="w-3.5 h-3.5 text-warn" strokeWidth={1.75} />
+                  可能重复的实体（合并后旧实体名将作为别名自动路由）
+                </div>
+                <div className="flex flex-col gap-2">
+                  {duplicates.map((g, i) => {
+                    const [a, b] = g.entities
+                    if (!a || !b) return null
+                    return (
+                      <div
+                        key={i}
+                        className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2"
+                      >
+                        <span className="text-[12px] text-muted-foreground tabular-nums min-w-0">
+                          <span className="text-foreground">{a.display}</span>
+                          <span className="mx-1 text-muted-foreground/50">({a.mention_count})</span>
+                          <span className="text-muted-foreground/60">→</span>
+                          <span className="ml-1 text-foreground">{b.display}</span>
+                          <span className="mx-1 text-muted-foreground/50">({b.mention_count})</span>
+                          <span className="hidden sm:inline text-muted-foreground/60"> · {g.reason}</span>
+                        </span>
+                        <button
+                          type="button"
+                          disabled={merging === (a.mention_count <= b.mention_count ? a.id : b.id)}
+                          onClick={() => mergeGroup(g)}
+                          className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-md border border-border bg-background hover:bg-accent hover:border-foreground/20 px-2 py-1 text-[11.5px] text-foreground transition-colors disabled:opacity-50"
+                        >
+                          {merging === (a.mention_count <= b.mention_count ? a.id : b.id) ? (
+                            <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
+                          ) : (
+                            <GitMerge className="w-3 h-3" strokeWidth={1.75} />
+                          )}
+                          合并（少→多）
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {filtered.length === 0 ? (
               <p className="px-1 py-8 text-center text-[13px] text-muted-foreground">
                 {debouncedQuery
@@ -168,6 +243,11 @@ export default function EntitiesPage() {
                           <p className="text-[11.5px] text-muted-foreground mt-0.5 tabular-nums">
                             {e.mention_count} 篇笔记提及
                           </p>
+                          {e.description && (
+                            <p className="text-[12px] text-muted-foreground/80 mt-1 line-clamp-1 leading-relaxed">
+                              {e.description}
+                            </p>
+                          )}
                         </div>
                         <ChevronRight
                           className={`w-4 h-4 shrink-0 text-muted-foreground/50 transition-transform ${open ? 'rotate-90' : ''}`}

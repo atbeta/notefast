@@ -18,6 +18,15 @@ import { cors } from 'hono/cors'
 import { initDb, closeDb, getDb } from '../db'
 import { registerMentions } from '../ai/entities'
 import { normalizeEntityName, findEntityByName, deleteMentionsTouchingBlocks } from '../store/entities'
+import {
+  addAlias,
+  addMention,
+  findPotentialDuplicates,
+  getEntityById,
+  mergeEntities,
+  resolveAlias,
+  upsertEntity,
+} from '../store/entities'
 import { queryGraph, type GraphEdge } from '../store/graph'
 import graphRouter from '../api/graph'
 
@@ -348,6 +357,69 @@ describe('queryGraph docs 模式（笔记关联图）', () => {
     expect(none).toEqual([])
   })
 })
+
+describe('别名与合并（E5）', () => {
+  test('resolveAlias / addAlias 幂等；registerMentions 命中别名路由到规范实体', () => {
+    const db = getDb()
+    seedDoc({ docTitle: 'T', blocks: [{ id: 'al-b1', content: '' }] })
+    const e = upsertEntityDirect('向量数据库', 'concept')
+    addAlias(db, '向量库', e.id)
+    expect(resolveAlias(db, '向量库')).toBe(e.id)
+    expect(resolveAlias(db, '不存在')).toBeNull()
+
+    // 别名命中：挂到规范实体，不新建
+    registerMentions('al-b1', [{ anchor: '向量库', kind: 'concept' }])
+    expect(findEntityByName(db, '向量数据库')!.mention_count).toBe(1)
+    expect(findEntityByName(db, '向量库')).toBeNull()
+  })
+
+  test('mergeEntities：迁移提及、重算计数、别名搬移、from 删除', () => {
+    const db = getDb()
+    seedDoc({ docTitle: 'T1', blocks: [{ id: 'm-b1', content: '' }] })
+    seedDoc({ docTitle: 'T2', blocks: [{ id: 'm-b2', content: '' }] })
+    registerMentions('m-b1', [{ anchor: '向量数据库', kind: 'concept' }])
+    registerMentions('m-b2', [{ anchor: 'sqlite-vec', kind: 'tool' }])
+    const a = findEntityByName(db, '向量数据库')!
+    const b = findEntityByName(db, 'sqlite-vec')!
+
+    mergeEntities(db, b.id, a.id)
+    expect(getEntityById(db, b.id)).toBeNull()
+    const merged = getEntityById(db, a.id)!
+    expect(merged.mention_count).toBe(2) // 两条提及迁移后重算
+    // from 的规范化名成为别名
+    expect(resolveAlias(db, 'sqlite-vec')).toBe(a.id)
+    // 此后抽取 sqlite-vec 直接路由到向量数据库
+    seedDoc({ docTitle: 'T3', blocks: [{ id: 'm-b3', content: '' }] })
+    registerMentions('m-b3', [{ anchor: 'sqlite-vec', kind: 'tool' }])
+    expect(getEntityById(db, a.id)!.mention_count).toBe(3)
+  })
+
+  test('findPotentialDuplicates：子串包含（任意语言）+ ASCII 编辑距离近义提示', () => {
+    const db = getDb()
+    seedDoc({ docTitle: 'T', blocks: [{ id: 'dup-b1', content: '' }] })
+    const a = upsertEntityDirect('混合检索', 'concept')
+    const b = upsertEntityDirect('混合检索架构', 'concept')
+    const c = upsertEntityDirect('qdrant', 'tool')
+    const d = upsertEntityDirect('qdrnt', 'tool')
+    const e = upsertEntityDirect('中文检索', 'concept')
+    addMention(db, a.id, 'dup-b1', '混合检索')
+    addMention(db, b.id, 'dup-b1', '混合检索架构')
+    addMention(db, c.id, 'dup-b1', 'qdrant')
+    addMention(db, d.id, 'dup-b1', 'qdrnt')
+    addMention(db, e.id, 'dup-b1', '中文检索')
+    const groups = findPotentialDuplicates(db, 8)
+    const reasons = groups.map((g) => g.reason).join(' | ')
+    expect(reasons).toContain('的一部分') // 子串包含
+    expect(reasons).toContain('相近') // ASCII 编辑距离（qdrant/qdrnt）
+    // CJK 近音但不同概念（中文检索 vs 混合检索）不提示
+    expect(groups.some((g) => g.a.display === '中文检索' && g.b.display === '混合检索')).toBe(false)
+  })
+})
+
+// 便捷：直接 upsert 实体（绕过 registerMentions 的别名路由）
+function upsertEntityDirect(name: string, kind: string) {
+  return upsertEntity(getDb(), { name, display: name, kind })
+}
 
 describe('graph REST API', () => {
   test('GET /graph：总览契约形状', async () => {

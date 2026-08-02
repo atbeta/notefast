@@ -38,10 +38,13 @@ import {
   findEntityByName,
   getEntityById,
   listEntities,
+  listEntitiesNeedingDescription,
   listEntityMentions,
   normalizeEntityName,
+  updateEntityDescription,
   upsertEntity,
 } from '../store/entities'
+import { describeEntity, _resetDescribeRateLimitForTests } from '../ai/entityDescribe'
 import docsRouter from '../api/docs'
 import entitiesRouter, { docEntities } from '../api/entities'
 
@@ -85,6 +88,7 @@ beforeEach(() => {
   _setRuntimeForTests(null)
   initAiRuntime(pluginSystem, testDir)
   _resetRateLimitForTests()
+  _resetDescribeRateLimitForTests()
   const db = getDb()
   db.query('DELETE FROM entity_mentions').run()
   db.query('DELETE FROM entities').run()
@@ -499,5 +503,55 @@ describe('实体 REST API', () => {
 
     const missing = await api('GET', '/api/v1/docs/ghost/entities')
     expect(missing.status).toBe(404)
+  })
+})
+
+// ───────────────────── 实体描述（E2）─────────────────────
+
+describe('实体描述（E2）', () => {
+  test('listEntitiesNeedingDescription 只挑 mention_count≥3 且无描述；update 后不再入选', () => {
+    const db = getDb()
+    seedDocWithBlocks({
+      docTitle: 'T',
+      blocks: [
+        { id: 'desc-b1', content: '首次提及概念一的块' },
+        { id: 'desc-b2', content: '再次提及概念一的块' },
+        { id: 'desc-b3', content: '第三次提及概念一的块' },
+      ],
+    })
+    registerMentions('desc-b1', [{ anchor: '概念一', kind: 'concept' }])
+    registerMentions('desc-b2', [{ anchor: '概念一', kind: 'concept' }])
+    registerMentions('desc-b3', [{ anchor: '概念一', kind: 'concept' }])
+    const e = findEntityByName(db, '概念一')!
+    expect(e.mention_count).toBe(3)
+    expect(listEntitiesNeedingDescription(db, 10).map((x) => x.id)).toContain(e.id)
+
+    updateEntityDescription(db, e.id, '一个概念')
+    expect(getEntityById(db, e.id)!.description).toBe('一个概念')
+    expect(listEntitiesNeedingDescription(db, 10).map((x) => x.id)).not.toContain(e.id)
+  })
+
+  test('describeEntity：低于阈值不生成；达标后 mock chat 生成并落库', async () => {
+    mockChat(() => '「概念一」是一个用于描述测试的示例概念')
+    seedDocWithBlocks({
+      docTitle: 'T',
+      blocks: [
+        { id: 'de-b1', content: '这里提到概念一，用于描述生成的上下文' },
+        { id: 'de-b2', content: '再次提到概念一，补充描述依据' },
+      ],
+    })
+    registerMentions('de-b1', [{ anchor: '概念一', kind: 'concept' }])
+    registerMentions('de-b2', [{ anchor: '概念一', kind: 'concept' }])
+    const e2 = findEntityByName(getDb(), '概念一')!
+    expect(e2.mention_count).toBe(2)
+    expect(await describeEntity(e2.id)).toBe(false)
+    expect(getEntityById(getDb(), e2.id)!.description).toBeNull()
+
+    seedDocWithBlocks({ docTitle: 'T2', blocks: [{ id: 'de-b3', content: '第三次提到概念一，达标生成描述' }] })
+    registerMentions('de-b3', [{ anchor: '概念一', kind: 'concept' }])
+    const e3 = findEntityByName(getDb(), '概念一')!
+    expect(e3.mention_count).toBe(3)
+    expect(await describeEntity(e3.id)).toBe(true)
+    expect(getEntityById(getDb(), e3.id)!.description).toContain('概念一')
   })
 })

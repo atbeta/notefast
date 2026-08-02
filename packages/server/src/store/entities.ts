@@ -23,6 +23,8 @@ export interface EntityRow {
   display: string
   kind: string
   mention_count: number
+  /** 一句话描述（E2，后台 LLM 生成缓存）；NULL = 未生成 */
+  description?: string | null
   created_at: string
   updated_at: string
 }
@@ -153,8 +155,138 @@ export function listEntities(db: Db, opts: { q?: string; limit?: number } = {}):
     .all(pattern, pattern, limit) as EntityRow[]
 }
 
-/** 实体的全部提及（人类视角全量：不过滤任何文档状态；ai_exclude 已 purge 天然安全） */
-export interface EntityMentionView extends EntityMentionRow {
+/** 实体描述（E2）：达到该提及数才值得生成一句话描述 */
+export const DESC_MIN_MENTIONS = 3
+
+// ───────────────────── 别名（E5）─────────────────────
+
+/**
+ * 按规范化名查别名字典 → 命中返回规范实体 id。
+ * 归并时手工合并会把旧实体名登记为别名，此后抽取同名锚点直接路由到规范实体。
+ */
+export function resolveAlias(db: Db, name: string): string | null {
+  const row = db.query('SELECT entity_id FROM entity_aliases WHERE alias = ?').get(name) as
+    | { entity_id: string }
+    | undefined
+  return row?.entity_id ?? null
+}
+
+/** 登记别名（幂等） */
+export function addAlias(db: Db, alias: string, entityId: string): void {
+  db.query('INSERT OR IGNORE INTO entity_aliases (alias, entity_id) VALUES (?, ?)').run(alias, entityId)
+}
+
+/** 把 fromId 实体合并进 intoId（into 存活）：迁移 mentions、搬别名、删 from */
+export function mergeEntities(db: Db, fromId: string, intoId: string): void {
+  if (fromId === intoId) return
+  const from = getEntityById(db, fromId)
+  if (!from || !getEntityById(db, intoId)) return
+
+  // 迁移提及（同 block 已存在则跳过）
+  db.query(
+    `INSERT OR IGNORE INTO entity_mentions (entity_id, block_id, surface, created_at)
+     SELECT ?, block_id, surface, created_at FROM entity_mentions WHERE entity_id = ?`,
+  ).run(intoId, fromId)
+  db.query('DELETE FROM entity_mentions WHERE entity_id = ?').run(fromId)
+  // 重算 into 计数（迁移后以真实提及数为准）
+  db.query(
+    `UPDATE entities SET mention_count = (SELECT COUNT(*) FROM entity_mentions WHERE entity_id = ?), updated_at = datetime('now') WHERE id = ?`,
+  ).run(intoId, intoId)
+
+  // 搬别名：from 的规范化名 + display 变体 + from 已有别名 → into
+  for (const a of [from.name, normalizeEntityName(from.display)]) {
+    if (a && a.length >= 2 && a !== intoId) addAlias(db, a, intoId)
+  }
+  db.query(
+    `INSERT OR IGNORE INTO entity_aliases (alias, entity_id) SELECT alias, ? FROM entity_aliases WHERE entity_id = ?`,
+  ).run(intoId, fromId)
+
+  // description 兜底：into 无描述时沿用 from 的
+  if (!getEntityById(db, intoId)!.description && from.description) {
+    updateEntityDescription(db, intoId, from.description)
+  }
+  // 删除 from（entity_mentions 已清空；别名经 ON DELETE CASCADE 随行清理）
+  db.query('DELETE FROM entities WHERE id = ?').run(fromId)
+}
+
+// ───────────────────── 近义重复检测（E5）─────────────────────
+
+export interface DuplicateGroup {
+  reason: string
+  a: EntityRow
+  b: EntityRow
+}
+
+/** 编辑距离（小写输入，字符串操作；用于 CJK/ASCII 近义提示） */
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0
+  const m = a.length
+  const n = b.length
+  if (m === 0) return n
+  if (n === 0) return m
+  let prev = Array.from({ length: n + 1 }, (_, i) => i)
+  for (let i = 1; i <= m; i++) {
+    const cur = [i]
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+    }
+    prev = cur
+  }
+  return prev[n]!
+}
+
+function duplicateReason(a: string, b: string): string | null {
+  if (a === b) return null
+  // 子串包含：高置信提示（任意语言，长度差至少 1）
+  if (b.length >= 3 && a.includes(b) && a.length > b.length) return `「${b}」是「${a}」的一部分`
+  if (a.length >= 3 && b.includes(a) && b.length > a.length) return `「${a}」是「${b}」的一部分`
+  // 编辑距离 ≤ 2：仅限纯 ASCII 名——CJK 共享常用词（混合/实体/检索…）距离 ≤2 误报率高，
+  // 宁可漏检也不建议错并；ASCII 全小写拼写差异（qdrant/qdrnt）是高置信信号
+  const asciiOnly = (s: string): boolean => [...s].every((c) => c.charCodeAt(0) <= 0x7f)
+  if (
+    asciiOnly(a) && asciiOnly(b) &&
+    a.length >= 4 && b.length >= 4 &&
+    levenshtein(a, b) <= 2
+  ) return '名称相近'
+  return null
+}
+
+/** 高频实体的近义重复候选（供 /entities 页「可能重复」提示；不自动合并） */
+export function findPotentialDuplicates(db: Db, limit = 8): DuplicateGroup[] {
+  const rows = db
+    .query('SELECT * FROM entities ORDER BY mention_count DESC')
+    .all() as EntityRow[]
+  const out: DuplicateGroup[] = []
+  for (let i = 0; i < rows.length && out.length < limit; i++) {
+    for (let j = i + 1; j < rows.length && out.length < limit; j++) {
+      const reason = duplicateReason(rows[i]!.name, rows[j]!.name)
+      if (reason) out.push({ reason, a: rows[i]!, b: rows[j]! })
+    }
+  }
+  return out
+}
+
+/** 需要生成描述的实体（mention_count ≥ 阈值且尚无描述），按提及数倒序 */
+export function listEntitiesNeedingDescription(db: Db, limit: number): EntityRow[] {
+  return db
+    .query(
+      `SELECT * FROM entities
+       WHERE mention_count >= ? AND description IS NULL
+       ORDER BY mention_count DESC, updated_at DESC
+       LIMIT ?`,
+    )
+    .all(DESC_MIN_MENTIONS, limit) as EntityRow[]
+}
+
+/** 写入实体一句话描述（幂等：已存在则更新，失败重试语义由调用方保证） */
+export function updateEntityDescription(db: Db, id: string, description: string): void {
+  db.query(
+    `UPDATE entities SET description = ?, updated_at = datetime('now') WHERE id = ?`,
+  ).run(description, id)
+}
+
+/** 实体的全部提及（人类视角全量：不过滤任何文档状态；ai_exclude 已 purge 天然安全） */export interface EntityMentionView extends EntityMentionRow {
   doc_id: string
   doc_title: string
   doc_status: string
@@ -176,8 +308,7 @@ export function listEntityMentions(db: Db, entityId: string): EntityMentionView[
     .all(entityId) as EntityMentionView[]
 }
 
-/** 本篇文档提及的实体（去重；面板数据源） */
-export interface DocEntityView {
+/** 本篇文档提及的实体（去重；面板数据源） */export interface DocEntityView {
   id: string
   display: string
   kind: string

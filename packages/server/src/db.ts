@@ -61,6 +61,7 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
  *          并按 blocks 现内容回填
  * v6 → v7：图谱实体层——新增 entities / entity_mentions 表（block→entity 提及边）
  * v7 → v8：登录审计——新增 auth_events 表（记录每次密码登录的时间/IP/UA）
+ * （v8 之后走 migrations/framework 的 005+；db.ts 内联迁移仅覆盖框架基线前的历史库）
  */
 function applySchemaMigrations(database: Database): void {
   const current = getSchemaVersion(database)
