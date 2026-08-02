@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.30.0](https://github.com/atbeta/notefast/compare/v0.29.0...v0.30.0) (2026-08-02)
+
+
+### Features
+
+* **ai:** support enable/disable toggle for chat/embedding providers ([9090788](https://github.com/atbeta/notefast/commit/90907884576f588f6049430463f1097f3f8d80ce))
+* **backup:** rework backup & sync architecture ([968e27b](https://github.com/atbeta/notefast/commit/968e27b59b87f67c5cb71b22bd6f99777ccd215b))
+* **graph:** entity co-occurrence graph UI with force-directed explorer ([ce6dc00](https://github.com/atbeta/notefast/commit/ce6dc0085a8c6072313724ea569f9b198659d105))
+* **graph:** node glow, entity descriptions, alias merge, MCP entity tools ([d24c29b](https://github.com/atbeta/notefast/commit/d24c29b61bb148a8edcc82646dfe12a7a85f3b00))
+* **graph:** notes graph mode and interaction polish ([16d2ed0](https://github.com/atbeta/notefast/commit/16d2ed00e0df3608958f6c86da43fa77413a4433))
+* **storage:** unify backup/sync/archive on a shared connection library ([45c3e61](https://github.com/atbeta/notefast/commit/45c3e6112d91136e657231aa5837783cb93a7ded))
+* **sync:** archive includes images; make archive manual-only ([8fc99f7](https://github.com/atbeta/notefast/commit/8fc99f77b094f144f1b565e926eb48fc44757e99))
+* **sync:** self-asserted device identity with shared-storage registry ([d58e04e](https://github.com/atbeta/notefast/commit/d58e04ea49e0f189f6f76619ac99ccddcd91bc1f))
+* **ui:** global sync status pill, simplified sync panel status ([b8c756d](https://github.com/atbeta/notefast/commit/b8c756d5aaff9ca13108bad018edbed9611fca31))
+* **web:** polish graph view visuals and interactions ([e7e8bfc](https://github.com/atbeta/notefast/commit/e7e8bfc61843d8c45fa622a5ecd4d4c9262261dc))
+* **web:** reorganize settings page ([28cd199](https://github.com/atbeta/notefast/commit/28cd1992bef12205a97315022257bbe0c7a3f0f4))
+
+
+### Bug Fixes
+
+* **graph:** gate description loop on autoLink, confirm merges, bound degree pool, regenerate descriptions ([090c093](https://github.com/atbeta/notefast/commit/090c0937cf98adb58a336209a734c46036bd01f3))
+* **sync:** lazy-rebuild S3 client when backup config changes ([db73933](https://github.com/atbeta/notefast/commit/db73933975a552b9e6b76ca70f621f2a7ccfe787))
+* **ui:** move sync status pill to bottom-right ([855297f](https://github.com/atbeta/notefast/commit/855297f6b375536466266ec550a8a98a0f5c16a5))
+* **ui:** remove redundant disable buttons, fix sync pill overlap ([ce4b135](https://github.com/atbeta/notefast/commit/ce4b13532a952d60da576936a76aa7f42edd8dae))
+* **ui:** storage locations shared cache — dropdowns update instantly ([ecd6ae0](https://github.com/atbeta/notefast/commit/ecd6ae02b15a70548744af7044b15acc5a9b2bda))
+* **ui:** tidy panel titles, merge archive S3/WebDAV into connection ([47d4d4b](https://github.com/atbeta/notefast/commit/47d4d4b95e2f63aca9f17afef52e2b4314b94e32))
+* **web:** hide zero counts in page headers and align entity kind colors ([cd6cd44](https://github.com/atbeta/notefast/commit/cd6cd44b4b8d6b54b89f662d3972e2b29bc12dda))
+* **web:** unify list skeletons across home/inbox/archived/entities ([b87f035](https://github.com/atbeta/notefast/commit/b87f0355cdf5ff86f6385855213ae721e07569de))
+
 ## [0.29.0](https://github.com/atbeta/notefast/compare/v0.28.0...v0.29.0) (2026-08-01)
 
 
