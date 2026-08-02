@@ -11,6 +11,7 @@
     "dev": "bun --filter @notefast/server dev",
     "dev:web": "bun --filter @notefast/web dev",
     "build": "bun --filter @notefast/server build && bun --filter @notefast/web build",
+    "build:engine": "bun --filter @notefast/server build:engine",
     "lint": "bun --filter '*' lint",
     "test": "bun --filter '*' test",
     "typecheck": "bun --filter '*' typecheck"

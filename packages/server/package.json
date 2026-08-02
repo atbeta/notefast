@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "build": "bun build src/index.ts --outdir=dist --target=bun && bun run scripts/copy-sqlite-vec.ts",
+    "build:engine": "bun run scripts/build-engine.ts",
     "start": "bun run dist/index.js",
     "backup:restore": "bun run src/cli/restoreBackup.ts",
     "eval": "bun run src/eval/runEval.ts",

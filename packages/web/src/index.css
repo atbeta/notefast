@@ -852,3 +852,22 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
 }
+
+/* ───────────────────── 原生壳适配（native-shell） ─────────────────────
+   Tauri / 内嵌 WebView 以 ?native=1 加载时启用（见 index.html 探测脚本）。
+   标注 [data-drag-region] 的容器可整行拖动窗口（-webkit-app-region: drag），
+   可交互子元素（按钮/链接/输入/文本）必须恢复 no-drag，否则无法点击。 */
+html.native-shell [data-drag-region] {
+  -webkit-app-region: drag;
+  user-select: none;
+  cursor: default;
+}
+html.native-shell [data-drag-region] button,
+html.native-shell [data-drag-region] a,
+html.native-shell [data-drag-region] input,
+html.native-shell [data-drag-region] textarea,
+html.native-shell [data-drag-region] select,
+html.native-shell [data-drag-region] [role='button'],
+html.native-shell [data-drag-region] [contenteditable] {
+  -webkit-app-region: no-drag;
+}

@@ -51,6 +51,24 @@
       })();
     </script>
 
+    <!--
+      原生壳探测：?native=1 → <html class="native-shell" data-shell="macos|tauri|...">。
+      壳层（内嵌 WKWebView / Tauri）加载入口 URL 时带 native 参数，web 据此启用
+      窗口拖拽区等桌面化适配；非壳环境无此参数，保持纯浏览器行为。
+      必须在 <head> 内联防闪烁，与主题/语言脚本同时机。
+    -->
+    <script>
+      (function () {
+        try {
+          var m = (location.search || '').match(/[?&]native=(1|macos|tauri|windows|linux)/);
+          if (m) {
+            document.documentElement.classList.add('native-shell');
+            document.documentElement.setAttribute('data-shell', m[1] === '1' ? 'tauri' : m[1]);
+          }
+        } catch (e) { /* ignore — 保持默认浏览器行为 */ }
+      })();
+    </script>
+
     <!-- Variable fonts: Inter (UI), Source Serif 4 (reading), JetBrains Mono (code) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
