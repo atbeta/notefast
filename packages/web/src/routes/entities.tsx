@@ -10,6 +10,7 @@ import { ChevronRight, GitMerge, Loader2, Search, Waypoints } from 'lucide-react
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import PageHeader from '../components/PageHeader'
+import { ListRowsSkeleton } from '../components/ui'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { EntityMentions } from '../components/EntityPanel'
 import {
@@ -117,11 +118,7 @@ export default function EntitiesPage() {
         </p>
 
         {loading ? (
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="card animate-pulse p-3.5 h-14" />
-            ))}
-          </div>
+          <ListRowsSkeleton rows={4} withIcon={false} />
         ) : entities.length === 0 && !debouncedQuery ? (
           <div className="px-3 py-14 flex flex-col items-center text-center">
             <div className="empty-icon-tile">

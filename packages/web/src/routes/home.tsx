@@ -10,6 +10,7 @@ import { usePinnedViews } from '../hooks/usePinnedViews'
 import DocList from '../components/DocList'
 import PageHeader from '../components/PageHeader'
 import TagFilter from '../components/TagFilter'
+import { ListRowsSkeleton } from '../components/ui'
 
 function viewTitle(params: URLSearchParams): string {
   if (params.get('untagged') === '1' || params.get('view') === 'untagged') return '未加标签'
@@ -153,18 +154,7 @@ export default function HomePage() {
 
         <section className="space-y-3 animate-fade-in">
           {loading ? (
-            <div className="space-y-0.5">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="animate-pulse px-3 py-2 flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-md bg-secondary shrink-0" />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="h-3.5 bg-secondary rounded w-1/3" />
-                    <div className="h-2.5 bg-secondary rounded w-1/5" />
-                  </div>
-                  <div className="h-2.5 bg-secondary rounded w-12 shrink-0" />
-                </div>
-              ))}
-            </div>
+            <ListRowsSkeleton rows={5} />
           ) : docs.length === 0 ? (
             <EmptyState onCreate={goNew} title={title} />
           ) : (

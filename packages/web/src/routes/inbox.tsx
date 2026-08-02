@@ -13,6 +13,7 @@ import { useApiQuery } from '../hooks/useApiQuery'
 import { formatRelative } from '../lib/time'
 import DocActionsMenu from '../components/DocActionsMenu'
 import PageHeader from '../components/PageHeader'
+import { ListRowsSkeleton } from '../components/ui'
 
 export default function InboxPage() {
   const navigate = useNavigate()
@@ -134,11 +135,7 @@ export default function InboxPage() {
         )}
 
         {loading ? (
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="card animate-pulse p-3.5 h-16" />
-            ))}
-          </div>
+          <ListRowsSkeleton rows={4} />
         ) : docs.length === 0 ? (
           <div className="px-3 py-14 flex flex-col items-center text-center">
             <div className="empty-icon-tile">
