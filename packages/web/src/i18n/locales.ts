@@ -17,7 +17,7 @@ export interface LocaleInfo {
 /** 已内置语言包的注册表；顺序即设置页展示顺序 */
 export const SUPPORTED_LOCALES: LocaleInfo[] = [
   { code: 'zh-CN', nativeName: '简体中文' },
-  // 未来：{ code: 'en', nativeName: 'English' }
+  { code: 'en', nativeName: 'English' },
 ]
 
 /** 兜底语言：无法匹配任何受支持语言时的回退 */

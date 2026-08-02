@@ -1,0 +1,148 @@
+{
+  "chat": {
+    "copy": "Copy"
+  },
+  "settingsSub": {
+    "settings": "Settings"
+  },
+  "confirm": {
+    "cancel": "Cancel"
+  },
+  "tagEditor": {
+    "addTag": "Add tag",
+    "removeTag": "Remove tag {{tag}}"
+  },
+  "tagFilter": {
+    "tagMatchMode": "Tag matching mode",
+    "matchAll": "All",
+    "matchAny": "Any"
+  },
+  "docList": {
+    "untitled": "Untitled document",
+    "aiExclude": "AI hidden",
+    "updatedAt": "Updated {{date}}"
+  },
+  "btn": {
+    "processing": "Processing…",
+    "done": "Done"
+  },
+  "sidebar": {
+    "unpin": "Unpin",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "docs": "Documents",
+    "aiAssistant": "AI Assistant",
+    "settings": "Settings",
+    "openPalette": "Open command palette",
+    "searchPlaceholder": "Search documents…",
+    "navigation": "Navigation",
+    "allDocs": "All documents",
+    "newDocTitle": "New document ({{shortcut}})",
+    "newDoc": "New",
+    "inbox": "Inbox",
+    "archived": "Archive",
+    "entities": "Entities",
+    "graph": "Graph",
+    "smartViews": "Smart views",
+    "recent7Days": "Updated in last 7 days",
+    "stale90Days": "Not updated for 90 days",
+    "aiHidden": "Hidden from AI",
+    "untagged": "Untagged",
+    "pinnedViews": "Pinned views",
+    "recentDocs": "Recent documents",
+    "untitled": "Untitled document",
+    "hasDraft": "Unsaved draft",
+    "collapse": "Collapse",
+    "expandAll": "Show all ({{n}})"
+  },
+  "layout": {
+    "openMenu": "Open menu",
+    "openAiChat": "Chat / knowledge base Q&A",
+    "search": "Search"
+  },
+  "command": {
+    "newDoc": "New document",
+    "newDocHint": "Create a new Markdown document",
+    "goHome": "Go to home",
+    "goHomeHint": "All documents list",
+    "switchToLight": "Switch to light",
+    "switchToDark": "Switch to dark",
+    "toggleThemeHint": "Switch the app theme",
+    "dialogLabel": "Command palette",
+    "placeholder": "Search documents, commands or files…",
+    "searching": "Searching…",
+    "noResults": "No matching results",
+    "hint": "Try searching for a document name or running a command",
+    "commands": "Commands",
+    "docs": "Documents",
+    "recentDocs": "Recent documents",
+    "select": "Select",
+    "open": "Open",
+    "close": "Close"
+  },
+  "auth": {
+    "wrongPassword": "Wrong password, please try again",
+    "networkError": "Network error, please check your connection and retry",
+    "loginTitle": "NoteFast login",
+    "passwordRequired": "This instance has password protection enabled",
+    "password": "Password",
+    "rememberMe": "Keep me logged in for 7 days",
+    "rememberDesc": "You won't need to enter the password again for 7 days; don't check this on shared devices.",
+    "noRememberDesc": "The password only applies to this session; you'll need to log in again after closing the browser.",
+    "loggingIn": "Logging in…",
+    "login": "Log in"
+  },
+  "docActions": {
+    "untitled": "Untitled document",
+    "renameFailed": "Rename failed",
+    "archived": "Archived",
+    "addedToNotes": "Added to notes",
+    "restoredToNotes": "Restored to notes",
+    "undo": "Undo",
+    "undoFailed": "Undo failed",
+    "operationFailed": "Operation failed",
+    "aiRestore": "Made visible to AI again",
+    "aiHide": "Hidden from AI",
+    "exportFailed": "Export failed",
+    "exportedWithImages": "Exported (with images)",
+    "exportedMarkdown": "Exported Markdown",
+    "discarded": "Discarded",
+    "deleted": "Deleted",
+    "restored": "Restored",
+    "deleteFailed": "Failed to delete",
+    "openInNewTab": "Open in new tab",
+    "rename": "Rename",
+    "addToNotes": "Add to notes",
+    "restoreToNotes": "Restore to notes",
+    "archive": "Archive",
+    "share": "Share…",
+    "export": "Export",
+    "restoreAiVisibility": "Make visible to AI again",
+    "hideFromAi": "Hide from AI",
+    "discard": "Discard",
+    "delete": "Delete",
+    "moreActionsFor": "More actions for “{{title}}”",
+    "menuLabel": "Document actions",
+    "confirmDiscardTitle": "Discard inbox item",
+    "confirmDeleteTitle": "Delete document",
+    "confirmDiscardMsg": "Discard “{{title}}”? You can undo it from the toast at the bottom-right.",
+    "confirmDeleteMsg": "Delete “{{title}}”? You can undo it from the toast at the bottom-right.",
+    "discarding": "Discarding…",
+    "deleting": "Deleting…",
+    "renameTitle": "Rename",
+    "titlePlaceholder": "Document title"
+  },
+  "syncStatus": {
+    "syncing": "Syncing",
+    "syncingTooltip": "Syncing now",
+    "syncFailed": "Sync failed",
+    "syncFailedWithError": "Sync failed: {{error}}",
+    "pendingChanges": "{{n}} changes pending",
+    "hasPendingChanges": "Changes pending, will push shortly",
+    "synced": "Synced",
+    "pending": "Pending",
+    "syncedAt": "Synced {{time}}",
+    "neverSynced": "Never synced",
+    "statusLabel": "Sync status: {{status}}"
+  }
+}

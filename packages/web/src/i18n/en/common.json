@@ -1,0 +1,44 @@
+{
+  "common": {
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "close": "Close",
+    "confirm": "Confirm",
+    "back": "Back",
+    "edit": "Edit",
+    "copy": "Copy",
+    "copied": "Copied",
+    "loading": "Loading…",
+    "more": "More",
+    "error": "Something went wrong",
+    "retry": "Retry",
+    "name": "Name",
+    "title": "Title",
+    "description": "Description",
+    "type": "Type",
+    "status": "Status",
+    "actions": "Actions",
+    "none": "None",
+    "untitled": "Untitled",
+    "unnamed": "Untitled",
+    "unknown": "Unknown",
+    "confirmDeleteTitle": "Confirm delete",
+    "confirmDeleteDescription": "This action cannot be undone.",
+    "httpError": "HTTP {{status}}"
+  },
+  "time": {
+    "justNow": "just now",
+    "secondsAgo": "{{n}}s ago",
+    "minutesAgo": "{{n}}m ago",
+    "hoursAgo": "{{n}}h ago",
+    "daysAgo": "{{n}}d ago"
+  },
+  "toast": {
+    "saved": "Saved",
+    "deleteFailed": "Failed to delete",
+    "copyFailed": "Failed to copy"
+  }
+}

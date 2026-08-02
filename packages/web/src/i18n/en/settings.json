@@ -1,0 +1,30 @@
+{
+  "settings": {
+    "title": "Settings",
+    "description": "Configure NoteFast options. Local-first; database backups, Markdown archive and AI are all optional.",
+    "tabs": {
+      "general": "General & Appearance",
+      "ai": "AI Capabilities & Models",
+      "backup": "Backup & Archive",
+      "tokens": "API Tokens",
+      "security": "Account Security"
+    },
+    "language": {
+      "title": "Interface language",
+      "system": "Follow browser",
+      "systemHint": "Automatically match the browser language",
+      "current": "Currently active"
+    },
+    "theme": {
+      "title": "Theme",
+      "current": "Currently active",
+      "systemSuffix": "(follow system)",
+      "light": "Light",
+      "lightHint": "Always light",
+      "dark": "Dark",
+      "darkHint": "Always dark",
+      "system": "System",
+      "systemHint": "Automatically switch with OS"
+    }
+  }
+}

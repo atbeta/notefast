@@ -2,11 +2,14 @@
  * 校验 i18n 完整性：
  *   bun scripts/check-i18n.ts              # 扫描全部 src
  *   bun scripts/check-i18n.ts <相对路径>    # 只校验指定文件（如 components/Sidebar.tsx）
- * 用法：把 t()/i18next.t() 调用的 key 与 zh-CN 语言包比对，缺翻译即退出码 1。
+ * 校验项：
+ *   1. 每个 t()/i18next.t() key 都在 zh-CN 语言包里（缺翻译即退出码 1）
+ *   2. en 语言包覆盖 zh-CN 的全部 key（保证切英文不漏 key）
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import zhCN from '../src/i18n/zh-CN'
+import en from '../src/i18n/en'
 
 const ROOT = join(import.meta.dir, '../src')
 const KEY_RE = /\bt\((['"`])([\w.-]+)\1/g
@@ -70,3 +73,23 @@ if (missing.size > 0) {
   process.exit(1)
 }
 console.log(`[i18n] OK：${total} 次 t() 调用全部有对应翻译`)
+
+// 语言包对齐：en 必须覆盖 zh-CN 的所有 key（嵌套结构递归比对）
+function collectKeys(obj: Record<string, unknown>, prefix = ''): string[] {
+  const out: string[] = []
+  for (const [k, v] of Object.entries(obj)) {
+    const p = prefix ? `${prefix}.${k}` : k
+    if (typeof v === 'string') out.push(p)
+    else out.push(...collectKeys(v as Record<string, unknown>, p))
+  }
+  return out
+}
+const zhKeys = new Set(collectKeys(zhCN as Record<string, unknown>))
+const enKeys = new Set(collectKeys(en as Record<string, unknown>))
+const missingEn = [...zhKeys].filter((k) => !enKeys.has(k))
+if (missingEn.length > 0) {
+  console.error(`[i18n] en 语言包缺少 ${missingEn.length} 个 key（zh-CN 有而 en 没有）：`)
+  for (const k of missingEn.sort()) console.error(`  - ${k}`)
+  process.exit(1)
+}
+console.log(`[i18n] OK：en 覆盖全部 ${zhKeys.size} 个 key`)

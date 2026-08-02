@@ -1,0 +1,20 @@
+{
+  "indexJob": {
+    "eta": " · ~{{sec}}s",
+    "ready": "Indexing complete · {{total}} blocks · {{elapsed}}s",
+    "partial": "Indexing partially complete · {{done}}/{{total}} ok · {{errors}} failed · {{elapsed}}s",
+    "failed": "Indexing failed{{error}}",
+    "progress": "Vectorizing {{processed}}/{{total}} ({{pct}}%){{eta}}"
+  },
+  "imageUploader": {
+    "uploadFailed": "Image upload failed"
+  },
+  "toastUI": {
+    "mustBeInProvider": "useToast must be used within <ToastProvider>",
+    "close": "Close"
+  },
+  "copyBtn": {
+    "copied": "Copied",
+    "copy": "Copy"
+  }
+}
