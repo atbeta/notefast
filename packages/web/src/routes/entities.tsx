@@ -11,6 +11,7 @@ import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import PageHeader from '../components/PageHeader'
 import { ListRowsSkeleton } from '../components/ui'
+import { graphKindColor } from '../lib/graph'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { EntityMentions } from '../components/EntityPanel'
 import {
@@ -104,7 +105,7 @@ export default function EntitiesPage() {
           <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
             实体
           </h1>
-          {!loading && !debouncedQuery && (
+          {!loading && !debouncedQuery && entities.length > 0 && (
             <span className="font-mono text-[11px] text-muted-foreground tabular-nums shrink-0">
               {entities.length}
             </span>
@@ -161,6 +162,9 @@ export default function EntitiesPage() {
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
                     }`}
                   >
+                    {f.id !== 'all' && (
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: graphKindColor(f.id) }} />
+                    )}
                     {f.label}
                     <span className={`tabular-nums text-[10.5px] ${active ? 'text-primary/70' : 'text-muted-foreground/60'}`}>
                       {count}
@@ -235,7 +239,8 @@ export default function EntitiesPage() {
                             <h3 className="font-medium text-[14px] text-foreground tracking-[-0.005em] truncate">
                               {e.display}
                             </h3>
-                            <span className="shrink-0 rounded border border-border/60 bg-muted/40 px-1.5 py-px text-[10.5px] text-muted-foreground">
+                            <span className="shrink-0 inline-flex items-center gap-1 rounded border border-border/60 bg-muted/40 px-1.5 py-px text-[10.5px] text-muted-foreground">
+                              <span className="w-1.5 h-1.5 rounded-full" style={{ background: graphKindColor(e.kind) }} />
                               {entityKindLabel(e.kind)}
                             </span>
                           </div>

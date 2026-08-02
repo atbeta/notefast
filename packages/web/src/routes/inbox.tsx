@@ -77,7 +77,7 @@ export default function InboxPage() {
           <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
             收集箱
           </h1>
-          {!loading && (
+          {!loading && docs.length > 0 && (
             <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
               {docs.length}
             </span>

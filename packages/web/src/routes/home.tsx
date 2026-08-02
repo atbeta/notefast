@@ -137,7 +137,7 @@ export default function HomePage() {
               <Star className="w-3.5 h-3.5" strokeWidth={1.75} fill={isPinned(listQuery) ? 'currentColor' : 'none'} />
             </button>
           )}
-          {!loading && (
+          {!loading && docs.length > 0 && (
             <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
               {docs.length}
             </span>
