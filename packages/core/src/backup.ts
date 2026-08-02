@@ -1,57 +1,32 @@
 /**
  * 数据库备份领域模型
  *
- * 与 Markdown 归档（sync）完全独立：
- * - 备份：SQLite 一致快照 → S3 不可变恢复点
- * - 归档：文档 Markdown 单向推送
+ * 与 Markdown 归档（sync）、多端同步完全独立的能力，但**共享存储连接库**：
+ * 连接（bucket/凭据）存 data/storage-locations.json，这里只引用 locationId + 前缀。
  */
 
 import { z } from 'zod'
 
-/** 对外脱敏占位符（与 AI KEY_MASK 同形，便于 UI 复用） */
-export const BACKUP_SECRET_MASK = '***set***'
-
 /** 当前程序支持的最高 schema 版本；恢复时备份版本不得高于此值 */
 export const CURRENT_SCHEMA_VERSION = 10
 
-/** 默认备份间隔：1 小时 */
-export const DEFAULT_BACKUP_INTERVAL_MS = 3_600_000
-
 /** 默认保留天数 */
 export const DEFAULT_BACKUP_RETENTION_DAYS = 30
-
-export interface BackupS3Config {
-  bucket: string
-  region: string
-  endpoint?: string
-  accessKeyId: string
-  secretAccessKey: string
-  /** 对象键前缀，如 notefast-backup/；归一化后带尾斜杠 */
-  prefix?: string
-  forcePathStyle?: boolean
-}
 
 /** 持久化到 data/backup.config.json */
 export interface BackupPersistedConfig {
   version: 1
   enabled: boolean
-  s3: BackupS3Config | null
-  /** 自动备份间隔（毫秒）；0 表示仅手动 */
-  intervalMs: number
+  /** 引用的存储连接 id（storage-locations.json）；null = 未配置 */
+  locationId: string | null
+  /** 备份对象前缀（snapshots/、media/ 之下的命名空间）；归一化带尾斜杠 */
+  prefix: string
   /** 保留天数；超过后删除 NoteFast 管理的恢复点 */
   retentionDays: number
 }
 
-/** mergeBackupConfig 入参的 s3 片段：密钥可省略，由 merge 沿用旧值 */
-export type BackupS3Input = Omit<BackupS3Config, 'accessKeyId' | 'secretAccessKey'> & {
-  accessKeyId?: string
-  secretAccessKey?: string
-}
-
-/** mergeBackupConfig / applyBackupConfig 入参形态（与持久化配置同形，仅 s3 密钥可省略） */
-export type BackupConfigInput = Omit<BackupPersistedConfig, 's3'> & {
-  s3: BackupS3Input | null
-}
+/** applyBackupConfig 入参形态（version 由服务端补全） */
+export type BackupConfigInput = Omit<BackupPersistedConfig, 'version'>
 
 export type BackupPhase =
   | 'idle'
@@ -71,7 +46,7 @@ export interface BackupRuntimeStatus {
   lastSuccessAt?: string
   lastError?: string
   lastResult?: BackupRunResult | null
-  intervalMs: number
+  locationId?: string | null
   retentionDays: number
 }
 
@@ -117,52 +92,27 @@ export function emptyBackupConfig(): BackupPersistedConfig {
   return {
     version: 1,
     enabled: false,
-    s3: null,
-    intervalMs: DEFAULT_BACKUP_INTERVAL_MS,
+    locationId: null,
+    prefix: '',
     retentionDays: DEFAULT_BACKUP_RETENTION_DAYS,
   }
 }
 
-/** 解析保存时的密钥：脱敏占位符 → 保留旧值；undefined → 保留旧值 */
-export function resolveBackupSecret(
-  incoming: string | undefined,
-  existing: string | undefined,
-): string {
-  if (incoming === undefined || incoming === BACKUP_SECRET_MASK) return existing ?? ''
-  return incoming.trim()
-}
-
 export function publicBackupView(cfg: BackupPersistedConfig): BackupPersistedConfig {
-  if (!cfg.s3) return cfg
-  return {
-    ...cfg,
-    s3: {
-      ...cfg.s3,
-      accessKeyId: cfg.s3.accessKeyId ? BACKUP_SECRET_MASK : '',
-      secretAccessKey: cfg.s3.secretAccessKey ? BACKUP_SECRET_MASK : '',
-    },
-  }
+  // 无内嵌密钥（连接信息在 storage-locations.json），原样返回
+  return cfg
 }
 
-/** 合并 PUT 请求与磁盘配置（密钥省略/脱敏时沿用旧值） */
+/** 合并 PUT 请求与磁盘配置（仅归一化前缀；密钥随连接库） */
 export function mergeBackupConfig(
   incoming: BackupConfigInput,
-  existing: BackupPersistedConfig,
+  _existing: BackupPersistedConfig,
 ): BackupPersistedConfig {
-  const prevS3 = existing.s3
-  const nextS3: BackupS3Config | null = incoming.s3
-    ? {
-        ...incoming.s3,
-        accessKeyId: resolveBackupSecret(incoming.s3.accessKeyId, prevS3?.accessKeyId),
-        secretAccessKey: resolveBackupSecret(incoming.s3.secretAccessKey, prevS3?.secretAccessKey),
-        prefix: normalizeBackupPrefix(incoming.s3.prefix),
-      }
-    : null
   return {
     version: 1,
     enabled: incoming.enabled,
-    s3: nextS3,
-    intervalMs: Math.max(0, incoming.intervalMs ?? DEFAULT_BACKUP_INTERVAL_MS),
+    locationId: incoming.locationId ?? null,
+    prefix: normalizeBackupPrefix(incoming.prefix),
     retentionDays: Math.max(1, incoming.retentionDays ?? DEFAULT_BACKUP_RETENTION_DAYS),
   }
 }
@@ -194,21 +144,10 @@ export function assertSchemaCompatible(backupSchemaVersion: number, current = CU
   }
 }
 
-export const backupS3ConfigSchema = z.object({
-  bucket: z.string().min(1),
-  region: z.string().min(1),
-  endpoint: z.string().optional(),
-  // 密钥可省略（已有配置时 UI 不重发，merge 沿用旧值）
-  accessKeyId: z.string().optional(),
-  secretAccessKey: z.string().optional(),
-  prefix: z.string().optional(),
-  forcePathStyle: z.boolean().optional(),
-})
-
 export const backupConfigSchema = z.object({
   enabled: z.boolean(),
-  s3: backupS3ConfigSchema.nullable(),
-  intervalMs: z.number().int().min(0).max(86_400_000).optional(),
+  locationId: z.string().nullable(),
+  prefix: z.string().optional(),
   retentionDays: z.number().int().min(1).max(3650).optional(),
 })
 

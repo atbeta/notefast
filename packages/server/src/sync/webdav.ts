@@ -9,7 +9,7 @@ import {
   type SyncInfo,
   type SyncResult,
   type PushOptions,
-  type WebDavAdapterConfig,
+  type WebDavLocationConfig,
 } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks, listDocRows } from '../store/blocks'
@@ -59,10 +59,10 @@ function basicAuth(user: string, pass: string): string {
 }
 
 export function createDefaultClient(
-  cfg: WebDavAdapterConfig,
+  webdav: WebDavLocationConfig,
   fetchImpl: typeof fetch = globalThis.fetch,
 ): WebDavClientLike {
-  const auth = basicAuth(cfg.username, cfg.password)
+  const auth = basicAuth(webdav.username, webdav.password)
   const commonHeaders = {
     Authorization: auth,
     Accept: '*/*',
@@ -116,20 +116,22 @@ async function ensureCollections(
 }
 
 export function createWebDavAdapter(
-  cfg: WebDavAdapterConfig,
+  webdav: WebDavLocationConfig,
+  prefix: string,
+  enabled: boolean,
   opts: CreateWebDavAdapterOptions = {},
 ): SyncAdapter {
-  if (!cfg.enabled) throw new Error('WebDAV adapter not enabled')
-  if (!cfg.endpoint || !cfg.endpoint.trim()) {
+  if (!enabled) throw new Error('WebDAV adapter not enabled')
+  if (!webdav.endpoint || !webdav.endpoint.trim()) {
     throw new Error('WebDAV endpoint 不能为空')
   }
-  if (!cfg.username || !cfg.password) {
+  if (!webdav.username || !webdav.password) {
     throw new Error('WebDAV username / password 必填')
   }
 
-  const client: WebDavClientLike = opts.client ?? createDefaultClient(cfg, opts.fetchImpl)
-  const { base, rootPath } = splitBaseUrl(cfg.endpoint)
-  const basePrefix = normalizePrefix(cfg.prefix)
+  const client: WebDavClientLike = opts.client ?? createDefaultClient(webdav, opts.fetchImpl)
+  const { base, rootPath } = splitBaseUrl(webdav.endpoint)
+  const basePrefix = normalizePrefix(prefix)
 
   async function loadPreviousManifest(prefix: string): Promise<ArchiveManifest | null> {
     const key = `${prefix}${ARCHIVE_MANIFEST_NAME}`
@@ -169,8 +171,8 @@ export function createWebDavAdapter(
       }
       return {
         extra: {
-          endpoint: cfg.endpoint,
-          username: cfg.username ? '***set***' : '',
+          endpoint: webdav.endpoint,
+          username: webdav.username ? '***set***' : '',
           prefix: basePrefix,
           reachable,
           status: res.status,
@@ -182,7 +184,7 @@ export function createWebDavAdapter(
     async push(options?: PushOptions): Promise<SyncResult> {
       const db = getDb()
       const docIds = options?.docIds
-      const prefix = normalizePrefix(options?.prefix ?? cfg.prefix)
+      const keyPrefix = normalizePrefix(options?.prefix ?? basePrefix)
 
       // 归档镜像活库：软删除文档不导出（下次全量同步时经 manifest 清理远端陈旧文件）
       const docs = listDocRows(db, { docIds, order: 'updated_asc' })
@@ -190,17 +192,17 @@ export function createWebDavAdapter(
       const result: SyncResult = { pushed: 0, pulled: 0, errors: [] }
       const files: ArchiveManifest['files'] = []
       const previous =
-        !docIds || docIds.length === 0 ? await loadPreviousManifest(prefix) : null
+        !docIds || docIds.length === 0 ? await loadPreviousManifest(keyPrefix) : null
 
       for (const doc of docs) {
         try {
           const tree = buildBlockTree(fetchDocBlocks(db, doc.id))
           const markdown = blocksToMarkdown(tree)
           const filename = archiveFilename(doc.content || 'untitled', doc.id)
-          const key = `${prefix}${filename}`
+          const key = `${keyPrefix}${filename}`
           const fullUrl = joinUrl(base, rootPath, key)
 
-          const ok = await ensureCollections(client, base, rootPath, prefix)
+          const ok = await ensureCollections(client, base, rootPath, keyPrefix)
           if (!ok) {
             result.errors.push(`${doc.id}: MKCOL 失败`)
             continue
@@ -244,7 +246,7 @@ export function createWebDavAdapter(
             result.errors.push(`delete ${key}: ${e instanceof Error ? e.message : String(e)}`)
           }
         }
-        const mUrl = joinUrl(base, rootPath, `${prefix}${ARCHIVE_MANIFEST_NAME}`)
+        const mUrl = joinUrl(base, rootPath, `${keyPrefix}${ARCHIVE_MANIFEST_NAME}`)
         const mPut = await client.send({
           method: 'PUT',
           url: mUrl,

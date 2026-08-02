@@ -12,7 +12,7 @@ import {
   normalizeBackupPrefix,
   type BackupManifest,
   type BackupRestorePoint,
-  type BackupS3Config,
+  type S3LocationConfig,
 } from '@notefast/core'
 import { createS3ObjectStore, getObjectText, type ObjectStore } from '../storage/objectStore'
 
@@ -33,8 +33,12 @@ export interface BackupStore {
   objectStore: ObjectStore
 }
 
-export function createBackupStore(cfg: BackupS3Config, injected?: ObjectStore): BackupStore {
-  const prefix = normalizeBackupPrefix(cfg.prefix)
+export function createBackupStore(
+  cfg: S3LocationConfig,
+  prefix: string,
+  injected?: ObjectStore,
+): BackupStore {
+  const normalizedPrefix = normalizeBackupPrefix(prefix)
   const objectStore =
     injected ??
     createS3ObjectStore({
@@ -55,7 +59,7 @@ export function createBackupStore(cfg: BackupS3Config, injected?: ObjectStore): 
 
     async uploadSnapshot({ localPath, sha256, sizeBytes, schemaVersion, appVersion }) {
       const id = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
-      const objectKey = buildSnapshotObjectKey(prefix, id)
+      const objectKey = buildSnapshotObjectKey(normalizedPrefix, id)
       const manifestKey = buildManifestObjectKey(objectKey)
       const body = readFileSync(localPath)
       await objectStore.putObject(objectKey, body)
@@ -122,7 +126,7 @@ export function createBackupStore(cfg: BackupS3Config, injected?: ObjectStore): 
   }
 
   async function listAllManifestKeys(): Promise<string[]> {
-    const keys = await objectStore.listObjects(`${prefix}snapshots/`)
+    const keys = await objectStore.listObjects(`${normalizedPrefix}snapshots/`)
     return keys.filter((key) => key.endsWith('.manifest.json'))
   }
 

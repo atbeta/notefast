@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw, FolderOpen, Cloud, HardDrive, CheckCircle2, AlertCircle, Settings as SettingsIcon } from 'lucide-react'
 import { api } from '../hooks/useAPI'
-import { SYNC_SECRET_MASK, type LocalFsAdapterConfig, type S3AdapterConfig, type WebDavAdapterConfig } from '@notefast/core'
+import { type LocalFsAdapterConfig, type S3AdapterConfig, type WebDavAdapterConfig } from '@notefast/core'
+import LocationSelect from './LocationSelect'
 import { ActionButton, useToast, HelpTip } from './ui'
 import ConfirmDialog from './ConfirmDialog'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
@@ -36,25 +37,8 @@ type FormState =
   | WebDavAdapterConfig
 
 const EMPTY_LOCALFS: LocalFsAdapterConfig = { kind: 'localfs', dir: '', prefix: '', enabled: true }
-const EMPTY_S3: S3AdapterConfig = {
-  kind: 's3',
-  bucket: '',
-  region: 'us-east-1',
-  endpoint: '',
-  accessKeyId: '',
-  secretAccessKey: '',
-  prefix: '',
-  forcePathStyle: false,
-  enabled: true,
-}
-const EMPTY_WEBDAV: WebDavAdapterConfig = {
-  kind: 'webdav',
-  endpoint: '',
-  username: '',
-  password: '',
-  prefix: '',
-  enabled: true,
-}
+const EMPTY_S3: S3AdapterConfig = { kind: 's3', locationId: '', prefix: '', enabled: true }
+const EMPTY_WEBDAV: WebDavAdapterConfig = { kind: 'webdav', locationId: '', prefix: '', enabled: true }
 
 export default function SyncPanel() {
   const [status, setStatus] = useState<SyncRuntimeStatus | null>(null)
@@ -80,16 +64,12 @@ export default function SyncPanel() {
           ...a,
           // Key 前缀显示为不含尾斜杠的目录名（服务端归一化时自动补）
           prefix: (a.prefix ?? '').replace(/\/$/, ''),
-          accessKeyId: a.accessKeyId || SYNC_SECRET_MASK,
-          secretAccessKey: a.secretAccessKey || SYNC_SECRET_MASK,
         })
       } else if (active?.kind === 'webdav') {
         const a = active as WebDavAdapterConfig
         setForm({
           ...EMPTY_WEBDAV,
-          endpoint: a.endpoint ?? '',
-          username: a.username || SYNC_SECRET_MASK,
-          password: a.password || SYNC_SECRET_MASK,
+          locationId: a.locationId ?? '',
           prefix: (a.prefix ?? '').replace(/\/$/, ''),
         })
       } else {
@@ -237,28 +217,16 @@ export default function SyncPanel() {
 
           {form.kind === 's3' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
-              <InlineField
-                label="Bucket"
-                value={form.bucket}
-                onChange={(v) => setForm({ ...form, bucket: v })}
-                placeholder="my-notefast-bucket"
-                mono
-              />
-              <InlineField
-                label="Region"
-                value={form.region}
-                onChange={(v) => setForm({ ...form, region: v })}
-                placeholder="us-east-1"
-                mono
-              />
-              <InlineField
-                label="Endpoint"
-                description="MinIO / R2 / OSS 等兼容协议必填"
-                value={form.endpoint ?? ''}
-                onChange={(v) => setForm({ ...form, endpoint: v })}
-                placeholder="https://s3.amazonaws.com"
-                mono
-              />
+              <div className="md:col-span-2">
+                <label className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">存储连接</label>
+                <div className="mt-1.5">
+                  <LocationSelect
+                    value={form.locationId}
+                    onChange={(v) => setForm({ ...form, locationId: v })}
+                    kind="s3"
+                  />
+                </div>
+              </div>
               <InlineField
                 label="Key 前缀"
                 value={form.prefix ?? ''}
@@ -266,35 +234,6 @@ export default function SyncPanel() {
                 placeholder="notes"
                 mono
               />
-              <InlineField
-                label="Access Key ID"
-                value={form.accessKeyId}
-                onChange={(v) => setForm({ ...form, accessKeyId: v })}
-                placeholder="AKIA..."
-                mono
-              />
-              <InlineField
-                label="Secret Access Key"
-                value={form.secretAccessKey}
-                onChange={(v) => setForm({ ...form, secretAccessKey: v })}
-                placeholder="••••••••"
-                type="password"
-                mono
-              />
-              <div className="md:col-span-2 pt-2">
-                <label className="flex items-center gap-2 text-[13px] text-foreground cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.forcePathStyle}
-                    onChange={(e) => { setForm({ ...form, forcePathStyle: e.target.checked }) }}
-                    className="rounded border-border"
-                  />
-                  <div className="flex flex-col">
-                    <span>Path-style endpoint</span>
-                    <span className="text-[11px] text-muted-foreground/60">MinIO 必需，AWS / R2 默认关闭</span>
-                  </div>
-                </label>
-              </div>
             </div>
           )}
 
@@ -305,28 +244,15 @@ export default function SyncPanel() {
                 <HelpTip label="支持 NextCloud / ownCloud / 群晖 / 坚果云等 WebDAV。第一次推送时前缀不存在会创建中间目录。" />
               </div>
               <div className="md:col-span-2">
-                <InlineField
-                  label="Endpoint URL"
-                  value={form.endpoint}
-                  onChange={(v) => setForm({ ...form, endpoint: v })}
-                  placeholder="https://nas.local/dav/"
-                  mono
-                />
+                <label className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">存储连接</label>
+                <div className="mt-1.5">
+                  <LocationSelect
+                    value={form.locationId}
+                    onChange={(v) => setForm({ ...form, locationId: v })}
+                    kind="webdav"
+                  />
+                </div>
               </div>
-              <InlineField
-                label="用户名"
-                value={form.username}
-                onChange={(v) => setForm({ ...form, username: v })}
-                mono
-              />
-              <InlineField
-                label="密码 / 应用密码"
-                value={form.password}
-                onChange={(v) => setForm({ ...form, password: v })}
-                placeholder="••••••••"
-                type="password"
-                mono
-              />
               <InlineField
                 label="远端子目录前缀（可选）"
                 value={form.prefix ?? ''}

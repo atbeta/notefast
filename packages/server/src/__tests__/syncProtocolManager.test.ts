@@ -18,9 +18,11 @@ import {
   _setProtocolStateForTests,
 } from '../sync/protocolManager'
 import { createS3ObjectStore } from '../storage/objectStore'
+import { initStorageLocations, createStorageLocation, _resetStorageLocationsForTests } from '../storage/locations'
 import { SYNC_S3_DIR } from '@notefast/core'
 
 const S3_CFG = { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's' }
+let locationId = ''
 
 /**
  * 同步协议 Manager 编排：
@@ -49,14 +51,22 @@ beforeEach(() => {
   // 清理上次测试落盘的 state 与配置，保证 init 走干净初始状态
   rmSync(join(testDir, 'sync-state.json'), { force: true })
   rmSync(join(testDir, 'sync-protocol.config.json'), { force: true })
+  _resetStorageLocationsForTests()
+  initStorageLocations(testDir)
+  locationId = createStorageLocation({
+    id: '',
+    name: '测试 R2',
+    kind: 's3',
+    s3: { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's' },
+  }).id
 })
 
-/** 配置独立的多端同步（enabled + S3） */
+/** 配置多端同步（引用存储连接） */
 async function configureProtocol(): Promise<void> {
   await applyProtocolManagerConfig({
-    version: 1,
     enabled: true,
-    s3: { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's', prefix: 'test' },
+    locationId,
+    prefix: 'test',
   })
 }
 
@@ -258,31 +268,29 @@ describe('sync protocol manager', () => {
 
   test('S3 位置变化时重置 seq 锚点，避免换位置后跳过早期变更', async () => {
     initProtocolManager(testDir)
-    await configureProtocol() // bucket=b
+    await configureProtocol() // location=bucket b
     _setProtocolStoreForTests(createS3ObjectStore(S3_CFG, makeMockS3().client))
     insertDoc(crypto.randomUUID(), '位置A文档')
     await syncNow()
     expect(protocolStatus().state.publishedSeq).toBeGreaterThan(0)
 
-    // 换存储位置（不同 bucket）→ 重建时游标应重置为 0（从头全量发布）
-    await applyProtocolManagerConfig({
-      version: 1,
-      enabled: true,
-      s3: { bucket: 'b2', region: 'r', accessKeyId: 'k', secretAccessKey: 's', prefix: 'test' },
-    })
+    // 换存储位置（不同 bucket 的连接）→ 重建时游标应重置为 0（从头全量发布）
+    const locB2 = createStorageLocation({
+      id: '',
+      name: '位置 B2',
+      kind: 's3',
+      s3: { bucket: 'b2', region: 'r', accessKeyId: 'k', secretAccessKey: 's' },
+    }).id
+    await applyProtocolManagerConfig({ enabled: true, locationId: locB2, prefix: 'test' })
     expect(protocolStatus().state.publishedSeq).toBe(0)
 
-    // 同一位置（仅改凭据）→ 游标保留
+    // 同一位置（相同 locationId + 前缀）→ 游标保留
     _setProtocolStoreForTests(createS3ObjectStore(S3_CFG, makeMockS3().client))
     insertDoc(crypto.randomUUID(), '位置A再来一条')
     await syncNow()
     const anchor = protocolStatus().state.publishedSeq
     expect(anchor).toBeGreaterThan(0)
-    await applyProtocolManagerConfig({
-      version: 1,
-      enabled: true,
-      s3: { bucket: 'b2', region: 'r', accessKeyId: 'k2', secretAccessKey: 's2', prefix: 'test' },
-    })
+    await applyProtocolManagerConfig({ enabled: true, locationId: locB2, prefix: 'test' })
     expect(protocolStatus().state.publishedSeq).toBe(anchor)
   })
 })

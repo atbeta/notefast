@@ -32,6 +32,7 @@ import { initAiRuntime } from './services/aiRuntime'
 import { initSyncManager } from './sync/manager'
 import { initProtocolManager } from './sync/protocolManager'
 import { initBackupManager, stopBackupManager } from './backup/manager'
+import { initStorageLocations } from './storage/locations'
 import { initVectorStore } from './ai/indexer'
 import { initAssetStore } from './assets/store'
 import { getVectorStore } from './ai/vectorStore'
@@ -54,6 +55,7 @@ import pinnedViews from './api/pinnedViews'
 import statusRouter from './api/status'
 import eventsRouter from './api/events'
 import syncProtocolRouter from './api/syncProtocol'
+import storageLocations from './api/storageLocations'
 import sharePublic from './api/sharePublic'
 import { initDocEvents } from './services/docEvents'
 import { startEntityDescribe } from './ai/entityDescribe'
@@ -225,6 +227,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   app.route('/api/v1/notebooks', notebooks)
   app.route('/api/v1/sync', sync)
   app.route('/api/v1/backup', backup)
+  app.route('/api/v1/storage-locations', storageLocations)
   app.route('/api/v1/ai', ai)
   app.route('/api/v1/auto-link', autoLink)
   app.route('/api/v1/entities', entities)
@@ -263,6 +266,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     initDocEvents(pluginSystem)
     await initVectorStore()
     initAssetStore(dataDir)
+    initStorageLocations(dataDir)
     initSyncManager(dataDir)
     initBackupManager(dataDir)
     initProtocolManager(dataDir)

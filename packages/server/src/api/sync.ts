@@ -40,21 +40,14 @@ const localFsSchema = z.object({
 
 const s3Schema = z.object({
   kind: z.literal('s3'),
-  bucket: z.string().min(1),
-  region: z.string().min(1),
-  endpoint: z.string().optional(),
-  accessKeyId: z.string().min(1),
-  secretAccessKey: z.string().min(1),
+  locationId: z.string().min(1),
   prefix: z.string().optional(),
-  forcePathStyle: z.boolean().optional(),
   enabled: z.boolean(),
 })
 
 const webdavSchema = z.object({
   kind: z.literal('webdav'),
-  endpoint: z.string().min(1).url(),
-  username: z.string().min(1),
-  password: z.string().min(1),
+  locationId: z.string().min(1),
   prefix: z.string().optional(),
   enabled: z.boolean(),
 })

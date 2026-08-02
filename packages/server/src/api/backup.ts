@@ -37,15 +37,10 @@ backup.get('/config', (c) => {
 backup.put('/config', zValidator('json', backupConfigSchema), async (c) => {
   const body = c.req.valid('json')
   const next: BackupConfigInput = {
-    version: 1,
     enabled: body.enabled,
-    s3: body.s3,
-    // 备份仅支持手动：不调度自动全量备份
-    intervalMs: 0,
+    locationId: body.locationId,
+    prefix: body.prefix ?? '',
     retentionDays: body.retentionDays ?? 30,
-  }
-  if (next.enabled && !next.s3) {
-    return c.json({ error: 'bad_request', message: '启用备份时必须提供 s3 配置' }, 400)
   }
   const status = await applyBackupManagerConfig(next)
   return c.json({ ok: true, status, config: getBackupPublicConfig() })

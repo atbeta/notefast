@@ -25,7 +25,14 @@ import {
   initProtocolConfig,
   _resetProtocolConfigForTests,
 } from './protocolConfig'
-import { SYNC_S3_DIR, type SyncDevice, type SyncProtocolConfigInput } from '@notefast/core'
+import {
+  SYNC_S3_DIR,
+  type S3LocationConfig,
+  type StorageLocation,
+  type SyncDevice,
+  type SyncProtocolConfigInput,
+} from '@notefast/core'
+import { getStorageLocation } from '../storage/locations'
 import {
   publishChanges,
   consumeChanges,
@@ -92,18 +99,19 @@ export function initProtocolManager(dir: string): void {
   rebuild()
 }
 
-/** 是否已配置（独立 S3 可用且已启用） */
+/** 是否已配置（引用了存储连接且已启用） */
 export function isProtocolConfigured(): boolean {
   const c = getProtocolConfig()
-  return Boolean(c.enabled && c.s3?.bucket && c.s3?.accessKeyId && c.s3?.secretAccessKey && c.s3?.region)
+  return Boolean(c.enabled && c.locationId)
 }
 
 export function protocolStatus(): SyncProtocolStatus {
   const c = getProtocolConfig()
+  const loc = c.locationId ? getStorageLocation(c.locationId) : undefined
   // 懒重建：配置可在运行期（多端同步面板）更新，而 store 只在 init 时创建。
-  // 配置已就绪但 store 未建、或配置指纹变化（bucket/key/endpoint 等改动）时自动重建，
-  // 否则同步永远「未配置」或用着旧凭据。
-  const fingerprint = c.s3 ? s3Fingerprint(c.s3) : ''
+  // 配置已就绪但 store 未建、或连接/前缀指纹变化时自动重建，否则同步永远「未配置」或用着旧连接。
+  const prefix = c.prefix ?? ''
+  const fingerprint = loc?.s3 ? s3Fingerprint(loc.s3, prefix) : ''
   if (isProtocolConfigured() && (!store || storeFingerprint !== fingerprint)) {
     rebuild()
     storeFingerprint = store ? fingerprint : ''
@@ -111,8 +119,8 @@ export function protocolStatus(): SyncProtocolStatus {
   return {
     configured: isProtocolConfigured(),
     enabled: Boolean(store),
-    s3Bucket: c.s3?.bucket,
-    s3Prefix: c.s3?.prefix,
+    s3Bucket: loc?.s3?.bucket,
+    s3Prefix: c.prefix,
     lastRunAt: lastRunAt ?? undefined,
     lastSuccessAt: lastSuccessAt ?? undefined,
     lastError: lastError ?? undefined,
@@ -160,8 +168,9 @@ export async function syncNow(): Promise<{ published: number; snapshotCreated: b
   lastRunAt = new Date().toISOString()
   try {
     const db = getDb()
-    const cfg = s3Cfg()
-    const prefix = syncPrefix(cfg.prefix)
+    const c = getProtocolConfig()
+    resolvedS3() // 校验连接可用
+    const prefix = syncPrefix(c.prefix)
     const workRoot = join(dataDir, '.sync-tmp')
     if (!existsSync(workRoot)) mkdirSync(workRoot, { recursive: true })
 
@@ -172,7 +181,7 @@ export async function syncNow(): Promise<{ published: number; snapshotCreated: b
     const mediaDir = getMediaDir()
     if (mediaDir) {
       try {
-        await uploadMissingMedia(store, mediaPrefixFor(cfg.prefix), mediaDir)
+        await uploadMissingMedia(store, mediaPrefixFor(c.prefix), mediaDir)
       } catch (e) {
         console.warn('[sync] media 上送失败（变更仍发布）:', e instanceof Error ? e.message : e)
       }
@@ -241,8 +250,9 @@ export async function syncPull(): Promise<{ mode: 'full' | 'incremental'; applie
   running = true
   lastRunAt = new Date().toISOString()
   try {
-    const cfg = s3Cfg()
-    const prefix = syncPrefix(cfg.prefix)
+    const c = getProtocolConfig()
+    resolvedS3()
+    const prefix = syncPrefix(c.prefix)
     const manifest = await readManifest(store, prefix)
     if (!manifest) {
       throw Object.assign(new Error('远端无同步数据（manifest 不存在）'), { code: 'no_remote' })
@@ -275,7 +285,7 @@ export async function syncPull(): Promise<{ mode: 'full' | 'incremental'; applie
     if (mediaDir) {
       const refs = collectReferencedAssetIds()
       if (refs.size > 0) {
-        const mediaRes = await restoreReferencedMedia(store, mediaPrefixFor(cfg.prefix), mediaDir, refs)
+        const mediaRes = await restoreReferencedMedia(store, mediaPrefixFor(c.prefix), mediaDir, refs)
         mediaRestored = mediaRes.restored
       }
     }
@@ -330,8 +340,8 @@ async function syncHeartbeat(): Promise<void> {
 /** 服务端安全合并远端变更：落后于快照时不恢复自身（保持权威，交给客户端全量拉取） */
 async function safeMergeRemote(): Promise<void> {
   if (!store) return
-  const cfg = s3Cfg()
-  const prefix = syncPrefix(cfg.prefix)
+  resolvedS3()
+  const prefix = syncPrefix(getProtocolConfig().prefix)
   const manifest = await readManifest(store, prefix)
   if (!manifest) return
   const snapshotSeq = manifest.snapshot_seq ?? 0
@@ -372,23 +382,27 @@ function stopDebounceTimer(): void {
 
 // ───────────────────── 内部 ─────────────────────
 
-/** S3 配置指纹：bucket/endpoint/region/prefix/凭据任一变化 → 指纹变 → 重建 client */
-function s3Fingerprint(s3: NonNullable<ReturnType<typeof getProtocolConfig>['s3']>): string {
-  return [s3.bucket, s3.endpoint, s3.region, s3.prefix, s3.accessKeyId, s3.secretAccessKey, s3.forcePathStyle].join('|')
+/** S3 连接指纹：连接 id + bucket/endpoint/region/凭据/前缀任一变化 → 指纹变 → 重建 store */
+function s3Fingerprint(s3: S3LocationConfig, prefix: string): string {
+  return [s3.bucket, s3.endpoint, s3.region, s3.accessKeyId, s3.secretAccessKey, prefix].join('|')
 }
 
-/** S3 位置指纹（不含凭据）：bucket/endpoint/region/prefix 任一变化 = 换了存储位置 */
-function s3LocationFingerprint(s3: NonNullable<ReturnType<typeof getProtocolConfig>['s3']>): string {
-  return [s3.bucket, s3.endpoint, s3.region, s3.prefix].join('|')
+/** S3 位置指纹（不含凭据）：连接 id + bucket/endpoint/region + 前缀任一变化 = 换了存储位置 */
+function s3LocationFingerprint(s3: S3LocationConfig, prefix: string): string {
+  return [s3.bucket, s3.endpoint, s3.region, prefix].join('|')
 }
 
-function s3Cfg(): NonNullable<ReturnType<typeof getProtocolConfig>['s3']> {
-  const s3 = getProtocolConfig().s3
-  if (!s3) throw new Error('多端同步 S3 未配置')
-  return s3
+/** 解析协议配置引用的 S3 连接（未配置 / 非 S3 / 未找到 → 抛错） */
+function resolvedS3(): { location: StorageLocation; s3: S3LocationConfig } {
+  const c = getProtocolConfig()
+  if (!c.locationId) throw new Error('多端同步未配置存储连接')
+  const location = getStorageLocation(c.locationId)
+  if (!location) throw new Error(`存储连接 ${c.locationId} 未找到`)
+  if (location.kind !== 's3' || !location.s3) throw new Error('多端同步暂只支持 S3 连接')
+  return { location, s3: location.s3 }
 }
 
-/** 同步前缀 = 配置前缀 + 'sync/'（多端同步独立于备份的 snapshots/、media/） */
+/** 同步前缀 = 配置前缀（归一化；capability 自持，独立于备份的 snapshots/、media/） */
 function syncPrefix(prefix: string | undefined): string {
   const p = (prefix || '').replace(/^\/+/, '').replace(/\/+$/, '')
   return p === '' ? '' : `${p}/`
@@ -432,7 +446,8 @@ async function updateDeviceRegistry(store: ObjectStore, prefix: string): Promise
 /** 列出共享存储中注册的设备（按最近同步倒序） */
 export async function listSyncDevices(): Promise<SyncDevice[]> {
   if (!store) return []
-  const prefix = syncPrefix(s3Cfg().prefix)
+  resolvedS3()
+  const prefix = syncPrefix(getProtocolConfig().prefix)
   const keys = (await store.listObjects(devicesDir(prefix))).filter((k) => k.endsWith('.json'))
   const devices: SyncDevice[] = []
   for (const key of keys) {
@@ -450,7 +465,8 @@ export async function listSyncDevices(): Promise<SyncDevice[]> {
 /** 从注册表移除设备记录（展示性操作；真实拦截靠更换 S3 凭证） */
 export async function removeSyncDevice(deviceId: string): Promise<boolean> {
   if (!store) return false
-  const prefix = syncPrefix(s3Cfg().prefix)
+  resolvedS3()
+  const prefix = syncPrefix(getProtocolConfig().prefix)
   await store.deleteObject(`${devicesDir(prefix)}${deviceId}.json`)
   return true
 }
@@ -463,18 +479,19 @@ function rebuild(): void {
     return
   }
   try {
-    const cfg = s3Cfg()
+    const { s3 } = resolvedS3()
+    const prefix = syncPrefix(getProtocolConfig().prefix)
     store = createS3ObjectStore({
-      bucket: cfg.bucket,
-      region: cfg.region,
-      endpoint: cfg.endpoint,
-      accessKeyId: cfg.accessKeyId,
-      secretAccessKey: cfg.secretAccessKey,
-      forcePathStyle: cfg.forcePathStyle,
+      bucket: s3.bucket,
+      region: s3.region,
+      endpoint: s3.endpoint,
+      accessKeyId: s3.accessKeyId,
+      secretAccessKey: s3.secretAccessKey,
+      forcePathStyle: s3.forcePathStyle,
     })
-    storeFingerprint = s3Fingerprint(cfg)
+    storeFingerprint = s3Fingerprint(s3, prefix)
     // 存储位置变化 → 旧 seq 锚点失效：重置游标，避免换位置后跳过早期变更
-    const loc = s3LocationFingerprint(cfg)
+    const loc = s3LocationFingerprint(s3, prefix)
     if (stateLocation && stateLocation !== loc) {
       state = emptyState()
       stateLocation = loc
@@ -521,8 +538,9 @@ function emptyState(): SyncProtocolState {
 function saveState(): void {
   if (!dataDir) return
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true })
-  const cfg = getProtocolConfig()
-  const location = cfg.s3 ? s3LocationFingerprint(cfg.s3) : ''
+  const c = getProtocolConfig()
+  const loc = c.locationId ? getStorageLocation(c.locationId) : undefined
+  const location = loc?.s3 ? s3LocationFingerprint(loc.s3, c.prefix ?? '') : ''
   stateLocation = location
   writeFileSync(statePath(), JSON.stringify({ ...state, location }, null, 2) + '\n', 'utf-8')
   try { chmodSync(statePath(), 0o600) } catch { /* ignore */ }

@@ -28,6 +28,8 @@ import {
 import { createLocalFsAdapter } from './localFs'
 import { createS3Adapter } from './s3'
 import { createWebDavAdapter } from './webdav'
+import { getStorageLocation } from '../storage/locations'
+import type { StorageLocation } from '@notefast/core'
 
 const CONFIG_FILE = 'sync.config.json'
 
@@ -186,9 +188,25 @@ function createAdapter(ac: SyncPersistedConfig['active']): SyncAdapter | null {
   if (!ac) return null
   if (!ac.enabled) return null
   if (ac.kind === 'localfs') return createLocalFsAdapter(ac)
-  if (ac.kind === 's3') return createS3Adapter(ac)
-  if (ac.kind === 'webdav') return createWebDavAdapter(ac)
+  if (ac.kind === 's3') {
+    const location = resolveLocation(ac.locationId)
+    if (location?.kind !== 's3' || !location.s3) {
+      throw new Error('S3 归档引用的存储连接未找到或非 S3')
+    }
+    return createS3Adapter(location.s3, ac.prefix ?? '', ac.enabled)
+  }
+  if (ac.kind === 'webdav') {
+    const location = resolveLocation(ac.locationId)
+    if (location?.kind !== 'webdav' || !location.webdav) {
+      throw new Error('WebDAV 归档引用的存储连接未找到或非 WebDAV')
+    }
+    return createWebDavAdapter(location.webdav, ac.prefix ?? '', ac.enabled)
+  }
   throw new Error(`未知 adapter kind: ${(ac as { kind?: string }).kind ?? 'undefined'}`)
+}
+
+function resolveLocation(id: string): StorageLocation | undefined {
+  return getStorageLocation(id)
 }
 
 function rebuild(): void {

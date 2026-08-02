@@ -18,7 +18,7 @@ import {
   type SyncInfo,
   type SyncResult,
   type PushOptions,
-  type S3AdapterConfig,
+  type S3LocationConfig,
 } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks, listDocRows } from '../store/blocks'
@@ -45,29 +45,31 @@ function normalizePrefix(prefix?: string): string {
 }
 
 export function createS3Adapter(
-  cfg: S3AdapterConfig,
+  s3: S3LocationConfig,
+  prefix: string,
+  enabled: boolean,
   opts: CreateS3AdapterOptions = {},
 ): SyncAdapter {
-  if (!cfg.enabled) throw new Error('S3 adapter not enabled')
-  if (!cfg.bucket) throw new Error('S3 bucket 不能为空')
-  if (!cfg.region) throw new Error('S3 region 不能为空')
-  if (!cfg.accessKeyId || !cfg.secretAccessKey) {
+  if (!enabled) throw new Error('S3 adapter not enabled')
+  if (!s3.bucket) throw new Error('S3 bucket 不能为空')
+  if (!s3.region) throw new Error('S3 region 不能为空')
+  if (!s3.accessKeyId || !s3.secretAccessKey) {
     throw new Error('S3 accessKeyId / secretAccessKey 必填')
   }
 
   const client: S3ClientLike =
     opts.client ??
     new S3Client({
-      region: cfg.region,
-      endpoint: cfg.endpoint || undefined,
-      forcePathStyle: cfg.forcePathStyle ?? false,
+      region: s3.region,
+      endpoint: s3.endpoint || undefined,
+      forcePathStyle: s3.forcePathStyle ?? false,
       credentials: {
-        accessKeyId: cfg.accessKeyId,
-        secretAccessKey: cfg.secretAccessKey,
+        accessKeyId: s3.accessKeyId,
+        secretAccessKey: s3.secretAccessKey,
       },
     })
-  const bucket = cfg.bucket
-  const prefix = normalizePrefix(cfg.prefix)
+  const bucket = s3.bucket
+  const normalizedPrefix = normalizePrefix(prefix)
 
   async function loadPreviousManifest(keyPrefix: string): Promise<ArchiveManifest | null> {
     const key = `${keyPrefix}${ARCHIVE_MANIFEST_NAME}`
@@ -95,21 +97,21 @@ export function createS3Adapter(
         return {
           extra: {
             bucket,
-            region: cfg.region,
-            endpoint: cfg.endpoint || '(default AWS)',
-            prefix,
-            forcePathStyle: cfg.forcePathStyle ?? false,
+            region: s3.region,
+            endpoint: s3.endpoint || '(default AWS)',
+            prefix: normalizedPrefix,
+            forcePathStyle: s3.forcePathStyle ?? false,
             ok: true,
-            status: res.BucketRegion ?? cfg.region,
+            status: res.BucketRegion ?? s3.region,
           },
         }
       } catch (e) {
         return {
           extra: {
             bucket,
-            region: cfg.region,
-            endpoint: cfg.endpoint || '(default AWS)',
-            prefix,
+            region: s3.region,
+            endpoint: s3.endpoint || '(default AWS)',
+            prefix: normalizedPrefix,
             ok: false,
             error: e instanceof Error ? e.message : String(e),
           },
@@ -120,7 +122,7 @@ export function createS3Adapter(
     async push(options?: PushOptions): Promise<SyncResult> {
       const db = getDb()
       const docIds = options?.docIds
-      const keyPrefix = normalizePrefix(options?.prefix ?? cfg.prefix)
+      const keyPrefix = normalizePrefix(options?.prefix ?? normalizedPrefix)
 
       // 归档镜像活库：软删除文档不导出（下次全量同步时经 manifest 清理远端陈旧文件）
       const docs = listDocRows(db, { docIds, order: 'updated_asc' })

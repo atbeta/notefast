@@ -17,9 +17,11 @@ import {
 } from '../sync/manager'
 import { createS3Adapter, type S3ClientLike } from '../sync/s3'
 import { ARCHIVE_MANIFEST_NAME } from '../sync/archive'
+import { initStorageLocations, createStorageLocation, _resetStorageLocationsForTests } from '../storage/locations'
 
 let testDir: string
 let app: Hono
+let locationId: string
 
 interface RecordedPut {
   bucket: string
@@ -113,6 +115,13 @@ function seedDocWithBlocks(opts: { docTitle: string; blocks: Array<{ content: st
 beforeAll(() => {
   testDir = mkdtempSync(join('/tmp', 'notefast-s3-'))
   initDb(testDir)
+  initStorageLocations(testDir)
+  locationId = createStorageLocation({
+    id: '',
+    name: '测试 R2',
+    kind: 's3',
+    s3: { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's' },
+  }).id
   app = new Hono()
   app.use('*', cors({ origin: '*' }))
   app.route('/api/v1/sync', syncRouter)
@@ -127,6 +136,14 @@ beforeEach(() => {
   getDb().query('DELETE FROM blocks').run()
   getDb().exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
   _resetForTests()
+  _resetStorageLocationsForTests()
+  initStorageLocations(testDir)
+  locationId = createStorageLocation({
+    id: '',
+    name: '测试 R2',
+    kind: 's3',
+    s3: { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's' },
+  }).id
   const cfg = join(testDir, 'sync.config.json')
   if (existsSync(cfg)) unlinkSync(cfg)
 })
@@ -137,14 +154,9 @@ describe('S3 Adapter — 单元（stub client）', () => {
     const id1 = seedDocWithBlocks({ docTitle: 'doc-1', blocks: [{ content: 'p1' }] })
     seedDocWithBlocks({ docTitle: 'doc-2', blocks: [{ content: 'p2' }] })
     const adapter = createS3Adapter(
-      {
-        kind: 's3',
-        bucket: 'b',
-        region: 'us-east-1',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-        enabled: true,
-      },
+      { bucket: 'b', region: 'us-east-1', accessKeyId: 'k', secretAccessKey: 's' },
+      '',
+      true,
       { client: stub.client },
     )
     const r = await adapter.push()
@@ -161,14 +173,9 @@ describe('S3 Adapter — 单元（stub client）', () => {
     const a = seedDocWithBlocks({ docTitle: 'Same', blocks: [] })
     const b = seedDocWithBlocks({ docTitle: 'Same', blocks: [] })
     const adapter = createS3Adapter(
-      {
-        kind: 's3',
-        bucket: 'b',
-        region: 'us-east-1',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-        enabled: true,
-      },
+      { bucket: 'b', region: 'us-east-1', accessKeyId: 'k', secretAccessKey: 's' },
+      '',
+      true,
       { client: stub.client },
     )
     await adapter.push()
@@ -183,14 +190,9 @@ describe('S3 Adapter — 单元（stub client）', () => {
     const keep = seedDocWithBlocks({ docTitle: 'Keep', blocks: [] })
     const gone = seedDocWithBlocks({ docTitle: 'Gone', blocks: [] })
     const adapter = createS3Adapter(
-      {
-        kind: 's3',
-        bucket: 'b',
-        region: 'us-east-1',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-        enabled: true,
-      },
+      { bucket: 'b', region: 'us-east-1', accessKeyId: 'k', secretAccessKey: 's' },
+      '',
+      true,
       { client: stub.client },
     )
     await adapter.push()
@@ -209,14 +211,9 @@ describe('S3 Adapter — 单元（stub client）', () => {
     seedDocWithBlocks({ docTitle: 'good-2', blocks: [] })
     const stub = createStubClient({ failKeys: new Set(['bad--']) })
     const adapter = createS3Adapter(
-      {
-        kind: 's3',
-        bucket: 'b',
-        region: 'us-east-1',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-        enabled: true,
-      },
+      { bucket: 'b', region: 'us-east-1', accessKeyId: 'k', secretAccessKey: 's' },
+      '',
+      true,
       { client: stub.client },
     )
     const r = await adapter.push()
@@ -229,15 +226,9 @@ describe('S3 Adapter — 单元（stub client）', () => {
     const stub = createStubClient()
     seedDocWithBlocks({ docTitle: 'X', blocks: [] })
     const adapter = createS3Adapter(
-      {
-        kind: 's3',
-        bucket: 'b',
-        region: 'us-east-1',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-        prefix: 'notes',
-        enabled: true,
-      },
+      { bucket: 'b', region: 'us-east-1', accessKeyId: 'k', secretAccessKey: 's' },
+      'notes',
+      true,
       { client: stub.client },
     )
     await adapter.push()
@@ -249,14 +240,9 @@ describe('S3 Adapter — 单元（stub client）', () => {
     const a = seedDocWithBlocks({ docTitle: 'keep', blocks: [] })
     seedDocWithBlocks({ docTitle: 'skip', blocks: [] })
     const adapter = createS3Adapter(
-      {
-        kind: 's3',
-        bucket: 'b',
-        region: 'us-east-1',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-        enabled: true,
-      },
+      { bucket: 'b', region: 'us-east-1', accessKeyId: 'k', secretAccessKey: 's' },
+      '',
+      true,
       { client: stub.client },
     )
     const r = await adapter.push({ docIds: [a] })
@@ -267,16 +253,9 @@ describe('S3 Adapter — 单元（stub client）', () => {
   test('info() HeadBucket 成功/失败', async () => {
     const ok = createStubClient()
     const adapter = createS3Adapter(
-      {
-        kind: 's3',
-        bucket: 'my-bucket',
-        region: 'eu-west-1',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-        endpoint: 'https://minio.local',
-        forcePathStyle: true,
-        enabled: true,
-      },
+      { bucket: 'my-bucket', region: 'eu-west-1', accessKeyId: 'k', secretAccessKey: 's', endpoint: 'https://minio.local', forcePathStyle: true },
+      '',
+      true,
       { client: ok.client },
     )
     const info = await adapter.info()
@@ -284,14 +263,9 @@ describe('S3 Adapter — 单元（stub client）', () => {
 
     const bad = createStubClient({ failKeys: new Set(['head']) })
     const adapter2 = createS3Adapter(
-      {
-        kind: 's3',
-        bucket: 'b',
-        region: 'us-east-1',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-        enabled: true,
-      },
+      { bucket: 'b', region: 'us-east-1', accessKeyId: 'k', secretAccessKey: 's' },
+      '',
+      true,
       { client: bad.client },
     )
     const info2 = await adapter2.info()
@@ -306,10 +280,7 @@ describe('Sync Manager × S3', () => {
       version: 1,
       active: {
         kind: 's3',
-        bucket: 'b',
-        region: 'r',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
+        locationId,
         enabled: true,
       },
     })
@@ -332,31 +303,18 @@ describe('Sync HTTP × S3', () => {
     expect(s3.status).toBe('available')
   })
 
-  test('PUT 配置脱敏密钥可保留', async () => {
+  test('PUT 引用连接可保存', async () => {
     initSyncManager(testDir)
-    await api('PUT', '/config', {
+    const res = await api('PUT', '/config', {
       active: {
         kind: 's3',
-        bucket: 'b',
-        region: 'r',
-        accessKeyId: 'REAL',
-        secretAccessKey: 'SECRET',
+        locationId,
         enabled: true,
       },
     })
-    const { body } = await api('PUT', '/config', {
-      active: {
-        kind: 's3',
-        bucket: 'b2',
-        region: 'r',
-        accessKeyId: '***set***',
-        secretAccessKey: '***set***',
-        enabled: true,
-      },
-    })
-    expect(body.ok).toBe(true)
+    expect(res.status).toBe(200)
     const disk = JSON.parse(await Bun.file(join(testDir, 'sync.config.json')).text())
-    expect(disk.active.accessKeyId).toBe('REAL')
-    expect(disk.active.bucket).toBe('b2')
+    expect(disk.active.kind).toBe('s3')
+    expect(disk.active.locationId).toBe(locationId)
   })
 })

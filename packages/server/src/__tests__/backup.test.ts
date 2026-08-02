@@ -8,7 +8,6 @@ import { join } from 'node:path'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import {
-  BACKUP_SECRET_MASK,
   buildManifestObjectKey,
   isBackupManifest,
   type BackupManifest,
@@ -28,11 +27,13 @@ import {
 import { createLocalSnapshot, cleanupSnapshot, hashFile, verifySnapshotFile } from '../backup/snapshot'
 import { createBackupStore, type BackupStore } from '../backup/s3Store'
 import { createS3ObjectStore, type ObjectStore } from '../storage/objectStore'
+import { initStorageLocations, createStorageLocation, _resetStorageLocationsForTests } from '../storage/locations'
 import { durableReplaceFile } from '../backup/durableFs'
 import { assertSchemaCompatible, CURRENT_SCHEMA_VERSION } from '@notefast/core'
 
 let testDir: string
 let app: Hono
+let locationId = ''
 
 function createMemoryStore(): BackupStore & {
   objects: Map<string, Buffer | string>
@@ -133,6 +134,13 @@ beforeAll(() => {
   testDir = mkdtempSync(join('/tmp', 'notefast-backup-'))
   initDb(testDir)
   initAssetStore(testDir)
+  initStorageLocations(testDir)
+  locationId = createStorageLocation({
+    id: '',
+    name: '测试 R2',
+    kind: 's3',
+    s3: { bucket: 'b', region: 'us-east-1', accessKeyId: 'k', secretAccessKey: 's' },
+  }).id
   const db = getDb()
   const nb = (db.query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }).id
   const docId = crypto.randomUUID()
@@ -159,6 +167,14 @@ afterAll(() => {
 
 beforeEach(() => {
   _resetBackupManagerForTests()
+  _resetStorageLocationsForTests()
+  initStorageLocations(testDir)
+  locationId = createStorageLocation({
+    id: '',
+    name: '测试 R2',
+    kind: 's3',
+    s3: { bucket: 'b', region: 'us-east-1', accessKeyId: 'k', secretAccessKey: 's' },
+  }).id
 })
 
 describe('snapshot', () => {
@@ -180,17 +196,10 @@ describe('backup manager', () => {
     const mem = createMemoryStore()
     initBackupManager(testDir, { storeFactory: () => mem })
     await applyBackupManagerConfig({
-      version: 1,
       enabled: true,
-      intervalMs: 0,
+      locationId,
+      prefix: 'test',
       retentionDays: 30,
-      s3: {
-        bucket: 'b',
-        region: 'us-east-1',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-        prefix: 'test',
-      },
     })
     const result = await runBackupNow()
     expect(result.ok).toBe(true)
@@ -214,11 +223,10 @@ describe('backup manager', () => {
 
     initBackupManager(testDir, { storeFactory: () => mem })
     await applyBackupManagerConfig({
-      version: 1,
       enabled: true,
-      intervalMs: 0,
+      locationId,
+      prefix: 'test',
       retentionDays: 30,
-      s3: { bucket: 'b', region: 'us-east-1', accessKeyId: 'k', secretAccessKey: 's', prefix: 'test' },
     })
     const result = await runBackupNow()
     expect(result.ok).toBe(true)
@@ -237,16 +245,10 @@ describe('backup manager', () => {
     }
     initBackupManager(testDir, { storeFactory: () => mem })
     await applyBackupManagerConfig({
-      version: 1,
       enabled: true,
-      intervalMs: 0,
+      locationId,
+      prefix: 'test',
       retentionDays: 30,
-      s3: {
-        bucket: 'b',
-        region: 'r',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-      },
     })
     const p1 = runBackupNow()
     await Bun.sleep(10)
@@ -265,16 +267,10 @@ describe('backup manager', () => {
     mem.failUpload = true
     initBackupManager(testDir, { storeFactory: () => mem })
     await applyBackupManagerConfig({
-      version: 1,
       enabled: true,
-      intervalMs: 0,
+      locationId,
+      prefix: 'test',
       retentionDays: 30,
-      s3: {
-        bucket: 'b',
-        region: 'r',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-      },
     })
     const before = (getDb().query("SELECT count(*) as c FROM blocks WHERE type='document'").get() as { c: number }).c
     await expect(runBackupNow()).rejects.toThrow(/upload failed/)
@@ -292,41 +288,21 @@ describe('backup HTTP', () => {
     return { status: res.status, body: await res.json() }
   }
 
-  test('PUT config 脱敏；二次保存保留密钥', async () => {
+  test('PUT config 引用存储连接可保存', async () => {
     const mem = createMemoryStore()
     initBackupManager(testDir, { storeFactory: () => mem })
-    const put1 = await api('PUT', '/config', {
+    const put = await api('PUT', '/config', {
       enabled: true,
-      intervalMs: 0,
+      locationId,
+      prefix: 'p',
       retentionDays: 7,
-      s3: {
-        bucket: 'b',
-        region: 'r',
-        accessKeyId: 'REAL_AK',
-        secretAccessKey: 'REAL_SK',
-        prefix: 'p',
-      },
     })
-    expect(put1.status).toBe(200)
-    expect(put1.body.config.s3.accessKeyId).toBe(BACKUP_SECRET_MASK)
-
-    const put2 = await api('PUT', '/config', {
-      enabled: true,
-      intervalMs: 0,
-      retentionDays: 7,
-      s3: {
-        bucket: 'b2',
-        region: 'r',
-        accessKeyId: BACKUP_SECRET_MASK,
-        secretAccessKey: BACKUP_SECRET_MASK,
-        prefix: 'p',
-      },
-    })
-    expect(put2.status).toBe(200)
-    // 磁盘仍存真实密钥
+    expect(put.status).toBe(200)
+    expect(put.body.config.locationId).toBe(locationId)
+    expect(put.body.config.prefix).toBe('p/')
     const disk = JSON.parse(readFileSync(join(testDir, 'backup.config.json'), 'utf-8'))
-    expect(disk.s3.accessKeyId).toBe('REAL_AK')
-    expect(disk.s3.bucket).toBe('b2')
+    expect(disk.locationId).toBe(locationId)
+    expect(disk.enabled).toBe(true)
   })
 
   test('POST /run + GET restore-points', async () => {
@@ -334,14 +310,9 @@ describe('backup HTTP', () => {
     initBackupManager(testDir, { storeFactory: () => mem })
     await api('PUT', '/config', {
       enabled: true,
-      intervalMs: 0,
+      locationId,
+      prefix: 'p',
       retentionDays: 30,
-      s3: {
-        bucket: 'b',
-        region: 'r',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-      },
     })
     const run = await api('POST', '/run')
     expect(run.status).toBe(200)
@@ -349,65 +320,6 @@ describe('backup HTTP', () => {
     const list = await api('GET', '/restore-points')
     expect(list.status).toBe(200)
     expect(list.body.points.length).toBeGreaterThanOrEqual(1)
-  })
-
-  test('PUT config 省略 s3 密钥仍可保存（intervalMs 0 持久化）', async () => {
-    const mem = createMemoryStore()
-    initBackupManager(testDir, { storeFactory: () => mem })
-    // 首次配置带真实密钥
-    const first = await api('PUT', '/config', {
-      enabled: true,
-      intervalMs: 3_600_000,
-      retentionDays: 30,
-      s3: {
-        bucket: 'b',
-        region: 'r',
-        accessKeyId: 'REAL_AK',
-        secretAccessKey: 'REAL_SK',
-        prefix: 'p',
-      },
-    })
-    expect(first.status).toBe(200)
-
-    // 二次保存：密钥已脱敏，UI 不再重发（省略）——只改间隔为 0
-    const second = await api('PUT', '/config', {
-      enabled: true,
-      intervalMs: 0,
-      retentionDays: 30,
-      s3: { bucket: 'b', region: 'r', prefix: 'p' },
-    })
-    expect(second.status).toBe(200)
-    expect(second.body.config.intervalMs).toBe(0)
-
-    const get = await api('GET', '/config')
-    expect(get.status).toBe(200)
-    expect(get.body.config.intervalMs).toBe(0)
-    // 磁盘仍保留真实密钥
-    const disk = JSON.parse(readFileSync(join(testDir, 'backup.config.json'), 'utf-8'))
-    expect(disk.s3.accessKeyId).toBe('REAL_AK')
-    expect(disk.s3.secretAccessKey).toBe('REAL_SK')
-  })
-
-  test('备份仅支持手动：即使带上 intervalMs 也持久化为 0', async () => {
-    const mem = createMemoryStore()
-    initBackupManager(testDir, { storeFactory: () => mem })
-    const put = await api('PUT', '/config', {
-      enabled: true,
-      intervalMs: 60_000,
-      retentionDays: 30,
-      s3: {
-        bucket: 'b',
-        region: 'r',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-      },
-    })
-    expect(put.status).toBe(200)
-    expect(put.body.config.intervalMs).toBe(0)
-    expect(backupStatus().intervalMs).toBe(0)
-    // 磁盘也清零
-    const disk = JSON.parse(readFileSync(join(testDir, 'backup.config.json'), 'utf-8'))
-    expect(disk.intervalMs).toBe(0)
   })
 })
 
@@ -503,13 +415,8 @@ describe('prune 全量列举', () => {
     }
 
     const store = createBackupStore(
-      {
-        bucket: 'b',
-        region: 'r',
-        accessKeyId: 'k',
-        secretAccessKey: 's',
-        prefix: 'p',
-      },
+      { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's' },
+      'p',
       createS3ObjectStore(
         { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's' },
         client as never,

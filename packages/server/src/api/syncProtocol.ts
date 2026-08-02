@@ -24,7 +24,7 @@ import {
   syncNow,
   syncPull,
 } from '../sync/protocolManager'
-import { getProtocolConfig, getProtocolPublicConfig } from '../sync/protocolConfig'
+import { getProtocolPublicConfig } from '../sync/protocolConfig'
 
 const syncProtocol = new Hono()
 
@@ -43,9 +43,9 @@ syncProtocol.get('/config', (c) => {
 syncProtocol.put('/config', zValidator('json', syncProtocolConfigSchema), async (c) => {
   const body = c.req.valid('json')
   const status = await applyProtocolManagerConfig({
-    version: 1,
     enabled: body.enabled,
-    s3: body.s3 ?? getProtocolConfig().s3,
+    locationId: body.locationId,
+    prefix: body.prefix ?? '',
   })
   return c.json({ ok: true, status, config: getProtocolPublicConfig() })
 })

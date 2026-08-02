@@ -23,32 +23,19 @@ export interface LocalFsAdapterConfig {
 
 export interface S3AdapterConfig {
   kind: 's3'
-  /** 桶名 */
-  bucket: string
-  /** 区域 */
-  region: string
-  /** 自定义 endpoint（MinIO / R2 / 阿里云 OSS） */
-  endpoint?: string
-  /** 凭证 */
-  accessKeyId: string
-  secretAccessKey: string
+  /** 引用的存储连接 id（storage-locations.json） */
+  locationId: string
   /** key 前缀 */
   prefix?: string
-  /** MinIO 自建需要 true */
-  forcePathStyle?: boolean
   enabled: boolean
 }
 
 export interface WebDavAdapterConfig {
-  /** WebDAV 端点（绝对 URL） */
   kind: 'webdav'
-  /** 例如：https://dav.example.com/remote.php/webdav 或 https://nas.local/dav/ */
-  endpoint: string
-  username: string
-  password: string
+  /** 引用的存储连接 id（storage-locations.json） */
+  locationId: string
   /** 远端路径前缀（可选），如 'notes' */
   prefix?: string
-  /** 第一次推送时是否需要认证 challenge（Basic Auth 默认 true） */
   enabled: boolean
 }
 
@@ -119,69 +106,25 @@ export function emptySyncConfig(): SyncPersistedConfig {
   return { version: 1, active: null }
 }
 
-function resolveSecret(incoming: string | undefined, existing: string | undefined): string {
-  if (incoming === undefined || incoming === SYNC_SECRET_MASK) return existing ?? ''
-  return incoming.trim()
-}
-
-/** 合并 PUT 配置与磁盘配置（脱敏密钥沿用旧值） */
+/** 合并 PUT 配置与磁盘配置（密钥随连接库，这里只归一化前缀） */
 export function mergeSyncConfig(
   incoming: SyncPersistedConfig,
-  existing: SyncPersistedConfig,
+  _existing: SyncPersistedConfig,
 ): SyncPersistedConfig {
-  const next: SyncPersistedConfig = {
+  return {
     version: 1,
     active: incoming.active,
     autoSyncIntervalMs: incoming.autoSyncIntervalMs,
   }
-  if (!next.active) return next
-  const prev = existing.active
-  if (next.active.kind === 's3') {
-    const prevS3 = prev?.kind === 's3' ? prev : null
-    next.active = {
-      ...next.active,
-      accessKeyId: resolveSecret(next.active.accessKeyId, prevS3?.accessKeyId),
-      secretAccessKey: resolveSecret(next.active.secretAccessKey, prevS3?.secretAccessKey),
-    }
-  } else if (next.active.kind === 'webdav') {
-    const prevDav = prev?.kind === 'webdav' ? prev : null
-    next.active = {
-      ...next.active,
-      username: resolveSecret(next.active.username, prevDav?.username),
-      password: resolveSecret(next.active.password, prevDav?.password),
-    }
-  }
-  return next
 }
 
-/** 对外展示时移除密钥 */
+/** 对外展示（无内嵌密钥，原样返回） */
 export function publicSyncView(cfg: SyncPersistedConfig): SyncPersistedConfig {
-  if (!cfg.active) return cfg
-  if (cfg.active.kind === 's3') {
-    return {
-      ...cfg,
-      active: {
-        ...cfg.active,
-        accessKeyId: cfg.active.accessKeyId ? SYNC_SECRET_MASK : '',
-        secretAccessKey: cfg.active.secretAccessKey ? SYNC_SECRET_MASK : '',
-      },
-    }
-  }
-  if (cfg.active.kind === 'webdav') {
-    return {
-      ...cfg,
-      active: {
-        ...cfg.active,
-        username: cfg.active.username ? SYNC_SECRET_MASK : '',
-        password: cfg.active.password ? SYNC_SECRET_MASK : '',
-      },
-    }
-  }
   return cfg
 }
 
 // ───────────────────── 多端同步协议（双向增量）独立配置 ─────────────────────
-// 与「数据库备份」完全解耦：各自独立的 S3 配置、开关与调度。
+// 能力与「数据库备份」独立，但共享存储连接库：这里只引用 locationId + 前缀。
 
 export interface SyncProtocolS3Config {
   /** 桶名 */
@@ -203,22 +146,17 @@ export interface SyncProtocolS3Config {
 export interface SyncProtocolPersistedConfig {
   version: 1
   enabled: boolean
-  s3: SyncProtocolS3Config | null
+  /** 引用的存储连接 id（storage-locations.json）；null = 未配置 */
+  locationId: string | null
+  /** 同步对象前缀（sync/ 之下的命名空间）；归一化带尾斜杠 */
+  prefix: string
 }
 
-/** PUT 入参的 s3 片段：密钥可省略，由 merge 沿用旧值 */
-export type SyncProtocolS3Input = Omit<SyncProtocolS3Config, 'accessKeyId' | 'secretAccessKey'> & {
-  accessKeyId?: string
-  secretAccessKey?: string
-}
-
-/** mergeSyncProtocolConfig / applyProtocolConfig 入参形态（仅 s3 密钥可省略） */
-export type SyncProtocolConfigInput = Omit<SyncProtocolPersistedConfig, 's3'> & {
-  s3: SyncProtocolS3Input | null
-}
+/** applyProtocolConfig 入参形态（version 由服务端补全） */
+export type SyncProtocolConfigInput = Omit<SyncProtocolPersistedConfig, 'version'>
 
 export function emptySyncProtocolConfig(): SyncProtocolPersistedConfig {
-  return { version: 1, enabled: false, s3: null }
+  return { version: 1, enabled: false, locationId: null, prefix: '' }
 }
 
 export function normalizeSyncProtocolPrefix(prefix?: string): string {
@@ -227,52 +165,26 @@ export function normalizeSyncProtocolPrefix(prefix?: string): string {
   return p === '' ? '' : `${p}/`
 }
 
-/** 合并 PUT 配置与磁盘配置（密钥省略/脱敏时沿用旧值；前缀归一化） */
+/** 合并 PUT 配置与磁盘配置（密钥随连接库，这里只归一化前缀） */
 export function mergeSyncProtocolConfig(
   incoming: SyncProtocolConfigInput,
-  existing: SyncProtocolPersistedConfig,
+  _existing: SyncProtocolPersistedConfig,
 ): SyncProtocolPersistedConfig {
-  const prevS3 = existing.s3
-  const nextS3: SyncProtocolS3Config | null = incoming.s3
-    ? {
-        ...incoming.s3,
-        accessKeyId: resolveSecret(incoming.s3.accessKeyId, prevS3?.accessKeyId),
-        secretAccessKey: resolveSecret(incoming.s3.secretAccessKey, prevS3?.secretAccessKey),
-        prefix: normalizeSyncProtocolPrefix(incoming.s3.prefix),
-      }
-    : null
   return {
     version: 1,
     enabled: incoming.enabled,
-    s3: nextS3,
+    locationId: incoming.locationId ?? null,
+    prefix: normalizeSyncProtocolPrefix(incoming.prefix),
   }
 }
 
-/** 对外展示时移除密钥 */
+/** 对外展示（无内嵌密钥，原样返回） */
 export function publicSyncProtocolView(cfg: SyncProtocolPersistedConfig): SyncProtocolPersistedConfig {
-  if (!cfg.s3) return cfg
-  return {
-    ...cfg,
-    s3: {
-      ...cfg.s3,
-      accessKeyId: cfg.s3.accessKeyId ? SYNC_SECRET_MASK : '',
-      secretAccessKey: cfg.s3.secretAccessKey ? SYNC_SECRET_MASK : '',
-    },
-  }
+  return cfg
 }
-
-export const syncProtocolS3ConfigSchema = z.object({
-  bucket: z.string().min(1),
-  region: z.string().min(1),
-  endpoint: z.string().optional(),
-  // 密钥可省略（已有配置时 UI 不重发，merge 沿用旧值）
-  accessKeyId: z.string().optional(),
-  secretAccessKey: z.string().optional(),
-  prefix: z.string().optional(),
-  forcePathStyle: z.boolean().optional(),
-})
 
 export const syncProtocolConfigSchema = z.object({
   enabled: z.boolean(),
-  s3: syncProtocolS3ConfigSchema.nullable(),
+  locationId: z.string().nullable(),
+  prefix: z.string().optional(),
 })

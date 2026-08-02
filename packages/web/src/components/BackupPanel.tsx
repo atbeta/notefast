@@ -8,36 +8,24 @@ import {
   Plug,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
-import { BACKUP_SECRET_MASK, type BackupRuntimeStatus, type BackupRestorePoint } from '@notefast/core'
+import { type BackupRuntimeStatus, type BackupRestorePoint } from '@notefast/core'
 import { ActionButton, useToast } from './ui'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
+import LocationSelect from './LocationSelect'
 import { formatIsoDateTime } from '../lib/time'
 
 interface BackupConfig {
   enabled: boolean
-  intervalMs: number
+  locationId: string | null
+  prefix: string
   retentionDays: number
-  s3: {
-    bucket: string
-    region: string
-    endpoint?: string
-    accessKeyId: string
-    secretAccessKey: string
-    prefix?: string
-    forcePathStyle?: boolean
-  } | null
 }
 
 export default function BackupPanel() {
   const [status, setStatus] = useState<BackupRuntimeStatus | null>(null)
   const [enabled, setEnabled] = useState(false)
-  const [bucket, setBucket] = useState('')
-  const [region, setRegion] = useState('auto')
-  const [endpoint, setEndpoint] = useState('')
-  const [accessKeyId, setAccessKeyId] = useState('')
-  const [secretAccessKey, setSecretAccessKey] = useState('')
-  const [prefix, setPrefix] = useState('notefast')
-  const [forcePathStyle, setForcePathStyle] = useState(false)
+  const [locationId, setLocationId] = useState('')
+  const [prefix, setPrefix] = useState('')
   const [retentionDays, setRetentionDays] = useState(30)
   const [points, setPoints] = useState<BackupRestorePoint[]>([])
   const toast = useToast()
@@ -48,18 +36,9 @@ export default function BackupPanel() {
     )
     setStatus(res.status)
     setEnabled(res.config.enabled)
+    setLocationId(res.config.locationId ?? '')
+    setPrefix((res.config.prefix ?? '').replace(/\/$/, ''))
     setRetentionDays(res.config.retentionDays || 30)
-    if (res.config.s3) {
-      setBucket(res.config.s3.bucket || '')
-      setRegion(res.config.s3.region || 'auto')
-      setEndpoint(res.config.s3.endpoint || '')
-      // 脱敏占位符 = 已有密钥：不填进输入框（placeholder 提示「已设置」），
-      // 提交留空时后端保留旧值；避免把 ***set*** 当真实值提交（首次配置时会被还原成空）
-      setAccessKeyId(res.config.s3.accessKeyId === BACKUP_SECRET_MASK ? '' : res.config.s3.accessKeyId || '')
-      setSecretAccessKey(res.config.s3.secretAccessKey === BACKUP_SECRET_MASK ? '' : res.config.s3.secretAccessKey || '')
-      setPrefix(res.config.s3.prefix?.replace(/\/$/, '') || '')
-      setForcePathStyle(Boolean(res.config.s3.forcePathStyle))
-    }
     if (res.configured) {
       try {
         const list = await api.get<{ points: BackupRestorePoint[] }>('/backup/restore-points?limit=20')
@@ -81,25 +60,13 @@ export default function BackupPanel() {
   const handleSave = async () => {
     await toast.promise(
       async () => {
-        // 填了 bucket 即视为「要配置 S3 备份」——不受独立开关误伤（此前 enabled=false 时 s3 被发成 null，填了也存不上）
-        const hasS3 = Boolean(bucket.trim())
+        // 选了存储连接即视为「要配置备份」
+        const hasLocation = Boolean(locationId)
         await api.put('/backup/config', {
-          enabled: enabled || hasS3,
-          intervalMs: 0,
+          enabled: enabled || hasLocation,
+          locationId: locationId || null,
+          prefix,
           retentionDays,
-          s3: hasS3
-            ? {
-                bucket,
-                region,
-                endpoint: endpoint || undefined,
-                // 空字符串 = 未填 → undefined（JSON.stringify 省略），后端保留旧值；
-                // 首次配置旧值为空时保持空。避免把脱敏占位符或空串当真值提交。
-                accessKeyId: accessKeyId || undefined,
-                secretAccessKey: secretAccessKey || undefined,
-                prefix,
-                forcePathStyle,
-              }
-            : null,
         })
         await refresh()
       },
@@ -162,31 +129,17 @@ export default function BackupPanel() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
-          <InlineField label="Bucket" value={bucket} onChange={setBucket} mono placeholder="notefast" />
-          <InlineField label="Region" value={region} onChange={setRegion} mono placeholder="auto" />
+          <div>
+            <label className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">存储连接</label>
+            <div className="mt-1.5"><LocationSelect value={locationId} onChange={setLocationId} kind="s3" /></div>
+          </div>
           <InlineField
-            label="Endpoint"
-            description="R2 / MinIO 等兼容协议必填"
-            value={endpoint}
-            onChange={setEndpoint}
+            label="前缀（目录）"
+            description="快照与 media 存放在此前缀下"
+            value={prefix}
+            onChange={setPrefix}
             mono
-            placeholder="https://xxx.r2.cloudflarestorage.com"
-          />
-          <InlineField label="Key 前缀" value={prefix} onChange={setPrefix} mono placeholder="notefast" />
-          <InlineField
-            label="Access Key ID"
-            value={accessKeyId}
-            onChange={setAccessKeyId}
-            mono
-            placeholder={BACKUP_SECRET_MASK}
-          />
-          <InlineField
-            label="Secret Access Key"
-            value={secretAccessKey}
-            onChange={setSecretAccessKey}
-            mono
-            type="password"
-            placeholder={BACKUP_SECRET_MASK}
+            placeholder="backup"
           />
           <InlineField
             label="保留天数"
@@ -194,17 +147,6 @@ export default function BackupPanel() {
             onChange={(v) => setRetentionDays(parseInt(v, 10) || 30)}
             type="number"
           />
-        </div>
-
-        <div className="flex items-center justify-between pt-2">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <span className="text-[13px] font-medium text-foreground">Path-style endpoint</span>
-            <span className="text-[11px] text-muted-foreground/60 -ml-1.5">MinIO 必需，AWS / R2 默认关闭</span>
-            <div className="relative inline-flex items-center">
-              <input type="checkbox" className="sr-only peer" checked={forcePathStyle} onChange={(e) => { setForcePathStyle(e.target.checked) }} />
-              <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-            </div>
-          </label>
         </div>
 
         <div className="flex items-center gap-3 pt-4 border-t border-border/40">

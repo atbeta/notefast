@@ -17,9 +17,11 @@ import {
 } from '../sync/manager'
 import { createWebDavAdapter, createDefaultClient, type WebDavClientLike } from '../sync/webdav'
 import { ARCHIVE_MANIFEST_NAME } from '../sync/archive'
+import { initStorageLocations, createStorageLocation, _resetStorageLocationsForTests } from '../storage/locations'
 
 let testDir: string
 let app: Hono
+let locationId: string
 
 function createStubClient(opts: { failUrls?: RegExp[]; failMethods?: string[] } = {}): {
   client: WebDavClientLike
@@ -101,6 +103,13 @@ function seedDocWithBlocks(opts: {
 beforeAll(() => {
   testDir = mkdtempSync(join('/tmp', 'notefast-webdav-'))
   initDb(testDir)
+  initStorageLocations(testDir)
+  locationId = createStorageLocation({
+    id: '',
+    name: '测试 NAS',
+    kind: 'webdav',
+    webdav: { endpoint: 'https://x/dav', username: 'u', password: 'p' },
+  }).id
   app = new Hono()
   app.use('*', cors({ origin: '*' }))
   app.route('/api/v1/sync', syncRouter)
@@ -115,6 +124,14 @@ beforeEach(() => {
   getDb().query('DELETE FROM blocks').run()
   getDb().exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
   _resetForTests()
+  _resetStorageLocationsForTests()
+  initStorageLocations(testDir)
+  locationId = createStorageLocation({
+    id: '',
+    name: '测试 NAS',
+    kind: 'webdav',
+    webdav: { endpoint: 'https://x/dav', username: 'u', password: 'p' },
+  }).id
   const cfg = join(testDir, 'sync.config.json')
   if (existsSync(cfg)) unlinkSync(cfg)
   initSyncManager(testDir)
@@ -127,16 +144,11 @@ describe('WebDAV Adapter — 单元（stub client）', () => {
     seedDocWithBlocks({ docTitle: 'Second', blocks: [] })
 
     const adapter = createWebDavAdapter(
-      {
-        kind: 'webdav',
-        endpoint: 'https://nas.local/dav/',
-        username: 'u',
-        password: 'p',
-        prefix: 'notes',
-        enabled: true,
-      },
-      { client: stub.client },
-    )
+        { endpoint: 'https://nas.local/dav/', username: 'u', password: 'p' },
+        'notes',
+        true,
+        { client: stub.client  },
+      )
     const r = await adapter.push()
     expect(r.pushed).toBe(2)
     const puts = stub.requests.filter((r) => r.method === 'PUT' && r.url.endsWith('.md'))
@@ -161,15 +173,10 @@ describe('WebDAV Adapter — 单元（stub client）', () => {
     for (const c of cases) {
       const stub = createStubClient()
       const adapter = createWebDavAdapter(
-        {
-          kind: 'webdav',
-          endpoint: c.endpoint,
-          username: 'u',
-          password: 'p',
-          prefix: c.prefix,
-          enabled: true,
-        },
-        { client: stub.client },
+        { endpoint: c.endpoint, username: 'u', password: 'p' },
+        c.prefix ?? '',
+        true,
+        { client: stub.client  },
       )
       await adapter.push()
       const mkcols = stub.requests
@@ -194,15 +201,11 @@ describe('WebDAV Adapter — 单元（stub client）', () => {
       },
     }
     const adapter = createWebDavAdapter(
-      {
-        kind: 'webdav',
-        endpoint: 'https://x/dav',
-        username: 'u',
-        password: 'p',
-        enabled: true,
-      },
-      { client: stubClient },
-    )
+        { endpoint: 'https://x/dav', username: 'u', password: 'p' },
+        '',
+        true,
+        { client: stubClient  },
+      )
     const r = await adapter.push()
     expect(r.pushed).toBe(2)
     expect(r.errors.length).toBeGreaterThanOrEqual(1)
@@ -217,15 +220,11 @@ describe('WebDAV Adapter — 单元（stub client）', () => {
   <d:response><d:href>/dav/c.txt</d:href></d:response>
 </d:multistatus>`
     const adapter = createWebDavAdapter(
-      {
-        kind: 'webdav',
-        endpoint: 'https://x/dav/',
-        username: 'u',
-        password: 'p',
-        enabled: true,
-      },
-      { client: stub.client },
-    )
+        { endpoint: 'https://x/dav/', username: 'u', password: 'p' },
+        '',
+        true,
+        { client: stub.client  },
+      )
     const info = await adapter.info()
     expect((info.extra as { reachable: boolean }).reachable).toBe(true)
     expect((info.extra as { fileCount: number }).fileCount).toBe(2)
@@ -238,15 +237,9 @@ describe('WebDAV Adapter — 单元（stub client）', () => {
       return new Response('', { status: 207, headers: { 'content-type': 'text/xml' } })
     }) as unknown as typeof fetch
     const client = createDefaultClient(
-      {
-        kind: 'webdav',
-        endpoint: 'https://x/dav',
-        username: 'alice',
-        password: 's3cret',
-        enabled: true,
-      },
-      fakeFetch,
-    )
+        { endpoint: 'https://x/dav', username: 'alice', password: 's3cret' },
+        fakeFetch,
+      )
     await client.send({ method: 'PROPFIND', url: 'https://x/dav/' })
     const headers = calls[0]!.init.headers as Record<string, string>
     expect(headers['Authorization']).toBe(`Basic ${Buffer.from('alice:s3cret').toString('base64')}`)
@@ -266,9 +259,7 @@ describe('WebDAV × Manager / HTTP', () => {
       version: 1,
       active: {
         kind: 'webdav',
-        endpoint: 'https://x/dav',
-        username: 'u',
-        password: 'p',
+        locationId,
         enabled: true,
       },
     })

@@ -25,6 +25,8 @@ import { createBackupStore } from '../backup/s3Store'
 import { durableReplaceFile } from '../backup/durableFs'
 import { hashFile, verifySnapshotFile } from '../backup/snapshot'
 import { restoreReferencedMedia, mediaPrefixFor } from '../backup/mediaBackup'
+import { initStorageLocations, getStorageLocation } from '../storage/locations'
+import { createS3ObjectStore } from '../storage/objectStore'
 
 function parseArgs(argv: string[]): Record<string, string | boolean> {
   const out: Record<string, string | boolean> = {}
@@ -79,12 +81,26 @@ async function main(): Promise<void> {
   }
 
   const cfg = loadBackupConfig(dataDir)
-  if (!cfg.s3) {
-    console.error('未找到 backup.config.json 中的 S3 配置')
+  if (!cfg.locationId) {
+    console.error('未找到 backup.config.json 中的存储连接引用')
     process.exit(1)
   }
+  initStorageLocations(dataDir)
+  const location = getStorageLocation(cfg.locationId)
+  if (location?.kind !== 's3' || !location.s3) {
+    console.error(`存储连接 ${cfg.locationId} 未找到或非 S3`)
+    process.exit(1)
+  }
+  const s3 = location.s3
 
-  const store = createBackupStore(cfg.s3)
+  const store = createBackupStore(s3, cfg.prefix, createS3ObjectStore({
+    bucket: s3.bucket,
+    region: s3.region,
+    endpoint: s3.endpoint,
+    accessKeyId: s3.accessKeyId,
+    secretAccessKey: s3.secretAccessKey,
+    forcePathStyle: s3.forcePathStyle,
+  }))
   const manifestKey = buildManifestObjectKey(objectKey)
   const workDir = join(dataDir, '.restore-tmp')
   mkdirSync(workDir, { recursive: true })
@@ -166,7 +182,7 @@ async function main(): Promise<void> {
     }
     console.log(`media 引用集合: ${refs.length} 张图`)
     if (!dryRun) {
-      const mediaRes = await restoreReferencedMedia(store.objectStore, mediaPrefixFor(cfg.s3.prefix), mediaDir, refs)
+      const mediaRes = await restoreReferencedMedia(store.objectStore, mediaPrefixFor(cfg.prefix), mediaDir, refs)
       console.log(`media 恢复: 拉回 ${mediaRes.restored}，本地已有跳过，缺失 ${mediaRes.missing.length}`)
       if (mediaRes.missing.length > 0) {
         console.warn(`⚠️  以下图片在 S3 缺失（引用悬空）: ${mediaRes.missing.slice(0, 5).join(', ')}${mediaRes.missing.length > 5 ? '…' : ''}`)

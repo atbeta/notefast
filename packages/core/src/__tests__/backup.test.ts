@@ -1,6 +1,5 @@
 import { describe, test, expect } from 'bun:test'
 import {
-  BACKUP_SECRET_MASK,
   CURRENT_SCHEMA_VERSION,
   assertSchemaCompatible,
   backupConfigSchema,
@@ -10,118 +9,41 @@ import {
   isBackupManifest,
   mergeBackupConfig,
   normalizeBackupPrefix,
-  publicBackupView,
-  resolveBackupSecret,
 } from '../backup'
 
 describe('backup 领域模型', () => {
   test('emptyBackupConfig 默认关闭', () => {
     const c = emptyBackupConfig()
     expect(c.enabled).toBe(false)
-    expect(c.s3).toBeNull()
-    expect(c.intervalMs).toBe(3_600_000)
+    expect(c.locationId).toBeNull()
+    expect(c.prefix).toBe('')
     expect(c.retentionDays).toBe(30)
   })
 
-  test('resolveBackupSecret 保留脱敏与 undefined', () => {
-    expect(resolveBackupSecret(BACKUP_SECRET_MASK, 'real')).toBe('real')
-    expect(resolveBackupSecret(undefined, 'real')).toBe('real')
-    expect(resolveBackupSecret('new-key', 'real')).toBe('new-key')
-    expect(resolveBackupSecret('', 'real')).toBe('')
-  })
-
-  test('publicBackupView 脱敏密钥', () => {
-    const pub = publicBackupView({
-      version: 1,
-      enabled: true,
-      intervalMs: 1000,
-      retentionDays: 7,
-      s3: {
-        bucket: 'b',
-        region: 'r',
-        accessKeyId: 'AKIA',
-        secretAccessKey: 'SECRET',
-      },
-    })
-    expect(pub.s3?.accessKeyId).toBe(BACKUP_SECRET_MASK)
-    expect(pub.s3?.secretAccessKey).toBe(BACKUP_SECRET_MASK)
-  })
-
-  test('mergeBackupConfig 沿用旧密钥', () => {
-    const existing = {
-      version: 1 as const,
-      enabled: true,
-      intervalMs: 3600_000,
-      retentionDays: 30,
-      s3: {
-        bucket: 'old',
-        region: 'us-east-1',
-        accessKeyId: 'OLD_AK',
-        secretAccessKey: 'OLD_SK',
-        prefix: 'nf/',
-      },
-    }
+  test('mergeBackupConfig 归一化前缀、沿用 locationId', () => {
     const merged = mergeBackupConfig(
       {
-        version: 1,
         enabled: true,
-        intervalMs: 7200_000,
+        locationId: 'loc-1',
+        prefix: '/nf/',
         retentionDays: 14,
-        s3: {
-          bucket: 'new',
-          region: 'auto',
-          accessKeyId: BACKUP_SECRET_MASK,
-          secretAccessKey: BACKUP_SECRET_MASK,
-          prefix: 'nf',
-        },
       },
-      existing,
+      emptyBackupConfig(),
     )
-    expect(merged.s3?.bucket).toBe('new')
-    expect(merged.s3?.accessKeyId).toBe('OLD_AK')
-    expect(merged.s3?.secretAccessKey).toBe('OLD_SK')
-    expect(merged.s3?.prefix).toBe('nf/')
-    expect(merged.intervalMs).toBe(7200_000)
+    expect(merged.locationId).toBe('loc-1')
+    expect(merged.prefix).toBe('nf/')
+    expect(merged.retentionDays).toBe(14)
   })
 
-  test('mergeBackupConfig 密钥整体省略（undefined）时沿用旧值', () => {
-    const existing = {
-      version: 1 as const,
-      enabled: true,
-      intervalMs: 3_600_000,
-      retentionDays: 30,
-      s3: {
-        bucket: 'b',
-        region: 'r',
-        accessKeyId: 'REAL_AK',
-        secretAccessKey: 'REAL_SK',
-      },
-    }
-    const merged = mergeBackupConfig(
-      {
-        version: 1,
-        enabled: true,
-        intervalMs: 0,
-        retentionDays: 7,
-        s3: { bucket: 'b', region: 'r' },
-      },
-      existing,
-    )
-    expect(merged.s3?.accessKeyId).toBe('REAL_AK')
-    expect(merged.s3?.secretAccessKey).toBe('REAL_SK')
-    expect(merged.intervalMs).toBe(0)
-  })
-
-  test('backupConfigSchema 允许省略 s3 密钥（intervalMs 0 保留）', () => {
+  test('backupConfigSchema 接受 locationId + prefix', () => {
     const parsed = backupConfigSchema.parse({
       enabled: true,
-      intervalMs: 0,
+      locationId: 'loc-1',
+      prefix: 'p',
       retentionDays: 7,
-      s3: { bucket: 'b', region: 'r', prefix: 'p' },
     })
-    expect(parsed.intervalMs).toBe(0)
-    expect(parsed.s3?.accessKeyId).toBeUndefined()
-    expect(parsed.s3?.secretAccessKey).toBeUndefined()
+    expect(parsed.locationId).toBe('loc-1')
+    expect(parsed.prefix).toBe('p')
   })
 
   test('normalizeBackupPrefix / object keys', () => {

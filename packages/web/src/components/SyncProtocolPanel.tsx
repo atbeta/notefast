@@ -3,11 +3,11 @@ import { RefreshCw, ArrowDownToLine, ArrowUpFromLine, AlertCircle, Cloud } from 
 import { api } from '../hooks/useAPI'
 import { ActionButton, useToast } from './ui'
 import { SettingsCard, StatusBadge, InlineField } from './settings/ui'
-import { SYNC_SECRET_MASK, type SyncProtocolS3Config } from '@notefast/core'
+import LocationSelect from './LocationSelect'
 import { formatIsoDateTime } from '../lib/time'
 
 /**
- * 多端同步面板：双向增量同步（发布/拉取），独立 S3 配置，与「数据库备份」完全解耦。
+ * 多端同步面板：双向增量同步（发布/拉取），引用存储连接 + 独立前缀。
  */
 
 interface SyncProtocolState {
@@ -47,30 +47,17 @@ export default function SyncProtocolPanel() {
   const [status, setStatus] = useState<SyncProtocolStatus>(EMPTY_STATUS)
   const [devices, setDevices] = useState<SyncDevice[]>([])
   const [enabled, setEnabled] = useState(false)
-  const [bucket, setBucket] = useState('')
-  const [region, setRegion] = useState('us-east-1')
-  const [endpoint, setEndpoint] = useState('')
-  const [accessKeyId, setAccessKeyId] = useState('')
-  const [secretAccessKey, setSecretAccessKey] = useState('')
+  const [locationId, setLocationId] = useState('')
   const [prefix, setPrefix] = useState('')
-  const [forcePathStyle, setForcePathStyle] = useState(false)
   const toast = useToast()
 
   const refresh = useCallback(async () => {
     try {
-      const res = await api.get<{ configured: boolean; config: { enabled: boolean; s3: SyncProtocolS3Config | null }; status: SyncProtocolStatus }>('/sync/protocol/config')
+      const res = await api.get<{ configured: boolean; config: { enabled: boolean; locationId: string | null; prefix: string }; status: SyncProtocolStatus }>('/sync/protocol/config')
       setStatus(res.status)
       setEnabled(res.config.enabled)
-      if (res.config.s3) {
-        setBucket(res.config.s3.bucket || '')
-        setRegion(res.config.s3.region || 'us-east-1')
-        setEndpoint(res.config.s3.endpoint || '')
-        // 脱敏占位符 = 已有密钥：不填进输入框（提交留空时后端保留旧值）
-        setAccessKeyId(res.config.s3.accessKeyId === SYNC_SECRET_MASK ? '' : res.config.s3.accessKeyId || '')
-        setSecretAccessKey(res.config.s3.secretAccessKey === SYNC_SECRET_MASK ? '' : res.config.s3.secretAccessKey || '')
-        setPrefix((res.config.s3.prefix ?? '').replace(/\/$/, ''))
-        setForcePathStyle(Boolean(res.config.s3.forcePathStyle))
-      }
+      setLocationId(res.config.locationId ?? '')
+      setPrefix((res.config.prefix ?? '').replace(/\/$/, ''))
       // 设备列表（共享存储注册表；可能因未配置/远端不可达失败，忽略）
       api.get<{ devices: SyncDevice[] }>('/sync/protocol/devices')
         .then((r) => setDevices(r.devices ?? []))
@@ -90,7 +77,7 @@ export default function SyncProtocolPanel() {
       },
       {
         loading: '正在移除设备…',
-        success: '设备已从同步注册表移除（若仍在同步，请更换 S3 凭证才能真正拦截）',
+        success: '设备已从同步注册表移除（若仍在同步，请更换存储凭证才能真正拦截）',
         error: (e) => ({ title: '移除失败', description: e instanceof Error ? e.message : String(e) }),
       },
     ).catch(() => undefined)
@@ -99,22 +86,12 @@ export default function SyncProtocolPanel() {
   const handleSave = async () => {
     await toast.promise(
       async () => {
-        // 填了 bucket 即视为「要配置多端同步」——不受独立开关误伤
-        const hasS3 = Boolean(bucket.trim())
+        // 选了存储连接即视为「要配置多端同步」——不受独立开关误伤
+        const hasLocation = Boolean(locationId)
         await api.put('/sync/protocol/config', {
-          enabled: enabled || hasS3,
-          s3: hasS3
-            ? {
-                bucket,
-                region,
-                endpoint: endpoint || undefined,
-                // 空字符串 = 未填 → undefined（JSON.stringify 省略），后端保留旧值
-                accessKeyId: accessKeyId || undefined,
-                secretAccessKey: secretAccessKey || undefined,
-                prefix,
-                forcePathStyle,
-              }
-            : null,
+          enabled: enabled || hasLocation,
+          locationId: locationId || null,
+          prefix,
         })
         await refresh()
       },
@@ -145,7 +122,7 @@ export default function SyncProtocolPanel() {
     <SettingsCard
       title="多端同步 (S3)"
       icon={<Cloud className="w-4 h-4" strokeWidth={1.75} />}
-      helpTip="在 Web 端与客户端之间共享同一份 S3 数据：本端变更发布到 S3，同时拉取远端变更合并进本地（LWW 按更新时间裁决）。与「数据库备份」相互独立，使用各自的 S3 配置。同步完全自动：任何写入（Web/MCP/导入/AI）都会立即触发发布，并定期心跳拉取远端变更。"
+      helpTip="在 Web 端与客户端之间共享同一份存储：本端变更发布到共享存储，同时拉取远端变更合并进本地（LWW 按更新时间裁决）。复用「存储连接」面板的连接 + 独立前缀。同步完全自动：任何写入（Web/MCP/导入/AI）都会立即触发发布，并定期心跳拉取远端变更。"
       statusBadge={
         <StatusBadge active={status.enabled} label={status.enabled ? '已启用' : '未配置'} />
       }
@@ -161,43 +138,18 @@ export default function SyncProtocolPanel() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
-          <InlineField label="Bucket" value={bucket} onChange={setBucket} mono placeholder="my-notefast-bucket" />
-          <InlineField label="Region" value={region} onChange={setRegion} mono placeholder="us-east-1" />
+          <div>
+            <label className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">存储连接</label>
+            <div className="mt-1.5"><LocationSelect value={locationId} onChange={setLocationId} kind="s3" /></div>
+          </div>
           <InlineField
-            label="Endpoint"
-            description="R2 / MinIO 等兼容协议必填"
-            value={endpoint}
-            onChange={setEndpoint}
+            label="前缀（目录）"
+            description="同步数据存放于此前缀下"
+            value={prefix}
+            onChange={setPrefix}
             mono
-            placeholder="https://xxx.r2.cloudflarestorage.com"
+            placeholder="sync"
           />
-          <InlineField label="Key 前缀" value={prefix} onChange={setPrefix} mono placeholder="sync" />
-          <InlineField
-            label="Access Key ID"
-            value={accessKeyId}
-            onChange={setAccessKeyId}
-            mono
-            placeholder={SYNC_SECRET_MASK}
-          />
-          <InlineField
-            label="Secret Access Key"
-            value={secretAccessKey}
-            onChange={setSecretAccessKey}
-            mono
-            type="password"
-            placeholder={SYNC_SECRET_MASK}
-          />
-        </div>
-
-        <div className="flex items-center justify-between pt-2">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <span className="text-[13px] font-medium text-foreground">Path-style endpoint</span>
-            <span className="text-[11px] text-muted-foreground/60 -ml-1.5">MinIO 必需，AWS / R2 默认关闭</span>
-            <div className="relative inline-flex items-center">
-              <input type="checkbox" className="sr-only peer" checked={forcePathStyle} onChange={(e) => { setForcePathStyle(e.target.checked) }} />
-              <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-            </div>
-          </label>
         </div>
 
         <div className="flex items-center gap-3 pt-4 border-t border-border/40">
