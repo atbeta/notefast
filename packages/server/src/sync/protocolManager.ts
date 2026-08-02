@@ -34,6 +34,7 @@ import {
   readManifest,
   updateManifest,
 } from './protocol'
+import { getChangesAnchor } from '../store/changeFeed'
 
 const STATE_FILE = 'sync-state.json'
 const DEVICE_ID_FILE = 'device.id'
@@ -58,6 +59,8 @@ export interface SyncProtocolStatus {
   lastSuccessAt?: string
   lastError?: string
   state: SyncProtocolState
+  /** 本地待发布变更条数（entity_changes 锚点 - publishedSeq；>0 说明还有未同步的本地改动） */
+  pendingChanges: number
   running: boolean
 }
 
@@ -114,7 +117,17 @@ export function protocolStatus(): SyncProtocolStatus {
     lastSuccessAt: lastSuccessAt ?? undefined,
     lastError: lastError ?? undefined,
     state,
+    pendingChanges: pendingChangeCount(),
     running,
+  }
+}
+
+/** 本地待发布变更条数（change feed 锚点 - 已发布；db 不可用/未初始化时按 0 处理） */
+function pendingChangeCount(): number {
+  try {
+    return Math.max(0, getChangesAnchor(getDb()) - state.publishedSeq)
+  } catch {
+    return 0
   }
 }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, ArrowDownToLine, ArrowUpFromLine, CheckCircle2, AlertCircle, Cloud } from 'lucide-react'
+import { RefreshCw, ArrowDownToLine, ArrowUpFromLine, AlertCircle, Cloud } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { ActionButton, useToast } from './ui'
 import ConfirmDialog from './ConfirmDialog'
@@ -26,6 +26,7 @@ interface SyncProtocolStatus {
   lastSuccessAt?: string
   lastError?: string
   state: SyncProtocolState
+  pendingChanges: number
   running: boolean
 }
 
@@ -39,6 +40,7 @@ const EMPTY_STATUS: SyncProtocolStatus = {
   configured: false,
   enabled: false,
   state: { publishedSeq: 0, consumedSeq: 0, sinceSnapshot: 0 },
+  pendingChanges: 0,
   running: false,
 }
 
@@ -249,30 +251,24 @@ export default function SyncProtocolPanel() {
             <div className="flex items-center gap-2">
               <span className="font-medium text-foreground">状态：</span>
               {status.running ? (
-                <span className="text-amber-500 flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5 animate-spin"/> 同步中</span>
+                <span className="text-amber-500 flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> 同步中</span>
+              ) : status.lastError ? (
+                <span className="text-destructive flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> 同步失败</span>
               ) : (
                 '空闲'
               )}
               <span className="ml-2">上次同步：<span className="font-mono">{lastRunText}</span></span>
-              <span className="ml-2">存储：<span className="font-mono truncate max-w-[240px] inline-block align-bottom">{status.s3Bucket ? `s3://${status.s3Bucket}/${status.s3Prefix ?? ''}sync/` : '未配置'}</span></span>
             </div>
-            <div className="flex items-center gap-3 text-[11px] text-muted-foreground/70">
-              <span>已发布 seq：<span className="font-mono text-foreground/80 tabular-nums">{status.state.publishedSeq}</span></span>
-              <span>已消费 seq：<span className="font-mono text-foreground/80 tabular-nums">{status.state.consumedSeq}</span></span>
-              {status.enabled && (
-                <span className="text-emerald-600/80">自动同步已开启</span>
+            <div className="flex items-center gap-2 text-[12px]">
+              <span>已同步 <span className="font-mono text-foreground/80 tabular-nums">{status.state.publishedSeq}</span> 条变更</span>
+              {status.pendingChanges > 0 && (
+                <span className="text-amber-600/90">· {status.pendingChanges} 条待同步</span>
               )}
             </div>
-            {status.lastSuccessAt && (
-              <div className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                上次成功 {formatIsoDateTime(status.lastSuccessAt)}
-              </div>
-            )}
             {status.lastError && (
-              <div className="text-destructive flex items-center gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5" />
-                上次失败：{status.lastError}
+              <div className="text-destructive flex items-start gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>{status.lastError}</span>
               </div>
             )}
           </div>

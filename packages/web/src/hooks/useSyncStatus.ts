@@ -3,7 +3,7 @@ import { api } from './useAPI'
 
 /**
  * 同步协议状态（GET /sync/protocol）共享轮询 hook。
- * 文档页 SyncStatus 与侧栏 SidebarSyncStatus 共用，避免重复实现轮询。
+ * 全局同步胶囊 GlobalSyncStatus 与设置面板共用，避免重复实现轮询。
  */
 
 export interface SyncStatusData {
@@ -13,6 +13,7 @@ export interface SyncStatusData {
   lastSuccessAt?: string
   lastError?: string
   state?: { publishedSeq: number; consumedSeq: number }
+  pendingChanges?: number
 }
 
 /** 轮询间隔：捕捉去抖触发的同步中状态与完成/失败 */

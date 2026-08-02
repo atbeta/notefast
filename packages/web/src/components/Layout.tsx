@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import CommandPalette from './CommandPalette'
 import AIChatPanel from './AIChatPanel'
+import GlobalSyncStatus from './GlobalSyncStatus'
 import { useTheme } from '../hooks/useTheme'
 
 /** AI 聊天面板开关状态 — 页面（如文档页右栏）可据此避让空间 */
@@ -85,6 +86,7 @@ export default function Layout({ children, contentClassName }: { children: React
 
   return (
     <div className="flex h-screen overflow-hidden bg-background relative w-full">
+      <GlobalSyncStatus />
       {/* 桌面侧边栏 */}
       <div className={`hidden md:block transition-all duration-300 z-20 relative ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
         <Sidebar

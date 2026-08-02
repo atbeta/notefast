@@ -10,7 +10,6 @@ import {
 import { api } from '../hooks/useAPI'
 import { BACKUP_SECRET_MASK, type BackupRuntimeStatus, type BackupRestorePoint } from '@notefast/core'
 import { ActionButton, useToast } from './ui'
-import ConfirmDialog from './ConfirmDialog'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
 import { formatIsoDateTime } from '../lib/time'
 
@@ -41,7 +40,6 @@ export default function BackupPanel() {
   const [forcePathStyle, setForcePathStyle] = useState(false)
   const [retentionDays, setRetentionDays] = useState(30)
   const [points, setPoints] = useState<BackupRestorePoint[]>([])
-  const [showDisableConfirm, setShowDisableConfirm] = useState(false)
   const toast = useToast()
 
   const refresh = useCallback(async () => {
@@ -113,11 +111,6 @@ export default function BackupPanel() {
     ).catch(() => undefined)
   }
 
-  const handleDisable = async () => {
-    await api.del('/backup/config')
-    await refresh()
-  }
-
   const handleTest = async () => {
     await toast.promise(
       async () => {
@@ -158,23 +151,6 @@ export default function BackupPanel() {
       icon={<Database className="w-4 h-4" strokeWidth={1.75} />}
       helpTip="在线生成数据库快照并上传 S3，仅支持手动触发（不自动调度）。快照不含可重建的向量索引（体积大幅缩小），恢复后语义搜索需重建索引。恢复须先停止服务，再通过命令行执行（Web 界面不提供一键恢复，以防止误操作覆盖当前数据）。日常跨端同步请用「多端同步」。"      statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? '已启用' : '未启用'} />}
       defaultExpanded={!status?.configured}
-      dangerZone={
-        status?.configured && (
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-[13px] font-medium text-destructive">禁用数据库备份</div>
-              <div className="text-[12px] text-destructive/70 mt-0.5">禁用后将停止自动备份，已有恢复点不会被删除。</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowDisableConfirm(true)}
-              className="px-3 py-1.5 text-[12.5px] font-medium rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
-            >
-              禁用备份
-            </button>
-          </div>
-        )
-      }
     >
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -310,19 +286,6 @@ export default function BackupPanel() {
           </div>
         )}
       </div>
-
-      <ConfirmDialog
-        open={showDisableConfirm}
-        title="禁用数据库备份"
-        message="禁用后将停止自动备份（已有恢复点不会删除）。继续？"
-        confirmLabel="禁用"
-        destructive
-        onCancel={() => setShowDisableConfirm(false)}
-        onConfirm={() => {
-          setShowDisableConfirm(false)
-          void handleDisable()
-        }}
-      />
     </SettingsCard>
   )
 }

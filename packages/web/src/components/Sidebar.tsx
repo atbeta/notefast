@@ -30,7 +30,6 @@ import { useScrollFade } from '../hooks/useScrollFade'
 import { DRAFT_CHANGED_EVENT, hasDraftSync } from '../hooks/useEditorDraft'
 import type { DocSummary } from '@notefast/core'
 import DocActionsMenu from './DocActionsMenu'
-import SidebarSyncStatus from './SidebarSyncStatus'
 import { Tooltip, ShortcutKeys, shortcutLabel } from './ui'
 
 interface SidebarProps {
@@ -514,7 +513,6 @@ export default function Sidebar({
       <div className="border-t border-sidebar-border shrink-0">
         <div className="px-3 pt-2 pb-2.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <SidebarSyncStatus />
             <Tooltip label="设置">
               <Link
                 to="/settings"

@@ -25,7 +25,6 @@ import MarkdownEditor from '../components/MarkdownEditor'
 import TagEditor from '../components/TagEditor'
 import ConfirmDialog from '../components/ConfirmDialog'
 import EntityPanel from '../components/EntityPanel'
-import SyncStatus from '../components/SyncStatus'
 import PageHeader from '../components/PageHeader'
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
 import { useAiChatOpen } from '../components/Layout'
@@ -719,8 +718,6 @@ export default function DocPage() {
                     更新于 {updatedAt}
                   </>
                 )}
-                <span className="mx-2 text-border-strong">·</span>
-                <SyncStatus />
               </div>
             )}
             {isEditing && <div className="mb-2" />}
