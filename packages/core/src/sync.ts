@@ -41,12 +41,10 @@ export interface WebDavAdapterConfig {
 
 export type SyncAdapterConfig = LocalFsAdapterConfig | S3AdapterConfig | WebDavAdapterConfig
 
-/** 持久化到磁盘的 sync 配置 */
+/** 持久化到磁盘的 sync 配置（归档仅手动触发，无自动间隔） */
 export interface SyncPersistedConfig {
   version: 1
   active: SyncAdapterConfig | null
-  /** 自动同步间隔（毫秒）；0 或 undefined 表示关闭 */
-  autoSyncIntervalMs?: number
 }
 
 export interface SyncInfo {
@@ -114,7 +112,6 @@ export function mergeSyncConfig(
   return {
     version: 1,
     active: incoming.active,
-    autoSyncIntervalMs: incoming.autoSyncIntervalMs,
   }
 }
 

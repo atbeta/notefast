@@ -17,6 +17,8 @@ export interface ArchiveManifest {
     /** S3 key 或 WebDAV 相对路径 */
     key: string
   }>
+  /** 归档引用的 media 相对键（media/<sha><ext>）；供陈旧 media 清理 */
+  media?: string[]
 }
 
 export function sanitizeFilename(name: string): string {
@@ -40,6 +42,7 @@ export function archiveFilename(title: string, docId: string): string {
 export function buildArchiveManifest(opts: {
   adapter: string
   files: ArchiveManifest['files']
+  media?: string[]
 }): ArchiveManifest {
   return {
     app: 'notefast',
@@ -48,6 +51,7 @@ export function buildArchiveManifest(opts: {
     updatedAt: new Date().toISOString(),
     adapter: opts.adapter,
     files: opts.files,
+    media: opts.media?.length ? opts.media : undefined,
   }
 }
 
@@ -74,4 +78,14 @@ export function staleArchiveKeys(
     if (!keep.has(f.key)) stale.push(f.key)
   }
   return stale
+}
+
+/** 计算应删除的陈旧 media 相对键：上一份有、当前文档不再引用 */
+export function staleArchiveMedia(
+  previous: ArchiveManifest | null,
+  current: ArchiveManifest,
+): string[] {
+  if (!previous?.media) return []
+  const keep = new Set(current.media ?? [])
+  return previous.media.filter((key) => !keep.has(key))
 }

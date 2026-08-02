@@ -36,7 +36,6 @@ const EMPTY_CONNECTION = { kind: 'connection' as const, locationId: '', prefix: 
 export default function SyncPanel() {
   const [status, setStatus] = useState<SyncRuntimeStatus | null>(null)
   const [form, setForm] = useState<FormState>({ kind: 'none' })
-  const [interval, setInterval] = useState(3600)
   const [info, setInfo] = useState<{ remoteDocCount?: number; extra: Record<string, unknown> } | null>(null)
   const [showDisableConfirm, setShowDisableConfirm] = useState(false)
   const toast = useToast()
@@ -58,9 +57,6 @@ export default function SyncPanel() {
         })
       } else {
         setForm({ kind: 'none' })
-      }
-      if (typeof res.status.autoSyncIntervalMs === 'number') {
-        setInterval(Math.round(res.status.autoSyncIntervalMs / 1000))
       }
     } catch (e) {
       toast.error({ title: '加载归档配置失败', description: e instanceof Error ? e.message : String(e) })
@@ -85,7 +81,6 @@ export default function SyncPanel() {
         }
         await api.put('/sync/config', {
           active,
-          autoSyncIntervalMs: interval * 1000,
         })
         await refresh()
       },
@@ -134,7 +129,7 @@ export default function SyncPanel() {
     <SettingsCard
       title="Markdown 归档"
       icon={<SettingsIcon className="w-4 h-4" strokeWidth={1.75} />}
-      helpTip="将文档导出为 Markdown 推送到远端（本地文件 / S3 / WebDAV）。这是内容归档，不含内部 ID、引用关系、标签与向量数据。同名文档使用带 ID 的文件名确保不冲突，删除文档时会自动清理远端对应的旧文件。"
+      helpTip="Markdown 归档 = 便捷迁移 / 便携副本：把文档连同引用的图片一起导出为 Markdown（.md + media/，图片引用改写为相对路径，拿到任何地方都能渲染）。仅手动触发，不含内部 ID、引用关系、标签与向量数据。同名文档用带 ID 的文件名避免覆盖，删除文档时会清理远端对应文件。"
       statusBadge={<StatusBadge active={!!status?.configured} label={status?.configured ? `已启用 · ${status.adapterName === 'localfs' ? '本地目录' : status.adapterName === 'webdav' ? 'WebDAV' : 'S3 连接'}` : '未启用'} />}
       defaultExpanded={!status?.configured}
     >
@@ -219,16 +214,9 @@ export default function SyncPanel() {
           )}
 
           {form.kind !== 'none' && (
-            <div className="pt-2">
-              <InlineField
-                label="自动同步间隔"
-                description="单位：秒，设为 0 表示仅手动同步"
-                value={String(interval)}
-                type="number"
-                onChange={(v) => setInterval(parseInt(v, 10) || 0)}
-                mono
-              />
-            </div>
+            <p className="text-[11px] text-muted-foreground/60 pt-1">
+              归档仅手动触发（界面「立即同步」或 API），不会自动推送。
+            </p>
           )}
 
           {form.kind !== 'none' && (

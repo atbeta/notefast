@@ -54,7 +54,6 @@ const webdavSchema = z.object({
 
 const configSchema = z.object({
   active: z.union([localFsSchema, s3Schema, webdavSchema]).nullable(),
-  autoSyncIntervalMs: z.number().int().min(0).max(86_400_000).optional(),
 })
 
 // ───────────────────── 兼容旧版：一次性导出 ─────────────────────
@@ -88,7 +87,6 @@ sync.put('/config', zValidator('json', configSchema), async (c) => {
   const next: SyncPersistedConfig = {
     version: 1,
     active,
-    autoSyncIntervalMs: body.autoSyncIntervalMs,
   }
   const status = await applySyncConfig(next)
   return c.json({ ok: true, status })
@@ -98,7 +96,6 @@ sync.delete('/config', async (c) => {
   const next: SyncPersistedConfig = {
     version: 1,
     active: null,
-    autoSyncIntervalMs: 0,
   }
   const status = await applySyncConfig(next)
   return c.json({ ok: true, status })

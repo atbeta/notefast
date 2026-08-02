@@ -8,6 +8,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3'
@@ -22,14 +23,17 @@ import {
 } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks, listDocRows } from '../store/blocks'
+import { readAssetBytes } from '../assets/store'
 import {
   ARCHIVE_MANIFEST_NAME,
   archiveFilename,
   buildArchiveManifest,
   isArchiveManifest,
   staleArchiveKeys,
+  staleArchiveMedia,
   type ArchiveManifest,
 } from './archive'
+import { collectArchiveMediaRefs, rewriteAssetRefs } from './archiveMedia'
 
 export interface S3ClientLike {
   send(command: unknown): Promise<unknown>
@@ -131,41 +135,73 @@ export function createS3Adapter(
       const files: ArchiveManifest['files'] = []
       const previous = await loadPreviousManifest(keyPrefix)
 
+      // 第一遍：构建每篇 markdown + 收集 media 引用（多文档共享内容寻址，去重）
+      const pending: Array<{ docId: string; key: string; filename: string; title: string; markdown: string }> = []
+      const mediaRefs = new Map<string, string>() // sha → relativeKey（media/<sha><ext>）
       for (const doc of docs) {
         try {
           const tree = buildBlockTree(fetchDocBlocks(db, doc.id))
           const markdown = blocksToMarkdown(tree)
+          for (const [sha, rel] of collectArchiveMediaRefs(markdown)) mediaRefs.set(sha, rel)
           const filename = archiveFilename(doc.content || 'untitled', doc.id)
-          const key = `${keyPrefix}${filename}`
-          await client.send(
-            new PutObjectCommand({
-              Bucket: bucket,
-              Key: key,
-              Body: markdown,
-              ContentType: 'text/markdown; charset=utf-8',
-            }),
-          )
-          files.push({
-            docId: doc.id,
-            title: doc.content || 'untitled',
-            filename,
-            key,
-          })
-          result.pushed++
+          pending.push({ docId: doc.id, key: `${keyPrefix}${filename}`, filename, title: doc.content || 'untitled', markdown })
         } catch (e) {
           result.errors.push(`${doc.id}: ${e instanceof Error ? e.message : String(e)}`)
         }
       }
 
-      // 全量推送时才清理陈旧文件（按文档过滤时不删）
+      // 上送缺失的 media（内容寻址，仅补差）
+      if (mediaRefs.size > 0) {
+        try {
+          const existing = new Set(await listObjects(client, bucket, `${keyPrefix}media/`))
+          for (const [sha, rel] of mediaRefs) {
+            const key = `${keyPrefix}${rel}`
+            if (existing.has(key)) continue
+            const bytes = readAssetBytes(sha)
+            if (!bytes) continue
+            await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes }))
+          }
+        } catch (e) {
+          result.errors.push(`media: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+
+      // 重写 asset: 引用为相对路径后上传文档
+      for (const p of pending) {
+        try {
+          const markdown = rewriteAssetRefs(p.markdown, mediaRefs)
+          await client.send(
+            new PutObjectCommand({
+              Bucket: bucket,
+              Key: p.key,
+              Body: markdown,
+              ContentType: 'text/markdown; charset=utf-8',
+            }),
+          )
+          files.push({ docId: p.docId, title: p.title, filename: p.filename, key: p.key })
+          result.pushed++
+        } catch (e) {
+          result.errors.push(`${p.filename}: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+
+      // 全量推送时才清理陈旧文件与 media（按文档过滤时不删）
       if (!docIds || docIds.length === 0) {
-        const manifest = buildArchiveManifest({ adapter: 's3', files })
+        const manifest = buildArchiveManifest({ adapter: 's3', files, media: [...mediaRefs.values()] })
         const stale = staleArchiveKeys(previous, manifest)
         for (const key of stale) {
           try {
             await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))
           } catch (e) {
             result.errors.push(`delete ${key}: ${e instanceof Error ? e.message : String(e)}`)
+          }
+        }
+        const staleMedia = staleArchiveMedia(previous, manifest)
+        for (const rel of staleMedia) {
+          try {
+            await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: `${keyPrefix}${rel}` }))
+          } catch (e) {
+            result.errors.push(`delete ${rel}: ${e instanceof Error ? e.message : String(e)}`)
           }
         }
         try {
@@ -184,5 +220,22 @@ export function createS3Adapter(
 
       return result
     },
+  }
+
+  async function listObjects(
+    client: S3ClientLike,
+    bucket: string,
+    prefix: string,
+  ): Promise<string[]> {
+    const keys: string[] = []
+    let token: string | undefined
+    do {
+      const res = (await client.send(
+        new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: token }),
+      )) as { Contents?: Array<{ Key?: string }>; IsTruncated?: boolean; NextContinuationToken?: string }
+      for (const obj of res.Contents ?? []) if (obj.Key) keys.push(obj.Key)
+      token = res.IsTruncated ? res.NextContinuationToken : undefined
+    } while (token)
+    return keys
   }
 }

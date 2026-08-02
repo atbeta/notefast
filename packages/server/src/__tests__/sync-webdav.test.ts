@@ -25,11 +25,11 @@ let locationId: string
 
 function createStubClient(opts: { failUrls?: RegExp[]; failMethods?: string[] } = {}): {
   client: WebDavClientLike
-  requests: Array<{ method: string; url: string; body?: string }>
+  requests: Array<{ method: string; url: string; body?: string | Uint8Array }>
   files: Map<string, string>
   set propfindResponse(s: string)
 } {
-  const requests: Array<{ method: string; url: string; body?: string }> = []
+  const requests: Array<{ method: string; url: string; body?: string | Uint8Array }> = []
   const files = new Map<string, string>()
   let propfindBody = ''
   const client: WebDavClientLike = {
@@ -56,9 +56,10 @@ function createStubClient(opts: { failUrls?: RegExp[]; failMethods?: string[] } 
       if (method === 'PUT') {
         const path = decodeURIComponent(new URL(url).pathname)
         const name = path.split('/').pop() || path
-        files.set(name, body || '')
+        const text = typeof body === 'string' ? body : Buffer.from(body || []).toString()
+        files.set(name, text)
         // also store by relative key suffix for GET
-        if (body) files.set(path.replace(/^\/+/, ''), body)
+        if (body) files.set(path.replace(/^\/+/, ''), text)
         return { status: 201, body: '' }
       }
       if (method === 'DELETE') return { status: 204, body: '' }

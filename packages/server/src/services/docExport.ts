@@ -7,21 +7,8 @@ import { extractAssetRefs, readAsset, readAssetBytes } from '../assets/store'
 import { getDb } from '../db'
 import { fetchDocBlocks, getDocById } from '../store/blocks'
 import { sanitizeFilename } from '../sync/archive'
+import { extForMime } from '../sync/archiveMedia'
 import { buildZipStore } from '../lib/zipStore'
-
-const MIME_EXT: Record<string, string> = {
-  'image/png': '.png',
-  'image/jpeg': '.jpg',
-  'image/jpg': '.jpg',
-  'image/gif': '.gif',
-  'image/webp': '.webp',
-  'image/svg+xml': '.svg',
-  'image/avif': '.avif',
-}
-
-function extForMime(mime: string): string {
-  return MIME_EXT[mime.toLowerCase()] || '.bin'
-}
 
 /** Content-Disposition：ASCII fallback + UTF-8 filename* */
 export function contentDispositionAttachment(filename: string): string {

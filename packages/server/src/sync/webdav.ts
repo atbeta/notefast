@@ -13,20 +13,23 @@ import {
 } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks, listDocRows } from '../store/blocks'
+import { readAssetBytes } from '../assets/store'
 import {
   ARCHIVE_MANIFEST_NAME,
   archiveFilename,
   buildArchiveManifest,
   isArchiveManifest,
   staleArchiveKeys,
+  staleArchiveMedia,
   type ArchiveManifest,
 } from './archive'
+import { collectArchiveMediaRefs, rewriteAssetRefs } from './archiveMedia'
 
 export interface WebDavClientLike {
   send(input: {
     method: string
     url: string
-    body?: string
+    body?: string | Uint8Array
     headers?: Record<string, string>
   }): Promise<{ status: number; body: string; contentLength?: number }>
 }
@@ -73,7 +76,7 @@ export function createDefaultClient(
       const res = await fetchImpl(url, {
         method,
         headers: mergedHeaders,
-        body,
+        body: body as BodyInit,
       })
       const text = await res.text().catch(() => '')
       return {
@@ -194,44 +197,74 @@ export function createWebDavAdapter(
       const previous =
         !docIds || docIds.length === 0 ? await loadPreviousManifest(keyPrefix) : null
 
+      // 第一遍：构建每篇 markdown + 收集 media 引用（多文档共享内容寻址，去重）
+      const pending: Array<{ docId: string; key: string; filename: string; title: string; markdown: string }> = []
+      const mediaRefs = new Map<string, string>() // sha → relativeKey（media/<sha><ext>）
       for (const doc of docs) {
         try {
           const tree = buildBlockTree(fetchDocBlocks(db, doc.id))
           const markdown = blocksToMarkdown(tree)
+          for (const [sha, rel] of collectArchiveMediaRefs(markdown)) mediaRefs.set(sha, rel)
           const filename = archiveFilename(doc.content || 'untitled', doc.id)
-          const key = `${keyPrefix}${filename}`
-          const fullUrl = joinUrl(base, rootPath, key)
-
-          const ok = await ensureCollections(client, base, rootPath, keyPrefix)
-          if (!ok) {
-            result.errors.push(`${doc.id}: MKCOL 失败`)
-            continue
-          }
-
-          const put = await client.send({
-            method: 'PUT',
-            url: fullUrl,
-            body: markdown,
-            headers: { 'Content-Type': 'text/markdown; charset=utf-8' },
-          })
-          if (put.status >= 200 && put.status < 300) {
-            files.push({
-              docId: doc.id,
-              title: doc.content || 'untitled',
-              filename,
-              key,
-            })
-            result.pushed++
-          } else {
-            result.errors.push(`${doc.id}: PUT ${put.status} ${put.body.slice(0, 80)}`)
-          }
+          pending.push({ docId: doc.id, key: `${keyPrefix}${filename}`, filename, title: doc.content || 'untitled', markdown })
         } catch (e) {
           result.errors.push(`${doc.id}: ${e instanceof Error ? e.message : String(e)}`)
         }
       }
 
+      // 上送缺失的 media（内容寻址，仅补差）
+      if (mediaRefs.size > 0) {
+        try {
+          await ensureCollections(client, base, rootPath, `${keyPrefix}media/`)
+          const existing = new Set(await listMediaKeys(client, base, rootPath, `${keyPrefix}media/`))
+          for (const [sha, rel] of mediaRefs) {
+            const key = `${keyPrefix}${rel}`
+            if (existing.has(key)) continue
+            const bytes = readAssetBytes(sha)
+            if (!bytes) continue
+            const put = await client.send({
+              method: 'PUT',
+              url: joinUrl(base, rootPath, key),
+              body: bytes,
+              headers: { 'Content-Type': 'application/octet-stream' },
+            })
+            if (put.status < 200 || put.status >= 300) {
+              result.errors.push(`media ${sha}: PUT ${put.status}`)
+            }
+          }
+        } catch (e) {
+          result.errors.push(`media: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+
+      // 重写 asset: 引用为相对路径后上传文档
+      for (const p of pending) {
+        try {
+          const markdown = rewriteAssetRefs(p.markdown, mediaRefs)
+          const ok = await ensureCollections(client, base, rootPath, keyPrefix)
+          if (!ok) {
+            result.errors.push(`${p.docId}: MKCOL 失败`)
+            continue
+          }
+          const put = await client.send({
+            method: 'PUT',
+            url: joinUrl(base, rootPath, p.key),
+            body: markdown,
+            headers: { 'Content-Type': 'text/markdown; charset=utf-8' },
+          })
+          if (put.status >= 200 && put.status < 300) {
+            files.push({ docId: p.docId, title: p.title, filename: p.filename, key: p.key })
+            result.pushed++
+          } else {
+            result.errors.push(`${p.docId}: PUT ${put.status} ${put.body.slice(0, 80)}`)
+          }
+        } catch (e) {
+          result.errors.push(`${p.docId}: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+
       if (!docIds || docIds.length === 0) {
-        const manifest = buildArchiveManifest({ adapter: 'webdav', files })
+        const manifest = buildArchiveManifest({ adapter: 'webdav', files, media: [...mediaRefs.values()] })
         const stale = staleArchiveKeys(previous, manifest)
         for (const key of stale) {
           try {
@@ -244,6 +277,20 @@ export function createWebDavAdapter(
             }
           } catch (e) {
             result.errors.push(`delete ${key}: ${e instanceof Error ? e.message : String(e)}`)
+          }
+        }
+        const staleMedia = staleArchiveMedia(previous, manifest)
+        for (const rel of staleMedia) {
+          try {
+            const del = await client.send({
+              method: 'DELETE',
+              url: joinUrl(base, rootPath, `${keyPrefix}${rel}`),
+            })
+            if (del.status >= 400 && del.status !== 404) {
+              result.errors.push(`delete ${rel}: ${del.status}`)
+            }
+          } catch (e) {
+            result.errors.push(`delete ${rel}: ${e instanceof Error ? e.message : String(e)}`)
           }
         }
         const mUrl = joinUrl(base, rootPath, `${keyPrefix}${ARCHIVE_MANIFEST_NAME}`)
@@ -260,5 +307,31 @@ export function createWebDavAdapter(
 
       return result
     },
+  }
+
+  /** 列出指定目录下的文件相对键（PROPFIND Depth:1 解析 href） */
+  async function listMediaKeys(
+    client: WebDavClientLike,
+    base: string,
+    rootPath: string,
+    dirPrefix: string,
+  ): Promise<string[]> {
+    const propfindBody =
+      '<?xml version="1.0" encoding="utf-8"?>' +
+      '<d:propfind xmlns:d="DAV:"><d:allprop/></d:propfind>'
+    const res = await client.send({
+      method: 'PROPFIND',
+      url: joinUrl(base, rootPath, `/${dirPrefix.replace(/\/+$/, '')}/`),
+      body: propfindBody,
+      headers: { 'Content-Type': 'application/xml; charset=utf-8', Depth: '1' },
+    })
+    if (res.status !== 207 && res.status !== 200) return []
+    const keys: string[] = []
+    for (const m of res.body.match(/<[^>]*:?href[^>]*>([^<]+)<\/[^>]*:?href>/gi) || []) {
+      const href = m.replace(/<[^>]*:?href[^>]*>/, '').replace(/<\/[^>]*:?href>/, '').trim()
+      const decoded = decodeURIComponent(href.split('/').pop() ?? '')
+      if (decoded) keys.push(`${dirPrefix}${decoded}`)
+    }
+    return keys
   }
 }

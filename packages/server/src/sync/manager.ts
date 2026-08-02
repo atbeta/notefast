@@ -9,7 +9,7 @@
  * - 状态可序列化：syncStatus() 返回 runtime 视图
  *
  * 自动同步：
- * - cfg.autoSyncIntervalMs > 0 时启动定时器，每隔 N ms 跑一次
+ * - 仅手动触发（界面「立即同步」/ API），无自动定时器
  * - 失败不影响下一次；lastError / lastSuccessAt 暴露
  */
 
@@ -41,7 +41,6 @@ export interface SyncRuntimeStatus {
   lastSuccessAt?: string
   lastError?: string
   lastResult?: SyncResult | null
-  autoSyncIntervalMs?: number
 }
 
 let cfg: SyncPersistedConfig = emptySyncConfig()
@@ -51,7 +50,6 @@ let lastResult: SyncResult | null = null
 let lastRunAt: string | null = null
 let lastSuccessAt: string | null = null
 let lastError: string | null = null
-let autoSyncTimer: ReturnType<typeof setInterval> | null = null
 let running = false
 
 /** 启动期初始化 */
@@ -84,7 +82,6 @@ export function syncStatus(): SyncRuntimeStatus {
     lastSuccessAt: lastSuccessAt ?? undefined,
     lastError: lastError ?? undefined,
     lastResult,
-    autoSyncIntervalMs: cfg.autoSyncIntervalMs,
   }
 }
 
@@ -155,11 +152,9 @@ function loadOrSeed(env: Record<string, string | undefined>): SyncPersistedConfi
 function seedFromEnv(env: Record<string, string | undefined>): SyncPersistedConfig | null {
   const dir = (env.SYNC_LOCAL_DIR || env.AUTO_EXPORT_DIR || '').trim()
   if (dir) {
-    const interval = parseInt(env.SYNC_AUTO_INTERVAL_MS || '3600000', 10)
     return {
       version: 1,
       active: { kind: 'localfs', dir, enabled: true },
-      autoSyncIntervalMs: Number.isFinite(interval) && interval >= 0 ? interval : 3600_000,
     }
   }
   return null
@@ -210,10 +205,6 @@ function resolveLocation(id: string): StorageLocation | undefined {
 }
 
 function rebuild(): void {
-  if (autoSyncTimer) {
-    clearInterval(autoSyncTimer)
-    autoSyncTimer = null
-  }
   activeAdapter = null
   lastError = null
   try {
@@ -226,25 +217,10 @@ function rebuild(): void {
   if (activeAdapter) {
     console.log(`🔄 Sync adapter: ${activeAdapter.name}`)
   }
-  if (cfg.autoSyncIntervalMs && cfg.autoSyncIntervalMs > 0 && activeAdapter) {
-    autoSyncTimer = setInterval(() => {
-      // 统一走 syncPush，确保 lastRunAt / lastError / lastResult 更新
-      syncPush().catch((err) => {
-        console.warn('[sync] auto push failed:', err instanceof Error ? err.message : err)
-      })
-    }, cfg.autoSyncIntervalMs)
-    if (!process.env.SYNC_QUIET) {
-      console.log(`🔄 Sync auto interval: ${cfg.autoSyncIntervalMs}ms`)
-    }
-  }
 }
 
 // 测试钩子：清空全部状态
 export function _resetForTests(): void {
-  if (autoSyncTimer) {
-    clearInterval(autoSyncTimer)
-    autoSyncTimer = null
-  }
   cfg = emptySyncConfig()
   dataDir = ''
   activeAdapter = null
