@@ -469,76 +469,28 @@ export class AiRuntime {
     const url = joinUrl(p.baseUrl, '/chat/completions')
     const headers = buildHeaders(p.apiKey, p.extraHeaders)
     const model = options.model || p.chatModel.trim()
-    const toolAcc = new Map<number, { id: string; name: string; arguments: string }>()
+    const toolAcc: ToolAcc = new Map()
     try {
       const sse = streamSse(
         this.fetchImpl,
         url,
         headers,
-        {
-          model,
-          messages,
-          stream: true,
-          temperature: options.temperature ?? 0.3,
-          max_tokens: options.maxTokens ?? 2000,
-          ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
-          ...(options.tools && options.tools.length > 0 ? { tools: options.tools } : {}),
-        },
+        buildStreamBody(model, messages, options),
         { timeoutMs: p.timeoutMs, errorLabel: 'LLM stream' },
       )
-      const finish = (): StreamChatChunk => {
-        this.usage.chatCalls++
-        this.usage.lastSuccessAt = new Date().toISOString()
-        this.setError('chat', undefined)
-        const tool_calls = [...toolAcc.entries()]
-          .sort((a, b) => a[0] - b[0])
-          .map(([, tc]) => ({
-            id: tc.id,
-            name: tc.name,
-            args: safeJsonParse(tc.arguments),
-          }))
-          .filter((tc) => tc.name)
-        return { content: '', done: true, ...(tool_calls.length > 0 ? { tool_calls } : {}) }
-      }
       for await (const payload of sse) {
-        try {
-          const json = JSON.parse(payload) as {
-            choices?: Array<{
-              delta?: {
-                content?: string | null
-                reasoning_content?: string | null
-                reasoning?: string | null
-                thinking?: string | null
-                tool_calls?: Array<{
-                  index?: number
-                  id?: string
-                  type?: string
-                  function?: { name?: string; arguments?: string }
-                }>
-              }
-            }>
-          }
-          const delta = json.choices?.[0]?.delta
-          if (!delta) continue
-          const reasoning =
-            delta.reasoning_content || delta.reasoning || delta.thinking || undefined
-          if (reasoning) yield { reasoning }
-          if (delta.content) yield { content: delta.content }
-          if (delta.tool_calls) {
-            for (const tc of delta.tool_calls) {
-              const index = tc.index ?? 0
-              const prev = toolAcc.get(index) ?? { id: '', name: '', arguments: '' }
-              if (tc.id) prev.id = tc.id
-              if (tc.function?.name) prev.name = tc.function.name
-              if (tc.function?.arguments) prev.arguments += tc.function.arguments
-              toolAcc.set(index, prev)
-            }
-          }
-        } catch {
-          // 忽略无法解析的行（OpenAI 偶尔会发 keep-alive 注释）
-        }
+        const delta = parseSseDelta(payload)
+        if (!delta) continue
+        if (delta.reasoning) yield { reasoning: delta.reasoning }
+        if (delta.content) yield { content: delta.content }
+        if (delta.tool_calls) accumulateToolDelta(toolAcc, delta.tool_calls)
       }
-      yield finish()
+      // 流正常结束：记一次成功 + 产出 final chunk
+      this.usage.chatCalls++
+      this.usage.lastSuccessAt = new Date().toISOString()
+      this.setError('chat', undefined)
+      const tool_calls = buildFinalToolCalls(toolAcc)
+      yield { content: '', done: true, ...(tool_calls.length > 0 ? { tool_calls } : {}) }
     } catch (e) {
       this.usage.chatErrors++
       this.setError('chat', e instanceof Error ? e.message : String(e))
@@ -722,6 +674,96 @@ function safeJsonParse(s: string): Record<string, unknown> {
   } catch {
     return {}
   }
+}
+
+// ───────────────────── Streaming helpers（streamCompletions 拆解）─────────────────────
+
+/** OpenAI 流式响应中的单次 delta 结构 */
+interface OpenAIStreamDelta {
+  content?: string | null
+  reasoning_content?: string | null
+  reasoning?: string | null
+  thinking?: string | null
+  tool_calls?: Array<{
+    index?: number
+    id?: string
+    type?: string
+    function?: { name?: string; arguments?: string }
+  }>
+}
+
+/** 解析后的 delta（仅保留有内容的字段，方便下游 if 检查） */
+interface ParsedDelta {
+  content?: string
+  reasoning?: string
+  tool_calls?: NonNullable<OpenAIStreamDelta['tool_calls']>
+}
+
+/** tool_calls 累加器：按 index 拼 id/name/arguments 增量 */
+type ToolAcc = Map<number, { id: string; name: string; arguments: string }>
+
+/** 构造流式 chat/completions 请求体 */
+function buildStreamBody(
+  model: string,
+  messages: ChatMessage[],
+  options: {
+    temperature?: number
+    maxTokens?: number
+    responseFormat?: ResponseFormat
+    tools?: ToolDefinition[]
+  },
+): Record<string, unknown> {
+  return {
+    model,
+    messages,
+    stream: true,
+    temperature: options.temperature ?? 0.3,
+    max_tokens: options.maxTokens ?? 2000,
+    ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
+    ...(options.tools && options.tools.length > 0 ? { tools: options.tools } : {}),
+  }
+}
+
+/** 解析单条 SSE payload → 简化 delta；解析失败返回 null（OpenAI 偶尔发 keep-alive 注释） */
+function parseSseDelta(payload: string): ParsedDelta | null {
+  let json: { choices?: Array<{ delta?: OpenAIStreamDelta }> }
+  try {
+    json = JSON.parse(payload)
+  } catch {
+    return null
+  }
+  const delta = json.choices?.[0]?.delta
+  if (!delta) return null
+  const reasoning = delta.reasoning_content || delta.reasoning || delta.thinking || undefined
+  return {
+    ...(reasoning ? { reasoning } : {}),
+    ...(delta.content ? { content: delta.content } : {}),
+    ...(delta.tool_calls ? { tool_calls: delta.tool_calls } : {}),
+  }
+}
+
+/** 把单次 delta 的 tool_calls 增量合并进累加器（OpenAI 流式分段协议） */
+function accumulateToolDelta(toolAcc: ToolAcc, deltas: NonNullable<OpenAIStreamDelta['tool_calls']>): void {
+  for (const tc of deltas) {
+    const index = tc.index ?? 0
+    const prev = toolAcc.get(index) ?? { id: '', name: '', arguments: '' }
+    if (tc.id) prev.id = tc.id
+    if (tc.function?.name) prev.name = tc.function.name
+    if (tc.function?.arguments) prev.arguments += tc.function.arguments
+    toolAcc.set(index, prev)
+  }
+}
+
+/** 流结束时把累加器还原成 ToolCall[]（按 index 排序 + 解析 args + 丢弃空名字） */
+function buildFinalToolCalls(toolAcc: ToolAcc): Array<{ id: string; name: string; args: Record<string, unknown> }> {
+  return [...toolAcc.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, tc]) => ({
+      id: tc.id,
+      name: tc.name,
+      args: safeJsonParse(tc.arguments),
+    }))
+    .filter((tc) => tc.name)
 }
 
 /** 用于日志的 provider 简短标签（host 或 label） */
