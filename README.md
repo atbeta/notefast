@@ -123,6 +123,17 @@ Available tools: `search`, `get_doc`, `get_block`, `create_doc`, `create_block`,
 | `AI_API_KEY` | LLM API key |
 | `EMBEDDING_PROVIDER` | Embedding provider preset ID |
 | `EMBEDDING_API_KEY` | Embedding API key |
+| `CORS_ORIGINS` | Comma-separated allowed origins for the Web UI (default `http://localhost:5173`); **must set for production** |
+
+### ⚠️ Production Deployment
+
+Before exposing NoteFast publicly (not just `127.0.0.1`), set:
+
+- `AUTH_PASSWORD` — required for Web UI login
+- `API_TOKEN` (or split `READ_TOKEN` + `WRITE_TOKEN`) — required for API / MCP access
+- `CORS_ORIGINS` — comma-separated origin allowlist; the default `http://localhost:5173` is **insecure** for production
+
+Auth-mode behavior: if **any** auth variable is set, the server runs in authenticated mode and rejects unauthenticated requests. If **none** are set, it runs in unauthenticated dev mode (every request treated as admin) and prints a startup warning to stderr.
 
 ## Quality
 
