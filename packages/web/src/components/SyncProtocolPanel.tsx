@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw, ArrowDownToLine, ArrowUpFromLine, AlertCircle, Cloud } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { ActionButton, useToast } from './ui'
-import ConfirmDialog from './ConfirmDialog'
 import { SettingsCard, StatusBadge, InlineField } from './settings/ui'
 import { SYNC_SECRET_MASK, type SyncProtocolS3Config } from '@notefast/core'
 import { formatIsoDateTime } from '../lib/time'
@@ -55,7 +54,6 @@ export default function SyncProtocolPanel() {
   const [secretAccessKey, setSecretAccessKey] = useState('')
   const [prefix, setPrefix] = useState('')
   const [forcePathStyle, setForcePathStyle] = useState(false)
-  const [showDisableConfirm, setShowDisableConfirm] = useState(false)
   const toast = useToast()
 
   const refresh = useCallback(async () => {
@@ -128,11 +126,6 @@ export default function SyncProtocolPanel() {
     ).catch(() => undefined)
   }
 
-  const handleDisable = async () => {
-    await api.del('/sync/protocol/config')
-    await refresh()
-  }
-
   const doPull = async () => {
     const res = await api.post<{ mode?: string; applied?: number; mediaRestored?: number }>('/sync/protocol/pull', {})
     const detail = `模式 ${res.mode === 'full' ? '全量恢复' : '增量合并'}${(res.applied ?? 0) > 0 ? `，合并 ${res.applied} 条` : ''}${(res.mediaRestored ?? 0) > 0 ? `，拉回 ${res.mediaRestored} 张图` : ''}`
@@ -157,23 +150,6 @@ export default function SyncProtocolPanel() {
         <StatusBadge active={status.enabled} label={status.enabled ? '已启用' : '未配置'} />
       }
       defaultExpanded={!status?.configured}
-      dangerZone={
-        status?.configured && (
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-[13px] font-medium text-destructive">停用多端同步</div>
-              <div className="text-[12px] text-destructive/70 mt-0.5">停用后不再自动同步，远端已有数据不会被删除。</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowDisableConfirm(true)}
-              className="px-3 py-1.5 text-[12.5px] font-medium rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
-            >
-              停用同步
-            </button>
-          </div>
-        )
-      }
     >
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -315,18 +291,6 @@ export default function SyncProtocolPanel() {
         )}
       </div>
 
-      <ConfirmDialog
-        open={showDisableConfirm}
-        title="停用多端同步"
-        message="停用后不再自动同步（远端已有数据不会删除，也不会丢失）。继续？"
-        confirmLabel="停用"
-        destructive
-        onCancel={() => setShowDisableConfirm(false)}
-        onConfirm={() => {
-          setShowDisableConfirm(false)
-          void handleDisable()
-        }}
-      />
     </SettingsCard>
   )
 }
