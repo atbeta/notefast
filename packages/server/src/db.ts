@@ -6,6 +6,7 @@ import { CURRENT_SCHEMA_VERSION } from '@notefast/core'
 import { configureSqliteForExtensions } from './sqliteVec'
 import { runMigrations } from './migrations/framework'
 import { safeLogInfo } from '@notefast/core'
+import { revokeWebSessionsIfPasswordChanged } from './services/apiTokens'
 import { auditSecretFilePermissions } from './services/secretAudit'
 
 let db: Database
@@ -43,6 +44,7 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
   }
 
   initApiKey(dataDir)
+  revokeWebSessionsIfPasswordChanged(dataDir)
   auditSecretFilePermissions(dataDir)
 
   return { db, notebookId }

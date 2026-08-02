@@ -1,5 +1,9 @@
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { join } from 'node:path'
 import { getDb } from '../db'
 import { computeContentHash } from './contentHash'
+import { safeLogWarn } from '@notefast/core'
 
 export interface ApiTokenRecord {
   token_id: string
@@ -64,6 +68,46 @@ export function revokeWebSessionTokens(): number {
     .query("UPDATE api_tokens SET revoked = 1 WHERE name = 'web-session' AND revoked = 0")
     .run()
   return result.changes
+}
+
+/**
+ * 启动期检测 AUTH_PASSWORD 是否变更：变更即撤销全部 web-session 会话 token。
+ *
+ * 背景：Web 登录（POST /auth/session）会生成持久化 web-session token（api_tokens 表，
+ * 7 天滑动过期），浏览器存于 localStorage 并作为 Bearer 发送——这类 token 与密码无关，
+ * 改密码（docker-compose 等 env 变更后重启）时不会自然失效；cookie 侧由 HMAC 密钥变化
+ * 自动作废，唯独 DB token 残留。此函数在 initDb 时比对 `data/auth.state.json` 里记录的
+ * 密码指纹，不一致（改/增/删密码均触发）则批量撤销，让旧会话下次请求即 401。
+ */
+export function revokeWebSessionsIfPasswordChanged(dataDir: string): void {
+  const current = passwordFingerprint()
+  const statePath = join(dataDir, 'auth.state.json')
+  let prev: string | null = null
+  try {
+    const raw = JSON.parse(readFileSync(statePath, 'utf-8')) as { passwordFingerprint?: unknown }
+    if (typeof raw?.passwordFingerprint === 'string') prev = raw.passwordFingerprint
+  } catch {
+    /* 无状态文件（首次启动）：只记录指纹，不撤销 */
+  }
+
+  if (prev !== null && prev !== current) {
+    revokeWebSessionTokens()
+  }
+  if (prev !== current) {
+    try {
+      if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true })
+      writeFileSync(statePath, JSON.stringify({ passwordFingerprint: current }, null, 2) + '\n', 'utf-8')
+      try { chmodSync(statePath, 0o600) } catch { /* Windows 不支持 */ }
+    } catch (e) {
+      safeLogWarn('auth.state.write_failed', { error: String(e) })
+    }
+  }
+}
+
+/** 密码指纹：AUTH_PASSWORD 的 sha256（未配置时为空串的指纹，增/删密码同样触发变更） */
+function passwordFingerprint(): string {
+  const pw = (process.env.AUTH_PASSWORD || '').trim()
+  return createHash('sha256').update(pw).digest('hex')
 }
 
 export function verifyToken(plain: string): ApiTokenRecord | null {
