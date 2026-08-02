@@ -2,6 +2,22 @@ import { z } from 'zod'
 
 /** Block 类型常量 */
 export const BlockType = {
+  /**
+   * 文档根块：每个文档恰好一个。
+   *
+   * **关键约定**：`Document` 块的 `content` 字段承载**文档标题**（非正文），
+   * 正文挂在它的 `children` 上。
+   *
+   * 设计动机：保持 SQLite 单行即可识别文档身份 + 标题（无需独立 docs 表）。
+   *
+   * 副作用 / 调用约束：
+   * - 导出 Markdown：`blocksToMarkdown` 在根写 `# {title}`；编辑器加载 / 解析需 strip 与标题同文的首 H1（见 `stripTitleHeading` / `stripTitleFromMarkdown`）
+   * - 列表 / 搜索查询：`type = 'document'` 是文档级聚合的判定锚
+   *
+   * ⚠️ 任何直接读 / 写 `Document.content` 当作正文的代码都会破坏这个约定，
+   * 造成标题重复或正文丢失。新代码请改用 `doc.title` 风格 API（如有）或显式
+   * 调用 strip 工具。
+   */
   Document: 'document',
   Heading: 'heading',
   Paragraph: 'paragraph',
