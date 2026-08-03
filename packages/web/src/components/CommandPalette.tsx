@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { isNativeShell } from '../lib/nativeShell'
 import {
   Search,
   FileText,
@@ -53,6 +54,19 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     setResults([])
     setActive(0)
     return () => clearTimeout(t)
+  }, [open])
+
+  // macOS WKWebView 焦点恢复（原生壳）：ESC 关闭时 WebKit 在 NSEvent 层结束
+  // 文本输入会话并使 webview 失去 first responder——之后的 ⌘K/⌘J/⌘\ 不再送达
+  // 页面（系统只蜂鸣），需手动点击才恢复。关闭后把 DOM 焦点显式交回 body
+  // （tabindex=-1 可编程聚焦），等价一次页面内激活；纯浏览器无副作用故跳过。
+  useEffect(() => {
+    if (open) return
+    if (!isNativeShell()) return
+    requestAnimationFrame(() => {
+      document.body.tabIndex = -1
+      document.body.focus({ preventScroll: true })
+    })
   }, [open])
 
   // 当 query 变化时拉搜索结果
