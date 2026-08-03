@@ -67,7 +67,19 @@ jobs:
         run: |
           ditto -c -k --keepParent NoteFast.app NoteFast.zip
           xcrun notarytool submit NoteFast.zip \
-            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_PASSWORD" --wait
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_PASSWORD" --wait \
+            2>&1 | tee /tmp/notary.out
+          SUBMISSION_ID=$(grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' /tmp/notary.out | head -1)
+          STATUS=$(grep -iE 'status: (accepted|invalid|in progress)' /tmp/notary.out | tail -1 | sed 's/.*status: //I' | tr '[:upper:]' '[:lower:]')
+          echo "notary status: ${STATUS} (id: ${SUBMISSION_ID})"
+          if [ "$STATUS" != "accepted" ]; then
+            if [ -n "$SUBMISSION_ID" ]; then
+              echo "=== notarytool log（拒绝原因）==="
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_PASSWORD" || true
+            fi
+            exit 1
+          fi
           xcrun stapler staple NoteFast.app
           spctl --assess --type execute --verbose=4 NoteFast.app
 

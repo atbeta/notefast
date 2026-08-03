@@ -86,19 +86,19 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 # 注意：全角字符不能紧贴 $var（UTF-8 locale 下 bash 会把多字节首字节吞进变量名），用 ${} 包裹
 echo "==> [4/5] 签名（身份: ${SIGN_IDENTITY}）"
-# 引擎二进制：Bun JIT entitlements（allow-jit 等）
-codesign --force --options runtime --sign "$SIGN_IDENTITY" \
+# 引擎二进制：Bun JIT entitlements（allow-jit + disable-library-validation；公证要求 --timestamp）
+codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" \
   --entitlements "$APPLE_DIR/Resources/notefast-server.entitlements" \
   "$APP/Contents/Resources/engine/notefast-server"
-# 旁置 dylib（vec0 / libsqlite3）：ad-hoc 签名，避免 hardened runtime 校验告警
+# 旁置 dylib（vec0 / libsqlite3）：与主进程同 Team 重签（公证要求 secure timestamp）
 find "$APP/Contents/Resources/engine" -name '*.dylib' -print0 | while IFS= read -r -d '' dylib; do
-  codesign --force --sign "$SIGN_IDENTITY" "$dylib"
+  codesign --force --timestamp --sign "$SIGN_IDENTITY" "$dylib"
 done
 # app 主二进制 + bundle
-codesign --force --options runtime --sign "$SIGN_IDENTITY" \
+codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" \
   --entitlements "$APPLE_DIR/Resources/NoteFast.entitlements" \
   "$APP/Contents/MacOS/$APP_NAME"
-codesign --force --options runtime --sign "$SIGN_IDENTITY" "$APP"
+codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
 
 echo "==> [5/5] 校验"
 codesign --verify --deep --strict "$APP"
