@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.0](https://github.com/atbeta/notefast/compare/v0.35.0...v0.36.0) (2026-08-03)
+
+
+### Features
+
+* **web:** block-level menu in reading mode (copy link/content, ask AI) ([239130c](https://github.com/atbeta/notefast/commit/239130c2b6d8f71c7a91ecb2b6ec6104dbbf5148))
+
 ## [0.35.0](https://github.com/atbeta/notefast/compare/v0.34.0...v0.35.0) (2026-08-03)
 
 
