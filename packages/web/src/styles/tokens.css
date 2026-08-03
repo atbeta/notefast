@@ -40,6 +40,7 @@
   --primary-hover: 78 100 152; /* #4E6498 */
   --primary-soft: rgb(var(--primary) / 0.08);
   --primary-softer: rgb(var(--primary) / 0.04);
+  --selection: rgb(var(--primary) / 0.14); /* 文本选中底色 */
 
   /* ───────────── 墨色（主按钮 / 最强行动色） ───────────── */
   --ink: 31 35 40;           /* #1F2328 */
@@ -137,6 +138,8 @@
   --primary-hover: 169 184 214;
   --primary-soft: rgb(var(--primary) / 0.15);
   --primary-softer: rgb(var(--primary) / 0.08);
+  /* 暗色下选中色需更高不透明度——浅色 0.14 在深底上几乎不可见 */
+  --selection: rgb(var(--primary) / 0.38);
 
   --ink: 235 237 240;
   --ink-foreground: 25 25 25;

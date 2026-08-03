@@ -18,7 +18,7 @@
     line-height: 1.55;
   }
   ::selection {
-    background: rgb(var(--primary) / 0.14);
+    background: var(--selection);
     color: rgb(var(--foreground));
   }
 
