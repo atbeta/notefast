@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.33.0](https://github.com/atbeta/notefast/compare/v0.32.0...v0.33.0) (2026-08-03)
+
+
+### Features
+
+* **clients:** macOS shell — menus, deep links, sync panel, version check ([c0209ef](https://github.com/atbeta/notefast/commit/c0209efe3a989f1a43abc0b1fa70a6365d0fd625))
+* **clients:** polish macOS app icon — depth gradient, glass gloss, glyph shadow ([d2c7a77](https://github.com/atbeta/notefast/commit/d2c7a775cae37824f96e27d66f63d0c06159fd5c))
+* **clients:** scaffold macOS native client shell ([0bdd489](https://github.com/atbeta/notefast/commit/0bdd489158694a784eb70993d23dcc4c3a9dec6a))
+* **server,clients:** fast shutdown via SSE close, app icon, quit-on-window-close ([6eb0af0](https://github.com/atbeta/notefast/commit/6eb0af05de45eb8acf26eff7a311438933e2749c))
+
+
+### Bug Fixes
+
+* **clients,web:** native shell — hide web sidebar, fix empty-list spinner ([60fd23f](https://github.com/atbeta/notefast/commit/60fd23f0d0adcfc71676a69ea4cc794f5a70f827))
+* **clients:** full-window web UI, drop native sidebar ([e555a31](https://github.com/atbeta/notefast/commit/e555a317aaeb4f7e155a2b695254b8ccfec274e4))
+* **clients:** menu-intercepted Cmd+K/J — dispatch synthetic keydown to page ([4efd752](https://github.com/atbeta/notefast/commit/4efd7526d0dc21f33b2ee3d0c7185dc770d07067))
+* **web:** Cmd+K/J close palette/chat even when its input is focused ([3d46334](https://github.com/atbeta/notefast/commit/3d46334134f1e17ac8e4fba3232027d4f8f7db64))
+* **web:** Cmd+Shift+D theme toggle works while palette is open ([f7f7810](https://github.com/atbeta/notefast/commit/f7f7810f6de82e2420c8ff9c9aeaf86053f2cce3))
+* **web:** restore WKWebView key focus after command palette closes ([d61b447](https://github.com/atbeta/notefast/commit/d61b447ac998d6e0b0a44ead6cd89e09045fec8b))
+
 ## [0.32.0](https://github.com/atbeta/notefast/compare/v0.31.0...v0.32.0) (2026-08-03)
 
 
