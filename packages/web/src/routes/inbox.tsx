@@ -11,6 +11,7 @@ import { Inbox, Plus, ArrowUpRight, Loader2 } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
+import { useDocChanges } from '../hooks/useDocEvents'
 import { formatRelative, currentLocale } from '../lib/time'
 import DocActionsMenu from '../components/DocActionsMenu'
 import PageHeader from '../components/PageHeader'
@@ -32,6 +33,9 @@ export default function InboxPage() {
   )
   // 原 .catch(() => setDocs([])) 语义：拉取失败按空列表渲染（空收集箱 UI）
   const docs = error ? [] : (data ?? [])
+
+  // 外部 MCP / AI 聊天等任何通道写入 → 即时刷新列表（对齐 archived 页）
+  useDocChanges(() => refetch())
 
   const { data: notebooks } = useApiQuery(() => api.get<Array<{ id: string }>>('/notebooks'), [])
   useEffect(() => {
