@@ -11,6 +11,7 @@ struct NoteFastApp: App {
                     model.handle(url: url)
                 }
         }
+        .defaultSize(width: 1100, height: 720)
         .commands {
             AppMenuCommands(model: model)
         }
