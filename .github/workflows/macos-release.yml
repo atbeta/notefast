@@ -13,6 +13,8 @@ concurrency:
 jobs:
   sign-notarize:
     runs-on: macos-latest
+    permissions:
+      contents: write
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
@@ -83,11 +85,45 @@ jobs:
           xcrun stapler staple NoteFast.app
           spctl --assess --type execute --verbose=4 NoteFast.app
 
+      - name: Build + notarize DMG
+        working-directory: clients/apple/dist
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          ../scripts/make-dmg.sh NoteFast.app NoteFast.dmg
+          # DMG 是最外层分发容器：Gatekeeper 检查它自己的公证票据
+          xcrun notarytool submit NoteFast.dmg \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_PASSWORD" --wait \
+            2>&1 | tee /tmp/notary-dmg.out
+          STATUS=$(grep -iE 'status: (accepted|invalid|in progress)' /tmp/notary-dmg.out | tail -1 | sed 's/.*status: //I' | tr '[:upper:]' '[:lower:]')
+          echo "dmg notary status: ${STATUS}"
+          [ "$STATUS" = "accepted" ] || exit 1
+          xcrun stapler staple NoteFast.dmg
+          spctl --assess --type open --context context:primary-signature --verbose=4 NoteFast.dmg
+
+      - name: Attach to GitHub Release
+        if: github.ref_type == 'tag'
+        working-directory: clients/apple/dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          # release-please 与 tag 推送并发，等 Release 对象出现（最多 150s）
+          for i in $(seq 1 30); do
+            gh release view "$TAG" >/dev/null 2>&1 && break
+            sleep 5
+          done
+          gh release view "$TAG" >/dev/null 2>&1 || { echo "Release $TAG 未找到" >&2; exit 1; }
+          gh release upload "$TAG" NoteFast.dmg NoteFast.zip --clobber
+
       - name: Upload signed app
         uses: actions/upload-artifact@v4
         with:
           name: NoteFast-macos-${{ github.ref_name }}
           path: |
             clients/apple/dist/NoteFast.zip
+            clients/apple/dist/NoteFast.dmg
             clients/apple/dist/NoteFast.app
           if-no-files-found: error
