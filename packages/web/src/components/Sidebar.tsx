@@ -367,7 +367,7 @@ export default function Sidebar({
           <Inbox className="w-[15px] h-[15px]" strokeWidth={1.75} />
           <span className="flex-1">{t('sidebar.inbox')}</span>
           {inboxCount > 0 && (
-            <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-foreground text-background tabular-nums">
+            <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-sidebar-accent text-sidebar-muted tabular-nums">
               {inboxCount > 99 ? '99+' : inboxCount}
             </span>
           )}
