@@ -15,7 +15,6 @@ final class AppModel: ObservableObject {
     static let minSupportedEngineVersion = "0.31.0"
 
     @Published private(set) var state: State = .starting
-    @Published var selectedDocID: String?
     @Published var windowTitle = "NoteFast"
     @Published var syncStatus: SyncProtocolStatus?
     @Published var engineVersion: String?
@@ -222,7 +221,7 @@ final class AppModel: ObservableObject {
         guard url.scheme == "notefast", isRunning else { return }
         switch (url.host, url.pathComponents) {
         case ("doc", let parts) where parts.count >= 2:
-            selectedDocID = parts[1]
+            if let target = docURL(parts[1]) { navigator.navigate(to: target) }
         case ("new", _):
             if let url = pageURL("/new") { navigator.navigate(to: url) }
         case ("search", _):
@@ -236,7 +235,6 @@ final class AppModel: ObservableObject {
 
     func newDoc() {
         guard let url = pageURL("/new") else { return }
-        selectedDocID = nil
         navigator.navigate(to: url)
     }
 

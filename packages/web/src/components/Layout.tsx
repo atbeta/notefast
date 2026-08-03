@@ -86,29 +86,22 @@ export default function Layout({ children, contentClassName }: { children: React
     return () => window.removeEventListener('keydown', handler, { capture: true })
   }, [toggleSidebar, navigate, paletteOpen, resolvedTheme, setTheme])
 
-  // 原生壳（WKWebView / Tauri）：web 不再渲染自己的侧栏与移动顶栏——
-  // 导航职责由壳层承担（壳侧栏/工具栏），避免出现「壳侧栏 + web 侧栏」双份列表。
-  const isNativeShell = typeof document !== 'undefined'
-    && document.documentElement.classList.contains('native-shell')
-
   return (
     <div className="flex h-screen overflow-hidden bg-background relative w-full">
       <GlobalSyncStatus />
-      {/* 桌面侧边栏（原生壳下隐藏，由壳层侧栏代替） */}
-      {!isNativeShell && (
-        <div className={`hidden md:block transition-all duration-300 z-20 relative ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
-          <Sidebar
-            collapsed={sidebarCollapsed}
-            onToggle={toggleSidebar}
-            onOpenPalette={openPalette}
-            aiChatOpen={aiChatOpen}
-            onToggleAiChat={toggleAiChat}
-          />
-        </div>
-      )}
+      {/* 桌面侧边栏 */}
+      <div className={`hidden md:block transition-all duration-300 z-20 relative ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggle={toggleSidebar}
+          onOpenPalette={openPalette}
+          aiChatOpen={aiChatOpen}
+          onToggleAiChat={toggleAiChat}
+        />
+      </div>
 
-      {/* 移动端 drawer（原生壳下隐藏） */}
-      {!isNativeShell && mobileOpen && (
+      {/* 移动端 drawer */}
+      {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={closeMobile} />
           <div className="relative w-64 h-full bg-background shadow-xl animate-fade-in">
@@ -125,7 +118,6 @@ export default function Layout({ children, contentClassName }: { children: React
       )}
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
-        {!isNativeShell && (
         <div className="md:hidden flex items-center h-12 px-4 border-b border-border bg-card gap-3 shrink-0" data-drag-region>
           <button onClick={toggleMobileSidebar} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-foreground transition-colors" aria-label={t('layout.openMenu')}>
             <Menu className="w-5 h-5" />
@@ -149,7 +141,6 @@ export default function Layout({ children, contentClassName }: { children: React
             </button>
           </div>
         </div>
-        )}
         <main className={`flex-1 flex flex-col min-h-0 relative transition-[padding] duration-300 ${aiChatOpen ? (aiChatExpanded ? 'md:pr-[600px]' : 'md:pr-[400px]') : ''}`}>
           {/* 统一滚动容器：文档页内部自管滚动（h-full 正好一屏），其余页面由此容器滚动 */}
           <div className={`${contentClassName ?? 'w-full h-full'} flex flex-col overflow-y-auto`}>

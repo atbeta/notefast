@@ -1,26 +1,21 @@
 import SwiftUI
 import NoteFast
 
-/// 主界面：侧栏文档列表（原生 SwiftUI）+ 内容区（WKWebView 加载内嵌 server）。
+/// 主界面：WKWebView 全窗口加载完整 Web 应用（web 自带侧栏/标签/图谱等全部导航）。
+/// 原生壳只提供 chrome：菜单、同步面板、新建/设置入口、窗口标题、深链。
 struct MainView: View {
     @ObservedObject var model: AppModel
     let handshake: EngineHandshake
 
     var body: some View {
-        NavigationSplitView {
-            DocListSidebar(model: model)
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
-        } detail: {
-            DocWebView(
-                url: detailURL,
-                navigator: model.navigator,
-                onTitleChange: { title in
-                    guard !model.versionIncompatible else { return }
-                    model.windowTitle = title.isEmpty ? "NoteFast" : title
-                }
-            )
-            .ignoresSafeArea()
-        }
+        DocWebView(
+            navigator: model.navigator,
+            onTitleChange: { title in
+                guard !model.versionIncompatible else { return }
+                model.windowTitle = title.isEmpty ? "NoteFast" : title
+            }
+        )
+        .ignoresSafeArea()
         .navigationTitle(model.windowTitle)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -39,12 +34,5 @@ struct MainView: View {
                 .help("设置")
             }
         }
-    }
-
-    private var detailURL: URL {
-        if let id = model.selectedDocID, let url = model.docURL(id) {
-            return url
-        }
-        return model.entryURL ?? URL(string: "http://127.0.0.1")!
     }
 }
