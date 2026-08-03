@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.34.0](https://github.com/atbeta/notefast/compare/v0.33.1...v0.34.0) (2026-08-03)
+
+
+### Features
+
+* **server:** tighten entity extraction quality ([066d5e0](https://github.com/atbeta/notefast/commit/066d5e0f3187495e0ca3fdb742cc8b8941866357))
+
+
+### Bug Fixes
+
+* **clients:** exclude engine tarball from app bundle — notarization Invalid ([c3df61f](https://github.com/atbeta/notefast/commit/c3df61f2fe75491ea50c01f41c6a87329d50cff8))
+
 ## [0.33.1](https://github.com/atbeta/notefast/compare/v0.33.0...v0.33.1) (2026-08-03)
 
 
