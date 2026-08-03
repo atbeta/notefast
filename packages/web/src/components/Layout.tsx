@@ -63,21 +63,32 @@ export default function Layout({ children, contentClassName }: { children: React
       return false
     }
     const handler = (e: KeyboardEvent) => {
-      if (isEditing(document.activeElement)) return
       const mod = e.metaKey || e.ctrlKey
-      if (mod && e.key.toLowerCase() === 'k') {
+      const key = e.key.toLowerCase()
+      // ⌘K/⌘J 在面板/聊天已开时优先关闭——即使焦点在面板输入框内
+      // （isEditing 守卫只保护「未开时不在输入态打断」，开了就该能关）
+      if (mod && key === 'k') {
+        if (paletteOpen) { e.preventDefault(); setPaletteOpen(false); return }
+        if (isEditing(document.activeElement)) return
         e.preventDefault()
-        setPaletteOpen((v) => !v)
-      } else if (mod && e.key.toLowerCase() === 'j') {
+        setPaletteOpen(true)
+        return
+      }
+      if (mod && key === 'j') {
+        if (aiChatOpen) { e.preventDefault(); setAiChatOpen(false); return }
+        if (isEditing(document.activeElement)) return
         e.preventDefault()
-        setAiChatOpen((v) => !v)
-      } else if (mod && e.key.toLowerCase() === 'n' && !paletteOpen) {
+        setAiChatOpen(true)
+        return
+      }
+      if (isEditing(document.activeElement)) return
+      if (mod && key === 'n' && !paletteOpen) {
         e.preventDefault()
         navigate('/new')
       } else if (mod && e.key === '\\') {
         e.preventDefault()
         toggleSidebar()
-      } else if (mod && e.shiftKey && e.key.toLowerCase() === 'd') {
+      } else if (mod && e.shiftKey && key === 'd') {
         e.preventDefault()
         setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')
       }
