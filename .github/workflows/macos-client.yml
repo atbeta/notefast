@@ -1,0 +1,43 @@
+name: macOS Client
+
+on:
+  pull_request:
+    paths: ['clients/**']
+  push:
+    branches: [main]
+    paths: ['clients/**']
+
+concurrency:
+  group: macos-client-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Swift tests (clients/apple)
+        working-directory: clients/apple
+        run: swift test
+
+      - name: Build web-dist
+        run: bun --filter @notefast/web build
+
+      - name: Build engine artifact
+        run: bun run build:engine
+
+      - name: Assemble NoteFast.app (ad-hoc)
+        working-directory: clients/apple
+        run: ./scripts/assemble-app.sh --no-build
+
+      - name: Verify bundle signature
+        working-directory: clients/apple
+        run: codesign --verify --deep --strict dist/NoteFast.app && test -x dist/NoteFast.app/Contents/Resources/engine/notefast-server
