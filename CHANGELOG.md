@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.32.0](https://github.com/atbeta/notefast/compare/v0.31.0...v0.32.0) (2026-08-03)
+
+
+### Features
+
+* **server,web:** add embedded engine bootstrap and packaging pipeline ([e7f0902](https://github.com/atbeta/notefast/commit/e7f0902f1e3768201dddb195d54a7408417b4108))
+
+
+### Bug Fixes
+
+* **server:** revoke web sessions when auth password changes ([ce1e25e](https://github.com/atbeta/notefast/commit/ce1e25e921a0ab6de752a9231a1bce4afec09e2e))
+
 ## [0.31.0](https://github.com/atbeta/notefast/compare/v0.30.0...v0.31.0) (2026-08-02)
 
 
