@@ -1,11 +1,11 @@
 import { useState, useEffect, createElement, memo } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, Link2 } from 'lucide-react'
+import { Check } from 'lucide-react'
 import type { Block } from '@notefast/core'
-import { scrollToElement } from '../lib/scroll'
 import { highlightCode } from '../lib/highlight'
 import MermaidDiagram from './MermaidDiagram'
+import BlockSurface, { BlockHandle } from './BlockSurface'
 import { CopyButton } from './ui'
 
 interface BlockNodeProps {
@@ -92,7 +92,6 @@ function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
 // ───────────────────────── Heading ─────────────────────────
 
 function HeadingTag({ block }: { block: Block }) {
-  const { t } = useTranslation()
   // 兼容历史数据：新数据存 headingLevel，早期可能存 level
   const level =
     (block.properties.headingLevel as number) ||
@@ -114,24 +113,9 @@ function HeadingTag({ block }: { block: Block }) {
         {
           // id 使用 block.id：与大纲（HeadingNode.id = block.id）一致，支持点击定位
           id: block.id,
-          className: `group relative ${sizes[tagLevel]} leading-[1.3] tracking-[-0.01em] text-foreground scroll-mt-20`,
+          className: `${sizes[tagLevel]} leading-[1.3] tracking-[-0.01em] text-foreground scroll-mt-20`,
         },
-        <>
-          <a
-            href={`#${block.id}`}
-            aria-label={t('block.navigateToSection')}
-            className="absolute -left-6 top-1/2 -translate-y-1/2 p-1 rounded text-muted-foreground/70 opacity-0 group-hover:opacity-100 hover:text-foreground transition-all"
-            onClick={(e) => {
-              e.preventDefault()
-              const el = document.getElementById(block.id)
-              if (el) scrollToElement(el)
-              history.replaceState(null, '', `#${block.id}`)
-            }}
-          >
-            <Link2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-          </a>
-          {renderInline(block.content || '', 'h')}
-        </>,
+        renderInline(block.content || '', 'h'),
       )}
       {/* 子块必须继续渲染：部分写入路径会把内容嵌在 heading 下（如代码块），不渲染就丢了 */}
       <ChildrenView children={block.children} />
@@ -255,13 +239,22 @@ function TableBlock({ block }: { block: Block }) {
 // 持久化树里没有 List 包装节点（解析期被拍平），渲染时把连续的同级 list_item
 // 重新归并成组：ordered 标记一致的连续段为一组。
 
-function ListItemView({ block }: { block: Block }) {
+function ListItemView({ block, depth = 0 }: { block: Block; depth?: number }) {
   const isTask = Boolean(block.properties.task)
   const checked = Boolean(block.properties.checked)
   const nestedItems = block.children.filter((c) => c.type === 'list_item')
   const otherChildren = block.children.filter((c) => c.type !== 'list_item')
   return (
-    <li id={block.id} className="scroll-mt-20 leading-[1.75] text-foreground/95">
+    <li
+      id={block.id}
+      className={`group/bs relative scroll-mt-20 leading-[1.75] text-foreground/95${
+        // hover 桥：li 盒外的 24px marker 区铺 before 伪元素，消除正文 → handle 之间的 hover 死区
+        depth === 0 ? " before:absolute before:-left-6 before:top-0 before:bottom-0 before:w-6 before:content-['']" : ''
+      }`}
+    >
+      {/* 列表项不经过 BlockSurface（ul > li 语义），handle 直接挂 li。仅顶层渲染：
+          嵌套项缩进后 handle 会压到正文，且复制/问 AI 由父项菜单（含子块）覆盖 */}
+      {depth === 0 && <BlockHandle block={block} className="-left-[48px] top-0.5" />}
       {isTask && (
         <span
           className={`mr-2 inline-flex h-3.5 w-3.5 translate-y-[2px] items-center justify-center rounded-[3px] border transition-colors ${
@@ -280,13 +273,13 @@ function ListItemView({ block }: { block: Block }) {
         <BlockNode key={child.id} block={child} />
       ))}
       {nestedItems.length > 0 && (
-        <ListGroup items={nestedItems} className="pl-5 mt-1.5" />
+        <ListGroup items={nestedItems} className="pl-5 mt-1.5" depth={depth + 1} />
       )}
     </li>
   )
 }
 
-function ListGroup({ items, className }: { items: Block[]; className?: string }) {
+function ListGroup({ items, className, depth = 0 }: { items: Block[]; className?: string; depth?: number }) {
   const ordered = Boolean(items[0]?.properties.ordered)
   const Tag = ordered ? 'ol' : 'ul'
   return (
@@ -294,7 +287,7 @@ function ListGroup({ items, className }: { items: Block[]; className?: string })
       className={`${ordered ? 'list-decimal' : 'list-disc'} pl-6 marker:text-muted-foreground/70 space-y-1.5 ${className ?? 'my-3'}`}
     >
       {items.map((item) => (
-        <ListItemView key={item.id} block={item} />
+        <ListItemView key={item.id} block={item} depth={depth} />
       ))}
     </Tag>
   )
@@ -337,44 +330,52 @@ function ChildrenView({ children }: { children: Block[] }) {
 const BlockNode = memo(function BlockNode({ block }: BlockNodeProps) {
   const { t } = useTranslation()
   // ⚠️ hooks 必须在 switch 之前调用（memo 组件内 hooks 顺序不可变）
+  let node: ReactNode
   switch (block.type) {
     case 'heading':
-      return <HeadingTag block={block} />
+      node = <HeadingTag block={block} />
+      break
 
     case 'paragraph':
-      // 水平分隔线（---）渲染为 hr，而非字面文本
+      // 水平分隔线（---）渲染为 hr：无块锚点，不挂块级菜单
       if (block.content && /^-{3,}\s*$/.test(block.content.trim())) {
         return <hr className="my-7 border-border/70" />
       }
-      return (
+      node = (
         <p id={block.id} className={`scroll-mt-20 leading-[1.75] text-foreground/95${block.content && HANGING_OPEN_PUNCT_RE.test(block.content) ? ' hanging-punct' : ''}`}>
           {block.content ? renderInline(block.content, `p-${block.id}`) : <span className="text-muted-foreground">{t('block.emptyParagraph')}</span>}
         </p>
       )
+      break
 
     case 'list':
+      // list / list_item 走 ListGroup → ListItemView，块菜单挂在 li 上
       return <ListGroup items={block.children} />
 
     case 'list_item':
       return <ListGroup items={[block]} />
 
     case 'code':
-      return <CodeBlock block={block} />
+      node = <CodeBlock block={block} />
+      break
 
     case 'table':
-      return <TableBlock block={block} />
+      node = <TableBlock block={block} />
+      break
 
     case 'quote':
-      return (
+      node = (
         <blockquote id={block.id} className="scroll-mt-20 my-5 pl-4 border-l-[3px] border-border-strong text-muted-foreground bg-muted/35 rounded-r">
           <p className="leading-[1.65] text-[1.05em]">{renderInline(block.content || '', `q-${block.id}`)}</p>
           <ChildrenView children={block.children} />
         </blockquote>
       )
+      break
 
     default:
-      return <p className="text-muted-foreground italic">{t('block.unknownBlockType', { type: block.type })}</p>
+      node = <p className="text-muted-foreground italic">{t('block.unknownBlockType', { type: block.type })}</p>
   }
+  return <BlockSurface block={block}>{node}</BlockSurface>
 })
 
 export default function BlockRenderer({ block, depth = 0 }: BlockRendererProps) {

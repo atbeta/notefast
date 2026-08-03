@@ -1,6 +1,12 @@
 {
   "block": {
-    "navigateToSection": "Jump to section",
+    "menuLabel": "Block actions",
+    "copyLink": "Copy block link",
+    "copyContent": "Copy block content",
+    "askAi": "Ask AI about this",
+    "linkCopied": "Block link copied",
+    "contentCopied": "Block content copied",
+    "copyFailed": "Copy failed",
     "emptyParagraph": "(empty paragraph)",
     "unknownBlockType": "[Unrecognized block type: {{type}}]",
     "emptyDocument": "Empty document"

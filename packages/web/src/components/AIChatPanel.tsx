@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { request, fetchWithAuth, ApiError } from '../hooks/useAPI'
 import { useScrollFade } from '../hooks/useScrollFade'
+import { ASK_AI_EVENT, type AskAiDetail } from '../lib/askAi'
 import ChatMarkdown from './ChatMarkdown'
 import ConfirmDialog from './ConfirmDialog'
 import { Tooltip } from './ui'
@@ -227,6 +228,19 @@ export default function AIChatPanel({
       .catch(() => {})
     return () => { cancelled = true }
   }, [isOpen])
+
+  // 阅读态块菜单「问 AI 关于这一段」：预填引用草稿（不自动发送，用户审阅后自行发出）
+  useEffect(() => {
+    const onAsk = (e: Event) => {
+      const detail = (e as CustomEvent<AskAiDetail>).detail
+      if (!detail?.quote) return
+      const quoted = detail.quote.split('\n').map((l) => `> ${l}`).join('\n')
+      setInput(`${t('chat.askAboutPrefix')}\n${quoted}\n\n`)
+      window.setTimeout(() => inputRef.current?.focus(), 60)
+    }
+    window.addEventListener(ASK_AI_EVENT, onAsk)
+    return () => window.removeEventListener(ASK_AI_EVENT, onAsk)
+  }, [t])
 
   useEffect(() => {
     return () => {

@@ -1,6 +1,7 @@
 {
   "chat": {
     "visionFallbackText": "Please describe the content of this image",
+    "askAboutPrefix": "About this passage:",
     "tool": "tool",
     "callingTool": "Calling {{tool}}…",
     "llmError": "LLM error",

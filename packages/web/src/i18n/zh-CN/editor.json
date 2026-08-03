@@ -1,6 +1,12 @@
 {
   "block": {
-    "navigateToSection": "定位到本节",
+    "menuLabel": "块操作",
+    "copyLink": "复制块链接",
+    "copyContent": "复制块内容",
+    "askAi": "问 AI 关于这一段",
+    "linkCopied": "已复制块链接",
+    "contentCopied": "已复制块内容",
+    "copyFailed": "复制失败",
     "emptyParagraph": "（空白段落）",
     "unknownBlockType": "[未识别块类型：{{type}}]",
     "emptyDocument": "空白文档"

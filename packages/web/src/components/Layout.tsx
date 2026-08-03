@@ -8,6 +8,7 @@ import CommandPalette from './CommandPalette'
 import AIChatPanel from './AIChatPanel'
 import GlobalSyncStatus from './GlobalSyncStatus'
 import { useTheme } from '../hooks/useTheme'
+import { ASK_AI_EVENT } from '../lib/askAi'
 
 /** AI 聊天面板开关状态 — 页面（如文档页右栏）可据此避让空间 */
 const AiChatOpenContext = createContext(false)
@@ -51,6 +52,13 @@ export default function Layout({ children, contentClassName }: { children: React
   const closeMobile = useCallback(() => setMobileOpen(false), [])
 
   const { resolvedTheme, setTheme } = useTheme()
+
+  // 阅读态块菜单「问 AI 关于这一段」→ 打开聊天面板；草稿预填由 AIChatPanel 自行监听
+  useEffect(() => {
+    const open = () => setAiChatOpen(true)
+    window.addEventListener(ASK_AI_EVENT, open)
+    return () => window.removeEventListener(ASK_AI_EVENT, open)
+  }, [])
 
   // 全局快捷键：⌘K / Ctrl+K, ⌘N / Ctrl+N, ⌘\ / Ctrl+\, ⌘J / Ctrl+J, ⌘⇧D / Ctrl+Shift+D
   // capture 阶段拦截，在浏览器默认行为之前处理（⌘N 可能被浏览器截为新窗口）
