@@ -18,6 +18,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createApp } from '../app'
+import { closeAllSseStreams } from '../api/events'
 
 // ───────────────────── stdout = 协议通道 ─────────────────────
 const writeStdout = process.stdout.write.bind(process.stdout)
@@ -148,6 +149,8 @@ async function main(): Promise<void> {
     if (shuttingDown) return
     shuttingDown = true
     console.error(`[bootstrap] 收到 ${signal}，停止接收新连接，等待在飞请求完成…`)
+    // 主动关闭 SSE 订阅流（/api/v1/events 是永久长连接），否则 drain 会等满强退超时
+    try { closeAllSseStreams() } catch { /* ignore */ }
     const forceTimer = setTimeout(() => {
       console.error(`[bootstrap] ${SHUTDOWN_TIMEOUT_MS}ms 内未能 drain，强制退出`)
       process.exit(1)

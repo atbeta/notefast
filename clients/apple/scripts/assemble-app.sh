@@ -44,6 +44,7 @@ echo "==> [3/5] 组装 .app bundle"
 rm -rf "$OUT_DIR"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/engine"
 cp "$APPLE_DIR/.build/release/NoteFastApp" "$APP/Contents/MacOS/$APP_NAME"
+cp "$APPLE_DIR/Resources/AppIcon.icns" "$APP/Contents/Resources/"
 # engine 产物整体注入 Resources/engine（notefast-server + native/ + web-dist + VERSION）
 cp -R "$ENGINE_DIR/." "$APP/Contents/Resources/engine/"
 
@@ -58,6 +59,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>$APP_NAME</string>
   <key>CFBundleDisplayName</key><string>$APP_NAME</string>
   <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>

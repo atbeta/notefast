@@ -10,30 +10,46 @@
  */
 
 import { Hono } from 'hono'
-import { streamSSE } from 'hono/streaming'
+import { streamSSE, type SSEStreamingApi } from 'hono/streaming'
 import { subscribeDocChanges } from '../services/docEvents'
 
 const HEARTBEAT_MS = 25_000
+
+/** 活跃的 SSE 订阅流：服务端停机时需主动关闭，否则 drain 会等满强退超时（~10s） */
+const activeStreams = new Set<SSEStreamingApi>()
+
+/** 关闭全部活跃 SSE 订阅（停机入口调用，让 server.stop 的 drain 快速完成） */
+export function closeAllSseStreams(): void {
+  for (const sse of [...activeStreams]) {
+    try { void sse.close() } catch { /* ignore */ }
+  }
+  activeStreams.clear()
+}
 
 const events = new Hono()
 
 events.get('/', (c) => {
   return streamSSE(c, async (sse) => {
-    const unsubscribe = subscribeDocChanges((ev) => {
-      sse.writeSSE({ event: 'doc', data: JSON.stringify(ev) }).catch(() => {})
-    })
-    const heartbeat = setInterval(() => {
-      sse.writeSSE({ event: 'ping', data: '{}' }).catch(() => {})
-    }, HEARTBEAT_MS)
-
-    // 保持连接直到客户端断开
-    await new Promise<void>((resolve) => {
-      sse.onAbort(() => {
-        clearInterval(heartbeat)
-        unsubscribe()
-        resolve()
+    activeStreams.add(sse)
+    try {
+      const unsubscribe = subscribeDocChanges((ev) => {
+        sse.writeSSE({ event: 'doc', data: JSON.stringify(ev) }).catch(() => {})
       })
-    })
+      const heartbeat = setInterval(() => {
+        sse.writeSSE({ event: 'ping', data: '{}' }).catch(() => {})
+      }, HEARTBEAT_MS)
+
+      // 保持连接直到客户端断开
+      await new Promise<void>((resolve) => {
+        sse.onAbort(() => {
+          clearInterval(heartbeat)
+          unsubscribe()
+          resolve()
+        })
+      })
+    } finally {
+      activeStreams.delete(sse)
+    }
   })
 })
 

@@ -7,6 +7,7 @@
 
 import { createApp } from './app'
 import { isAuthEnabled } from './middleware/auth'
+import { closeAllSseStreams } from './api/events'
 
 const PORT = parseInt(process.env.PORT || '3140', 10)
 const DATA_DIR = process.env.DATA_DIR || './data'
@@ -47,6 +48,8 @@ function shutdown(signal: string) {
   if (shuttingDown) return
   shuttingDown = true
   console.log(`\n🛑 收到 ${signal}，停止接收新连接，等待在飞请求完成…`)
+  // 主动关闭 SSE 订阅流（/api/v1/events 是永久长连接），否则 drain 会等满强退超时
+  try { closeAllSseStreams() } catch { /* ignore */ }
   const forceTimer = setTimeout(() => {
     console.error(`⚠️ ${SHUTDOWN_TIMEOUT_MS}ms 内未能 drain，强制退出`)
     process.exit(1)
