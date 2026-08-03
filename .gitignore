@@ -8,6 +8,9 @@ dist-engine/
 *.tsbuildinfo
 packages/**/vite.config.d.ts
 
+# Swift client (clients/apple)
+clients/apple/.build/
+
 # Data
 data/
 data/eval/
