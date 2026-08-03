@@ -46,7 +46,9 @@ const EXTRACT_SYSTEM_PROMPT = `你是 NoteFast 的实体抽取助手。从用户
 - 输出必须是合法 JSON：{"mentions": [{"anchor":"...", "kind":"concept|person|tool|doc"} , ...]}
 - anchor 必须 ≥3 字、最长 20 字，在原文里逐字出现
 - 排除：停用词、人称代词、纯数字、纯标点、连接词
-- 工具 / 项目 / 产品名也要抽取（kind=tool）——它们是知识图谱中的一等实体
+- 排除代码标识符：含 _ 或 . 的符号名（变量 / 字段 / 函数 / 表名 / API 名），如 block_refs、mention_count、fs.readFile——它们是实现细节，不是知识实体
+- 排除泛化短语：评价性 / 修饰性短语（如 高置信、零人工审核、硬指标）与过于宽泛的通用词（如 知识库、文档、笔记）
+- 工具 / 项目 / 产品名也要抽取（kind=tool）——它们是知识图谱中的一等实体；独立的版本号后缀只保留主名（CodeMirror 6 → CodeMirror），名称本身含数字的除外（FTS5、BM25）
 - 同一 anchor 在同一块内只出现一次
 - 最多输出 5 个 mentions；过短或没具体名词时返回 {"mentions": []}
 - 拿不准就不要输出：锚点贵精不贵多

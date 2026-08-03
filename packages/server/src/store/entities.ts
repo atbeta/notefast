@@ -171,6 +171,21 @@ export function resolveAlias(db: Db, name: string): string | null {
   return row?.entity_id ?? null
 }
 
+/**
+ * 版本变体归并：「既有主名 + 独立版本号后缀」（codemirror 6 → codemirror、react v18 → react）
+ * 路由到主名实体 id；主名不是既有实体时返回 null（不新建、不猜测）。
+ * 仅处理显式分隔的后缀（空格/点 + 可选 v + 数字）——名称本身含数字（fts5、bm25）不动，
+ * 保持「宁多勿错并」。
+ */
+export function resolveVersionVariant(db: Db, name: string): string | null {
+  const m = name.match(/^(.+?)[\s.]+v?\d+(?:\.\d+)*$/)
+  if (!m) return null
+  const base = m[1]!
+  if (base.length < 2) return null
+  const hit = findEntityByName(db, base)
+  return hit ? hit.id : null
+}
+
 /** 登记别名（幂等） */
 export function addAlias(db: Db, alias: string, entityId: string): void {
   db.query('INSERT OR IGNORE INTO entity_aliases (alias, entity_id) VALUES (?, ?)').run(alias, entityId)

@@ -225,6 +225,54 @@ describe('实体归并（规范化名精确匹配）', () => {
     expect(n).toBe(1)
     expect(listEntities(getDb()).map((e) => e.name)).toEqual(['向量数据库'])
   })
+
+  test('代码标识符确定性拦截（snake_case / 点分符号名）；连字符与纯词不受影响', () => {
+    seedDocWithBlocks({ docTitle: 'T', blocks: [{ id: 'mb3', content: '随便记一点东西凑长度' }] })
+    const n = registerMentions('mb3', [
+      { anchor: 'block_refs', kind: 'tool' },
+      { anchor: 'mention_count', kind: 'tool' },
+      { anchor: 'fs.readFile', kind: 'tool' },
+      { anchor: 'react-markdown', kind: 'tool' },
+      { anchor: 'vec0', kind: 'tool' },
+    ])
+    expect(n).toBe(2)
+    expect(listEntities(getDb()).map((e) => e.name).sort()).toEqual(['react-markdown', 'vec0'])
+  })
+
+  test('版本变体归并：「主名 + 独立版本号后缀」路由到既有主名实体', () => {
+    const db = getDb()
+    seedDocWithBlocks({
+      docTitle: 'T',
+      blocks: [
+        { id: 'vv1', content: 'CodeMirror 编辑器改造笔记' },
+        { id: 'vv2', content: 'CodeMirror 6 的装饰层用法' },
+      ],
+    })
+    registerMentions('vv1', [{ anchor: 'CodeMirror', kind: 'tool' }])
+    const n = registerMentions('vv2', [{ anchor: 'CodeMirror 6', kind: 'tool' }])
+    expect(n).toBe(1)
+    // 不新建 codemirror 6，提及挂到主名实体
+    expect(findEntityByName(db, 'codemirror 6')).toBeNull()
+    const base = findEntityByName(db, 'codemirror')!
+    expect(base.mention_count).toBe(2)
+    // 主名不存在时不猜测、正常新建
+    registerMentions('vv2', [{ anchor: 'React 19', kind: 'tool' }])
+    expect(findEntityByName(db, 'react 19')).not.toBeNull()
+    // 名称本身含数字（无分隔）不动
+    registerMentions('vv2', [{ anchor: 'FTS5', kind: 'tool' }])
+    expect(findEntityByName(db, 'fts5')).not.toBeNull()
+  })
+
+  test('版本变体归并例外：kind=doc 不路由（编号文档是不同文档）', () => {
+    const db = getDb()
+    seedDocWithBlocks({ docTitle: 'T', blocks: [{ id: 'vd1', content: '视觉验证测试文档汇总' }] })
+    registerMentions('vd1', [{ anchor: '视觉验证测试文档', kind: 'doc' }])
+    registerMentions('vd1', [{ anchor: '视觉验证测试文档 30', kind: 'doc' }])
+    expect(findEntityByName(db, '视觉验证测试文档 30')).not.toBeNull()
+    // concept 同形则路由
+    registerMentions('vd1', [{ anchor: '视觉验证测试文档 31', kind: 'concept' }])
+    expect(findEntityByName(db, '视觉验证测试文档 31')).toBeNull()
+  })
 })
 
 // ───────────────────── store：count 维护 / 级联 ─────────────────────
@@ -279,26 +327,26 @@ describe('一次抽取两处消费（E2E）', () => {
     mockChat(() =>
       JSON.stringify({
         mentions: [
-          { anchor: 'notefast_create_doc', kind: 'tool' },
+          { anchor: 'CodeMirror', kind: 'tool' },
           { anchor: 'KMP', kind: 'concept' },
         ],
       }),
     )
     seedDocWithBlocks({
       docTitle: '源',
-      blocks: [{ id: 'e2e-src', content: '调用 notefast_create_doc 创建，比如 KMP 笔记' }],
+      blocks: [{ id: 'e2e-src', content: '用 CodeMirror 做编辑器，比如 KMP 笔记' }],
     })
     const r = await analyzeBlock({
       blockId: 'e2e-src',
-      content: '调用 notefast_create_doc 创建，比如 KMP 笔记',
+      content: '用 CodeMirror 做编辑器，比如 KMP 笔记',
       notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.entities).toBe(2)
     const names = listEntities(getDb()).map((e) => e.name)
-    expect(names).toContain('notefast_create_doc')
+    expect(names).toContain('codemirror')
     expect(names).toContain('kmp')
-    const tool = findEntityByName(getDb(), 'notefast_create_doc')!
+    const tool = findEntityByName(getDb(), 'codemirror')!
     expect(tool.kind).toBe('tool')
     // 无候选可链，但实体必须落库
     expect(r.applied).toBe(0)

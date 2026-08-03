@@ -16,12 +16,22 @@ import {
   getEntityById,
   normalizeEntityName,
   resolveAlias,
+  resolveVersionVariant,
   upsertEntity,
 } from '../store/entities'
 
 export interface MentionInput {
   anchor: string
   kind: string
+}
+
+/**
+ * 代码标识符（snake_case / 点分符号名）不是知识实体——prompt 规则的确定性兜底，
+ * LLM 不遵守排除规则时在此拦截（block_refs、mention_count、fs.readFile 等）。
+ * 连字符名（react-markdown、sqlite-vec）与纯词（vec0）不受影响。
+ */
+export function looksLikeCodeIdentifier(normalizedName: string): boolean {
+  return /^[\w.]+$/.test(normalizedName) && (normalizedName.includes('_') || normalizedName.includes('.'))
 }
 
 /**
@@ -44,8 +54,12 @@ export function registerMentions(blockId: string, mentions: MentionInput[]): num
   for (const m of mentions) {
     const name = normalizeEntityName(m.anchor)
     if (name.length < 2 || seen.has(name)) continue
+    if (looksLikeCodeIdentifier(name)) continue
     seen.add(name)
-    const aliasTarget = resolveAlias(db, name)
+    // 版本变体（CodeMirror 6 → codemirror）路由到既有主名实体；
+    // kind=doc 例外——编号文档是不同文档（「视觉验证测试文档 30」≠「视觉验证测试文档」）
+    const aliasTarget =
+      resolveAlias(db, name) ?? (m.kind === 'doc' ? null : resolveVersionVariant(db, name))
     const entity = aliasTarget
       ? getEntityById(db, aliasTarget)
       : upsertEntity(db, { name, display: m.anchor.trim(), kind: m.kind })
