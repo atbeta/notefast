@@ -101,7 +101,9 @@ jobs:
           echo "dmg notary status: ${STATUS}"
           [ "$STATUS" = "accepted" ] || exit 1
           xcrun stapler staple NoteFast.dmg
-          spctl --assess --type open --context context:primary-signature --verbose=4 NoteFast.dmg
+          # DMG 无自身代码签名（hdiutil 产物特性），spctl primary-signature 检查必然
+          # rejected——Gatekeeper 对 DMG 走公证票据，正确验证是 stapler validate
+          xcrun stapler validate NoteFast.dmg
 
       - name: Attach to GitHub Release
         if: github.ref_type == 'tag'
