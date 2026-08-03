@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.35.0](https://github.com/atbeta/notefast/compare/v0.34.0...v0.35.0) (2026-08-03)
+
+
+### Features
+
+* **clients:** DMG volume icon — reuse AppIcon.icns as .VolumeIcon.icns ([dc33f9d](https://github.com/atbeta/notefast/commit/dc33f9dd2b42a80b2bfedd406715639ba23ffae8))
+* **clients:** DMG window layout — branded background + icon positions ([da135a0](https://github.com/atbeta/notefast/commit/da135a0bd1648d99ce8904b3280ef7059642abce))
+
 ## [0.34.0](https://github.com/atbeta/notefast/compare/v0.33.1...v0.34.0) (2026-08-03)
 
 
