@@ -41,7 +41,9 @@ jobs:
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
           KEYCHAIN="build.keychain"
-          echo "$APPLE_CERTIFICATE" | base64 --decode > /tmp/cert.p12
+          # 容忍 secret 内的换行/空白（历史踩坑：base64 文本粘进 secret 时被拆行导致 decode 失败）
+          echo "$APPLE_CERTIFICATE" | tr -d '[:space:]' | base64 --decode > /tmp/cert.p12
+          test -s /tmp/cert.p12 || { echo "证书解码失败：APPLE_CERTIFICATE 不是有效的 base64 p12" >&2; exit 1; }
           security create-keychain -p "temp" "$KEYCHAIN"
           security default-keychain -s "$KEYCHAIN"
           security unlock-keychain -p "temp" "$KEYCHAIN"
