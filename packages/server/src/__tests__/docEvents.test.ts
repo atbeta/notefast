@@ -2,7 +2,7 @@
  * docEvents：block 级 hooks → doc 级事件聚合广播 + SSE 端点
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
+import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { Hono } from 'hono'
@@ -36,15 +36,20 @@ afterAll(() => {
   rmSync(testDir, { recursive: true, force: true })
 })
 
-function collect(): { events: DocChangeEvent[]; unsubscribe: () => void } {
+// bun test 全部文件共享一个进程，docEvents 的 pending/定时器是模块级全局：
+// 其它测试文件（真实 API 写路径）发布的事件会残留并 flush 进本文件的订阅。
+// 因此 collect 按 docId 过滤，且每个用例开始前先 drain 一个聚合窗口清掉残留。
+function collect(docId: string): { events: DocChangeEvent[]; unsubscribe: () => void } {
   const events: DocChangeEvent[] = []
-  const unsubscribe = subscribeDocChanges((ev) => events.push(ev))
+  const unsubscribe = subscribeDocChanges((ev) => { if (ev.doc_id === docId) events.push(ev) })
   return { events, unsubscribe }
 }
 
 const waitFlush = () => new Promise((r) => setTimeout(r, FLUSH_MS + 150))
 
 describe('docEvents 聚合广播', () => {
+  beforeEach(async () => { await waitFlush() })
+
   test('创建文档：doc + N 个子块的 afterCreate 聚合为单条 created', async () => {
     const db = getDb()
     const { docId, blockIds } = insertDocFromMarkdown(db, {
@@ -53,7 +58,7 @@ describe('docEvents 聚合广播', () => {
       markdown: '第一段\n\n第二段\n\n第三段',
     })
 
-    const { events, unsubscribe } = collect()
+    const { events, unsubscribe } = collect(docId)
     const docRow = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
     await pluginSystem.note.afterCreate.call(rowToBlock(docRow))
     for (const bid of blockIds) {
@@ -64,7 +69,6 @@ describe('docEvents 聚合广播', () => {
     unsubscribe()
 
     expect(events.length).toBe(1)
-    expect(events[0].doc_id).toBe(docId)
     expect(events[0].kind).toBe('created')
   })
 
@@ -76,7 +80,7 @@ describe('docEvents 聚合广播', () => {
       markdown: '一段内容',
     })
 
-    const { events, unsubscribe } = collect()
+    const { events, unsubscribe } = collect(docId)
     const row = db.query('SELECT * FROM blocks WHERE id = ?').get(blockIds[0]) as BlockRow
     await pluginSystem.note.afterUpdate.call(rowToBlock(row))
     await waitFlush()
@@ -95,7 +99,7 @@ describe('docEvents 聚合广播', () => {
     })
     db.query('UPDATE blocks SET is_deleted = 1 WHERE root_id = ?').run(docId)
 
-    const { events, unsubscribe } = collect()
+    const { events, unsubscribe } = collect(docId)
     await pluginSystem.note.afterDelete.call(docId)
     await waitFlush()
     unsubscribe()
@@ -113,7 +117,7 @@ describe('docEvents 聚合广播', () => {
     })
     db.query('UPDATE blocks SET is_deleted = 1 WHERE id = ?').run(blockIds[0])
 
-    const { events, unsubscribe } = collect()
+    const { events, unsubscribe } = collect(docId)
     await pluginSystem.note.afterDelete.call(blockIds[0])
     await waitFlush()
     unsubscribe()
@@ -130,7 +134,7 @@ describe('docEvents 聚合广播', () => {
       markdown: '内容',
     })
 
-    const { events, unsubscribe } = collect()
+    const { events, unsubscribe } = collect(docId)
     const docRow = db.query('SELECT * FROM blocks WHERE id = ?').get(docId) as BlockRow
     await pluginSystem.note.afterCreate.call(rowToBlock(docRow))
     const childRow = db.query('SELECT * FROM blocks WHERE id = ?').get(blockIds[0]) as BlockRow
@@ -152,6 +156,7 @@ describe('docEvents 聚合广播', () => {
 
 describe('GET /events SSE 端点', () => {
   test('doc 事件以 SSE 帧推送', async () => {
+    await waitFlush() // drain 同进程其它文件残留的 pending/定时器，避免陈旧帧抢先到达
     const app = new Hono()
     app.route('/events', eventsRouter)
 

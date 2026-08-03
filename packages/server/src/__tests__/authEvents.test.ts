@@ -17,17 +17,22 @@ import { initDb, closeDb, getDb } from '../db'
 import { authMiddleware, sessionTokenValue, SESSION_COOKIE } from '../middleware/auth'
 
 let originalPassword: string | undefined
+let originalToken: string | undefined
 let testDir: string
 
 beforeAll(() => {
   originalPassword = process.env.AUTH_PASSWORD
+  originalToken = process.env.API_TOKEN
   testDir = mkdtempSync(join('/tmp', 'notefast-auth-events-'))
   process.env.AUTH_PASSWORD = 'test-pw'
+  process.env.API_TOKEN = ''
   initDb(testDir)
 })
 
 afterAll(() => {
   process.env.AUTH_PASSWORD = originalPassword
+  // initDb 生成了 api.key 并写入 API_TOKEN，必须还原（bun test 全部文件共享一个进程）
+  process.env.API_TOKEN = originalToken
   closeDb()
   rmSync(testDir, { recursive: true, force: true })
 })

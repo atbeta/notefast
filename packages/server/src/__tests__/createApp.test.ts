@@ -11,12 +11,22 @@ import { createApp } from '../app'
  */
 
 let testDir: string
+const AUTH_ENV_KEYS = ['API_TOKEN', 'AUTH_PASSWORD', 'READ_TOKEN', 'WRITE_TOKEN'] as const
+let savedAuthEnv: Record<string, string | undefined>
 
 beforeAll(() => {
+  // bun test 全部文件共享一个进程：其它文件的鉴权 env 可能泄漏过来，
+  // 本文件断言的是免鉴权直通行为，先清空并在结束后还原
+  savedAuthEnv = {}
+  for (const k of AUTH_ENV_KEYS) {
+    savedAuthEnv[k] = process.env[k]
+    process.env[k] = ''
+  }
   testDir = mkdtempSync(join('/tmp', 'notefast-createapp-'))
 })
 
 afterAll(() => {
+  for (const k of AUTH_ENV_KEYS) process.env[k] = savedAuthEnv[k]
   rmSync(testDir, { recursive: true, force: true })
 })
 

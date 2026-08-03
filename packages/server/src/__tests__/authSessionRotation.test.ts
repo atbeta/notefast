@@ -16,16 +16,22 @@ import { createWebSessionToken, verifyToken } from '../services/apiTokens'
 
 let testDir: string
 let originalPassword: string | undefined
+let originalToken: string | undefined
 
 beforeEach(() => {
   originalPassword = process.env.AUTH_PASSWORD
+  originalToken = process.env.API_TOKEN
   process.env.AUTH_PASSWORD = ''
+  process.env.API_TOKEN = ''
   testDir = mkdtempSync(join('/tmp', 'notefast-auth-session-test-'))
 })
 
 afterEach(() => {
   closeDb()
   process.env.AUTH_PASSWORD = originalPassword
+  // initDb 在配置了密码时会生成 api.key 并写入 API_TOKEN——必须一并还原，
+  // 否则泄漏给同进程后执行的其它测试文件（bun test 全部文件共享一个进程）
+  process.env.API_TOKEN = originalToken
   rmSync(testDir, { recursive: true, force: true })
 })
 

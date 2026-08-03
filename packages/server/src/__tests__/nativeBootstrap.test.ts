@@ -74,9 +74,11 @@ describe('injectEngineAssets', () => {
   })
 
   test('注入 VERSION / vec0 / libsqlite3 / web-dist', () => {
+    // vec0 扩展名随平台（与 bootstrap 的 vecSuffix 一致）：CI 跑在 Linux，不能写死 .dylib
+    const vecExt = process.platform === 'darwin' ? 'dylib' : process.platform === 'win32' ? 'dll' : 'so'
     writeFileSync(join(assetsDir, 'VERSION'), '0.31.0\n')
     mkdirSync(join(assetsDir, 'native'))
-    writeFileSync(join(assetsDir, 'native', 'vec0.dylib'), 'x')
+    writeFileSync(join(assetsDir, 'native', `vec0.${vecExt}`), 'x')
     writeFileSync(join(assetsDir, 'libsqlite3.dylib'), 'x')
     mkdirSync(join(assetsDir, 'web-dist'))
     writeFileSync(join(assetsDir, 'web-dist', 'index.html'), '<html/>')
@@ -85,7 +87,7 @@ describe('injectEngineAssets', () => {
 
     expect(process.env.DATA_DIR).toBe('/tmp/dd')
     expect(process.env.APP_VERSION).toBe('0.31.0')
-    expect(process.env.SQLITE_VEC_PATH).toBe(join(assetsDir, 'native', 'vec0.dylib'))
+    expect(process.env.SQLITE_VEC_PATH).toBe(join(assetsDir, 'native', `vec0.${vecExt}`))
     expect(process.env.SQLITE_LIBRARY_PATH).toBe(join(assetsDir, 'libsqlite3.dylib'))
     expect(process.env.WEB_DIST).toBe(join(assetsDir, 'web-dist'))
   })
