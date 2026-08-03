@@ -5,11 +5,13 @@ set -euo pipefail
 #   1. bun run build:engine（packages/server/dist-engine/）
 #   2. swift build -c release（clients/apple）
 #   3. 组装 bundle（Contents/MacOS + Contents/Resources/engine + Info.plist + PkgInfo）
-#   4. ad-hoc 签名（engine 带 Bun JIT entitlements；app 主二进制 + bundle）
+#   4. 签名（engine 带 Bun JIT entitlements；app 主二进制 + bundle）
 #   5. codesign --verify
 #
-# 用法：./scripts/assemble-app.sh [--no-build]
-#   --no-build  跳过 bun run build:engine（已构建时用，仅重打包 Swift 壳）
+# 用法：./scripts/assemble-app.sh [--no-build] [--sign <identity>]
+#   --no-build       跳过 bun run build:engine（已构建时用，仅重打包 Swift 壳）
+#   --sign <identity>签名身份（缺省 "-" = ad-hoc 本地开发；发布用 "Developer ID Application: <名字>"，
+#                    配合 scripts/notarize.sh 走公证）
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 APPLE_DIR="$ROOT/clients/apple"
@@ -19,10 +21,12 @@ APP_NAME="NoteFast"
 APP="$OUT_DIR/$APP_NAME.app"
 
 BUILD_ENGINE=1
-for arg in "$@"; do
-  case "$arg" in
-    --no-build) BUILD_ENGINE=0 ;;
-    *) echo "未知参数: $arg" >&2; exit 1 ;;
+SIGN_IDENTITY="-"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-build) BUILD_ENGINE=0; shift ;;
+    --sign) SIGN_IDENTITY="${2:?--sign 需要身份}"; shift 2 ;;
+    *) echo "未知参数: $1" >&2; exit 1 ;;
   esac
 done
 
@@ -59,6 +63,16 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key><string>com.notefast.app</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>notefast</string>
+      </array>
+    </dict>
+  </array>
   <key>NSAppTransportSecurity</key>
   <dict>
     <key>NSAllowsLocalNetworking</key><true/>
@@ -68,20 +82,21 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
-echo "==> [4/5] 签名（ad-hoc；发布时换 Developer ID + 公证）"
+# 注意：全角字符不能紧贴 $var（UTF-8 locale 下 bash 会把多字节首字节吞进变量名），用 ${} 包裹
+echo "==> [4/5] 签名（身份: ${SIGN_IDENTITY}）"
 # 引擎二进制：Bun JIT entitlements（allow-jit 等）
-codesign --force --options runtime --sign - \
+codesign --force --options runtime --sign "$SIGN_IDENTITY" \
   --entitlements "$APPLE_DIR/Resources/notefast-server.entitlements" \
   "$APP/Contents/Resources/engine/notefast-server"
 # 旁置 dylib（vec0 / libsqlite3）：ad-hoc 签名，避免 hardened runtime 校验告警
 find "$APP/Contents/Resources/engine" -name '*.dylib' -print0 | while IFS= read -r -d '' dylib; do
-  codesign --force --sign - "$dylib"
+  codesign --force --sign "$SIGN_IDENTITY" "$dylib"
 done
 # app 主二进制 + bundle
-codesign --force --options runtime --sign - \
+codesign --force --options runtime --sign "$SIGN_IDENTITY" \
   --entitlements "$APPLE_DIR/Resources/NoteFast.entitlements" \
   "$APP/Contents/MacOS/$APP_NAME"
-codesign --force --options runtime --sign - "$APP"
+codesign --force --options runtime --sign "$SIGN_IDENTITY" "$APP"
 
 echo "==> [5/5] 校验"
 codesign --verify --deep --strict "$APP"

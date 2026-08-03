@@ -27,6 +27,10 @@ struct DocListSidebar: View {
         .task {
             await reload()
         }
+        // 窗口重新激活时刷新（覆盖 ⌘N 新建、Web 内编辑等外部变更）
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await reload() }
+        }
     }
 
     private func reload() async {

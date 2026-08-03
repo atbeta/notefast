@@ -24,3 +24,42 @@ public struct DocSummary: Decodable, Identifiable, Equatable {
 public struct ServerVersion: Decodable, Equatable {
     public let version: String
 }
+
+/// 多端同步状态（对齐 `GET /api/v1/sync/protocol`，见 server `sync/protocolManager.ts`）。
+public struct SyncProtocolStatus: Decodable, Equatable {
+    public let configured: Bool
+    public let enabled: Bool
+    public let s3Bucket: String?
+    public let s3Prefix: String?
+    public let lastRunAt: String?
+    public let lastSuccessAt: String?
+    public let lastError: String?
+    public let state: SyncState?
+    public let pendingChanges: Int?
+    public let running: Bool?
+
+    public struct SyncState: Decodable, Equatable {
+        public let publishedSeq: Int
+        public let consumedSeq: Int
+        public let sinceSnapshot: Int
+    }
+}
+
+/// `POST /sync/protocol/run` 结果。
+public struct SyncRunResult: Decodable, Equatable {
+    public let ok: Bool
+    public let published: Int?
+    public let snapshotCreated: Bool?
+    public let state: SyncProtocolStatus.SyncState?
+    public let status: SyncProtocolStatus?
+}
+
+/// `POST /sync/protocol/pull` 结果（消费端拉取：首次全量 / 增量合并 + media）。
+public struct SyncPullResult: Decodable, Equatable {
+    public let ok: Bool
+    public let mode: String?
+    public let applied: Int?
+    public let mediaRestored: Int?
+    public let state: SyncProtocolStatus.SyncState?
+    public let status: SyncProtocolStatus?
+}

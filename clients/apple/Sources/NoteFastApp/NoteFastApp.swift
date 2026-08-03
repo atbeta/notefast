@@ -7,6 +7,12 @@ struct NoteFastApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(model: model)
+                .onOpenURL { url in
+                    model.handle(url: url)
+                }
+        }
+        .commands {
+            AppMenuCommands(model: model)
         }
     }
 }

@@ -38,6 +38,18 @@ public final class NoteFastClient {
         return data
     }
 
+    public func post<T: Decodable>(_ path: String, body: [String: Any]? = nil, as type: T.Type) async throws -> T {
+        var request = URLRequest(url: url(for: path))
+        request.httpMethod = "POST"
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
     private func url(for path: String) -> URL {
         // path 以 `/` 开头（如 `/docs/list`），appendingPathComponent 会正确拼接
         baseURL.appendingPathComponent(path)

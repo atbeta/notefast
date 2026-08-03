@@ -11,13 +11,33 @@ struct MainView: View {
             DocListSidebar(model: model)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
         } detail: {
-            DocWebView(url: detailURL)
-                .ignoresSafeArea()
+            DocWebView(
+                url: detailURL,
+                navigator: model.navigator,
+                onTitleChange: { title in
+                    guard !model.versionIncompatible else { return }
+                    model.windowTitle = title.isEmpty ? "NoteFast" : title
+                }
+            )
+            .ignoresSafeArea()
         }
+        .navigationTitle(model.windowTitle)
         .toolbar {
-            Text("v\(handshake.version)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            ToolbarItemGroup(placement: .primaryAction) {
+                SyncStatusButton(model: model)
+                Button {
+                    model.newDoc()
+                } label: {
+                    Label("新建笔记", systemImage: "square.and.pencil")
+                }
+                .help("新建笔记 (⌘N)")
+                Button {
+                    model.openSettings()
+                } label: {
+                    Label("设置", systemImage: "gearshape")
+                }
+                .help("设置")
+            }
         }
     }
 
