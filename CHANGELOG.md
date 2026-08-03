@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.33.1](https://github.com/atbeta/notefast/compare/v0.33.0...v0.33.1) (2026-08-03)
+
+
+### Bug Fixes
+
+* **clients:** notarization Invalid — trim engine JIT entitlements, add timestamps ([3ad6bd2](https://github.com/atbeta/notefast/commit/3ad6bd2075b08cf234ddd37f3b7623b4c6e771f6))
+* **web:** raise text selection contrast in dark mode ([162c10a](https://github.com/atbeta/notefast/commit/162c10a55bd610df01e95982d92490cb241ebf03))
+* **web:** refresh inbox list on external doc changes ([e4898b2](https://github.com/atbeta/notefast/commit/e4898b2e7048c5a335087bf2f90c0a174a65cf59))
+
 ## [0.33.0](https://github.com/atbeta/notefast/compare/v0.32.0...v0.33.0) (2026-08-03)
 
 
