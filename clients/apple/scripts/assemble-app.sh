@@ -45,8 +45,12 @@ rm -rf "$OUT_DIR"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/engine"
 cp "$APPLE_DIR/.build/release/NoteFastApp" "$APP/Contents/MacOS/$APP_NAME"
 cp "$APPLE_DIR/Resources/AppIcon.icns" "$APP/Contents/Resources/"
-# engine 产物整体注入 Resources/engine（notefast-server + native/ + web-dist + VERSION）
-cp -R "$ENGINE_DIR/." "$APP/Contents/Resources/engine/"
+# engine 产物整体注入 Resources/engine（notefast-server + native/ + web-dist + VERSION）。
+# 注意：必须排除 notefast-engine-*.tar.gz——tarball 内含构建时未签名的原始副本，
+# 公证会扫描 bundle 内所有代码（含压缩包内），未签名副本会以「signature invalid /
+# no secure timestamp / not hardened」整包拒绝。
+find "$ENGINE_DIR" -maxdepth 1 -mindepth 1 -not -name '*.tar.gz' \
+  -exec cp -R {} "$APP/Contents/Resources/engine/" \;
 
 VERSION="$(cat "$ENGINE_DIR/VERSION")"
 cat > "$APP/Contents/Info.plist" <<PLIST
