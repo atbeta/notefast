@@ -81,6 +81,14 @@ export default function Layout({ children, contentClassName }: { children: React
         setAiChatOpen(true)
         return
       }
+      // ⌘⇧D 主题切换：面板打开时即使输入框聚焦也生效（面板里展示了该快捷键提示）
+      if (mod && e.shiftKey && key === 'd') {
+        if (paletteOpen || !isEditing(document.activeElement)) {
+          e.preventDefault()
+          setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')
+        }
+        return
+      }
       if (isEditing(document.activeElement)) return
       if (mod && key === 'n' && !paletteOpen) {
         e.preventDefault()
@@ -88,9 +96,6 @@ export default function Layout({ children, contentClassName }: { children: React
       } else if (mod && e.key === '\\') {
         e.preventDefault()
         toggleSidebar()
-      } else if (mod && e.shiftKey && key === 'd') {
-        e.preventDefault()
-        setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')
       }
     }
     window.addEventListener('keydown', handler, { capture: true })
