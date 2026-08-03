@@ -7,13 +7,19 @@ import Foundation
 final class WebNavigator {
     private var loadHandler: ((URL) -> Void)?
     private var reloadHandler: (() -> Void)?
+    private var evaluateHandler: ((String) -> Void)?
     /// attach 前发起的导航（如启动握手刚完成、WebView 尚未挂载）：挂载后立即补发
     private var pendingURL: URL?
 
     /// DocWebView 挂载时注册（每次挂载覆盖，单一内容区）
-    func attach(load: @escaping (URL) -> Void, reload: @escaping () -> Void) {
+    func attach(
+        load: @escaping (URL) -> Void,
+        reload: @escaping () -> Void,
+        evaluate: @escaping (String) -> Void
+    ) {
         loadHandler = load
         reloadHandler = reload
+        evaluateHandler = evaluate
         if let url = pendingURL {
             pendingURL = nil
             load(url)
@@ -27,5 +33,10 @@ final class WebNavigator {
 
     func reload() {
         reloadHandler?()
+    }
+
+    /// 在页面上下文执行 JS（壳层兜底：菜单拦截被输入系统吞掉的快捷键后派发合成事件）
+    func evaluate(_ script: String) {
+        evaluateHandler?(script)
     }
 }

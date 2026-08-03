@@ -14,6 +14,14 @@ struct AppMenuCommands: Commands {
         }
 
         CommandMenu("视图") {
+            Button("命令面板") {
+                model.toggleCommandPalette()
+            }
+            .keyboardShortcut("k")
+            Button("AI 聊天") {
+                model.toggleAiChat()
+            }
+            .keyboardShortcut("j")
             Button("刷新") {
                 model.navigator.reload()
             }

@@ -23,6 +23,9 @@ struct DocWebView: NSViewRepresentable {
                 },
                 reload: { [weak webView] in
                     webView?.reload()
+                },
+                evaluate: { [weak webView] script in
+                    webView?.evaluateJavaScript(script, completionHandler: nil)
                 }
             )
         }

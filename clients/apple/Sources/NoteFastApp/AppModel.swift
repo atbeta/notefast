@@ -238,6 +238,24 @@ final class AppModel: ObservableObject {
         navigator.navigate(to: url)
     }
 
+    /// ⌘K 命令面板（菜单兜底）：文本输入会话下 macOS 输入系统会吞掉 ⌘K
+    /// （页面收不到、只蜂鸣）。菜单先拦截，再向页面派发合成 keydown——
+    /// Layout 的 window capture 监听照常处理（isEditing 守卫语义不变）。
+    func toggleCommandPalette() {
+        dispatchKeyEvent("k")
+    }
+
+    /// ⌘J AI 聊天（同 ⌘K：输入框聚焦时会被输入系统拦截）
+    func toggleAiChat() {
+        dispatchKeyEvent("j")
+    }
+
+    private func dispatchKeyEvent(_ key: String) {
+        navigator.evaluate(
+            "window.dispatchEvent(new KeyboardEvent('keydown',{key:'\(key)',code:'Key\(key.uppercased())',metaKey:true,bubbles:true,cancelable:true}))"
+        )
+    }
+
     func openSettings() {
         guard let url = pageURL("/settings") else { return }
         navigator.navigate(to: url)
