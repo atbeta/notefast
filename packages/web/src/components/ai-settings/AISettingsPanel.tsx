@@ -61,6 +61,14 @@ type AIStatus = RuntimeStatus & {
   fix_hint?: string
 }
 
+type EntityRebuildStatus = {
+  running: boolean
+  total: number
+  done: number
+  errors: number
+  started_at: string | null
+}
+
 function defaultAutoLink(): AutoLinkConfig {
   return defaultAutoLinkConfig()
 }
@@ -138,6 +146,32 @@ export default function AISettingsPanel() {
     }, 800)
     return () => clearInterval(t)
   }, [status?.vectorStore?.status, refresh])
+
+  // 实体重建进度轮询
+  const [entityRebuild, setEntityRebuild] = useState<EntityRebuildStatus | null>(null)
+  useEffect(() => {
+    if (!entityRebuild?.running) return
+    const t = setInterval(() => {
+      void api
+        .get<EntityRebuildStatus>('/ai/entities/rebuild/status')
+        .then(setEntityRebuild)
+        .catch(() => {})
+    }, 800)
+    return () => clearInterval(t)
+  }, [entityRebuild?.running])
+
+  const handleRebuildEntities = async () => {
+    try {
+      await api.post('/ai/entities/rebuild', {})
+      toast.info({ title: t('aiSettings.entityRebuildStarted') })
+      setEntityRebuild(await api.get<EntityRebuildStatus>('/ai/entities/rebuild/status'))
+    } catch (e) {
+      toast.error({
+        title: t('aiSettings.entityRebuildFailed'),
+        description: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
 
   const handleRebuild = async () => {
     if (rebuilding) return
@@ -521,6 +555,15 @@ export default function AISettingsPanel() {
               </button>
               <button
                 type="button"
+                onClick={() => void handleRebuildEntities()}
+                disabled={!capabilities?.chat || entityRebuild?.running === true}
+                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-border hover:bg-accent disabled:opacity-50"
+              >
+                {entityRebuild?.running && <Loader2 className="w-3 h-3 animate-spin" />}
+                {t('aiSettings.rebuildEntities')}
+              </button>
+              <button
+                type="button"
                 onClick={() => void refresh()}
                 className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md text-muted-foreground hover:text-foreground"
               >
@@ -528,6 +571,15 @@ export default function AISettingsPanel() {
                 {t('aiSettings.refresh')}
               </button>
             </div>
+            {entityRebuild && entityRebuild.total > 0 && (
+              <p className="tabular-nums text-muted-foreground">
+                {t('aiSettings.entityRebuildProgress', {
+                  done: entityRebuild.done,
+                  total: entityRebuild.total,
+                })}
+                {entityRebuild.errors > 0 && t('aiSettings.entityRebuildErrors', { n: entityRebuild.errors })}
+              </p>
+            )}
           </div>
         )}
       </SettingsCard>

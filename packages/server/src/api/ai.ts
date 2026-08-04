@@ -45,6 +45,7 @@ import { indexBlock, indexAllBlocks, semanticSearch } from '../ai/indexer'
 import { getVectorStore } from '../ai/vectorStore'
 import { startVectorRebuild } from '../ai/vectorRebuild'
 import { getRebuildProgress } from '../ai/rebuildProgress'
+import { startEntityRebuild, getEntityRebuildProgress } from '../ai/entityRebuild'
 import { resolveAiLang } from '../ai/locale'
 import { getIndexJob, getLatestIndexJobForDoc } from '../ai/indexJobs'
 import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
@@ -486,6 +487,17 @@ ai.post('/index/rebuild', async (c) => {
   if (!started) return c.json({ error: 'already_rebuilding', message: '向量索引正在重建' }, 409)
   return c.json({ started: true }, 202)
 })
+
+ai.post('/entities/rebuild', async (c) => {
+  if (!runtimeSafe() || !getRuntime().hasChat()) {
+    return c.json({ error: 'not_configured', message: 'Chat 未配置', fix_hint: FIX_HINT }, 400)
+  }
+  const started = startEntityRebuild()
+  if (!started) return c.json({ error: 'already_rebuilding', message: '实体图谱正在重建' }, 409)
+  return c.json({ started: true }, 202)
+})
+
+ai.get('/entities/rebuild/status', (c) => c.json(getEntityRebuildProgress()))
 
 ai.post('/index/:blockId', async (c) => {
   const blockId = c.req.param('blockId')

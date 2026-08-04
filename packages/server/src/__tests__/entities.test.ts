@@ -26,6 +26,11 @@ import {
 } from '../services/aiRuntime'
 import { analyzeBlock, _resetRateLimitForTests } from '../ai/autoLink'
 import { registerMentions } from '../ai/entities'
+import {
+  startEntityRebuild,
+  getEntityRebuildProgress,
+  _resetEntityRebuildForTests,
+} from '../ai/entityRebuild'
 import { entitySearch } from '../ai/entitySearch'
 import { hybridSearch } from '../ai/hybridSearch'
 import { writeDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
@@ -622,5 +627,61 @@ describe('实体描述（E2）', () => {
 
     const missing = await api('POST', '/api/v1/entities/ghost/describe')
     expect(missing.status).toBe(404)
+  })
+})
+
+describe('全库实体重建', () => {
+  test('startEntityRebuild 清空后按当前配置重抽实体', async () => {
+    _resetEntityRebuildForTests()
+    // 固定返回两个锚点：每块（含文档根）都会登记
+    mockChat(() => JSON.stringify({
+      mentions: [
+        { anchor: 'KMP', kind: 'concept' },
+        { anchor: '后缀数组', kind: 'concept' },
+      ],
+    }))
+    seedDocWithBlocks({
+      docTitle: '算法笔记',
+      blocks: [
+        { id: 'rb-a1', content: 'KMP 是高效的字符串匹配算法' },
+        { id: 'rb-a2', content: '后缀数组用于字符串处理' },
+      ],
+    })
+    seedDocWithBlocks({
+      docTitle: '第二篇',
+      blocks: [{ id: 'rb-b1', content: 'KMP 与后缀数组都是字符串算法' }],
+    })
+
+    // 预置旧实体 + 一个孤儿实体（重建后应消失）
+    const db = getDb()
+    const orphan = upsertEntity(db, { name: '旧实体', display: '旧实体', kind: 'concept' })
+    addMention(db, orphan.id, 'rb-a1', '旧实体')
+
+    expect(startEntityRebuild()).toBe(true)
+    // 防重入：已在重建中时拒绝再次触发
+    expect(startEntityRebuild()).toBe(false)
+
+    const ok = await waitFor(() => {
+      const p = getEntityRebuildProgress()
+      return !p.running && p.done >= p.total
+    })
+    expect(ok).toBe(true)
+    const p = getEntityRebuildProgress()
+    expect(p.done).toBe(5) // 2 文档根 + 3 正文块
+    expect(p.errors).toBe(0)
+
+    // 孤儿清掉；新实体按重抽结果重建（锚点必须出自块内容：
+    // KMP 出现在 rb-a1 / rb-b1 = 2 次提及，文档根标题不含锚点不登记）
+    expect(findEntityByName(db, '旧实体')).toBeNull()
+    expect(findEntityByName(db, 'kmp')?.mention_count).toBe(2)
+    expect(findEntityByName(db, '后缀数组')?.mention_count).toBe(2)
+  })
+
+  test('空库重建立即完成，不报错', async () => {
+    _resetEntityRebuildForTests()
+    mockChat()
+    expect(startEntityRebuild()).toBe(true)
+    const ok = await waitFor(() => !getEntityRebuildProgress().running)
+    expect(ok).toBe(true)
   })
 })
