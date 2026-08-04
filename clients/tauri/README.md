@@ -51,18 +51,17 @@ dev 模式不打包，engine 直接跑 `dist-engine/` 产物；改动 Rust 代�
 ## 打包（P0 后阶段）
 
 ```bash
-# 1. 构建 engine 并复制进 Tauri resources（tauri.conf.json 的 bundle.resources 引用）
-bun run build:engine
-Copy-Item packages\server\dist-engine\* clients\tauri\src-tauri\resources\engine\ -Recurse
-
-# 2. NSIS 安装包
-cd clients\tauri
-bun run build
+# 一站式：构建 engine → 复制进 src-tauri/resources/engine → NSIS 安装包
+bun run build:full
 # 产物：src-tauri\target\release\bundle\nsis\NoteFast_0.x.x_x64-setup.exe
 ```
 
-- engine 产物（~60MB exe + vec0.dll + web-dist）进 resources，安装期随 NSIS 分发
-- 发布期需 Authenticode 签名（未签名 exe 首次运行会触发 SmartScreen 提示）
+- engine 产物（~60MB exe + vec0.dll + web-dist）经 `bundle.resources` 进安装包，
+  运行时 `resources/engine/` 是壳定位引擎的路径（dev 模式自动探测 dist-engine）
+- CI：`.github/workflows/windows-client.yml`（PR/push 冒烟：cargo check/clippy +
+  engine 构建 + NSIS 打包）与 `windows-release.yml`（tag 触发，上传 GitHub Release）
+- 发布期需 Authenticode 签名（未签名 exe 首次运行会触发 SmartScreen 提示；
+  release workflow 暂未配置签名，证书就绪后补）
 
 ## 与 macOS 壳的对应关系
 

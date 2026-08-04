@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
+    "prepare:engine": "bun run scripts/prepare-resources.ts",
+    "build:full": "bun run prepare:engine && tauri build",
     "icon": "tauri icon"
   },
   "devDependencies": {
