@@ -48,6 +48,8 @@ jobs:
       - name: Build NSIS installer
         working-directory: clients/tauri
         run: |
+          # clients/tauri 非 bun workspace 包，必须单独安装（@tauri-apps/cli 在 node_modules/.bin）
+          bun install
           bun run build
 
       - name: Attach to GitHub Release
