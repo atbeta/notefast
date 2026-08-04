@@ -39,11 +39,15 @@ jobs:
         with:
           workspaces: clients/tauri/src-tauri
 
+      - name: Prepare engine resources
+        # tauri-build 的 generate_context 会校验 bundle.resources 存在，
+        # 必须在任何 cargo 编译前把 dist-engine 复制进 src-tauri/resources/engine
+        working-directory: clients/tauri
+        run: bun run prepare:engine
+
       - name: Build NSIS installer
         working-directory: clients/tauri
         run: |
-          bun install
-          bun run prepare:engine
           bun run build
 
       - name: Attach to GitHub Release

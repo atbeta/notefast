@@ -40,6 +40,12 @@ jobs:
         with:
           workspaces: clients/tauri/src-tauri
 
+      - name: Prepare engine resources
+        # tauri-build 的 generate_context 会校验 bundle.resources 存在，
+        # 必须在任何 cargo 编译前把 dist-engine 复制进 src-tauri/resources/engine
+        working-directory: clients/tauri
+        run: bun run prepare:engine
+
       - name: cargo check + clippy
         working-directory: clients/tauri/src-tauri
         run: cargo check && cargo clippy --all-targets -- -D warnings
