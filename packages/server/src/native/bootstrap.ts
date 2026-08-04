@@ -33,17 +33,23 @@ function vecSuffix(): string {
 
 export interface NativeArgs {
   dataDir: string
-  /** 0 = 随机端口（由 Bun.serve 分配，握手行回传实际端口） */
+  /** 0 = 随机端口（由 Bun.serve 分配，握手行回传实际端口）；缺省 = 尝试固定端口，被占用自动回退随机 */
   port: number
   /** 引擎资源根目录：缺省为可执行文件所在目录 */
   assetsDir: string
 }
 
+/**
+ * 原生壳默认监听端口：固定端口让页面 origin 稳定（localStorage 按 origin 隔离，
+ * 随机端口会导致主题/语言等本地偏好每次启动丢失、首屏闪烁）。被占用时回退随机端口。
+ */
+export const DEFAULT_PORT = 3876
+
 function usage(): string {
   return [
     '用法: notefast-server [选项]',
     '  --data-dir <path>   数据目录（SQLite + media + 配置）[env DATA_DIR]',
-    '  --port <n>          监听端口；0 = 随机（默认）',
+    `  --port <n>          监听端口；缺省 ${DEFAULT_PORT}（被占用自动回退随机），0 = 直接随机`,
     '  --assets-dir <path> 引擎资源根目录（VERSION / native/ / web-dist）[默认: 可执行文件目录]',
     '  -h, --help          显示帮助',
     '',
@@ -54,7 +60,7 @@ function usage(): string {
 export function parseNativeArgs(argv: string[]): NativeArgs {
   const args: NativeArgs = {
     dataDir: process.env.DATA_DIR || './data',
-    port: 0,
+    port: DEFAULT_PORT,
     assetsDir: dirname(process.execPath),
   }
   for (let i = 0; i < argv.length; i++) {
@@ -136,33 +142,6 @@ async function main(): Promise<void> {
   const handle = createApp({ dataDir: args.dataDir, trustedLocal: true })
   await handle.start()
 
-  const server = Bun.serve({
-    hostname: '127.0.0.1',
-    port: args.port,
-    fetch(req, server) {
-      const internal = handleInternalRoute(req)
-      if (internal) {
-        // 先回响应再停机：等当前请求 flush（50ms 缓冲），随后走标准 drain 路径
-        setTimeout(() => shutdown('http /internal/shutdown'), 50)
-        return internal
-      }
-      return handle.app.fetch(req, server)
-    },
-  })
-  handle.attachServer(server)
-
-  writeStdout(
-    'NF_READY '
-      + JSON.stringify({
-        port: server.port,
-        version: handle.version,
-        notebookId: handle.notebookId,
-        apiPath: '/api/v1',
-        mcpPath: '/mcp',
-      })
-      + '\n',
-  )
-
   // 优雅停机：与 index.ts 同语义——SIGTERM 停止接收新连接、等在飞请求 drain，
   // 超时强退；DB 清理由 createApp 注册的 process.on('exit') 统一完成。
   const SHUTDOWN_TIMEOUT_MS = 10_000
@@ -183,6 +162,41 @@ async function main(): Promise<void> {
       process.exit(0)
     })
   }
+
+  const fetchHandler = (req: Request, srv: ReturnType<typeof Bun.serve>): Response | Promise<Response> => {
+    const internal = handleInternalRoute(req)
+    if (internal) {
+      // 先回响应再停机：等当前请求 flush（50ms 缓冲），随后走标准 drain 路径
+      setTimeout(() => shutdown('http /internal/shutdown'), 50)
+      return internal
+    }
+    return handle.app.fetch(req, srv)
+  }
+
+  // 固定端口优先（origin 稳定 → localStorage 持久，主题/语言首屏即正确）；
+  // 被占用时回退随机端口（握手行回传实际端口，壳层按实际端口跳转）
+  let server: ReturnType<typeof Bun.serve>
+  try {
+    server = Bun.serve({ hostname: '127.0.0.1', port: args.port, fetch: fetchHandler })
+  } catch {
+    if (args.port === 0) throw new Error(`端口 0 监听失败`)
+    console.error(`[bootstrap] 端口 ${args.port} 被占用，回退随机端口`)
+    server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: fetchHandler })
+  }
+  handle.attachServer(server)
+
+  writeStdout(
+    'NF_READY '
+      + JSON.stringify({
+        port: server.port,
+        version: handle.version,
+        notebookId: handle.notebookId,
+        apiPath: '/api/v1',
+        mcpPath: '/mcp',
+      })
+      + '\n',
+  )
+
   process.on('SIGINT', () => shutdown('SIGINT'))
   process.on('SIGTERM', () => shutdown('SIGTERM'))
 }

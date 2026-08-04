@@ -108,8 +108,8 @@ pub fn start(engine_dir: &Path, data_dir: &Path) -> Result<EngineHandle, String>
     let mut cmd = new_engine_command(&binary);
     cmd.arg("--data-dir")
         .arg(data_dir)
-        .arg("--port")
-        .arg("0")
+        // 不传 --port：用 bootstrap 默认固定端口（3876，被占用自动回退随机）——
+        // 固定端口让页面 origin 稳定，localStorage（主题/语言缓存）跨启动持久
         .arg("--assets-dir")
         .arg(engine_dir)
         .stdout(Stdio::piped())

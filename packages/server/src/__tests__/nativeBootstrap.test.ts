@@ -12,7 +12,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { dirname } from 'node:path'
-import { parseNativeArgs, injectEngineAssets, handleInternalRoute } from '../native/bootstrap'
+import { parseNativeArgs, injectEngineAssets, handleInternalRoute, DEFAULT_PORT } from '../native/bootstrap'
 
 const ENV_KEYS = ['DATA_DIR', 'APP_VERSION', 'SQLITE_VEC_PATH', 'SQLITE_LIBRARY_PATH', 'WEB_DIST']
 
@@ -34,9 +34,9 @@ describe('parseNativeArgs', () => {
   // 还原未设置的变量必须显式 delete
   beforeEach(() => { delete process.env.DATA_DIR })
 
-  test('缺省值：随机端口 + 可执行文件目录', () => {
+  test('缺省值：固定端口（origin 稳定保 localStorage）+ 可执行文件目录', () => {
     const args = parseNativeArgs([])
-    expect(args.port).toBe(0)
+    expect(args.port).toBe(DEFAULT_PORT)
     expect(args.dataDir).toBe('./data')
     expect(args.assetsDir).toBe(dirname(process.execPath))
   })

@@ -84,7 +84,8 @@ public final class EngineProcess {
 
         let proc = Process()
         proc.executableURL = engineBinaryURL
-        proc.arguments = ["--data-dir", dataDir.path, "--port", "0", "--assets-dir", engineDir.path]
+        // 不传 --port：bootstrap 默认固定端口（origin 稳定 → localStorage 持久，主题/语言不丢）
+        proc.arguments = ["--data-dir", dataDir.path, "--assets-dir", engineDir.path]
         let outPipe = Pipe()
         proc.standardOutput = outPipe
         // stderr 不接管：engine 日志（含启动告警）不进握手通道
