@@ -197,3 +197,11 @@
      'system' 时 JS 监听 prefers-color-scheme 变化并把 data-theme 同步为 light/dark
    - 未来新增主题：复制 :root 块改名为 [data-theme="warm"] 等
    ──────────────────────────────────────────────────────────────── */
+
+
+/* Windows 字体渲染：ClearType 对可变字体插值实例 hinting 弱，小字号西文/数字发虚；
+   Segoe UI 是 ClearType 原生优化（中文字体不变，仍回落雅黑）。
+   index.html 探测脚本按 UA 设置 data-os="windows"（head 内联防闪烁，无字体跳动） */
+html[data-os='windows'] {
+  --font-sans: 'Segoe UI', 'Microsoft YaHei', 'Inter Variable', 'Inter', system-ui, 'PingFang SC', 'Hiragino Sans GB', Helvetica, 'Apple Color Emoji', Arial, sans-serif, 'Segoe UI Emoji', 'Segoe UI Symbol';
+}

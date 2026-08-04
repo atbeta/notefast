@@ -68,6 +68,8 @@
       壳层（内嵌 WKWebView / Tauri）加载入口 URL 时带 native 参数，web 据此启用
       窗口拖拽区等桌面化适配；非壳环境无此参数，保持纯浏览器行为。
       必须在 <head> 内联防闪烁，与主题/语言脚本同时机。
+      同时标记运行平台 data-os（windows/macos/linux）——Windows 上字体渲染策略
+      （Segoe UI 优先）依赖它，见 styles/tokens.css。
     -->
     <script>
       (function () {
@@ -77,6 +79,12 @@
             document.documentElement.classList.add('native-shell');
             document.documentElement.setAttribute('data-shell', m[1] === '1' ? 'tauri' : m[1]);
           }
+          var os = /Windows/i.test(navigator.userAgent)
+            ? 'windows'
+            : /Mac/i.test(navigator.userAgent)
+              ? 'macos'
+              : 'linux';
+          document.documentElement.setAttribute('data-os', os);
         } catch (e) { /* ignore — 保持默认浏览器行为 */ }
       })();
     </script>
