@@ -80,7 +80,8 @@ export default function TagFilter({ onChange }: TagFilterProps) {
   const tags = error ? [] : (data?.tags ?? [])
   const selected = useMemo(() => readSelectedTags(searchParams), [searchParams])
   const tagMatch = useMemo(() => parseTagMatchMode(searchParams.get('tag_match')), [searchParams])
-  const untagged = searchParams.get('untagged') === '1'
+  const untagged =
+    searchParams.get('untagged') === '1' || searchParams.get('view') === 'untagged'
 
   const patchParams = (fn: (prev: URLSearchParams) => void) => {
     setSearchParams(
@@ -122,6 +123,8 @@ export default function TagFilter({ onChange }: TagFilterProps) {
   }
 
   if (loading && tags.length === 0) return null
+  // 「未加标签」与标签筛选互斥：该视图下列出标签 chip 无意义（选中任一标签即会退出 untagged）
+  if (untagged) return null
   if (tags.length === 0) return null
 
   const showMatchToggle = selected.length >= 2
