@@ -8,6 +8,10 @@ import '@fontsource-variable/inter'
 import '@fontsource-variable/source-serif-4/opsz.css'
 import '@fontsource-variable/jetbrains-mono'
 import './index.css'
+import { initNativeShell } from './lib/nativeShell'
+
+// 原生壳适配（右键菜单屏蔽等）：浏览器形态内部自动跳过
+initNativeShell()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
