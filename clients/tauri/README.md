@@ -38,10 +38,10 @@ cd D:\Code\notefast
 bun --filter @notefast/web build
 bun run build:engine
 
-# 2. 启动壳（dev 模式：Rust 读 NOTEFAST_ENGINE_DIR 定位 engine）
+# 2. 启动壳（dev 模式：自动探测 packages/server/dist-engine，无需设环境变量；
+#    如需覆盖可用 $env:NOTEFAST_ENGINE_DIR = "..."）
 cd clients\tauri
 bun install          # 首次：拉取 @tauri-apps/cli（已声明在 package.json）
-$env:NOTEFAST_ENGINE_DIR = "..\..\packages\server\dist-engine"
 bun dev              # 等价 bun run dev → tauri dev
 ```
 

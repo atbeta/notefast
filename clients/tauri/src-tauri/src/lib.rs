@@ -42,8 +42,10 @@ async fn engine_start(app: AppHandle, state: State<'_, EngineState>) -> Result<E
     Ok(info)
 }
 
-/// 定位 engine 产物目录：dev 模式读 NOTEFAST_ENGINE_DIR（指向 packages/server/dist-engine，
-/// 与 macOS 壳同约定）；打包模式取资源目录 resources/engine/
+/// 定位 engine 产物目录，优先级：
+/// 1. `NOTEFAST_ENGINE_DIR` 显式指定（与 macOS 壳同约定）
+/// 2. debug 构建自动探测仓库内 `packages/server/dist-engine`（dev 免配置）
+/// 3. 打包模式取资源目录 `resources/engine/`
 fn resolve_engine_dir(app: &AppHandle) -> Result<PathBuf, String> {
     if let Ok(dir) = std::env::var("NOTEFAST_ENGINE_DIR") {
         let dir = dir.trim();
@@ -51,6 +53,22 @@ fn resolve_engine_dir(app: &AppHandle) -> Result<PathBuf, String> {
             return Ok(PathBuf::from(dir));
         }
     }
+
+    // dev 免配置：CARGO_MANIFEST_DIR = src-tauri，向上三级即仓库根
+    #[cfg(debug_assertions)]
+    {
+        let candidate = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("packages")
+            .join("server")
+            .join("dist-engine");
+        if candidate.join(engine::engine_binary_name()).exists() {
+            return Ok(candidate);
+        }
+    }
+
     let resource_dir = app
         .path()
         .resource_dir()
@@ -60,7 +78,8 @@ fn resolve_engine_dir(app: &AppHandle) -> Result<PathBuf, String> {
         return Ok(dir);
     }
     Err(format!(
-        "找不到 engine 产物。dev 模式请设置 NOTEFAST_ENGINE_DIR 指向 packages/server/dist-engine；\
+        "找不到 engine 产物。dev 模式请先运行 `bun run build:engine` 产出 \
+         packages/server/dist-engine（或设置 NOTEFAST_ENGINE_DIR 覆盖）；\
          打包模式请将 engine 产物放入 resources/engine/（已尝试: {}）",
         dir.display()
     ))
