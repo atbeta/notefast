@@ -39,6 +39,8 @@ import { Kbd, Tooltip, useToast } from '../components/ui'
 interface Backlink {
   id: number
   source_id: string
+  source_root_id: string
+  source_doc_title: string | null
   source_content: string
   source_type: string
   ref_type: string
@@ -991,11 +993,11 @@ function BacklinksView({ backlinks, loading }: { backlinks: Backlink[]; loading:
       {backlinks.map((bl) => (
         <Link
           key={bl.id}
-          to={'/doc/' + bl.source_id}
+          to={'/doc/' + bl.source_root_id + '#block-' + bl.source_id}
           className="group block px-2.5 py-2 -mx-1 rounded-lg hover:bg-accent transition-colors"
         >
-          <div className="text-[10.5px] font-medium uppercase tracking-[0.04em] text-primary/80 mb-0.5">
-            {bl.ref_type}
+          <div className="text-[11px] font-medium text-foreground/75 line-clamp-1 mb-0.5">
+            {bl.source_doc_title ?? '—'}
           </div>
           <p className="text-[12.5px] text-muted-foreground group-hover:text-foreground line-clamp-2 leading-relaxed transition-colors">
             {bl.source_content}

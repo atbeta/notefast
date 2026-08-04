@@ -315,6 +315,38 @@ describe('Search API', () => {
     expect(Array.isArray(body)).toBe(true)
     expect(body.length).toBe(1)
   })
+
+  test('GET /api/v1/search/refs 目标为文档根块时展开到文档内全部子块', async () => {
+    const { body: doc } = await api('POST', '/api/v1/docs', {
+      notebook_id: notebookId,
+      title: '反链展开目标文档',
+    })
+    const { body: child } = await api('POST', '/api/v1/blocks', {
+      notebook_id: notebookId,
+      parent_id: doc.id,
+      type: 'paragraph',
+      content: '文档内的目标段落',
+    })
+    const { body: sourceDoc } = await api('POST', '/api/v1/docs', {
+      notebook_id: notebookId,
+      title: '引用方文档',
+    })
+    const { body: source } = await api('POST', '/api/v1/blocks', {
+      notebook_id: notebookId,
+      parent_id: sourceDoc.id,
+      type: 'paragraph',
+      content: '引用方段落',
+    })
+
+    await api('POST', '/api/v1/refs', { source_id: source.id, target_id: child.id })
+
+    const { status, body } = await api('GET', `/api/v1/search/refs?target_id=${doc.id}`)
+    expect(status).toBe(200)
+    expect(body.length).toBe(1)
+    expect(body[0].source_id).toBe(source.id)
+    expect(body[0].target_id).toBe(child.id)
+    expect(body[0].source_doc_title).toBe('引用方文档')
+  })
 })
 
 describe('Import API', () => {

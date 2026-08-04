@@ -63,15 +63,26 @@ export interface BacklinkRow {
   source_content: string
   source_type: string
   source_root_id: string
+  source_doc_title: string | null
 }
 
-/** 指向 targetId 的反链（新→旧）；limit 不传则全量 */
+/**
+ * 指向 targetId 的反链（新→旧）；limit 不传则全量
+ *
+ * targetId 为文档根块（type='document'）时按文档维度展开——引用该文档内
+ * 任意子块的引用都算反链（AI 自动建链目标多为正文段落块，只查根块会漏）。
+ */
 export function listBacklinks(db: Db, targetId: string, opts: { limit?: number } = {}): BacklinkRow[] {
+  const isDocRoot =
+    (db.query('SELECT type FROM blocks WHERE id = ?').get(targetId) as { type?: string } | undefined)
+      ?.type === 'document'
   let sql = `SELECT r.id, r.source_id, r.target_id, r.ref_type, r.created_at,
-                    b.content as source_content, b.type as source_type, b.root_id as source_root_id
+                    b.content as source_content, b.type as source_type, b.root_id as source_root_id,
+                    d.content as source_doc_title
              FROM block_refs r
              JOIN blocks b ON b.id = r.source_id
-             WHERE r.target_id = ?
+             LEFT JOIN blocks d ON d.id = b.root_id AND d.type = 'document'
+             WHERE r.target_id ${isDocRoot ? 'IN (SELECT id FROM blocks WHERE root_id = ?)' : '= ?'}
              ORDER BY r.created_at DESC`
   const params: (string | number)[] = [targetId]
   if (opts.limit !== undefined) {
