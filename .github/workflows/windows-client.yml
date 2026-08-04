@@ -1,10 +1,9 @@
 name: Windows Client
 
+# 仅 PR 冒烟（轻量）：cargo check/clippy + engine 构建验证；
+# 完整 NSIS 打包只在打 v tag 时由 windows-release.yml 执行
 on:
   pull_request:
-    paths: ['clients/**']
-  push:
-    branches: [main]
     paths: ['clients/**']
 
 concurrency:
@@ -58,17 +57,3 @@ jobs:
           Test-Path packages/server/dist-engine/native/vec0.dll | Out-Null
           Test-Path packages/server/dist-engine/web-dist/index.html | Out-Null
           Write-Host "engine artifact OK"
-
-      - name: Build NSIS installer
-        working-directory: clients/tauri
-        run: |
-          bun install
-          bun run prepare:engine
-          bun run build
-
-      - name: Upload installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: NoteFast-windows-${{ github.ref_name }}
-          path: clients/tauri/src-tauri/target/release/bundle/nsis/*.exe
-          if-no-files-found: error

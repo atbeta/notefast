@@ -1,10 +1,8 @@
 name: macOS Client
 
+# 仅 PR 冒烟（swift test + assemble 验证）；签名/公证发布只在打 v tag 时由 macos-release.yml 执行
 on:
   pull_request:
-    paths: ['clients/**']
-  push:
-    branches: [main]
     paths: ['clients/**']
 
 concurrency:
