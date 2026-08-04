@@ -1,7 +1,9 @@
 /**
  * Theme hook — 三档主题（light / dark / system）+ 系统跟随
  *
- * 持久化：localStorage 'notefast.theme' = 'light' | 'dark' | 'system'
+ * 持久化：localStorage 'notefast.theme' = 'light' | 'dark' | 'system'（首屏缓存）
+ *         + 服务端 /api/v1/preferences（权威——原生壳 origin 随 engine 随机端口
+ *         变化，localStorage 不持久；浏览器形态双写无副作用）
  * 渲染：<html data-theme="light|dark"> 由防闪烁脚本（在 index.html 内联）
  *       和本 hook 在系统变化时同步更新。
  *
@@ -10,6 +12,7 @@
  */
 
 import { useSyncExternalStore } from 'react'
+import { fetchWithAuth } from './useAPI'
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
@@ -68,15 +71,50 @@ function setState(patch: Partial<ThemeState>): void {
   for (const l of listeners) l()
 }
 
-/** 切换主题：写 localStorage（唯一一份持久化逻辑）+ 更新 store */
+/** 切换主题：写 localStorage（首屏缓存）+ 服务端持久化 + 更新 store */
 function setThemeChoice(next: ThemeChoice): void {
   try {
     localStorage.setItem(STORAGE_KEY, next)
   } catch {
     // ignore — 隐私模式 / 配额满时不影响 UI
   }
+  persistToServer({ theme: next })
   setState({ choice: next })
 }
+
+/** 服务端持久化（fire-and-forget）：原生壳 origin 不稳定，localStorage 会丢 */
+function persistToServer(patch: Record<string, string>): void {
+  void fetchWithAuth('/api/v1/preferences', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  }).catch(() => {
+    // 离线 / 未鉴权：保留本地值，下次加载以服务端为准
+  })
+}
+
+/** 模块加载时拉取服务端偏好（权威）覆盖本地缓存；失败则保留本地值 */
+async function loadServerChoice(): Promise<void> {
+  try {
+    const res = await fetchWithAuth('/api/v1/preferences')
+    if (!res.ok) return
+    const prefs = (await res.json()) as { theme?: string }
+    if (prefs.theme && (VALID_CHOICES as readonly string[]).includes(prefs.theme)) {
+      const server = prefs.theme as ThemeChoice
+      if (server !== state.choice) {
+        try {
+          localStorage.setItem(STORAGE_KEY, server)
+        } catch {
+          // ignore
+        }
+        setState({ choice: server })
+      }
+    }
+  } catch {
+    // 服务端不可达：保留本地值
+  }
+}
+void loadServerChoice()
 
 // 系统偏好监听：首个订阅者出现时挂一次，存活期与模块一致
 let mediaListenerAttached = false

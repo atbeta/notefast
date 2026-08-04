@@ -1,7 +1,9 @@
 /**
  * Locale hook — 语言选择（跟随浏览器 / 具体语言）
  *
- * 持久化：localStorage 'notefast.locale' = 'system' | '<code>'
+ * 持久化：localStorage 'notefast.locale' = 'system' | '<code>'（首屏缓存）
+ *         + 服务端 /api/v1/preferences（权威——原生壳 origin 随 engine 随机端口
+ *         变化，localStorage 不持久；浏览器形态双写无副作用）
  * 切换动作：写 localStorage + i18next.changeLanguage() + 同步 <html lang>
  * 渲染：模块级 store + useSyncExternalStore（同 useTheme 模式），
  *       所有实例共享同一份状态，切换即时生效。
@@ -13,6 +15,7 @@
 import { useSyncExternalStore } from 'react'
 import i18next from '../i18n'
 import { LOCALE_STORAGE_KEY, readStoredLocaleChoice, resolveLocale } from '../i18n/locales'
+import { fetchWithAuth } from './useAPI'
 
 export type LocaleChoice = 'system' | string
 
@@ -53,15 +56,50 @@ function setState(patch: Partial<LocaleState>): void {
   for (const l of listeners) l()
 }
 
-/** 切换语言：写 localStorage（唯一一份持久化逻辑）+ 更新 store */
+/** 切换语言：写 localStorage（首屏缓存）+ 服务端持久化 + 更新 store */
 function setLocaleChoice(next: LocaleChoice): void {
   try {
     localStorage.setItem(LOCALE_STORAGE_KEY, next)
   } catch {
     // ignore — 隐私模式 / 配额满时不影响 UI
   }
+  persistToServer({ locale: next })
   setState({ choice: next })
 }
+
+/** 服务端持久化（fire-and-forget）：原生壳 origin 不稳定，localStorage 会丢 */
+function persistToServer(patch: Record<string, string>): void {
+  void fetchWithAuth('/api/v1/preferences', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  }).catch(() => {
+    // 离线 / 未鉴权：保留本地值，下次加载以服务端为准
+  })
+}
+
+/** 模块加载时拉取服务端偏好（权威）覆盖本地缓存；失败则保留本地值 */
+async function loadServerChoice(): Promise<void> {
+  try {
+    const res = await fetchWithAuth('/api/v1/preferences')
+    if (!res.ok) return
+    const prefs = (await res.json()) as { locale?: string }
+    if (prefs.locale) {
+      const server: LocaleChoice = prefs.locale === 'system' ? 'system' : prefs.locale
+      if (server !== state.choice) {
+        try {
+          localStorage.setItem(LOCALE_STORAGE_KEY, server)
+        } catch {
+          // ignore
+        }
+        setState({ choice: server })
+      }
+    }
+  } catch {
+    // 服务端不可达：保留本地值
+  }
+}
+void loadServerChoice()
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
