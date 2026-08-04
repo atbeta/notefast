@@ -240,14 +240,26 @@ export default function Sidebar({
     return () => window.removeEventListener(DRAFT_CHANGED_EVENT, compute)
   }, [allRecent])
 
+  // 收集箱计数 + 归档计数（SSE 变更即时刷新 + 15s 兜底轮询）
+  const refreshCounts = useCallback(() => {
+    api.get<DocSummary[]>('/docs/list?status=inbox')
+      .then((list) => { setInboxCount(list.length) })
+      .catch(() => {})
+    api.get<DocSummary[]>('/docs/list?status=archived')
+      .then((list) => { setArchivedCount(list.length) })
+      .catch(() => {})
+  }, [])
+
   // 外部 MCP / AI 聊天等任何通道写入文档 → 即时刷新最近列表（服务端已聚合去抖）
   useDocChanges(
     useCallback(() => {
-      if (!collapsed) refetchRecent()
-    }, [collapsed, refetchRecent]),
+      if (!collapsed) {
+        refetchRecent()
+        refreshCounts()
+      }
+    }, [collapsed, refetchRecent, refreshCounts]),
   )
 
-  // 收集箱计数 + 归档计数
   useEffect(() => {
     let cancelled = false
     const refresh = () => {
