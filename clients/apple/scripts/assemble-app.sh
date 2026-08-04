@@ -17,8 +17,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 APPLE_DIR="$ROOT/clients/apple"
 ENGINE_DIR="$ROOT/packages/server/dist-engine"
 OUT_DIR="$APPLE_DIR/dist"
-APP_NAME="NoteFast"
-APP="$OUT_DIR/$APP_NAME.app"
 
 BUILD_ENGINE=1
 SIGN_IDENTITY="-"
@@ -29,6 +27,21 @@ while [ $# -gt 0 ]; do
     *) echo "未知参数: $1" >&2; exit 1 ;;
   esac
 done
+
+# 产物身份：DEV（ad-hoc）与发布（Developer ID）区分——
+# 应用名/bundle ID/深链 scheme 全部隔离，两个版本可同时安装、应用列表可分辨
+if [ "$SIGN_IDENTITY" = "-" ]; then
+  APP_NAME="NoteFast Dev"
+  EXEC_NAME="NoteFastDev"
+  BUNDLE_ID="com.notefast.app.dev"
+  URL_SCHEME="notefast-dev"
+else
+  APP_NAME="NoteFast"
+  EXEC_NAME="NoteFast"
+  BUNDLE_ID="com.notefast.app"
+  URL_SCHEME="notefast"
+fi
+APP="$OUT_DIR/$APP_NAME.app"
 
 echo "==> [1/5] engine 产物"
 if [ "$BUILD_ENGINE" = "1" ]; then
@@ -43,7 +56,7 @@ echo "==> [2/5] swift build（release）"
 echo "==> [3/5] 组装 .app bundle"
 rm -rf "$OUT_DIR"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/engine"
-cp "$APPLE_DIR/.build/release/NoteFastApp" "$APP/Contents/MacOS/$APP_NAME"
+cp "$APPLE_DIR/.build/release/NoteFastApp" "$APP/Contents/MacOS/$EXEC_NAME"
 cp "$APPLE_DIR/Resources/AppIcon.icns" "$APP/Contents/Resources/"
 # engine 产物整体注入 Resources/engine（notefast-server + native/ + web-dist + VERSION）。
 # 注意：必须排除 notefast-engine-*.tar.gz——tarball 内含构建时未签名的原始副本，
@@ -58,8 +71,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleExecutable</key><string>$APP_NAME</string>
-  <key>CFBundleIdentifier</key><string>com.notefast.app</string>
+  <key>CFBundleExecutable</key><string>$EXEC_NAME</string>
+  <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
   <key>CFBundleName</key><string>$APP_NAME</string>
   <key>CFBundleDisplayName</key><string>$APP_NAME</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -72,10 +85,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleURLTypes</key>
   <array>
     <dict>
-      <key>CFBundleURLName</key><string>com.notefast.app</string>
+      <key>CFBundleURLName</key><string>$BUNDLE_ID</string>
       <key>CFBundleURLSchemes</key>
       <array>
-        <string>notefast</string>
+        <string>$URL_SCHEME</string>
       </array>
     </dict>
   </array>
@@ -101,7 +114,7 @@ done
 # app 主二进制 + bundle
 codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" \
   --entitlements "$APPLE_DIR/Resources/NoteFast.entitlements" \
-  "$APP/Contents/MacOS/$APP_NAME"
+  "$APP/Contents/MacOS/$EXEC_NAME"
 codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
 
 echo "==> [5/5] 校验"

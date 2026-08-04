@@ -104,6 +104,12 @@ jobs:
           # DMG 无自身代码签名（hdiutil 产物特性），spctl primary-signature 检查必然
           # rejected——Gatekeeper 对 DMG 走公证票据，正确验证是 stapler validate
           xcrun stapler validate NoteFast.dmg
+          # 产物带版本 + 平台（对齐 RelayCraft_1.4.1_universal-apple-darwin.dmg 风格；
+          # 当前为 arm64 单架构，做 universal 时改为 universal-apple-darwin）
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" NoteFast.app/Contents/Info.plist)
+          mv NoteFast.dmg "NoteFast_${VERSION}_arm64-apple-darwin.dmg"
+          mv NoteFast.zip "NoteFast_${VERSION}_arm64-apple-darwin.zip"
+          echo "ARTIFACT_VERSION=${VERSION}" >> "$GITHUB_ENV"
 
       - name: Attach to GitHub Release
         if: github.ref_type == 'tag'
@@ -118,14 +124,14 @@ jobs:
             sleep 5
           done
           gh release view "$TAG" >/dev/null 2>&1 || { echo "Release $TAG 未找到" >&2; exit 1; }
-          gh release upload "$TAG" NoteFast.dmg NoteFast.zip --clobber
+          gh release upload "$TAG" NoteFast_*_arm64-apple-darwin.dmg NoteFast_*_arm64-apple-darwin.zip --clobber
 
       - name: Upload signed app
         uses: actions/upload-artifact@v4
         with:
           name: NoteFast-macos-${{ github.ref_name }}
           path: |
-            clients/apple/dist/NoteFast.zip
-            clients/apple/dist/NoteFast.dmg
+            clients/apple/dist/NoteFast_*_arm64-apple-darwin.zip
+            clients/apple/dist/NoteFast_*_arm64-apple-darwin.dmg
             clients/apple/dist/NoteFast.app
           if-no-files-found: error
