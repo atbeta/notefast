@@ -20,12 +20,12 @@
  * 🇨🇳 CN    deepseek      DeepSeek V4-Flash (低价)               (空，禁用)                       deepseek-v4-flash
  * 🇨🇳 CN    doubao        字节豆包 Seed 2.1 (256K)              doubao-embedding-large          doubao-seed-2-1-pro-260628
  * 🇨🇳 CN    zhipu         智谱 GLM-5 (744B-A40B, MIT)           embedding-3                     glm-5
- * 🇨🇳 CN    moonshot      Kimi K2.6 长文本                       (空，禁用)                       kimi-latest（→K2.6）
+ * 🇨🇳 CN    moonshot      Kimi K3 长文本（kimi-latest 别名）           (空，禁用)                       kimi-latest（→K3）
  * 🇨🇳 CN    siliconflow   国产聚合 + 免费 Qwen3-Embed           Qwen/Qwen3-Embedding-8B         deepseek-ai/DeepSeek-V4-Flash（rerank: BAAI/bge-reranker-v2-m3）
  * 🇨🇳 CN    dashscope     阿里百炼 Qwen3.8-Max                  qwen3.7-text-embedding          qwen3.8-max（rerank: qwen3-rerank）
  *
- * 🌍 Global openai        官方 GPT-5 mini                       text-embedding-3-small           gpt-5-mini
- * 🌍 Global openrouter    1 key 访问 400+ 模型                   qwen/qwen3-embedding-8b          meta-llama/llama-4-maverick
+ * 🌍 Global openai        官方 GPT-5.6 Terra（低延迟）               text-embedding-3-small           gpt-5.6-terra
+ * 🌍 Global openrouter    1 key 访问 400+ 模型                   qwen/qwen3-embedding-8b          deepseek/deepseek-v4-flash
  * 🌍 Global gemini        Google Gemini 3.5 Flash                gemini-embedding-001             gemini-3.5-flash
  * 🌍 Global mistral       Mistral Large 3 (production)          mistral-embed                    mistral-large-latest
  * 🌍 Global groq          Groq + Qwen 3.6                       (空，禁用)                       qwen/qwen3.6-27b
@@ -61,7 +61,7 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     label: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com/v1',
     embeddingModel: '',
-    chatModel: 'deepseek-chat',
+    chatModel: 'deepseek-v4-flash',
     rerankerModel: '',
     extraHeaders: {},
     requiresKey: true,
@@ -73,7 +73,7 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     label: 'MiniMax',
     baseUrl: 'https://api.minimaxi.com/v1',
     embeddingModel: '',
-    chatModel: 'MiniMax-Text-01',
+    chatModel: 'MiniMax-M3',
     rerankerModel: '',
     extraHeaders: {},
     requiresKey: true,
@@ -85,7 +85,7 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     label: 'Moonshot (Kimi)',
     baseUrl: 'https://api.moonshot.cn/v1',
     embeddingModel: '',
-    chatModel: 'moonshot-v1-8k',
+    chatModel: 'kimi-latest',
     rerankerModel: '',
     extraHeaders: {},
     requiresKey: true,
@@ -123,7 +123,7 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     label: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
     embeddingModel: '',
-    chatModel: 'gpt-4o-mini',
+    chatModel: 'gpt-5.6-terra',
     rerankerModel: '',
     extraHeaders: {},
     requiresKey: true,
@@ -135,7 +135,7 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     label: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
     embeddingModel: '',
-    chatModel: 'openai/gpt-4o-mini',
+    chatModel: 'deepseek/deepseek-v4-flash',
     rerankerModel: '',
     extraHeaders: { 'HTTP-Referer': 'https://notefast.local', 'X-Title': 'NoteFast' },
     requiresKey: true,
@@ -281,6 +281,7 @@ export const KNOWN_CHAT_MODELS = [
   'deepseek-ai/DeepSeek-V4-Pro',
   'Qwen/Qwen3-235B-A22B-Instruct-2507',
   // OpenRouter
+  'deepseek/deepseek-v4-flash',
   'meta-llama/llama-4-maverick',
   'meta-llama/llama-4-scout',
   'openai/gpt-oss-120b',
