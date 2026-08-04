@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NoteFast</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: #18181b;
+      color: #fafafa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    .wrap { text-align: center; }
+    .spinner {
+      width: 28px; height: 28px;
+      margin: 0 auto 16px;
+      border: 3px solid rgba(255, 255, 255, 0.15);
+      border-top-color: #4ade80;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .err { color: #f87171; max-width: 440px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="boot">
+    <div class="spinner"></div>
+    <div id="msg">正在启动 NoteFast…</div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -14,7 +14,7 @@ clients/
 │   ├── Resources/          # 组装期注入：engine 产物、Info.plist、entitlements
 │   ├── scripts/assemble-app.sh
 │   └── Package.swift       # SPM（Swift 源码与未来 XcodeGen 生成 .xcodeproj 兼容）
-└── desktop/      # 未来：Tauri 壳（Windows / Linux，复用 web-dist）
+└── tauri/        # Tauri 壳（当前仅 Windows，复用 web-dist；Linux 后续同一工程）
 ```
 
 ## 各平台形态
@@ -23,7 +23,8 @@ clients/
 |---|---|---|---|
 | **macOS** | SwiftUI + WKWebView | 内嵌 Bun server（`--compile` 单文件） | 开发中（P0 壳 + 阅读） |
 | **iOS / iPadOS** | SwiftUI | 不内嵌（禁派生进程）→ 同步协议直连 S3 / 连自部署 server | 规划 |
-| **Windows / Linux** | Tauri | 内嵌 Bun server + 复用 web-dist | 规划 |
+| **Windows** | Tauri（WebView2） | 内嵌 Bun server（.exe + vec0.dll）+ 复用 web-dist | 开发中（P0 壳 + 阅读） |
+| **Linux** | Tauri | 内嵌 Bun server + 复用 web-dist | 规划 |
 
 ## 关键约定
 

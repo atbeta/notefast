@@ -1,0 +1,6 @@
+# Rust 构建产物
+src-tauri/target/
+# Tauri 生成的 schema / 上下文
+src-tauri/gen/
+# 打包期注入的 engine 产物（bun run build:engine 后复制，勿提交）
+src-tauri/resources/
