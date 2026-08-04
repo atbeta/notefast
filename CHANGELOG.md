@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.37.1](https://github.com/atbeta/notefast/compare/v0.37.0...v0.37.1) (2026-08-04)
+
+
+### Bug Fixes
+
+* **ai:** update chat model defaults to latest provider models ([784a7db](https://github.com/atbeta/notefast/commit/784a7db7e796f9f147c8124122e62606bcaee67e))
+* **ci:** give Cargo.toml extra-file an explicit toml type ([12f9b12](https://github.com/atbeta/notefast/commit/12f9b12421551d38fe2b7492e77ff5a59c6b016f))
+
 ## [0.37.0](https://github.com/atbeta/notefast/compare/v0.36.0...v0.37.0) (2026-08-04)
 
 
