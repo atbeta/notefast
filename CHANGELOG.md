@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.38.0](https://github.com/atbeta/notefast/compare/v0.37.3...v0.38.0) (2026-08-04)
+
+
+### Features
+
+* **server:** persist UI preferences (theme/locale) server-side ([c74d787](https://github.com/atbeta/notefast/commit/c74d7870223df5b0bbe75c953d58972cff707073))
+* **tauri:** enforce single instance ([57d7ab3](https://github.com/atbeta/notefast/commit/57d7ab3044cb8154d477a0bb9fd08923feed413f))
+* **web:** block browser context menu in native shells ([b5ca487](https://github.com/atbeta/notefast/commit/b5ca4870e1e7087146e287b908b06770ae71767d))
+
+
+### Bug Fixes
+
+* **engine:** fixed loopback port for stable origin, kill startup flicker ([227a248](https://github.com/atbeta/notefast/commit/227a248e1fbd6c98b92d3b99de9ebc1af0b3ada9))
+
 ## [0.37.3](https://github.com/atbeta/notefast/compare/v0.37.2...v0.37.3) (2026-08-04)
 
 
