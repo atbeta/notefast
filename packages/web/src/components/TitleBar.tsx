@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Minimize2, Maximize2, Square, X } from 'lucide-react'
+import { Minus, Square, Copy, X } from 'lucide-react'
 import { isTauriShell } from '../hooks/useShell'
 
 /**
@@ -63,13 +63,13 @@ export default function TitleBar() {
       </span>
       <div className="flex items-center">
         <TitleBarButton label={t('layout.minimize')} onClick={() => void win.minimize()}>
-          <Minimize2 className="w-3.5 h-3.5" />
+          <Minus className="w-4 h-4" />
         </TitleBarButton>
         <TitleBarButton
           label={maximized ? t('layout.restore') : t('layout.maximize')}
           onClick={() => void win.toggleMaximize()}
         >
-          {maximized ? <Square className="w-3 h-3" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          {maximized ? <Copy className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
         </TitleBarButton>
         <TitleBarButton label={t('layout.closeWindow')} onClick={() => void win.close()} danger>
           <X className="w-4 h-4" />
