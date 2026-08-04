@@ -22,6 +22,7 @@ export type ProviderPresetId =
   | 'deepseek'
   | 'minimax'
   | 'moonshot'
+  | 'dashscope'
   | 'openai'
   | 'openrouter'
   | 'jina'
@@ -34,6 +35,7 @@ export const PROVIDER_PRESET_IDS: readonly ProviderPresetId[] = [
   'deepseek',
   'minimax',
   'moonshot',
+  'dashscope',
   'openai',
   'openrouter',
   'jina',

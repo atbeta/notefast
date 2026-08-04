@@ -63,7 +63,7 @@ describe('TEI Reranker', () => {
   })
 })
 
-describe('Jina 风格 Reranker（SiliconFlow / Jina / Cohere）', () => {
+describe('Jina 风格 Reranker（SiliconFlow / Jina / Cohere / DashScope）', () => {
   test('请求体用 documents，响应解析 results[].relevance_score', async () => {
     let captured: Record<string, unknown> = {}
     const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -104,6 +104,27 @@ describe('createReranker 按 baseUrl 分派', () => {
     expect(createReranker('https://api.siliconflow.cn/v1', 'm').name).toBe('jina-rerank-m')
     expect(createReranker('https://api.jina.ai/v1', 'm').name).toBe('jina-rerank-m')
     expect(createReranker('https://api.cohere.ai/v1', 'm').name).toBe('jina-rerank-m')
+  })
+
+  test('DashScope（aliyuncs.com）走 Jina 风格协议但路径为 /reranks', async () => {
+    let capturedUrl = ''
+    let captured: Record<string, unknown> = {}
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(input)
+      captured = JSON.parse(init!.body as string)
+      return new Response(JSON.stringify({
+        results: [{ index: 0, relevance_score: 0.9 }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }) as unknown as typeof fetch
+    const r = createReranker('https://dashscope.aliyuncs.com/compatible-mode/v1', 'qwen3-rerank', fetchImpl, 5_000, 'k')
+    expect(r.name).toBe('jina-rerank-qwen3-rerank')
+    const out = await r.rerank({ query: 'q', texts: ['a', 'b'], topN: 1 })
+    expect(capturedUrl).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1/reranks')
+    expect(captured.documents).toEqual(['a', 'b'])
+    expect(captured.model).toBe('qwen3-rerank')
+    expect(out).toEqual([{ index: 0, score: 0.9 }])
+    // workspace 级域名同样命中
+    expect(createReranker('https://ws123.cn-beijing.maas.aliyuncs.com/compatible-api/v1', 'm').name).toBe('jina-rerank-m')
   })
 
   test('自托管 / 未知域名保持 TEI 协议', () => {

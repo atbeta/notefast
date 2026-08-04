@@ -53,7 +53,9 @@ export function ProviderForm({
       ...value,
       preset: newPreset,
       baseUrl: p.baseUrl,
-      embeddingModel: mode === 'chat' ? '' : p.embeddingModel,
+      // reranker 模式的模型字段走独立的 rerankerModel（与 embedding 解耦，
+      // 否则选 SiliconFlow 会把 Qwen3-Embedding 错填成 rerank 模型）
+      embeddingModel: mode === 'chat' ? '' : mode === 'reranker' ? p.rerankerModel : p.embeddingModel,
       chatModel: mode === 'chat' ? p.chatModel : '',
       extraHeaders: { ...p.extraHeaders },
       apiKey: '',

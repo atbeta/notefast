@@ -6,9 +6,10 @@
  *
  * 两种线协议：
  * - TEI（默认，自托管）：body { query, texts } → resp [{ index, score }]
- * - Jina 风格（SiliconFlow / Jina / Cohere）：body { model, query, documents }
+ * - Jina 风格（SiliconFlow / Jina / Cohere / DashScope）：body { model, query, documents }
  *   → resp { results: [{ index, relevance_score }] }
- * createReranker 按 baseUrl 域名自动分派；baseUrl 都只给到 /v1，/rerank 由实现拼接。
+ * createReranker 按 baseUrl 域名自动分派；baseUrl 都只给到 /v1，/rerank(s) 由实现拼接
+ * （DashScope qwen3-rerank 是 /reranks 复数路径，其余为 /rerank）。
  *
  * 也可自定义实现 RerankerProvider（无第三方服务时返回 undefined 即可降级）。
  */
@@ -70,11 +71,13 @@ export function createTeiReranker(
 }
 
 /**
- * Jina 风格 /rerank 实现（SiliconFlow / Jina / Cohere 同协议）：
- *   POST {baseUrl}/rerank
+ * Jina 风格 /rerank 实现（SiliconFlow / Jina / Cohere / DashScope 同协议）：
+ *   POST {baseUrl}{path}
  *   body: { model, query, documents: string[], top_n?, return_documents?: boolean }
  *   resp: { results: Array<{ index, relevance_score }> }
  * 与 TEI 的差异仅在字段名（documents / relevance_score / 外层 results 包装）。
+ * path 默认 /rerank；DashScope qwen3-rerank 的 OpenAI 兼容端点是 /reranks（复数），
+ * 协议字段与响应形状和 Jina 完全一致（gte-rerank-v2 的旧嵌套协议已于 2026-05-30 下线，不支持）。
  */
 export function createJinaReranker(
   baseUrl: string,
@@ -82,8 +85,9 @@ export function createJinaReranker(
   fetchImpl: typeof fetch = globalThis.fetch,
   timeoutMs = 30_000,
   apiKey = '',
+  path: '/rerank' | '/reranks' = '/rerank',
 ): RerankerProvider {
-  const url = joinUrl(baseUrl, '/rerank')
+  const url = joinUrl(baseUrl, path)
   const headers = buildHeaders(apiKey)
 
   return {
@@ -112,8 +116,14 @@ export function createJinaReranker(
 const JINA_STYLE_HOSTS = /(^|\.)(siliconflow\.cn|jina\.ai|cohere\.(ai|com))$/i
 
 /**
+ * 阿里云百炼（DashScope）：qwen3-rerank 走 OpenAI 兼容端点 {base}/reranks（复数），
+ * body/响应与 Jina 风格一致。匹配整个 aliyuncs.com 域（dashscope.* 与 workspace 级 maas.* 都覆盖）。
+ */
+const DASHSCOPE_HOSTS = /(^|\.)aliyuncs\.com$/i
+
+/**
  * 按 baseUrl 分派 reranker 实现：已知 Jina 协议平台走 createJinaReranker，
- * 其余（自托管 TEI 等）保持 TEI 默认。baseUrl 只需给到 /v1，/rerank 由实现拼接。
+ * 其余（自托管 TEI 等）保持 TEI 默认。baseUrl 只需给到 /v1，/rerank(s) 由实现拼接。
  */
 export function createReranker(
   baseUrl: string,
@@ -126,6 +136,7 @@ export function createReranker(
   try {
     host = new URL(baseUrl).hostname
   } catch { /* 非法 URL 时按 TEI 处理，请求阶段会以可读错误暴露 */ }
+  if (DASHSCOPE_HOSTS.test(host)) return createJinaReranker(baseUrl, model, fetchImpl, timeoutMs, apiKey, '/reranks')
   if (JINA_STYLE_HOSTS.test(host)) return createJinaReranker(baseUrl, model, fetchImpl, timeoutMs, apiKey)
   return createTeiReranker(baseUrl, model, fetchImpl, timeoutMs, apiKey)
 }

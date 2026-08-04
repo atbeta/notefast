@@ -272,6 +272,7 @@ describe('PUT /api/v1/ai/config', () => {
     const cases = [
       { id: 'sf-1', preset: 'siliconflow', baseUrl: 'https://api.siliconflow.cn/v1', chatModel: 'deepseek-ai/DeepSeek-V4-Flash' },
       { id: 'vh-1', preset: 'voyage', baseUrl: 'https://api.voyageai.com/v1', chatModel: '', embeddingModel: 'voyage-4-large' },
+      { id: 'ds-1', preset: 'dashscope', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', chatModel: 'qwen3.8-max' },
     ]
     for (const c of cases) {
       _setRuntimeForTests(null)

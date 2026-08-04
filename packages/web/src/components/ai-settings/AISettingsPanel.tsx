@@ -65,14 +65,10 @@ function defaultAutoLink(): AutoLinkConfig {
   return defaultAutoLinkConfig()
 }
 
-/** 根据浏览器 locale 推测一个合理的默认 preset；用户可在下拉中覆盖 */
-function defaultPresetForLocale(): ProviderPresetId {
-  if (typeof navigator !== 'undefined') {
-    const lang = (navigator.language || '').toLowerCase()
-    if (lang.startsWith('zh')) return 'siliconflow'
-  }
-  return 'openrouter'
-}
+/**
+ * 新增 chat / embedding / reranker 时的默认预设一律为「自定义」（空表单）——
+ * 本地优先姿态：不替用户预选任何云端厂商，由用户显式选择。
+ */
 
 /** 简略描述 Provider 配置（用于保存后的 toast） */
 function describeSaved(
@@ -231,8 +227,8 @@ export default function AISettingsPanel() {
     }
   }
 
-  const handleEnableChat = () => setChat(definitionFromPreset(defaultPresetForLocale()))
-  const handleEnableEmbedding = () => setEmbedding(definitionFromPreset('siliconflow'))
+  const handleEnableChat = () => setChat(definitionFromPreset('custom'))
+  const handleEnableEmbedding = () => setEmbedding(definitionFromPreset('custom'))
 
   /**
    * 「复用 Chat」：把 Chat provider 的 baseUrl / apiKey / headers / preset 都拷到 Embedding，
@@ -252,11 +248,11 @@ export default function AISettingsPanel() {
 
   const handleEnableReranker = () => setReranker({
     enabled: true,
-    baseUrl: 'https://api.jina.ai/v1',
+    baseUrl: '',
     apiKey: '',
-    model: 'jina-reranker-v3',
+    model: '',
     timeoutMs: 60000,
-    preset: 'jina',
+    preset: 'custom',
   })
 
   const rerankerAsProvider: ProviderDefinition | null = reranker ? {
@@ -438,7 +434,7 @@ export default function AISettingsPanel() {
               value={rerankerAsProvider}
               onChange={handleRerankerChange}
               mode="reranker"
-              knownModels={['BAAI/bge-reranker-v2-m3', 'jina-reranker-v3', 'voyage-rerank-2', 'voyage-rerank-2-lite']}
+              knownModels={['BAAI/bge-reranker-v2-m3', 'qwen3-rerank', 'jina-reranker-v3', 'voyage-rerank-2', 'voyage-rerank-2-lite']}
               modelLabel={t('aiSettings.rerankerModelLabel')}
             />
           </div>

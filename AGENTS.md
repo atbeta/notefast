@@ -161,6 +161,7 @@ docker compose up -d
 - Markdown 富渲染优先接入 Mermaid；LaTeX/公式后续再做
 - 人类写作体验视为正轨（非整站副产品）；可服务「同步写读找」轻量用户，不对打思源式块级 PKM 全家桶
 - Markdown 仅作表达与导出，不作权威存储；主权靠自托管 SQLite + 可验证导出讲清楚，不为安抚退回文件夹 MD
+- AI 设置三个模型槽（chat/embedding/reranker）新增时默认预设一律为「自定义」空表单（本地优先姿态，不按 locale 替用户预选云端厂商）；预设含 DashScope 阿里云百炼（chat `qwen3.8-max` / embedding `qwen3.7-text-embedding` / reranker `qwen3-rerank`，rerank 走 compatible-mode 的 `/reranks` 复数路径、Jina 风格协议，由 `createReranker` 按 aliyuncs.com 域名分派）；reranker 默认模型与 embedding 解耦，走预设的 `rerankerModel` 字段（SiliconFlow = `BAAI/bge-reranker-v2-m3`）
 - 本地可写 SQLite 的原生客户端是一等拓扑；官方免配置 Sync 云暂缓；PWA 只做「可安装壳」（manifest + 图标 + meta + safe-area），**不做 Service Worker / 离线缓存**（避免内嵌原生壳拿到陈旧资源，离线能力归原生壳），手机与轻客户端优先复用现有 Web
 - Web 运行时零外部 CDN 依赖（中国大陆部署友好）：字体经 `@fontsource-variable/*` npm 自托管（main.tsx 引入，family 名带 ` Variable` 后缀），**禁止恢复 Google Fonts 等外链**；mermaid 等均为 npm 打包
 - MCP 做强：能力落在 NoteFast 自身 MCP/API，不为本地另封一层 API 调用；大文件建档正文不经 LLM，走 stage/upload 通道

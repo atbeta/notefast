@@ -9,20 +9,20 @@
  * 每个预设带 `region: 'cn' | 'global' | 'local'`，仅用于 UI 分组展示，不影响实际路由。
  * 用户应自行评估网络可达性（GFW / 合规）。
  *
- * ## Provider 矩阵（2026-07 更新）
+ * ## Provider 矩阵（2026-08 更新）
  *
- * 备注：以下默认模型是抓取自各厂商 2026-07 公开文档的最新可用 slug；
+ * 备注：以下默认模型是抓取自各厂商 2026-08 公开文档的最新可用 slug；
  * 如果 slug 错误或厂商微调，去 `/settings/ai` 改成任意名称即可（永远允许 freeform）。
  *
- * 区域       id            推荐场景                              默认 Embedding                  默认 Chat                             
+ * 区域       id            推荐场景                              默认 Embedding                  默认 Chat
  * ────────── ───────────── ──────────────────────────────────── ─────────────────────────────── ──────────────────────────────────────
  * 🇨🇳 CN    minimax       MiniMax M3 (1M context, SOTA agentic) MiniMax-Embedding-01            MiniMax-M3
  * 🇨🇳 CN    deepseek      DeepSeek V4-Flash (低价)               (空，禁用)                       deepseek-v4-flash
  * 🇨🇳 CN    doubao        字节豆包 Seed 2.1 (256K)              doubao-embedding-large          doubao-seed-2-1-pro-260628
  * 🇨🇳 CN    zhipu         智谱 GLM-5 (744B-A40B, MIT)           embedding-3                     glm-5
  * 🇨🇳 CN    moonshot      Kimi K2.6 长文本                       (空，禁用)                       kimi-latest（→K2.6）
- * 🇨🇳 CN    siliconflow   国产聚合 + 免费 Qwen3-Embed           Qwen/Qwen3-Embedding-8B         deepseek-ai/DeepSeek-V4-Flash
- * 🇨🇳 CN    dashscope     阿里百炼 Qwen3.7-max                  text-embedding-v4               qwen3.7-max
+ * 🇨🇳 CN    siliconflow   国产聚合 + 免费 Qwen3-Embed           Qwen/Qwen3-Embedding-8B         deepseek-ai/DeepSeek-V4-Flash（rerank: BAAI/bge-reranker-v2-m3）
+ * 🇨🇳 CN    dashscope     阿里百炼 Qwen3.8-Max                  qwen3.7-text-embedding          qwen3.8-max（rerank: qwen3-rerank）
  *
  * 🌍 Global openai        官方 GPT-5 mini                       text-embedding-3-small           gpt-5-mini
  * 🌍 Global openrouter    1 key 访问 400+ 模型                   qwen/qwen3-embedding-8b          meta-llama/llama-4-maverick
@@ -47,6 +47,8 @@ export interface ProviderPreset {
   baseUrl: string
   embeddingModel: string
   chatModel: string
+  /** Reranker 模式的默认模型（仅 supportedModes 含 'reranker' 时有意义；空 = 不预填） */
+  rerankerModel: string
   extraHeaders: Record<string, string>
   requiresKey: boolean
   signupUrl?: string
@@ -60,6 +62,7 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     baseUrl: 'https://api.deepseek.com/v1',
     embeddingModel: '',
     chatModel: 'deepseek-chat',
+    rerankerModel: '',
     extraHeaders: {},
     requiresKey: true,
     signupUrl: 'https://platform.deepseek.com/api_keys',
@@ -71,6 +74,7 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     baseUrl: 'https://api.minimaxi.com/v1',
     embeddingModel: '',
     chatModel: 'MiniMax-Text-01',
+    rerankerModel: '',
     extraHeaders: {},
     requiresKey: true,
     signupUrl: 'https://platform.minimaxi.com',
@@ -82,6 +86,7 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     baseUrl: 'https://api.moonshot.cn/v1',
     embeddingModel: '',
     chatModel: 'moonshot-v1-8k',
+    rerankerModel: '',
     extraHeaders: {},
     requiresKey: true,
     signupUrl: 'https://platform.moonshot.cn',
@@ -93,9 +98,24 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     baseUrl: 'https://api.siliconflow.cn/v1',
     embeddingModel: 'Qwen/Qwen3-Embedding-8B',
     chatModel: 'deepseek-ai/DeepSeek-V4-Flash',
+    rerankerModel: 'BAAI/bge-reranker-v2-m3',
     extraHeaders: {},
     requiresKey: true,
     signupUrl: 'https://cloud.siliconflow.cn',
+    supportedModes: ['chat', 'embedding', 'reranker'],
+  },
+  dashscope: {
+    id: 'dashscope',
+    label: '阿里云百炼 (DashScope)',
+    // OpenAI 兼容端点：chat/embeddings 走 /compatible-mode/v1；
+    // qwen3-rerank 走同 base 下的 /reranks（Jina 风格协议，见 core/reranker.ts）
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    embeddingModel: 'qwen3.7-text-embedding',
+    chatModel: 'qwen3.8-max',
+    rerankerModel: 'qwen3-rerank',
+    extraHeaders: {},
+    requiresKey: true,
+    signupUrl: 'https://bailian.console.aliyun.com/#/api-key',
     supportedModes: ['chat', 'embedding', 'reranker'],
   },
   openai: {
@@ -104,6 +124,7 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     baseUrl: 'https://api.openai.com/v1',
     embeddingModel: '',
     chatModel: 'gpt-4o-mini',
+    rerankerModel: '',
     extraHeaders: {},
     requiresKey: true,
     signupUrl: 'https://platform.openai.com/api-keys',
@@ -115,6 +136,7 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     baseUrl: 'https://openrouter.ai/api/v1',
     embeddingModel: '',
     chatModel: 'openai/gpt-4o-mini',
+    rerankerModel: '',
     extraHeaders: { 'HTTP-Referer': 'https://notefast.local', 'X-Title': 'NoteFast' },
     requiresKey: true,
     signupUrl: 'https://openrouter.ai/keys',
@@ -126,6 +148,7 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     baseUrl: 'https://api.jina.ai/v1',
     embeddingModel: 'jina-embeddings-v3',
     chatModel: '',
+    rerankerModel: 'jina-reranker-v3',
     extraHeaders: {},
     requiresKey: true,
     signupUrl: 'https://jina.ai',
@@ -137,6 +160,7 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     baseUrl: 'https://api.voyageai.com/v1',
     embeddingModel: 'voyage-3',
     chatModel: '',
+    rerankerModel: 'voyage-rerank-2',
     extraHeaders: {},
     requiresKey: true,
     signupUrl: 'https://dash.voyageai.com',
@@ -148,6 +172,7 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     baseUrl: '',
     embeddingModel: '',
     chatModel: '',
+    rerankerModel: '',
     extraHeaders: {},
     requiresKey: true,
     supportedModes: ['chat', 'embedding', 'reranker'],
@@ -177,6 +202,7 @@ export const KNOWN_EMBEDDING_MODELS = [
   'text-embedding-3-large',
   // Qwen
   'text-embedding-v4',
+  'qwen3.7-text-embedding',
   'qwen/qwen3-embedding-8b',
   'Qwen/Qwen3-Embedding-8B',
   // Zhipu
@@ -246,6 +272,7 @@ export const KNOWN_CHAT_MODELS = [
   'doubao-seed-2-1-pro-260628',
   'doubao-seed-2-1-turbo-260628',
   // DashScope Qwen3
+  'qwen3.8-max',
   'qwen3.7-max',
   'qwen3.7-plus',
   'qwen3-vl-plus',
