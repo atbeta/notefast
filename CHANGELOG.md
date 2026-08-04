@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.3](https://github.com/atbeta/notefast/compare/v0.37.2...v0.37.3) (2026-08-04)
+
+
+### Bug Fixes
+
+* **ci:** install tauri CLI deps before NSIS build ([e36f95f](https://github.com/atbeta/notefast/commit/e36f95f6e609c9ee7dc10bac3ecb4ed2b0c4d981))
+
 ## [0.37.2](https://github.com/atbeta/notefast/compare/v0.37.1...v0.37.2) (2026-08-04)
 
 
