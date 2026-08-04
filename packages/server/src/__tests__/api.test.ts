@@ -257,6 +257,29 @@ describe('Documents API', () => {
     expect(row?.ai_exclude).toBe(true)
     expect(row?.tags).toContain('work')
   })
+
+  test('GET /api/v1/docs/list 带 shared 标记（仅有效分享；关闭后消失）', async () => {
+    const { body: d1 } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '待分享文档' })
+    const { body: d2 } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '未分享文档' })
+
+    // 未分享时不带 shared 字段
+    const before = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}`)
+    const beforeRow = (before.body as Array<{ id: string; shared?: boolean }>).find((d) => d.id === d1.id)
+    expect(beforeRow?.shared).toBeUndefined()
+
+    // 开启分享后出现 shared: true，未分享文档不受影响
+    const shareRes = await api('PUT', `/api/v1/docs/${d1.id}/share`, {})
+    expect(shareRes.status).toBe(200)
+    const after = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}`)
+    const afterRows = after.body as Array<{ id: string; shared?: boolean }>
+    expect(afterRows.find((d) => d.id === d1.id)?.shared).toBe(true)
+    expect(afterRows.find((d) => d.id === d2.id)?.shared).toBeUndefined()
+
+    // 关闭分享后标记消失
+    await api('DELETE', `/api/v1/docs/${d1.id}/share`)
+    const revoked = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}`)
+    expect((revoked.body as Array<{ id: string; shared?: boolean }>).find((d) => d.id === d1.id)?.shared).toBeUndefined()
+  })
 })
 
 describe('Search API', () => {

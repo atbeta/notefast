@@ -20,6 +20,7 @@
   "docList": {
     "untitled": "Untitled document",
     "aiExclude": "AI hidden",
+    "shared": "Shared",
     "updatedAt": "Updated {{date}}"
   },
   "btn": {

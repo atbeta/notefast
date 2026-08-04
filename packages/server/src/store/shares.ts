@@ -45,6 +45,24 @@ export function getShareByDocId(db: Db, docId: string): ShareRow | null {
   return validOrCleanup(db, row)
 }
 
+/**
+ * 批量列出当前有效分享的 doc_id 集合（供文档列表打「已分享」标记）。
+ * 与单查路径同一语义：过期记录惰性清理后不返回。
+ */
+export function listSharedDocIds(db: Db): Set<string> {
+  const rows = db.query('SELECT doc_id, expires_at FROM shares').all() as Array<{ doc_id: string; expires_at: string | null }>
+  const now = nowTimestamp()
+  const valid = new Set<string>()
+  for (const r of rows) {
+    if (r.expires_at !== null && r.expires_at <= now) {
+      db.query('DELETE FROM shares WHERE doc_id = ?').run(r.doc_id)
+    } else {
+      valid.add(r.doc_id)
+    }
+  }
+  return valid
+}
+
 export function getShareByToken(db: Db, token: string): ShareRow | null {
   const row = rowOf(db.query('SELECT doc_id, token, expires_at, created_at FROM shares WHERE token = ?').get(token))
   return validOrCleanup(db, row)

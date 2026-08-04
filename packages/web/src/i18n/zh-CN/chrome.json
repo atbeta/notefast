@@ -20,6 +20,7 @@
   "docList": {
     "untitled": "未命名文档",
     "aiExclude": "AI 隐藏",
+    "shared": "已分享",
     "updatedAt": "更新于 {{date}}"
   },
   "btn": {

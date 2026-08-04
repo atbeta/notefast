@@ -21,7 +21,7 @@ import {
 } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
-import { getShareByDocId, createShare, deleteShare, setShareExpiry, deleteSharesByDocIds } from '../store/shares'
+import { getShareByDocId, createShare, deleteShare, setShareExpiry, deleteSharesByDocIds, listSharedDocIds } from '../store/shares'
 import { insertDocFromMarkdown, insertChildBlocks } from '../services/docImport'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany, fireDocAfterCreate, fireDocAfterStatusChange, fireDocAfterTagChange, fireDocAfterShare, fireDocAfterShareRevoked, fireDocAfterDelete } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
@@ -110,6 +110,8 @@ docs.get('/list', (c) => {
     rows = rows.filter((r) => readAiExclude(r))
   }
 
+  const sharedDocIds = listSharedDocIds(db)
+
   const summaries: DocSummary[] = rows.map((r) => {
     const tags = readTags(r)
     const aiExclude = readAiExclude(r)
@@ -122,6 +124,7 @@ docs.get('/list', (c) => {
       tags,
       ...(aiExclude ? { ai_exclude: true } : {}),
       ...(status !== 'note' ? { status } : {}),
+      ...(sharedDocIds.has(r.id) ? { shared: true } : {}),
     }
   })
 

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
 import type { DocSummary } from '@notefast/core'
 import { Link } from 'react-router-dom'
-import { FileText, Check, X, EyeOff } from 'lucide-react'
+import { FileText, Check, X, EyeOff, Globe } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { formatRelative } from '../lib/time'
 import DocActionsMenu from './DocActionsMenu'
@@ -19,6 +19,7 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
   const inputRef = useRef<HTMLInputElement>(null)
   const tags = doc.tags ?? []
   const aiExclude = doc.ai_exclude === true
+  const shared = doc.shared === true
 
   useEffect(() => {
     if (editing) inputRef.current?.focus()
@@ -71,6 +72,12 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
           <Link to={'/doc/' + doc.id} className="block">
             <h3 className="font-medium text-[14px] text-foreground tracking-[-0.005em] truncate flex items-center gap-1.5 leading-snug">
               <span className="truncate">{doc.title || t('docList.untitled')}</span>
+              {shared && (
+                <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded border border-border/70 text-muted-foreground">
+                  <Globe className="w-2.5 h-2.5" strokeWidth={1.75} />
+                  {t('docList.shared')}
+                </span>
+              )}
               {aiExclude && (
                 <span className="shrink-0 text-[10px] font-medium px-1.5 py-px rounded border border-border/70 text-muted-foreground">
                   {t('docList.aiExclude')}

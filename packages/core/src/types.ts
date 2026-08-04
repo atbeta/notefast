@@ -146,6 +146,8 @@ export interface DocSummary {
   tags: string[]
   /** 对 AI 隐藏：不进向量 / RAG / AutoLink / MCP */
   ai_exclude?: boolean
+  /** 已开启公开分享（存在未过期分享链接） */
+  shared?: boolean
   /** 生命周期：inbox=收集箱，archived=归档；缺省视为 note */
   status?: 'note' | 'inbox' | 'archived'
 }
