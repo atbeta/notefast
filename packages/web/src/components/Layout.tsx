@@ -7,6 +7,7 @@ import Sidebar from './Sidebar'
 import CommandPalette from './CommandPalette'
 import AIChatPanel from './AIChatPanel'
 import GlobalSyncStatus from './GlobalSyncStatus'
+import TitleBar from './TitleBar'
 import { useTheme } from '../hooks/useTheme'
 import { ASK_AI_EVENT } from '../lib/askAi'
 
@@ -112,80 +113,84 @@ export default function Layout({ children, contentClassName }: { children: React
 
   return (
     // 根容器 pt/pb 用 env() 吸收刘海/Home 指示条安全区（非 standalone/无刘海环境恒为 0，不影响现有布局）
-    <div className="flex h-screen overflow-hidden bg-background relative w-full pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-      <GlobalSyncStatus />
-      {/* 桌面侧边栏 */}
-      <div className={`hidden md:block transition-all duration-300 z-20 relative ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
-        <Sidebar
-          collapsed={sidebarCollapsed}
-          onToggle={toggleSidebar}
-          onOpenPalette={openPalette}
-          aiChatOpen={aiChatOpen}
-          onToggleAiChat={toggleAiChat}
+    <div className="flex flex-col h-screen overflow-hidden bg-background relative w-full pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+      {/* 原生壳自绘标题栏（仅 Tauri 壳渲染；macOS 壳走系统标题栏，浏览器不渲染） */}
+      <TitleBar />
+      <div className="flex flex-1 min-h-0 relative">
+        <GlobalSyncStatus />
+        {/* 桌面侧边栏 */}
+        <div className={`hidden md:block transition-all duration-300 z-20 relative ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
+          <Sidebar
+            collapsed={sidebarCollapsed}
+            onToggle={toggleSidebar}
+            onOpenPalette={openPalette}
+            aiChatOpen={aiChatOpen}
+            onToggleAiChat={toggleAiChat}
+          />
+        </div>
+
+        {/* 移动端 drawer */}
+        {mobileOpen && (
+          <div className="md:hidden fixed inset-0 z-50 flex">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={closeMobile} />
+            <div className="relative w-64 h-full bg-background shadow-xl animate-fade-in pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+              <Sidebar
+                collapsed={false}
+                onToggle={closeMobile}
+                onOpenPalette={openPalette}
+                onNavigate={closeMobile}
+                aiChatOpen={aiChatOpen}
+                onToggleAiChat={toggleAiChat}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
+          <div className="md:hidden flex items-center h-12 px-4 border-b border-border bg-card gap-3 shrink-0" data-drag-region>
+            <button onClick={toggleMobileSidebar} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-foreground transition-colors" aria-label={t('layout.openMenu')}>
+              <Menu className="w-5 h-5" />
+            </button>
+            <span className="font-semibold text-sm">NoteFast</span>
+            <div className="ml-auto flex items-center gap-1">
+              <button
+                onClick={() => setAiChatOpen(!aiChatOpen)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={t('layout.openAiChat')}
+              >
+                <Sparkles className="w-4 h-4" strokeWidth={1.75} />
+              </button>
+              <button
+                type="button"
+                onClick={openPalette}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={t('layout.search')}
+              >
+                <SearchIcon />
+              </button>
+            </div>
+          </div>
+          <main className={`flex-1 flex flex-col min-h-0 relative transition-[padding] duration-300 ${aiChatOpen ? (aiChatExpanded ? 'md:pr-[600px]' : 'md:pr-[400px]') : ''}`}>
+            {/* 统一滚动容器：文档页内部自管滚动（h-full 正好一屏），其余页面由此容器滚动 */}
+            <div className={`${contentClassName ?? 'w-full h-full'} flex flex-col overflow-y-auto`}>
+              <AiChatOpenContext.Provider value={aiChatOpen}>
+                {children}
+              </AiChatOpenContext.Provider>
+            </div>
+          </main>
+        </div>
+
+        {/* AI Chat 面板 */}
+        <AIChatPanel
+          isOpen={aiChatOpen}
+          onClose={closeAiChat}
+          contextDocId={currentDocId}
+          expanded={aiChatExpanded}
+          onToggleExpand={toggleAiChatExpand}
         />
+
+        <CommandPalette open={paletteOpen} onClose={closePalette} />
       </div>
-
-      {/* 移动端 drawer */}
-      {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={closeMobile} />
-          <div className="relative w-64 h-full bg-background shadow-xl animate-fade-in pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-            <Sidebar
-              collapsed={false}
-              onToggle={closeMobile}
-              onOpenPalette={openPalette}
-              onNavigate={closeMobile}
-              aiChatOpen={aiChatOpen}
-              onToggleAiChat={toggleAiChat}
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
-        <div className="md:hidden flex items-center h-12 px-4 border-b border-border bg-card gap-3 shrink-0" data-drag-region>
-          <button onClick={toggleMobileSidebar} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-foreground transition-colors" aria-label={t('layout.openMenu')}>
-            <Menu className="w-5 h-5" />
-          </button>
-          <span className="font-semibold text-sm">NoteFast</span>
-          <div className="ml-auto flex items-center gap-1">
-            <button
-              onClick={() => setAiChatOpen(!aiChatOpen)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-              aria-label={t('layout.openAiChat')}
-            >
-              <Sparkles className="w-4 h-4" strokeWidth={1.75} />
-            </button>
-            <button
-              type="button"
-              onClick={openPalette}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-              aria-label={t('layout.search')}
-            >
-              <SearchIcon />
-            </button>
-          </div>
-        </div>
-        <main className={`flex-1 flex flex-col min-h-0 relative transition-[padding] duration-300 ${aiChatOpen ? (aiChatExpanded ? 'md:pr-[600px]' : 'md:pr-[400px]') : ''}`}>
-          {/* 统一滚动容器：文档页内部自管滚动（h-full 正好一屏），其余页面由此容器滚动 */}
-          <div className={`${contentClassName ?? 'w-full h-full'} flex flex-col overflow-y-auto`}>
-            <AiChatOpenContext.Provider value={aiChatOpen}>
-              {children}
-            </AiChatOpenContext.Provider>
-          </div>
-        </main>
-      </div>
-
-      {/* AI Chat 面板 */}
-      <AIChatPanel
-        isOpen={aiChatOpen}
-        onClose={closeAiChat}
-        contextDocId={currentDocId}
-        expanded={aiChatExpanded}
-        onToggleExpand={toggleAiChatExpand}
-      />
-
-      <CommandPalette open={paletteOpen} onClose={closePalette} />
     </div>
   )
 }

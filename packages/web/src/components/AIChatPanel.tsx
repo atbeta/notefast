@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { request, fetchWithAuth, ApiError } from '../hooks/useAPI'
 import { useScrollFade } from '../hooks/useScrollFade'
+import { isTauriShell } from '../hooks/useShell'
 import { ASK_AI_EVENT, type AskAiDetail } from '../lib/askAi'
 import ChatMarkdown from './ChatMarkdown'
 import ConfirmDialog from './ConfirmDialog'
@@ -520,10 +521,13 @@ export default function AIChatPanel({
 
   const showSpinner = loading && !messages.some((m) => m.role === 'assistant' && (m.content.trim() || m.reasoning))
 
+  // Tauri 壳下有自绘标题栏（h-9）——面板下移避开，否则会盖住窗口控制按钮
+  const shellTop = isTauriShell() ? 'top-9 h-[calc(100vh-2.25rem)]' : 'top-0 h-screen'
+
   return (
     <div
       aria-hidden={!isOpen}
-      className={`fixed top-0 right-0 h-screen bg-card border-l border-border shadow-[var(--shadow-floating)] z-40 flex flex-col
+      className={`fixed right-0 ${shellTop} bg-card border-l border-border shadow-[var(--shadow-floating)] z-40 flex flex-col
         w-full md:w-[400px] ${expanded ? 'md:w-[600px]' : ''}
         transition-[transform,width] duration-[var(--dur)] ease-[var(--ease)]
         ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'}

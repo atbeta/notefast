@@ -59,7 +59,11 @@
   "layout": {
     "openMenu": "打开菜单",
     "openAiChat": "聊天 / 知识库问答",
-    "search": "搜索"
+    "search": "搜索",
+    "minimize": "最小化",
+    "maximize": "最大化",
+    "restore": "还原",
+    "closeWindow": "关闭窗口"
   },
   "command": {
     "newDoc": "新建文档",

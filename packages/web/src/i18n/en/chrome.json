@@ -59,7 +59,11 @@
   "layout": {
     "openMenu": "Open menu",
     "openAiChat": "Chat / knowledge base Q&A",
-    "search": "Search"
+    "search": "Search",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "closeWindow": "Close window"
   },
   "command": {
     "newDoc": "New document",

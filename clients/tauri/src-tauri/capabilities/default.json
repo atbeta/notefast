@@ -3,5 +3,12 @@
   "identifier": "default",
   "description": "NoteFast 主窗口默认能力（invoke engine_start 为自定义命令，不在 ACL 内）",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-is-maximized",
+    "core:window:allow-start-dragging"
+  ]
 }
