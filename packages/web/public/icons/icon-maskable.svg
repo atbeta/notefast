@@ -1,0 +1,5 @@
+<!-- maskable / apple-touch 源：全幅底（无圆角、无透明），字形收敛在 80% 安全区内 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#3b82f6"/>
+  <path d="M128 160h256M128 256h192M128 352h160" stroke="#fff" stroke-width="40" stroke-linecap="round"/>
+</svg>

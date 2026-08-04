@@ -10,10 +10,11 @@
 
 :root {
   /* ───────────── 字体 ───────────── */
-  /* 英文/数字走 Inter，中文回落苹方（macOS/iOS）或雅黑（Windows），灰度更统一 */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei', Helvetica, 'Apple Color Emoji', Arial, sans-serif, 'Segoe UI Emoji', 'Segoe UI Symbol';
-  --font-serif: 'Source Serif Pro', 'Charter', 'Georgia', serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, monospace;
+  /* 自托管可变字体（@fontsource-variable，main.tsx 引入）；英文/数字走 Inter，
+     中文回落苹方（macOS/iOS）或雅黑（Windows），灰度更统一 */
+  --font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei', Helvetica, 'Apple Color Emoji', Arial, sans-serif, 'Segoe UI Emoji', 'Segoe UI Symbol';
+  --font-serif: 'Source Serif 4 Variable', 'Source Serif Pro', 'Charter', 'Georgia', serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'Fira Code', 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, monospace;
 
   /* ───────────── 平面 / 表面 ───────────── */
   --background: 255 255 255;

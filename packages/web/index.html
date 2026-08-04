@@ -24,12 +24,24 @@
       })();
     </script>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="NoteFast — 极速私人笔记，AI 原生知识管理" />
     <meta name="theme-color" content="#ffffff" />
     <meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/svg+xml" href="/favicon-dark.svg" media="(prefers-color-scheme: dark)" />
+
+    <!--
+      PWA「可安装壳」：仅 manifest + 图标 + meta，不注册 Service Worker（无离线缓存，
+      避免内嵌原生壳拿到陈旧资源）。刘海/Home 指示条安全区由 Layout 根容器的
+      env(safe-area-inset-*) padding 吸收。
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="NoteFast" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <!--
       内联防闪烁脚本：React 挂载前同步读 localStorage + 系统偏好，把
@@ -69,13 +81,7 @@
       })();
     </script>
 
-    <!-- Variable fonts: Inter (UI), Source Serif 4 (reading), JetBrains Mono (code) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
+    <!-- 字体为 npm 自托管（@fontsource-variable），见 src/main.tsx；勿恢复外链 CDN -->
 
     <title>NoteFast</title>
   </head>

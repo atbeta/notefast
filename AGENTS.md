@@ -161,7 +161,8 @@ docker compose up -d
 - Markdown 富渲染优先接入 Mermaid；LaTeX/公式后续再做
 - 人类写作体验视为正轨（非整站副产品）；可服务「同步写读找」轻量用户，不对打思源式块级 PKM 全家桶
 - Markdown 仅作表达与导出，不作权威存储；主权靠自托管 SQLite + 可验证导出讲清楚，不为安抚退回文件夹 MD
-- 本地可写 SQLite 的原生客户端是一等拓扑；官方免配置 Sync 云暂缓；早期不优先完整 PWA/离线，手机与轻客户端优先复用现有 Web（可安装壳即可）
+- 本地可写 SQLite 的原生客户端是一等拓扑；官方免配置 Sync 云暂缓；PWA 只做「可安装壳」（manifest + 图标 + meta + safe-area），**不做 Service Worker / 离线缓存**（避免内嵌原生壳拿到陈旧资源，离线能力归原生壳），手机与轻客户端优先复用现有 Web
+- Web 运行时零外部 CDN 依赖（中国大陆部署友好）：字体经 `@fontsource-variable/*` npm 自托管（main.tsx 引入，family 名带 ` Variable` 后缀），**禁止恢复 Google Fonts 等外链**；mermaid 等均为 npm 打包
 - MCP 做强：能力落在 NoteFast 自身 MCP/API，不为本地另封一层 API 调用；大文件建档正文不经 LLM，走 stage/upload 通道
 - 分享 UI：顶栏轻量 popover（非全屏 modal）；已分享需可辨识图标态（如 Globe）；文档列表/侧栏项悬浮 `⋯` 菜单承载文档级操作（含导出）
 

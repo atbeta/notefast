@@ -111,7 +111,8 @@ export default function Layout({ children, contentClassName }: { children: React
   }, [toggleSidebar, navigate, paletteOpen, resolvedTheme, setTheme])
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background relative w-full">
+    // 根容器 pt/pb 用 env() 吸收刘海/Home 指示条安全区（非 standalone/无刘海环境恒为 0，不影响现有布局）
+    <div className="flex h-screen overflow-hidden bg-background relative w-full pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       <GlobalSyncStatus />
       {/* 桌面侧边栏 */}
       <div className={`hidden md:block transition-all duration-300 z-20 relative ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
@@ -128,7 +129,7 @@ export default function Layout({ children, contentClassName }: { children: React
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={closeMobile} />
-          <div className="relative w-64 h-full bg-background shadow-xl animate-fade-in">
+          <div className="relative w-64 h-full bg-background shadow-xl animate-fade-in pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
             <Sidebar
               collapsed={false}
               onToggle={closeMobile}
