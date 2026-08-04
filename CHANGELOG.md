@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.37.0](https://github.com/atbeta/notefast/compare/v0.36.0...v0.37.0) (2026-08-04)
+
+
+### Features
+
+* **ai:** add DashScope preset and default new providers to custom ([8daa4b5](https://github.com/atbeta/notefast/commit/8daa4b5fd94fe24913501d8ef76e793b5dd5627d))
+* **ai:** rebuild entity graph on demand ([26e42c6](https://github.com/atbeta/notefast/commit/26e42c621165986729b60f077f6f2e50230423c6))
+* **clients:** distinguish dev builds, versioned release artifacts ([1fa8af8](https://github.com/atbeta/notefast/commit/1fa8af8fedd0e2a742e17b4e215c12ea79a0544b))
+* **server:** add /internal/shutdown route for embedded shells ([b7919a4](https://github.com/atbeta/notefast/commit/b7919a4d57262177cd1f3907b1915808b9136eb2))
+* **tauri:** add Windows desktop client shell ([e3ee3f2](https://github.com/atbeta/notefast/commit/e3ee3f2fd93a2aaeb629f67d62db7218f59c8dd8))
+* **web:** custom titlebar for Tauri shells ([5fd5888](https://github.com/atbeta/notefast/commit/5fd5888c4b05236c72d078dbb39721457ef0ff42))
+* **web:** installable PWA shell and self-hosted fonts ([faab2b8](https://github.com/atbeta/notefast/commit/faab2b88e76567ac16279c3994378c54cc95431b))
+* **web:** show shared badge in document list ([3daccae](https://github.com/atbeta/notefast/commit/3daccae0ccd7070d0386218bd69c274fa93c1a0a))
+
+
+### Bug Fixes
+
+* **clients:** black strip on maximized window, icon-only titlebar ([f8bb4d3](https://github.com/atbeta/notefast/commit/f8bb4d30e0a8b3f8f12cfc761705e4bfd18d817e))
+* **clients:** drop centered titlebar icon (bordered button look) ([07796de](https://github.com/atbeta/notefast/commit/07796deda71ad4f714e1580829449c652eb08c87))
+* **tauri:** auto-locate engine in dev without NOTEFAST_ENGINE_DIR ([e948352](https://github.com/atbeta/notefast/commit/e948352c6ba1e4eb6119c70a9de5d1cb1430758b))
+* **tauri:** grant IPC to engine origin, use Windows-style titlebar icons ([b42145a](https://github.com/atbeta/notefast/commit/b42145ac25fec090540dd23122bea843f3b459fb))
+* **web:** doc-wide backlinks with source title and block anchor ([fca4087](https://github.com/atbeta/notefast/commit/fca4087c8ccf1417132d599354032e209dc117ac))
+* **web:** hide tag filter in untagged view ([813c133](https://github.com/atbeta/notefast/commit/813c13352bb928f56ad4fca18f87483ae2263e74))
+* **web:** make /settings/ai deep link work and simplify chat not-configured state ([23032d6](https://github.com/atbeta/notefast/commit/23032d66716943866846be04efb959430bcd7411))
+* **web:** match sidebar toggle icon color with other icons ([9f07d20](https://github.com/atbeta/notefast/commit/9f07d205025797c4bd548a2d5f817a9f8c039bae))
+* **web:** prefer Segoe UI for latin text on Windows ([0f08d2d](https://github.com/atbeta/notefast/commit/0f08d2dae9d3a75911d83ec6f482bc6ee497ec43))
+* **web:** refresh inbox/archived counts on doc changes ([73fb5aa](https://github.com/atbeta/notefast/commit/73fb5aa69afea7a90b7d2ff32768f1b39c58eb94))
+
 ## [0.36.0](https://github.com/atbeta/notefast/compare/v0.35.0...v0.36.0) (2026-08-03)
 
 
