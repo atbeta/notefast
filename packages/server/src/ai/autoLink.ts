@@ -59,8 +59,6 @@ const MAX_CONTENT_CHARS = 1500
 export interface AnalyzeOptions {
   blockId: string
   content: string
-  notebookId?: string
-  notebookScope: 'all' | 'same'
   maxPerBlock: number
   /** true = 只登记实体不建链（文档根块：标题是强实体信号，但不作链接源） */
   entitiesOnly?: boolean
@@ -200,7 +198,7 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
 
   for (const m of linkMentions) {
     try {
-      const ranked = await findCandidates(opts.blockId, m.anchor, opts.notebookId, opts.notebookScope, sourceDocId)
+      const ranked = await findCandidates(opts.blockId, m.anchor, sourceDocId)
       if (ranked.length === 0) {
         if (skippedAnchors.length < 10) {
           skippedAnchors.push({ anchor: m.anchor, reason: 'no_candidates' })
@@ -354,8 +352,6 @@ const STOP_ANCHORS = new Set(['note', '笔记', '内容', '下面的', '示例',
 async function findCandidates(
   sourceBlockId: string,
   anchor: string,
-  notebookId: string | undefined,
-  scope: 'all' | 'same',
   /** 非 null 时排除该文档内的 block（自指过滤） */
   sourceDocId: string | null,
 ): Promise<Candidate[]> {
@@ -371,7 +367,6 @@ async function findCandidates(
   // 双路词法检索：LIKE 严格路覆盖 CJK 子串（原 try/catch LIKE 降级已上移到 lexicalSearch），
   // strictOnly 禁用 OR 降级保精度
   let rows = lexicalSearch(anchor, {
-    notebookId: scope === 'same' ? notebookId : undefined,
     limit: 10,
     strictOnly: true,
     extraWhere,
@@ -462,8 +457,6 @@ export function reanalyzeDoc(docId: string): void {
     void analyzeBlock({
       blockId: row.id,
       content: row.content || '',
-      notebookId: row.notebook_id,
-      notebookScope: cfg.notebookScope,
       maxPerBlock: cfg.maxPerBlock,
       entitiesOnly: row.type === 'document',
     }).catch((e) => console.warn('[autoLink] reanalyzeDoc:', e instanceof Error ? e.message : e))

@@ -38,8 +38,6 @@ autoLink.post('/run', zValidator('json', runSchema), async (c) => {
   const result = await analyzeBlock({
     blockId: row.id,
     content: row.content || '',
-    notebookId: row.notebook_id,
-    notebookScope: cfg.notebookScope,
     maxPerBlock: cfg.maxPerBlock,
   })
   return c.json({
@@ -80,8 +78,6 @@ autoLink.post('/run-batch', zValidator('json', runBatchSchema), async (c) => {
       const r = await analyzeBlock({
         blockId: row.id,
         content: row.content || '',
-        notebookId: row.notebook_id,
-        notebookScope: cfg.notebookScope,
         maxPerBlock: cfg.maxPerBlock,
       })
       total++

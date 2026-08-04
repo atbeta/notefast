@@ -122,7 +122,7 @@ function warnUnknownAutoLinkKeys(parsed: Record<string, unknown> | null): void {
   const al = parsed?.autoLink
   if (!al || typeof al !== 'object') return
   const known = new Set([
-    'enabled', 'notebookScope', 'maxPerBlock', 'minConfidence', 'minMargin',
+    'enabled', 'maxPerBlock', 'minConfidence', 'minMargin',
     'excludeAnchorKinds', 'excludeSelfDoc', 'rateLimitPerMinute',
   ])
   const unknownKeys = Object.keys(al as Record<string, unknown>).filter((k) => !known.has(k))
@@ -235,9 +235,8 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
 
   const al = cfg.autoLink
   // 打印生效中的 AutoLink 配置（磁盘配置是否被读取一目了然）
-  console.log(`🧠 AI auto-link: 高置信自动建链, scope=${al.notebookScope}, maxPerBlock=${al.maxPerBlock}, minConfidence=${al.minConfidence}, minMargin=${al.minMargin}, excludeKinds=[${(al.excludeAnchorKinds ?? []).join(',')}], excludeSelfDoc=${al.excludeSelfDoc}, rateLimit=${al.rateLimitPerMinute}/min`)
+  console.log(`🧠 AI auto-link: 高置信自动建链, maxPerBlock=${al.maxPerBlock}, minConfidence=${al.minConfidence}, minMargin=${al.minMargin}, excludeKinds=[${(al.excludeAnchorKinds ?? []).join(',')}], excludeSelfDoc=${al.excludeSelfDoc}, rateLimit=${al.rateLimitPerMinute}/min`)
 
-  const scope = al.notebookScope
   const max = al.maxPerBlock
 
   pluginSystem.note.afterCreate.tap(AUTOLINK_HOOK_NAME, async (block) => {
@@ -246,8 +245,6 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
     await analyzeBlock({
       blockId: block.id,
       content: block.content,
-      notebookId: block.notebook_id,
-      notebookScope: scope,
       maxPerBlock: max,
       // 文档根（标题）：强实体信号，只登记实体不建链
       entitiesOnly: block.type === 'document',
@@ -262,8 +259,6 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
     await analyzeBlock({
       blockId: block.id,
       content: block.content,
-      notebookId: block.notebook_id,
-      notebookScope: scope,
       maxPerBlock: max,
       entitiesOnly: block.type === 'document',
     }).catch((e) => console.warn('[autoLink] afterUpdate:', e instanceof Error ? e.message : e))

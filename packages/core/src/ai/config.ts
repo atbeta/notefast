@@ -107,8 +107,6 @@ export interface RerankerDefinition {
 export interface AutoLinkConfig {
   /** 是否启用（note.afterCreate/Update 触发，默认开启）*/
   enabled: boolean
-  /** 'all' = 任意 notebook；'same' = 同 notebook */
-  notebookScope: 'all' | 'same'
   /** 每个块最多建立几条链接 */
   maxPerBlock: number
   /**
@@ -148,7 +146,6 @@ export const DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE = 30
 export function defaultAutoLinkConfig(): AutoLinkConfig {
   return {
     enabled: true,
-    notebookScope: 'all',
     maxPerBlock: DEFAULT_MAX_AUTO_LINK_PER_BLOCK,
     minConfidence: DEFAULT_AUTO_LINK_MIN_CONFIDENCE,
     minMargin: DEFAULT_AUTO_LINK_MIN_MARGIN,
@@ -310,8 +307,6 @@ export function configFromEnv(env: Record<string, string | undefined>): AiConfig
 function autoLinkFromEnv(env: Record<string, string | undefined>): AutoLinkConfig {
   // 默认开启；显式 AUTO_LINK_ENABLED=false 才关闭
   const enabled = (env.AUTO_LINK_ENABLED || 'true').toLowerCase() !== 'false'
-  const scopeRaw = (env.AUTO_LINK_SCOPE || 'all').toLowerCase()
-  const scope: 'all' | 'same' = scopeRaw === 'same' ? 'same' : 'all'
   const maxRaw = parseInt(env.AUTO_LINK_MAX_PER_BLOCK || '', 10)
   const max = Number.isFinite(maxRaw) && maxRaw > 0 ? Math.min(maxRaw, 10) : DEFAULT_MAX_AUTO_LINK_PER_BLOCK
   const minConfRaw = parseFloat(env.AUTO_LINK_MIN_CONFIDENCE || '')
@@ -326,7 +321,6 @@ function autoLinkFromEnv(env: Record<string, string | undefined>): AutoLinkConfi
   const rate = Number.isFinite(rateRaw) && rateRaw >= 0 ? rateRaw : DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE
   return {
     enabled,
-    notebookScope: scope,
     maxPerBlock: max,
     minConfidence: minConf,
     minMargin,

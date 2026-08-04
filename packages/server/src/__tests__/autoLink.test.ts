@@ -119,7 +119,6 @@ function seedDocWithBlocks(opts: {
 function testAutoLinkConfig(overrides: Record<string, unknown> = {}) {
   return {
     enabled: true,
-    notebookScope: 'all' as const,
     maxPerBlock: 5,
     minConfidence: 0.85,
     minMargin: 0.15,
@@ -242,8 +241,6 @@ describe('AutoLink — 抽取与解析', () => {
     const r = await analyzeBlock({
       blockId: 'b1',
       content: '这是关于 KMP 和字符串匹配的笔记',
-      notebookId: 'T',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.analyzed).toBe(1)
@@ -271,7 +268,6 @@ describe('AutoLink — 抽取与解析', () => {
     const r = await analyzeBlock({
       blockId: 'src',
       content: '这是关于 KMP 的笔记',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.errors).toEqual([])
@@ -299,7 +295,6 @@ describe('AutoLink — 抽取与解析', () => {
     const r = await analyzeBlock({
       blockId: 'src',
       content: '这是关于 KMP 的笔记',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.errors).toEqual([])
@@ -312,7 +307,6 @@ describe('AutoLink — 抽取与解析', () => {
     const r = await analyzeBlock({
       blockId: 'tiny',
       content: 'abc',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.analyzed).toBe(0)
@@ -338,7 +332,6 @@ describe('AutoLink — 建链门槛', () => {
     const r = await analyzeBlock({
       blockId: 'hi-src',
       content: 'KMP 是高效的字符串匹配',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.errors).toEqual([])
@@ -369,7 +362,6 @@ describe('AutoLink — 建链门槛', () => {
     const r = await analyzeBlock({
       blockId: 'fts-src',
       content: 'KMP 是高效的字符串匹配',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.errors).toEqual([])
@@ -398,7 +390,6 @@ describe('AutoLink — 建链门槛', () => {
     const r = await analyzeBlock({
       blockId: 'low-src',
       content: 'KMP 是高效的字符串匹配',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.errors).toEqual([])
@@ -433,7 +424,6 @@ describe('AutoLink — 建链门槛', () => {
     const r = await analyzeBlock({
       blockId: 'mg-src',
       content: 'KMP 是高效的字符串匹配',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.errors).toEqual([])
@@ -461,7 +451,6 @@ describe('AutoLink — 建链门槛', () => {
     const r = await analyzeBlock({
       blockId: 'dup-src',
       content: 'KMP 是高效的字符串匹配',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.errors).toEqual([])
@@ -496,7 +485,6 @@ describe('AutoLink — 建链门槛', () => {
     const r = await analyzeBlock({
       blockId: 'kind-src',
       content: '调用 notefast_create_doc 创建，比如 KMP 笔记',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.errors).toEqual([])
@@ -524,8 +512,6 @@ describe('AutoLink — 建链门槛', () => {
     const r = await analyzeBlock({
       blockId: 'self-src',
       content: 'KMP 是高效的字符串匹配',
-      notebookId: 'T',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.errors).toEqual([])
@@ -558,9 +544,10 @@ describe('AutoLink — 建链门槛', () => {
       ],
     })
 
-    const r1 = await analyzeBlock({ blockId: 'rl-1', content: '第一条内容足够长用于分析', notebookScope: 'all', maxPerBlock: 5 })
+    const r1 = await analyzeBlock({ blockId: 'rl-1', content: '第一条内容足够长用于分析', maxPerBlock: 5 })
+    const r2 = await analyzeBlock({ blockId: 'rl-2', content: '第二条内容足够长用于分析', maxPerBlock: 5 })
+
     expect(r1.rateLimited).toBeFalsy()
-    const r2 = await analyzeBlock({ blockId: 'rl-2', content: '第二条内容足够长用于分析', notebookScope: 'all', maxPerBlock: 5 })
     expect(r2.rateLimited).toBe(true)
     expect(r2.analyzed).toBe(0)
   })
@@ -586,7 +573,6 @@ describe('AutoLink — 文档状态过滤', () => {
     const r = await analyzeBlock({
       blockId: `st-src-${status}`,
       content: 'KMP 是高效的字符串匹配',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.errors).toEqual([])
@@ -614,7 +600,6 @@ describe('AutoLink — 文档状态过滤', () => {
     const r = await analyzeBlock({
       blockId: 'ax-src',
       content: 'KMP 是高效的字符串匹配',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.errors).toEqual([])
@@ -636,7 +621,6 @@ describe('AutoLink — 文档状态过滤', () => {
     const r = await analyzeBlock({
       blockId: 'ax-src2',
       content: 'KMP 是高效的字符串匹配',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.analyzed).toBe(0)
@@ -814,7 +798,6 @@ describe('AutoLink — 配置文件字段真实生效（Bug 14 回归）', () =>
       reranker: null,
       autoLink: {
         enabled: true,
-        notebookScope: 'all',
         maxPerBlock: 5,
         minConfidence: 0.85,
         minMargin: 0.15,
@@ -852,7 +835,6 @@ describe('AutoLink — 配置文件字段真实生效（Bug 14 回归）', () =>
     const r = await analyzeBlock({
       blockId: 'cfg-src',
       content: 'KMP 是高效的字符串匹配',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.errors).toEqual([])

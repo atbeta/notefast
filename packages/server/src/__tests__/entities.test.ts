@@ -144,7 +144,6 @@ function mockChat(fetcher?: (callCount: number) => string) {
       reranker: null,
       autoLink: {
         enabled: true,
-        notebookScope: 'all',
         maxPerBlock: 5,
         minConfidence: 0.85,
         minMargin: 0.15,
@@ -339,7 +338,6 @@ describe('一次抽取两处消费（E2E）', () => {
     const r = await analyzeBlock({
       blockId: 'e2e-src',
       content: '用 CodeMirror 做编辑器，比如 KMP 笔记',
-      notebookScope: 'all',
       maxPerBlock: 5,
     })
     expect(r.entities).toBe(2)

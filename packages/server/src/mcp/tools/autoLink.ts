@@ -45,8 +45,6 @@ export function registerAutoLinkTools(ctx: ToolContext): void {
       const r = await analyzeBlock({
         blockId: row.id,
         content: row.content || '',
-        notebookId: row.notebook_id,
-        notebookScope: cfg.notebookScope,
         maxPerBlock: cfg.maxPerBlock,
       })
       return {

@@ -553,14 +553,14 @@ export default function AISettingsPanel() {
           <div className="mt-4 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
               <InlineField
-                label="minConfidence"
+                label={t('aiSettings.minConfidence')}
                 type="number"
                 value={String(autoLink.minConfidence)}
                 onChange={(v) => setAutoLink({ ...autoLink, minConfidence: parseFloat(v) || 0 })}
                 mono
               />
               <InlineField
-                label="minMargin"
+                label={t('aiSettings.minMargin')}
                 type="number"
                 value={String(autoLink.minMargin)}
                 onChange={(v) => setAutoLink({ ...autoLink, minMargin: parseFloat(v) || 0 })}
@@ -573,40 +573,6 @@ export default function AISettingsPanel() {
                 onChange={(v) => setAutoLink({ ...autoLink, maxPerBlock: Math.min(10, Math.max(1, parseInt(v, 10) || 5)) })}
                 mono
               />
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
-              <h4 className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">{t('aiSettings.notebookScope')}</h4>
-              <div
-                className="inline-flex items-center rounded-md border border-border/60 bg-muted/30 p-0.5 text-[12px]"
-                role="group"
-                aria-label={t('aiSettings.notebookScope')}
-              >
-                <button
-                  type="button"
-                  aria-pressed={autoLink.notebookScope === 'all'}
-                  onClick={() => setAutoLink({ ...autoLink, notebookScope: 'all' })}
-                  className={`px-2.5 py-1 rounded-[5px] transition-colors ${
-                    autoLink.notebookScope === 'all'
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {t('aiSettings.all')}
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={autoLink.notebookScope === 'same'}
-                  onClick={() => setAutoLink({ ...autoLink, notebookScope: 'same' })}
-                  className={`px-2.5 py-1 rounded-[5px] transition-colors ${
-                    autoLink.notebookScope === 'same'
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {t('aiSettings.sameNotebook')}
-                </button>
-              </div>
             </div>
           </div>
         )}

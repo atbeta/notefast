@@ -195,7 +195,6 @@ export function registerAiChatTools(ctx: ToolContext): void {
           autoLink: cfg.autoLink
             ? {
                 enabled: cfg.autoLink.enabled,
-                notebookScope: cfg.autoLink.notebookScope,
                 maxPerBlock: cfg.autoLink.maxPerBlock,
                 minConfidence: cfg.autoLink.minConfidence,
                 minMargin: cfg.autoLink.minMargin,

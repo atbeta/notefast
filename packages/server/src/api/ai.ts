@@ -112,7 +112,6 @@ const configSchema = z.object({
   autoLink: z
     .object({
       enabled: z.boolean(),
-      notebookScope: z.enum(['all', 'same']),
       maxPerBlock: z.number().int().min(1).max(10),
       minConfidence: z.number().min(0).max(1),
       minMargin: z.number().min(0).max(1),
