@@ -82,7 +82,7 @@ function writeVersion(): void {
 function archive(): void {
   if (process.platform === 'win32') {
     // Windows 10+ 自带 bsdtar；失败不阻断（产物目录已可用）
-    const r = spawnSync('tar', ['-czf', archiveName(), execName, 'native', 'web-dist', 'VERSION', 'libsqlite3.dylib'], {
+    const r = spawnSync('tar', ['-czf', archiveName(), execName, 'native', 'web-dist', 'VERSION'], {
       cwd: outDir,
       stdio: 'inherit',
     })

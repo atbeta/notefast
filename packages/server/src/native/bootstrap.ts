@@ -107,6 +107,20 @@ export function injectEngineAssets(args: NativeArgs): void {
   if (existsSync(webDist)) process.env.WEB_DIST = webDist
 }
 
+/**
+ * 内部管理路由（仅回环 + trustedLocal 可及，bootstrap 独有、不进公开 REST）：
+ * - `POST /internal/shutdown` → 触发优雅停机（先回响应再 drain，供 Tauri/Swift 壳退出时调用；
+ *   Windows 无 SIGTERM 语义，这是壳层触发优雅停机的通道；返回 200 表示已受理）
+ */
+export function handleInternalRoute(req: Request): Response | null {
+  if (req.method !== 'POST') return null
+  const url = new URL(req.url)
+  if (url.pathname === '/internal/shutdown') {
+    return new Response('ok', { status: 200 })
+  }
+  return null
+}
+
 async function main(): Promise<void> {
   let args: NativeArgs
   try {
@@ -125,7 +139,15 @@ async function main(): Promise<void> {
   const server = Bun.serve({
     hostname: '127.0.0.1',
     port: args.port,
-    fetch: handle.app.fetch,
+    fetch(req, server) {
+      const internal = handleInternalRoute(req)
+      if (internal) {
+        // 先回响应再停机：等当前请求 flush（50ms 缓冲），随后走标准 drain 路径
+        setTimeout(() => shutdown('http /internal/shutdown'), 50)
+        return internal
+      }
+      return handle.app.fetch(req, server)
+    },
   })
   handle.attachServer(server)
 

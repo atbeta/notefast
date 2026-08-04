@@ -12,7 +12,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { dirname } from 'node:path'
-import { parseNativeArgs, injectEngineAssets } from '../native/bootstrap'
+import { parseNativeArgs, injectEngineAssets, handleInternalRoute } from '../native/bootstrap'
 
 const ENV_KEYS = ['DATA_DIR', 'APP_VERSION', 'SQLITE_VEC_PATH', 'SQLITE_LIBRARY_PATH', 'WEB_DIST']
 
@@ -30,7 +30,9 @@ function restoreEnv(saved: Record<string, string | undefined>): void {
 }
 
 describe('parseNativeArgs', () => {
-  beforeEach(() => process.env.DATA_DIR = undefined)
+  // 注意：不能写 `process.env.DATA_DIR = undefined`——Bun ≥1.2 会写入字符串 "undefined"，
+  // 还原未设置的变量必须显式 delete
+  beforeEach(() => { delete process.env.DATA_DIR })
 
   test('缺省值：随机端口 + 可执行文件目录', () => {
     const args = parseNativeArgs([])
@@ -108,5 +110,19 @@ describe('injectEngineAssets', () => {
     process.env.DATA_DIR = '/env/dd'
     injectEngineAssets({ dataDir: '/arg/dd', port: 0, assetsDir })
     expect(process.env.DATA_DIR).toBe('/arg/dd')
+  })
+})
+
+describe('handleInternalRoute', () => {
+  test('POST /internal/shutdown 受理', () => {
+    const res = handleInternalRoute(new Request('http://127.0.0.1:3140/internal/shutdown', { method: 'POST' }))
+    expect(res).not.toBeNull()
+    expect(res!.status).toBe(200)
+  })
+
+  test('其他方法 / 路径不拦截（null 交由 app.fetch）', () => {
+    expect(handleInternalRoute(new Request('http://127.0.0.1:3140/internal/shutdown'))).toBeNull()
+    expect(handleInternalRoute(new Request('http://127.0.0.1:3140/api/v1/docs', { method: 'POST' }))).toBeNull()
+    expect(handleInternalRoute(new Request('http://127.0.0.1:3140/anything', { method: 'POST' }))).toBeNull()
   })
 })
