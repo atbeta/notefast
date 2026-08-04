@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 import NoteFast
 
 /// 主界面：WKWebView 全窗口加载完整 Web 应用（web 自带侧栏/标签/图谱等全部导航）。
@@ -20,12 +19,8 @@ struct MainView: View {
         )
         .navigationTitle("")
         .toolbar {
-            // 标题栏居中只放应用图标（文档标题在 web 内容区已有，避免重复）
-            ToolbarItem(placement: .principal) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .frame(width: 18, height: 18)
-            }
+            // 不放置 principal 项——居中图标会渲染成带边框的按钮样，观感差；
+            // 标题栏保持干净（仅红绿灯），功能入口放右侧标准工具栏按钮
             ToolbarItemGroup(placement: .primaryAction) {
                 SyncStatusButton(model: model)
                 Button {
