@@ -68,7 +68,7 @@ export default function App() {
             <Route path="/archived" element={<ArchivedPage />} />
             <Route path="/entities" element={<EntitiesPage />} />
             <Route path="/graph" element={<GraphPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/*" element={<SettingsPage />} />
           </Routes>
         </RouteTransition>
       </Layout>

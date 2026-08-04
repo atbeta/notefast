@@ -1,5 +1,6 @@
 import { useState, useEffect, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useLocation } from 'react-router-dom'
 import { CheckCircle2, AlertCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { HelpTip } from '../ui'
 
@@ -22,7 +23,20 @@ export function SettingsLayout({
   children: ReactNode
 }) {
   const [activeTab, setActiveTab] = useState(tabs[0]?.id)
-  
+  const location = useLocation()
+
+  // 深链支持：/settings/ai → 挂载后滚动到对应 section（tab 高亮由 IntersectionObserver 自动跟随）
+  useEffect(() => {
+    const seg = location.pathname.replace(/^\/settings\/?/, '')
+    if (!seg) return
+    if (!tabs.some((t) => t.id === seg)) return
+    // 等渲染完成（RouteTransition fade-in 期间布局可能变化）
+    const raf = requestAnimationFrame(() => {
+      document.getElementById(seg)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [location.pathname, tabs])
+
   // Intersection Observer for active tab tracking
   useEffect(() => {
     const observer = new IntersectionObserver(

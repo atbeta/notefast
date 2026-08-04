@@ -593,15 +593,13 @@ export default function AIChatPanel({
           <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground space-y-3">
             <MessageSquareText className="w-7 h-7 mb-1 opacity-50" strokeWidth={1.25} />
             <p className="text-sm">{t('chat.notConfigured')}</p>
-            <p className="text-xs max-w-[260px]">
-              {t('chat.notConfiguredDesc1')} <span className="text-primary font-medium">/settings/ai</span> {t('chat.notConfiguredDesc2')}
-            </p>
-            <a
-              href="/settings/ai"
+            <p className="text-xs max-w-[260px]">{t('chat.notConfiguredDesc1')}</p>
+            <Link
+              to="/settings/ai"
               className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
             >
               {t('chat.openSettings')} <ExternalLink className="w-3 h-3" />
-            </a>
+            </Link>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex flex-col h-full min-h-0 pt-2 pb-1">
