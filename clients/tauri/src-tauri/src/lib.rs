@@ -96,6 +96,15 @@ fn default_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 pub fn run() {
     tauri::Builder::default()
+        // 单实例：第二个实例直接退出并聚焦已有窗口——多开会共享同一 data 目录，
+        // 配置文件并发写互相覆盖、索引/同步双跑
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.unminimize();
+                let _ = win.set_focus();
+            }
+        }))
         .manage(EngineState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![engine_start])
         .build(tauri::generate_context!())
