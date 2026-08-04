@@ -273,7 +273,7 @@ export default function Sidebar({
         <div className="h-14 w-full flex items-center justify-center border-b border-border/50 shrink-0 absolute top-0 left-0">
           <Tooltip label={t('sidebar.expandSidebar')}>
             <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group">
-              <PanelLeft className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
+              <PanelLeft className="w-4 h-4" strokeWidth={1.75} />
             </button>
           </Tooltip>
         </div>
@@ -335,7 +335,7 @@ export default function Sidebar({
         </div>
         <Tooltip label={t('sidebar.collapseSidebar')}>
           <button onClick={onToggle} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group">
-            <PanelLeftClose className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" strokeWidth={1.75} />
+            <PanelLeftClose className="w-4 h-4" strokeWidth={1.75} />
           </button>
         </Tooltip>
       </div>
