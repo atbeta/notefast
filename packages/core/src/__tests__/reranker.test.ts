@@ -106,7 +106,7 @@ describe('createReranker 按 baseUrl 分派', () => {
     expect(createReranker('https://api.cohere.ai/v1', 'm').name).toBe('jina-rerank-m')
   })
 
-  test('DashScope（aliyuncs.com）走 Jina 风格协议但路径为 /reranks', async () => {
+  test('DashScope（aliyuncs.com）走 Jina 风格协议，端点切到 compatible-api /reranks', async () => {
     let capturedUrl = ''
     let captured: Record<string, unknown> = {}
     const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -116,15 +116,25 @@ describe('createReranker 按 baseUrl 分派', () => {
         results: [{ index: 0, relevance_score: 0.9 }],
       }), { status: 200, headers: { 'Content-Type': 'application/json' } })
     }) as unknown as typeof fetch
+    // chat/embeddings 用的 compatible-mode baseUrl 会被替换成 rerank 专属的 compatible-api
     const r = createReranker('https://dashscope.aliyuncs.com/compatible-mode/v1', 'qwen3-rerank', fetchImpl, 5_000, 'k')
     expect(r.name).toBe('jina-rerank-qwen3-rerank')
     const out = await r.rerank({ query: 'q', texts: ['a', 'b'], topN: 1 })
-    expect(capturedUrl).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1/reranks')
+    expect(capturedUrl).toBe('https://dashscope.aliyuncs.com/compatible-api/v1/reranks')
     expect(captured.documents).toEqual(['a', 'b'])
     expect(captured.model).toBe('qwen3-rerank')
     expect(out).toEqual([{ index: 0, score: 0.9 }])
-    // workspace 级域名同样命中
-    expect(createReranker('https://ws123.cn-beijing.maas.aliyuncs.com/compatible-api/v1', 'm').name).toBe('jina-rerank-m')
+    // workspace 级域名（compatible-api 已在 baseUrl）不做替换
+    const ws = createReranker('https://ws123.cn-beijing.maas.aliyuncs.com/compatible-api/v1', 'm', fetchImpl, 5_000, 'k')
+    expect(ws.name).toBe('jina-rerank-m')
+    let wsUrl = ''
+    const wsFetch = (async (input: RequestInfo | URL) => {
+      wsUrl = String(input)
+      return new Response(JSON.stringify({ results: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }) as unknown as typeof fetch
+    await createReranker('https://ws123.cn-beijing.maas.aliyuncs.com/compatible-api/v1', 'm', wsFetch, 5_000, 'k')
+      .rerank({ query: 'q', texts: ['a'], topN: 1 })
+    expect(wsUrl).toBe('https://ws123.cn-beijing.maas.aliyuncs.com/compatible-api/v1/reranks')
   })
 
   test('自托管 / 未知域名保持 TEI 协议', () => {

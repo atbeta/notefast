@@ -118,6 +118,10 @@ const JINA_STYLE_HOSTS = /(^|\.)(siliconflow\.cn|jina\.ai|cohere\.(ai|com))$/i
 /**
  * 阿里云百炼（DashScope）：qwen3-rerank 走 OpenAI 兼容端点 {base}/reranks（复数），
  * body/响应与 Jina 风格一致。匹配整个 aliyuncs.com 域（dashscope.* 与 workspace 级 maas.* 都覆盖）。
+ *
+ * 端点注意：百炼的 rerank 兼容端点是 compatible-api（chat/embeddings 的 compatible-mode
+ * 不含 /reranks，2026 起调用即 404）——分派时把 baseUrl 的 compatible-mode 段替换掉；
+ * workspace 级 maas.* 端点（compatible-api 已在 baseUrl 中）不受影响。
  */
 const DASHSCOPE_HOSTS = /(^|\.)aliyuncs\.com$/i
 
@@ -136,7 +140,10 @@ export function createReranker(
   try {
     host = new URL(baseUrl).hostname
   } catch { /* 非法 URL 时按 TEI 处理，请求阶段会以可读错误暴露 */ }
-  if (DASHSCOPE_HOSTS.test(host)) return createJinaReranker(baseUrl, model, fetchImpl, timeoutMs, apiKey, '/reranks')
+  if (DASHSCOPE_HOSTS.test(host)) {
+    const rerankBase = baseUrl.replace(/\/compatible-mode\/v1\/?$/, '/compatible-api/v1')
+    return createJinaReranker(rerankBase, model, fetchImpl, timeoutMs, apiKey, '/reranks')
+  }
   if (JINA_STYLE_HOSTS.test(host)) return createJinaReranker(baseUrl, model, fetchImpl, timeoutMs, apiKey)
   return createTeiReranker(baseUrl, model, fetchImpl, timeoutMs, apiKey)
 }

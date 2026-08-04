@@ -108,7 +108,7 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     id: 'dashscope',
     label: '阿里云百炼 (DashScope)',
     // OpenAI 兼容端点：chat/embeddings 走 /compatible-mode/v1；
-    // qwen3-rerank 走同 base 下的 /reranks（Jina 风格协议，见 core/reranker.ts）
+    // qwen3-rerank 走 rerank 专属的 /compatible-api/v1/reranks（createReranker 自动替换段，见 core/reranker.ts）
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     embeddingModel: 'qwen3.7-text-embedding',
     chatModel: 'qwen3.8-max',

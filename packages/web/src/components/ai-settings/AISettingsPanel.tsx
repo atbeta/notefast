@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import i18next from '../../i18n'
 import {
   Loader2,
   Sparkles,
@@ -77,19 +76,6 @@ function defaultAutoLink(): AutoLinkConfig {
  * 新增 chat / embedding / reranker 时的默认预设一律为「自定义」（空表单）——
  * 本地优先姿态：不替用户预选任何云端厂商，由用户显式选择。
  */
-
-/** 简略描述 Provider 配置（用于保存后的 toast） */
-function describeSaved(
-  chat: ProviderDefinition | null,
-  embedding: ProviderDefinition | null,
-  reranker: RerankerDefinition | null
-): string {
-  const bits: string[] = []
-  if (chat) bits.push(`Chat @ ${chat.baseUrl.replace(/^https?:\/\//, '')}`)
-  if (embedding) bits.push(`Embedding @ ${embedding.baseUrl.replace(/^https?:\/\//, '')}`)
-  if (reranker?.enabled) bits.push(`Reranker @ ${reranker.baseUrl.replace(/^https?:\/\//, '')}`)
-  return bits.length > 0 ? bits.join(' · ') : i18next.t('aiSettings.savedCleared')
-}
 
 export default function AISettingsPanel() {
   const { t } = useTranslation()
@@ -193,17 +179,15 @@ export default function AISettingsPanel() {
   const handleSave = async () => {
     setFormErrors({})
 
-    // 1) 客户端先校验 → 即时反馈
+    // 1) 客户端先校验 → 即时反馈（字段级红字 + 抛错让 ActionButton 的 errorToast 提示，
+    //    避免「校验失败」与 ActionButton 的 successToast 同时弹出）
     const localErrs = localValidate({ chat, embedding, reranker })
     if (localErrs.length > 0) {
       setFormErrors(errorsToFields(localErrs))
       const first = localErrs[0]!
-      toast.error({
-        title: t('aiSettings.validationFailed', { n: localErrs.length }),
-        description: `${first}${localErrs.length > 1 ? t('aiSettings.validationMore', { n: localErrs.length - 1 }) : ''}`,
-        durationMs: 5500,
-      })
-      return
+      throw new Error(
+        `${t('aiSettings.validationFailed', { n: localErrs.length })}：${first}${localErrs.length > 1 ? t('aiSettings.validationMore', { n: localErrs.length - 1 }) : ''}`,
+      )
     }
 
     // 2) 真正落盘
@@ -219,10 +203,7 @@ export default function AISettingsPanel() {
         vision: visionEnabled ? { enabled: true } : undefined,
       })
       setStatus(r.status)
-      toast.success({
-        title: t('aiSettings.configSaved'),
-        description: describeSaved(chat, embedding, reranker),
-      })
+      // 成功提示由调用方（ActionButton successToast）统一弹，这里不重复
       refresh()
     } catch (e: unknown) {
       // 服务端 400：ApiError.body 带 { error, message, errors[] }，拆成字段级红字
