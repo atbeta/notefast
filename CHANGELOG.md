@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.37.2](https://github.com/atbeta/notefast/compare/v0.37.1...v0.37.2) (2026-08-04)
+
+
+### Bug Fixes
+
+* **ai:** route DashScope rerank to compatible-api, dedupe save toast ([659d5b0](https://github.com/atbeta/notefast/commit/659d5b0fc94d7036fbffa9070143699d98431925))
+* **ci:** prepare engine resources before cargo build ([4ab7ef7](https://github.com/atbeta/notefast/commit/4ab7ef787913256e99bfa81513201d83f25ac006))
+
 ## [0.37.1](https://github.com/atbeta/notefast/compare/v0.37.0...v0.37.1) (2026-08-04)
 
 
