@@ -10,6 +10,7 @@ import '@fontsource-variable/jetbrains-mono'
 import './index.css'
 import { initNativeShell } from './lib/nativeShell'
 import { initNoAutofill } from './lib/noAutofill'
+import ErrorBoundary from './components/ErrorBoundary'
 
 // 原生壳适配（右键菜单屏蔽等）：浏览器形态内部自动跳过
 initNativeShell()
@@ -18,8 +19,11 @@ initNoAutofill()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    {/* 顶层错误边界：组件抛错不再白屏，展示具体错误 + 重试入口 */}
+    <ErrorBoundary>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>,
 )
