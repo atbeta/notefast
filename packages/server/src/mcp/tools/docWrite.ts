@@ -132,7 +132,8 @@ export function registerDocWriteTools(ctx: ToolContext): void {
         return toolError('not_found', `Block ${block_id} 不存在`, { block_id })
       }
 
-      updateBlock(db, block_id, { content })
+      // actor='mcp'：block revision 历史面板（actorLabel）据此显示「MCP 写入」
+      updateBlock(db, block_id, { content, actor: 'mcp' })
 
       const row = getBlockById(db, block_id)!
       fireAfterUpdate(rowToBlock(row))

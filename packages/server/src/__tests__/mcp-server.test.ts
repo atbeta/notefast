@@ -602,3 +602,39 @@ describe('notefast 实体工具（E3）', () => {
     expect((missing.payload.error as { code: string }).code).toBe('not_found')
   })
 })
+
+describe('MCP 写入的 actor 标注（历史面板可识别）', () => {
+  async function callTool(name: string, args: Record<string, unknown>) {
+    const { getDb } = await import('../db')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { transport } = await createSession(nb.id)
+    const init = await mcpRequest(transport, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    await mcpRequest(transport, 'notifications/initialized', undefined, undefined, init.sessionId)
+    const call = await mcpRequest(transport, 'tools/call', { name, arguments: args }, 2, init.sessionId)
+    await transport.close()
+    const msg = call.body[0] as Record<string, unknown>
+    const result = msg.result as { isError?: boolean; content: Array<{ text: string }> }
+    return { result, payload: JSON.parse(result.content[0]!.text) as Record<string, unknown> }
+  }
+
+  test('update_block 成功 → block_revisions 最新条 actor=mcp', async () => {
+    const { getDb } = await import('../db')
+    const db = getDb()
+    const nb = db.query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { insertDocFromMarkdown } = await import('../services/docImport')
+    const created = insertDocFromMarkdown(db, { notebookId: nb.id, title: 'MCP actor 测试', markdown: '原始内容' })
+    const blockId = created.blockIds[0]!
+
+    const { result } = await callTool('notefast_update_block', { block_id: blockId, content: 'MCP 改的内容' })
+    expect(result.isError).toBeFalsy()
+
+    const rev = db.query(
+      `SELECT actor FROM block_revisions WHERE block_id = ? ORDER BY rev DESC LIMIT 1`,
+    ).get(blockId) as { actor: string } | undefined
+    expect(rev?.actor).toBe('mcp')
+  })
+})
