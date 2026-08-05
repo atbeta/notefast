@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto'
 import {
   collectOrphanAssets,
   findMissingAssets,
+  getAssetUploadStatus,
   getUploadBatchStatus,
   MAX_ASSET_BYTES,
   maybeUploadToRemote,
@@ -22,6 +23,7 @@ import {
   runUploadCommand,
   saveAsset,
   uploadMissingAssets,
+  uploadSingleAsset,
 } from '../assets/store'
 import { imageUploadConfigSchema, type ImageUploadConfigInput } from '@notefast/core'
 import {
@@ -128,6 +130,27 @@ assets.post('/upload-missing', async (c) => {
 /** 存量补传进度（内存态）——必须在 /:id 之前注册，否则被当作 asset id */
 assets.get('/upload-status', (c) => {
   return c.json(getUploadBatchStatus())
+})
+
+/** 单图上传状态批量查询（渲染层徽章用）：GET /assets/status?ids=a,b,c */
+assets.get('/status', (c) => {
+  const raw = (c.req.query('ids') || '').trim()
+  const ids = raw ? raw.split(',').filter((x) => /^[0-9a-f]{64}$/.test(x)).slice(0, 200) : []
+  return c.json(getAssetUploadStatus(ids))
+})
+
+/** 单图触发上传（同步等待结果）：POST /assets/:id/upload */
+assets.post('/:id/upload', async (c) => {
+  const id = c.req.param('id')
+  if (!/^[0-9a-f]{64}$/.test(id)) {
+    return c.json({ error: 'bad_request', message: '非法 asset id' }, 400)
+  }
+  const outcome = await uploadSingleAsset(id)
+  return c.json({
+    ok: outcome.ok,
+    url: outcome.url ?? null,
+    error: outcome.error ?? null,
+  }, outcome.ok ? 200 : 400)
 })
 
 assets.get('/:id', (c) => {

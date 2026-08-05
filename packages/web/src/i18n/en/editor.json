@@ -9,7 +9,12 @@
     "copyFailed": "Copy failed",
     "emptyParagraph": "(empty paragraph)",
     "unknownBlockType": "[Unrecognized block type: {{type}}]",
-    "emptyDocument": "Empty document"
+    "emptyDocument": "Empty document",
+    "assetSynced": "Synced to image host",
+    "assetLocal": "Local only — click to upload",
+    "assetUploading": "Uploading…",
+    "assetFailed": "Upload failed — click to retry",
+    "assetUploaded": "Uploaded to image host"
   },
   "mermaid": {
     "emptyDiagram": "Empty diagram",

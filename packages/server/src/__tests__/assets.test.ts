@@ -473,3 +473,53 @@ describe('AssetStore — 最近失败语义（成功后不再显示）', () => {
     setImageUploadConfig(null)
   })
 })
+
+describe('AssetStore — 单图状态与单图上传', () => {
+  test('GET /assets/status 批量返回 remote/error', async () => {
+    const { meta: a } = saveAsset(Buffer.from([7, 7, 7, 7]), 'image/png')
+    applyImageUploadConfig({
+      mode: 'auto',
+      command: process.execPath,
+      args: ['-e', 'console.log("https://img.example.test/single.png")'],
+      timeoutMs: 5_000,
+    })
+    setImageUploadConfig(getImageUploadConfig())
+    maybeUploadToRemote(a.id)
+    for (let i = 0; i < 40; i++) {
+      if (getAssetRemoteUrl(a.id)) break
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    const res = await app.fetch(new Request(`http://localhost/api/v1/assets/status?ids=${a.id},deadbeef`))
+    const body = await res.json() as Record<string, { remote: boolean; error: string | null }>
+    expect(body[a.id]?.remote).toBe(true)
+    expect(body.deadbeef).toBeUndefined()
+  })
+
+  test('POST /assets/:id/upload 同步上传单图；未启用自动上传 → 400', async () => {
+    applyImageUploadConfig({
+      mode: 'auto',
+      command: process.execPath,
+      args: ['-e', 'console.log("https://img.example.test/single2.png")'],
+      timeoutMs: 5_000,
+    })
+    setImageUploadConfig(getImageUploadConfig())
+    const { meta } = saveAsset(Buffer.from([8, 8, 8, 8]), 'image/png')
+
+    const ok = await app.fetch(new Request(`http://localhost/api/v1/assets/${meta.id}/upload`, { method: 'POST' }))
+    expect(ok.status).toBe(200)
+    const body = await ok.json() as { ok: boolean; url: string | null }
+    expect(body.ok).toBe(true)
+    expect(body.url).toBe('https://img.example.test/single2.png')
+    expect(getAssetRemoteUrl(meta.id)).toBe('https://img.example.test/single2.png')
+
+    applyImageUploadConfig({ mode: 'off' })
+    setImageUploadConfig(getImageUploadConfig())
+    const off = await app.fetch(new Request(`http://localhost/api/v1/assets/${meta.id}/upload`, { method: 'POST' }))
+    expect(off.status).toBe(400)
+  })
+
+  afterAll(() => {
+    applyImageUploadConfig({ mode: 'off' })
+    setImageUploadConfig(null)
+  })
+})

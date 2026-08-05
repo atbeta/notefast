@@ -9,7 +9,12 @@
     "copyFailed": "复制失败",
     "emptyParagraph": "（空白段落）",
     "unknownBlockType": "[未识别块类型：{{type}}]",
-    "emptyDocument": "空白文档"
+    "emptyDocument": "空白文档",
+    "assetSynced": "已同步图床",
+    "assetLocal": "仅本地存储，点击上传",
+    "assetUploading": "上传中…",
+    "assetFailed": "上传失败，点击重试",
+    "assetUploaded": "已上传至图床"
   },
   "mermaid": {
     "emptyDiagram": "空图表",

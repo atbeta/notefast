@@ -89,6 +89,39 @@ export function getAssetRemoteUrl(id: string): string | null {
   return row?.remote_url || null
 }
 
+/** 批量查询上传状态（渲染层单图徽章用）：id → { remote, error } */
+export function getAssetUploadStatus(ids: string[]): Record<string, { remote: boolean; error: string | null }> {
+  const out: Record<string, { remote: boolean; error: string | null }> = {}
+  if (ids.length === 0) return out
+  const db = getDb()
+  const placeholders = ids.map(() => '?').join(',')
+  const rows = db.query(
+    `SELECT id, remote_url, upload_error FROM assets WHERE id IN (${placeholders})`,
+  ).all(...ids) as Array<{ id: string; remote_url: string | null; upload_error: string | null }>
+  for (const r of rows) {
+    out[r.id] = { remote: Boolean(r.remote_url), error: r.upload_error }
+  }
+  return out
+}
+
+/**
+ * 单图触发上传（同步等待结果，供 hover 徽章点击用）。
+ * 返回结果并写回 assets 表；未启用自动上传 / 命令为空时返回错误。
+ */
+export async function uploadSingleAsset(id: string): Promise<UploadCommandOutcome> {
+  const cfg = uploadConfig
+  if (!cfg || cfg.mode !== 'auto' || !cfg.command.trim()) {
+    return { ok: false, error: '未启用自动上传或命令为空（设置 → 图床与图片）' }
+  }
+  const srcPath = join(mediaDir, id)
+  if (!existsSync(srcPath)) {
+    return { ok: false, error: '本地文件缺失' }
+  }
+  const outcome = await runUploadCommandForAsset(cfg, id, srcPath)
+  applyUploadOutcome(id, outcome)
+  return outcome
+}
+
 /**
  * 自动上传模式：异步 spawn 图床命令（fire-and-forget，不阻塞上传响应）。
  * 命令契约：`command [args...] <图片路径>` → stdout 每行一个 http(s) URL。

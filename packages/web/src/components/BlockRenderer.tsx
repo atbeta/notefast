@@ -1,12 +1,13 @@
-import { useState, useEffect, createElement, memo } from 'react'
+import { useState, useEffect, useMemo, createElement, memo, createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check } from 'lucide-react'
+import { Check, Cloud, CloudOff, Loader2 } from 'lucide-react'
 import type { Block } from '@notefast/core'
 import { highlightCode } from '../lib/highlight'
 import MermaidDiagram from './MermaidDiagram'
 import BlockSurface, { BlockHandle } from './BlockSurface'
 import { CopyButton } from './ui'
+import { api } from '../hooks/useAPI'
 
 interface BlockNodeProps {
   block: Block
@@ -16,6 +17,107 @@ interface BlockNodeProps {
 interface BlockRendererProps {
   block: Block
   depth?: number
+}
+
+// ───────────────────────── 图片图床同步状态（hover 徽章）─────────────────────────
+
+interface AssetSyncValue {
+  statusMap: Record<string, { remote: boolean; error: string | null }>
+  uploadingIds: Set<string>
+  upload: (id: string) => Promise<void>
+}
+
+const AssetSyncCtx = createContext<AssetSyncValue | null>(null)
+
+/**
+ * 文档内 asset 图床状态查询 + 单图触发上传。
+ * 状态一次性批量查询（blocks 变化时重查）；上传后单图更新，不发全量刷新。
+ */
+function useAssetSync(block: Block): AssetSyncValue {
+  const [statusMap, setStatusMap] = useState<Record<string, { remote: boolean; error: string | null }>>({})
+  const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    const ids = new Set<string>()
+    const walk = (b: Block): void => {
+      for (const m of b.content.matchAll(/asset:([0-9a-f]{64})/g)) ids.add(m[1]!)
+      b.children?.forEach(walk)
+    }
+    walk(block)
+    if (ids.size === 0) {
+      setStatusMap({})
+      return
+    }
+    const idList = [...ids]
+    api.get<Record<string, { remote: boolean; error: string | null }>>(`/assets/status?ids=${idList.join(',')}`)
+      .then(setStatusMap)
+      .catch(() => {})
+  }, [block])
+
+  const upload = async (id: string): Promise<void> => {
+    setUploadingIds((prev) => new Set(prev).add(id))
+    try {
+      const res = await api.post<{ ok: boolean; url: string | null; error: string | null }>(`/assets/${id}/upload`, {})
+      setStatusMap((prev) => ({
+        ...prev,
+        [id]: { remote: res.ok, error: res.ok ? null : (res.error ?? '上传失败') },
+      }))
+    } catch (e) {
+      setStatusMap((prev) => ({
+        ...prev,
+        [id]: { remote: false, error: e instanceof Error ? e.message : String(e) },
+      }))
+    } finally {
+      setUploadingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
+  }
+
+  return useMemo(() => ({ statusMap, uploadingIds, upload }), [statusMap, uploadingIds])
+}
+
+/** 图片 + hover 状态徽章（已同步 / 仅本地可点击上传 / 失败重试） */
+function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: string }) {
+  const { t } = useTranslation()
+  const ctx = useContext(AssetSyncCtx)
+  const st = ctx?.statusMap[assetId]
+  const uploading = ctx?.uploadingIds.has(assetId)
+  const failed = !st?.remote && Boolean(st?.error)
+  return (
+    <span className="relative inline-block group/asset">
+      <img src={src} alt={alt} loading="lazy" className="my-3 max-w-full rounded-md border border-border/50" />
+      <span className="absolute bottom-4 right-1.5 opacity-0 group-hover/asset:opacity-100 transition-opacity z-10">
+        {uploading ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-background/90 border border-border px-2 py-0.5 text-[10px] text-muted-foreground shadow-sm">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            {t('block.assetUploading')}
+          </span>
+        ) : st?.remote ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-600 dark:text-emerald-400 shadow-sm">
+            <Cloud className="w-3 h-3" />
+            {t('block.assetSynced')}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void ctx?.upload(assetId)}
+            title={failed ? st?.error ?? undefined : undefined}
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] shadow-sm transition-colors ${
+              failed
+                ? 'bg-destructive/10 border-destructive/30 text-destructive hover:bg-destructive/15'
+                : 'bg-background/90 border-border text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <CloudOff className="w-3 h-3" />
+            {failed ? t('block.assetFailed') : t('block.assetLocal')}
+          </button>
+        )}
+      </span>
+    </span>
+  )
 }
 
 // ───────────────────────── 行内 Markdown 渲染 ─────────────────────────
@@ -48,16 +150,23 @@ function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
       const im = m[1].match(/!\[([^\]]*)\]\(([^)\s]+)\)/)!
       // asset:<id> 是 AssetStore 的稳定引用（见 server/assets/store.ts），渲染时解析为 API 路径
       const rawSrc = im[2]
-      const src = rawSrc.startsWith('asset:') ? `/api/v1/assets/${rawSrc.slice(6)}` : rawSrc
-      nodes.push(
-        <img
-          key={`${keyPrefix}-${k++}`}
-          src={src}
-          alt={im[1]}
-          loading="lazy"
-          className="my-3 max-w-full rounded-md border border-border/50"
-        />,
-      )
+      const id = rawSrc.startsWith('asset:') ? rawSrc.slice(6) : null
+      if (id && /^[0-9a-f]{64}$/.test(id)) {
+        nodes.push(
+          <AssetImage key={`${keyPrefix}-${k++}`} assetId={id} src={`/api/v1/assets/${id}`} alt={im[1]} />,
+        )
+      } else {
+        const src = rawSrc
+        nodes.push(
+          <img
+            key={`${keyPrefix}-${k++}`}
+            src={src}
+            alt={im[1]}
+            loading="lazy"
+            className="my-3 max-w-full rounded-md border border-border/50"
+          />,
+        )
+      }
     } else if (m[2]) {
       nodes.push(<code key={`${keyPrefix}-${k++}`}>{m[2].slice(1, -1)}</code>)
     } else if (m[3]) {
@@ -380,23 +489,24 @@ const BlockNode = memo(function BlockNode({ block }: BlockNodeProps) {
 
 export default function BlockRenderer({ block, depth = 0 }: BlockRendererProps) {
   const { t } = useTranslation()
+  const assetSync = useAssetSync(block)
   if (!block) {
     return <p className="text-muted-foreground italic">{t('block.emptyDocument')}</p>
   }
 
   if (depth > 20) return null
 
-  if (block.type === 'document') {
-    return (
-      <article className="reading-prose">
-        <ChildrenView children={block.children} />
-      </article>
-    )
-  }
-
   return (
-    <div className="reading-prose">
-      <BlockNode block={block} depth={depth} />
-    </div>
+    <AssetSyncCtx.Provider value={assetSync}>
+      {block.type === 'document' ? (
+        <article className="reading-prose">
+          <ChildrenView children={block.children} />
+        </article>
+      ) : (
+        <div className="reading-prose">
+          <BlockNode block={block} depth={depth} />
+        </div>
+      )}
+    </AssetSyncCtx.Provider>
   )
 }
