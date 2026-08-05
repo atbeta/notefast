@@ -31,6 +31,7 @@ import {
   getDocById,
   getLiveDocById,
   listDocRows,
+  recordDocSnapshot,
   updateBlock,
 } from '../store/blocks'
 import { hybridSearch, type HybridSearchReport } from './hybridSearch'
@@ -510,6 +511,12 @@ export async function executeWriteTool(name: string, args: Record<string, unknow
     const heading = typeof args.heading === 'string' && args.heading.trim()
     const fullContent = heading ? `${heading}\n\n${content}` : content
 
+    // 追加前先记「保存前快照」（actor='ai'），与 PUT /docs/:id/markdown 的整篇快照语义一致：
+    // 历史面板据此显示「AI 写入」，且可回退到追加前的状态。
+    // 快照与追加分两个事务：快照先行，追加失败至多多一条旧快照，无副作用。
+    const oldMarkdown = blocksToMarkdown(buildBlockTree(fetchDocBlocks(db, docId)))
+    recordDocSnapshot(db, docId, oldMarkdown, 'ai')
+
     // 追加内容与编辑保存同语义：解析为结构化 block 树入库，
     // 否则整段 Markdown 原文会成为单个 paragraph，预览把 ```、表格等按纯文本渲染
     const { blockIds, parsedCount } = appendMarkdownToDoc(db, {
@@ -567,7 +574,8 @@ export async function executeWriteTool(name: string, args: Record<string, unknow
     if (excluded.has(row.root_id)) {
       return { content: JSON.stringify({ error: `Block ${blockId} 所属文档已对 AI 隐藏` }), resultCount: 0 }
     }
-    updateBlock(db, blockId, { content: newContent })
+    // actor='ai'：block revision 历史面板（actorLabel）据此显示「AI 写入」
+    updateBlock(db, blockId, { content: newContent, actor: 'ai' })
     scheduleSyncNow()
     emitAppEvent({
       source: 'mcp',

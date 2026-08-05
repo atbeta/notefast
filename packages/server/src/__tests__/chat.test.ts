@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync, unlinkSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { initDb, closeDb } from '../db'
+import { initDb, closeDb, getDb } from '../db'
 import { createPluginSystem } from '@notefast/core'
 import {
   initAiRuntime,
@@ -576,5 +576,53 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
     const untilReport = await hybridSearch({ query: 'KMP', until: '2021-01-01T00:00:00.000Z' })
     expect(untilReport.citations.some((c) => c.block_id === 'old-block')).toBe(true)
     expect(untilReport.citations.every((c) => c.block_id !== 'new-block')).toBe(true)
+  })
+})
+
+describe('executeWriteTool — AI 写入在文档历史中可识别（actor=ai）', () => {
+  function seedDoc(db: ReturnType<typeof getDb>): { docId: string; blockId: string } {
+    const docId = crypto.randomUUID()
+    const blockId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(docId, 'd')
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
+    ).run(docId, docId, docId, 'AI 测试文档', now, now)
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'paragraph', '原始内容', 0, 0, ?, ?)`,
+    ).run(blockId, docId, docId, docId, now, now)
+    return { docId, blockId }
+  }
+
+  test('update_block：block revision actor 记为 ai（历史面板显示「AI 写入」）', async () => {
+    const { getDb } = await import('../db')
+    const db = getDb()
+    const { blockId } = seedDoc(db)
+
+    const { executeWriteTool } = await import('../ai/chat')
+    const res = await executeWriteTool('notefast_update_block', { block_id: blockId, content: 'AI 改写的内容' }, {})
+    expect(res.resultCount).toBe(1)
+
+    const rev = db.query(
+      `SELECT actor FROM block_revisions WHERE block_id = ? ORDER BY rev DESC LIMIT 1`,
+    ).get(blockId) as { actor: string } | undefined
+    expect(rev?.actor).toBe('ai')
+  })
+
+  test('append_to_doc：追加前记 doc 整篇快照，actor 记为 ai', async () => {
+    const { getDb } = await import('../db')
+    const db = getDb()
+    const { docId } = seedDoc(db)
+
+    const { executeWriteTool } = await import('../ai/chat')
+    const res = await executeWriteTool('notefast_append_to_doc', { doc_id: docId, content: 'AI 追加的内容' }, {})
+    expect(res.resultCount).toBe(1)
+
+    const snap = db.query(
+      `SELECT actor FROM doc_snapshots WHERE doc_id = ? ORDER BY rev DESC LIMIT 1`,
+    ).get(docId) as { actor: string } | undefined
+    expect(snap?.actor).toBe('ai')
   })
 })
