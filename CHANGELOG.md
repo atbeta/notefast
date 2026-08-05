@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.39.1](https://github.com/atbeta/notefast/compare/v0.39.0...v0.39.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* **tauri:** use tauri::webview::Color for set_background_color ([27a6820](https://github.com/atbeta/notefast/commit/27a6820cf120a0addc8623174aa4b334b661819e))
+
 ## [0.39.0](https://github.com/atbeta/notefast/compare/v0.38.0...v0.39.0) (2026-08-05)
 
 
