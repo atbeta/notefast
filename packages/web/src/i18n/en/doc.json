@@ -70,6 +70,11 @@
     "preview": "Preview",
     "revert": "Revert",
     "emptyContent": "(empty)",
-    "backToHome": "Back to home"
+    "backToHome": "Back to home",
+    "exportDoc": "Export document",
+    "exportedTo": "Saved to {{path}}",
+    "exportFailed": "Export failed",
+    "exportedWithImages": "Exported (with images)",
+    "exportedMarkdown": "Exported Markdown"
   }
 }

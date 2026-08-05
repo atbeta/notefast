@@ -70,6 +70,11 @@
     "preview": "预览",
     "revert": "回退",
     "emptyContent": "（空内容）",
-    "backToHome": "返回首页"
+    "backToHome": "返回首页",
+    "exportDoc": "导出文档",
+    "exportedTo": "已保存到 {{path}}",
+    "exportFailed": "导出失败",
+    "exportedWithImages": "已导出（含图片）",
+    "exportedMarkdown": "已导出 Markdown"
   }
 }

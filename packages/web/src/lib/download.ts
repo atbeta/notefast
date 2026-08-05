@@ -1,3 +1,6 @@
+import { fetchWithAuth } from '../hooks/useAPI'
+import { isTauriShell } from '../hooks/useShell'
+
 /**
  * 浏览器文件下载辅助（单文档导出等）
  */
@@ -49,4 +52,34 @@ export async function saveBlobViaTauriDialog(blob: Blob, filename: string): Prom
   const data = new Uint8Array(await blob.arrayBuffer())
   await writeFile(path, data)
   return path
+}
+
+/** 导出交付结果：浏览器=下载；Tauri 壳=另存为对话框 */
+export interface ExportDelivery {
+  mode: 'downloaded' | 'saved' | 'cancelled'
+  savedPath?: string
+}
+
+/** 按壳形态交付导出文件（浏览器触发下载；Tauri 弹另存为）。UI 层据此 toast。 */
+export async function deliverExport(blob: Blob, filename: string): Promise<ExportDelivery> {
+  if (isTauriShell()) {
+    const savedPath = await saveBlobViaTauriDialog(blob, filename)
+    return savedPath ? { mode: 'saved', savedPath } : { mode: 'cancelled' }
+  }
+  triggerBlobDownload(blob, filename)
+  return { mode: 'downloaded' }
+}
+
+/** 拉取单文档导出文件（.md 或含图 zip），解析文件名。失败抛错。 */
+export async function fetchDocExportFile(docId: string, title: string): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetchWithAuth(`/docs/${docId}/export/file`)
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => null)
+    throw new Error((body as { message?: string } | null)?.message || `HTTP ${res.status}`)
+  }
+  const blob = await res.blob()
+  const filename =
+    parseContentDispositionFilename(res.headers.get('Content-Disposition'))
+    || (blob.type.includes('zip') ? `${title}.zip` : `${title}.md`)
+  return { blob, filename }
 }

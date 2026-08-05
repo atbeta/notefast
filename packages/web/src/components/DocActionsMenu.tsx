@@ -22,9 +22,8 @@ import {
   Trash2,
 } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
-import { api, fetchWithAuth } from '../hooks/useAPI'
-import { parseContentDispositionFilename, saveBlobViaTauriDialog, triggerBlobDownload } from '../lib/download'
-import { isTauriShell } from '../hooks/useShell'
+import { api } from '../hooks/useAPI'
+import { deliverExport, fetchDocExportFile } from '../lib/download'
 import ConfirmDialog from './ConfirmDialog'
 import ShareDialog from './ShareDialog'
 import { useToast } from './ui'
@@ -219,38 +218,20 @@ export default function DocActionsMenu({
     setBusy(true)
     close()
     try {
-      const res = await fetchWithAuth(`/docs/${doc.id}/export/file`)
-      if (!res.ok) {
-        toast.error({ title: t('docActions.exportFailed') })
-        return
-      }
-      const blob = await res.blob()
-      const filename =
-        parseContentDispositionFilename(res.headers.get('Content-Disposition'))
-        || (blob.type.includes('zip') ? `${title}.zip` : `${title}.md`)
-      if (isTauriShell()) {
-        // 客户端：系统「另存为」对话框选位置 + toast 显示保存路径
-        // （WebView2 默认静默下载到 Downloads，用户看不见也选不了）
-        try {
-          const savedPath = await saveBlobViaTauriDialog(blob, filename)
-          if (savedPath) {
-            toast.success({ title: t('docActions.exportedTo', { path: savedPath }) })
-          }
-        } catch (err) {
-          // 带上具体错误（权限/路径/插件缺失），否则用户在客户端里无法定位
-          toast.error({
-            title: t('docActions.exportFailed'),
-            description: err instanceof Error ? err.message : String(err),
-          })
-        }
-      } else {
-        triggerBlobDownload(blob, filename)
+      const { blob, filename } = await fetchDocExportFile(doc.id, title)
+      const delivery = await deliverExport(blob, filename)
+      if (delivery.mode === 'saved') {
+        toast.success({ title: t('docActions.exportedTo', { path: delivery.savedPath }) })
+      } else if (delivery.mode === 'downloaded') {
         toast.success({
           title: filename.endsWith('.zip') ? t('docActions.exportedWithImages') : t('docActions.exportedMarkdown'),
         })
       }
-    } catch {
-      toast.error({ title: t('docActions.exportFailed') })
+    } catch (err) {
+      toast.error({
+        title: t('docActions.exportFailed'),
+        description: err instanceof Error ? err.message : String(err),
+      })
     } finally {
       setBusy(false)
     }

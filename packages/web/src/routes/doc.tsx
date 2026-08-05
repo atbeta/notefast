@@ -19,6 +19,7 @@ import {
   SquarePen,
   PencilLine,
   Network,
+  Download,
 } from 'lucide-react'
 import i18next from '../i18n'
 import { api, request } from '../hooks/useAPI'
@@ -35,6 +36,7 @@ import { formatRelative, relativeTime, formatSqliteDateTime, currentLocale } fro
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
 import { Kbd, Tooltip, useToast } from '../components/ui'
+import { deliverExport, fetchDocExportFile } from '../lib/download'
 
 interface Backlink {
   id: number
@@ -162,6 +164,7 @@ export default function DocPage() {
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showShare, setShowShare] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [docShared, setDocShared] = useState(false)
   const shareBtnRef = useRef<HTMLButtonElement>(null)
 
@@ -185,6 +188,30 @@ export default function DocPage() {
     setEditingDocId(editing ? (id ?? null) : null)
   }, [id])
   const handleStartEdit = useCallback(() => setEditingDocId(id ?? null), [id])
+
+  /** 右上角导出：与列表菜单共用 fetch + 交付逻辑，按壳形态下载或另存为 */
+  const handleExport = async () => {
+    if (!id || exporting) return
+    setExporting(true)
+    try {
+      const { blob, filename } = await fetchDocExportFile(id, doc?.content ?? '')
+      const delivery = await deliverExport(blob, filename)
+      if (delivery.mode === 'saved') {
+        toast.success({ title: t('doc.exportedTo', { path: delivery.savedPath }) })
+      } else if (delivery.mode === 'downloaded') {
+        toast.success({
+          title: filename.endsWith('.zip') ? t('doc.exportedWithImages') : t('doc.exportedMarkdown'),
+        })
+      }
+    } catch (err) {
+      toast.error({
+        title: t('doc.exportFailed'),
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setExporting(false)
+    }
+  }
   // 阅读态草稿探测：进入文档 / 退出编辑 / 保存刷新后重估（草稿由编辑器的
   // 自动暂存产生，阅读态此前完全无感——看不到「这篇还有未保存内容」）
   const editorDraft = useEditorDraft(id ?? '')
@@ -586,6 +613,16 @@ export default function DocPage() {
               </span>
             )}
             <div className="w-px h-4 bg-border/60 mx-1" />
+            <Tooltip label={t('doc.exportDoc')}>
+              <button
+                type="button"
+                onClick={() => void handleExport()}
+                disabled={exporting || loading}
+                className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50"
+              >
+                {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} /> : <Download className="w-3.5 h-3.5" strokeWidth={1.75} />}
+              </button>
+            </Tooltip>
             <Tooltip label={t('doc.viewGraph')}>
               <Link
                 to={`/graph?mode=docs&center=${encodeURIComponent(id ?? '')}&center_type=doc`}
