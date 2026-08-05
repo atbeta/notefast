@@ -4,6 +4,7 @@
 //! 业务（block 模型/检索/AI/MCP/同步）全部复用 server engine，壳层不重写。
 
 mod engine;
+mod import;
 
 use engine::{EngineHandle, EngineInfo};
 use std::path::PathBuf;
@@ -95,22 +96,36 @@ fn default_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 pub fn run() {
+    // 打开即导入·冷启动：Windows 文件关联双击 → 以文件路径为 argv 拉起新实例
+    let initial_files: Vec<PathBuf> = std::env::args_os()
+        .skip(1)
+        .map(PathBuf::from)
+        .filter(|p| import::is_markdown_path(p) && p.is_file())
+        .collect();
+
     tauri::Builder::default()
         // 单实例：第二个实例直接退出并聚焦已有窗口——多开会共享同一 data 目录，
         // 配置文件并发写互相覆盖、索引/同步双跑
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(win) = app.get_webview_window("main") {
                 let _ = win.show();
                 let _ = win.unminimize();
                 let _ = win.set_focus();
             }
+            // 已运行时双击 .md：第二实例 argv 带文件路径 → 打开即导入
+            let files: Vec<PathBuf> = args
+                .into_iter()
+                .map(PathBuf::from)
+                .filter(|p| import::is_markdown_path(p) && p.is_file())
+                .collect();
+            import::handle_open_files(app, files);
         }))
         // 保存对话框 + 文件写入：前端导出 markdown/zip 时让用户选位置（而非静默下载到 Downloads）
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(EngineState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![engine_start])
-        .setup(|app| {
+        .setup(move |app| {
             // 窗口背景色跟随系统主题（tauri.conf.json 的 backgroundColor 是静态深色，
             // 亮色系统下 webview 加载前会闪一块深色）——必须在窗口显示前设置
             if let Some(win) = app.get_webview_window("main") {
@@ -121,6 +136,10 @@ pub fn run() {
                     };
                     let _ = win.set_background_color(Some(tauri::webview::Color::from((r, g, b, 255))));
                 }
+            }
+            // 冷启动带入的 .md：engine 由前端启动页拉起，import 内部会等它就绪
+            if !initial_files.is_empty() {
+                import::handle_open_files(&app.handle(), initial_files.clone());
             }
             Ok(())
         })
