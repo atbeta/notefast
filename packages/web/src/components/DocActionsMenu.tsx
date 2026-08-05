@@ -23,7 +23,8 @@ import {
 } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
 import { api, fetchWithAuth } from '../hooks/useAPI'
-import { parseContentDispositionFilename, triggerBlobDownload } from '../lib/download'
+import { parseContentDispositionFilename, saveBlobViaTauriDialog, triggerBlobDownload } from '../lib/download'
+import { isTauriShell } from '../hooks/useShell'
 import ConfirmDialog from './ConfirmDialog'
 import ShareDialog from './ShareDialog'
 import { useToast } from './ui'
@@ -227,10 +228,23 @@ export default function DocActionsMenu({
       const filename =
         parseContentDispositionFilename(res.headers.get('Content-Disposition'))
         || (blob.type.includes('zip') ? `${title}.zip` : `${title}.md`)
-      triggerBlobDownload(blob, filename)
-      toast.success({
-        title: filename.endsWith('.zip') ? t('docActions.exportedWithImages') : t('docActions.exportedMarkdown'),
-      })
+      if (isTauriShell()) {
+        // 客户端：系统「另存为」对话框选位置 + toast 显示保存路径
+        // （WebView2 默认静默下载到 Downloads，用户看不见也选不了）
+        try {
+          const savedPath = await saveBlobViaTauriDialog(blob, filename)
+          if (savedPath) {
+            toast.success({ title: t('docActions.exportedTo', { path: savedPath }) })
+          }
+        } catch {
+          toast.error({ title: t('docActions.exportFailed') })
+        }
+      } else {
+        triggerBlobDownload(blob, filename)
+        toast.success({
+          title: filename.endsWith('.zip') ? t('docActions.exportedWithImages') : t('docActions.exportedMarkdown'),
+        })
+      }
     } catch {
       toast.error({ title: t('docActions.exportFailed') })
     } finally {

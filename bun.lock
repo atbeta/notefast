@@ -10,7 +10,7 @@
     },
     "packages/core": {
       "name": "@notefast/core",
-      "version": "0.35.0",
+      "version": "0.40.1",
       "dependencies": {
         "remark-parse": "^11.0.0",
         "remark-stringify": "^11.0.0",
@@ -24,7 +24,7 @@
     },
     "packages/server": {
       "name": "@notefast/server",
-      "version": "0.35.0",
+      "version": "0.40.1",
       "dependencies": {
         "@aws-sdk/client-s3": "^3.700.0",
         "@hono/zod-validator": "^0.4.3",
@@ -41,7 +41,7 @@
     },
     "packages/web": {
       "name": "@notefast/web",
-      "version": "0.35.0",
+      "version": "0.40.1",
       "dependencies": {
         "@codemirror/autocomplete": "^6.20.3",
         "@codemirror/commands": "^6.10.4",
@@ -56,6 +56,8 @@
         "@fontsource-variable/source-serif-4": "^5.3.0",
         "@lezer/highlight": "^1.2.3",
         "@notefast/core": "workspace:*",
+        "@tauri-apps/plugin-dialog": "2",
+        "@tauri-apps/plugin-fs": "2",
         "codemirror": "^6.0.2",
         "d3-force": "^3.0.0",
         "highlight.js": "^11.11.1",
@@ -460,6 +462,12 @@
     "@smithy/types": ["@smithy/types@4.16.1", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-0JFs3V2y2M9tKW5na/qxe69Zv+uxLMO7QBbhxF/FHu/Gp2NFZAAL9tWl9PU02xxo07pb3G9FTyjNc6D5uZrJIg=="],
 
     "@tailwindcss/typography": ["@tailwindcss/typography@0.5.20", "", { "dependencies": { "postcss-selector-parser": "6.0.10" }, "peerDependencies": { "tailwindcss": ">=3.0.0 || >=4.0.0 || insiders" } }, "sha512-hwbzQuNUfcPvbegQFatVPl/MY/tcM9KLl963hQ5laJKPh81TEZ1+dNG9PirGvcaDBkp+BCshExAyKVPW91dozw=="],
+
+    "@tauri-apps/api": ["@tauri-apps/api@2.11.1", "", {}, "sha512-M2FPuYND2m+wh5hfW9ZpSdxMPdEJovPBWwoHJmwUpysTYNHaOkVFN419m/K0LIgjb/7KU2vBgsUepJWugQCvAA=="],
+
+    "@tauri-apps/plugin-dialog": ["@tauri-apps/plugin-dialog@2.7.2", "", { "dependencies": { "@tauri-apps/api": "^2.11.0" } }, "sha512-pX0IGm1I3I6wc+zeKYcq1GSqogK6okCNX5fOdaNU5ab1AjGS6l1E5wFNjEb7meg7ZFSp0JUs+0jQGQNyOvLrsg=="],
+
+    "@tauri-apps/plugin-fs": ["@tauri-apps/plugin-fs@2.5.1", "", { "dependencies": { "@tauri-apps/api": "^2.11.0" } }, "sha512-9Lz+Jopp6QyeEWhlpkMx4R/+P9HgR+AVAI4vOZhlT8Xaymtz8iVI/Ov984/XTqgJz/5gz5NretqPB/XEMS3NhQ=="],
 
     "@types/babel__core": ["@types/babel__core@7.20.5", "", { "dependencies": { "@babel/parser": "^7.20.7", "@babel/types": "^7.20.7", "@types/babel__generator": "*", "@types/babel__template": "*", "@types/babel__traverse": "*" } }, "sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA=="],
 

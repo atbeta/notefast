@@ -135,7 +135,8 @@
     "discarding": "丢弃中…",
     "deleting": "删除中…",
     "renameTitle": "重命名",
-    "titlePlaceholder": "文档标题"
+    "titlePlaceholder": "文档标题",
+    "exportedTo": "已保存到 {{path}}"
   },
   "syncStatus": {
     "syncing": "同步中",

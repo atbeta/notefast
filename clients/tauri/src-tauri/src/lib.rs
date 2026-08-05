@@ -105,6 +105,9 @@ pub fn run() {
                 let _ = win.set_focus();
             }
         }))
+        // 保存对话框 + 文件写入：前端导出 markdown/zip 时让用户选位置（而非静默下载到 Downloads）
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .manage(EngineState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![engine_start])
         .setup(|app| {

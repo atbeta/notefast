@@ -26,6 +26,8 @@
     "@fontsource-variable/source-serif-4": "^5.3.0",
     "@lezer/highlight": "^1.2.3",
     "@notefast/core": "workspace:*",
+    "@tauri-apps/plugin-dialog": "2",
+    "@tauri-apps/plugin-fs": "2",
     "codemirror": "^6.0.2",
     "d3-force": "^3.0.0",
     "highlight.js": "^11.11.1",

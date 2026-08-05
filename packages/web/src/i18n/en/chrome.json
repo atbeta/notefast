@@ -135,7 +135,8 @@
     "discarding": "Discarding…",
     "deleting": "Deleting…",
     "renameTitle": "Rename",
-    "titlePlaceholder": "Document title"
+    "titlePlaceholder": "Document title",
+    "exportedTo": "Saved to {{path}}"
   },
   "syncStatus": {
     "syncing": "Syncing",
