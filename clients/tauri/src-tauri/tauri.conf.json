@@ -33,6 +33,11 @@
     "resources": {
       "resources/engine": "engine"
     },
+    "windows": {
+      "nsis": {
+        "languages": ["English", "SimpChinese"]
+      }
+    },
     "fileAssociations": [
       {
         "ext": ["md", "markdown", "mdown", "mkd"],
