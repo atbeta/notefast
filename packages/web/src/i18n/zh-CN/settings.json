@@ -44,7 +44,10 @@
       "testOk": "✓ 命令可用，返回：{{url}}",
       "testFailed": "命令执行失败：",
       "exitCode": "退出码：{{code}}",
-      "lastError": "最近一次上传失败"
+      "lastError": "最近一次上传失败",
+      "uploadExisting": "上传存量图片",
+      "batchRunning": "正在上传 {{done}}/{{total}}…",
+      "batchDone": "✓ 存量上传完成：成功 {{ok}} 张，失败 {{failed}} 张"
     }
   }
 }

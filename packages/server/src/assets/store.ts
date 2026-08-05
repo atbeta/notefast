@@ -11,10 +11,12 @@
 
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDb } from '../db'
 import type { ImageUploadConfig } from '@notefast/core'
+import { extForMime } from '../sync/archiveMedia'
 
 export const ASSET_REF_PREFIX = 'asset:'
 const MEDIA_DIR_NAME = 'media'
@@ -95,18 +97,94 @@ export function getAssetRemoteUrl(id: string): string | null {
 export function maybeUploadToRemote(id: string): void {
   const cfg = uploadConfig
   if (!cfg || cfg.mode !== 'auto' || !cfg.command.trim()) return
-  const filePath = join(mediaDir, id)
-  if (!existsSync(filePath)) return
+  const srcPath = join(mediaDir, id)
+  if (!existsSync(srcPath)) return
   void (async () => {
-    const outcome = await runUploadCommand(cfg, filePath)
-    const db = getDb()
-    if (outcome.ok && outcome.url) {
-      db.query('UPDATE assets SET remote_url = ?, upload_error = NULL WHERE id = ?').run(outcome.url, id)
-    } else {
-      // 静默降级：保留本地存储，但记录原因供设置页/诊断展示
-      db.query('UPDATE assets SET upload_error = ? WHERE id = ?').run(outcome.error ?? 'unknown error', id)
-    }
+    const outcome = await runUploadCommandForAsset(cfg, id, srcPath)
+    applyUploadOutcome(id, outcome)
   })()
+}
+
+/** 写回上传结果：成功清 error 写 remote_url；失败记 upload_error */
+function applyUploadOutcome(id: string, outcome: UploadCommandOutcome): void {
+  const db = getDb()
+  if (outcome.ok && outcome.url) {
+    db.query('UPDATE assets SET remote_url = ?, upload_error = NULL WHERE id = ?').run(outcome.url, id)
+  } else {
+    db.query('UPDATE assets SET upload_error = ? WHERE id = ?').run(outcome.error ?? 'unknown error', id)
+  }
+}
+
+/**
+ * 图床命令需要带扩展名的文件路径（picfast 等按扩展名判文件类型，
+ * media/<sha256> 无扩展名会被 400 拒收）——在 tmpdir 建 <id>.<ext> 副本再跑命令。
+ */
+async function runUploadCommandForAsset(
+  cfg: ImageUploadConfig,
+  id: string,
+  srcPath: string,
+): Promise<UploadCommandOutcome> {
+  const row = getDb().query('SELECT mime FROM assets WHERE id = ?').get(id) as { mime: string } | undefined
+  const ext = row ? extForMime(row.mime) : '.bin'
+  const tmpFile = join(tmpdir(), `notefast-upload-${id}${ext}`)
+  try {
+    copyFileSync(srcPath, tmpFile)
+    return await runUploadCommand(cfg, tmpFile)
+  } finally {
+    try { unlinkSync(tmpFile) } catch { /* ignore */ }
+  }
+}
+
+// ───────────────────── 存量图片批量补传 ─────────────────────
+
+export interface UploadBatchStatus {
+  running: boolean
+  total: number
+  done: number
+  ok: number
+  failed: number
+  lastError: string | null
+}
+
+let batchStatus: UploadBatchStatus = { running: false, total: 0, done: 0, ok: 0, failed: 0, lastError: null }
+
+/** 批量补传进度（内存态；结果已持久化到 assets 表，重启后进度归零不影响事实） */
+export function getUploadBatchStatus(): UploadBatchStatus {
+  return { ...batchStatus }
+}
+
+/**
+ * 存量图片补传：remote_url IS NULL 的全部 assets 串行上传（避免打爆图床）。
+ * 已在跑则返回 running。返回排队数量。
+ */
+export function uploadMissingAssets(): { queued: number; running: boolean } {
+  if (batchStatus.running) return { queued: 0, running: true }
+  const cfg = uploadConfig
+  if (!cfg || cfg.mode !== 'auto' || !cfg.command.trim()) return { queued: 0, running: false }
+  const ids = (getDb().query('SELECT id FROM assets WHERE remote_url IS NULL').all() as Array<{ id: string }>)
+    .map((r) => r.id)
+  if (ids.length === 0) return { queued: 0, running: false }
+  batchStatus = { running: true, total: ids.length, done: 0, ok: 0, failed: 0, lastError: null }
+  void (async () => {
+    for (const id of ids) {
+      const srcPath = join(mediaDir, id)
+      let outcome: UploadCommandOutcome
+      if (!existsSync(srcPath)) {
+        outcome = { ok: false, error: '本地文件缺失' }
+      } else {
+        outcome = await runUploadCommandForAsset(cfg, id, srcPath)
+      }
+      applyUploadOutcome(id, outcome)
+      batchStatus.done++
+      if (outcome.ok && outcome.url) batchStatus.ok++
+      else {
+        batchStatus.failed++
+        batchStatus.lastError = outcome.error ?? null
+      }
+    }
+    batchStatus.running = false
+  })()
+  return { queued: ids.length, running: true }
 }
 
 /**

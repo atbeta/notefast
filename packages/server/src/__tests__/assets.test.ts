@@ -361,3 +361,65 @@ describe('AssetStore — 图床命令容错与错误可见性', () => {
     setImageUploadConfig(null)
   })
 })
+
+describe('AssetStore — 存量图片批量补传', () => {
+  test('upload-missing：串行补传全部 remote_url IS NULL 的图片并写回', async () => {
+    const { getDb } = await import('../db')
+    const db = getDb()
+    applyImageUploadConfig({
+      mode: 'auto',
+      command: process.execPath,
+      args: ['-e', 'console.log("https://img.example.test/batch.png")'],
+      timeoutMs: 5_000,
+    })
+    setImageUploadConfig(getImageUploadConfig())
+
+    const { meta: a } = saveAsset(Buffer.from([1, 2, 3, 4]), 'image/png')
+    saveAsset(Buffer.from([5, 6, 7, 8]), 'image/jpeg')
+
+    const res = await app.fetch(new Request('http://localhost/api/v1/assets/upload-missing', { method: 'POST' }))
+    expect(res.status).toBe(200)
+    const body = await res.json() as { queued: number; running: boolean }
+    expect(body.queued).toBe(2)
+    expect(body.running).toBe(true)
+
+    // 轮询等待批量完成
+    const { getUploadBatchStatus } = await import('../assets/store')
+    let status = getUploadBatchStatus()
+    for (let i = 0; i < 100 && status.running; i++) {
+      await new Promise((r) => setTimeout(r, 50))
+      status = getUploadBatchStatus()
+    }
+    expect(status.running).toBe(false)
+    expect(status.ok).toBe(2)
+    expect(status.failed).toBe(0)
+
+    const rowA = db.query('SELECT remote_url FROM assets WHERE id = ?').get(a.id) as { remote_url: string | null }
+    expect(rowA.remote_url).toBe('https://img.example.test/batch.png')
+  })
+
+  test('未启用自动上传 → 400；重复触发返回 running', async () => {
+    applyImageUploadConfig({ mode: 'off' })
+    setImageUploadConfig(getImageUploadConfig())
+    const off = await app.fetch(new Request('http://localhost/api/v1/assets/upload-missing', { method: 'POST' }))
+    expect(off.status).toBe(400)
+
+    // running 中重复触发 → queued 0 + running true
+    applyImageUploadConfig({ mode: 'auto', command: process.execPath, args: ['-e', 'setTimeout(()=>{},2000)'], timeoutMs: 10_000 })
+    setImageUploadConfig(getImageUploadConfig())
+    saveAsset(Buffer.from([9, 9, 9]), 'image/png') // 造一张待补传的图
+    const first = await app.fetch(new Request('http://localhost/api/v1/assets/upload-missing', { method: 'POST' }))
+    expect((await first.json() as { running: boolean }).running).toBe(true)
+    const second = await app.fetch(new Request('http://localhost/api/v1/assets/upload-missing', { method: 'POST' }))
+    const dup = await second.json() as { queued: number; running: boolean }
+    expect(dup.queued).toBe(0)
+    expect(dup.running).toBe(true)
+    // 等批量结束，避免影响后续测试
+    const { getUploadBatchStatus } = await import('../assets/store')
+    for (let i = 0; i < 100 && getUploadBatchStatus().running; i++) {
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    applyImageUploadConfig({ mode: 'off' })
+    setImageUploadConfig(getImageUploadConfig())
+  })
+})

@@ -16,11 +16,13 @@ import {
   collectOrphanAssets,
   findMissingAssets,
   getAssetRemoteUrl,
+  getUploadBatchStatus,
   MAX_ASSET_BYTES,
   maybeUploadToRemote,
   readAsset,
   runUploadCommand,
   saveAsset,
+  uploadMissingAssets,
 } from '../assets/store'
 import { imageUploadConfigSchema, type ImageUploadConfigInput } from '@notefast/core'
 import {
@@ -106,6 +108,23 @@ assets.post('/upload-config/test', async (c) => {
   } finally {
     try { unlinkSync(tmpFile) } catch { /* ignore */ }
   }
+})
+
+/**
+ * 存量图片补传：remote_url IS NULL 的全部 assets 串行上传（后台队列）。
+ * 未启用自动上传 → 400；已在跑 → 返回 running。
+ */
+assets.post('/upload-missing', async (c) => {
+  const cfg = getImageUploadConfig()
+  if (cfg.mode !== 'auto' || !cfg.command.trim()) {
+    return c.json({ error: 'bad_request', message: '未启用自动上传或命令为空' }, 400)
+  }
+  return c.json(uploadMissingAssets())
+})
+
+/** 存量补传进度（内存态）——必须在 /:id 之前注册，否则被当作 asset id */
+assets.get('/upload-status', (c) => {
+  return c.json(getUploadBatchStatus())
 })
 
 assets.get('/:id', (c) => {
