@@ -12,6 +12,7 @@
  */
 
 import { getDb } from '../db'
+import { fullToHalfWidth } from '@notefast/core'
 import { resolveDictTerm } from '../termDict'
 import { normalizeEntityName } from '../store/entities'
 
@@ -43,7 +44,7 @@ function matchEntities(query: string): MatchedEntity[] {
   // 用户查「tape-out」要能命中标准实体「流片」。
   const names = new Set<string>()
   const addCandidate = (raw: string) => {
-    const n = normalizeEntityName(raw)
+    const n = normalizeEntityName(fullToHalfWidth(raw))
     if (n.length >= 2) names.add(n)
     const resolved = resolveDictTerm(raw)
     if (resolved) names.add(resolved.name)

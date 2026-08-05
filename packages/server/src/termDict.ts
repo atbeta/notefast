@@ -17,16 +17,25 @@
  * - ai/entitySearch：别名反向 resolve 到标准名（实体路精确匹配）
  * - termDict.rebuildDictEntities：存量归并（PUT 后自动 + POST 手动）
  *
- * 匹配键统一用 normalizeEntityName（trim/lowercase/去首尾标点/压缩空白），
+ * 匹配键统一 dictKey = fullToHalfWidth(normalizeEntityName(x))：
+ * trim/lowercase/去首尾标点/压缩空白 + 全角→半角（「（晶圆）」与「(晶圆)」同键）。
  * 精确匹配不子串——词典是显式声明，子串匹配会误伤（「晶圆」是「晶圆厂」子串）。
+ * 注意：fullToHalfWidth 只作用于匹配键，display/标准名原始写法原样保留；
+ * 实体归并键 normalizeEntityName 不含全半角转换（实体表存量保持稳定）。
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { fullToHalfWidth } from '@notefast/core'
 import { getDb } from './db'
 import { normalizeEntityName, upsertEntity, findEntityByName, mergeEntities } from './store/entities'
 
 const CONFIG_FILE = 'term-dict.json'
+
+/** 词典匹配键：全角→半角 + 规范实体名（词典内部使用，不影响实体表归并键） */
+function dictKey(s: string): string {
+  return fullToHalfWidth(normalizeEntityName(s))
+}
 
 export interface TermDictEntry {
   /** 标准名（原始写法，用于 display） */
@@ -89,7 +98,7 @@ export function loadTermDictFromDisk(): TermDict {
       skipped++
       continue
     }
-    const nameNorm = normalizeEntityName(e.name)
+    const nameNorm = dictKey(e.name)
     if (nameNorm.length < 2) {
       skipped++
       continue
@@ -97,13 +106,13 @@ export function loadTermDictFromDisk(): TermDict {
     const rawAliases = Array.isArray(e.aliases)
       ? e.aliases
           .map((a) => (typeof a === 'string' ? a.trim() : ''))
-          .filter((a) => a.length >= 2 && normalizeEntityName(a) !== nameNorm && normalizeEntityName(a).length >= 2)
+          .filter((a) => a.length >= 2 && dictKey(a) !== nameNorm && dictKey(a).length >= 2)
       : []
     // 别名按 normalized 去重（'Wafer' 与 'wafer' 归一后同键，保留首个写法）
     const seenAliases = new Set<string>()
     const aliases: string[] = []
     for (const a of rawAliases) {
-      const an = normalizeEntityName(a)
+      const an = dictKey(a)
       if (seenAliases.has(an)) continue
       seenAliases.add(an)
       aliases.push(a)
@@ -118,7 +127,7 @@ export function loadTermDictFromDisk(): TermDict {
     }
     entries.push(entry)
     byNormalized.set(nameNorm, entry)
-    for (const a of entry.aliases) byNormalized.set(normalizeEntityName(a), entry)
+    for (const a of entry.aliases) byNormalized.set(dictKey(a), entry)
   }
   if (skipped > 0) {
     console.warn(`📖 实体词典: 跳过 ${skipped} 条无效条目（标准名 <2 字 / 别名与标准名相同 / 重复）`)
@@ -147,7 +156,7 @@ export function dictStats(): { entries: number; aliases: number } {
  * 供抽取端（registerMentions）把别名锚点收敛到标准名实体。
  */
 export function resolveDictTerm(name: string): { name: string; display: string; kind?: string } | null {
-  const entry = getTermDict().byNormalized.get(normalizeEntityName(name))
+  const entry = getTermDict().byNormalized.get(dictKey(name))
   return entry ? { name: normalizeEntityName(entry.name), display: entry.name, kind: entry.kind } : null
 }
 
@@ -156,7 +165,7 @@ export function resolveDictTerm(name: string): { name: string; display: string; 
  * 未命中返回 null（调用方保持单 term）。匹配键 = normalizeEntityName(term)。
  */
 export function expandDictTerm(term: string): string[] | null {
-  const entry = getTermDict().byNormalized.get(normalizeEntityName(term))
+  const entry = getTermDict().byNormalized.get(dictKey(term))
   if (!entry) return null
   return [...new Set([term, entry.name, ...entry.aliases])]
 }
@@ -172,12 +181,12 @@ export function saveTermDictToDisk(terms: TermDictEntry[]): TermDict {
   // 语义校验（结构校验在 API zod 层）：标准名 ≥2 字、别名 ≥2 字且不与标准名相同、无重复标准名
   const seen = new Set<string>()
   for (const t of terms) {
-    const n = normalizeEntityName(t.name)
+    const n = dictKey(t.name)
     if (n.length < 2) throw new Error(`标准名过短：「${t.name}」`)
     if (seen.has(n)) throw new Error(`标准名重复：「${t.name}」`)
     seen.add(n)
     for (const a of t.aliases) {
-      const an = normalizeEntityName(a)
+      const an = dictKey(a)
       if (an.length < 2) throw new Error(`别名过短：「${a}」`)
       if (an === n) throw new Error(`别名与标准名相同：「${a}」`)
     }

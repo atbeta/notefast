@@ -117,6 +117,41 @@ describe('lexicalSearch — 中文召回（LIKE 路）', () => {
     expect(hits.some((h) => h.id === id)).toBe(true)
   })
 
+  test('后缀式问句剥离：「XXX怎么选」命中含「XXX」的正文', () => {
+    // 用户场景：问「向量数据库怎么选」文档写「向量数据库选型」——尾部问句整句不匹配
+    const { id } = seedBlock({ content: '向量数据库选型：先看召回质量再谈部署' })
+    seedBlock({ content: '完全无关的内容' })
+
+    const hits = lexicalSearch('向量数据库怎么选', { limit: 10 })
+    expect(hits.length).toBeGreaterThan(0)
+    expect(hits.some((h) => h.id === id)).toBe(true)
+    expect(hits[0]!.matched_by).toBe('like_and')
+  })
+
+  test('后缀式带中缀：「红烧肉怎么做才好吃」命中「红烧肉」', () => {
+    const { id } = seedBlock({ content: '红烧肉的做法要点：先焯水再炒糖色' })
+    const hits = lexicalSearch('红烧肉怎么做才好吃', { limit: 10 })
+    expect(hits.some((h) => h.id === id)).toBe(true)
+  })
+
+  test('后缀式带「应该」中缀：「卡片笔记应该怎么写」命中「卡片笔记」', () => {
+    const { id } = seedBlock({ content: '卡片笔记的记录方法' })
+    const hits = lexicalSearch('卡片笔记应该怎么写', { limit: 10 })
+    expect(hits.some((h) => h.id === id)).toBe(true)
+  })
+
+  test('全半角归一：全角括号/数字查询命中半角写法', () => {
+    const { id } = seedBlock({ content: 'sqlite-vec 的 vec0 虚拟表（float 768）' })
+    const hits = lexicalSearch('vec0 虚拟表（float ７６８）', { limit: 10 })
+    expect(hits.some((h) => h.id === id)).toBe(true)
+  })
+
+  test('全半角归一：全角括号术语与词典/实体键兼容', () => {
+    const { id } = seedBlock({ content: 'RAG（检索增强生成）架构' })
+    const hits = lexicalSearch('RAG(检索增强生成) 架构', { limit: 10 })
+    expect(hits.some((h) => h.id === id)).toBe(true)
+  })
+
   test('中文与 ASCII 混合查询：两个 term 都要命中', () => {
     const both = seedBlock({ content: '用 sqlite 做向量检索的笔记' })
     seedBlock({ content: '只谈向量数据库，不提具体引擎' })

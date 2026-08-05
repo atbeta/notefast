@@ -141,6 +141,16 @@ describe('resolve / expand', () => {
     expect(expandDictTerm('tape-out')).toEqual(['tape-out', '流片', '送片'])
     expect(expandDictTerm('无关')).toBeNull()
   })
+
+  test('匹配键全半角归一：全角别名与半角查询互相命中', () => {
+    writeDict([
+      { name: '晶圆', aliases: ['wafer', '（晶圆片）'] }, // 全角括号别名
+      { name: '流片', aliases: ['tape-out', 'TAPE-OUT'] }, // 大小写别名
+    ])
+    expect(resolveDictTerm('(晶圆片)')).toEqual({ name: '晶圆', display: '晶圆', kind: undefined })
+    expect(resolveDictTerm('tape-out')).toEqual({ name: '流片', display: '流片', kind: undefined })
+    expect(expandDictTerm('（晶圆片）')).toEqual(['（晶圆片）', '晶圆', 'wafer'])
+  })
 })
 
 describe('保存校验', () => {

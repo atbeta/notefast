@@ -18,6 +18,7 @@
  * ai_exclude / 生命周期状态等后置过滤仍由调用方负责。
  */
 
+import { fullToHalfWidth, halfToFullPunct } from '@notefast/core'
 import { getDb } from './db'
 import { runFtsQuery } from './dbQueries'
 import { expandDictTerm } from './termDict'
@@ -65,8 +66,19 @@ const CJK_QUERY_PREFIXES = [
 ].sort((a, b) => b.length - a.length)
 
 /**
- * 提取 CJK term 的核心词：循环剥离疑问/指示/动作前缀（剥到稳定）。
- * 如「如何选择向量数据库」→「向量数据库」。
+ * CJK 问句常见后缀（正则，匹配到句尾）：「向量数据库怎么选」「红烧肉怎么做才好吃」
+ * 这类尾部式问句与「XXX是什么」同理——剥掉后缀助词后核心词「XXX」可命中。
+ * 「怎么/如何」+ 动作动词（做/用/选/学/练/备份/部署…）+ 可选「才/要/会/更」中缀
+ * + 短尾（好吃/才对…）；单字语气词（呢/吗/么）单独容忍。
+ * 已知限制：中置式（「怎么选向量数据库」动词在句首后）不剥离，留给语义路/词典。
+ */
+const CJK_QUERY_SUFFIX_RE =
+  /(?:是什么|为什么|怎么样|怎么办|有哪些|哪几个|哪个好|推荐|区别|对比|怎么样|(?:应该|要|想|得|可以|能|最好|该)?怎么(?:做|用|选|学|练|玩|办|读|写|看|考|调|改|定|建|制定|评测|备份|部署|安装|搭建|配置|入门|开始|上手|处理|解决|提升|优化|实现|使用|组织)?(?:才|要|会|更|再|才能|才可以)?(?:[^，。！？]{0,6})?|如何(?:做|用|选|学|入门|开始|解决)?|怎样|为啥|哪个|哪些|呢|吗|么)$/
+
+/**
+ * 提取 CJK term 的核心词：循环剥离疑问/指示/动作前缀（剥到稳定），
+ * 再循环剥离句尾问句后缀。如「如何选择向量数据库」→「向量数据库」、
+ * 「向量数据库怎么选」→「向量数据库」。
  * 剥离后 < 2 字符则保留原 term（避免「什么是A」误伤成单字）。
  */
 function cjkCoreTerm(term: string): string {
@@ -80,6 +92,11 @@ function cjkCoreTerm(term: string): string {
         break
       }
     }
+  }
+  prev = ''
+  while (cur !== prev) {
+    prev = cur
+    cur = cur.replace(CJK_QUERY_SUFFIX_RE, '')
   }
   return cur.trim().length >= 2 ? cur : term
 }
@@ -97,14 +114,33 @@ interface TermGroup {
   variants: string[]
 }
 
+/**
+ * 组内形态展开：每个 variant 生成半角/标点全角两种形态（去重）。
+ * 文档里「RAG（检索增强生成）」与查询「RAG(检索增强生成)」互相都能命中。
+ * Cond 与 Params 共用同一展开，保证占位符与参数一一对应。
+ */
+function groupForms(g: TermGroup): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const v of g.variants) {
+    for (const form of [v, halfToFullPunct(v)]) {
+      if (seen.has(form)) continue
+      seen.add(form)
+      out.push(form)
+    }
+  }
+  return out
+}
+
 /** 单组 LIKE 条件（组内 OR）：(col LIKE ? ESCAPE '\' OR ...) */
 function groupLikeCond(col: string, g: TermGroup): string {
-  return `(${g.variants.map(() => `${col} LIKE ? ESCAPE '\\'`).join(' OR ')})`
+  const forms = groupForms(g)
+  return `(${forms.map(() => `${col} LIKE ? ESCAPE '\\'`).join(' OR ')})`
 }
 
 /** 整组 LIKE 参数（转义后 %term%） */
 function groupLikeParams(g: TermGroup): string[] {
-  return g.variants.map((v) => `%${escapeLike(v)}%`)
+  return groupForms(g).map((v) => `%${escapeLike(v)}%`)
 }
 
 interface LikeRow {
@@ -178,9 +214,10 @@ export function lexicalSearch(query: string, opts: LexicalSearchOptions): Lexica
   let terms = query.split(/\s+/).filter(Boolean)
   if (terms.length === 0 || opts.limit <= 0) return []
 
-  // CJK 问句归一化：「什么是XXX」→ 核心词「XXX」（无空格中文整句是一个 term，
-  // 子串匹配要求完整句序，文档里是「XXX是什么」就漏检）。匹配/打分统一用核心词。
-  terms = [...new Set(terms.map((t) => (CJK_RE.test(t) ? cjkCoreTerm(t) : t)))]
+  // 全角→半角（术语高频变体：全角括号/数字/标点），再 CJK 问句归一化：
+  // 「什么是XXX」→ 核心词「XXX」（无空格中文整句是一个 term，子串匹配要求完整
+  // 句序，文档里是「XXX是什么」就漏检）。匹配/打分统一用核心词。
+  terms = [...new Set(terms.map((t) => fullToHalfWidth(t)).map((t) => (CJK_RE.test(t) ? cjkCoreTerm(t) : t)))]
 
   // 词典展开：term 命中实体词典 → 组（原词 + 标准名 + 别名）；组内 OR，组间沿用原语义
   const groups: TermGroup[] = terms.map((t) => {
