@@ -84,8 +84,18 @@ describe('PRESETS — shape contract', () => {
     for (const id of PRESET_IDS) {
       if (id === 'custom') continue
       const p = preset(id)
-      expect(p.requiresKey, `${id} says requiresKey`).toBe(true)
+      // 本地服务（Ollama 等）requiresKey=false，允许 http://localhost，跳过 https 断言
+      if (!p.requiresKey) continue
       expect(p.baseUrl.startsWith('https://'), `${id} should use https`).toBe(true)
+    }
+  })
+
+  test('本地服务（requiresKey=false）baseUrl 应指向 localhost', () => {
+    for (const id of PRESET_IDS) {
+      if (id === 'custom') continue
+      const p = preset(id)
+      if (p.requiresKey) continue
+      expect(p.baseUrl.startsWith('http://localhost'), `${id} should target localhost`).toBe(true)
     }
   })
 

@@ -166,6 +166,20 @@ export const PRESETS: Record<ProviderPresetId, ProviderPreset> = {
     signupUrl: 'https://dash.voyageai.com',
     supportedModes: ['embedding', 'reranker'],
   },
+  ollama: {
+    id: 'ollama',
+    label: 'Ollama（本地）',
+    // 必须用 OpenAI 兼容端点 /v1（/v1/embeddings、/v1/chat/completions）。
+    // 不要填 /api/* 原生端点：/api/embeddings 返回 `embeddings[]` 而非 OpenAI 的 `data[]`，
+    // 且 baseUrl 会被拼成 /embeddings 后缀，填完整 URL 会得到 /api/embeddings/embeddings。
+    baseUrl: 'http://localhost:11434/v1',
+    embeddingModel: 'nomic-embed-text',
+    chatModel: 'llama3.3',
+    rerankerModel: '',
+    extraHeaders: {},
+    requiresKey: false,
+    supportedModes: ['chat', 'embedding'],
+  },
   custom: {
     id: 'custom',
     label: '自定义',

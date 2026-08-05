@@ -27,6 +27,7 @@ export type ProviderPresetId =
   | 'openrouter'
   | 'jina'
   | 'voyage'
+  | 'ollama'
   | 'custom'
 
 /** ProviderPresetId 的运行时清单：Zod schema、UI 下拉等都从这里取，避免列表漂移 */
@@ -40,6 +41,7 @@ export const PROVIDER_PRESET_IDS: readonly ProviderPresetId[] = [
   'openrouter',
   'jina',
   'voyage',
+  'ollama',
   'custom',
 ]
 
