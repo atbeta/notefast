@@ -1,6 +1,6 @@
 [package]
 name = "notefast-tauri"
-version = "0.39.0"
+version = "0.39.1"
 description = "NoteFast Windows 桌面客户端（Tauri 壳 + 内嵌 server engine）"
 edition = "2021"
 rust-version = "1.77.2"
