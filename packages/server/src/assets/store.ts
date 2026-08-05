@@ -90,7 +90,7 @@ export function getAssetRemoteUrl(id: string): string | null {
 /**
  * 自动上传模式：异步 spawn 图床命令（fire-and-forget，不阻塞上传响应）。
  * 命令契约：`command [args...] <图片路径>` → stdout 每行一个 http(s) URL。
- * 失败静默降级本地（图片不丢、编辑不受影响），URL 写回 assets.remote_url。
+ * 失败记录 upload_error（设置页可查），不丢图、不影响编辑。
  */
 export function maybeUploadToRemote(id: string): void {
   const cfg = uploadConfig
@@ -98,31 +98,94 @@ export function maybeUploadToRemote(id: string): void {
   const filePath = join(mediaDir, id)
   if (!existsSync(filePath)) return
   void (async () => {
-    try {
-      const url = await runUploadCommand(cfg, filePath)
-      if (url) {
-        getDb().query('UPDATE assets SET remote_url = ? WHERE id = ?').run(url, id)
-      }
-    } catch {
-      // 静默降级：保留本地存储
+    const outcome = await runUploadCommand(cfg, filePath)
+    const db = getDb()
+    if (outcome.ok && outcome.url) {
+      db.query('UPDATE assets SET remote_url = ?, upload_error = NULL WHERE id = ?').run(outcome.url, id)
+    } else {
+      // 静默降级：保留本地存储，但记录原因供设置页/诊断展示
+      db.query('UPDATE assets SET upload_error = ? WHERE id = ?').run(outcome.error ?? 'unknown error', id)
     }
   })()
 }
 
-function runUploadCommand(cfg: ImageUploadConfig, filePath: string): Promise<string | null> {
+/**
+ * 图床命令容错：command 字段允许用户直接填「完整命令」（如 `D:\\Tools\\picfast.exe upload`），
+ * 按 shell 引号感知分词拆成可执行文件 + 前置参数（Windows 路径本身可含空格，用引号包裹）。
+ */
+export function splitUploadCommand(input: string): { command: string; preArgs: string[] } {
+  const trimmed = input.trim()
+  if (!trimmed) return { command: '', preArgs: [] }
+  const parts: string[] = []
+  let cur = ''
+  let inQuote = false
+  for (const ch of trimmed) {
+    if (ch === '"') {
+      inQuote = !inQuote
+      continue
+    }
+    if (ch === ' ' && !inQuote) {
+      if (cur) {
+        parts.push(cur)
+        cur = ''
+      }
+      continue
+    }
+    cur += ch
+  }
+  if (cur) parts.push(cur)
+  if (parts.length === 0) return { command: '', preArgs: [] }
+  return { command: parts[0]!, preArgs: parts.slice(1) }
+}
+
+export interface UploadCommandOutcome {
+  ok: boolean
+  url?: string
+  /** 失败原因（供 upload_error 列 / 测试端点展示） */
+  error?: string
+  stdout?: string
+  stderr?: string
+  exitCode?: number | null
+}
+
+/**
+ * 执行一次图床命令（测试端点与自动上传共用）。
+ * 契约：command [args...] <图片路径> → stdout 每行一个 http(s) URL。
+ */
+export function runUploadCommand(cfg: ImageUploadConfig, filePath: string): Promise<UploadCommandOutcome> {
+  const { command, preArgs } = splitUploadCommand(cfg.command)
+  if (!command) {
+    return Promise.resolve({ ok: false, error: '上传命令为空' })
+  }
   return new Promise((resolve) => {
     execFile(
-      cfg.command,
-      [...cfg.args, filePath],
+      command,
+      [...preArgs, ...cfg.args, filePath],
       { timeout: cfg.timeoutMs, maxBuffer: 2 * 1024 * 1024, windowsHide: true },
-      (err, stdout) => {
-        if (err) return resolve(null)
-        // 契约：每行一个 URL；只取第一个 http(s) 链接（与 Typora 语义一致）
-        const url = stdout
+      (err, stdout, stderr) => {
+        const out = String(stdout ?? '')
+        const errText = String(stderr ?? '')
+        if (err) {
+          const code = (err as NodeJS.ErrnoException & { code?: string | number }).code
+          const reason = typeof code === 'string'
+            ? `${command}: ${code}${errText ? ` · ${errText.trim().slice(0, 200)}` : ''}`
+            : `${command}: ${errText.trim().slice(0, 200) || err.message}`
+          return resolve({ ok: false, error: reason, stdout: out, stderr: errText, exitCode: typeof code === 'number' ? code : null })
+        }
+        const url = out
           .split(/\r?\n/)
           .map((l) => l.trim())
           .find((l) => /^https?:\/\//i.test(l))
-        resolve(url ?? null)
+        if (!url) {
+          return resolve({
+            ok: false,
+            error: `命令成功退出但 stdout 无 http(s) URL${errText ? ` · ${errText.trim().slice(0, 200)}` : ''}`,
+            stdout: out,
+            stderr: errText,
+            exitCode: 0,
+          })
+        }
+        resolve({ ok: true, url, stdout: out, stderr: errText, exitCode: 0 })
       },
     )
   })

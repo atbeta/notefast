@@ -39,7 +39,12 @@
       "timeout": "超时（秒）",
       "contractHint": "命令契约（Typora 式）：command [args...] <图片路径> → stdout 每行输出一个 http(s) URL。web 端与桌面端行为一致：命令在服务端机器执行，不可用时自动降级本地存储。",
       "saved": "图床配置已保存",
-      "saveFailed": "保存失败"
+      "saveFailed": "保存失败",
+      "test": "测试命令",
+      "testOk": "✓ 命令可用，返回：{{url}}",
+      "testFailed": "命令执行失败：",
+      "exitCode": "退出码：{{code}}",
+      "lastError": "最近一次上传失败"
     }
   }
 }

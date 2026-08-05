@@ -8,7 +8,10 @@
 
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, unlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import {
   collectOrphanAssets,
   findMissingAssets,
@@ -16,13 +19,16 @@ import {
   MAX_ASSET_BYTES,
   maybeUploadToRemote,
   readAsset,
+  runUploadCommand,
   saveAsset,
 } from '../assets/store'
 import { imageUploadConfigSchema, type ImageUploadConfigInput } from '@notefast/core'
 import {
   applyImageUploadConfig,
   getImageUploadPublicConfig,
+  getImageUploadConfig,
 } from '../services/imageUploadConfig'
+import { getDb } from '../db'
 
 const assets = new Hono()
 
@@ -56,7 +62,12 @@ assets.post('/', async (c) => {
 
 /** 图床上传配置：读取（无密钥，原样返回）——必须在 /:id 之前注册，否则被当作 asset id */
 assets.get('/upload-config', (c) => {
-  return c.json(getImageUploadPublicConfig())
+  const cfg = getImageUploadPublicConfig()
+  // 附带最近一次上传失败（assets 表 upload_error，按创建时间倒序取最新一条）
+  const lastErr = getDb().query(
+    'SELECT created_at, upload_error FROM assets WHERE upload_error IS NOT NULL ORDER BY created_at DESC LIMIT 1',
+  ).get() as { created_at: string; upload_error: string } | undefined
+  return c.json({ ...cfg, last_error: lastErr ? { at: lastErr.created_at, message: lastErr.upload_error } : null })
 })
 
 /** 图床上传配置：保存（mode=off|auto + 命令 + 参数 + 超时） */
@@ -64,6 +75,37 @@ assets.put('/upload-config', zValidator('json', imageUploadConfigSchema), async 
   const body = c.req.valid('json') as ImageUploadConfigInput
   const next = applyImageUploadConfig(body)
   return c.json(next)
+})
+
+/**
+ * 测试图床命令：用 1×1 PNG 跑一次命令，返回完整诊断（stdout/stderr/exit code）。
+ * 解决「静默降级看不见报错」：用户保存配置后先点测试，立即知道命令能不能跑。
+ */
+assets.post('/upload-config/test', async (c) => {
+  const cfg = getImageUploadConfig()
+  if (cfg.mode !== 'auto' || !cfg.command.trim()) {
+    return c.json({ ok: false, error: '未启用自动上传或命令为空' }, 400)
+  }
+  // 1×1 红色 PNG
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  )
+  const tmpFile = join(tmpdir(), `notefast-upload-test-${randomUUID()}.png`)
+  writeFileSync(tmpFile, png)
+  try {
+    const outcome = await runUploadCommand(cfg, tmpFile)
+    return c.json({
+      ok: outcome.ok,
+      url: outcome.url ?? null,
+      error: outcome.error ?? null,
+      stdout: (outcome.stdout ?? '').slice(0, 2000),
+      stderr: (outcome.stderr ?? '').slice(0, 2000),
+      exit_code: outcome.exitCode,
+    })
+  } finally {
+    try { unlinkSync(tmpFile) } catch { /* ignore */ }
+  }
 })
 
 assets.get('/:id', (c) => {

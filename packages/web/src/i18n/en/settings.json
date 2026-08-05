@@ -38,7 +38,12 @@
       "timeout": "Timeout (s)",
       "contractHint": "Command contract (Typora-style): command [args...] <image_path> → stdout prints one http(s) URL per line. Web and desktop behave identically: the command runs on the server machine; when unavailable it silently falls back to local storage.",
       "saved": "Image hosting config saved",
-      "saveFailed": "Failed to save"
+      "saveFailed": "Failed to save",
+      "test": "Test command",
+      "testOk": "✓ Command works, returned: {{url}}",
+      "testFailed": "Command failed:",
+      "exitCode": "Exit code: {{code}}",
+      "lastError": "Last upload failure"
     }
   }
 }

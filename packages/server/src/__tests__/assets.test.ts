@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
 import { initAssetStore, readAsset, collectOrphanAssets, ORPHAN_GRACE_MS, setImageUploadConfig, saveAsset, maybeUploadToRemote, getAssetRemoteUrl } from '../assets/store'
+import { initImageUploadConfig, applyImageUploadConfig, getImageUploadConfig } from '../services/imageUploadConfig'
 import { authMiddleware, sessionTokenValue, SESSION_COOKIE } from '../middleware/auth'
 import assetsRouter from '../api/assets'
 import importRouter from '../api/import'
@@ -29,6 +30,7 @@ beforeAll(() => {
   testDir = mkdtempSync(join('/tmp', 'notefast-assets-'))
   initDb(testDir)
   initAssetStore(testDir)
+  initImageUploadConfig(testDir)
   app = new Hono()
   app.route('/api/v1/assets', assetsRouter)
   app.route('/api/v1/import', importRouter)
@@ -285,6 +287,74 @@ describe('AssetStore — 图床上传（命令契约）', () => {
     const getRes = await app.fetch(new Request('http://localhost/api/v1/assets/upload-config'))
     const loaded = await getRes.json() as { mode: string }
     expect(loaded.mode).toBe('auto')
+  })
+
+  afterAll(() => {
+    setImageUploadConfig(null)
+  })
+})
+
+describe('AssetStore — 图床命令容错与错误可见性', () => {
+  test('splitUploadCommand：带子命令的完整命令被拆分（含引号路径）', async () => {
+    const { splitUploadCommand } = await import('../assets/store')
+    expect(splitUploadCommand('D:\\Tools\\picfast.exe upload')).toEqual({
+      command: 'D:\\Tools\\picfast.exe',
+      preArgs: ['upload'],
+    })
+    expect(splitUploadCommand('"D:\\My Tools\\picfast.exe" upload --raw')).toEqual({
+      command: 'D:\\My Tools\\picfast.exe',
+      preArgs: ['upload', '--raw'],
+    })
+    expect(splitUploadCommand('picgo')).toEqual({ command: 'picgo', preArgs: [] })
+    expect(splitUploadCommand('  ')).toEqual({ command: '', preArgs: [] })
+  })
+
+  test('命令失败 → upload_error 写回 assets 行，GET /upload-config 暴露最近失败', async () => {
+    const { getDb } = await import('../db')
+    setImageUploadConfig({
+      version: 1,
+      mode: 'auto',
+      command: process.execPath,
+      args: ['-e', 'process.exit(3)'],
+      timeoutMs: 5_000,
+    })
+
+    const { meta } = saveAsset(PNG_BYTES, 'image/png')
+    maybeUploadToRemote(meta.id)
+    // 等待异步写回 upload_error
+    let err: string | null = null
+    for (let i = 0; i < 40; i++) {
+      const row = getDb().query('SELECT upload_error FROM assets WHERE id = ?').get(meta.id) as { upload_error: string | null }
+      if (row.upload_error) { err = row.upload_error; break }
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    expect(err).not.toBeNull()
+    expect(err).toContain('exit')
+
+    const cfgRes = await app.fetch(new Request('http://localhost/api/v1/assets/upload-config'))
+    const cfg = await cfgRes.json() as { last_error: { at: string; message: string } | null }
+    expect(cfg.last_error?.message ?? null).toBe(err)
+  })
+
+  test('测试端点：命令可用返回 URL；未启用自动上传 → 400', async () => {
+    // API 层读 services 配置（applyImageUploadConfig），store 层用于上传路径——两层同步设置
+    applyImageUploadConfig({
+      mode: 'auto',
+      command: process.execPath,
+      args: ['-e', 'console.log("https://img.example.test/ok.png")'],
+      timeoutMs: 5_000,
+    })
+    setImageUploadConfig(getImageUploadConfig())
+    const okRes = await app.fetch(new Request('http://localhost/api/v1/assets/upload-config/test', { method: 'POST' }))
+    expect(okRes.status).toBe(200)
+    const ok = await okRes.json() as { ok: boolean; url: string | null; stderr: string }
+    expect(ok.ok).toBe(true)
+    expect(ok.url).toBe('https://img.example.test/ok.png')
+
+    applyImageUploadConfig({ mode: 'off' })
+    setImageUploadConfig(getImageUploadConfig())
+    const offRes = await app.fetch(new Request('http://localhost/api/v1/assets/upload-config/test', { method: 'POST' }))
+    expect(offRes.status).toBe(400)
   })
 
   afterAll(() => {
