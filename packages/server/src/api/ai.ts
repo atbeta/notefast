@@ -47,7 +47,7 @@ import { startVectorRebuild } from '../ai/vectorRebuild'
 import { getRebuildProgress } from '../ai/rebuildProgress'
 import { startEntityRebuild, getEntityRebuildProgress } from '../ai/entityRebuild'
 import { resolveAiLang } from '../ai/locale'
-import { getIndexJob, getLatestIndexJobForDoc } from '../ai/indexJobs'
+import { getIndexJob, getIndexJobSummary, getLatestIndexJobForDoc } from '../ai/indexJobs'
 import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
 import { loadAiExcludedDocIds } from '../ai/aiExcludeQuery'
 import { runChat, runChatSync, executeWriteTool } from '../ai/chat'
@@ -66,12 +66,14 @@ ai.get('/status', async (c) => {
   const base = await getVectorStore().status()
   const rebuild = getRebuildProgress()
   const vectorStore = rebuild ? { ...base, rebuild } : base
+  // 增量索引作业汇总：语义索引面板据此展示 zip 导入等后台向量化进度
+  const indexJobs = getIndexJobSummary()
   if (!runtimeSafe()) {
-    return c.json({ enabled: false, embedding: { configured: false, ok: false }, chat: { configured: false, ok: false }, usage: emptyUsage(), config: emptyConfig(), vectorStore, fix_hint: FIX_HINT })
+    return c.json({ enabled: false, embedding: { configured: false, ok: false }, chat: { configured: false, ok: false }, usage: emptyUsage(), config: emptyConfig(), vectorStore, indexJobs, fix_hint: FIX_HINT })
   }
   const r = getRuntime()
   const s = r.status()
-  return c.json({ ...s, vectorStore, fix_hint: s.enabled ? undefined : FIX_HINT })
+  return c.json({ ...s, vectorStore, indexJobs, fix_hint: s.enabled ? undefined : FIX_HINT })
 })
 
 // ───────────────────── config ─────────────────────

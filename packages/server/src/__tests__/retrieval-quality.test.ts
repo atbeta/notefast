@@ -288,6 +288,35 @@ describe('文档级索引作业', () => {
     expect(latest.elapsed_ms).toBeGreaterThanOrEqual(0)
   })
 
+  test('getIndexJobSummary 汇总 ready/active/recent/indexedBlocks', async () => {
+    const { getIndexJobSummary } = await import('../ai/indexJobs')
+    // beforeEach 重建了 runtime（默认 fetchImpl）：mock embedding 响应，否则作业会真实网络请求而 failed
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl((async () => {
+      return new Response(JSON.stringify({ data: [{ embedding: [0.2, 0.3, 0.4] }] }), { status: 200 })
+    }) as unknown as typeof fetch)
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const { docId, blockId } = seedDoc({ notebookId: nb, title: 'S', content: 'summary progress' })
+
+    const job = scheduleDocIndex(docId, [blockId])
+    expect(job).not.toBeNull()
+
+    // 等待完成（running/pending 清零）
+    const deadline = Date.now() + 5000
+    let s = getIndexJobSummary()
+    while ((s.running > 0 || s.pending > 0) && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 30))
+      s = getIndexJobSummary()
+    }
+    expect(s.ready).toBeGreaterThanOrEqual(1)
+    expect(s.running).toBe(0)
+    expect(s.pending).toBe(0)
+    expect(s.active).toBeNull()
+    expect(s.indexedBlocks).toBeGreaterThanOrEqual(1)
+    expect(s.recent.length).toBeGreaterThanOrEqual(1)
+  })
+
   test('running 作业被 supersede 后循环终止且状态保持 failed', async () => {
     applyNewConfig(
       {

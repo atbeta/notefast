@@ -134,7 +134,12 @@
     "braveApiKey": "Brave Search API Key",
     "braveApiHint2": "(free tier: 1,000 calls/month)",
     "saveConfig": "Save configuration",
-    "refreshStatus": "Refresh status"
+    "refreshStatus": "Refresh status",
+    "indexJobActive": "Indexing {{done}}/{{total}} blocks · {{pending}} queued",
+    "indexJobQueued": "{{n}} documents queued for indexing",
+    "indexJobEta": "· ~{{sec}}s left",
+    "indexJobIdle": "✓ Incremental indexing done: {{ready}} ready",
+    "indexJobBlocks": "{{n}} blocks indexed this session"
   },
   "diagnose": {
     "healthy": "All healthy",

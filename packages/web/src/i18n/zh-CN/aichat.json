@@ -134,7 +134,12 @@
     "braveApiKey": "Brave Search API Key",
     "braveApiHint2": "（免费额度 1000 次/月）",
     "saveConfig": "保存配置",
-    "refreshStatus": "刷新状态"
+    "refreshStatus": "刷新状态",
+    "indexJobActive": "正在索引 {{done}}/{{total}} 块 · 排队 {{pending}} 篇",
+    "indexJobQueued": "索引排队中：{{n}} 篇文档",
+    "indexJobEta": "· 预计 {{sec}}s",
+    "indexJobIdle": "✓ 增量索引完成：{{ready}} 篇就绪",
+    "indexJobBlocks": "本次会话已索引 {{n}} 块"
   },
   "diagnose": {
     "healthy": "一切正常",

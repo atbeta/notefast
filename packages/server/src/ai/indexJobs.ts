@@ -223,6 +223,56 @@ export function getLatestIndexJobForDoc(docId: string): IndexJob | null {
   return latest ? publicJob(latest) : null
 }
 
+export interface IndexJobSummary {
+  /** 排队中（尚未开始）的作业数 */
+  pending: number
+  /** 正在运行的作业数（并发上限 1） */
+  running: number
+  /** 已完成（ready/partial）的作业数 */
+  ready: number
+  /** 失败作业数（含 superseded） */
+  failed: number
+  /** 当前正在跑的作业（含实时进度）；无则 null */
+  active: IndexJob | null
+  /** 最近完成的作业（按结束时间倒序，最多 5 条） */
+  recent: IndexJob[]
+  /** 会话内累计已索引块数 */
+  indexedBlocks: number
+}
+
+/**
+ * 增量索引作业汇总（设置页语义索引面板用）。
+ * 作业在内存 Map：只有当前进程内的可见（结果已持久化，进度是瞬态显示）。
+ */
+export function getIndexJobSummary(): IndexJobSummary {
+  let pending = 0
+  let running = 0
+  let ready = 0
+  let failed = 0
+  let indexedBlocks = 0
+  let active: IndexJob | null = null
+  const recent: IndexJob[] = []
+  for (const job of jobs.values()) {
+    recomputeTiming(job)
+    indexedBlocks += job.done
+    if (job.state === 'pending') {
+      pending++
+    } else if (job.state === 'running') {
+      running++
+      if (!active) active = publicJob(job)
+    } else if (job.state === 'ready' || job.state === 'partial') {
+      ready++
+      recent.push(publicJob(job))
+    } else if (job.state === 'failed') {
+      failed++
+      // superseded（被更新的作业取代）不进 recent，避免噪音
+      if (job.error !== '被更新的索引作业取代') recent.push(publicJob(job))
+    }
+  }
+  recent.sort((a, b) => (b.finished_at ?? '').localeCompare(a.finished_at ?? ''))
+  return { pending, running, ready, failed, active, recent: recent.slice(0, 5), indexedBlocks }
+}
+
 /** 测试用：清空作业表 */
 export function _resetIndexJobsForTests(): void {
   jobs.clear()

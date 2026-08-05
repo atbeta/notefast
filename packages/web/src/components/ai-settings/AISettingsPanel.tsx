@@ -55,8 +55,46 @@ type VectorStoreStatus = {
   }
 }
 
+/** 增量索引作业（zip 导入等后台向量化）汇总 */
+type IndexJobSummary = {
+  pending: number
+  running: number
+  ready: number
+  failed: number
+  active: {
+    id: string
+    doc_id: string
+    total_blocks: number
+    done: number
+    skipped: number
+    errors: number
+    state: string
+    started_at: string | null
+    finished_at: string | null
+    elapsed_ms: number
+    eta_ms: number | null
+    error: string | null
+  } | null
+  recent: Array<{
+    id: string
+    doc_id: string
+    total_blocks: number
+    done: number
+    skipped: number
+    errors: number
+    state: string
+    started_at: string | null
+    finished_at: string | null
+    elapsed_ms: number
+    eta_ms: number | null
+    error: string | null
+  }>
+  indexedBlocks: number
+}
+
 type AIStatus = RuntimeStatus & {
   vectorStore?: VectorStoreStatus
+  indexJobs?: IndexJobSummary
   fix_hint?: string
 }
 
@@ -123,15 +161,17 @@ export default function AISettingsPanel() {
     refresh()
   }, [refresh])
 
-  // 重建中轮询 index/status
+  // 重建中轮询 index/status（800ms）；增量索引作业进行中轮询（1.5s）
   useEffect(() => {
     const vs = status?.vectorStore
-    if (!vs || vs.status !== 'rebuilding') return
+    const jobs = status?.indexJobs
+    const busy = (vs?.status === 'rebuilding') || Boolean(jobs?.running || (jobs?.pending ?? 0) > 0)
+    if (!busy) return
     const t = setInterval(() => {
       void refresh()
-    }, 800)
+    }, vs?.status === 'rebuilding' ? 800 : 1500)
     return () => clearInterval(t)
-  }, [status?.vectorStore?.status, refresh])
+  }, [status?.vectorStore?.status, status?.indexJobs?.running, status?.indexJobs?.pending, refresh])
 
   // 实体重建进度轮询
   const [entityRebuild, setEntityRebuild] = useState<EntityRebuildStatus | null>(null)
@@ -522,6 +562,47 @@ export default function AISettingsPanel() {
                   : ''}
               </p>
             )}
+            {/* 增量索引作业（zip 导入 / 批量创建后的后台向量化）进度 */}
+            {(() => {
+              const jobs = status.indexJobs
+              if (!jobs) return null
+              const busy = jobs.running > 0 || jobs.pending > 0
+              const active = jobs.active
+              return (
+                <div className="pt-1.5 border-t border-border/60 space-y-1.5">
+                  {busy ? (
+                    <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
+                      {active ? (
+                        <span className="tabular-nums">
+                          {t('aiSettings.indexJobActive', {
+                            done: active.done + active.skipped,
+                            total: active.total_blocks,
+                            pending: jobs.pending,
+                          })}
+                        </span>
+                      ) : (
+                        <span>{t('aiSettings.indexJobQueued', { n: jobs.pending })}</span>
+                      )}
+                      {active && active.eta_ms != null && active.eta_ms > 0 && (
+                        <span className="tabular-nums text-muted-foreground/70">
+                          {t('aiSettings.indexJobEta', { sec: (active.eta_ms / 1000).toFixed(1) })}
+                        </span>
+                      )}
+                    </div>
+                  ) : jobs.ready + jobs.failed > 0 ? (
+                    <p className="text-[12px] text-emerald-700 dark:text-emerald-400">
+                      {t('aiSettings.indexJobIdle', { ready: jobs.ready, failed: jobs.failed })}
+                    </p>
+                  ) : null}
+                  {jobs.indexedBlocks > 0 && (
+                    <p className="text-[11px] text-muted-foreground/60">
+                      {t('aiSettings.indexJobBlocks', { n: jobs.indexedBlocks.toLocaleString(currentLocale()) })}
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
             <div className="flex gap-2 pt-0.5">
               <button
                 type="button"
