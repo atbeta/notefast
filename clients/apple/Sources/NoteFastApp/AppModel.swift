@@ -16,7 +16,6 @@ final class AppModel: ObservableObject {
 
     @Published private(set) var state: State = .starting
     @Published var windowTitle = "NoteFast"
-    @Published var syncStatus: SyncProtocolStatus?
     @Published var engineVersion: String?
     @Published var versionIncompatible = false
     @Published var syncActionMessage: String?
@@ -25,7 +24,6 @@ final class AppModel: ObservableObject {
 
     private var engine: EngineProcess?
     private var terminateObserver: NSObjectProtocol?
-    private var pollTask: Task<Void, Never>?
     private var transientMessageTask: Task<Void, Never>?
 
     init() {
@@ -47,7 +45,6 @@ final class AppModel: ObservableObject {
         if let observer = terminateObserver {
             NotificationCenter.default.removeObserver(observer)
         }
-        pollTask?.cancel()
         transientMessageTask?.cancel()
     }
 
@@ -100,8 +97,6 @@ final class AppModel: ObservableObject {
             engineVersion = hs.version
             verifyEngineVersion(hs.version)
             navigator.navigate(to: entryURL ?? URL(string: "http://127.0.0.1")!)
-            await refreshSyncStatus()
-            startSyncPolling()
         } catch {
             state = .failed(error)
         }
@@ -113,11 +108,8 @@ final class AppModel: ObservableObject {
     }
 
     func stop() {
-        pollTask?.cancel()
-        pollTask = nil
         engine?.stop(wait: 8)
         engine = nil
-        syncStatus = nil
     }
 
     /// 契约稳定守则：engine 版本低于客户端最低支持 → 标记不兼容
@@ -152,58 +144,7 @@ final class AppModel: ObservableObject {
         return base.appendingPathComponent("NoteFast", isDirectory: true)
     }
 
-    // MARK: - 同步（多端同步协议：自动同步由 engine 负责，壳层只做状态展示 + 手动触发）
-
-    private func startSyncPolling() {
-        pollTask?.cancel()
-        pollTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 10_000_000_000)
-                await self?.refreshSyncStatus()
-            }
-        }
-    }
-
-    func refreshSyncStatus() async {
-        guard let base = baseURL else { return }
-        do {
-            let client = NoteFastClient(baseURL: base)
-            syncStatus = try await client.get("/sync/protocol", as: SyncProtocolStatus.self)
-        } catch {
-            // 轮询失败静默（engine 重启窗口期）
-        }
-    }
-
-    /// 手动触发一轮同步（publish + consume；engine 内部已有去抖自动同步）
-    func syncNow() async {
-        guard let base = baseURL else { return }
-        showTransientMessage("正在同步…")
-        do {
-            let client = NoteFastClient(baseURL: base)
-            _ = try await client.post("/sync/protocol/run", as: SyncRunResult.self)
-            await refreshSyncStatus()
-            showTransientMessage("同步完成")
-        } catch {
-            let apiError = (error as? NotefastAPIError)
-            showTransientMessage(apiError?.message ?? "同步失败")
-        }
-    }
-
-    /// 消费端首次恢复：从 S3 拉全量快照/增量合并到本地（会替换本地库，需用户确认后调用）
-    func syncPull() async {
-        guard let base = baseURL else { return }
-        showTransientMessage("正在从云端恢复…")
-        do {
-            let client = NoteFastClient(baseURL: base)
-            let result = try await client.post("/sync/protocol/pull", as: SyncPullResult.self)
-            await refreshSyncStatus()
-            let mode = result.mode == "full" ? "全量恢复" : "增量合并"
-            showTransientMessage("\(mode)完成（应用 \(result.applied ?? 0) 条）")
-        } catch {
-            let apiError = (error as? NotefastAPIError)
-            showTransientMessage(apiError?.message ?? "恢复失败")
-        }
-    }
+    // MARK: - 瞬时消息（菜单命令反馈：Help 菜单展示 syncActionMessage）
 
     private func showTransientMessage(_ message: String) {
         syncActionMessage = message

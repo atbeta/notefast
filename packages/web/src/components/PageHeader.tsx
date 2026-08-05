@@ -22,13 +22,13 @@ export default function PageHeader({
 }) {
   if (bare) {
     return (
-      <header className={`sticky top-0 z-10 h-14 border-b border-border/50 bg-background/85 backdrop-blur-md ${className}`.trim()}>
+      <header data-drag-region className={`sticky top-0 z-10 h-14 border-b border-border/50 bg-background/85 backdrop-blur-md ${className}`.trim()}>
         {children}
       </header>
     )
   }
   return (
-    <header className="sticky top-0 z-10 h-14 border-b border-border/50 bg-background/85 backdrop-blur-md">
+    <header data-drag-region className="sticky top-0 z-10 h-14 border-b border-border/50 bg-background/85 backdrop-blur-md">
       <div className={`h-full w-full max-w-4xl mx-auto px-4 sm:px-8 ${innerClassName}`.trim()}>
         {children}
       </div>

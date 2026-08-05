@@ -14,6 +14,8 @@ struct NoteFastApp: App {
                 }
         }
         .defaultSize(width: 1100, height: 720)
+        // 隐藏式标题栏：web 内容延伸至窗口顶缘，红绿灯悬浮在侧栏净空区上
+        .windowStyle(.hiddenTitleBar)
         .commands {
             AppMenuCommands(model: model)
         }

@@ -282,14 +282,17 @@ export default function Sidebar({
   if (collapsed) {
     return (
       <aside className="w-14 flex flex-col items-center py-3 shrink-0 h-full relative bg-sidebar border-r border-border/50">
-        <div className="h-14 w-full flex items-center justify-center border-b border-border/50 shrink-0 absolute top-0 left-0">
+        <div
+          data-drag-region
+          className="h-[calc(3.5rem+var(--shell-top-inset,0px))] pt-[var(--shell-top-inset,0px)] w-full flex items-center justify-center border-b border-border/50 shrink-0 absolute top-0 left-0"
+        >
           <Tooltip label={t('sidebar.expandSidebar')}>
             <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group">
               <PanelLeft className="w-4 h-4" strokeWidth={1.75} />
             </button>
           </Tooltip>
         </div>
-        <div className="mt-14 w-full flex-1 flex flex-col items-center pt-4 gap-1">
+        <div className="mt-[calc(3.5rem+var(--shell-top-inset,0px))] w-full flex-1 flex flex-col items-center pt-4 gap-1">
           <Tooltip label={t('sidebar.docs')}>
             <Link to="/" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-primary transition-colors">
               <FileText className="w-4 h-4" strokeWidth={1.75} />
@@ -330,7 +333,10 @@ export default function Sidebar({
 
   return (
     <aside className="w-60 flex flex-col shrink-0 h-full bg-sidebar border-r border-border/50">
-      <div className="h-14 flex items-center justify-between px-3 border-b border-border/50 shrink-0">
+      <div
+        data-drag-region
+        className="h-[calc(3.5rem+var(--shell-top-inset,0px))] pt-[var(--shell-top-inset,0px)] flex items-center justify-between px-3 border-b border-border/50 shrink-0"
+      >
         <div className="flex items-center gap-2">
           <Link to="/" onClick={closeAfterNav} className="flex items-center gap-2 font-semibold text-[15px] text-foreground hover:text-foreground/80 transition-colors tracking-[-0.01em]">
             <span className="w-7 h-7 grid place-items-center rounded-md bg-foreground text-background">
