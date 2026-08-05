@@ -7,9 +7,6 @@
     "llmError": "LLM 错误",
     "requestFailed": "请求失败: {{msg}}",
     "openDoc": "打开文档",
-    "writtenDocLink": "已写入：**[{{label}}](/doc/{{docId}})**",
-    "writtenWithMessage": "已写入：{{message}}",
-    "writtenToKb": "已写入知识库。",
     "title": "AI 助手",
     "contextDocTitle": "优先检索当前文档，必要时扩至知识库",
     "contextAllTitle": "检索全部知识库",
@@ -61,16 +58,7 @@
     "jumpToBlock": "跳转到原文块",
     "expandMore": "展开其余 {{n}} 段",
     "thinking": "思考中…",
-    "thinkProcess": "思考过程",
-    "proposalCreate": "创建笔记「{{title}}」",
-    "proposalAppend": "向文档追加内容",
-    "proposalUpdate": "更新内容片段",
-    "noPreview": "（无内容预览）",
-    "reject": "拒绝",
-    "confirmWrite": "确认写入",
-    "writing": "正在写入…",
-    "written": "✓ 已写入",
-    "rejected": "已拒绝，未写入。"
+    "thinkProcess": "思考过程"
   },
   "aiSettings": {
     "savedCleared": "已清空所有 Provider",

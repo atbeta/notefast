@@ -630,9 +630,8 @@ ai.post('/chat', zValidator('json', chatSchema), async (c) => {
 })
 
 // ───────────────────── write-confirm ─────────────────────
-// chat agent loop 的写工具（create_note / append_to_doc / update_block）不直接执行：
-// 前端收到 write_proposal SSE 事件后渲染确认卡片，用户批准后调本端点真正写入。
-// 保证「AI 建议、人确认」（AGENTS.md：人类负责阅读）。
+// chat agent loop 现在直接执行写工具（executeWriteTool，文档历史可回退）；
+// 本端点保留兼容旧客户端 / 外部调用，语义一致：校验后走同一写路径。
 
 const writeConfirmSchema = z.object({
   tool: z.enum(['notefast_create_note', 'notefast_append_to_doc', 'notefast_update_block']),

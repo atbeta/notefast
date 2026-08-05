@@ -107,16 +107,6 @@ interface RetrievalInfo {
   }
 }
 
-/** AI 建议写入提案（写工具被 agent loop 触发但不直接执行，等用户确认） */
-interface WriteProposal {
-  id: string
-  tool: 'notefast_create_note' | 'notefast_append_to_doc' | 'notefast_update_block'
-  args: Record<string, unknown>
-  /** executing=正在写入；done=已写入；dismissed=已拒绝；error=写入失败 */
-  status: 'pending' | 'executing' | 'done' | 'dismissed' | 'error'
-  error?: string
-}
-
 interface AIChatPanelProps {
   contextDocId?: string
   isOpen: boolean
@@ -145,7 +135,6 @@ export default function AIChatPanel({
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [skills, setSkills] = useState<AiSkill[]>([])
-  const [proposals, setProposals] = useState<WriteProposal[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesFadeRef = useScrollFade<HTMLDivElement>()
   const abortRef = useRef<AbortController | null>(null)
@@ -394,17 +383,6 @@ export default function AIChatPanel({
               setCitations(payload.citations || [])
             } else if (eventName === 'tool') {
               setToolStatus(t('chat.callingTool', { tool: payload.tool || t('chat.tool') }))
-            } else if (eventName === 'write_proposal') {
-              setToolStatus(null)
-              setProposals((prev) => [
-                ...prev,
-                {
-                  id: `${payload.tool}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                  tool: payload.tool,
-                  args: payload.args || {},
-                  status: 'pending',
-                },
-              ])
             } else if (eventName === 'reasoning') {
               reasoningText += payload.content || ''
               upsertAssistant({ reasoning: reasoningText, content: assistantText })
@@ -474,49 +452,6 @@ export default function AIChatPanel({
     setCitations([])
     setRetrieval(null)
     setToolStatus(null)
-    setProposals([])
-  }
-
-  /** 拒绝 AI 写提案：仅丢弃，不调用任何写端点 */
-  const rejectProposal = (id: string) => {
-    setProposals((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'dismissed' } : p)))
-  }
-
-  /** 确认 AI 写提案：调 /ai/chat/write-confirm 真正写入（与 chat agent loop 解耦的写路径） */
-  const confirmProposal = async (id: string) => {
-    const prop = proposals.find((p) => p.id === id)
-    if (!prop || prop.status !== 'pending') return
-    setProposals((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'executing' } : p)))
-    try {
-      const res = await fetchWithAuth('/ai/chat/write-confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tool: prop.tool, args: prop.args }),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: `HTTP ${res.status}` }))
-        throw new Error(err.message || `HTTP ${res.status}`)
-      }
-      const data = (await res.json()) as { ok?: boolean; doc_id?: string; message?: string }
-      setProposals((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'done' } : p)))
-      // 写入成功 → 追加一条确认消息（引用新文档可跳转）
-      if (data.doc_id) {
-        upsertAssistantDone(t('chat.writtenDocLink', {
-          label: data.message || t('chat.openDoc'),
-          docId: data.doc_id,
-        }))
-      } else {
-        upsertAssistantDone(data.message ? t('chat.writtenWithMessage', { message: data.message }) : t('chat.writtenToKb'))
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setProposals((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'error', error: msg } : p)))
-    }
-  }
-
-  /** 追加一条独立的 assistant 消息（HTML 渲染，用于写入结果提示） */
-  const upsertAssistantDone = (content: string) => {
-    setMessages((prev) => [...prev, { role: 'assistant', content }])
   }
 
   const showSpinner = loading && !messages.some((m) => m.role === 'assistant' && (m.content.trim() || m.reasoning))
@@ -709,18 +644,6 @@ export default function AIChatPanel({
               )
             })}
           </>
-        )}
-        {proposals.length > 0 && (
-          <div className="space-y-3">
-            {proposals.map((p) => (
-              <WriteProposalCard
-                key={p.id}
-                proposal={p}
-                onConfirm={() => confirmProposal(p.id)}
-                onReject={() => rejectProposal(p.id)}
-              />
-            ))}
-          </div>
         )}
         {loading && (
           <div className="flex gap-3">
@@ -1073,86 +996,6 @@ function ThinkBlock({
         {streaming && <Loader2 className="w-3 h-3 animate-spin opacity-60" />}
       </button>
       {open && <div className="chat-think-body whitespace-pre-wrap">{text}</div>}
-    </div>
-  )
-}
-
-/** 把写提案渲染为人类可读摘要 */
-function proposalSummary(p: WriteProposal): { title: string; body: string } {
-  if (p.tool === 'notefast_create_note') {
-    const title = String(p.args.title ?? '')
-    const md = String(p.args.markdown ?? '')
-    return { title: i18next.t('chat.proposalCreate', { title }), body: md }
-  }
-  if (p.tool === 'notefast_append_to_doc') {
-    const heading = String(p.args.heading ?? '')
-    const content = String(p.args.content ?? '')
-    return { title: i18next.t('chat.proposalAppend'), body: [heading, content].filter(Boolean).join('\n\n') }
-  }
-  // update_block
-  return { title: i18next.t('chat.proposalUpdate'), body: String(p.args.content ?? '') }
-}
-
-function WriteProposalCard({
-  proposal,
-  onConfirm,
-  onReject,
-}: {
-  proposal: WriteProposal
-  onConfirm: () => void
-  onReject: () => void
-}) {
-  const { t } = useTranslation()
-  const { title, body } = proposalSummary(proposal)
-
-  return (
-    <div className="rounded-xl border border-primary/25 bg-primary-softer/60 p-3.5 space-y-2.5">
-      <div className="flex items-start gap-2.5">
-        <span className="w-6 h-6 rounded-md bg-primary/15 text-primary grid place-items-center shrink-0 mt-0.5">
-          <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-medium text-foreground">{title}</p>
-          {proposal.status === 'error' && proposal.error && (
-            <p className="text-[12px] text-destructive mt-1">{proposal.error}</p>
-          )}
-          {proposal.status === 'pending' && (
-            <pre className="mt-1.5 text-[11.5px] leading-relaxed whitespace-pre-wrap font-sans text-muted-foreground bg-background/60 border border-border/50 rounded-md p-2.5 max-h-36 overflow-y-auto">
-              {body || t('chat.noPreview')}
-            </pre>
-          )}
-        </div>
-      </div>
-      {proposal.status === 'pending' && (
-        <div className="flex justify-end gap-2 pl-8">
-          <button
-            type="button"
-            onClick={onReject}
-            className="px-3 py-1.5 text-[12.5px] font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-secondary/60 rounded-md transition-colors"
-          >
-            {t('chat.reject')}
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="px-3 py-1.5 text-[12.5px] font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary-hover transition-colors"
-          >
-            {t('chat.confirmWrite')}
-          </button>
-        </div>
-      )}
-      {proposal.status === 'executing' && (
-        <div className="flex items-center gap-2 pl-8 text-[12px] text-muted-foreground">
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-          {t('chat.writing')}
-        </div>
-      )}
-      {proposal.status === 'done' && (
-        <p className="pl-8 text-[12px] text-muted-foreground">{t('chat.written')}</p>
-      )}
-      {proposal.status === 'dismissed' && (
-        <p className="pl-8 text-[12px] text-muted-foreground">{t('chat.rejected')}</p>
-      )}
     </div>
   )
 }

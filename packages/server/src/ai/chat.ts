@@ -49,7 +49,6 @@ import { visionEnabled } from './imageCaptions'
 export type ChatEvent =
   | { type: 'retrieval'; report: HybridSearchReport }
   | { type: 'tool'; tool: string; args: Record<string, unknown>; resultCount: number }
-  | { type: 'write_proposal'; tool: string; args: Record<string, unknown> }
   | { type: 'reasoning'; content: string }
   | { type: 'token'; content: string }
   | { type: 'done'; citations: Citation[]; retrieval: HybridSearchReport['retrieval']; toolTrace: ToolTraceEntry[] }
@@ -261,26 +260,11 @@ function getAllToolDefinitions(lang: AiLang): ToolDefinition[] {
 }
 
 /**
- * 写工具（改库）集合：chat agent loop 中这些工具不直接执行，
- * 而是返回「写入提案」（awaiting_confirm），由前端以确认卡片形式交用户决定；
- * 用户确认后前端调 REST 写端点真正执行。保证 AI 写入经过人眼把关（AGENTS.md：人类负责阅读）。
+ * 写工具（改库）集合：agent loop 中直接执行（executeWriteTool），
+ * 不再返回「写入提案」等用户确认——文档有 block_revisions / doc_snapshots 历史，
+ * 写错可随时回退（POST /blocks/:id/revisions/:rev/restore），确认卡片流程已废弃。
  */
 export const WRITE_TOOLS = new Set(['notefast_create_note', 'notefast_append_to_doc', 'notefast_update_block'])
-
-/** 写工具被调用的返回：不执行，改交提案 */
-function pendingWriteProposal(tool: string, args: Record<string, unknown>, lang: AiLang): ToolResult {
-  return {
-    content: JSON.stringify({
-      awaiting_confirm: true,
-      tool,
-      args,
-      message: lang === 'en'
-        ? 'This operation requires your confirmation; waiting for it.'
-        : '该操作需用户确认后执行，等待确认。',
-    }),
-    resultCount: 0,
-  }
-}
 
 /**
  * 执行 LLM 请求的工具调用。
@@ -292,8 +276,10 @@ async function executeToolCall(
   fallbackQuery: string,
   ctx: { notebookId?: string; ctxDocId?: string; since?: string; until?: string; minScore?: number; lang?: AiLang },
 ): Promise<ToolResult> {
-  // 写工具：不在此执行，返回提案（前端确认卡片决定最终写入）
-  if (WRITE_TOOLS.has(name)) return pendingWriteProposal(name, args, ctx.lang ?? 'zh')
+  // 写工具：直接执行（不经过用户确认；文档历史可回退）
+  if (WRITE_TOOLS.has(name)) {
+    return executeWriteTool(name, args, { notebookId: ctx.notebookId })
+  }
 
   if (name === 'notefast_search_more') {
     const q = (typeof args.query === 'string' && args.query.trim()) || fallbackQuery
@@ -443,9 +429,9 @@ export interface WriteToolContext {
 
 /**
  * 执行写工具（create_note / append_to_doc / update_block）。
- * 由前端确认卡片触发：用户批准后经 REST /ai/chat/write-confirm 调用。
- * 与 executeToolCall 解耦：chat agent loop 不再直接写库（WRITE_TOOLS 拦截），
- * 写库统一走这里，保证「AI 建议、人确认」与既有 MCP/REST 写路径行为一致。
+ * 由 chat agent loop 直接调用（写操作不再需要用户确认，文档历史可回退）；
+ * REST /ai/chat/write-confirm 端点保留兼容（外部客户端），同样走这里。
+ * 写库统一走这里，保证与既有 MCP/REST 写路径行为一致。
  */
 export async function executeWriteTool(name: string, args: Record<string, unknown>, ctx: WriteToolContext): Promise<ToolResult> {
   if (name === 'notefast_create_note') {
@@ -850,28 +836,8 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
           })
 
           for (const tc of toolCalls) {
-            // 写工具：不在此执行。向客户端发 write_proposal 事件（前端渲染确认卡片），
-            // 客户端确认后调 REST /ai/chat/write-confirm 执行 executeWriteTool。
-            // tool 结果回填「待确认」占位，避免 LLM 误以为写入已发生。
-            if (WRITE_TOOLS.has(tc.name)) {
-              yield { type: 'write_proposal', tool: tc.name, args: tc.args }
-              toolTrace.push({
-                tool: tc.name,
-                args: tc.args,
-                result_count: 0,
-                result_text: JSON.stringify({ awaiting_confirm: true }),
-              })
-              workingMessages.push({
-                role: 'tool',
-                tool_call_id: tc.id,
-                content: JSON.stringify({
-                  awaiting_confirm: true,
-                  message: '该操作已提交给用户确认，等待用户在界面确认后执行。',
-                }),
-              })
-              continue
-            }
-
+            // 写工具直接执行（executeToolCall 内部路由到 executeWriteTool），
+            // 不再发 write_proposal 等待用户确认——文档有 revision 历史，写错可回退。
             const exec = await executeToolCall(tc.name, tc.args, lastUserText, {
               notebookId: opts.notebookId,
               ctxDocId: opts.contextDocId,
@@ -982,12 +948,10 @@ export async function runChatSync(opts: RunChatOptions): Promise<{
     timing: { fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
   }
   let toolTrace: ToolTraceEntry[] = []
-  const writeProposals: Array<{ tool: string; args: Record<string, unknown> }> = []
 
   for await (const ev of runChat(opts)) {
     if (ev.type === 'token') answer += ev.content
     else if (ev.type === 'reasoning') reasoning += ev.content
-    else if (ev.type === 'write_proposal') writeProposals.push({ tool: ev.tool, args: ev.args })
     else if (ev.type === 'done') {
       citations = ev.citations
       retrieval = ev.retrieval
@@ -1003,6 +967,5 @@ export async function runChatSync(opts: RunChatOptions): Promise<{
     citations,
     retrieval,
     toolTrace,
-    ...(writeProposals.length > 0 ? { writeProposals } : {}),
   }
 }

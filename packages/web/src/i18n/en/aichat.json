@@ -7,9 +7,6 @@
     "llmError": "LLM error",
     "requestFailed": "Request failed: {{msg}}",
     "openDoc": "Open document",
-    "writtenDocLink": "Written: **[{{label}}](/doc/{{docId}})**",
-    "writtenWithMessage": "Written: {{message}}",
-    "writtenToKb": "Written to the knowledge base.",
     "title": "AI Assistant",
     "contextDocTitle": "Prioritize the current document, expanding to the knowledge base when needed",
     "contextAllTitle": "Search the entire knowledge base",
@@ -61,16 +58,7 @@
     "jumpToBlock": "Jump to source block",
     "expandMore": "Show {{n}} more",
     "thinking": "Thinking…",
-    "thinkProcess": "Thought process",
-    "proposalCreate": "Create note “{{title}}”",
-    "proposalAppend": "Append content to a document",
-    "proposalUpdate": "Update content fragment",
-    "noPreview": "(no content preview)",
-    "reject": "Reject",
-    "confirmWrite": "Confirm write",
-    "writing": "Writing…",
-    "written": "✓ Written",
-    "rejected": "Rejected, not written."
+    "thinkProcess": "Thought process"
   },
   "aiSettings": {
     "savedCleared": "All providers cleared",
