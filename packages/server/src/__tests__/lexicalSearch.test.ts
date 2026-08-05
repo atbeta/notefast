@@ -13,7 +13,7 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { initDb, closeDb, getDb } from '../db'
 import { createPluginSystem } from '@notefast/core'
@@ -23,6 +23,7 @@ import {
 } from '../services/aiRuntime'
 import { lexicalSearch } from '../lexicalSearch'
 import { hybridSearch } from '../ai/hybridSearch'
+import { initTermDict, resetTermDictForTests, dictFilePath } from '../termDict'
 
 let testDir: string
 let pluginSystem: ReturnType<typeof createPluginSystem>
@@ -31,6 +32,7 @@ let nb: string
 beforeAll(() => {
   testDir = mkdtempSync(join('/tmp', 'notefast-lexical-'))
   initDb(testDir)
+  initTermDict(testDir)
   pluginSystem = createPluginSystem()
   initAiRuntime(pluginSystem, testDir)
 })
@@ -38,6 +40,7 @@ beforeAll(() => {
 afterAll(() => {
   // 不泄漏 AI runtime 给其他测试文件（bun 跨文件共享模块状态）
   _setRuntimeForTests(null)
+  resetTermDictForTests()
   closeDb()
   rmSync(testDir, { recursive: true, force: true })
 })
@@ -46,11 +49,23 @@ beforeEach(() => {
   // 保证无 embedding/chat provider：hybridSearch 走纯词法通道
   _setRuntimeForTests(null)
   initAiRuntime(pluginSystem, testDir)
+  // 清空词典文件（默认空词典 = 零变化）
+  const dictPath = dictFilePath()
+  if (dictPath) rmSync(dictPath, { force: true })
+  resetTermDictForTests()
+  initTermDict(testDir)
   getDb().query('DELETE FROM blocks').run()
   getDb().exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
   nb = crypto.randomUUID()
   getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
 })
+
+/** 写词典文件并重载（词典兜底用例用） */
+function writeDict(terms: unknown[]) {
+  writeFileSync(dictFilePath()!, JSON.stringify({ version: 1, terms }))
+  resetTermDictForTests()
+  initTermDict(testDir)
+}
 
 /** 种一篇文档（根块 + 一个正文块），返回正文块 id 与文档 id */
 function seedBlock(opts: { content: string; title?: string; blockId?: string }) {
@@ -103,8 +118,27 @@ describe('lexicalSearch — 中文召回（LIKE 路）', () => {
     expect(hits[0]!.matched_by).toBe('like_and')
   })
 
-  test('循环剥离：「如何选择向量数据库」命中含「向量数据库」的正文', () => {
+  test('循环剥离：「如何选择向量数据库」命中含「选择向量数据库」的正文', () => {
+    // 剥离到疑问词为止（「如何」→ 停），动作动词「选择」保留整词语义
+    const { id } = seedBlock({ content: '如何选择向量数据库？先看部署成本' })
+    const hits = lexicalSearch('如何选择向量数据库', { limit: 10 })
+    expect(hits.some((h) => h.id === id)).toBe(true)
+    expect(hits[0]!.matched_by).toBe('like_and')
+  })
+
+  test('动词词头不剥离：「选择」不在剥离列表（配置中心类名词短语不受误伤）', () => {
+    // 剥离词表冻结为疑问/指示词；「选择/配置/了解」等名词词头高频动词移出——
+    // 「选择恐惧症」保持整词，不会剥成「恐惧症」放宽召回
+    const { id } = seedBlock({ content: '选择恐惧症的应对方法' })
+    const hits = lexicalSearch('选择恐惧症', { limit: 10, strictOnly: true })
+    expect(hits.some((h) => h.id === id)).toBe(true)
+    // 动词措辞差异（如何选择X vs 文档写怎么选X）走 term-dict 兜底
+  })
+
+  test('动词措辞差异由词典兜底：「如何选择向量数据库」经词典别名命中', () => {
+    // 业界同构：IK 自定义词典 / 同义词过滤器处理动词措辞差异，不做暴力剥离
     const { id } = seedBlock({ content: '向量数据库怎么选？看召回质量' })
+    writeDict([{ name: '向量数据库', aliases: ['选择向量数据库', '向量库'] }])
     const hits = lexicalSearch('如何选择向量数据库', { limit: 10 })
     expect(hits.some((h) => h.id === id)).toBe(true)
     expect(hits[0]!.matched_by).toBe('like_and')
