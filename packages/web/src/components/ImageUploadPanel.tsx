@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ImageIcon, Loader2 } from 'lucide-react'
+import { ImageIcon, Loader2, X } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useToast } from './ui'
 
@@ -76,6 +76,10 @@ export default function ImageUploadPanel() {
         timeoutMs: timeoutSec * 1000,
       })
       toast.success({ title: t('settings.imageUpload.saved') })
+      // 保存后刷新最近失败状态（语义：按最近上传尝试判定）
+      void api.get<ImageUploadConfig>('/assets/upload-config')
+        .then((cfg) => setLastError(cfg.last_error ?? null))
+        .catch(() => {})
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       toast.error({ title: t('settings.imageUpload.saveFailed'), description: msg })
@@ -210,7 +214,17 @@ export default function ImageUploadPanel() {
 
           {lastError && (
             <div className="rounded-md border border-destructive/30 bg-destructive/8 px-3 py-2">
-              <p className="text-[11px] font-medium text-destructive mb-0.5">{t('settings.imageUpload.lastError')}</p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[11px] font-medium text-destructive mb-0.5">{t('settings.imageUpload.lastError')}</p>
+                <button
+                  type="button"
+                  onClick={() => setLastError(null)}
+                  className="text-muted-foreground/60 hover:text-foreground transition-colors shrink-0"
+                  aria-label={t('common.close')}
+                >
+                  <X className="w-3.5 h-3.5" strokeWidth={2} />
+                </button>
+              </div>
               <p className="text-[11px] text-destructive/90 break-all leading-relaxed">{lastError.message}</p>
               <p className="text-[10px] text-muted-foreground/70 mt-0.5">{new Date(lastError.at).toLocaleString()}</p>
             </div>

@@ -423,3 +423,53 @@ describe('AssetStore — 存量图片批量补传', () => {
     setImageUploadConfig(getImageUploadConfig())
   })
 })
+
+describe('AssetStore — 最近失败语义（成功后不再显示）', () => {
+  test('失败尝试后跟一次成功上传 → last_error 为 null', async () => {
+    const { getDb } = await import('../db')
+    const db = getDb()
+    applyImageUploadConfig({
+      mode: 'auto',
+      command: process.execPath,
+      args: ['-e', 'process.exit(1)'],
+      timeoutMs: 5_000,
+    })
+    setImageUploadConfig(getImageUploadConfig())
+    const { meta } = saveAsset(Buffer.from([1, 1, 1, 1]), 'image/png')
+    maybeUploadToRemote(meta.id)
+    // 等失败写回
+    for (let i = 0; i < 40; i++) {
+      const row = db.query('SELECT upload_error FROM assets WHERE id = ?').get(meta.id) as { upload_error: string | null }
+      if (row.upload_error) break
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    let cfg = await (await app.fetch(new Request('http://localhost/api/v1/assets/upload-config'))).json() as { last_error: unknown }
+    expect(cfg.last_error).not.toBeNull()
+
+    // 同图重新上传成功（模拟修复后重试同一内容 → dedup 命中但 maybeUploadToRemote 仍触发）
+    applyImageUploadConfig({
+      mode: 'auto',
+      command: process.execPath,
+      args: ['-e', 'console.log("https://img.example.test/fixed.png")'],
+      timeoutMs: 5_000,
+    })
+    setImageUploadConfig(getImageUploadConfig())
+    const { meta: again, dedup } = saveAsset(Buffer.from([1, 1, 1, 1]), 'image/png')
+    expect(dedup).toBe(true)
+    expect(again.id).toBe(meta.id)
+    maybeUploadToRemote(meta.id)
+    // 等成功写回（remote_url 非空）
+    for (let i = 0; i < 40; i++) {
+      const row = db.query('SELECT remote_url FROM assets WHERE id = ?').get(meta.id) as { remote_url: string | null }
+      if (row.remote_url) break
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    cfg = await (await app.fetch(new Request('http://localhost/api/v1/assets/upload-config'))).json() as { last_error: unknown }
+    expect(cfg.last_error).toBeNull()
+  })
+
+  afterAll(() => {
+    applyImageUploadConfig({ mode: 'off' })
+    setImageUploadConfig(null)
+  })
+})

@@ -105,13 +105,16 @@ export function maybeUploadToRemote(id: string): void {
   })()
 }
 
-/** 写回上传结果：成功清 error 写 remote_url；失败记 upload_error */
+/** 写回上传结果：成功清 error 写 remote_url；失败记 upload_error。两者都刷新 upload_attempted_at */
 function applyUploadOutcome(id: string, outcome: UploadCommandOutcome): void {
   const db = getDb()
+  const now = new Date().toISOString()
   if (outcome.ok && outcome.url) {
-    db.query('UPDATE assets SET remote_url = ?, upload_error = NULL WHERE id = ?').run(outcome.url, id)
+    db.query('UPDATE assets SET remote_url = ?, upload_error = NULL, upload_attempted_at = ? WHERE id = ?')
+      .run(outcome.url, now, id)
   } else {
-    db.query('UPDATE assets SET upload_error = ? WHERE id = ?').run(outcome.error ?? 'unknown error', id)
+    db.query('UPDATE assets SET upload_error = ?, upload_attempted_at = ? WHERE id = ?')
+      .run(outcome.error ?? 'unknown error', now, id)
   }
 }
 

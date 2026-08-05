@@ -65,11 +65,15 @@ assets.post('/', async (c) => {
 /** 图床上传配置：读取（无密钥，原样返回）——必须在 /:id 之前注册，否则被当作 asset id */
 assets.get('/upload-config', (c) => {
   const cfg = getImageUploadPublicConfig()
-  // 附带最近一次上传失败（assets 表 upload_error，按创建时间倒序取最新一条）
-  const lastErr = getDb().query(
-    'SELECT created_at, upload_error FROM assets WHERE upload_error IS NOT NULL ORDER BY created_at DESC LIMIT 1',
-  ).get() as { created_at: string; upload_error: string } | undefined
-  return c.json({ ...cfg, last_error: lastErr ? { at: lastErr.created_at, message: lastErr.upload_error } : null })
+  // 「最近一次上传失败」按最近上传尝试判定：取 upload_attempted_at 最新的一行，
+  // 仅当那次尝试失败才返回（最近一次成功 → 不再显示历史失败）
+  const lastTry = getDb().query(
+    'SELECT upload_error, upload_attempted_at FROM assets WHERE upload_attempted_at IS NOT NULL ORDER BY upload_attempted_at DESC LIMIT 1',
+  ).get() as { upload_error: string | null; upload_attempted_at: string } | undefined
+  const lastError = lastTry?.upload_error
+    ? { at: lastTry.upload_attempted_at, message: lastTry.upload_error }
+    : null
+  return c.json({ ...cfg, last_error: lastError })
 })
 
 /** 图床上传配置：保存（mode=off|auto + 命令 + 参数 + 超时） */
