@@ -3,17 +3,21 @@
  *
  * 概念 / 人物 / 工具 / 文档四类实体，按提及次数倒序。
  * 顶部搜索（q 参数，300ms 防抖）+ kind 筛选；点击实体展开相关笔记列表，再点跳转文档。
+ *
+ * 实体准确性由系统自行保持，不做逐对人工合并：
+ * - 拼写变体（typo 信号，编辑距离）页面加载时自动合并
+ * - 子串包含（substring 信号，可能是上下位而非同义）只作为「词典建议」展示，
+ *   确认后一键写入 term-dict（声明式、可审计），PUT 自动触发存量归并
  */
 
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronRight, GitMerge, Loader2, Search, Waypoints } from 'lucide-react'
+import { BookMarked, ChevronRight, GitMerge, Loader2, Search, Waypoints } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import PageHeader from '../components/PageHeader'
-import { ListRowsSkeleton } from '../components/ui'
+import { ListRowsSkeleton, useToast } from '../components/ui'
 import { graphKindColor } from '../lib/graph'
-import ConfirmDialog from '../components/ConfirmDialog'
 import { EntityMentions } from '../components/EntityPanel'
 import { entityKindLabel, type EntitySummary } from '../lib/entities'
 
@@ -29,20 +33,27 @@ function kindFilters(t: (key: string) => string) {
 
 type KindFilter = 'all' | 'person' | 'tool' | 'concept' | 'doc'
 
-/** 近义重复候选（/entities/duplicates） */
-interface DuplicateGroup {
+/** 词典建议候选（/entities/duplicates 的 suggest_groups，signal=substring） */
+interface SuggestGroup {
   reason: string
   entities: Array<{ id: string; display: string; kind: string; mention_count: number }>
 }
 
+interface TermDictEntry {
+  name: string
+  aliases: string[]
+  kind?: string
+}
+
 export default function EntitiesPage() {
   const { t } = useTranslation()
+  const toast = useToast()
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [openId, setOpenId] = useState<string | null>(null)
-  const [merging, setMerging] = useState<string | null>(null)
-  const [confirmMerge, setConfirmMerge] = useState<DuplicateGroup | null>(null)
+  const [autoMerged, setAutoMerged] = useState(0)
+  const [adopting, setAdopting] = useState(false)
 
   // 300ms 防抖；空关键词回全量列表
   useEffect(() => {
@@ -60,28 +71,57 @@ export default function EntitiesPage() {
   const entities = error ? [] : (data?.entities ?? [])
   const searching = query.trim() !== debouncedQuery
 
-  // 近义重复候选（仅总览、无搜索词时显示）
+  // 词典建议候选（仅总览、无搜索词时显示）
   const { data: dupData, refetch: refetchDuplicates } = useApiQuery(
-    () => api.get<{ groups: DuplicateGroup[] }>('/entities/duplicates'),
+    () => api.get<{ suggest_groups: SuggestGroup[] }>('/entities/duplicates'),
     [debouncedQuery],
   )
-  const duplicates = !debouncedQuery ? (dupData?.groups ?? []) : []
+  const suggests = !debouncedQuery ? (dupData?.suggest_groups ?? []) : []
 
-  const doMerge = async (g: DuplicateGroup) => {
-    const [a, b] = g.entities
-    if (!a || !b) return
-    // 合并到提及数多的一方（少→多），保持知识面完整
-    const from = a.mention_count <= b.mention_count ? a : b
-    const target = from === a ? b : a
-    setMerging(from.id)
+  // 拼写变体自动合并（一次性，页面加载时执行；有副作用故为 POST 而非 GET）
+  useEffect(() => {
+    if (debouncedQuery) return
+    api
+      .post<{ merged: number }>('/entities/duplicates/auto-merge', {})
+      .then((r) => {
+        if (r.merged > 0) {
+          setAutoMerged(r.merged)
+          refetch()
+          refetchDuplicates()
+        }
+      })
+      .catch(() => undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /** 把候选组写入词典（标准名 = 提及多的一方，别名 = 另一方）；PUT 自动归并 */
+  const adoptToDict = async (groups: SuggestGroup[]) => {
+    if (groups.length === 0) return
+    setAdopting(true)
     try {
-      await api.post(`/entities/${from.id}/merge`, { target_id: target.id })
+      const { terms } = await api.get<{ terms: TermDictEntry[] }>('/term-dict')
+      const byName = new Map(terms.map((e) => [e.name, e]))
+      for (const g of groups) {
+        const [a, b] = g.entities
+        if (!a || !b) continue
+        const target = a.mention_count >= b.mention_count ? a : b
+        const alias = (target === a ? b : a).display
+        const existing = byName.get(target.display)
+        if (existing) {
+          existing.aliases = [...new Set([...(existing.aliases ?? []), alias])]
+        } else {
+          byName.set(target.display, { name: target.display, aliases: [alias] })
+        }
+      }
+      const d = await api.put<{ count: number }>('/term-dict', { terms: [...byName.values()] })
+      void d
+      toast.success({ title: t('entities.adopted') })
       refetch()
       refetchDuplicates()
-    } catch {
-      /* 失败静默（可加 toast） */
+    } catch (e) {
+      toast.error({ title: t('entities.adoptFailed'), description: e instanceof Error ? e.message : String(e) })
     } finally {
-      setMerging(null)
+      setAdopting(false)
     }
   }
 
@@ -176,14 +216,36 @@ export default function EntitiesPage() {
               })}
             </div>
 
-            {duplicates.length > 0 && (
+            {autoMerged > 0 && (
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3.5 py-2.5 flex items-center gap-2 text-[12px] text-foreground">
+                <GitMerge className="w-3.5 h-3.5 text-emerald-500" strokeWidth={1.75} />
+                {t('entities.autoMerged', { n: autoMerged })}
+              </div>
+            )}
+
+            {suggests.length > 0 && (
               <div className="rounded-xl border border-warn/25 bg-warn/5 px-3.5 py-3">
-                <div className="flex items-center gap-1.5 text-[12px] font-medium text-foreground mb-2">
-                  <GitMerge className="w-3.5 h-3.5 text-warn" strokeWidth={1.75} />
-                  {t('entities.duplicatesTitle')}
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-1.5 text-[12px] font-medium text-foreground">
+                    <BookMarked className="w-3.5 h-3.5 text-warn" strokeWidth={1.75} />
+                    {t('entities.suggestTitle')}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={adopting}
+                    onClick={() => void adoptToDict(suggests)}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-md border border-border bg-background hover:bg-accent hover:border-foreground/20 px-2 py-1 text-[11.5px] text-foreground transition-colors disabled:opacity-50"
+                  >
+                    {adopting ? (
+                      <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
+                    ) : (
+                      <BookMarked className="w-3 h-3" strokeWidth={1.75} />
+                    )}
+                    {t('entities.adoptAll')}
+                  </button>
                 </div>
                 <div className="flex flex-col gap-2">
-                  {duplicates.map((g, i) => {
+                  {suggests.map((g, i) => {
                     const [a, b] = g.entities
                     if (!a || !b) return null
                     return (
@@ -201,16 +263,11 @@ export default function EntitiesPage() {
                         </span>
                         <button
                           type="button"
-                          disabled={merging === (a.mention_count <= b.mention_count ? a.id : b.id)}
-                          onClick={() => setConfirmMerge(g)}
+                          disabled={adopting}
+                          onClick={() => void adoptToDict([g])}
                           className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-md border border-border bg-background hover:bg-accent hover:border-foreground/20 px-2 py-1 text-[11.5px] text-foreground transition-colors disabled:opacity-50"
                         >
-                          {merging === (a.mention_count <= b.mention_count ? a.id : b.id) ? (
-                            <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
-                          ) : (
-                            <GitMerge className="w-3 h-3" strokeWidth={1.75} />
-                          )}
-                          {t('entities.mergeButton')}
+                          {t('entities.adoptButton')}
                         </button>
                       </div>
                     )
@@ -273,35 +330,6 @@ export default function EntitiesPage() {
           </>
         )}
       </div>
-
-      {/* 合并确认（不可逆：源实体删除、旧名成为别名） */}
-      <ConfirmDialog
-        open={confirmMerge !== null}
-        title={t('entities.confirmMergeTitle')}
-        message={
-          confirmMerge
-            ? (() => {
-                const [a, b] = confirmMerge.entities
-                if (!a || !b) return ''
-                const from = a.mention_count <= b.mention_count ? a : b
-                const target = from === a ? b : a
-                return t('entities.confirmMergeMessage', {
-                  from: from.display,
-                  fromCount: from.mention_count,
-                  to: target.display,
-                  toCount: target.mention_count,
-                })
-              })()
-            : ''
-        }
-        confirmLabel={t('entities.confirmMergeButton')}
-        destructive
-        onConfirm={() => {
-          if (confirmMerge) void doMerge(confirmMerge)
-          setConfirmMerge(null)
-        }}
-        onCancel={() => setConfirmMerge(null)}
-      />
     </div>
   )
 }

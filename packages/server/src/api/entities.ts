@@ -22,6 +22,7 @@ import {
   listEntities,
   listEntityMentions,
   mergeEntities,
+  type EntityRow,
 } from '../store/entities'
 
 const BLOCK_SNIPPET_LEN = 120
@@ -49,15 +50,51 @@ entities.get('/', (c) => {
 entities.get('/duplicates', (c) => {
   const db = getDb()
   const groups = findPotentialDuplicates(db, 8)
-  return c.json({
-    groups: groups.map((g) => ({
-      reason: g.reason,
-      entities: [
-        { id: g.a.id, display: g.a.display, kind: g.a.kind, mention_count: g.a.mention_count },
-        { id: g.b.id, display: g.b.display, kind: g.b.kind, mention_count: g.b.mention_count },
-      ],
-    })),
+  const pick = (g: (typeof groups)[number]) => ({
+    reason: g.reason,
+    signal: g.signal,
+    entities: [
+      { id: g.a.id, display: g.a.display, kind: g.a.kind, mention_count: g.a.mention_count },
+      { id: g.b.id, display: g.b.display, kind: g.b.kind, mention_count: g.b.mention_count },
+    ],
   })
+  return c.json({
+    groups: groups.map(pick), // 兼容旧字段
+    typo_groups: groups.filter((g) => g.signal === 'typo').map(pick),
+    suggest_groups: groups.filter((g) => g.signal === 'substring').map(pick),
+  })
+})
+
+/**
+ * 自动合并拼写变体（signal=typo 的高置信候选）。
+ * 由实体页加载时调用（有副作用，不挂在 GET 上）；substring 候选不在此列——
+ * 子串包含可能是上下位而非同义，错误合并污染图谱代价大于漏合，留给词典声明。
+ *
+ * 合并方向：mention_count 大者存活；同 count 取名称长者（拼写变体通常更短，
+ * qdrnt → qdrant）；再同取先创建者（rowid 小）。
+ */
+entities.post('/duplicates/auto-merge', (c) => {
+  const db = getDb()
+  const groups = findPotentialDuplicates(db, 8)
+  const rowidOf = (id: string): number =>
+    (db.query('SELECT rowid FROM entities WHERE id = ?').get(id) as { rowid: number } | undefined)
+      ?.rowid ?? Number.MAX_SAFE_INTEGER
+  const pickTarget = (x: EntityRow, y: EntityRow): EntityRow => {
+    if (x.mention_count !== y.mention_count) return x.mention_count > y.mention_count ? x : y
+    if (x.name.length !== y.name.length) return x.name.length > y.name.length ? x : y
+    return rowidOf(x.id) <= rowidOf(y.id) ? x : y
+  }
+  const pairs: Array<{ from: string; into: string }> = []
+  for (const g of groups) {
+    if (g.signal !== 'typo') continue
+    const target = pickTarget(g.a, g.b)
+    const from = target === g.a ? g.b : g.a
+    // mergeEntities 内部有实体存在性守卫：候选对可能引用了已被前一对合并掉的实体
+    if (!getEntityById(db, from.id) || !getEntityById(db, target.id)) continue
+    mergeEntities(db, from.id, target.id)
+    pairs.push({ from: from.display, into: target.display })
+  }
+  return c.json({ merged: pairs.length, pairs })
 })
 
 /** 把 :id 合并进 target_id（target 存活；提及/别名迁移，from 删除） */

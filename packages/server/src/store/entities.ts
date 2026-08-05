@@ -228,6 +228,13 @@ export function mergeEntities(db: Db, fromId: string, intoId: string): void {
 
 export interface DuplicateGroup {
   reason: string
+  /**
+   * 信号分桶：
+   * - typo：ASCII 拼写变体（编辑距离），高置信同义 → 自动合并信号
+   * - substring：子串包含（「数据库」⊂「向量数据库」），可能是上下位而非同义，
+   *   只作为「词典建议」展示，不自动合（错误合并污染共现边与实体检索，代价大于漏合）
+   */
+  signal: 'typo' | 'substring'
   a: EntityRow
   b: EntityRow
 }
@@ -251,23 +258,28 @@ function levenshtein(a: string, b: string): number {
   return prev[n]!
 }
 
-function duplicateReason(a: string, b: string): string | null {
+function duplicateReason(a: string, b: string): { reason: string; signal: DuplicateGroup['signal'] } | null {
   if (a === b) return null
-  // 子串包含：高置信提示（任意语言，长度差至少 1）
-  if (b.length >= 3 && a.includes(b) && a.length > b.length) return `「${b}」是「${a}」的一部分`
-  if (a.length >= 3 && b.includes(a) && b.length > a.length) return `「${a}」是「${b}」的一部分`
-  // 编辑距离 ≤ 2：仅限纯 ASCII 名——CJK 共享常用词（混合/实体/检索…）距离 ≤2 误报率高，
-  // 宁可漏检也不建议错并；ASCII 全小写拼写差异（qdrant/qdrnt）是高置信信号
+  // 子串包含：低置信同义信号（上下位/简称均可能），仅作词典建议
+  if (b.length >= 3 && a.includes(b) && a.length > b.length) {
+    return { reason: `「${b}」是「${a}」的一部分`, signal: 'substring' }
+  }
+  if (a.length >= 3 && b.includes(a) && b.length > a.length) {
+    return { reason: `「${a}」是「${b}」的一部分`, signal: 'substring' }
+  }
+  // 编辑距离 ≤2：仅限纯 ASCII 名且长度 ≥5 才视为拼写变体自动合并信号——
+  // CJK 共享常用词（混合/实体/检索…）距离 ≤2 误报率高；长度 4 的 ASCII 名
+  // （rust/rush、vite/vitex 是真实不同实体）也下放词典建议，宁漏合不错合
   const asciiOnly = (s: string): boolean => [...s].every((c) => c.charCodeAt(0) <= 0x7f)
   if (
     asciiOnly(a) && asciiOnly(b) &&
-    a.length >= 4 && b.length >= 4 &&
+    a.length >= 5 && b.length >= 5 &&
     levenshtein(a, b) <= 2
-  ) return '名称相近'
+  ) return { reason: '名称相近', signal: 'typo' }
   return null
 }
 
-/** 高频实体的近义重复候选（供 /entities 页「可能重复」提示；不自动合并） */
+/** 高频实体的近义重复候选（供 /entities 页提示；typo 自动合并，substring 词典建议） */
 export function findPotentialDuplicates(db: Db, limit = 8): DuplicateGroup[] {
   const rows = db
     .query('SELECT * FROM entities ORDER BY mention_count DESC')
@@ -275,8 +287,8 @@ export function findPotentialDuplicates(db: Db, limit = 8): DuplicateGroup[] {
   const out: DuplicateGroup[] = []
   for (let i = 0; i < rows.length && out.length < limit; i++) {
     for (let j = i + 1; j < rows.length && out.length < limit; j++) {
-      const reason = duplicateReason(rows[i]!.name, rows[j]!.name)
-      if (reason) out.push({ reason, a: rows[i]!, b: rows[j]! })
+      const hit = duplicateReason(rows[i]!.name, rows[j]!.name)
+      if (hit) out.push({ ...hit, a: rows[i]!, b: rows[j]! })
     }
   }
   return out

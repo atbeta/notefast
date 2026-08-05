@@ -52,14 +52,15 @@
     "emptyTitle": "还没有实体",
     "emptyDesc": "写入文档后，AI 会自动识别其中的概念、人物与工具，在这里逐步沉淀知识关联。",
     "searchPlaceholder": "搜索实体…",
-    "duplicatesTitle": "可能重复的实体（合并后旧实体名将作为别名自动路由）",
-    "mergeButton": "合并（少→多）",
     "noMatch": "没有匹配「{{query}}」的实体",
     "noKind": "暂无「{{kind}}」类实体",
     "notesMentioned": "{{n}} 篇笔记提及",
-    "confirmMergeTitle": "确认合并实体？",
-    "confirmMergeMessage": "将「{{from}}」({{fromCount}}) 合并进「{{to}}」({{toCount}})。此操作不可撤销：源实体被删除，提及全部改挂到目标，旧实体名将作为别名。",
-    "confirmMergeButton": "确认合并"
+    "autoMerged": "已自动合并 {{n}} 对拼写变体实体（编辑距离信号，高置信）",
+    "suggestTitle": "可能是同一实体（确认后加入词典自动归并，可审计可回滚）",
+    "adoptButton": "加入词典",
+    "adoptAll": "全部加入词典",
+    "adopted": "已加入词典，实体已自动归并",
+    "adoptFailed": "加入词典失败"
   },
   "entityPanel": {
     "untitled": "无标题文档",

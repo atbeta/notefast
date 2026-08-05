@@ -52,14 +52,15 @@
     "emptyTitle": "No entities yet",
     "emptyDesc": "Once you write documents, AI automatically recognizes the concepts, people and tools inside, gradually building your knowledge graph here.",
     "searchPlaceholder": "Search entities…",
-    "duplicatesTitle": "Possibly duplicate entities (after merging, the old name becomes an alias that still routes)",
-    "mergeButton": "Merge (fewer → more)",
     "noMatch": "No entities match “{{query}}”",
     "noKind": "No “{{kind}}” entities yet",
     "notesMentioned": "mentioned by {{n}} notes",
-    "confirmMergeTitle": "Merge entities?",
-    "confirmMergeMessage": "Merge “{{from}}” ({{fromCount}}) into “{{to}}” ({{toCount}}). This cannot be undone: the source entity is deleted, mentions are reassigned to the target, and the old name becomes an alias.",
-    "confirmMergeButton": "Merge"
+    "autoMerged": "Auto-merged {{n}} pair(s) of spelling-variant entities (edit-distance signal)",
+    "suggestTitle": "Possibly the same entity (adopt to dictionary for automatic merging)",
+    "adoptButton": "Adopt",
+    "adoptAll": "Adopt all",
+    "adopted": "Adopted into the dictionary; entities merged",
+    "adoptFailed": "Failed to adopt"
   },
   "entityPanel": {
     "untitled": "Untitled document",

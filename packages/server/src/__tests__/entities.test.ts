@@ -555,6 +555,51 @@ describe('实体 REST API', () => {
     const missing = await api('GET', '/api/v1/docs/ghost/entities')
     expect(missing.status).toBe(404)
   })
+
+  test('GET /entities/duplicates 分桶 + POST /duplicates/auto-merge 自动合拼写变体', async () => {
+    const db = getDb()
+    seedDocWithBlocks({
+      docTitle: 'T',
+      blocks: [
+        { id: 'dup-api-b1', content: '' },
+        { id: 'dup-api-b2', content: '' },
+        { id: 'dup-api-b3', content: '' },
+      ],
+    })
+    const mk = (name: string, kind: string, blockId: string) => {
+      const e = upsertEntity(db, { name, display: name, kind })
+      addMention(db, e.id, blockId, name)
+      return e
+    }
+    mk('qdrant', 'tool', 'dup-api-b1') // 拼写变体（typo 信号）
+    mk('qdrnt', 'tool', 'dup-api-b2')
+    mk('混合检索', 'concept', 'dup-api-b3') // 子串包含（substring 信号，可能上下位）
+    mk('混合检索架构', 'concept', 'dup-api-b1')
+
+    // GET 分桶：typo 与 substring 分开返回（groups 字段保留兼容）
+    const { status, body } = await api('GET', '/api/v1/entities/duplicates')
+    expect(status).toBe(200)
+    const typo = (body.typo_groups as Array<{ entities: Array<{ display: string }> }>) ?? []
+    const suggest = (body.suggest_groups as Array<{ entities: Array<{ display: string }> }>) ?? []
+    expect(typo.some((g) => g.entities.some((e) => e.display === 'qdrnt'))).toBe(true)
+    expect(suggest.some((g) => g.entities.some((e) => e.display === '混合检索'))).toBe(true)
+    expect(Array.isArray(body.groups)).toBe(true)
+
+    // auto-merge：只合 typo（少→多），substring 候选不动
+    const merged = await api('POST', '/api/v1/entities/duplicates/auto-merge')
+    expect(merged.status).toBe(200)
+    expect((merged.body as { merged: number }).merged).toBe(1)
+    // qdrnt 合进 qdrant：实体删除、mention 迁移、旧名登记别名
+    expect(findEntityByName(db, 'qdrnt')).toBeNull()
+    expect(findEntityByName(db, 'qdrant')!.mention_count).toBe(2)
+    // substring 候选未被自动合（可能上下位，留给词典声明）
+    expect(findEntityByName(db, '混合检索')).not.toBeNull()
+    expect(findEntityByName(db, '混合检索架构')).not.toBeNull()
+
+    // 幂等：再跑一次没有可合并项
+    const again = await api('POST', '/api/v1/entities/duplicates/auto-merge')
+    expect((again.body as { merged: number }).merged).toBe(0)
+  })
 })
 
 // ───────────────────── 实体描述（E2）─────────────────────

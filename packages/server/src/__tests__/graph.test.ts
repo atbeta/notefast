@@ -423,7 +423,7 @@ describe('别名与合并（E5）', () => {
     expect(getEntityById(db, a.id)!.mention_count).toBe(3)
   })
 
-  test('findPotentialDuplicates：子串包含（任意语言）+ ASCII 编辑距离近义提示', () => {
+  test('findPotentialDuplicates：子串包含 → substring（词典建议）；ASCII 编辑距离 → typo（自动合并）', () => {
     const db = getDb()
     seedDoc({ docTitle: 'T', blocks: [{ id: 'dup-b1', content: '' }] })
     const a = upsertEntityDirect('混合检索', 'concept')
@@ -431,17 +431,24 @@ describe('别名与合并（E5）', () => {
     const c = upsertEntityDirect('qdrant', 'tool')
     const d = upsertEntityDirect('qdrnt', 'tool')
     const e = upsertEntityDirect('中文检索', 'concept')
+    const f = upsertEntityDirect('rust', 'tool') // 长度 4 的 ASCII：距离 ≤1 也不自动合（rust/rush 真实不同实体）
+    const g = upsertEntityDirect('rush', 'tool')
     addMention(db, a.id, 'dup-b1', '混合检索')
     addMention(db, b.id, 'dup-b1', '混合检索架构')
     addMention(db, c.id, 'dup-b1', 'qdrant')
     addMention(db, d.id, 'dup-b1', 'qdrnt')
     addMention(db, e.id, 'dup-b1', '中文检索')
+    addMention(db, f.id, 'dup-b1', 'rust')
+    addMention(db, g.id, 'dup-b1', 'rush')
     const groups = findPotentialDuplicates(db, 8)
-    const reasons = groups.map((g) => g.reason).join(' | ')
-    expect(reasons).toContain('的一部分') // 子串包含
-    expect(reasons).toContain('相近') // ASCII 编辑距离（qdrant/qdrnt）
+    // 子串包含 → substring 信号（词典建议，不自动合）
+    expect(groups.some((g2) => g2.signal === 'substring' && g2.reason.includes('的一部分'))).toBe(true)
+    // ASCII 编辑距离（qdrant/qdrnt）→ typo 信号（自动合并）
+    expect(groups.some((g2) => g2.signal === 'typo' && g2.a.display === 'qdrant' && g2.b.display === 'qdrnt')).toBe(true)
+    // 长度 4 的 ASCII 近拼写（rust/rush）降级为不提示（宁漏合不错合）
+    expect(groups.some((g2) => g2.a.display === 'rust' && g2.b.display === 'rush')).toBe(false)
     // CJK 近音但不同概念（中文检索 vs 混合检索）不提示
-    expect(groups.some((g) => g.a.display === '中文检索' && g.b.display === '混合检索')).toBe(false)
+    expect(groups.some((g2) => g2.a.display === '中文检索' && g2.b.display === '混合检索')).toBe(false)
   })
 })
 
