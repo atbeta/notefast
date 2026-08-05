@@ -58,7 +58,7 @@
   },
   "newDoc": {
     "tabCreate": "新建文档",
-    "tabImport": "导入 Markdown",
+    "tabImport": "导入",
     "aiTitleHint": "AI 生成标题",
     "generating": "生成中…",
     "aiTitle": "AI 标题",
@@ -70,8 +70,15 @@
     "createFailed": "创建失败",
     "creating": "创建中…",
     "createAndOpen": "创建并打开",
-    "dropHint": "拖入 .md 文件到此处",
-    "dropHintSub": "或点击选择文件 · 文件名自动作为标题"
+    "dropHint": "拖入 .md 或 .zip 文件到此处",
+    "dropHintSub": "或点击选择文件 · .md 直接编辑，.zip 批量导入全部文档",
+    "zipImporting": "正在导入 zip…",
+    "zipImported": "已导入 {{n}} 篇文档",
+    "zipMediaImported": "（含 {{n}} 个媒体文件）",
+    "zipSkipped": "跳过 {{n}} 篇",
+    "zipFailed": "失败 {{n}} 篇",
+    "importAnother": "再导入一个",
+    "backToLibrary": "返回文档库"
   },
   "share": {
     "notFoundTitle": "链接不存在或已关闭",

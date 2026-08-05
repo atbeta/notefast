@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Check, X, Upload, Sparkles, Loader2, Tag, Plus } from 'lucide-react'
 import type { Notebook } from '@notefast/core'
-import { request } from '../hooks/useAPI'
+import { request, fetchWithAuth, ApiError } from '../hooks/useAPI'
 import { currentLocale } from '../lib/time'
 import PageHeader from '../components/PageHeader'
 import SubNavTabs from '../components/SubNavTabs'
@@ -22,6 +22,14 @@ export default function NewDocPage() {
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'create' | 'import'>('create')
   const [generating, setGenerating] = useState(false)
+  const [zipImporting, setZipImporting] = useState(false)
+  const [zipResult, setZipResult] = useState<{
+    imported: number
+    skipped: number
+    failed: number
+    media_imported: number
+    errors: string[]
+  } | null>(null)
   const [tags, setTags] = useState<string[]>([])
   const [tagDraft, setTagDraft] = useState('')
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -114,6 +122,11 @@ export default function NewDocPage() {
   }
 
   const handleFile = (file: File) => {
+    // zip：直接上传批量导入（后端 /import/zip：每个 .md 建一篇文档，自家导出档按 manifest 还原）
+    if (file.name.toLowerCase().endsWith('.zip') || file.type === 'application/zip') {
+      void handleZipFile(file)
+      return
+    }
     const reader = new FileReader()
     reader.onload = () => {
       const text = String(reader.result || '')
@@ -122,6 +135,29 @@ export default function NewDocPage() {
       setActiveTab('create')
     }
     reader.readAsText(file)
+  }
+
+  /** 上传 zip 批量导入；结果原地展示（成功/跳过/失败明细），可继续导入或返回文档库 */
+  const handleZipFile = async (file: File) => {
+    setZipImporting(true)
+    setError('')
+    setZipResult(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      if (notebookId) fd.append('notebook_id', notebookId)
+      const res = await fetchWithAuth('/import/zip', { method: 'POST', body: fd })
+      const body: unknown = await res.json().catch(() => null)
+      if (!res.ok) {
+        const message = (body as { message?: string } | null)?.message || `HTTP ${res.status}`
+        throw new ApiError(message, res.status, body)
+      }
+      setZipResult(body as { imported: number; skipped: number; failed: number; media_imported: number; errors: string[] })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setZipImporting(false)
+    }
   }
 
   const onDrop = (e: React.DragEvent) => {
@@ -267,27 +303,91 @@ export default function NewDocPage() {
       )}
 
       {activeTab === 'import' && (
-        <div className="py-4">
-          <label
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={onDrop}
-            className="block border border-dashed border-border-strong/60 rounded-lg text-center py-16 px-6 cursor-pointer hover:border-foreground/30 hover:bg-muted/40 transition-colors"
-          >
-            <div className="empty-icon-tile mx-auto">
-              <Upload className="w-5 h-5" strokeWidth={1.75} />
+        <div className="py-4 space-y-4">
+          {!zipResult && (
+            <label
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={onDrop}
+              className="block border border-dashed border-border-strong/60 rounded-lg text-center py-16 px-6 cursor-pointer hover:border-foreground/30 hover:bg-muted/40 transition-colors"
+            >
+              <div className="empty-icon-tile mx-auto">
+                <Upload className="w-5 h-5" strokeWidth={1.75} />
+              </div>
+              <p className="text-sm font-medium text-foreground mb-1">{t('newDoc.dropHint')}</p>
+              <p className="text-xs text-muted-foreground">{t('newDoc.dropHintSub')}</p>
+              <input
+                type="file"
+                accept=".md,.markdown,text/markdown,.zip,application/zip"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) handleFile(f)
+                }}
+              />
+            </label>
+          )}
+
+          {zipImporting && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              {t('newDoc.zipImporting')}
             </div>
-            <p className="text-sm font-medium text-foreground mb-1">{t('newDoc.dropHint')}</p>
-            <p className="text-xs text-muted-foreground">{t('newDoc.dropHintSub')}</p>
-            <input
-              type="file"
-              accept=".md,.markdown,text/markdown"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) handleFile(f)
-              }}
-            />
-          </label>
+          )}
+
+          {error && !zipResult && !zipImporting && (
+            <p className="text-xs text-destructive bg-destructive/8 px-3 py-2 rounded-md">
+              {error}
+            </p>
+          )}
+
+          {zipResult && !zipImporting && (
+            <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+              <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-500" strokeWidth={2.25} />
+                {t('newDoc.zipImported', { n: zipResult.imported })}
+                {zipResult.media_imported > 0 && (
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {t('newDoc.zipMediaImported', { n: zipResult.media_imported })}
+                  </span>
+                )}
+              </p>
+              {(zipResult.skipped > 0 || zipResult.failed > 0) && (
+                <p className="text-xs text-muted-foreground">
+                  {zipResult.skipped > 0 && t('newDoc.zipSkipped', { n: zipResult.skipped })}
+                  {zipResult.skipped > 0 && zipResult.failed > 0 && ' · '}
+                  {zipResult.failed > 0 && t('newDoc.zipFailed', { n: zipResult.failed })}
+                </p>
+              )}
+              {zipResult.errors.length > 0 && (
+                <ul className="text-[11.5px] text-destructive/90 space-y-0.5 max-h-28 overflow-y-auto pl-1">
+                  {zipResult.errors.map((msg, i) => (
+                    <li key={i} className="truncate" title={msg}>{msg}</li>
+                  ))}
+                </ul>
+              )}
+              {error && !zipImporting && (
+                <p className="text-xs text-destructive">{error}</p>
+              )}
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setZipResult(null); setError('') }}
+                  className="btn-ghost-custom"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  {t('newDoc.importAnother')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="btn-primary-custom"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  {t('newDoc.backToLibrary')}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
       </div>
