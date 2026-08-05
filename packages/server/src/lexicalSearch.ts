@@ -50,6 +50,38 @@ export interface LexicalSearchOptions {
 /** CJK 统一表意文字基本区：含任一即视为 CJK term（FTS 帮不上忙，走 LIKE） */
 const CJK_RE = /[一-鿿]/
 
+/**
+ * CJK 问句常见前缀（按长度降序，先剥长前缀）。
+ * 「什么是XXX / 如何做Y / 为什么Z」这类问句整句是一个 term，LIKE 子串匹配要求
+ * 完整句序——文档里是「XXX是什么」就命中不了。剥离前缀后核心词「XXX」可命中。
+ */
+const CJK_QUERY_PREFIXES = [
+  '介绍一下', '解释一下', '讲解一下', '说一下', '讲一下', '聊一下', '谈一下',
+  '什么是', '怎么样', '为什么', '为啥', '为何', '如何', '怎么', '怎样',
+  '哪个', '哪些', '谁', '哪里', '有没有', '请问', '帮我', '聊聊', '谈谈', '说说',
+  '搭建', '部署', '使用', '实现', '安装', '配置', '选择', '学习', '了解', '研究', '解决', '知道',
+].sort((a, b) => b.length - a.length)
+
+/**
+ * 提取 CJK term 的核心词：循环剥离疑问/指示/动作前缀（剥到稳定）。
+ * 如「如何选择向量数据库」→「向量数据库」。
+ * 剥离后 < 2 字符则保留原 term（避免「什么是A」误伤成单字）。
+ */
+function cjkCoreTerm(term: string): string {
+  let cur = term
+  let prev = ''
+  while (cur !== prev) {
+    prev = cur
+    for (const p of CJK_QUERY_PREFIXES) {
+      if (cur.startsWith(p)) {
+        cur = cur.slice(p.length)
+        break
+      }
+    }
+  }
+  return cur.trim().length >= 2 ? cur : term
+}
+
 /** LIKE 字面量转义（配合 ESCAPE '\'）：反斜杠自身、%、_ */
 function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, (m) => `\\${m}`)
@@ -121,8 +153,12 @@ interface FtsRow extends LikeRow {
 }
 
 export function lexicalSearch(query: string, opts: LexicalSearchOptions): LexicalHit[] {
-  const terms = query.split(/\s+/).filter(Boolean)
+  let terms = query.split(/\s+/).filter(Boolean)
   if (terms.length === 0 || opts.limit <= 0) return []
+
+  // CJK 问句归一化：「什么是XXX」→ 核心词「XXX」（无空格中文整句是一个 term，
+  // 子串匹配要求完整句序，文档里是「XXX是什么」就漏检）。匹配/打分统一用核心词。
+  terms = [...new Set(terms.map((t) => (CJK_RE.test(t) ? cjkCoreTerm(t) : t)))]
 
   // ── LIKE 路（所有 term，含 ASCII——SQLite LIKE 对 ASCII 不区分大小写）──
   let likeRows = runLikePath(terms, opts, false)

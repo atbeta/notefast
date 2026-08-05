@@ -92,6 +92,31 @@ describe('lexicalSearch — 中文召回（LIKE 路）', () => {
     expect(hits.some((h) => h.id === id)).toBe(true)
   })
 
+  test('问句前缀剥离：「什么是XXX」命中正文为「XXX是什么」的块', () => {
+    // 用户场景：问「什么是KMP算法」文档写「KMP算法是什么」——整句子串匹配不到
+    const { id } = seedBlock({ content: 'KMP算法是什么？一种字符串匹配算法' })
+    seedBlock({ content: '完全无关的内容' })
+
+    const hits = lexicalSearch('什么是KMP算法', { limit: 10 })
+    expect(hits.length).toBeGreaterThan(0)
+    expect(hits.some((h) => h.id === id)).toBe(true)
+    expect(hits[0]!.matched_by).toBe('like_and')
+  })
+
+  test('循环剥离：「如何选择向量数据库」命中含「向量数据库」的正文', () => {
+    const { id } = seedBlock({ content: '向量数据库怎么选？看召回质量' })
+    const hits = lexicalSearch('如何选择向量数据库', { limit: 10 })
+    expect(hits.some((h) => h.id === id)).toBe(true)
+    expect(hits[0]!.matched_by).toBe('like_and')
+  })
+
+  test('剥离后核心词过短则保留原 term（不误伤短词）', () => {
+    // 「什么是A」剥离后剩「A」1 字符 < 2 → 保留原 term「什么是A」
+    const { id } = seedBlock({ content: '什么是A？A 是答案' })
+    const hits = lexicalSearch('什么是A', { limit: 10 })
+    expect(hits.some((h) => h.id === id)).toBe(true)
+  })
+
   test('中文与 ASCII 混合查询：两个 term 都要命中', () => {
     const both = seedBlock({ content: '用 sqlite 做向量检索的笔记' })
     seedBlock({ content: '只谈向量数据库，不提具体引擎' })
