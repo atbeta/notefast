@@ -14,6 +14,6 @@
     "core:window:allow-is-maximized",
     "core:window:allow-start-dragging",
     "dialog:allow-save",
-    { "identifier": "fs:allow-write", "allow": [{ "path": "**" }] }
+    { "identifier": "fs:write-files", "allow": [{ "path": "**" }] }
   ]
 }

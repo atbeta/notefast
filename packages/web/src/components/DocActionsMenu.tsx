@@ -236,8 +236,12 @@ export default function DocActionsMenu({
           if (savedPath) {
             toast.success({ title: t('docActions.exportedTo', { path: savedPath }) })
           }
-        } catch {
-          toast.error({ title: t('docActions.exportFailed') })
+        } catch (err) {
+          // 带上具体错误（权限/路径/插件缺失），否则用户在客户端里无法定位
+          toast.error({
+            title: t('docActions.exportFailed'),
+            description: err instanceof Error ? err.message : String(err),
+          })
         }
       } else {
         triggerBlobDownload(blob, filename)
