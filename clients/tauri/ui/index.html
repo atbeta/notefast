@@ -8,12 +8,25 @@
     body {
       margin: 0;
       font-family: "Segoe UI", system-ui, sans-serif;
+      /* 深色为默认；亮色系统下由 prefers-color-scheme 覆盖（见下方 media query） */
       background: #18181b;
       color: #fafafa;
       display: flex;
       align-items: center;
       justify-content: center;
       height: 100vh;
+    }
+    /* 跟随系统主题：亮色系统不再闪黑屏启动页 */
+    @media (prefers-color-scheme: light) {
+      body {
+        background: #fafafa;
+        color: #18181b;
+      }
+      .spinner {
+        border-color: rgba(0, 0, 0, 0.12);
+        border-top-color: #16a34a;
+      }
+      .err { color: #dc2626; }
     }
     .wrap { text-align: center; }
     .spinner {

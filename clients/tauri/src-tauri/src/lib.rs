@@ -107,19 +107,52 @@ pub fn run() {
         }))
         .manage(EngineState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![engine_start])
+        .setup(|app| {
+            // 窗口背景色跟随系统主题（tauri.conf.json 的 backgroundColor 是静态深色，
+            // 亮色系统下 webview 加载前会闪一块深色）——必须在窗口显示前设置
+            if let Some(win) = app.get_webview_window("main") {
+                if let Ok(theme) = win.theme() {
+                    let (r, g, b) = match theme {
+                        tauri::Theme::Light => (0xfa, 0xfa, 0xfa),
+                        _ => (0x18, 0x18, 0x1b),
+                    };
+                    let _ = win.set_background_color(Some(tauri::Color::from((r, g, b, 255))));
+                }
+            }
+            Ok(())
+        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            // 退出链路：先让 engine 优雅停机（/internal/shutdown → drain → 关 DB），
-            // 再放行应用退出
-            if let tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit = event {
-                if let Some(state) = app.try_state::<EngineState>() {
-                    if let Ok(mut guard) = state.0.lock() {
-                        if let Some(mut handle) = guard.take() {
-                            handle.stop();
+            match event {
+                // 窗口就位后：初始尺寸超屏则收缩到显示器内。
+                // width/height 是逻辑像素，Windows 150% 缩放下 1200×800 → 物理 1800×1200，
+                // 超出 1920×1080 屏幕（setup 阶段 current_monitor 可能为 None，故放这里）
+                tauri::RunEvent::Ready => {
+                    if let Some(win) = app.get_webview_window("main") {
+                        if let (Ok(Some(monitor)), Ok(outer)) = (win.current_monitor(), win.outer_size()) {
+                            let mon = monitor.size();
+                            if outer.width > mon.width || outer.height > mon.height {
+                                // 收缩到显示器物理尺寸的 90%×85%（下方留任务栏余量）
+                                let w = ((mon.width as f64 * 0.9) as u32).max(800);
+                                let h = ((mon.height as f64 * 0.85) as u32).max(600);
+                                let _ = win.set_size(tauri::Size::Physical(tauri::PhysicalSize::new(w, h)));
+                            }
                         }
                     }
                 }
+                // 退出链路：先让 engine 优雅停机（/internal/shutdown → drain → 关 DB），
+                // 再放行应用退出
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+                    if let Some(state) = app.try_state::<EngineState>() {
+                        if let Ok(mut guard) = state.0.lock() {
+                            if let Some(mut handle) = guard.take() {
+                                handle.stop();
+                            }
+                        }
+                    }
+                }
+                _ => {}
             }
         });
 }
