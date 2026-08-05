@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.42.0](https://github.com/atbeta/notefast/compare/v0.41.0...v0.42.0) (2026-08-05)
+
+
+### Features
+
+* **assets:** use image-host external links in export and share ([3a6f10b](https://github.com/atbeta/notefast/commit/3a6f10bec078cf51f4f5090dbfc178fabacffdfa))
+* **web:** disable input history autofill globally (password exempt) ([4a62f0d](https://github.com/atbeta/notefast/commit/4a62f0d4b499a1cf9560408d3ec498c227790128))
+
+
+### Bug Fixes
+
+* **assets:** last-upload-error is per latest attempt, dismissible in UI ([c30f65d](https://github.com/atbeta/notefast/commit/c30f65de3422a5fde89b5feeac5c0175ec03da17))
+* **tauri:** grant dialog/fs permissions for export save dialog; restore local image serving ([62fd6cc](https://github.com/atbeta/notefast/commit/62fd6cc0b9dbfa0dcefda989932732d5ca7ea92d))
+
 ## [0.41.0](https://github.com/atbeta/notefast/compare/v0.40.1...v0.41.0) (2026-08-05)
 
 
