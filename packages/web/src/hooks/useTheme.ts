@@ -36,9 +36,22 @@ function systemPrefersDark(): boolean {
     && window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
+/** 主题切换瞬间给 <html> 挂 .theme-fading（CSS 里启用颜色过渡），
+ *  过渡结束即移除——避免 transition 常驻全元素的开销 */
+const THEME_FADE_MS = 180
+let themeFadeTimer: ReturnType<typeof setTimeout> | undefined
+
 function applyDataTheme(resolved: ResolvedTheme): void {
   if (typeof document === 'undefined') return
-  document.documentElement.setAttribute('data-theme', resolved)
+  const el = document.documentElement
+  // 首次应用（与当前值相同）不做过渡，避免首屏无意义闪动
+  const changed = el.getAttribute('data-theme') !== resolved
+  if (changed) el.classList.add('theme-fading')
+  el.setAttribute('data-theme', resolved)
+  if (changed) {
+    if (themeFadeTimer) clearTimeout(themeFadeTimer)
+    themeFadeTimer = setTimeout(() => el.classList.remove('theme-fading'), THEME_FADE_MS)
+  }
 }
 
 function resolveTheme(choice: ThemeChoice, systemDark: boolean): ResolvedTheme {
@@ -84,7 +97,7 @@ function setThemeChoice(next: ThemeChoice): void {
 
 /** 服务端持久化（fire-and-forget）：原生壳 origin 不稳定，localStorage 会丢 */
 function persistToServer(patch: Record<string, string>): void {
-  void fetchWithAuth('/api/v1/preferences', {
+  void fetchWithAuth('/preferences', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
@@ -96,7 +109,7 @@ function persistToServer(patch: Record<string, string>): void {
 /** 模块加载时拉取服务端偏好（权威）覆盖本地缓存；失败则保留本地值 */
 async function loadServerChoice(): Promise<void> {
   try {
-    const res = await fetchWithAuth('/api/v1/preferences')
+    const res = await fetchWithAuth('/preferences')
     if (!res.ok) return
     const prefs = (await res.json()) as { theme?: string }
     if (prefs.theme && (VALID_CHOICES as readonly string[]).includes(prefs.theme)) {

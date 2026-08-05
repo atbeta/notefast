@@ -69,7 +69,7 @@ function setLocaleChoice(next: LocaleChoice): void {
 
 /** 服务端持久化（fire-and-forget）：原生壳 origin 不稳定，localStorage 会丢 */
 function persistToServer(patch: Record<string, string>): void {
-  void fetchWithAuth('/api/v1/preferences', {
+  void fetchWithAuth('/preferences', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
@@ -81,7 +81,7 @@ function persistToServer(patch: Record<string, string>): void {
 /** 模块加载时拉取服务端偏好（权威）覆盖本地缓存；失败则保留本地值 */
 async function loadServerChoice(): Promise<void> {
   try {
-    const res = await fetchWithAuth('/api/v1/preferences')
+    const res = await fetchWithAuth('/preferences')
     if (!res.ok) return
     const prefs = (await res.json()) as { locale?: string }
     if (prefs.locale) {

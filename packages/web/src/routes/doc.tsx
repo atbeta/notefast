@@ -927,6 +927,8 @@ export default function DocPage() {
             })}
           </div>
           <div className="flex-1 overflow-y-auto px-3.5 py-4">
+            {/* key=railTab：切 Tab 重新挂载触发 140ms 纯 opacity 淡入 */}
+            <div key={railTab} className="animate-fade-soft">
             {railTab === 'outline' && (
               <OutlineView headings={flatHeadings} loading={auxLoading} />
             )}
@@ -948,6 +950,7 @@ export default function DocPage() {
                 }}
               />
             )}
+            </div>
           </div>
         </div>
       )}
