@@ -375,8 +375,8 @@ export default function DocPage() {
     const raw = location.hash.slice(1)
     if (!raw) return
     const targetId = raw.startsWith('block-') ? raw.slice(6) : raw
-    // 路由离场叠影（.animate-page-leave）里是旧页快照，含相同 block id 的幽灵节点；
-    // getElementById 按文档序会命中幽灵——查找时显式排除
+    // 跨路由进场时 RouteTransition 的离场叠影（.animate-page-leave）里可能并行挂载着
+    // 同一路由的另一个实例，含相同 block id 的幽灵节点；getElementById 按文档序会命中幽灵——查找时显式排除
     const findTarget = (): HTMLElement | null => {
       for (const el of document.querySelectorAll(`[id="${targetId}"]`)) {
         if (el instanceof HTMLElement && !el.closest('.animate-page-leave')) return el
