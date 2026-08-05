@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.40.1](https://github.com/atbeta/notefast/compare/v0.40.0...v0.40.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* **assets:** tolerate full command strings, surface upload errors ([bf2b944](https://github.com/atbeta/notefast/commit/bf2b944a1e2cfd15818d59416ae8f1c8d20a695d))
+* **tauri:** enable HTML5 drag-and-drop in the shell window ([88fd30b](https://github.com/atbeta/notefast/commit/88fd30bfdcc4bcd489621bc4500f80faa537f0c2))
+
 ## [0.40.0](https://github.com/atbeta/notefast/compare/v0.39.1...v0.40.0) (2026-08-05)
 
 
