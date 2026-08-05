@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.41.0](https://github.com/atbeta/notefast/compare/v0.40.1...v0.41.0) (2026-08-05)
+
+
+### Features
+
+* **tauri:** export via save dialog instead of silent Downloads download ([c691f2c](https://github.com/atbeta/notefast/commit/c691f2ccba9f87865056878e8ad15438d47c239b))
+
+
+### Bug Fixes
+
+* **assets:** upload with proper file extension; batch backfill for existing images ([a19ede2](https://github.com/atbeta/notefast/commit/a19ede22b52e75c8d3dc062bc20b02a80bb94f2b))
+
 ## [0.40.1](https://github.com/atbeta/notefast/compare/v0.40.0...v0.40.1) (2026-08-05)
 
 
