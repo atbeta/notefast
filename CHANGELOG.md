@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.42.1](https://github.com/atbeta/notefast/compare/v0.42.0...v0.42.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* **tauri:** use real fs permission id (fs:write-files); surface export error details ([f32c831](https://github.com/atbeta/notefast/commit/f32c831dc991f40688faddbdbbeb4e49ab3ce0fc))
+
 ## [0.42.0](https://github.com/atbeta/notefast/compare/v0.41.0...v0.42.0) (2026-08-05)
 
 
