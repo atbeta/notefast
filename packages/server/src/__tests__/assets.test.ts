@@ -202,7 +202,7 @@ describe('AssetStore — 会话 cookie 鉴权', () => {
 })
 
 describe('AssetStore — 图床上传（命令契约）', () => {
-  test('自动模式：spawn 命令上传，URL 写回 remote_url；GET 302 到图床', async () => {
+  test('自动模式：spawn 命令上传，URL 写回 remote_url；显示仍走本地读（200 字节）', async () => {
     // 命令契约：command [args...] <path> → stdout 每行一个 http(s) URL
     // 用真实 node 进程模拟图床命令（无外部依赖）
     setImageUploadConfig({
@@ -225,10 +225,10 @@ describe('AssetStore — 图床上传（命令契约）', () => {
     }
     expect(url).toBe('https://img.example.test/abc.png')
 
-    // GET /assets/:id → 302 到图床 URL
+    // 显示不走 302（避免图床防盗链/跨域）：本地字节返回
     const res = await app.fetch(new Request(`http://localhost/api/v1/assets/${meta.id}`))
-    expect(res.status).toBe(302)
-    expect(res.headers.get('location')).toBe('https://img.example.test/abc.png')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('image/png')
   })
 
   test('命令失败（非零退出）→ 静默降级本地，remote_url 为空、GET 仍 200', async () => {

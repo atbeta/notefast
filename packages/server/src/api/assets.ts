@@ -15,7 +15,6 @@ import { randomUUID } from 'node:crypto'
 import {
   collectOrphanAssets,
   findMissingAssets,
-  getAssetRemoteUrl,
   getUploadBatchStatus,
   MAX_ASSET_BYTES,
   maybeUploadToRemote,
@@ -133,11 +132,8 @@ assets.get('/upload-status', (c) => {
 
 assets.get('/:id', (c) => {
   const id = c.req.param('id')
-  // 图床模式：已外链的 asset 直接 302 到图床（内网直连，不经本地代理）
-  const remoteUrl = getAssetRemoteUrl(id)
-  if (remoteUrl) {
-    return c.redirect(remoteUrl, 302)
-  }
+  // 显示永远走本地读：remote_url 不参与渲染（302 到图床会踩防盗链/跨域/可达性），
+  // 只作为导出外链替换的元数据（asset:<id> 引用语义与本地优先设计不变）
   const found = readAsset(id)
   if (!found) {
     return c.json({ error: 'not_found', message: '图片不存在' }, 404)
