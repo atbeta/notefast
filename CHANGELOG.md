@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.44.0](https://github.com/atbeta/notefast/compare/v0.43.0...v0.44.0) (2026-08-05)
+
+
+### Features
+
+* **search:** strip CJK question prefixes so '什么是XXX' hits 'XXX是什么' ([221135c](https://github.com/atbeta/notefast/commit/221135c75bd0a723c8c12020e9c590565f87f1d0))
+* **tauri:** polish the startup splash screen ([8693b5f](https://github.com/atbeta/notefast/commit/8693b5f67f9714a14831e7685e7c8e30c1d2f95a))
+* **web:** add export button to document top bar ([4cc6079](https://github.com/atbeta/notefast/commit/4cc607910e05deb81a643fae66c1d7c1b1bf1193))
+* **web:** per-image sync badge with single-image upload ([0db970c](https://github.com/atbeta/notefast/commit/0db970cabec8581e45b573796fd3993bce30cadd))
+
+
+### Bug Fixes
+
+* **web:** CRLF documents crashed the editor (Selection outside of document) ([7b00076](https://github.com/atbeta/notefast/commit/7b00076adc5db6c5fc72ca17f566b7370dd051a1))
+
 ## [0.43.0](https://github.com/atbeta/notefast/compare/v0.42.1...v0.43.0) (2026-08-05)
 
 
