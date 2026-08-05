@@ -63,3 +63,12 @@ public struct SyncPullResult: Decodable, Equatable {
     public let state: SyncProtocolStatus.SyncState?
     public let status: SyncProtocolStatus?
 }
+
+/// `POST /import/markdown` 结果（壳层只取 doc.id 用于导入后跳转）。
+public struct ImportMarkdownResult: Decodable, Equatable {
+    public let doc: DocRef
+
+    public struct DocRef: Decodable, Equatable {
+        public let id: String
+    }
+}

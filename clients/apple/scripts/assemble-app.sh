@@ -92,6 +92,27 @@ cat > "$APP/Contents/Info.plist" <<PLIST
       </array>
     </dict>
   </array>
+  <!-- 打开即导入：.md 关联（Alternate 不抢默认打开方式），双击/拖 Dock → 导入收集箱 -->
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key><string>Markdown 文档</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>net.daringfireball.markdown</string>
+        <string>public.markdown</string>
+      </array>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>md</string>
+        <string>markdown</string>
+        <string>mdown</string>
+        <string>mkd</string>
+      </array>
+    </dict>
+  </array>
   <key>NSAppTransportSecurity</key>
   <dict>
     <key>NSAllowsLocalNetworking</key><true/>

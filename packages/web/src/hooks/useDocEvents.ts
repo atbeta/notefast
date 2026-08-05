@@ -21,6 +21,10 @@ const listeners = new Set<Listener>()
 let running = false
 let retryDelay = 1000
 const RETRY_MAX_MS = 30_000
+/** 连接看门狗：服务端心跳 25s，超过 45s 无任何帧判定连接僵死——
+ *  macOS 睡眠/网络切换后 TCP 半开连接既不报错也不结束，fetch 会永远挂起，
+ *  表象就是「左侧列表不再自动更新，手动导航后才刷新」 */
+const WATCHDOG_MS = 45_000
 
 /** 订阅 doc 级变更；返回取消订阅函数。首个订阅者触发连接，全部退订后连接随下次断开回收 */
 export function subscribeDocChanges(fn: Listener): () => void {
@@ -53,10 +57,16 @@ async function readStream(body: ReadableStream<Uint8Array>): Promise<void> {
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let watchdog = setTimeout(() => reader.cancel().catch(() => {}), WATCHDOG_MS)
+  const kick = () => {
+    clearTimeout(watchdog)
+    watchdog = setTimeout(() => reader.cancel().catch(() => {}), WATCHDOG_MS)
+  }
   try {
     while (true) {
       const { value, done } = await reader.read()
       if (done) return
+      kick()
       buffer += decoder.decode(value, { stream: true })
       let idx: number
       while ((idx = buffer.indexOf('\n\n')) !== -1) {
@@ -78,6 +88,7 @@ async function readStream(body: ReadableStream<Uint8Array>): Promise<void> {
       }
     }
   } finally {
+    clearTimeout(watchdog)
     reader.cancel().catch(() => {})
   }
 }

@@ -97,6 +97,7 @@ final class AppModel: ObservableObject {
             engineVersion = hs.version
             verifyEngineVersion(hs.version)
             navigator.navigate(to: entryURL ?? URL(string: "http://127.0.0.1")!)
+            drainPendingImports()
         } catch {
             state = .failed(error)
         }
@@ -156,9 +157,77 @@ final class AppModel: ObservableObject {
         }
     }
 
-    // MARK: - 深链（notefast://）
+    // MARK: - 打开即导入（.md 文件关联：双击/拖到 Dock → 导入收集箱并打开）
+
+    /// engine 未就绪时暂存的待导入文件（app 经文件打开冷启动的场景）
+    private var pendingImportFiles: [URL] = []
+
+    /// AppDelegate 的 openFile(s) 入口：非 .md 后缀不接收（plist 已过滤，双保险）
+    func importMarkdownFile(at url: URL) {
+        let exts: Set<String> = ["md", "markdown", "mdown", "mkd"]
+        guard exts.contains(url.pathExtension.lowercased()) else { return }
+        guard isRunning else {
+            pendingImportFiles.append(url)
+            return
+        }
+        Task { await importMarkdownFiles([url]) }
+    }
+
+    private func drainPendingImports() {
+        let files = pendingImportFiles
+        pendingImportFiles = []
+        guard !files.isEmpty else { return }
+        Task { await importMarkdownFiles(files) }
+    }
+
+    /// 导入为 inbox 文档：单篇直接打开（满足「双击为了看」的场景，页面带升格/丢弃入口）；
+    /// 多篇跳收集箱列表批量整理
+    private func importMarkdownFiles(_ files: [URL]) async {
+        guard case .running(let hs) = state, let base = baseURL else { return }
+        guard let notebookId = hs.notebookId else {
+            showTransientMessage("导入失败：engine 握手缺少 notebookId")
+            return
+        }
+        let client = NoteFastClient(baseURL: base)
+        var firstDocId: String?
+        var imported = 0
+        for file in files {
+            guard let markdown = try? String(contentsOf: file, encoding: .utf8), !markdown.isEmpty else {
+                showTransientMessage("无法读取：\(file.lastPathComponent)")
+                continue
+            }
+            do {
+                let res = try await client.post("/import/markdown", body: [
+                    "notebook_id": notebookId,
+                    "title": file.deletingPathExtension().lastPathComponent,
+                    "markdown": markdown,
+                    "status": "inbox",
+                ], as: ImportMarkdownResult.self)
+                if firstDocId == nil { firstDocId = res.doc.id }
+                imported += 1
+            } catch {
+                let apiError = (error as? NotefastAPIError)
+                showTransientMessage("导入失败：\(file.lastPathComponent)（\(apiError?.message ?? "未知错误")）")
+            }
+        }
+        guard imported > 0 else { return }
+        showTransientMessage(files.count > 1 ? "已导入 \(imported) 篇到收集箱" : "已导入到收集箱")
+        if imported == 1, let docId = firstDocId, let url = docURL(docId) {
+            navigator.navigate(to: url)
+        } else if let url = pageURL("/inbox") {
+            navigator.navigate(to: url)
+        }
+    }
+
+    // MARK: - 深链（notefast://）与文件打开
 
     func handle(url: URL) {
+        // SwiftUI onOpenURL 在 macOS 上同时承接「打开文件」事件（file://）——
+        // AppDelegate 的 openFile(s) 未必会触发，这里兜底打开即导入
+        if url.isFileURL {
+            importMarkdownFile(at: url)
+            return
+        }
         guard url.scheme == "notefast", isRunning else { return }
         switch (url.host, url.pathComponents) {
         case ("doc", let parts) where parts.count >= 2:
