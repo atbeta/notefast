@@ -11,6 +11,9 @@ concurrency:
 
 jobs:
   build:
+    # release-please 的版本同步 PR（diff 含 clients/tauri/package.json 等版本文件）
+    # 不是真实的客户端改动，跳过冒烟，避免白跑整套 assemble/打包
+    if: github.head_ref != 'release-please--branches--main--components--notefast'
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -38,4 +41,6 @@ jobs:
 
       - name: Verify bundle signature
         working-directory: clients/apple
-        run: codesign --verify --deep --strict dist/NoteFast.app && test -x dist/NoteFast.app/Contents/Resources/engine/notefast-server
+        # ad-hoc（无 --sign）模式产物名是 NoteFast Dev.app（见 assemble-app.sh），
+        # 只有 Developer ID 签名模式才叫 NoteFast.app——路径必须匹配，否则 100% 失败
+        run: codesign --verify --deep --strict "dist/NoteFast Dev.app" && test -x "dist/NoteFast Dev.app/Contents/Resources/engine/notefast-server"

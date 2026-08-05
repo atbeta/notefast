@@ -12,6 +12,9 @@ concurrency:
 
 jobs:
   build:
+    # release-please 的版本同步 PR（diff 含 clients/tauri/package.json 等版本文件）
+    # 不是真实的客户端改动，跳过冒烟，避免白跑 cargo check/clippy
+    if: github.head_ref != 'release-please--branches--main--components--notefast'
     runs-on: windows-latest
     steps:
       - name: Checkout
