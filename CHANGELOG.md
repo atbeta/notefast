@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.39.0](https://github.com/atbeta/notefast/compare/v0.38.0...v0.39.0) (2026-08-05)
+
+
+### Features
+
+* **ai:** add local Ollama preset (OpenAI-compatible /v1 endpoint) ([15b3794](https://github.com/atbeta/notefast/commit/15b3794a0dcf55726baaff93fcea4b557ecb822a))
+* **ai:** drop write-confirmation cards, agent writes directly ([dd7f623](https://github.com/atbeta/notefast/commit/dd7f6236853a6ab16214a12ead66e8714578e7aa))
+
+
+### Bug Fixes
+
+* **ai:** surface real embedding errors and accept local-service response shapes ([46fb278](https://github.com/atbeta/notefast/commit/46fb278a2260d7c02799b07cffbd3f00030f75b5))
+* **ai:** tag AI writes with actor='ai' in document history ([8ad2422](https://github.com/atbeta/notefast/commit/8ad242235ab9c7f82aa5576c72fd7afa563dd3b3))
+* **mcp:** tag notefast_update_block revisions with actor='mcp' ([5e409af](https://github.com/atbeta/notefast/commit/5e409af266c7f2ed5af81fc846cceaaac371ebbc))
+* **tauri:** clamp initial window size to monitor, theme the splash ([eebbe15](https://github.com/atbeta/notefast/commit/eebbe159fb0b7a968d215029791faa100f53c285))
+
 ## [0.38.0](https://github.com/atbeta/notefast/compare/v0.37.3...v0.38.0) (2026-08-04)
 
 
