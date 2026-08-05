@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.43.0](https://github.com/atbeta/notefast/compare/v0.42.1...v0.43.0) (2026-08-05)
+
+
+### Features
+
+* **ai:** show incremental indexing job progress in semantic index panel ([abc0fcd](https://github.com/atbeta/notefast/commit/abc0fcd9187baddcc603df9f77a3b1a5a9ef1a50))
+* **web:** global error boundary — component errors show details instead of white screen ([f995c2e](https://github.com/atbeta/notefast/commit/f995c2ea6b60cf0cabc681b20d5a70ee2adf8e00))
+
 ## [0.42.1](https://github.com/atbeta/notefast/compare/v0.42.0...v0.42.1) (2026-08-05)
 
 
