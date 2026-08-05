@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.45.0](https://github.com/atbeta/notefast/compare/v0.44.0...v0.45.0) (2026-08-05)
+
+
+### Features
+
+* **graph:** auto-merge spelling variants, adopt substring candidates via dictionary ([c797964](https://github.com/atbeta/notefast/commit/c797964a4b0ef57ebc97a094c1332b38dd730225))
+* **macos:** hidden title bar, web-drawn top area follows theme ([fd50562](https://github.com/atbeta/notefast/commit/fd505625b582d3af24bb24b4beeb8032f0bc001e))
+* **macos:** open-to-import for Markdown files + SSE watchdog ([46631ad](https://github.com/atbeta/notefast/commit/46631ad6f15f084770dc9a3a4ec63081d1883a95))
+* **search:** add user-declared entity term-dictionary (term-dict) ([13c6ef6](https://github.com/atbeta/notefast/commit/13c6ef60335802196f47eaf36a28d9e1e9b448f4))
+* **search:** freeze CJK prefix strip list, drop noun-head verbs ([f25ed2c](https://github.com/atbeta/notefast/commit/f25ed2c302fbbd1fbdc36254b5404360ede20080))
+* **search:** strip CJK trailing question suffixes and normalize full-width forms ([933b1b1](https://github.com/atbeta/notefast/commit/933b1b13943177978a7c9635382aaf19452cfcd1))
+* **tauri:** bilingual NSIS installer (English + SimpChinese) ([0f144bc](https://github.com/atbeta/notefast/commit/0f144bc1fd89efedc689da59dea30a40ff52dd47))
+* **tauri:** open-to-import for Markdown files on Windows ([fda9cde](https://github.com/atbeta/notefast/commit/fda9cde2b1e454d625b61ac98e2b7469e14b6cb0))
+* **web:** subtle transition polish + fix preferences API path ([10613b5](https://github.com/atbeta/notefast/commit/10613b50473e7e158a1f8ef601c5c30f3ba82ac7))
+
+
+### Bug Fixes
+
+* **web:** skip leave-overlay for same-route navigations ([0b85ebc](https://github.com/atbeta/notefast/commit/0b85ebcbcb221e9091e574ca893db35301a0ae3d))
+
 ## [0.44.0](https://github.com/atbeta/notefast/compare/v0.43.0...v0.44.0) (2026-08-05)
 
 
