@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.40.0](https://github.com/atbeta/notefast/compare/v0.39.1...v0.40.0) (2026-08-05)
+
+
+### Features
+
+* **assets:** image hosting via Typora-style command contract ([bcde112](https://github.com/atbeta/notefast/commit/bcde1127c720831d4d476ed3a197ebe33d9d2b43))
+* **web:** support zip import from the new-doc import tab ([20bae42](https://github.com/atbeta/notefast/commit/20bae42999267bd7c249a122c043b9ccbe3051fa))
+
 ## [0.39.1](https://github.com/atbeta/notefast/compare/v0.39.0...v0.39.1) (2026-08-05)
 
 
