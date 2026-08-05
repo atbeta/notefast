@@ -4,7 +4,7 @@
  */
 
 import { blocksToMarkdown, buildBlockTree } from '@notefast/core'
-import { extractAssetRefs, readAsset, readAssetBytes } from '../assets/store'
+import { extractAssetRefs, getAssetRemoteUrl, readAsset, readAssetBytes } from '../assets/store'
 import { getDb } from '../db'
 import { fetchDocBlocks, getDocById, listDocRows } from '../store/blocks'
 import { extForMime, archiveMediaKey } from '../sync/archiveMedia'
@@ -50,6 +50,17 @@ export function buildDocExportFile(docId: string): DocExportFile | null {
   let markdown = blocksToMarkdown(tree)
   const refs = extractAssetRefs(markdown)
 
+  // 外链优先：已上传图床的 asset 在导出产物里直接用图床 URL（可分享、不依赖本地），
+  // 不再打包进 zip；未外链的保持 asset: 引用并打包 media（现状）
+  const remoteUrlById = new Map<string, string>()
+  for (const id of refs) {
+    const url = getAssetRemoteUrl(id)
+    if (url) remoteUrlById.set(id, url)
+  }
+  if (remoteUrlById.size > 0) {
+    markdown = markdown.replace(/asset:([0-9a-f]{64})/g, (full, id: string) => remoteUrlById.get(id) ?? full)
+  }
+
   if (refs.length === 0) {
     return {
       kind: 'markdown',
@@ -63,6 +74,8 @@ export function buildDocExportFile(docId: string): DocExportFile | null {
   const zipEntries: Array<{ name: string; data: Uint8Array }> = []
 
   for (const id of refs) {
+    // 已外链的 asset 跳过打包（markdown 里已是图床 URL）
+    if (remoteUrlById.has(id)) continue
     const found = readAsset(id)
     const bytes = readAssetBytes(id)
     if (!found || !bytes) continue

@@ -18,6 +18,8 @@ interface SharedDoc {
   markdown: string
   updated_at: string
   shared_at: string
+  /** 图床外链映射：asset sha → 图床 URL（有外链的图片分享页直接引用） */
+  asset_remote?: Record<string, string>
 }
 
 type PageState =
@@ -76,8 +78,9 @@ export default function SharePage() {
   }
 
   const { doc } = state
+  // 图床外链优先：已上传图床的图片直接用图床 URL；否则走公开分享图片端点
   const markdown = stripLeadingTitleHeading(doc.markdown, doc.title)
-    .replace(/asset:([0-9a-f]{64})/g, `/share/${token}/assets/$1`)
+    .replace(/asset:([0-9a-f]{64})/g, (_full, id: string) => doc.asset_remote?.[id] || `/share/${token}/assets/${id}`)
   const updatedAt = new Date(doc.updated_at.replace(' ', 'T') + 'Z')
   const dateText = Number.isFinite(updatedAt.getTime())
     ? updatedAt.toLocaleDateString(currentLocale(), { year: 'numeric', month: 'long', day: 'numeric' })

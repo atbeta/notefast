@@ -4,8 +4,11 @@
  * 挂在 /api/* 之外：authMiddleware 只覆盖 /api/*，公开路径天然绕开；
  * 全局 rate limit（app.use('*')）仍覆盖这些路径。
  *
- * - GET /share/:token              → 文档只读内容（title + markdown）
+ * - GET /share/:token              → 文档只读内容（title + markdown + asset_remote 外链映射）
  * - GET /share/:token/assets/:sha  → 文档引用的图片（引用扫描校验，非全站代理）
+ *
+ * 图片渲染：已上传图床的 asset 经 asset_remote 映射直接用图床 URL（前端重写），
+ * 未外链的走 /assets/:sha 公开端点。
  *
  * 失效语义：token 无效（从未开启 / 已关闭 / 已重开）一律 404，
  * 不暴露任何存在性信息。
@@ -18,7 +21,7 @@ import { getDb } from '../db'
 import { fetchDocBlocks } from '../store/blocks'
 import { getShareByToken } from '../store/shares'
 import { getChangesAnchor } from '../store/changeFeed'
-import { extractAssetRefs, readAsset } from '../assets/store'
+import { extractAssetRefs, getAssetRemoteUrl, readAsset } from '../assets/store'
 
 const sharePublic = new Hono()
 
@@ -65,12 +68,19 @@ sharePublic.get('/:token', (c) => {
 
   const tree = buildBlockTree(rows)
   const docRow = rows.find((r) => r.id === share.doc_id)!
+  // 图床外链映射：已上传图床的图片，分享页直接引用图床 URL（不依赖本地/分享图片端点）
+  const assetRemote: Record<string, string> = {}
+  for (const id of getDocAssetRefs(share.doc_id)) {
+    const url = getAssetRemoteUrl(id)
+    if (url) assetRemote[id] = url
+  }
   // no-store：过期/关闭语义要求每次回源，不给反代/CDN 缓存旧内容的机会
   return c.json({
     title: docRow.content,
     markdown: blocksToMarkdown(tree),
     updated_at: docRow.updated_at,
     shared_at: share.created_at,
+    asset_remote: assetRemote,
   }, 200, { 'Cache-Control': 'no-store' })
 })
 
