@@ -36,7 +36,7 @@
       "commandHint": "Executable name (on PATH) or absolute path; the image path is appended as the last argument",
       "args": "Arguments (space-separated)",
       "timeout": "Timeout (s)",
-      "contractHint": "Command contract (Typora-style): command [args...] <image_path> → stdout prints one http(s) URL per line. Web and desktop behave identically: the command runs on the server machine; when unavailable it silently falls back to local storage.",
+      "contractHint": "Images stay stored locally and render reliably inside the app; after a successful upload, the hosted URL is used only when exporting or sharing a document.",
       "saved": "Image hosting config saved",
       "saveFailed": "Failed to save",
       "test": "Test command",

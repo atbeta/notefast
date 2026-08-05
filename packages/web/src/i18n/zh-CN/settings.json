@@ -37,7 +37,7 @@
       "commandHint": "可执行名（PATH 内）或绝对路径；图片路径会自动追加在参数最后",
       "args": "参数（空格分隔）",
       "timeout": "超时（秒）",
-      "contractHint": "命令契约（Typora 式）：command [args...] <图片路径> → stdout 每行输出一个 http(s) URL。web 端与桌面端行为一致：命令在服务端机器执行，不可用时自动降级本地存储。",
+      "contractHint": "图片在应用内始终本地存储、可靠显示；上传成功后，仅在导出或分享文档时才会替换为图床远程地址。",
       "saved": "图床配置已保存",
       "saveFailed": "保存失败",
       "test": "测试命令",
