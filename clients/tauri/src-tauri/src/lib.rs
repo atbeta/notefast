@@ -116,7 +116,7 @@ pub fn run() {
                         tauri::Theme::Light => (0xfa, 0xfa, 0xfa),
                         _ => (0x18, 0x18, 0x1b),
                     };
-                    let _ = win.set_background_color(Some(tauri::Color::from((r, g, b, 255))));
+                    let _ = win.set_background_color(Some(tauri::webview::Color::from((r, g, b, 255))));
                 }
             }
             Ok(())
