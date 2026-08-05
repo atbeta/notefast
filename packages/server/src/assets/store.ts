@@ -10,9 +10,11 @@
  */
 
 import { createHash } from 'node:crypto'
+import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getDb } from '../db'
+import type { ImageUploadConfig } from '@notefast/core'
 
 export const ASSET_REF_PREFIX = 'asset:'
 const MEDIA_DIR_NAME = 'media'
@@ -38,6 +40,15 @@ export interface AssetMeta {
   mime: string
   size: number
   created_at: string
+  /** 图床外链（自动上传模式成功后写入；无则本地读取） */
+  remote_url?: string | null
+}
+
+/** 当前生效的图床上传配置（initImageUploadConfig 后由 app 注入） */
+let uploadConfig: ImageUploadConfig | null = null
+
+export function setImageUploadConfig(cfg: ImageUploadConfig | null): void {
+  uploadConfig = cfg
 }
 
 /** 保存图片（幂等去重）；返回元数据。dedup=true 表示命中已有内容未重复写盘 */
@@ -59,7 +70,7 @@ export function saveAsset(buf: Buffer, mime: string): { meta: AssetMeta; dedup: 
 export function readAsset(id: string): { meta: AssetMeta; path: string } | null {
   if (!/^[0-9a-f]{64}$/.test(id)) return null
   const db = getDb()
-  const meta = db.query('SELECT id, mime, size, created_at FROM assets WHERE id = ?').get(id) as AssetMeta | undefined
+  const meta = db.query('SELECT id, mime, size, created_at, remote_url FROM assets WHERE id = ?').get(id) as AssetMeta | undefined
   if (!meta) return null
   const path = join(mediaDir, id)
   if (!existsSync(path)) {
@@ -67,6 +78,54 @@ export function readAsset(id: string): { meta: AssetMeta; path: string } | null 
     return null
   }
   return { meta, path }
+}
+
+/** 读取 asset 的外链（无则 null；本地仍为基底，外链是增强层） */
+export function getAssetRemoteUrl(id: string): string | null {
+  if (!/^[0-9a-f]{64}$/.test(id)) return null
+  const row = getDb().query('SELECT remote_url FROM assets WHERE id = ?').get(id) as { remote_url?: string | null } | undefined
+  return row?.remote_url || null
+}
+
+/**
+ * 自动上传模式：异步 spawn 图床命令（fire-and-forget，不阻塞上传响应）。
+ * 命令契约：`command [args...] <图片路径>` → stdout 每行一个 http(s) URL。
+ * 失败静默降级本地（图片不丢、编辑不受影响），URL 写回 assets.remote_url。
+ */
+export function maybeUploadToRemote(id: string): void {
+  const cfg = uploadConfig
+  if (!cfg || cfg.mode !== 'auto' || !cfg.command.trim()) return
+  const filePath = join(mediaDir, id)
+  if (!existsSync(filePath)) return
+  void (async () => {
+    try {
+      const url = await runUploadCommand(cfg, filePath)
+      if (url) {
+        getDb().query('UPDATE assets SET remote_url = ? WHERE id = ?').run(url, id)
+      }
+    } catch {
+      // 静默降级：保留本地存储
+    }
+  })()
+}
+
+function runUploadCommand(cfg: ImageUploadConfig, filePath: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    execFile(
+      cfg.command,
+      [...cfg.args, filePath],
+      { timeout: cfg.timeoutMs, maxBuffer: 2 * 1024 * 1024, windowsHide: true },
+      (err, stdout) => {
+        if (err) return resolve(null)
+        // 契约：每行一个 URL；只取第一个 http(s) 链接（与 Typora 语义一致）
+        const url = stdout
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .find((l) => /^https?:\/\//i.test(l))
+        resolve(url ?? null)
+      },
+    )
+  })
 }
 
 /** 从 markdown 文本提取 asset:<id> 引用集合 */

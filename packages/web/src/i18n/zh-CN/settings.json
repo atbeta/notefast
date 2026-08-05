@@ -5,6 +5,7 @@
     "tabs": {
       "general": "通用与外观",
       "ai": "AI 能力与模型",
+      "images": "图床与图片",
       "backup": "灾备与归档",
       "tokens": "API Tokens",
       "security": "账户安全"
@@ -25,6 +26,20 @@
       "darkHint": "始终暗色",
       "system": "跟随系统",
       "systemHint": "随 OS 自动切换"
+    },
+    "imageUpload": {
+      "description": "图片始终先本地存储；开启「自动上传」后，上传图片时异步调用外部命令（PicGo / upgit / picfast CLI / 任意脚本）传到图床，失败自动回退本地，不影响编辑。",
+      "modeOff": "不处理（默认）",
+      "modeOffHint": "图片仅本地存储，与现状一致",
+      "modeAuto": "自动上传图床",
+      "modeAutoHint": "本地存储 + 异步上传，失败回退本地",
+      "command": "上传命令",
+      "commandHint": "可执行名（PATH 内）或绝对路径；图片路径会自动追加在参数最后",
+      "args": "参数（空格分隔）",
+      "timeout": "超时（秒）",
+      "contractHint": "命令契约（Typora 式）：command [args...] <图片路径> → stdout 每行输出一个 http(s) URL。web 端与桌面端行为一致：命令在服务端机器执行，不可用时自动降级本地存储。",
+      "saved": "图床配置已保存",
+      "saveFailed": "保存失败"
     }
   }
 }

@@ -15,7 +15,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
-import { initAssetStore, readAsset, collectOrphanAssets, ORPHAN_GRACE_MS } from '../assets/store'
+import { initAssetStore, readAsset, collectOrphanAssets, ORPHAN_GRACE_MS, setImageUploadConfig, saveAsset, maybeUploadToRemote, getAssetRemoteUrl } from '../assets/store'
 import { authMiddleware, sessionTokenValue, SESSION_COOKIE } from '../middleware/auth'
 import assetsRouter from '../api/assets'
 import importRouter from '../api/import'
@@ -196,5 +196,98 @@ describe('AssetStore — 会话 cookie 鉴权', () => {
       if (prev === undefined) delete process.env.AUTH_PASSWORD
       else process.env.AUTH_PASSWORD = prev
     }
+  })
+})
+
+describe('AssetStore — 图床上传（命令契约）', () => {
+  test('自动模式：spawn 命令上传，URL 写回 remote_url；GET 302 到图床', async () => {
+    // 命令契约：command [args...] <path> → stdout 每行一个 http(s) URL
+    // 用真实 node 进程模拟图床命令（无外部依赖）
+    setImageUploadConfig({
+      version: 1,
+      mode: 'auto',
+      command: process.execPath,
+      args: ['-e', 'console.log("https://img.example.test/abc.png")'],
+      timeoutMs: 10_000,
+    })
+
+    const { meta } = saveAsset(PNG_BYTES, 'image/png')
+    maybeUploadToRemote(meta.id)
+
+    // 异步写回：轮询等待（上限 2s）
+    let url: string | null = null
+    for (let i = 0; i < 40; i++) {
+      url = getAssetRemoteUrl(meta.id)
+      if (url) break
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    expect(url).toBe('https://img.example.test/abc.png')
+
+    // GET /assets/:id → 302 到图床 URL
+    const res = await app.fetch(new Request(`http://localhost/api/v1/assets/${meta.id}`))
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toBe('https://img.example.test/abc.png')
+  })
+
+  test('命令失败（非零退出）→ 静默降级本地，remote_url 为空、GET 仍 200', async () => {
+    setImageUploadConfig({
+      version: 1,
+      mode: 'auto',
+      command: process.execPath,
+      args: ['-e', 'process.exit(1)'],
+      timeoutMs: 5_000,
+    })
+
+    const { meta } = saveAsset(PNG_BYTES, 'image/png')
+    maybeUploadToRemote(meta.id)
+    await new Promise((r) => setTimeout(r, 300))
+
+    expect(getAssetRemoteUrl(meta.id)).toBeNull()
+    const res = await app.fetch(new Request(`http://localhost/api/v1/assets/${meta.id}`))
+    expect(res.status).toBe(200)
+  })
+
+  test('stdout 无 http(s) URL → 视为失败，本地保留', async () => {
+    setImageUploadConfig({
+      version: 1,
+      mode: 'auto',
+      command: process.execPath,
+      args: ['-e', 'console.log("not-a-url")'],
+      timeoutMs: 5_000,
+    })
+
+    const { meta } = saveAsset(PNG_BYTES, 'image/png')
+    maybeUploadToRemote(meta.id)
+    await new Promise((r) => setTimeout(r, 300))
+
+    expect(getAssetRemoteUrl(meta.id)).toBeNull()
+  })
+
+  test('mode=off → 不 spawn 命令', async () => {
+    setImageUploadConfig({ version: 1, mode: 'off', command: 'should-not-run', args: [], timeoutMs: 5_000 })
+    const { meta } = saveAsset(PNG_BYTES, 'image/png')
+    maybeUploadToRemote(meta.id)
+    await new Promise((r) => setTimeout(r, 200))
+    expect(getAssetRemoteUrl(meta.id)).toBeNull()
+  })
+
+  test('上传配置 GET/PUT 端点：保存后回读一致', async () => {
+    const put = await app.fetch(new Request('http://localhost/api/v1/assets/upload-config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'auto', command: 'picfast', args: ['upload'], timeoutMs: 15000 }),
+    }))
+    expect(put.status).toBe(200)
+    const saved = await put.json() as { mode: string; command: string; args: string[]; timeoutMs: number }
+    expect(saved.mode).toBe('auto')
+    expect(saved.command).toBe('picfast')
+
+    const getRes = await app.fetch(new Request('http://localhost/api/v1/assets/upload-config'))
+    const loaded = await getRes.json() as { mode: string }
+    expect(loaded.mode).toBe('auto')
+  })
+
+  afterAll(() => {
+    setImageUploadConfig(null)
   })
 })

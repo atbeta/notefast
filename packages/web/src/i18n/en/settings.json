@@ -25,6 +25,20 @@
       "darkHint": "Always dark",
       "system": "System",
       "systemHint": "Automatically switch with OS"
+    },
+    "imageUpload": {
+      "description": "Images are always stored locally first. With “Auto-upload”, each upload also asynchronously invokes an external command (PicGo / upgit / picfast CLI / any script) to push the image to a hosting service; failures fall back to local storage without affecting editing.",
+      "modeOff": "Do nothing (default)",
+      "modeOffHint": "Local-only storage, same as today",
+      "modeAuto": "Auto-upload to image host",
+      "modeAutoHint": "Local storage + async upload, falls back on failure",
+      "command": "Upload command",
+      "commandHint": "Executable name (on PATH) or absolute path; the image path is appended as the last argument",
+      "args": "Arguments (space-separated)",
+      "timeout": "Timeout (s)",
+      "contractHint": "Command contract (Typora-style): command [args...] <image_path> → stdout prints one http(s) URL per line. Web and desktop behave identically: the command runs on the server machine; when unavailable it silently falls back to local storage.",
+      "saved": "Image hosting config saved",
+      "saveFailed": "Failed to save"
     }
   }
 }

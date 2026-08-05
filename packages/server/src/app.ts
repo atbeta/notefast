@@ -35,7 +35,8 @@ import { initBackupManager, stopBackupManager } from './backup/manager'
 import { initStorageLocations } from './storage/locations'
 import { initPreferences } from './api/preferences'
 import { initVectorStore } from './ai/indexer'
-import { initAssetStore } from './assets/store'
+import { initAssetStore, setImageUploadConfig } from './assets/store'
+import { initImageUploadConfig } from './services/imageUploadConfig'
 import { getVectorStore } from './ai/vectorStore'
 import blocks from './api/blocks'
 import docs from './api/docs'
@@ -270,6 +271,8 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     initDocEvents(pluginSystem)
     await initVectorStore()
     initAssetStore(dataDir)
+    // 图床上传配置：init 后注入 assets 存储层（异步上传命令契约）
+    setImageUploadConfig(initImageUploadConfig(dataDir))
     initStorageLocations(dataDir)
     initPreferences(dataDir)
     initSyncManager(dataDir)

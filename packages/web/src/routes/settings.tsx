@@ -13,12 +13,14 @@ import SyncPanel from '../components/SyncPanel'
 import StorageLocationsPanel from '../components/StorageLocationsPanel'
 import ApiTokensPanel from '../components/ApiTokensPanel'
 import AuthEventsPanel from '../components/AuthEventsPanel'
+import ImageUploadPanel from '../components/ImageUploadPanel'
 
 export default function SettingsPage() {
   const { t } = useTranslation()
   const tabs = [
     { id: 'general', label: t('settings.tabs.general') },
     { id: 'ai', label: t('settings.tabs.ai') },
+    { id: 'images', label: t('settings.tabs.images') },
     { id: 'backup', label: t('settings.tabs.backup') },
     { id: 'tokens', label: t('settings.tabs.tokens') },
     { id: 'security', label: t('settings.tabs.security') },
@@ -37,6 +39,10 @@ export default function SettingsPage() {
 
       <SettingsSection id="ai" title={t('settings.tabs.ai')}>
         <AISettingsPanel />
+      </SettingsSection>
+
+      <SettingsSection id="images" title={t('settings.tabs.images')}>
+        <ImageUploadPanel />
       </SettingsSection>
 
       <SettingsSection id="backup" title={t('settings.tabs.backup')}>

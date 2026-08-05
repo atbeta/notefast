@@ -6,6 +6,7 @@ import * as m004 from './004_doc_snapshots'
 import * as m005 from './005_entity_description'
 import * as m006 from './006_entity_aliases'
 import * as m007 from './007_vector_binary_embedding'
+import * as m008 from './008_asset_remote_url'
 
 interface Migration {
   id: string
@@ -15,7 +16,7 @@ interface Migration {
 }
 
 /** 唯一基线迁移。历史 002-010 已合并到此。 */
-const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007]
+const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007, m008]
 
 export function runMigrations(db: Database): { applied: string[]; skipped: string[] } {
   db.exec(`

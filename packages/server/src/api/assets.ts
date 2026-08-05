@@ -7,14 +7,22 @@
  */
 
 import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
 import { readFileSync } from 'node:fs'
 import {
   collectOrphanAssets,
   findMissingAssets,
+  getAssetRemoteUrl,
   MAX_ASSET_BYTES,
+  maybeUploadToRemote,
   readAsset,
   saveAsset,
 } from '../assets/store'
+import { imageUploadConfigSchema, type ImageUploadConfigInput } from '@notefast/core'
+import {
+  applyImageUploadConfig,
+  getImageUploadPublicConfig,
+} from '../services/imageUploadConfig'
 
 const assets = new Hono()
 
@@ -31,6 +39,8 @@ assets.post('/', async (c) => {
     return c.json({ error: 'too_large', message: `图片超过 ${MAX_ASSET_BYTES / 1024 / 1024}MB 上限` }, 413)
   }
   const { meta, dedup } = saveAsset(buf, mime)
+  // 自动上传模式：异步旁路传图床（不阻塞响应；失败静默降级本地）
+  maybeUploadToRemote(meta.id)
   return c.json(
     {
       id: meta.id,
@@ -44,8 +54,26 @@ assets.post('/', async (c) => {
   )
 })
 
+/** 图床上传配置：读取（无密钥，原样返回）——必须在 /:id 之前注册，否则被当作 asset id */
+assets.get('/upload-config', (c) => {
+  return c.json(getImageUploadPublicConfig())
+})
+
+/** 图床上传配置：保存（mode=off|auto + 命令 + 参数 + 超时） */
+assets.put('/upload-config', zValidator('json', imageUploadConfigSchema), async (c) => {
+  const body = c.req.valid('json') as ImageUploadConfigInput
+  const next = applyImageUploadConfig(body)
+  return c.json(next)
+})
+
 assets.get('/:id', (c) => {
-  const found = readAsset(c.req.param('id'))
+  const id = c.req.param('id')
+  // 图床模式：已外链的 asset 直接 302 到图床（内网直连，不经本地代理）
+  const remoteUrl = getAssetRemoteUrl(id)
+  if (remoteUrl) {
+    return c.redirect(remoteUrl, 302)
+  }
+  const found = readAsset(id)
   if (!found) {
     return c.json({ error: 'not_found', message: '图片不存在' }, 404)
   }
