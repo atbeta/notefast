@@ -578,14 +578,14 @@ function createEmbeddingProvider(
     async embedBatch(texts: string[]): Promise<Array<Float64Array>> {
       const truncated = texts.map((t) => truncateText(t, maxTokens))
       // embedding 请求历史上不带超时，保持现状
-      const json = await postJson<{ data: Array<{ embedding: number[] }> }>(
+      const json = await postJson<EmbeddingResponse>(
         fetchImpl,
         url,
         headers,
         { model, input: truncated },
         { errorLabel: 'Embedding API' },
       )
-      return json.data.map((item) => new Float64Array(item.embedding))
+      return parseEmbeddingResponse(json, truncated.length, model, url)
     },
     async embedQuery(text: string): Promise<Float64Array> {
       const arr = await this.embedBatch([text])
@@ -593,6 +593,60 @@ function createEmbeddingProvider(
       return arr[0]
     },
   }
+}
+
+/**
+ * embeddings 响应体：兼容两种形态
+ * - OpenAI 标准：`data: [{ embedding: number[] }]`（Ollama /v1/embeddings、LM Studio、vLLM 均为此）
+ * - 部分本地服务：顶层 `embeddings: number[][]`（Ollama /api/embed 风格）
+ */
+interface EmbeddingResponseItem {
+  embedding?: number[] | string
+}
+interface EmbeddingResponse {
+  data?: EmbeddingResponseItem[]
+  embeddings?: number[][]
+}
+
+/**
+ * 解析 embeddings 响应并严格校验，杜绝「静默空向量」：
+ * - data 缺失 / 空数组 → 明确报错（而不是 TypeError 或 undefined）
+ * - 向量是 base64 字符串 → 报错：`new Float64Array('…')` 会按字符串 length 静默产出全 0 向量，必须拦截
+ * - 向量为空数组 → 报错
+ * - 返回条数 < 请求条数 → 报错（数量不匹配会让后续块索引错位）
+ */
+export function parseEmbeddingResponse(
+  json: EmbeddingResponse,
+  expected: number,
+  model: string,
+  url: string,
+): Float64Array[] {
+  const viaData = Array.isArray(json.data)
+    ? json.data.map((d) => d?.embedding)
+    : undefined
+  const raw =
+    viaData && viaData.length > 0
+      ? viaData
+      : Array.isArray(json.embeddings) && json.embeddings.length > 0
+        ? json.embeddings
+        : []
+
+  if (raw.length === 0) {
+    throw new Error(`Embedding API 返回空（${model} @ ${url}）：响应缺少 data[].embedding，请检查 baseUrl 是否带 /v1、模型名是否正确`)
+  }
+  if (raw.length < expected) {
+    throw new Error(`Embedding API 返回数量不足：请求 ${expected} 条，实际返回 ${raw.length} 条`)
+  }
+
+  return raw.slice(0, expected).map((emb, i) => {
+    if (typeof emb === 'string') {
+      throw new Error(`Embedding API 返回了 base64 编码向量（第 ${i} 条），当前仅支持 float 格式`)
+    }
+    if (!Array.isArray(emb) || emb.length === 0) {
+      throw new Error(`Embedding API 第 ${i} 条向量为空`)
+    }
+    return new Float64Array(emb)
+  })
 }
 
 /** chat/completions 响应中的 message 结构（content 可空，tool_calls 增量协议见 streamCompletions） */

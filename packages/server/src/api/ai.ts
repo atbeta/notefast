@@ -271,7 +271,14 @@ ai.post('/diagnose', async (c) => {
     try {
       const dim = await runtime.probeEmbeddingDim()
       if (!dim) {
-        return { configured: true, ok: false, latencyMs: Date.now() - t, error: 'embedding 返回空' }
+        // probeEmbeddingDim 内部吞掉异常只返回 null：必须把 lastError 透传出来，
+        // 否则用户永远只看到「embedding 返回空」，真实原因（404/模型不存在/超时/格式错）无从排查
+        return {
+          configured: true,
+          ok: false,
+          latencyMs: Date.now() - t,
+          error: runtime.status().embedding.lastError || 'embedding 返回空',
+        }
       }
       return {
         configured: true,

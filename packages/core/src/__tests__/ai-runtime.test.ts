@@ -178,6 +178,48 @@ describe('AiRuntime embedQuery', () => {
     expect(r.status().usage.embeddingErrors).toBe(1)
     expect(r.status().embedding.lastError).toContain('401')
   })
+
+  test('兼容本地服务顶层 embeddings[] 格式（Ollama /api/embed 风格）', async () => {
+    const fakeVec = Array.from({ length: 3 }, (_, i) => i + 1)
+    const fetchImpl = mockFetchJson(200, { model: 'nomic-embed-text', embeddings: [fakeVec] })
+    const r = makeRuntime(makeEmbConfig(), fetchImpl)
+    const v = await r.embedQuery('hi')
+    expect(v).not.toBeNull()
+    expect(v!.length).toBe(3)
+    expect(r.status().embedding.lastError).toBeUndefined()
+  })
+
+  test('响应缺少 data/embeddings → 抛出明确错误（不再 TypeError 或静默空向量）', async () => {
+    const fetchImpl = mockFetchJson(200, {})
+    const r = makeRuntime(makeEmbConfig(), fetchImpl)
+    await expect(r.embedQuery('hi')).rejects.toThrow(/返回空/)
+    expect(r.status().embedding.lastError).toContain('返回空')
+  })
+
+  test('data 为空数组 → 抛出明确错误', async () => {
+    const fetchImpl = mockFetchJson(200, { data: [] })
+    const r = makeRuntime(makeEmbConfig(), fetchImpl)
+    await expect(r.embedQuery('hi')).rejects.toThrow(/返回空/)
+  })
+
+  test('base64 编码向量 → 抛出明确错误（new Float64Array(字符串) 会静默产生全 0 向量）', async () => {
+    const fetchImpl = mockFetchJson(200, { data: [{ embedding: 'aGVsbG8=' }] })
+    const r = makeRuntime(makeEmbConfig(), fetchImpl)
+    await expect(r.embedQuery('hi')).rejects.toThrow(/base64/)
+  })
+
+  test('空向量 [] → 抛出明确错误', async () => {
+    const fetchImpl = mockFetchJson(200, { data: [{ embedding: [] }] })
+    const r = makeRuntime(makeEmbConfig(), fetchImpl)
+    await expect(r.embedQuery('hi')).rejects.toThrow(/向量为空/)
+  })
+
+  test('返回条数不足 → 抛出数量不匹配错误', async () => {
+    const fetchImpl = mockFetchJson(200, { data: [{ embedding: [1, 2, 3] }] })
+    // 批量请求 2 条，服务只回 1 条
+    const r = makeRuntime(makeEmbConfig(), fetchImpl)
+    await expect(r.embedBatch(['a', 'b'])).rejects.toThrow(/数量不足/)
+  })
 })
 
 describe('AiRuntime chat', () => {
