@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "terms": [
+    { "name": "晶圆", "aliases": ["wafer", "晶圆片", "硅片"] },
+    { "name": "流片", "aliases": ["tape-out", "TapeOut", "送片"] },
+    { "name": "光刻", "aliases": ["lithography"] },
+    { "name": "EDA", "aliases": ["电子设计自动化", "电子设计工具"] },
+    { "name": "版图设计", "aliases": ["layout"], "kind": "concept" },
+    { "name": "晶圆厂", "aliases": ["fab", "Foundry"] },
+    { "name": "RAG", "aliases": ["检索增强生成", "检索增强"] },
+    { "name": "编译器", "aliases": ["compiler", "compile"], "kind": "tool" },
+    { "name": "渲染管线", "aliases": ["render pipeline"], "kind": "concept" }
+  ]
+}

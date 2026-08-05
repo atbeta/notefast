@@ -5,6 +5,8 @@
     "tabs": {
       "general": "General & Appearance",
       "ai": "AI Capabilities & Models",
+      "termdict": "Entity Dictionary",
+      "images": "Images & Hosting",
       "backup": "Backup & Archive",
       "tokens": "API Tokens",
       "security": "Account Security"
@@ -47,6 +49,25 @@
       "uploadExisting": "Upload existing images",
       "batchRunning": "Uploading {{done}}/{{total}}…",
       "batchDone": "✓ Existing upload done: {{ok}} ok, {{failed}} failed"
+    },
+    "termDict": {
+      "title": "Entity Dictionary",
+      "helpTip": "Declared alias → canonical-name rules: extraction, retrieval and merging all converge on the canonical name; industry term packs can be imported wholesale",
+      "description": "Declare canonical-name ↔ alias rules (e.g. wafer ↔ 晶圆). New extractions converge on the canonical entity after saving; existing entities are merged immediately; searching any alias hits documents using the canonical name. An empty dictionary changes nothing.",
+      "enabled": "Enabled: {{count}} canonical names / {{aliases}} aliases",
+      "disabled": "Not configured (empty dictionary = default retrieval)",
+      "editorPlaceholder": "[\n  { \"name\": \"晶圆\", \"aliases\": [\"wafer\", \"晶圆片\"] },\n  { \"name\": \"流片\", \"aliases\": [\"tape-out\"] }\n]",
+      "saving": "Saving…",
+      "save": "Save",
+      "saved": "Dictionary saved, existing entities merged",
+      "saveFailed": "Failed to save",
+      "invalidJson": "Not a valid JSON array",
+      "rebuild": "Merge now",
+      "rebuildDone": "Merge complete",
+      "rebuildResult": "{{merged}} merged, {{created}} created, {{kindUpdated}} kind updated",
+      "rebuildFailed": "Merge failed",
+      "clear": "Clear dictionary",
+      "cleared": "Dictionary cleared (default retrieval restored)"
     }
   }
 }

@@ -3,7 +3,8 @@
  *
  * 思路：query 整句与各 term 对 entities.name 做 normalized 精确匹配（优先）+
  * LIKE 子串匹配（实体表规模小，LIKE 免费；CJK 无空格查询靠「实体名是查询子串」
- * 方向覆盖）→ 命中实体反查 entity_mentions → blocks。
+ * 方向覆盖）→ 命中实体反查 entity_mentions → blocks。词典别名经 resolveDictTerm
+ * 反向收敛到标准名——用户查「tape-out」能精确命中标准实体「流片」。
  *
  * 排序：精确匹配实体的块在前，其后按实体 mention_count 倒序；位置即 RRF rank。
  * 实体表为空或无命中时零成本短路。ai_exclude / inbox / archived 过滤在
@@ -11,6 +12,7 @@
  */
 
 import { getDb } from '../db'
+import { resolveDictTerm } from '../termDict'
 import { normalizeEntityName } from '../store/entities'
 
 export interface EntitySearchHit {
@@ -35,13 +37,19 @@ interface MatchedEntity {
 function matchEntities(query: string): MatchedEntity[] {
   const db = getDb()
   const terms = query.split(/\s+/).filter(Boolean)
+
+  // 候选名集合：查询整句 + 各 term + 词典反向（别名 → 标准名）。
+  // 词典命中的别名 resolve 到标准名后参与精确/子串匹配——库里实体已按词典收敛为标准名，
+  // 用户查「tape-out」要能命中标准实体「流片」。
   const names = new Set<string>()
-  const full = normalizeEntityName(query)
-  if (full.length >= 2) names.add(full)
-  for (const t of terms) {
-    const n = normalizeEntityName(t)
+  const addCandidate = (raw: string) => {
+    const n = normalizeEntityName(raw)
     if (n.length >= 2) names.add(n)
+    const resolved = resolveDictTerm(raw)
+    if (resolved) names.add(resolved.name)
   }
+  addCandidate(query)
+  for (const t of terms) addCandidate(t)
 
   const byId = new Map<string, MatchedEntity>()
 
@@ -53,16 +61,14 @@ function matchEntities(query: string): MatchedEntity[] {
     if (row) byId.set(row.id, { ...row, exact: true })
   }
 
-  // 子串匹配（双向）：实体名含 term，或实体名是查询整句的子串（CJK 无空格查询的召回主力）
+  // 子串匹配（双向）：实体名含候选名，或候选名是查询整句的子串（CJK 无空格查询的召回主力）
   const likeParams: string[] = []
   const conds: string[] = []
-  for (const t of terms) {
-    const n = normalizeEntityName(t)
-    if (n.length >= 2) {
-      conds.push(`name LIKE ? ESCAPE '\\'`)
-      likeParams.push(`%${escapeLike(n)}%`)
-    }
+  for (const n of names) {
+    conds.push(`name LIKE ? ESCAPE '\\'`)
+    likeParams.push(`%${escapeLike(n)}%`)
   }
+  const full = normalizeEntityName(query)
   if (full.length >= 2) {
     conds.push(`? LIKE '%' || name || '%' ESCAPE '\\'`)
     likeParams.push(full)

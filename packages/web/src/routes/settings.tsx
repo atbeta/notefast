@@ -14,12 +14,14 @@ import StorageLocationsPanel from '../components/StorageLocationsPanel'
 import ApiTokensPanel from '../components/ApiTokensPanel'
 import AuthEventsPanel from '../components/AuthEventsPanel'
 import ImageUploadPanel from '../components/ImageUploadPanel'
+import TermDictPanel from '../components/TermDictPanel'
 
 export default function SettingsPage() {
   const { t } = useTranslation()
   const tabs = [
     { id: 'general', label: t('settings.tabs.general') },
     { id: 'ai', label: t('settings.tabs.ai') },
+    { id: 'termdict', label: t('settings.tabs.termdict') },
     { id: 'images', label: t('settings.tabs.images') },
     { id: 'backup', label: t('settings.tabs.backup') },
     { id: 'tokens', label: t('settings.tabs.tokens') },
@@ -39,6 +41,10 @@ export default function SettingsPage() {
 
       <SettingsSection id="ai" title={t('settings.tabs.ai')}>
         <AISettingsPanel />
+      </SettingsSection>
+
+      <SettingsSection id="termdict" title={t('settings.tabs.termdict')}>
+        <TermDictPanel />
       </SettingsSection>
 
       <SettingsSection id="images" title={t('settings.tabs.images')}>

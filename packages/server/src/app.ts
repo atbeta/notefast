@@ -34,6 +34,7 @@ import { initProtocolManager } from './sync/protocolManager'
 import { initBackupManager, stopBackupManager } from './backup/manager'
 import { initStorageLocations } from './storage/locations'
 import { initPreferences } from './api/preferences'
+import { initTermDict } from './termDict'
 import { initVectorStore } from './ai/indexer'
 import { initAssetStore, setImageUploadConfig } from './assets/store'
 import { initImageUploadConfig } from './services/imageUploadConfig'
@@ -57,6 +58,7 @@ import apiTokens from './api/apiTokens'
 import pinnedViews from './api/pinnedViews'
 import preferences from './api/preferences'
 import statusRouter from './api/status'
+import termDict from './api/termDict'
 import eventsRouter from './api/events'
 import syncProtocolRouter from './api/syncProtocol'
 import storageLocations from './api/storageLocations'
@@ -243,6 +245,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   app.route('/api/v1/pinned-views', pinnedViews)
   app.route('/api/v1/preferences', preferences)
   app.route('/api/v1/status', statusRouter)
+  app.route('/api/v1/term-dict', termDict)
   app.route('/api/v1/events', eventsRouter)
   app.route('/api/v1/sync/protocol', syncProtocolRouter)
 
@@ -279,6 +282,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     initBackupManager(dataDir)
     initProtocolManager(dataDir)
     initAiRuntime(pluginSystem, dataDir)
+    initTermDict(dataDir)
     startEntityDescribe()
 
     app.all('/mcp', authMiddleware, async (c) => {

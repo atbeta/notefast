@@ -11,6 +11,7 @@
 
 import { getDb } from '../db'
 import { getLiveBlockById } from '../store/blocks'
+import { resolveDictTerm } from '../termDict'
 import {
   addMention,
   getEntityById,
@@ -43,6 +44,8 @@ export function looksLikeCodeIdentifier(normalizedName: string): boolean {
  * 的清理先跑、抽取后到，会把 mention 落在已软删块上成为「幽灵数据」——此处拒绝。
  *
  * 别名路由：规范化名命中别名字典（手工合并过）→ 直接挂到规范实体，不再新建。
+ * 词典路由：实体词典（用户声明的校准层）优先于别名字典——别名/标准名命中词典
+ * 即收敛到词典标准名实体（声明层比合并产物更显式，覆盖旧合并）。
  */
 export function registerMentions(blockId: string, mentions: MentionInput[]): number {
   if (mentions.length === 0) return 0
@@ -52,17 +55,21 @@ export function registerMentions(blockId: string, mentions: MentionInput[]): num
   const seen = new Set<string>()
   let registered = 0
   for (const m of mentions) {
-    const name = normalizeEntityName(m.anchor)
-    if (name.length < 2 || seen.has(name)) continue
-    if (looksLikeCodeIdentifier(name)) continue
-    seen.add(name)
+    const rawName = normalizeEntityName(m.anchor)
+    if (rawName.length < 2 || seen.has(rawName)) continue
+    if (looksLikeCodeIdentifier(rawName)) continue
+    seen.add(rawName)
+    // 词典路由（声明层最高优先级）：别名 → 标准名
+    const dictTarget = resolveDictTerm(rawName)
+    const name = dictTarget ? dictTarget.name : rawName
+    const display = dictTarget ? dictTarget.display : m.anchor.trim()
     // 版本变体（CodeMirror 6 → codemirror）路由到既有主名实体；
     // kind=doc 例外——编号文档是不同文档（「视觉验证测试文档 30」≠「视觉验证测试文档」）
     const aliasTarget =
       resolveAlias(db, name) ?? (m.kind === 'doc' ? null : resolveVersionVariant(db, name))
     const entity = aliasTarget
       ? getEntityById(db, aliasTarget)
-      : upsertEntity(db, { name, display: m.anchor.trim(), kind: m.kind })
+      : upsertEntity(db, { name, display, kind: dictTarget?.kind ?? m.kind })
     if (!entity) continue
     addMention(db, entity.id, blockId, m.anchor.trim())
     registered++

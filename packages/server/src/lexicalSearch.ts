@@ -6,19 +6,21 @@
  * trigram 分词器有 2 字词死区（「笔记」「主权」不进索引），不可用。
  * 因此中文召回走 LIKE 子串匹配（CJK 无需分词），ASCII 沿用 FTS5 bm25：
  *
- *   - FTS 路：仅当查询含 ASCII term 时运行（buildFtsQuery 加引号 AND），bm25 排序
+ *   - FTS 路：仅当查询含 ASCII term 时运行（加引号 AND），bm25 排序
  *   - LIKE 严格路：所有 term 子串 AND（SQLite LIKE 对 ASCII 不区分大小写），
  *     排序权重：整句命中(100) > 命中 term 数(10/个) > 标题命中(1)
  *   - LIKE 降级路：严格路零结果且 strictOnly=false 时，term OR + 命中数排序
  *   - 合并：LIKE 路在前（CJK 召回主力），FTS 路按 bm25 顺序补充未出现的 id
+ *   - 实体词典（term-dict）：term 命中词典别名/标准名 → 组内 OR 展开
+ *     （查 wafer 命中「晶圆」文档）；组间沿用 AND/OR 语义，展开不变宽召回语义
  *
  * 供 hybridSearch / web /search / MCP notefast_search / autoLink 四处共用；
  * ai_exclude / 生命周期状态等后置过滤仍由调用方负责。
  */
 
-import { buildFtsQuery } from '@notefast/core'
 import { getDb } from './db'
 import { runFtsQuery } from './dbQueries'
+import { expandDictTerm } from './termDict'
 
 export interface LexicalHit {
   id: string
@@ -87,6 +89,24 @@ function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, (m) => `\\${m}`)
 }
 
+/**
+ * term 组：词典命中时一个查询 term 展开为多个候选写法（原词 + 标准名 + 别名）。
+ * 组内是「多选一」（OR），组间沿用 AND/OR 语义——展开绝不能变成新的 AND 条件。
+ */
+interface TermGroup {
+  variants: string[]
+}
+
+/** 单组 LIKE 条件（组内 OR）：(col LIKE ? ESCAPE '\' OR ...) */
+function groupLikeCond(col: string, g: TermGroup): string {
+  return `(${g.variants.map(() => `${col} LIKE ? ESCAPE '\\'`).join(' OR ')})`
+}
+
+/** 整组 LIKE 参数（转义后 %term%） */
+function groupLikeParams(g: TermGroup): string[] {
+  return g.variants.map((v) => `%${escapeLike(v)}%`)
+}
+
 interface LikeRow {
   id: string
   type: string
@@ -95,23 +115,25 @@ interface LikeRow {
   doc_title: string
 }
 
-/** LIKE 路：严格 AND 或降级 OR，共用同一套打分（整句 100 + 命中数 10/个 + 标题 1） */
+/** LIKE 路：严格 AND 或降级 OR，共用同一套打分（整句 100 + 组命中数 10/个 + 标题 1） */
 function runLikePath(
-  terms: string[],
+  groups: TermGroup[],
   opts: LexicalSearchOptions,
   orMode: boolean,
+  sentence: string,
 ): LikeRow[] {
   const db = getDb()
   const params: (string | number)[] = []
 
-  // 打分表达式：整句命中 > 命中 term 数 > 标题（root content 含任一 term）
-  // 整句命中蕴含全部 term 命中，权重不会倒挂；标题分只用于打破平局
+  // 打分表达式：整句命中 > 组命中数 > 标题（root content 含任一 variant）
+  // 整句命中蕴含全部组命中，权重不会倒挂；标题分只用于打破平局。
+  // 整句按展开前的原始查询串判断（保持「原句序命中」的语义，不因展开变宽）
   let scoreSql = '(CASE WHEN b.content LIKE ? ESCAPE \'\\\' THEN 100 ELSE 0 END)'
-  params.push(`%${escapeLike(terms.join(' '))}%`)
-  scoreSql += ` + (${terms.map(() => `CASE WHEN b.content LIKE ? ESCAPE '\\' THEN 1 ELSE 0 END`).join(' + ')}) * 10`
-  for (const t of terms) params.push(`%${escapeLike(t)}%`)
-  scoreSql += ` + (CASE WHEN ${terms.map(() => `d.content LIKE ? ESCAPE '\\'`).join(' OR ')} THEN 1 ELSE 0 END)`
-  for (const t of terms) params.push(`%${escapeLike(t)}%`)
+  params.push(`%${escapeLike(sentence)}%`)
+  scoreSql += ` + (${groups.map((g) => `CASE WHEN ${groupLikeCond('b.content', g)} THEN 1 ELSE 0 END`).join(' + ')}) * 10`
+  for (const g of groups) params.push(...groupLikeParams(g))
+  scoreSql += ` + (CASE WHEN ${groups.map((g) => groupLikeCond('d.content', g)).join(' OR ')} THEN 1 ELSE 0 END)`
+  for (const g of groups) params.push(...groupLikeParams(g))
 
   let sql = `
     SELECT b.id, b.type, b.content, b.root_id, d.content AS doc_title, ${scoreSql} AS like_score
@@ -119,8 +141,8 @@ function runLikePath(
     LEFT JOIN blocks d ON d.id = b.root_id
     WHERE b.is_deleted = 0`
   const joiner = orMode ? ' OR ' : ' AND '
-  sql += ` AND (${terms.map(() => `b.content LIKE ? ESCAPE '\\'`).join(joiner)})`
-  for (const t of terms) params.push(`%${escapeLike(t)}%`)
+  sql += ` AND (${groups.map((g) => groupLikeCond('b.content', g)).join(joiner)})`
+  for (const g of groups) params.push(...groupLikeParams(g))
 
   if (opts.notebookId) {
     sql += ' AND b.notebook_id = ?'
@@ -160,11 +182,19 @@ export function lexicalSearch(query: string, opts: LexicalSearchOptions): Lexica
   // 子串匹配要求完整句序，文档里是「XXX是什么」就漏检）。匹配/打分统一用核心词。
   terms = [...new Set(terms.map((t) => (CJK_RE.test(t) ? cjkCoreTerm(t) : t)))]
 
+  // 词典展开：term 命中实体词典 → 组（原词 + 标准名 + 别名）；组内 OR，组间沿用原语义
+  const groups: TermGroup[] = terms.map((t) => {
+    const expanded = expandDictTerm(t)
+    return { variants: expanded && expanded.length > 0 ? expanded : [t] }
+  })
+  // 整句命中按展开前（词典剥离前）的核心词判断
+  const sentence = terms.join(' ')
+
   // ── LIKE 路（所有 term，含 ASCII——SQLite LIKE 对 ASCII 不区分大小写）──
-  let likeRows = runLikePath(terms, opts, false)
+  let likeRows = runLikePath(groups, opts, false, sentence)
   let orFallback = false
   if (likeRows.length === 0 && !opts.strictOnly) {
-    likeRows = runLikePath(terms, opts, true)
+    likeRows = runLikePath(groups, opts, true, sentence)
     orFallback = likeRows.length > 0
   }
   const likeMatchedBy: LexicalHit['matched_by'] = opts.titleOnly
@@ -182,11 +212,21 @@ export function lexicalSearch(query: string, opts: LexicalSearchOptions): Lexica
     matched_by: likeMatchedBy,
   }))
 
-  // ── FTS 路（仅 ASCII term；CJK term 在 unicode61 下是整 token 短语，召回交给 LIKE）──
-  const asciiTerms = terms.filter((t) => !CJK_RE.test(t))
+  // ── FTS 路（含 ASCII 原词的查询才跑；匹配用全组——CJK 组以引号短语形式进
+  // MATCH 提供 AND 约束，避免「wafer 光刻」只查 wafer 变体而漏掉光刻约束）──
   let ftsHits: LexicalHit[] = []
-  if (asciiTerms.length > 0) {
-    const { query: match } = buildFtsQuery(asciiTerms.join(' '), opts.limit)
+  if (terms.some((t) => !CJK_RE.test(t))) {
+    // 组内 OR（"wafer" OR "晶圆"），组间 AND；转义规则与 buildFtsQuery 一致
+    const match = groups
+      .map((g) => {
+        const quoted = g.variants
+          .map((v) => `"${v.replace(/['"*()]/g, ' ').trim()}"`)
+          .filter((v) => v.length > 2)
+        if (quoted.length === 0) return ''
+        return quoted.length === 1 ? quoted[0] : `(${quoted.join(' OR ')})`
+      })
+      .filter(Boolean)
+      .join(' AND ')
     if (match) {
       const extraWhere = [...(opts.extraWhere ?? [])]
       if (opts.titleOnly) extraWhere.push(`AND b.type = 'document'`)
