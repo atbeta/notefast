@@ -43,10 +43,14 @@ interface CodeMirrorEditorProps {
   autoFocus?: boolean
 }
 
+function clampPos(view: EditorView, pos: number): number {
+  return Math.max(0, Math.min(pos, view.state.doc.length))
+}
+
 function insertAtCursorCmd(view: EditorView, text: string, opts?: { cursorOffset?: number; selectStart?: number }): void {
   const { from, to } = view.state.selection.main
   const cursorOffset = opts?.cursorOffset ?? text.length
-  const anchor = opts?.selectStart !== undefined ? from + opts.selectStart : from + cursorOffset
+  const anchor = clampPos(view, opts?.selectStart !== undefined ? from + opts.selectStart : from + cursorOffset)
   view.dispatch({
     changes: { from, to, insert: text },
     selection: { anchor },
@@ -63,8 +67,8 @@ function wrapSelectionCmd(view: EditorView, left: string, right = left): void {
     changes: { from, to, insert: left + middle + right },
     selection:
       from === to
-        ? { anchor: from + left.length }
-        : { anchor: from + left.length, head: to + left.length },
+        ? { anchor: clampPos(view, from + left.length) }
+        : { anchor: clampPos(view, from + left.length), head: clampPos(view, to + left.length) },
     scrollIntoView: true,
     userEvent: 'input',
   })
@@ -212,9 +216,13 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
       if (!view) return
       const current = view.state.doc.toString()
       if (props.value !== current) {
+        // CM 会把 \r\n 规范化为 \n（每个 CRLF 少 1 字符）：anchor 必须按规范化后的长度计算，
+        // 否则含 CRLF 的文档（zip 导入的 Windows md 等）dispatch 时 selection 越界，
+        // 抛 RangeError("Selection points outside of document") → 整页白屏
+        const anchor = props.value.replace(/\r\n/g, '\n').length
         view.dispatch({
           changes: { from: 0, to: current.length, insert: props.value },
-          selection: { anchor: props.value.length },
+          selection: { anchor },
         })
       }
     }, [props.value])
