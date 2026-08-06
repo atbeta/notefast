@@ -18,6 +18,7 @@ import {
   recordDocSnapshot,
   getDocSnapshot,
   nowTimestamp,
+  listDeletedDocRows,
 } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
@@ -152,6 +153,19 @@ docs.get('/tree', (c) => {
 
   const headings = buildHeadingTree(tree[0].children || [])
   return c.json(headings)
+})
+
+// 回收站：软删除文档列表（恢复走 POST /blocks/:id/restore，整子树恢复）。
+// 必须注册在 /:id 之前，否则 'trash' 被当作文档 id。
+docs.get('/trash', (c) => {
+  const db = getDb()
+  return c.json(
+    listDeletedDocRows(db).map((r) => ({
+      id: r.id,
+      title: r.content,
+      deleted_at: r.updated_at,
+    })),
+  )
 })
 
 docs.get('/:id', (c) => {

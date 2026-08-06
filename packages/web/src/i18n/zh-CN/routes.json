@@ -56,6 +56,15 @@
     "searchPlaceholder": "搜索归档内容…",
     "noMatch": "没有匹配「{{query}}」的归档文档"
   },
+  "trash": {
+    "title": "回收站",
+    "description": "删除的文档会保留在这里，可以随时恢复。注意：分享链接在删除时已永久失效，恢复后需重新开启分享。",
+    "deletedAt": "删除于 {{time}}",
+    "restoreTitle": "恢复文档（回到所有文档）",
+    "restore": "恢复",
+    "emptyTitle": "回收站是空的",
+    "emptyDesc": "删除的文档会出现在这里，可以随时恢复。"
+  },
   "newDoc": {
     "tabCreate": "新建文档",
     "tabImport": "导入",

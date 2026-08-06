@@ -6,6 +6,7 @@ import { initDb, closeDb } from '../db'
 import { createPluginSystem, type DocumentEventPayload } from '@notefast/core'
 import { initAiRuntime, _setRuntimeForTests } from '../services/aiRuntime'
 import docsRouter from '../api/docs'
+import blocksRouter from '../api/blocks'
 import importRouter from '../api/import'
 
 /**
@@ -44,6 +45,7 @@ beforeAll(() => {
   pluginSystem = createPluginSystem()
   app = new Hono()
   app.route('/docs', docsRouter)
+  app.route('/blocks', blocksRouter)
   app.route('/import', importRouter)
 })
 
@@ -184,5 +186,44 @@ describe('文档级生命周期钩子', () => {
     } finally {
       untapAll()
     }
+  })
+})
+
+describe('回收站（GET /docs/trash + restore）', () => {
+  test('删除的文档进回收站；恢复后回到列表；重复恢复 404', async () => {
+    const docId = await createDoc('回收站测试')
+
+    // 删除前进不了回收站
+    const before = await app.request('/docs/trash')
+    expect(((await before.json()) as Array<{ id: string }>).some((d) => d.id === docId)).toBe(false)
+
+    const del = await app.request(`/docs/${docId}`, { method: 'DELETE' })
+    expect(del.status).toBe(200)
+
+    // 回收站可见（含标题与删除时间），主列表不可见
+    const trash = await app.request('/docs/trash')
+    const trashItems = (await trash.json()) as Array<{ id: string; title: string; deleted_at: string }>
+    const item = trashItems.find((d) => d.id === docId)
+    expect(item).toBeDefined()
+    expect(item!.title).toBe('回收站测试')
+    expect(item!.deleted_at).toBeTruthy()
+
+    const list = await app.request('/docs/list')
+    expect(((await list.json()) as Array<{ id: string }>).some((d) => d.id === docId)).toBe(false)
+
+    // 恢复：整子树回来，回收站清空该条，主列表可见
+    const restore = await app.request(`/blocks/${docId}/restore`, { method: 'POST' })
+    expect(restore.status).toBe(200)
+    expect(((await restore.json()) as { restored: boolean }).restored).toBe(true)
+
+    const trashAfter = await app.request('/docs/trash')
+    expect(((await trashAfter.json()) as Array<{ id: string }>).some((d) => d.id === docId)).toBe(false)
+
+    const listAfter = await app.request('/docs/list')
+    expect(((await listAfter.json()) as Array<{ id: string }>).some((d) => d.id === docId)).toBe(true)
+
+    // 重复恢复 = 没有可恢复的已删除 block
+    const again = await app.request(`/blocks/${docId}/restore`, { method: 'POST' })
+    expect(again.status).toBe(404)
   })
 })

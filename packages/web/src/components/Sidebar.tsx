@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   Inbox,
   Archive,
+  Trash2,
   Sparkles,
   Settings,
   Tag,
@@ -398,6 +399,10 @@ export default function Sidebar({
               {archivedCount > 99 ? '99+' : archivedCount}
             </span>
           )}
+        </Link>
+        <Link to="/trash" onClick={closeAfterNav} className={location.pathname === '/trash' ? 'sidebar-link-active' : 'sidebar-link'}>
+          <Trash2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <span className="flex-1">{t('sidebar.trash')}</span>
         </Link>
         <Link to="/entities" onClick={closeAfterNav} className={location.pathname === '/entities' ? 'sidebar-link-active' : 'sidebar-link'}>
           <Waypoints className="w-[15px] h-[15px]" strokeWidth={1.75} />

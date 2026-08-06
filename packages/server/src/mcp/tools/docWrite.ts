@@ -3,7 +3,8 @@
  *
  * notefast_create_block / update_block / create_doc /
  * stage_markdown / create_doc_from_file /
- * list_docs / list_tags / set_doc_tags。
+ * list_docs / list_tags / set_doc_tags /
+ * delete_doc（软删除，回收站可恢复）/ restore_block / list_deleted。
  */
 
 import { z } from 'zod'
@@ -28,20 +29,28 @@ import {
 } from '../../services/markdownStage'
 import {
   fetchDeletedSubtreeIds,
+  fetchSubtreeBlocks,
   getBlockAnchor,
   getBlockById,
   getBlocksByIds,
   getDeletedBlockById,
   getDocById,
+  getLiveDocById,
   insertBlock,
   listDocRows,
   listRecentlyDeletedBlocks,
   nowTimestamp,
   restoreBlocks,
+  softDeleteBlocks,
   updateBlock,
 } from '../../store/blocks'
-import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate } from '../../services/hooks'
+import { deleteRefsTouchingBlocks } from '../../store/refs'
+import { deleteMentionsTouchingBlocks } from '../../store/entities'
+import { deleteSharesByDocIds } from '../../store/shares'
+import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate, fireAfterDelete, fireDocAfterDelete } from '../../services/hooks'
 import { scheduleDocIndex } from '../../ai/indexJobs'
+import { reanalyzeDoc } from '../../ai/autoLink'
+import { emitAppEvent } from '../../events'
 import { scheduleSyncNow } from '../../sync/protocolManager'
 import { extractAssetRefs, findMissingAssets } from '../../assets/store'
 import { isDocRowAiExcluded } from '../../ai/aiExcludeQuery'
@@ -374,6 +383,51 @@ export function registerDocWriteTools(ctx: ToolContext): void {
   )
 
   registerTool(
+    'notefast_delete_doc',
+    {
+      description:
+        '删除文档（软删除，整篇含全部子块）。可从回收站恢复（notefast_restore_block / Web 回收站），但分享旧链接永久失效、实体提及需重抽。仅在确需删除时使用，勿用于日常整理',
+      inputSchema: {
+        doc_id: z.string().describe('文档 ID'),
+      },
+    },
+    async ({ doc_id }) => {
+      const denied = denyAiExcludedDoc(doc_id)
+      if (denied) return denied
+
+      const docRow = getLiveDocById(db, doc_id)
+      if (!docRow) {
+        return toolError('not_found', `文档 ${doc_id} 不存在`, { doc_id })
+      }
+
+      // 与 DELETE /docs/:id 同一事务语义：refs/mentions 级联清理 + 软删除 + 切断分享
+      const childIds = fetchSubtreeBlocks(db, doc_id)
+      const allIds = [doc_id, ...childIds.map((r) => r.id)]
+      db.transaction(() => {
+        deleteRefsTouchingBlocks(db, allIds)
+        deleteMentionsTouchingBlocks(db, allIds)
+        softDeleteBlocks(db, allIds)
+        deleteSharesByDocIds(db, [doc_id])
+      })()
+
+      fireAfterDelete(doc_id)
+      fireDocAfterDelete({ doc: rowToBlock(docRow) })
+      emitAppEvent({
+        source: 'mcp',
+        actor: 'mcp',
+        action: 'doc.deleted',
+        target: { type: 'doc', id: doc_id },
+        outcome: 'success',
+        fields: { block_count: allIds.length },
+      })
+      // 软删除 tombstone 需经多端同步传播
+      scheduleSyncNow()
+
+      return { content: [toText({ deleted: true, doc_id, count: allIds.length })] }
+    },
+  )
+
+  registerTool(
     'notefast_restore_block',
     {
       description: '恢复已软删除的 block 及其子树',
@@ -389,6 +443,12 @@ export function registerDocWriteTools(ctx: ToolContext): void {
 
       const allIds = [block_id, ...fetchDeletedSubtreeIds(db, block_id)]
       restoreBlocks(db, allIds)
+      // 与 POST /blocks/:id/restore 对齐：文档根恢复补全 doc 重索引 + autoLink 重抽
+      // （删除时向量被清、mentions 被物理 purge；无 provider 时安全 no-op）
+      if (existing.type === 'document') {
+        scheduleDocIndex(block_id, allIds)
+        reanalyzeDoc(block_id)
+      }
       scheduleSyncNow()
 
       return { content: [toText({ restored: true, block_id, count: allIds.length })] }

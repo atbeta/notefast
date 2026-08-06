@@ -123,6 +123,13 @@ export function countDocRows(db: Db): number {
   return row.c
 }
 
+/** 回收站：软删除文档根列表（updated_at = 删除时间，新删的在前） */
+export function listDeletedDocRows(db: Db): BlockRow[] {
+  return db
+    .query("SELECT * FROM blocks WHERE type = 'document' AND is_deleted = 1 ORDER BY updated_at DESC, rowid DESC")
+    .all() as BlockRow[]
+}
+
 /**
  * 文档级拉取：root_id 下全部 block（含文档根本身），按 level, sort 排序。
  * 走 root_id 索引一条查询；buildBlockTree 内部会按 sort 重排子节点，

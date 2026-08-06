@@ -56,6 +56,15 @@
     "searchPlaceholder": "Search archived content…",
     "noMatch": "No archived documents match “{{query}}”"
   },
+  "trash": {
+    "title": "Trash",
+    "description": "Deleted documents are kept here and can be restored anytime. Note: share links are permanently revoked on deletion — re-enable sharing after restoring.",
+    "deletedAt": "Deleted {{time}}",
+    "restoreTitle": "Restore document (back to all documents)",
+    "restore": "Restore",
+    "emptyTitle": "Trash is empty",
+    "emptyDesc": "Deleted documents will show up here and can be restored anytime."
+  },
   "newDoc": {
     "tabCreate": "New document",
     "tabImport": "Import",

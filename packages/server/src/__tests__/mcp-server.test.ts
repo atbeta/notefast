@@ -111,7 +111,7 @@ describe('createSession', () => {
     const msg = list.body[0] as Record<string, unknown>
     expect(msg.result).toBeDefined()
     const tools = (msg.result as Record<string, unknown>).tools as { name: string }[]
-    expect(tools.length).toBe(26)
+    expect(tools.length).toBe(27)
 
     const toolNames = tools.map((t) => t.name)
     expect(toolNames).toContain('notefast_search')
@@ -135,6 +135,7 @@ describe('createSession', () => {
     expect(toolNames).toContain('notefast_share_doc')
     expect(toolNames).toContain('notefast_get_share')
     expect(toolNames).toContain('notefast_unshare_doc')
+    expect(toolNames).toContain('notefast_delete_doc')
     // 三态审核工具已随「高置信直接建链」模型下线
     expect(toolNames).not.toContain('notefast_autolink_suggestions')
     expect(toolNames).not.toContain('notefast_autolink_apply')
@@ -760,5 +761,100 @@ describe('notefast 分享工具（公开只读链接）', () => {
     const denied = await callTool('notefast_share_doc', { doc_id: excludedId })
     expect(denied.result.isError).toBe(true)
     expect((denied.payload.error as { code: string }).code).toBe('forbidden')
+  })
+})
+
+describe('notefast_delete_doc（软删除，回收站可恢复）', () => {
+  async function callTool(name: string, args: Record<string, unknown>) {
+    const { getDb } = await import('../db')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { transport } = await createSession(nb.id)
+    const init = await mcpRequest(transport, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    await mcpRequest(transport, 'notifications/initialized', undefined, undefined, init.sessionId)
+    const call = await mcpRequest(transport, 'tools/call', { name, arguments: args }, 2, init.sessionId)
+    await transport.close()
+    const msg = call.body[0] as Record<string, unknown>
+    const result = msg.result as { isError?: boolean; content: Array<{ text: string }> }
+    const payload = result?.content?.[0]?.text ? JSON.parse(result.content[0].text) : null
+    return { result, payload }
+  }
+
+  async function setupDoc(title = 'MCP 删除测试'): Promise<string> {
+    const { getDb } = await import('../db')
+    const db = getDb()
+    const nb = db.query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const docId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, status, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', ?, 'note', 0, 0, ?, ?)`,
+    ).run(docId, nb.id, docId, title, now, now)
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'paragraph', '正文', 0, 1, ?, ?)`,
+    ).run(crypto.randomUUID(), nb.id, docId, docId, now, now)
+    return docId
+  }
+
+  test('删除整篇（含子块）；list_docs 不再可见；list_deleted 可见；restore 恢复；重复删除 not_found', async () => {
+    const docId = await setupDoc()
+
+    const del = await callTool('notefast_delete_doc', { doc_id: docId })
+    expect(del.result.isError).toBeFalsy()
+    expect(del.payload.deleted).toBe(true)
+    expect(del.payload.count).toBe(2) // 文档根 + 子块
+
+    // 主列表不可见
+    const list = await callTool('notefast_list_docs', {})
+    const ids = (list.payload.docs as Array<{ id: string }>).map((d) => d.id)
+    expect(ids).not.toContain(docId)
+
+    // 回收站（list_deleted）可见
+    const deleted = await callTool('notefast_list_deleted', {})
+    const deletedIds = (deleted.payload.blocks as Array<{ id: string }>).map((b) => b.id)
+    expect(deletedIds).toContain(docId)
+
+    // 恢复后回到列表
+    const restored = await callTool('notefast_restore_block', { block_id: docId })
+    expect(restored.result.isError).toBeFalsy()
+    const listAfter = await callTool('notefast_list_docs', {})
+    const idsAfter = (listAfter.payload.docs as Array<{ id: string }>).map((d) => d.id)
+    expect(idsAfter).toContain(docId)
+
+    // 重复删除 = 文档（活）不存在
+    const again = await callTool('notefast_delete_doc', { doc_id: docId })
+    expect(again.result.isError).toBeFalsy() // 恢复后可再次删除
+    const ghost = await callTool('notefast_delete_doc', { doc_id: 'no-such-doc' })
+    expect(ghost.result.isError).toBe(true)
+    expect((ghost.payload.error as { code: string }).code).toBe('not_found')
+  })
+
+  test('ai_exclude 文档 → forbidden；删除级联关闭分享', async () => {
+    // ai_exclude：MCP 一律 forbidden
+    const excludedId = await setupDoc('secret-delete')
+    const { default: docs } = await import('../api/docs')
+    const { Hono } = await import('hono')
+    const app = new Hono()
+    app.route('/api/v1/docs', docs)
+    await app.request(`http://localhost/api/v1/docs/${excludedId}/ai-exclude`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ai_exclude: true }),
+    })
+    const denied = await callTool('notefast_delete_doc', { doc_id: excludedId })
+    expect(denied.result.isError).toBe(true)
+    expect((denied.payload.error as { code: string }).code).toBe('forbidden')
+
+    // 级联关闭分享：删除后分享记录清除，恢复不复活旧 token
+    const docId = await setupDoc('级联分享测试')
+    await callTool('notefast_share_doc', { doc_id: docId })
+    await callTool('notefast_delete_doc', { doc_id: docId })
+    const { getDb } = await import('../db')
+    const row = getDb().query('SELECT doc_id FROM shares WHERE doc_id = ?').get(docId)
+    expect(row).toBeNull()
   })
 })

@@ -34,6 +34,8 @@ import { deleteMentionsTouchingBlocks } from '../store/entities'
 import { deleteSharesByDocIds } from '../store/shares'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete } from '../services/hooks'
 import { applyAiExcludeChange } from '../ai/aiExclude'
+import { reanalyzeDoc } from '../ai/autoLink'
+import { scheduleDocIndex } from '../ai/indexJobs'
 
 const blocks = new Hono()
 
@@ -277,6 +279,14 @@ blocks.post('/:id/restore', (c) => {
   // 恢复整个子树
   const allIds = [id, ...fetchDeletedSubtreeIds(db, id)]
   restoreBlocks(db, allIds)
+
+  // 文档根恢复 = 重新进入流通：删除时向量被清、mentions 被物理 purge，
+  // 补全 doc 重索引 + autoLink 重抽（均无 provider 时安全 no-op；
+  // 分享旧链接按既定语义不复活，需重新开启）
+  if (existing.type === 'document') {
+    scheduleDocIndex(id, allIds)
+    reanalyzeDoc(id)
+  }
 
   return c.json({ restored: true, count: allIds.length })
 })

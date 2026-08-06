@@ -6,6 +6,7 @@ import NewDocPage from './routes/new'
 import SettingsPage from './routes/settings'
 import InboxPage from './routes/inbox'
 import ArchivedPage from './routes/archived'
+import TrashPage from './routes/trash'
 import EntitiesPage from './routes/entities'
 import GraphPage from './routes/graph'
 import SharePage from './routes/share'
@@ -66,6 +67,7 @@ export default function App() {
             <Route path="/doc/:id" element={<DocPage />} />
             <Route path="/inbox" element={<InboxPage />} />
             <Route path="/archived" element={<ArchivedPage />} />
+            <Route path="/trash" element={<TrashPage />} />
             <Route path="/entities" element={<EntitiesPage />} />
             <Route path="/graph" element={<GraphPage />} />
             <Route path="/settings/*" element={<SettingsPage />} />
