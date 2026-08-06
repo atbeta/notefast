@@ -22,6 +22,12 @@
     "renderFailedWith": "Mermaid render failed: {{error}}",
     "loading": "Loading diagram…"
   },
+  "math": {
+    "emptyMath": "Empty formula",
+    "renderFailed": "Math render failed",
+    "renderFailedWith": "Math render failed: {{error}}",
+    "loading": "Loading formula…"
+  },
   "editorToolbar": {
     "h1": "Heading 1 (#)",
     "h2": "Heading 2 (##)",

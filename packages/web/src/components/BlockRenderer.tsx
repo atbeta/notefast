@@ -5,6 +5,8 @@ import { Check, Cloud, CloudOff, Loader2 } from 'lucide-react'
 import type { Block } from '@notefast/core'
 import { highlightCode } from '../lib/highlight'
 import MermaidDiagram from './MermaidDiagram'
+import MathBlock, { MathInline } from './MathBlock'
+import { INLINE_MATH_SRC } from '../lib/katex'
 import BlockSurface, { BlockHandle } from './BlockSurface'
 import { CopyButton } from './ui'
 import { api } from '../hooks/useAPI'
@@ -121,10 +123,23 @@ function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: 
 }
 
 // ───────────────────────── 行内 Markdown 渲染 ─────────────────────────
-// 支持：![image](url)、`code`、**bold**、*italic*、~~del~~、[text](url)、裸 URL
-// 单一正则扫描，非嵌套场景覆盖绝大多数笔记内容；image 必须在 link 之前匹配
+// 支持：![image](url)、`code`、$math$、**bold**、*italic*、~~del~~、[text](url)、裸 URL
+// 单一正则扫描，非嵌套场景覆盖绝大多数笔记内容；image 必须在 link 之前匹配；
+// $math$ 紧随 code 之后（code 内不解析公式），在 bold/italic 之前（避免 * 被先行认领）
 
-const INLINE_RE = /(!\[[^\]]*\]\([^)\s]+\))|(`[^`]+`)|(\*\*[^*\n]+\*\*)|(\*[^*\n]+\*)|(~~[^~\n]+~~)|(\[[^\]]+\]\([^)\s]+\))|(https?:\/\/[^\s<>()"]+)/g
+const INLINE_RE = new RegExp(
+  [
+    String.raw`(!\[[^\]]*\]\([^)\s]+\))`,
+    '(`[^`]+`)',
+    `(${INLINE_MATH_SRC})`,
+    String.raw`(\*\*[^*\n]+\*\*)`,
+    String.raw`(\*[^*\n]+\*)`,
+    String.raw`(~~[^~\n]+~~)`,
+    String.raw`(\[[^\]]+\]\([^)\s]+\))`,
+    String.raw`(https?:\/\/[^\s<>()"]+)`,
+  ].join('|'),
+  'g',
+)
 
 /** 裸 URL 尾部的标点不应吃进来（如「见 https://a.com/x, 」） */
 function trimUrlTail(url: string): string {
@@ -170,21 +185,24 @@ function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
     } else if (m[2]) {
       nodes.push(<code key={`${keyPrefix}-${k++}`}>{m[2].slice(1, -1)}</code>)
     } else if (m[3]) {
-      nodes.push(<strong key={`${keyPrefix}-${k++}`}>{renderInline(m[3].slice(2, -2), `${keyPrefix}s${k}`)}</strong>)
+      // 行内公式：tex 为 $ 内部内容，raw 保留原文供渲染前/失败回退
+      nodes.push(<MathInline key={`${keyPrefix}-${k++}`} tex={m[3].slice(1, -1)} raw={m[3]} />)
     } else if (m[4]) {
-      nodes.push(<em key={`${keyPrefix}-${k++}`}>{m[4].slice(1, -1)}</em>)
+      nodes.push(<strong key={`${keyPrefix}-${k++}`}>{renderInline(m[4].slice(2, -2), `${keyPrefix}s${k}`)}</strong>)
     } else if (m[5]) {
-      nodes.push(<del key={`${keyPrefix}-${k++}`} className="text-muted-foreground">{m[5].slice(2, -2)}</del>)
+      nodes.push(<em key={`${keyPrefix}-${k++}`}>{m[5].slice(1, -1)}</em>)
     } else if (m[6]) {
-      const lm = m[6].match(/\[([^\]]+)\]\(([^)\s]+)\)/)!
+      nodes.push(<del key={`${keyPrefix}-${k++}`} className="text-muted-foreground">{m[6].slice(2, -2)}</del>)
+    } else if (m[7]) {
+      const lm = m[7].match(/\[([^\]]+)\]\(([^)\s]+)\)/)!
       nodes.push(
         <a key={`${keyPrefix}-${k++}`} href={lm[2]} target="_blank" rel="noreferrer">
           {lm[1]}
         </a>,
       )
-    } else if (m[7]) {
-      const url = trimUrlTail(m[7])
-      const tail = m[7].slice(url.length)
+    } else if (m[8]) {
+      const url = trimUrlTail(m[8])
+      const tail = m[8].slice(url.length)
       nodes.push(
         <a key={`${keyPrefix}-${k++}`} href={url} target="_blank" rel="noreferrer">
           {url}
@@ -236,8 +254,13 @@ function HeadingTag({ block }: { block: Block }) {
 
 function CodeBlock({ block }: { block: Block }) {
   const lang = (block.properties.language as string) || ''
-  if (lang.trim().toLowerCase() === 'mermaid') {
+  const normalized = lang.trim().toLowerCase()
+  if (normalized === 'mermaid') {
     return <MermaidDiagram code={block.content || ''} />
+  }
+  // 块级公式：```math 围栏（latex/katex/tex 为常见别名），复用 code_block 零存储改动
+  if (normalized === 'math' || normalized === 'latex' || normalized === 'katex' || normalized === 'tex') {
+    return <MathBlock code={block.content || ''} />
   }
   return <HighlightedCodeBlock block={block} lang={lang} />
 }
