@@ -111,7 +111,7 @@ describe('createSession', () => {
     const msg = list.body[0] as Record<string, unknown>
     expect(msg.result).toBeDefined()
     const tools = (msg.result as Record<string, unknown>).tools as { name: string }[]
-    expect(tools.length).toBe(23)
+    expect(tools.length).toBe(26)
 
     const toolNames = tools.map((t) => t.name)
     expect(toolNames).toContain('notefast_search')
@@ -132,6 +132,9 @@ describe('createSession', () => {
     expect(toolNames).toContain('notefast_suggest_title')
     expect(toolNames).toContain('notefast_chat')
     expect(toolNames).toContain('notefast_autolink_run')
+    expect(toolNames).toContain('notefast_share_doc')
+    expect(toolNames).toContain('notefast_get_share')
+    expect(toolNames).toContain('notefast_unshare_doc')
     // 三态审核工具已随「高置信直接建链」模型下线
     expect(toolNames).not.toContain('notefast_autolink_suggestions')
     expect(toolNames).not.toContain('notefast_autolink_apply')
@@ -636,5 +639,126 @@ describe('MCP 写入的 actor 标注（历史面板可识别）', () => {
       `SELECT actor FROM block_revisions WHERE block_id = ? ORDER BY rev DESC LIMIT 1`,
     ).get(blockId) as { actor: string } | undefined
     expect(rev?.actor).toBe('mcp')
+  })
+})
+
+describe('notefast 分享工具（公开只读链接）', () => {
+  async function callTool(name: string, args: Record<string, unknown>) {
+    const { getDb } = await import('../db')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { transport } = await createSession(nb.id)
+    const init = await mcpRequest(transport, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    await mcpRequest(transport, 'notifications/initialized', undefined, undefined, init.sessionId)
+    const call = await mcpRequest(transport, 'tools/call', { name, arguments: args }, 2, init.sessionId)
+    await transport.close()
+    const msg = call.body[0] as Record<string, unknown>
+    const result = msg.result as { isError?: boolean; content: Array<{ text: string }> }
+    const payload = result?.content?.[0]?.text ? JSON.parse(result.content[0].text) : null
+    return { result, payload }
+  }
+
+  async function setupDoc(title = 'MCP 分享测试'): Promise<string> {
+    const { getDb } = await import('../db')
+    const db = getDb()
+    const nb = db.query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const docId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, status, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', ?, 'note', 0, 0, ?, ?)`,
+    ).run(docId, nb.id, docId, title, now, now)
+    return docId
+  }
+
+  test('工具已注册', async () => {
+    const { getDb } = await import('../db')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { transport } = await createSession(nb.id)
+    const init = await mcpRequest(transport, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    const call = await mcpRequest(transport, 'tools/list', {}, 2, init.sessionId)
+    await transport.close()
+    const msg = call.body[0] as { result?: { tools?: Array<{ name: string }> } }
+    const names = (msg.result?.tools ?? []).map((t) => t.name)
+    expect(names).toContain('notefast_share_doc')
+    expect(names).toContain('notefast_get_share')
+    expect(names).toContain('notefast_unshare_doc')
+  })
+
+  test('开启幂等同 token；get_share 查询；带 expires_in_days 调整有效期', async () => {
+    const docId = await setupDoc()
+
+    // 未开启时查询
+    const before = await callTool('notefast_get_share', { doc_id: docId })
+    expect(before.result.isError).toBeFalsy()
+    expect(before.payload.shared).toBe(false)
+
+    // 开启
+    const created = await callTool('notefast_share_doc', { doc_id: docId })
+    expect(created.result.isError).toBeFalsy()
+    expect(created.payload.shared).toBe(true)
+    expect(created.payload.path).toBe(`/s/${created.payload.token}`)
+    expect(created.payload.expires_at).toBeNull()
+
+    // 幂等：重复开启返回同一 token
+    const again = await callTool('notefast_share_doc', { doc_id: docId })
+    expect(again.payload.token).toBe(created.payload.token)
+
+    // 已开启时带 expires_in_days = 调整有效期（以现在为起点）
+    const adjusted = await callTool('notefast_share_doc', { doc_id: docId, expires_in_days: 7 })
+    expect(adjusted.payload.token).toBe(created.payload.token)
+    expect(typeof adjusted.payload.expires_at).toBe('string')
+    const deltaMs = new Date(adjusted.payload.expires_at as string).getTime() - Date.now()
+    expect(deltaMs).toBeGreaterThan(6 * 86_400_000)
+    expect(deltaMs).toBeLessThan(8 * 86_400_000)
+  })
+
+  test('关闭幂等；重新开启生成全新 token', async () => {
+    const docId = await setupDoc('MCP 分享关闭测试')
+    const created = await callTool('notefast_share_doc', { doc_id: docId })
+
+    const closed = await callTool('notefast_unshare_doc', { doc_id: docId })
+    expect(closed.result.isError).toBeFalsy()
+    expect(closed.payload.deleted).toBe(true)
+
+    // 幂等：本就没开启也成功
+    const again = await callTool('notefast_unshare_doc', { doc_id: docId })
+    expect(again.result.isError).toBeFalsy()
+
+    const after = await callTool('notefast_get_share', { doc_id: docId })
+    expect(after.payload.shared).toBe(false)
+
+    // 重开全新 token，旧链接永久失效
+    const reopened = await callTool('notefast_share_doc', { doc_id: docId })
+    expect(reopened.payload.token).not.toBe(created.payload.token)
+  })
+
+  test('文档不存在 → not_found；ai_exclude 文档 → forbidden', async () => {
+    const missing = await callTool('notefast_share_doc', { doc_id: 'no-such-doc' })
+    expect(missing.result.isError).toBe(true)
+    expect((missing.payload.error as { code: string }).code).toBe('not_found')
+
+    // ai_exclude 文档：MCP 一律 forbidden，无 confirm 通道
+    const excludedId = await setupDoc('secret-share')
+    const { default: docs } = await import('../api/docs')
+    const { Hono } = await import('hono')
+    const app = new Hono()
+    app.route('/api/v1/docs', docs)
+    await app.request(`http://localhost/api/v1/docs/${excludedId}/ai-exclude`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ai_exclude: true }),
+    })
+
+    const denied = await callTool('notefast_share_doc', { doc_id: excludedId })
+    expect(denied.result.isError).toBe(true)
+    expect((denied.payload.error as { code: string }).code).toBe('forbidden')
   })
 })

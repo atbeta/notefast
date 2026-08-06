@@ -9,6 +9,8 @@
  *                list_docs / list_tags / set_doc_tags
  * - aiChat.ts    AI：semantic_search / suggest_title / chat / get_config
  * - autoLink.ts  AutoLink：run（高置信直接建链，无审核队列）
+ * - share.ts     分享：share_doc / get_share / unshare_doc（语义对齐 REST，
+ *                ai_exclude 文档一律 forbidden，无 confirm 通道）
  *
  * 调用方（mcp/server.ts）只依赖本文件的 registerMcpTools，签名不变。
  */
@@ -21,6 +23,7 @@ import { registerDocWriteTools } from './tools/docWrite'
 import { registerAiChatTools } from './tools/aiChat'
 import { registerAutoLinkTools } from './tools/autoLink'
 import { registerEntityTools } from './tools/entityTools'
+import { registerShareTools } from './tools/share'
 
 export function registerMcpTools(server: McpServer, notebookId: string): void {
   const ctx: ToolContext = {
@@ -36,4 +39,5 @@ export function registerMcpTools(server: McpServer, notebookId: string): void {
   registerAiChatTools(ctx)
   registerAutoLinkTools(ctx)
   registerEntityTools(ctx)
+  registerShareTools(ctx)
 }
