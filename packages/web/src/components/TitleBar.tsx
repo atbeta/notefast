@@ -56,11 +56,9 @@ export default function TitleBar() {
         if ((e.target as HTMLElement).closest('button')) return
         void win.toggleMaximize()
       }}
-      className="h-9 shrink-0 flex items-center justify-between pl-4 pr-1 border-b border-border bg-background select-none"
+      className="h-9 shrink-0 flex items-center justify-end pr-1 border-b border-border bg-background select-none"
     >
-      <span data-tauri-drag-region className="text-[12px] font-medium text-muted-foreground tracking-wide truncate">
-        NoteFast
-      </span>
+      {/* 左侧不放应用名：侧栏品牌行已承担身份，标题栏只留拖拽区 + 窗口控制（否则 Tauri 壳左上角重复） */}
       <div className="flex items-center">
         <TitleBarButton label={t('layout.minimize')} onClick={() => void win.minimize()}>
           <Minus className="w-4 h-4" />
