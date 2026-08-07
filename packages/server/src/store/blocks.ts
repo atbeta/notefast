@@ -280,6 +280,13 @@ export interface BlockPatch {
    * 不在 updateBlockSchema（HTTP 校验层）暴露 —— 外部 API 无法绕过审计记录。
    */
   noRevision?: boolean
+  /**
+   * 元数据变更（tags / ai_exclude 等）不 bump updated_at：
+   * 避免「改标签把文档顶到最近更新最前」。同步仍经 entity_changes 变更流发布，
+   * 仅多端 LWW 合并时该字段变更不参与时间裁决（官方免配置同步云暂缓，可接受）。
+   * 不在 updateBlockSchema（HTTP 校验层）暴露。
+   */
+  touchUpdatedAt?: boolean
 }
 
 /** 每 block 保留的 revision 上限；超出删除最旧的（append-only 防膨胀） */
@@ -348,7 +355,9 @@ export function updateBlock(db: Db, id: string, patch: BlockPatch): void {
 
   if (updates.length === 0) return
 
-  updates.push(`updated_at = ${SQL_NOW}`)
+  if (patch.touchUpdatedAt !== false) {
+    updates.push(`updated_at = ${SQL_NOW}`)
+  }
   params.push(id)
   db.query(`UPDATE blocks SET ${updates.join(', ')} WHERE id = ?`).run(
     ...(params as [string, ...string[]]),

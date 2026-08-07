@@ -358,3 +358,38 @@ describe('侧栏计数（GET /docs/counts）', () => {
     expect(after.untagged - before.untagged).toBe(2)      // B(inbox) + D(ai_exclude)；A 已打标签，C 在回收站
   })
 })
+
+describe('更新时间语义（元数据变更不 bump updated_at）', () => {
+  test('标签 / ai_exclude 变更不改变 updated_at，内容变更仍 bump', async () => {
+    const docId = await createDoc('元数据时间测试')
+    const readU = () =>
+      (getDb().query('SELECT updated_at FROM blocks WHERE id = ?').get(docId) as { updated_at: string }).updated_at
+
+    const t0 = readU()
+    await new Promise((r) => setTimeout(r, 10)) // SQL_NOW 毫秒精度，确保有差异窗口
+
+    // 标签变更：不 bump（否则改标签会把文档顶到「最近更新」最前）
+    await app.request(`/docs/${docId}/tags`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: ['meta'] }),
+    })
+    expect(readU()).toBe(t0)
+
+    // ai_exclude 变更：不 bump
+    await app.request(`/docs/${docId}/ai-exclude`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ai_exclude: true }),
+    })
+    expect(readU()).toBe(t0)
+
+    // 内容变更：仍然 bump（控制组）
+    await app.request(`/blocks/${docId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: '新标题' }),
+    })
+    expect(readU()).not.toBe(t0)
+  })
+})

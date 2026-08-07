@@ -373,7 +373,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
       }
       const provider = getTagProvider()
       const updated = provider.setDocTags(docRow, tags)
-      updateBlock(db, doc_id, { tags: updated.tags })
+      updateBlock(db, doc_id, { tags: updated.tags, touchUpdatedAt: false })
       scheduleSyncNow()
       const finalTags = provider.getDocTags(updated)
       return {

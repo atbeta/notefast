@@ -45,7 +45,7 @@ export function writeDocAiExclude(docId: string, aiExclude: boolean): BlockRow |
   const docRow = getDocById(db, docId)
   if (!docRow) return null
 
-  updateBlock(db, docId, { ai_exclude: aiExclude ? 1 : 0 })
+  updateBlock(db, docId, { ai_exclude: aiExclude ? 1 : 0, touchUpdatedAt: false })
 
   return getBlockById(db, docId)
 }

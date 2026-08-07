@@ -299,7 +299,7 @@ docs.patch('/:id/tags', async (c) => {
   const provider = getTagProvider()
   const oldTags = readTags(docRow)
   const updated = provider.setDocTags(docRow, newTags)
-  updateBlock(db, id, { tags: updated.tags })
+  updateBlock(db, id, { tags: updated.tags, touchUpdatedAt: false })
 
   // 标签进入索引文本上下文：保存后整篇重索引（hasFreshVector 跳过未变块；
   // autoIndex 关闭或 embedding 未配时 scheduleDocIndex 返回 null，无需特判）
