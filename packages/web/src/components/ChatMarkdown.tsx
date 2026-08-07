@@ -1,8 +1,11 @@
 import { useState, useEffect, createElement, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
 import { highlightCode } from '../lib/highlight'
+import { classifyChatMath } from '../lib/chatMath'
 import MermaidDiagram from './MermaidDiagram'
+import MathBlock, { MathInline } from './MathBlock'
 import { CopyButton } from './ui'
 import { useTranslation } from 'react-i18next'
 
@@ -11,13 +14,13 @@ interface ChatMarkdownProps {
   className?: string
 }
 
-/** 聊天气泡内的 Markdown 渲染（GFM + 代码高亮 + Mermaid） */
+/** 聊天气泡内的 Markdown 渲染（GFM + 代码高亮 + Mermaid + KaTeX 公式） */
 export default function ChatMarkdown({ content, className = '' }: ChatMarkdownProps) {
   if (!content) return null
   return (
     <div className={`chat-prose ${className}`}>
       <Markdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMath]}
         components={{
           pre({ children }) {
             // 由 code 组件自行包一层 pre，避免双重嵌套
@@ -25,6 +28,15 @@ export default function ChatMarkdown({ content, className = '' }: ChatMarkdownPr
           },
           code({ className: codeClass, children, ...props }) {
             const text = String(children).replace(/\n$/, '')
+            // 数学分支必须最先判定：math-inline 也带 language-math，
+            // 落到下面的 isBlock 分支会被误判为块级代码块
+            const mathKind = classifyChatMath(codeClass)
+            if (mathKind === 'inline') {
+              return <MathInline tex={text} raw={'$' + text + '$'} />
+            }
+            if (mathKind === 'display') {
+              return <MathBlock code={text} />
+            }
             const match = /language-(\w+)/.exec(codeClass || '')
             const isBlock = Boolean(match) || text.includes('\n')
             if (!isBlock) {
