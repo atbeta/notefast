@@ -44,6 +44,8 @@ export interface TermDictEntry {
   aliases: string[]
   /** 可选 kind 覆盖（concept/person/tool/doc） */
   kind?: string
+  /** 可选描述：实体释义（用户声明层，优先级高于 AI 生成；人读 + AI 读） */
+  description?: string
 }
 
 export interface TermDict {
@@ -120,7 +122,15 @@ export function loadTermDictFromDisk(): TermDict {
     const kind = typeof e.kind === 'string' && ['concept', 'person', 'tool', 'doc'].includes(e.kind)
       ? e.kind
       : undefined
-    const entry: TermDictEntry = { name: e.name.trim(), aliases: [...new Set(aliases)], kind }
+    const description = typeof e.description === 'string' && e.description.trim().length > 0
+      ? e.description.trim()
+      : undefined
+    const entry: TermDictEntry = {
+      name: e.name.trim(),
+      aliases: [...new Set(aliases)],
+      ...(kind ? { kind } : {}),
+      ...(description ? { description } : {}),
+    }
     if (byNormalized.has(nameNorm)) {
       skipped++
       continue
@@ -155,9 +165,11 @@ export function dictStats(): { entries: number; aliases: number } {
  * 词典路由：normalized 名称命中（标准名或别名）→ 返回标准名信息。
  * 供抽取端（registerMentions）把别名锚点收敛到标准名实体。
  */
-export function resolveDictTerm(name: string): { name: string; display: string; kind?: string } | null {
+export function resolveDictTerm(name: string): { name: string; display: string; kind?: string; description?: string } | null {
   const entry = getTermDict().byNormalized.get(dictKey(name))
-  return entry ? { name: normalizeEntityName(entry.name), display: entry.name, kind: entry.kind } : null
+  return entry
+    ? { name: normalizeEntityName(entry.name), display: entry.name, kind: entry.kind, description: entry.description }
+    : null
 }
 
 /**

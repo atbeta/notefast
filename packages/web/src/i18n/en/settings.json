@@ -67,7 +67,32 @@
       "rebuildResult": "{{merged}} merged, {{created}} created, {{kindUpdated}} kind updated",
       "rebuildFailed": "Merge failed",
       "clear": "Clear dictionary",
-      "cleared": "Dictionary cleared (default retrieval restored)"
+      "cleared": "Dictionary cleared (default retrieval restored)",
+      "searchPlaceholder": "Search name or alias…",
+      "addEntry": "Add entry",
+      "edit": "Edit",
+      "delete": "Delete",
+      "nameLabel": "Canonical name",
+      "aliasesLabel": "Aliases",
+      "aliasesHint": "Enter or comma to add",
+      "kindLabel": "Kind",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "What is this entity? (optional; takes priority over AI-generated)",
+      "saveEntry": "Save entry",
+      "importTitle": "Import & merge",
+      "importHint": "Paste an industry dictionary JSON or pick a file; entries merge by canonical name",
+      "importFile": "Pick file",
+      "importPreview": "{{add}} new / {{update}} updated / {{skip}} skipped",
+      "importConfirm": "Merge",
+      "importInvalid": "Not a valid JSON",
+      "export": "Export",
+      "noResults": "No matching entries",
+      "kind": {
+        "concept": "Concept",
+        "person": "Person",
+        "tool": "Tool",
+        "doc": "Document"
+      }
     }
   }
 }

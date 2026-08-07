@@ -1,6 +1,15 @@
-import { useEffect, useState } from 'react'
+/**
+ * 实体词典面板（结构化编辑器）
+ *
+ * 替代原始 JSON 文本框：长词典可搜索、条目级增删改、导入合并（外挂行业词典）、导出。
+ * 所有编辑都在本地状态，显式「保存」PUT 全量落盘 + 自动存量归并——JSON 格式错误在
+ * 结构上不可能发生；导入在预览阶段校验。
+ * 描述（description）只在这里写：用户声明层，优先级高于 AI 生成。
+ */
+
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BookMarked, RefreshCw, Trash2 } from 'lucide-react'
+import { BookMarked, Plus, RefreshCw, Trash2, Search, Pencil, X, Download, Upload, FileUp } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { ActionButton, useToast } from './ui'
 import { SettingsCard } from './settings/ui'
@@ -9,6 +18,7 @@ interface TermDictEntry {
   name: string
   aliases: string[]
   kind?: string
+  description?: string
 }
 
 interface TermDictPayload {
@@ -18,43 +28,208 @@ interface TermDictPayload {
   terms: TermDictEntry[]
 }
 
-/**
- * 实体词典面板：用户声明的「实体校准层」（别名 → 标准名收敛）。
- * 空词典 = 检索行为零变化；编辑保存后服务端自动做存量归并。
- */
+const KINDS = ['concept', 'person', 'tool', 'doc'] as const
+
+type EditingState =
+  | { mode: 'new' }
+  | { mode: 'edit'; index: number }
+  | null
+
+interface EntryForm {
+  name: string
+  aliases: string[]
+  aliasDraft: string
+  kind: string
+  description: string
+}
+
+const emptyForm: EntryForm = { name: '', aliases: [], aliasDraft: '', kind: '', description: '' }
+
+/** 本地轻量归一（服务端 dictKey 为准；这里只用于去重/合并预览） */
+function normName(s: string): string {
+  return s.trim().toLowerCase()
+}
+
 export default function TermDictPanel() {
   const { t } = useTranslation()
   const toast = useToast()
   const [stats, setStats] = useState<{ enabled: boolean; count: number; aliasCount: number } | null>(null)
-  const [text, setText] = useState('')
+  const [terms, setTerms] = useState<TermDictEntry[]>([])
+  const [search, setSearch] = useState('')
+  const [editing, setEditing] = useState<EditingState>(null)
+  const [form, setForm] = useState<EntryForm>(emptyForm)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importError, setImportError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     api
       .get<TermDictPayload>('/term-dict')
       .then((d) => {
         setStats({ enabled: d.enabled, count: d.count, aliasCount: d.alias_count })
-        setText(JSON.stringify(d.terms, null, 2))
+        setTerms(d.terms)
       })
       .catch(() => setStats(null))
   }, [])
 
-  const handleSave = async () => {
-    let terms: unknown
+  // ───────────────────── 列表与搜索 ─────────────────────
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return terms
+    return terms.filter(
+      (e) => e.name.toLowerCase().includes(q) || e.aliases.some((a) => a.toLowerCase().includes(q)),
+    )
+  }, [terms, search])
+
+  // ───────────────────── 表单 ─────────────────────
+
+  const startNew = () => {
+    setForm(emptyForm)
+    setEditing({ mode: 'new' })
+  }
+
+  const startEdit = (index: number) => {
+    const e = terms[index]!
+    setForm({
+      name: e.name,
+      aliases: [...e.aliases],
+      aliasDraft: '',
+      kind: e.kind ?? '',
+      description: e.description ?? '',
+    })
+    setEditing({ mode: 'edit', index })
+  }
+
+  const cancelEdit = () => {
+    setEditing(null)
+    setForm(emptyForm)
+  }
+
+  const addAlias = () => {
+    const raw = form.aliasDraft.trim()
+    if (!raw) return
+    const parts = raw.split(/[,，]/).map((p) => p.trim()).filter(Boolean)
+    setForm((f) => ({
+      ...f,
+      aliasDraft: '',
+      aliases: [...new Set([...f.aliases, ...parts])],
+    }))
+  }
+
+  const removeAlias = (alias: string) => {
+    setForm((f) => ({ ...f, aliases: f.aliases.filter((a) => a !== alias) }))
+  }
+
+  const submitEntry = () => {
+    const name = form.name.trim()
+    if (!name) {
+      toast.error({ title: t('settings.termDict.nameLabel') })
+      return
+    }
+    // 本地去重：标准名重复则拒绝（服务端保存时同样校验）
+    const dupIndex = terms.findIndex((e) => normName(e.name) === normName(name))
+    if (editing?.mode === 'edit' && dupIndex !== editing.index && dupIndex >= 0) {
+      toast.error({ title: t('settings.termDict.nameLabel') })
+      return
+    }
+    if (editing?.mode !== 'edit' && dupIndex >= 0) {
+      toast.error({ title: t('settings.termDict.nameLabel') })
+      return
+    }
+    const entry: TermDictEntry = {
+      name,
+      aliases: form.aliases,
+      ...(form.kind ? { kind: form.kind } : {}),
+      ...(form.description.trim() ? { description: form.description.trim() } : {}),
+    }
+    setTerms((prev) => {
+      if (editing?.mode === 'edit') {
+        const next = [...prev]
+        next[editing.index] = entry
+        return next
+      }
+      return [...prev, entry]
+    })
+    cancelEdit()
+  }
+
+  const deleteEntry = (index: number) => {
+    setTerms((prev) => prev.filter((_, i) => i !== index))
+    if (editing?.mode === 'edit' && editing.index === index) cancelEdit()
+  }
+
+  // ───────────────────── 导入合并 ─────────────────────
+
+  const parseImport = (raw: string) => {
+    setImportError('')
+    let list: unknown
     try {
-      terms = JSON.parse(text)
+      list = JSON.parse(raw)
     } catch {
-      toast.error({ title: t('settings.termDict.invalidJson') })
+      setImportError(t('settings.termDict.importInvalid'))
       return
     }
-    if (!Array.isArray(terms)) {
-      toast.error({ title: t('settings.termDict.invalidJson') })
+    if (!Array.isArray(list)) {
+      setImportError(t('settings.termDict.importInvalid'))
       return
     }
+    const incoming: TermDictEntry[] = []
+    for (const item of list as Array<Record<string, unknown>>) {
+      if (typeof item?.name !== 'string' || !item.name.trim()) continue
+      const aliases = Array.isArray(item.aliases)
+        ? (item.aliases as unknown[]).filter((a): a is string => typeof a === 'string' && a.trim().length > 0).map((a) => a.trim())
+        : []
+      const kind = typeof item.kind === 'string' && (KINDS as readonly string[]).includes(item.kind) ? item.kind : undefined
+      const description = typeof item.description === 'string' && item.description.trim() ? item.description.trim() : undefined
+      incoming.push({ name: item.name.trim(), aliases, ...(kind ? { kind } : {}), ...(description ? { description } : {}) })
+    }
+    let add = 0
+    let update = 0
+    const merged = [...terms]
+    for (const inc of incoming) {
+      const idx = merged.findIndex((e) => normName(e.name) === normName(inc.name))
+      if (idx >= 0) {
+        merged[idx] = { ...merged[idx]!, ...inc, aliases: [...new Set([...merged[idx]!.aliases, ...inc.aliases])] }
+        update++
+      } else {
+        merged.push(inc)
+        add++
+      }
+    }
+    setTerms(merged)
+    setImportOpen(false)
+    setImportText('')
+    toast.success({
+      title: t('settings.termDict.importTitle'),
+      description: t('settings.termDict.importPreview', { add, update, skip: incoming.length - add - update }),
+    })
+  }
+
+  const onImportFile = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = () => parseImport(String(reader.result ?? ''))
+    reader.readAsText(file)
+  }
+
+  // ───────────────────── 导出 / 保存 / 归并 / 清空 ─────────────────────
+
+  const handleExport = () => {
+    const blob = new Blob([JSON.stringify({ version: 1, terms }, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'term-dict.json'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleSave = async () => {
     await toast.promise(
       async () => {
-        const d = await api.put<TermDictPayload>('/term-dict', { terms })
+        const d = await api.put<TermDictPayload & { saved?: number }>('/term-dict', { terms })
         setStats({ enabled: d.enabled, count: d.count, aliasCount: d.alias_count })
-        setText(JSON.stringify(d.terms ?? terms, null, 2))
       },
       {
         loading: t('settings.termDict.saving'),
@@ -80,20 +255,14 @@ export default function TermDictPanel() {
     }
   }
 
-  const handleClear = async () => {
-    await toast.promise(
-      async () => {
-        const d = await api.put<TermDictPayload>('/term-dict', { terms: [] })
-        setStats({ enabled: d.enabled, count: d.count, aliasCount: d.alias_count })
-        setText('[]')
-      },
-      {
-        loading: t('settings.termDict.saving'),
-        success: t('settings.termDict.cleared'),
-        error: (e) => ({ title: t('settings.termDict.saveFailed'), description: e instanceof Error ? e.message : String(e) }),
-      },
-    ).catch(() => undefined)
+  const handleClear = () => {
+    setTerms([])
+    cancelEdit()
   }
+
+  const formDup = terms.some(
+    (e) => normName(e.name) === normName(form.name) && !(editing?.mode === 'edit' && terms[editing.index]?.name === e.name),
+  )
 
   return (
     <SettingsCard
@@ -104,28 +273,208 @@ export default function TermDictPanel() {
       <div className="space-y-4">
         <p className="text-[12.5px] text-muted-foreground">{t('settings.termDict.description')}</p>
 
-        {stats && (
-          <div className="flex items-center gap-2 text-[12px]">
-            {stats.enabled ? (
-              <span className="px-2 py-1 rounded-md bg-primary-soft text-primary font-medium">
+        {/* 工具行：状态 + 搜索 + 操作 */}
+        <div className="flex flex-wrap items-center gap-2">
+          {stats && (
+            stats.enabled ? (
+              <span className="px-2 py-1 rounded-md bg-primary-soft text-primary font-medium text-[12px]">
                 {t('settings.termDict.enabled', { count: stats.count, aliases: stats.aliasCount })}
               </span>
             ) : (
-              <span className="px-2 py-1 rounded-md bg-muted text-muted-foreground">
+              <span className="px-2 py-1 rounded-md bg-muted text-muted-foreground text-[12px]">
                 {t('settings.termDict.disabled')}
               </span>
-            )}
+            )
+          )}
+          <div className="flex-1 min-w-[140px]" />
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60" strokeWidth={1.75} />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('settings.termDict.searchPlaceholder')}
+              className="pl-8 pr-3 py-1.5 w-52 rounded-md border border-border/60 bg-background text-[12.5px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/40"
+            />
+          </div>
+          <ActionButton variant="secondary" size="sm" onAction={startNew}>
+            <Plus className="w-3.5 h-3.5 mr-1" />
+            {t('settings.termDict.addEntry')}
+          </ActionButton>
+          <ActionButton variant="secondary" size="sm" onAction={() => setImportOpen((v) => !v)}>
+            <Upload className="w-3.5 h-3.5 mr-1" />
+            {t('settings.termDict.importTitle')}
+          </ActionButton>
+          <ActionButton variant="secondary" size="sm" onAction={handleExport}>
+            <Download className="w-3.5 h-3.5 mr-1" />
+            {t('settings.termDict.export')}
+          </ActionButton>
+        </div>
+
+        {/* 新增/编辑表单 */}
+        {editing && (
+          <div className="rounded-lg border border-primary/30 bg-primary-softer/40 p-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-muted-foreground">{t('settings.termDict.nameLabel')}</label>
+                <input
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder={t('settings.termDict.nameLabel')}
+                  autoFocus
+                  className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[13px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                />
+                {formDup && <p className="text-[10.5px] text-destructive">{t('settings.termDict.nameLabel')}</p>}
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-muted-foreground">{t('settings.termDict.kindLabel')}</label>
+                <select
+                  value={form.kind}
+                  onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))}
+                  className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
+                >
+                  <option value="">—</option>
+                  {KINDS.map((k) => (
+                    <option key={k} value={k}>{t(`settings.termDict.kind.${k}`)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                {t('settings.termDict.aliasesLabel')} <span className="text-muted-foreground/60">· {t('settings.termDict.aliasesHint')}</span>
+              </label>
+              <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5">
+                {form.aliases.map((a) => (
+                  <span key={a} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-muted/70 text-[11.5px] font-mono text-foreground/85">
+                    {a}
+                    <button type="button" onClick={() => removeAlias(a)} className="w-3.5 h-3.5 rounded-full grid place-items-center text-muted-foreground/50 hover:text-destructive">
+                      <X className="w-2.5 h-2.5" strokeWidth={2} />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  value={form.aliasDraft}
+                  onChange={(e) => setForm((f) => ({ ...f, aliasDraft: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ',') {
+                      e.preventDefault()
+                      addAlias()
+                    }
+                  }}
+                  onBlur={addAlias}
+                  placeholder="wafer, 晶圆片"
+                  className="flex-1 min-w-[100px] bg-transparent outline-none text-[12.5px] text-foreground placeholder:text-muted-foreground/40"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-muted-foreground">{t('settings.termDict.descriptionLabel')}</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder={t('settings.termDict.descriptionPlaceholder')}
+                rows={2}
+                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[12.5px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30 resize-y"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <ActionButton size="sm" onAction={submitEntry}>{t('settings.termDict.saveEntry')}</ActionButton>
+              <ActionButton variant="ghost" size="sm" onAction={cancelEdit}>{t('common.cancel')}</ActionButton>
+            </div>
           </div>
         )}
 
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={10}
-          spellCheck={false}
-          placeholder={t('settings.termDict.editorPlaceholder')}
-          className="w-full rounded-lg border border-border/60 bg-background p-3 font-mono text-[12px] text-foreground leading-relaxed focus:outline-none focus:border-foreground/40 focus:ring-1 focus:ring-foreground/20"
-        />
+        {/* 导入合并 */}
+        {importOpen && (
+          <div className="rounded-lg border border-border p-4 space-y-3 bg-accent/20">
+            <div className="text-[12.5px] text-muted-foreground">{t('settings.termDict.importHint')}</div>
+            <textarea
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              rows={5}
+              spellCheck={false}
+              placeholder='[ { "name": "晶圆", "aliases": ["wafer"] } ]'
+              className="w-full rounded-md border border-border bg-background p-2.5 font-mono text-[12px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
+            />
+            {importError && <p className="text-[11.5px] text-destructive">{importError}</p>}
+            <div className="flex items-center gap-2">
+              <ActionButton size="sm" onAction={() => parseImport(importText)} disabled={!importText.trim()}>
+                {t('settings.termDict.importConfirm')}
+              </ActionButton>
+              <ActionButton variant="secondary" size="sm" onAction={() => fileRef.current?.click()}>
+                <FileUp className="w-3.5 h-3.5 mr-1" />
+                {t('settings.termDict.importFile')}
+              </ActionButton>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) onImportFile(f)
+                  e.target.value = ''
+                }}
+              />
+              <ActionButton variant="ghost" size="sm" onAction={() => setImportOpen(false)}>{t('common.cancel')}</ActionButton>
+            </div>
+          </div>
+        )}
+
+        {/* 条目列表 */}
+        <div className="rounded-lg border border-border/70 overflow-hidden">
+          {filtered.length === 0 ? (
+            <div className="px-4 py-8 text-center text-[12.5px] text-muted-foreground">
+              {terms.length === 0 ? t('settings.termDict.disabled') : t('settings.termDict.noResults')}
+            </div>
+          ) : (
+            filtered.map((e, fi) => {
+              const index = terms.indexOf(e)
+              return (
+                <div key={e.name} className={`flex items-start gap-3 px-4 py-2.5 ${fi !== filtered.length - 1 ? 'border-b border-border/40' : ''} bg-background`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[13px] font-medium text-foreground">{e.name}</span>
+                      {e.kind && (
+                        <span className="px-1.5 py-px rounded text-[10px] uppercase tracking-wider font-mono bg-accent text-muted-foreground border border-border/50">
+                          {t(`settings.termDict.kind.${e.kind}`)}
+                        </span>
+                      )}
+                    </div>
+                    {e.aliases.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {e.aliases.map((a) => (
+                          <span key={a} className="px-1.5 py-px rounded-full bg-muted/60 text-[10.5px] font-mono text-muted-foreground">{a}</span>
+                        ))}
+                      </div>
+                    )}
+                    {e.description && (
+                      <p className="text-[12px] text-muted-foreground/80 mt-1 leading-relaxed">{e.description}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(index)}
+                      className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      title={t('settings.termDict.edit')}
+                    >
+                      <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteEntry(index)}
+                      className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                      title={t('settings.termDict.delete')}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
 
         <div className="flex items-center gap-3">
           <ActionButton onAction={handleSave}>{t('settings.termDict.save')}</ActionButton>
@@ -133,7 +482,7 @@ export default function TermDictPanel() {
             <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
             {t('settings.termDict.rebuild')}
           </ActionButton>
-          {stats?.enabled && (
+          {terms.length > 0 && (
             <ActionButton variant="secondary" onAction={handleClear}>
               <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
               {t('settings.termDict.clear')}

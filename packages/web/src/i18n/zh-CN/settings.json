@@ -67,7 +67,32 @@
       "rebuildResult": "合并 {{merged}} 个实体，新建 {{created}} 个，kind 更新 {{kindUpdated}} 个",
       "rebuildFailed": "归并失败",
       "clear": "清空词典",
-      "cleared": "词典已清空（检索恢复默认行为）"
+      "cleared": "词典已清空（检索恢复默认行为）",
+      "searchPlaceholder": "搜索标准名或别名…",
+      "addEntry": "新增条目",
+      "edit": "编辑",
+      "delete": "删除",
+      "nameLabel": "标准名",
+      "aliasesLabel": "别名",
+      "aliasesHint": "回车或逗号添加",
+      "kindLabel": "类型",
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "这个实体是什么？（可选；优先级高于 AI 生成）",
+      "saveEntry": "保存条目",
+      "importTitle": "导入合并",
+      "importHint": "粘贴行业词典 JSON 或选择文件，按标准名去重合并",
+      "importFile": "选择文件",
+      "importPreview": "新增 {{add}} / 更新 {{update}} / 跳过 {{skip}}",
+      "importConfirm": "合并",
+      "importInvalid": "JSON 格式不正确",
+      "export": "导出",
+      "noResults": "没有匹配的条目",
+      "kind": {
+        "concept": "概念",
+        "person": "人物",
+        "tool": "工具",
+        "doc": "文档"
+      }
     }
   }
 }

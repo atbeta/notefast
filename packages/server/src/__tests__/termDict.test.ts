@@ -151,6 +151,30 @@ describe('resolve / expand', () => {
     expect(resolveDictTerm('tape-out')).toEqual({ name: '流片', display: '流片', kind: undefined })
     expect(expandDictTerm('（晶圆片）')).toEqual(['（晶圆片）', '晶圆', 'wafer'])
   })
+
+  test('description：加载保留、resolve 返回、空白剔除', () => {
+    writeDict([
+      { name: '晶圆', aliases: ['wafer'], description: '半导体制造的基底材料' },
+      { name: '流片', aliases: ['tape-out'] },
+      { name: '空描述', aliases: [], description: '   ' },
+    ])
+    // 标准名与别名都能带出 description
+    expect(resolveDictTerm('wafer')).toEqual({
+      name: '晶圆',
+      display: '晶圆',
+      kind: undefined,
+      description: '半导体制造的基底材料',
+    })
+    expect(resolveDictTerm('晶圆')).toEqual({
+      name: '晶圆',
+      display: '晶圆',
+      kind: undefined,
+      description: '半导体制造的基底材料',
+    })
+    // 无描述条目不带 description；空白描述被剔除
+    expect(resolveDictTerm('tape-out')).toEqual({ name: '流片', display: '流片', kind: undefined })
+    expect(getTermDict().entries.find((e) => e.name === '空描述')?.description).toBeUndefined()
+  })
 })
 
 describe('保存校验', () => {

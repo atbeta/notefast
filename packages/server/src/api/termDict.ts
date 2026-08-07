@@ -23,6 +23,7 @@ const termEntrySchema = z.object({
   name: z.string().min(1).max(200),
   aliases: z.array(z.string().min(1).max(200)).max(200).optional(),
   kind: z.enum(['concept', 'person', 'tool', 'doc']).optional(),
+  description: z.string().max(1000).optional(),
 })
 
 const termDictSchema = z.object({
@@ -42,6 +43,7 @@ termDict.get('/', (c) => {
       name: e.name,
       aliases: e.aliases,
       ...(e.kind ? { kind: e.kind } : {}),
+      ...(e.description ? { description: e.description } : {}),
     })),
   })
 })
@@ -51,7 +53,7 @@ termDict.put('/', zValidator('json', termDictSchema), (c) => {
   let saved
   try {
     saved = saveTermDictToDisk(
-      terms.map((t) => ({ name: t.name, aliases: t.aliases ?? [], ...(t.kind ? { kind: t.kind } : {}) })),
+      terms.map((t) => ({ name: t.name, aliases: t.aliases ?? [], ...(t.kind ? { kind: t.kind } : {}), ...(t.description ? { description: t.description } : {}) })),
     )
   } catch (e) {
     return c.json({ error: 'bad_request', message: e instanceof Error ? e.message : String(e) }, 400)
