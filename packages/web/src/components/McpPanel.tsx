@@ -20,6 +20,18 @@ interface McpTool {
 
 const TOKEN_PLACEHOLDER = 'nf_在此粘贴你的API令牌'
 
+/** 示例配置格式：OpenCode 与 Claude/Cursor 的 MCP 配置结构不同，优雅兼顾 */
+type ConfigFormat = 'opencode' | 'claude'
+const FORMAT_STORAGE_KEY = 'notefast.mcp.configFormat'
+
+function readFormat(): ConfigFormat {
+  try {
+    return localStorage.getItem(FORMAT_STORAGE_KEY) === 'claude' ? 'claude' : 'opencode'
+  } catch {
+    return 'opencode'
+  }
+}
+
 export default function McpPanel() {
   const { t } = useTranslation()
   const toast = useToast()
@@ -28,6 +40,7 @@ export default function McpPanel() {
   /** 本次会话生成的令牌明文（只显示一次；刷新后丢失） */
   const [revealedToken, setRevealedToken] = useState<string | null>(null)
   const [copied, setCopied] = useState<'config' | 'token' | null>(null)
+  const [format, setFormat] = useState<ConfigFormat>(readFormat)
 
   const endpoint = useMemo(() => `${window.location.origin}/mcp`, [])
 
@@ -37,14 +50,30 @@ export default function McpPanel() {
       .catch(() => {})
   }, [])
 
-  const configJson = useMemo(() => JSON.stringify({
-    mcpServers: {
-      notefast: {
-        url: endpoint,
-        headers: { Authorization: `Bearer ${revealedToken ?? TOKEN_PLACEHOLDER}` },
-      },
-    },
-  }, null, 2), [endpoint, revealedToken])
+  const switchFormat = (next: ConfigFormat) => {
+    setFormat(next)
+    setCopied(null)
+    try { localStorage.setItem(FORMAT_STORAGE_KEY, next) } catch { /* ignore */ }
+  }
+
+  const auth = `Bearer ${revealedToken ?? TOKEN_PLACEHOLDER}`
+  const configJson = useMemo(() => {
+    const base = { url: endpoint, headers: { Authorization: auth } }
+    return JSON.stringify(
+      format === 'opencode'
+        ? {
+            $schema: 'https://opencode.ai/config.json',
+            mcp: {
+              notefast: { type: 'remote', ...base, enabled: true },
+            },
+          }
+        : {
+            mcpServers: { notefast: base },
+          },
+      null,
+      2,
+    )
+  }, [endpoint, auth, format])
 
   const generateToken = async () => {
     setGenerating(true)
@@ -94,7 +123,25 @@ export default function McpPanel() {
 
         {/* 连接配置 */}
         <div className="space-y-1.5">
-          <div className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">{t('mcp.configLabel')}</div>
+          <div className="flex items-center justify-between">
+            <div className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">{t('mcp.configLabel')}</div>
+            <div className="flex items-center rounded-md border border-border bg-muted/40 p-0.5">
+              {(['opencode', 'claude'] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => switchFormat(f)}
+                  className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
+                    format === f
+                      ? 'bg-popover text-foreground shadow-sm border border-border/70'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {f === 'opencode' ? t('mcp.formatOpencode') : t('mcp.formatClaude')}
+                </button>
+              ))}
+            </div>
+          </div>
           <pre className="rounded-lg border border-border bg-muted/30 p-3.5 text-[12px] font-mono leading-[1.7] overflow-x-auto text-foreground/90">
             {configJson}
           </pre>
@@ -103,7 +150,9 @@ export default function McpPanel() {
               {copied === 'config' ? <Check className="w-3.5 h-3.5 text-emerald-600 mr-1.5" /> : <Copy className="w-3.5 h-3.5 mr-1.5" />}
               {copied === 'config' ? t('mcp.copied') : t('mcp.copyConfig')}
             </Button>
-            <span className="text-[11px] text-muted-foreground/70">{t('mcp.configHint')}</span>
+            <span className="text-[11px] text-muted-foreground/70">
+              {format === 'opencode' ? t('mcp.configHintOpencode') : t('mcp.configHintClaude')}
+            </span>
           </div>
         </div>
 
