@@ -58,6 +58,8 @@ rm -rf "$OUT_DIR"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/engine"
 cp "$APPLE_DIR/.build/release/NoteFastApp" "$APP/Contents/MacOS/$EXEC_NAME"
 cp "$APPLE_DIR/Resources/AppIcon.icns" "$APP/Contents/Resources/"
+# .md 文档图标（文件关联专用，区别于 App 图标；Info.plist 的 CFBundleTypeIconFile 引用）
+cp "$APPLE_DIR/Resources/DocIcon.icns" "$APP/Contents/Resources/"
 # engine 产物整体注入 Resources/engine（notefast-server + native/ + web-dist + VERSION）。
 # 注意：必须排除 notefast-engine-*.tar.gz——tarball 内含构建时未签名的原始副本，
 # 公证会扫描 bundle 内所有代码（含压缩包内），未签名副本会以「signature invalid /
@@ -98,6 +100,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <dict>
       <key>CFBundleTypeName</key><string>Markdown 文档</string>
       <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>CFBundleTypeIconFile</key><string>DocIcon</string>
       <key>LSHandlerRank</key><string>Alternate</string>
       <key>LSItemContentTypes</key>
       <array>

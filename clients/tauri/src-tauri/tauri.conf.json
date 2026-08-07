@@ -52,7 +52,8 @@
         "name": "Markdown Document",
         "description": "Markdown 文档",
         "role": "Viewer",
-        "rank": "Alternate"
+        "rank": "Alternate",
+        "icon": "icons/md-doc.ico"
       }
     ],
     "icon": [
