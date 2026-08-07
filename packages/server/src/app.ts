@@ -107,9 +107,13 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   const app = new Hono()
 
   // ───────────────────── 中间件 ─────────────────────
+  // CORS_ORIGINS：逗号分隔的精确匹配列表；任一项为字面 * 时放行任意 origin
+  // （hono cors 的数组是精确匹配，['*'] 不等于通配，必须传字符串 '*'）。
+  // 安全警示：免鉴权模式 + '*' 意味着任意网页可读写整个库，生产环境切勿使用。
+  const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173').split(',').map((s) => s.trim())
   app.use('*', cors({
-    origin: (process.env.CORS_ORIGINS || 'http://localhost:5173').split(',').map((s) => s.trim()),
-    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    origin: corsOrigins.includes('*') ? '*' : corsOrigins,
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
   }))
 

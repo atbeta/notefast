@@ -284,7 +284,8 @@ export const createDocSchema = z.object({
 })
 
 export const importMarkdownSchema = z.object({
-  notebook_id: z.string().min(1).max(200),
+  /** 笔记本 ID；缺省落到第一个笔记本（单 Notebook 场景），由服务端 resolve */
+  notebook_id: z.string().min(1).max(200).optional(),
   markdown: z.string().min(1).max(5_000_000),
   title: z.string().max(500).optional(),
   status: z.enum(['note', 'inbox']).optional(),

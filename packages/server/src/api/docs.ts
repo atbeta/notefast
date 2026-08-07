@@ -27,7 +27,7 @@ import {
 import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
 import { getShareByDocId, createShare, deleteShare, setShareExpiry, deleteSharesByDocIds, listSharedDocIds } from '../store/shares'
-import { insertDocFromMarkdown, insertChildBlocks } from '../services/docImport'
+import { insertDocFromMarkdown, insertChildBlocks, normalizeDocTags } from '../services/docImport'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany, fireDocAfterCreate, fireDocAfterStatusChange, fireDocAfterTagChange, fireDocAfterShare, fireDocAfterShareRevoked, fireDocAfterDelete } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { writeDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
@@ -212,8 +212,7 @@ docs.post('/', zValidator('json', createDocSchema), (c) => {
   const db = getDb()
   const input = c.req.valid('json')
   const status = input.status === 'inbox' ? 'inbox' : 'note'
-  const normalizeTag = (t: string) => t.toLowerCase().replace(/\s+/g, '-').slice(0, 64)
-  const initialTags = (input.tags || []).map(normalizeTag).filter(Boolean)
+  const initialTags = normalizeDocTags(input.tags || [])
   const { docId, blockIds } = insertDocFromMarkdown(db, {
     notebookId: input.notebook_id,
     title: input.title,

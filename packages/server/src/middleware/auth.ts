@@ -137,6 +137,13 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
         } catch { /* scopes 保持 null，落到底部 401 */ }
         if (scopes) {
           c.set('authScopes', scopes)
+          // write scope 强制：api_tokens 表签发的 token 按 scopes 收窄写操作
+          // （此前仅 /api-tokens 管理端点查 scope，read-only token 也能写全库）。
+          // admin（web-session）与显式 write 放行；env API_TOKEN / api.key / 免鉴权 /
+          // trustedLocal 均在上方分支以 admin 直通，不受此检查影响
+          if (isWrite && !requireScope(c, 'write')) {
+            return c.json({ error: 'forbidden', message: '该 Token 为只读（scopes 缺少 write），无法执行写操作' }, 403)
+          }
           // fire-and-forget 更新 last_used_at
           try { updateLastUsed(record.token_id) } catch { /* ignore */ }
           await next()

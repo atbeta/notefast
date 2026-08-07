@@ -8,7 +8,7 @@ import { fireAfterCreate, fireAfterCreateMany, fireDocAfterCreate } from '../ser
 import { emitAppEvent } from '../events'
 import { scheduleSyncNow } from '../sync/protocolManager'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
-import { EmptyMarkdownError, insertDocFromMarkdown, type DocSourceRef, type InsertDocFromMarkdownResult } from '../services/docImport'
+import { EmptyMarkdownError, insertDocFromMarkdown, normalizeDocTags, type DocSourceRef, type InsertDocFromMarkdownResult } from '../services/docImport'
 import {
   createDocFromMarkdownFile,
   DocFileImportError,
@@ -75,14 +75,21 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
     source = { ...input.source, content_hash: incomingHash, synced_at: new Date().toISOString() }
   }
 
+  // notebook_id 可选：缺省落到第一个笔记本（单 Notebook 场景）；显式给出需存在。
+  // 与 /import/zip 同一解析逻辑与错误行为。放在去重早退之后：deduplicated 命中保持 200 零副作用。
+  const notebookId = resolveNotebookId(input.notebook_id)
+  if (!notebookId) {
+    return c.json({ error: 'bad_request', message: '未找到可用的笔记本' }, 400)
+  }
+
   let result: InsertDocFromMarkdownResult
   try {
     result = insertDocFromMarkdown(db, {
-      notebookId: input.notebook_id,
+      notebookId,
       title,
       markdown: input.markdown,
       status: input.status,
-      tags: input.tags,
+      tags: input.tags ? normalizeDocTags(input.tags) : undefined,
       rejectEmpty: true,
       source,
     })
@@ -121,7 +128,7 @@ function stripDocSource(db: ReturnType<typeof getDb>, docId: string): void {
 
 /**
  * multipart 文件导入：字段 file（必填）、notebook_id（必填）、title / status / tags（可选）。
- * tags 可为 JSON 数组字符串或逗号分隔。
+ * tags 可为 JSON 数组字符串或逗号分隔；入库前统一 normalize（lowercase + 空白转连字符，同 POST /docs）。
  */
 importRouter.post('/file', async (c) => {
   const body = await c.req.parseBody({ all: true })
@@ -151,7 +158,8 @@ importRouter.post('/file', async (c) => {
   const title = typeof body['title'] === 'string' ? body['title'] : undefined
   const statusRaw = typeof body['status'] === 'string' ? body['status'] : undefined
   const status = statusRaw === 'inbox' || statusRaw === 'note' ? statusRaw : undefined
-  const tags = parseTagsField(body['tags'])
+  const parsedTags = parseTagsField(body['tags'])
+  const tags = parsedTags ? normalizeDocTags(parsedTags) : undefined
 
   const db = getDb()
   try {

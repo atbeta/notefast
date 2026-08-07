@@ -1,10 +1,10 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { blocksToMarkdown, buildBlockTree } from '@notefast/core'
+import { blocksToMarkdown, buildBlockTree, readTags } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import { initDb, closeDb, getDb } from '../db'
-import { fetchDocBlocks } from '../store/blocks'
+import { fetchDocBlocks, getBlockById } from '../store/blocks'
 import { insertDocFromMarkdown, appendMarkdownToDoc, findDocIdBySource } from '../services/docImport'
 
 let testDir: string
@@ -232,5 +232,92 @@ describe('打开即导入去重（POST /import/markdown + source）', () => {
     expect(r2.status).toBe(201) // 重新导入为新文档，而非 deduplicated
     const doc2 = ((await r2.json()) as { doc: { id: string } }).doc.id
     expect(doc2).not.toBe(doc1)
+  })
+})
+
+describe('POST /import/markdown 打磨（notebook_id 可选 + tags normalize）', () => {
+  async function buildApp() {
+    const { Hono } = await import('hono')
+    const { default: importRouter } = await import('../api/import')
+    const app = new Hono()
+    app.route('/import', importRouter)
+    return app
+  }
+
+  test('缺省 notebook_id 成功入第一个笔记本', async () => {
+    const app = await buildApp()
+    const res = await app.request('/import/markdown', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: '无笔记本导入', markdown: '# 无笔记本导入\n\n内容' }),
+    })
+    expect(res.status).toBe(201)
+    const docId = ((await res.json()) as { doc: { id: string } }).doc.id
+    const row = getBlockById(getDb(), docId)!
+    expect(row.notebook_id).toBe(notebookId) // initDb 创建的默认（第一个）笔记本
+  })
+
+  test('显式给出不存在的 notebook_id → 400（与 /import/zip 一致）', async () => {
+    const app = await buildApp()
+    const res = await app.request('/import/markdown', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notebook_id: 'no-such-notebook', markdown: '内容' }),
+    })
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as { error: string }
+    expect(body.error).toBe('bad_request')
+  })
+
+  test('tags 入库前 normalize（"My Tag" → "my-tag"，同 POST /docs 语义）', async () => {
+    const app = await buildApp()
+    const res = await app.request('/import/markdown', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markdown: '内容', tags: ['My Tag', 'UPPER', '已 有 连字符'] }),
+    })
+    expect(res.status).toBe(201)
+    const docId = ((await res.json()) as { doc: { id: string } }).doc.id
+    expect(readTags(getBlockById(getDb(), docId)!)).toEqual(['my-tag', 'upper', '已-有-连字符'])
+  })
+
+  test('file-open 形态回归：notebook_id + source、无 tags → 201', async () => {
+    const app = await buildApp()
+    const res = await app.request('/import/markdown', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        notebook_id: notebookId,
+        title: '外部打开',
+        markdown: '# 外部打开\n\n内容',
+        status: 'inbox',
+        source: { provider: 'file-open', external_id: '/tmp/regression-file-open.md' },
+      }),
+    })
+    expect(res.status).toBe(201)
+    const docId = ((await res.json()) as { doc: { id: string } }).doc.id
+    expect(findDocIdBySource(getDb(), 'file-open', '/tmp/regression-file-open.md')).toBe(docId)
+  })
+
+  test('/import/file 的 tags 同样 normalize（multipart 逗号分隔与 JSON 数组）', async () => {
+    const app = await buildApp()
+
+    const form = new FormData()
+    form.append('file', new File(['# 文件导入\n\n内容'], 'note.md', { type: 'text/markdown' }))
+    form.append('notebook_id', notebookId)
+    form.append('tags', 'My Tag,UPPER')
+    const res = await app.request('/import/file', { method: 'POST', body: form })
+    expect(res.status).toBe(201)
+    const docId = ((await res.json()) as { doc: { id: string } }).doc.id
+    expect(readTags(getBlockById(getDb(), docId)!)).toEqual(['my-tag', 'upper'])
+
+    const form2 = new FormData()
+    form2.append('file', new File(['# 文件导入二\n\n内容'], 'note2.md', { type: 'text/markdown' }))
+    form2.append('notebook_id', notebookId)
+    form2.append('tags', '["Json Tag"]')
+    const res2 = await app.request('/import/file', { method: 'POST', body: form2 })
+    expect(res2.status).toBe(201)
+    const docId2 = ((await res2.json()) as { doc: { id: string } }).doc.id
+    expect(readTags(getBlockById(getDb(), docId2)!)).toEqual(['json-tag'])
   })
 })

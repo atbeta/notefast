@@ -98,6 +98,10 @@ External AI agents (Claude Desktop, Cursor, etc.) connect to NoteFast via MCP:
 
 Available tools: `search`, `get_doc`, `get_block`, `create_doc`, `create_block`, `update_block`, `semantic_search`, `chat`, `list_docs`, `set_doc_tags`, `autolink_run`, and more.
 
+## Capture
+
+Send web selections, page links, or any external content into the inbox via a browser bookmarklet, iOS Shortcuts, or plain HTTP — deduplicated by source URL. Setup guide: [docs/capture.md](docs/capture.md).
+
 ## Keyboard Shortcuts
 
 | Key | Action |
@@ -123,7 +127,7 @@ Available tools: `search`, `get_doc`, `get_block`, `create_doc`, `create_block`,
 | `AI_API_KEY` | LLM API key |
 | `EMBEDDING_PROVIDER` | Embedding provider preset ID |
 | `EMBEDDING_API_KEY` | Embedding API key |
-| `CORS_ORIGINS` | Comma-separated allowed origins for the Web UI (default `http://localhost:5173`); **must set for production** |
+| `CORS_ORIGINS` | Comma-separated allowed origins for the Web UI (default `http://localhost:5173`); **must set for production**. A literal `*` entry allows any origin — **dangerous**: in unauthenticated mode (no auth variables set) any web page can read/write the entire knowledge base; never use `*` in production |
 
 ### ⚠️ Production Deployment
 
@@ -131,7 +135,7 @@ Before exposing NoteFast publicly (not just `127.0.0.1`), set:
 
 - `AUTH_PASSWORD` — required for Web UI login
 - `API_TOKEN` (or split `READ_TOKEN` + `WRITE_TOKEN`) — required for API / MCP access
-- `CORS_ORIGINS` — comma-separated origin allowlist; the default `http://localhost:5173` is **insecure** for production
+- `CORS_ORIGINS` — comma-separated origin allowlist; the default `http://localhost:5173` is **insecure** for production, and `*` disables the allowlist entirely (only acceptable for local development)
 
 Auth-mode behavior: if **any** auth variable is set, the server runs in authenticated mode and rejects unauthenticated requests. If **none** are set, it runs in unauthenticated dev mode (every request treated as admin) and prints a startup warning to stderr.
 

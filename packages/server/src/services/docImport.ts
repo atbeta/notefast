@@ -71,6 +71,11 @@ export interface InsertDocFromMarkdownResult {
   parsedCount: number
 }
 
+/** 文档创建/导入入口的 tag 归一化：lowercase + 空白转连字符 + 限长 64（POST /docs 与 /import/* 同一语义） */
+export function normalizeDocTags(tags: readonly string[]): string[] {
+  return tags.map((t) => t.toLowerCase().replace(/\s+/g, '-').slice(0, 64)).filter(Boolean)
+}
+
 export function insertDocFromMarkdown(
   db: Db,
   opts: InsertDocFromMarkdownOptions,

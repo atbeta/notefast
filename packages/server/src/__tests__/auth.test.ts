@@ -7,20 +7,28 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { initDb, closeDb } from '../db'
 
-let originalToken: string | undefined
-let originalPassword: string | undefined
 let testDir: string
+const AUTH_ENV_KEYS = ['API_TOKEN', 'AUTH_PASSWORD', 'READ_TOKEN', 'WRITE_TOKEN'] as const
+let savedAuthEnv: Record<string, string | undefined>
 
 beforeAll(() => {
-  originalToken = process.env.API_TOKEN
-  originalPassword = process.env.AUTH_PASSWORD
+  // bun test 全部文件共享一个进程：先清空四个鉴权 env 再 initDb，
+  // 避免泄漏的 env 触发 api.key 生成并写入 process.env.API_TOKEN
+  savedAuthEnv = {}
+  for (const k of AUTH_ENV_KEYS) {
+    savedAuthEnv[k] = process.env[k]
+    delete process.env[k]
+  }
   testDir = mkdtempSync(join('/tmp', 'notefast-auth-test-'))
   initDb(testDir)
 })
 
 afterAll(() => {
-  process.env.API_TOKEN = originalToken
-  process.env.AUTH_PASSWORD = originalPassword
+  // 还原未设置的变量必须显式 delete（Bun ≥1.2 下赋 undefined 会写入字符串 "undefined"）
+  for (const k of AUTH_ENV_KEYS) {
+    if (savedAuthEnv[k] === undefined) delete process.env[k]
+    else process.env[k] = savedAuthEnv[k]
+  }
   closeDb()
   rmSync(testDir, { recursive: true, force: true })
 })
@@ -29,6 +37,7 @@ function createApp() {
   const app = new Hono()
   app.use('/api/*', authMiddleware)
   app.get('/api/v1/test', (c) => c.json({ ok: true }))
+  app.post('/api/v1/test', (c) => c.json({ ok: true }))
   return app
 }
 
@@ -238,6 +247,81 @@ describe('authMiddleware', () => {
         headers: { Authorization: `Bearer ${plain}` },
       }),
     )
+    expect(res.status).toBe(200)
+  })
+})
+
+describe('scoped token 的 write scope 强制', () => {
+  // api_tokens 表签发的 token 按 scopes 收窄写操作：
+  // 非 GET/HEAD/OPTIONS 且 scopes 不含 write/admin → 403；读操作不受影响。
+  // env API_TOKEN / 免鉴权 / web-session（admin）保持全能力。
+
+  function enablePasswordAuth() {
+    process.env.API_TOKEN = ''
+    process.env.AUTH_PASSWORD = 'scoped-pw'
+    process.env.READ_TOKEN = ''
+    process.env.WRITE_TOKEN = ''
+  }
+
+  test('read-only token：写 403（forbidden），读 200', async () => {
+    enablePasswordAuth()
+    const { plain } = createToken('ro-client', ['read'])
+    const app = createApp()
+
+    const write = await app.fetch(new Request('http://localhost/api/v1/test', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${plain}` },
+    }))
+    expect(write.status).toBe(403)
+    const body = (await write.json()) as { error: string }
+    expect(body.error).toBe('forbidden')
+
+    const read = await app.fetch(new Request('http://localhost/api/v1/test', {
+      headers: { Authorization: `Bearer ${plain}` },
+    }))
+    expect(read.status).toBe(200)
+  })
+
+  test('read+write token：读写均通', async () => {
+    enablePasswordAuth()
+    const { plain } = createToken('rw-client', ['read', 'write'])
+    const app = createApp()
+
+    const write = await app.fetch(new Request('http://localhost/api/v1/test', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${plain}` },
+    }))
+    expect(write.status).toBe(200)
+
+    const read = await app.fetch(new Request('http://localhost/api/v1/test', {
+      headers: { Authorization: `Bearer ${plain}` },
+    }))
+    expect(read.status).toBe(200)
+  })
+
+  test('env API_TOKEN 的写操作不受 scopes 强制影响', async () => {
+    process.env.API_TOKEN = 'env-full-token'
+    process.env.AUTH_PASSWORD = ''
+    process.env.READ_TOKEN = ''
+    process.env.WRITE_TOKEN = ''
+
+    const app = createApp()
+    const res = await app.fetch(new Request('http://localhost/api/v1/test', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer env-full-token' },
+    }))
+    expect(res.status).toBe(200)
+  })
+
+  test('web-session（admin scopes）的写操作不受影响', async () => {
+    enablePasswordAuth()
+    const { plain } = createWebSessionToken(true)
+
+    const app = createApp()
+    const res = await app.fetch(new Request('http://localhost/api/v1/test', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${plain}` },
+    }))
     expect(res.status).toBe(200)
   })
 })
