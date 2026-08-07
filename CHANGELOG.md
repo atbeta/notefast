@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.50.0](https://github.com/atbeta/notefast/compare/v0.49.0...v0.50.0) (2026-08-07)
+
+
+### Features
+
+* **entities:** merge substring duplicate suggestions directly instead of writing term-dict ([38bd3fa](https://github.com/atbeta/notefast/commit/38bd3fa65fea2f2cdc8059641e7928e9b25265cb))
+* **server:** capture channel readiness — CORS '*', write-scope enforcement, optional notebook, tag normalize ([f4734f1](https://github.com/atbeta/notefast/commit/f4734f101ba7edf17e939ef56bd1172f78e26192))
+* **server:** prune entity_changes after sync compaction ([35d6688](https://github.com/atbeta/notefast/commit/35d6688dde2e65f499ea8ca67d5756fd7af54651))
+* **web:** capture settings panel with bookmarklet generator ([6039482](https://github.com/atbeta/notefast/commit/60394822b7c2a807cccdae8d233567cebe7eaff2))
+* **web:** editor math preview and selection bubble with streaming refine ([fff994d](https://github.com/atbeta/notefast/commit/fff994d64f5359e167725055030b7c9785e6cb90))
+* **web:** render LaTeX math in AI chat messages ([3510549](https://github.com/atbeta/notefast/commit/351054947e364773d7d14e1be6817a23db661cd9))
+
+
+### Bug Fixes
+
+* **server:** strip inline think blocks from /ai/write stream ([8277158](https://github.com/atbeta/notefast/commit/8277158128bdf1f6b41e57cccc37f13cf00b5a6a))
+* **server:** warn loudly when unauthenticated mode combines with CORS '*' ([7d7c62b](https://github.com/atbeta/notefast/commit/7d7c62bbcb5a02f6472d92aefe0e5af53a4424d2))
+* **web:** fall back to selection-start anchor and prefer the higher end for multi-line selections ([6f9f750](https://github.com/atbeta/notefast/commit/6f9f7500d04c793bd381adea5b45edb91d7cde3f))
+* **web:** show actual merge direction in entity suggestion rows ([fc4e4c1](https://github.com/atbeta/notefast/commit/fc4e4c19f05492de4615c77cc57dffa3de629c74))
+
 ## [0.49.0](https://github.com/atbeta/notefast/compare/v0.48.0...v0.49.0) (2026-08-07)
 
 
