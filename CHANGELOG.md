@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.46.0](https://github.com/atbeta/notefast/compare/v0.45.0...v0.46.0) (2026-08-07)
+
+
+### Features
+
+* add doc trash with restore and MCP delete_doc tool ([0a8f4a4](https://github.com/atbeta/notefast/commit/0a8f4a41903c4f283cec3fb2fc7db1e256f1ad75))
+* **import:** dedupe file-open imports via source path upsert ([2e63913](https://github.com/atbeta/notefast/commit/2e63913b9a265f6109641c6976ac4580ba894384))
+* **mcp:** add document share tools (share_doc / get_share / unshare_doc) ([df3be33](https://github.com/atbeta/notefast/commit/df3be339a0484d9324f399b76db67b6eb5627a45))
+* **web:** render LaTeX math in reading view ([675d7ab](https://github.com/atbeta/notefast/commit/675d7ab3166e6b840993115628554d3b636526df))
+
+
+### Bug Fixes
+
+* **ai:** surface doc_id/block_id in chat context, validate list_docs status ([104d216](https://github.com/atbeta/notefast/commit/104d216b64cabc85f71a21e579188c84dd3d3156))
+* **markdown:** preserve list markers and blank lines between blocks ([47ed3a4](https://github.com/atbeta/notefast/commit/47ed3a42a7a4c6c03b77d400ebe3931b51de2866))
+
 ## [0.45.0](https://github.com/atbeta/notefast/compare/v0.44.0...v0.45.0) (2026-08-05)
 
 
