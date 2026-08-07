@@ -109,7 +109,9 @@ export default function Layout({ children, contentClassName }: { children: React
     }
     window.addEventListener('keydown', handler, { capture: true })
     return () => window.removeEventListener('keydown', handler, { capture: true })
-  }, [toggleSidebar, navigate, paletteOpen, resolvedTheme, setTheme])
+    // aiChatOpen 必须在 deps：handler 闭包读它做开关判断，漏了会 stale closure——
+    // Ctrl+J 永远用旧值（打开后再次按仍是「开」→ 无法连续切换）
+  }, [toggleSidebar, navigate, paletteOpen, aiChatOpen, resolvedTheme, setTheme])
 
   return (
     // 根容器 pt/pb 用 env() 吸收刘海/Home 指示条安全区（非 standalone/无刘海环境恒为 0，不影响现有布局）
