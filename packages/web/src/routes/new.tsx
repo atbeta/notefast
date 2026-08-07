@@ -7,10 +7,7 @@ import { request, fetchWithAuth, ApiError } from '../hooks/useAPI'
 import { currentLocale } from '../lib/time'
 import PageHeader from '../components/PageHeader'
 import SubNavTabs from '../components/SubNavTabs'
-
-function normalizeTag(tag: string): string {
-  return tag.toLowerCase().replace(/\s+/g, '-').slice(0, 64)
-}
+import TagPickerPopover from '../components/TagPickerPopover'
 
 export default function NewDocPage() {
   const { t } = useTranslation()
@@ -31,8 +28,9 @@ export default function NewDocPage() {
     errors: string[]
   } | null>(null)
   const [tags, setTags] = useState<string[]>([])
-  const [tagDraft, setTagDraft] = useState('')
+  const [pickerOpen, setPickerOpen] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const tagTriggerRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     request<Notebook[]>('/notebooks')
@@ -82,28 +80,8 @@ export default function NewDocPage() {
 
   const handleCancel = () => navigate('/')
 
-  const handleAddTag = () => {
-    const normalized = normalizeTag(tagDraft.trim())
-    if (!normalized || tags.includes(normalized)) {
-      setTagDraft('')
-      return
-    }
-    setTags((prev) => [...prev, normalized].sort())
-    setTagDraft('')
-  }
-
   const handleRemoveTag = (tag: string) => {
     setTags((prev) => prev.filter((item) => item !== tag))
-  }
-
-  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleAddTag()
-    } else if (e.key === 'Escape') {
-      setTagDraft('')
-      e.currentTarget.blur()
-    }
   }
 
   const handleSuggestTitle = async () => {
@@ -259,19 +237,26 @@ export default function NewDocPage() {
                   </button>
                 </span>
               ))}
-              <div className="inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full border border-dashed border-border/70 hover:border-foreground/30 transition-colors">
+              <button
+                ref={tagTriggerRef}
+                type="button"
+                onClick={() => setPickerOpen(true)}
+                aria-label={t('tagEditor.pickTag')}
+                className="inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full border border-dashed border-border/70 hover:border-foreground/30 text-muted-foreground/70 hover:text-foreground transition-colors"
+              >
                 <Plus className="w-3 h-3 text-muted-foreground/60" strokeWidth={2} />
-                <input
-                  value={tagDraft}
-                  onChange={(e) => setTagDraft(e.target.value)}
-                  onKeyDown={handleTagKeyDown}
-                  onBlur={() => {
-                    if (tagDraft.trim()) handleAddTag()
+                <span className="text-[11.5px]">{t('tagEditor.addTag')}</span>
+              </button>
+              {pickerOpen && (
+                <TagPickerPopover
+                  anchorRef={tagTriggerRef}
+                  existing={tags}
+                  onPick={(tag) => {
+                    setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag].sort()))
                   }}
-                  placeholder={t('tagEditor.addTag')}
-                  className="bg-transparent border-none outline-none text-[11.5px] w-16 placeholder:text-muted-foreground/40 focus:w-28 transition-[width] duration-200"
+                  onClose={() => setPickerOpen(false)}
                 />
-              </div>
+              )}
             </div>
           </div>
 

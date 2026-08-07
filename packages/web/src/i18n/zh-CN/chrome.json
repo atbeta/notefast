@@ -10,7 +10,16 @@
   },
   "tagEditor": {
     "addTag": "加标签",
-    "removeTag": "移除标签 {{tag}}"
+    "removeTag": "移除标签 {{tag}}",
+    "pickTag": "选择或创建标签"
+  },
+  "tagPicker": {
+    "title": "选择标签",
+    "placeholder": "搜索或创建标签…",
+    "createTag": "创建「{{tag}}」",
+    "noMatch": "没有匹配的标签，回车创建新标签",
+    "noTags": "还没有标签，输入后回车创建",
+    "hint": "↑↓ 选择 · Enter 确认 · Esc 关闭"
   },
   "tagFilter": {
     "tagMatchMode": "标签匹配方式",

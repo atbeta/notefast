@@ -10,7 +10,16 @@
   },
   "tagEditor": {
     "addTag": "Add tag",
-    "removeTag": "Remove tag {{tag}}"
+    "removeTag": "Remove tag {{tag}}",
+    "pickTag": "Pick or create tag"
+  },
+  "tagPicker": {
+    "title": "Pick tag",
+    "placeholder": "Search or create tag…",
+    "createTag": "Create “{{tag}}”",
+    "noMatch": "No matching tags — press Enter to create",
+    "noTags": "No tags yet — type and press Enter to create",
+    "hint": "↑↓ select · Enter confirm · Esc close"
   },
   "tagFilter": {
     "tagMatchMode": "Tag matching mode",

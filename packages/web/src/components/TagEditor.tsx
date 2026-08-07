@@ -3,14 +3,15 @@
  *
  * 纯展示 + 行内编辑：
  * - 点击 chip 的 × 删除 tag（乐观更新）
- * - 输入框敲 Enter / 失焦提交新 tag（自动 normalize）
+ * - 点「+」打开 TagPickerPopover：搜索/复用已有标签或创建新标签
  * - 用 api 请求 → 自动带 Authorization header
  */
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Tag as TagIcon, X, Plus, Loader2 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useTranslation } from 'react-i18next'
+import TagPickerPopover from './TagPickerPopover'
 
 export interface TagEditorProps {
   docId: string
@@ -20,8 +21,9 @@ export interface TagEditorProps {
 
 export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
   const { t } = useTranslation()
-  const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   const persist = async (next: string[]) => {
     setSaving(true)
@@ -35,18 +37,9 @@ export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
     }
   }
 
-  const handleAdd = async () => {
-    const raw = draft.trim()
-    if (!raw) return
-    // 本地先去重 + normalize（与后端规则保持一致：小写、空格 → -）
-    const normalized = raw.toLowerCase().replace(/\s+/g, '-').slice(0, 64)
-    if (!normalized || tags.includes(normalized)) {
-      setDraft('')
-      return
-    }
-    const next = [...tags, normalized].sort()
-    setDraft('')
-    await persist(next)
+  const handleAdd = async (tag: string) => {
+    if (!tag || tags.includes(tag)) return
+    await persist([...tags, tag].sort())
   }
 
   const handleRemove = async (tag: string) => {
@@ -75,29 +68,27 @@ export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
           </button>
         </span>
       ))}
-      <div className="inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full border border-dashed border-border/70 hover:border-foreground/30 transition-colors">
-        <Plus className="w-3 h-3 text-muted-foreground/60" strokeWidth={2} />
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              handleAdd()
-            } else if (e.key === 'Escape') {
-              setDraft('')
-              ;(e.currentTarget as HTMLInputElement).blur()
-            }
-          }}
-          onBlur={() => {
-            if (draft.trim()) handleAdd()
-          }}
-          placeholder={t('tagEditor.addTag')}
-          disabled={saving}
-          className="bg-transparent border-none outline-none text-[11.5px] w-16 placeholder:text-muted-foreground/40 focus:w-28 transition-[width] duration-200"
-        />
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setPickerOpen(true)}
+        disabled={saving}
+        aria-label={t('tagEditor.pickTag')}
+        className="inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full border border-dashed border-border/70 hover:border-foreground/30 text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-40"
+      >
+        <Plus className="w-3 h-3" strokeWidth={2} />
+        <span className="text-[11.5px]">{t('tagEditor.addTag')}</span>
         {saving && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground/60" />}
-      </div>
+      </button>
+      {pickerOpen && (
+        <TagPickerPopover
+          anchorRef={triggerRef}
+          existing={tags}
+          onPick={(tag) => void handleAdd(tag)}
+          onClose={() => setPickerOpen(false)}
+          disabled={saving}
+        />
+      )}
     </div>
   )
 }
