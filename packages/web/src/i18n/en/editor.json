@@ -85,6 +85,14 @@
     "helpCodeBlock": "Expand empty code block",
     "helpExit": "Exit (draft kept)"
   },
+  "selectionBubble": {
+    "label": "Selection actions",
+    "askAi": "Ask AI",
+    "refine": "Rewrite",
+    "generating": "Generating…",
+    "stop": "Stop",
+    "refineFailed": "Rewrite failed, please try again"
+  },
   "share": {
     "expiryText": "expires {{date}} ({{days}} days left)",
     "aiExcludeConfirm": "This document is marked “Hidden from AI”.\n\nOnce you enable public sharing, anyone with the link can read the full text without logging in. Still enable sharing?",

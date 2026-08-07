@@ -825,7 +825,7 @@ html.theme-fading *::after {
 }
 
 /* ────────────────────────────────────────────────────────────────
-   CodeMirror 编辑器附加样式（图片预览 widget / AI ghost text）
+   CodeMirror 编辑器附加样式（图片/表格/公式预览 widget、AI ghost text）
    ──────────────────────────────────────────────────────────────── */
 .cm-image-preview {
   padding: 6px 0;
@@ -889,6 +889,32 @@ html.theme-fading *::after {
   max-height: 40px;
   border-radius: 4px;
   vertical-align: middle;
+}
+
+/* 块级公式内联预览（```math 围栏；光标在块内时回退源码），居中/overflow-x 对齐阅读态 MathBlock */
+.cm-math-preview {
+  margin: 6px 0;
+  padding: 12px 16px;
+  overflow-x: auto;
+  border: 1px solid rgb(var(--border));
+  border-radius: 8px;
+  cursor: text;
+  text-align: center;
+}
+.cm-math-preview .katex-display {
+  margin: 0;
+}
+.cm-math-preview-status {
+  font-size: 13px;
+  color: rgb(var(--muted-foreground) / 0.6);
+}
+.cm-math-preview-source {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  text-align: left;
+  color: rgb(var(--foreground) / 0.85);
 }
 
 .cm-ai-ghost {

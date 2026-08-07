@@ -17,8 +17,12 @@ import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 import { editorTheme, editorHighlight } from './cm/theme'
 import { imagePreview } from './cm/imagePreview'
 import { tablePreview } from './cm/tablePreview'
+import { mathPreview } from './cm/mathPreview'
 import { ghostTextExtension, ghostTextState, setGhostText, clearGhostText } from './cm/ghostText'
 import { editorKeymap } from './cm/keymap'
+import { SelectionReporter } from './cm/selectionReport'
+import type { SelectionAnchor } from './cm/selectionReport'
+import { buildReplaceRangeUpdate } from './cm/refineReplace'
 
 /** 暴露给工具栏 / 上传 hook / 父组件的命令式编辑 API（与旧 textarea 版签名保持一致） */
 export interface CodeMirrorEditorHandle {
@@ -26,6 +30,8 @@ export interface CodeMirrorEditorHandle {
   wrapSelection: (left: string, right?: string) => void
   focus: () => void
   getSelectionText: () => string
+  /** 改写流式原地替换：把 [from, to) 渐进替换为 text（选区气泡用） */
+  replaceRange: (from: number, to: number, text: string) => void
 }
 
 interface CodeMirrorEditorProps {
@@ -39,6 +45,8 @@ interface CodeMirrorEditorProps {
   ghostText: string
   onGhostAccept: () => void
   onGhostDismiss: () => void
+  /** 非空选区 debounce 上报锚点（含 rect/text/from/to）；清空、失焦、卸载报 null */
+  onSelectionChange?: (anchor: SelectionAnchor | null) => void
   placeholder?: string
   autoFocus?: boolean
 }
@@ -106,12 +114,25 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
           const { from, to } = view.state.selection.main
           return view.state.sliceDoc(from, to)
         },
+        replaceRange: (from, to, text) => {
+          const view = viewRef.current
+          if (!view) return
+          view.dispatch({
+            ...buildReplaceRangeUpdate(view.state.doc.length, from, to, text),
+            scrollIntoView: true,
+            userEvent: 'input',
+          })
+        },
       }),
       [],
     )
 
     useEffect(() => {
       if (!hostRef.current) return
+      // 选区气泡上报：非空选区 debounce 后经 onSelectionChange 报锚点（桌面端 SelectionBubble）
+      const selectionReporter = new SelectionReporter((anchor) =>
+        propsRef.current.onSelectionChange?.(anchor),
+      )
       const view = new EditorView({
         parent: hostRef.current,
         state: EditorState.create({
@@ -131,6 +152,7 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
             cmPlaceholder(propsRef.current.placeholder ?? ''),
             imagePreview,
             tablePreview,
+            mathPreview,
             ghostTextExtension,
             editorKeymap({
               hasGhost: () => !!propsRef.current.ghostText,
@@ -190,6 +212,30 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
                 propsRef.current.onGhostDismiss()
               }
             }),
+            // 选区上报：updateListener 而非 mouseup/keyup（键盘 shift 选区也能覆盖）
+            EditorView.updateListener.of((update) => {
+              if (!update.selectionSet && !update.docChanged) return
+              if (update.state.selection.main.empty) {
+                selectionReporter.clear()
+                return
+              }
+              selectionReporter.schedule(() => {
+                const v = viewRef.current
+                if (!v || !v.hasFocus) return null
+                const cur = v.state.selection.main
+                if (cur.empty) return null
+                const text = v.state.sliceDoc(cur.from, cur.to)
+                if (!text.trim()) return null
+                const rect = v.coordsAtPos(cur.to)
+                if (!rect) return null
+                return { rect, text, from: cur.from, to: cur.to }
+              })
+            }),
+            EditorView.domEventHandlers({
+              blur() {
+                selectionReporter.clear()
+              },
+            }),
             keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
           ],
         }),
@@ -202,6 +248,8 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
         view.focus()
       }
       return () => {
+        // 卸载时报 null 收起气泡（父组件仍在，仅切预览/关编辑器）
+        selectionReporter.clear()
         if ((window as unknown as { __cmView?: EditorView }).__cmView === view) {
           delete (window as unknown as { __cmView?: EditorView }).__cmView
         }

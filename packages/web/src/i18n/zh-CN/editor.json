@@ -85,6 +85,14 @@
     "helpCodeBlock": "展开空代码块",
     "helpExit": "退出（保留草稿）"
   },
+  "selectionBubble": {
+    "label": "选区操作",
+    "askAi": "问 AI",
+    "refine": "改写",
+    "generating": "生成中…",
+    "stop": "停止",
+    "refineFailed": "改写失败，请重试"
+  },
   "share": {
     "expiryText": "{{date}} 失效（还剩 {{days}} 天）",
     "aiExcludeConfirm": "这篇文档已标记「对 AI 隐藏」。\n\n开启公开分享后，任何人获得链接均可阅读全文，无需登录。确认仍要开启分享吗？",

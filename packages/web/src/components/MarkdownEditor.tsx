@@ -16,6 +16,9 @@ import EditorToolbar, { ShortcutsHelp } from './editor/EditorToolbar'
 import EditorFooter from './editor/EditorFooter'
 import CodeMirrorEditor from './editor/CodeMirrorEditor'
 import type { CodeMirrorEditorHandle } from './editor/CodeMirrorEditor'
+import SelectionBubble from './editor/SelectionBubble'
+import type { SelectionAnchor } from './editor/cm/selectionReport'
+import { RefineSession } from './editor/refineSession'
 import { useAiWriting } from '../ai/useAiWriting'
 
 interface MarkdownEditorProps {
@@ -69,6 +72,11 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
   const [showHelp, setShowHelp] = useState(false)
   const [ghostText, setGhostText] = useState('')
   const editorRef = useRef<CodeMirrorEditorHandle>(null)
+  // 选区气泡（桌面端）：非空选区锚点 + 改写流式会话
+  const [selAnchor, setSelAnchor] = useState<SelectionAnchor | null>(null)
+  const [refining, setRefining] = useState(false)
+  const [refineRect, setRefineRect] = useState<SelectionAnchor['rect'] | null>(null)
+  const refineSessionRef = useRef<RefineSession | null>(null)
 
   const aiWriting = useAiWriting()
 
@@ -239,7 +247,7 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
   const imageUploader = useImageUploader({ insertAtCursor })
 
   const handleAiContinue = useCallback(() => {
-    if (aiWriting.isStreaming) return
+    if (aiWriting.isStreaming || refineSessionRef.current) return
     let accumulated = ''
     void aiWriting.streamContinue(content, {
       onToken: (token) => {
@@ -262,6 +270,75 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
     aiWriting.cancel()
     setGhostText('')
   }, [aiWriting])
+
+  // ── 选区气泡：问 AI / 改写流式原地替换 ──
+
+  const handleSelectionChange = useCallback((anchor: SelectionAnchor | null) => {
+    setSelAnchor(anchor)
+  }, [])
+
+  const endRefine = useCallback(() => {
+    refineSessionRef.current = null
+    setRefining(false)
+    setRefineRect(null)
+  }, [])
+
+  const handleRefineStop = useCallback(() => {
+    endRefine()
+    aiWriting.cancel()
+  }, [endRefine, aiWriting])
+
+  const handleBubbleDismiss = useCallback(() => {
+    setSelAnchor(null)
+  }, [])
+
+  const handleBubbleRefine = useCallback(
+    (anchor: SelectionAnchor) => {
+      if (refineSessionRef.current) return
+      // 改写接管续写：取消进行中的 ghost 续写流
+      handleGhostDismiss()
+      const session = new RefineSession(anchor.from, anchor.to, (from, to, text) => {
+        editorRef.current?.replaceRange(from, to, text)
+      })
+      refineSessionRef.current = session
+      setRefineRect(anchor.rect)
+      setRefining(true)
+      setSelAnchor(null)
+      let accumulated = ''
+      // instruction 传空串 = 通用润色（useAiWriting 对空串不下发该字段；服务端跟随内容语言）
+      void aiWriting
+        .streamRefine(anchor.text, '', {
+          onToken: (token) => {
+            if (refineSessionRef.current !== session) return
+            accumulated += token
+            session.apply(accumulated)
+          },
+        })
+        .then(() => {
+          if (refineSessionRef.current === session) endRefine()
+        })
+        .catch(() => {
+          // 主动取消 / 外部编辑中断：会话已不在，静默（保留已替换内容）
+          if (refineSessionRef.current !== session) return
+          endRefine()
+          toast.error({ title: t('selectionBubble.refineFailed') })
+        })
+    },
+    [aiWriting, endRefine, handleGhostDismiss, toast, t],
+  )
+
+  // 改写流式期间的外部编辑（非 session.apply 自身的 dispatch）：取消流，保留已替换内容
+  const handleEditorChange = useCallback(
+    (value: string) => {
+      setContent(value)
+      const session = refineSessionRef.current
+      if (session && session.isExternalEdit()) {
+        endRefine()
+        aiWriting.cancel()
+      }
+    },
+    [endRefine, aiWriting],
+  )
 
   const lines = content === '' ? 1 : content.split('\n').length
   const charCount = content.length
@@ -364,21 +441,32 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
               )}
             </div>
           ) : (
-            <CodeMirrorEditor
-              ref={editorRef}
-              value={content}
-              onChange={setContent}
-              onSave={handleSave}
-              onToggleMode={() => setMode((m) => (m === 'edit' ? 'view' : 'edit'))}
-              onAiContinue={handleAiContinue}
-              onCancel={handleCancel}
-              onImageFile={imageUploader.uploadImage}
-              ghostText={ghostText}
-              onGhostAccept={handleGhostAccept}
-              onGhostDismiss={handleGhostDismiss}
-              autoFocus
-              placeholder={t('mdEditor.placeholder')}
-            />
+            <>
+              <CodeMirrorEditor
+                ref={editorRef}
+                value={content}
+                onChange={handleEditorChange}
+                onSave={handleSave}
+                onToggleMode={() => setMode((m) => (m === 'edit' ? 'view' : 'edit'))}
+                onAiContinue={handleAiContinue}
+                onCancel={handleCancel}
+                onImageFile={imageUploader.uploadImage}
+                ghostText={ghostText}
+                onGhostAccept={handleGhostAccept}
+                onGhostDismiss={handleGhostDismiss}
+                onSelectionChange={handleSelectionChange}
+                autoFocus
+                placeholder={t('mdEditor.placeholder')}
+              />
+              <SelectionBubble
+                anchor={selAnchor}
+                refining={refining}
+                refineRect={refineRect}
+                onRefine={handleBubbleRefine}
+                onStopRefine={handleRefineStop}
+                onDismiss={handleBubbleDismiss}
+              />
+            </>
           )}
         </>
       )}
