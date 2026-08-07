@@ -21,7 +21,8 @@
     "untitled": "未命名文档",
     "aiExclude": "AI 隐藏",
     "shared": "已分享",
-    "updatedAt": "更新于 {{date}}"
+    "updatedAt": "更新于 {{date}}",
+    "createdAt": "创建于 {{date}}"
   },
   "btn": {
     "processing": "处理中…",

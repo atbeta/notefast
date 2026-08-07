@@ -37,6 +37,7 @@
     "generateTitleAi": "AI 生成标题",
     "charCount": "字",
     "updatedAtLabel": "更新于 {{time}}",
+    "createdAtLabel": "创建于 {{time}}",
     "archiveTooltip": "归档后不出现在「所有文档」，AI 回答默认不再引用；可随时恢复",
     "archive": "归档",
     "aiExcludeTooltip": "隐藏后 AI 将无法索引或检索本文（你仍可在 Web 界面中搜索与编辑）",

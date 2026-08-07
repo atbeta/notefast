@@ -37,6 +37,7 @@
     "generateTitleAi": "Generate title with AI",
     "charCount": "chars",
     "updatedAtLabel": "Updated {{time}}",
+    "createdAtLabel": "Created {{time}}",
     "archiveTooltip": "After archiving it won't appear under “All documents” and AI answers won't cite it by default; you can restore it anytime",
     "archive": "Archive",
     "aiExcludeTooltip": "When hidden, AI can no longer index or retrieve this document (you can still search and edit it in the Web UI)",

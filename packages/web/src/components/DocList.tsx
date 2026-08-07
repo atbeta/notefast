@@ -113,6 +113,14 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
           >
             {formatRelative(doc.updated_at)}
           </time>
+          {doc.created_at && doc.created_at !== doc.updated_at && (
+            <span
+              className="text-[11.5px] text-muted-foreground/55 font-mono tabular-nums whitespace-nowrap"
+              title={t('docList.createdAt', { date: doc.created_at })}
+            >
+              · {t('docList.createdAt', { date: formatRelative(doc.created_at) })}
+            </span>
+          )}
           <DocActionsMenu
             doc={doc}
             surface="list"

@@ -541,6 +541,7 @@ export default function DocPage() {
 
   const flatHeadings = flattenHeadings(headings)
   const updatedAt = doc ? formatRelative(doc.updated_at, 'long') : ''
+  const createdAt = doc ? formatRelative(doc.created_at, 'long') : ''
   const wordCount = doc ? countWords(doc) : 0
   const isEmpty = wordCount === 0
 
@@ -767,6 +768,12 @@ export default function DocPage() {
             {!isEditing && (
               <div className="mt-2 mb-8 text-[12px] text-muted-foreground/70 tabular-nums select-none">
                 {wordCount.toLocaleString(currentLocale())} {t('doc.charCount')}
+                {createdAt && (
+                  <>
+                    <span className="mx-2 text-border-strong">·</span>
+                    {t('doc.createdAtLabel', { time: createdAt })}
+                  </>
+                )}
                 {updatedAt && (
                   <>
                     <span className="mx-2 text-border-strong">·</span>

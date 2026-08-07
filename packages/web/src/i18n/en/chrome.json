@@ -21,7 +21,8 @@
     "untitled": "Untitled document",
     "aiExclude": "AI hidden",
     "shared": "Shared",
-    "updatedAt": "Updated {{date}}"
+    "updatedAt": "Updated {{date}}",
+    "createdAt": "Created {{date}}"
   },
   "btn": {
     "processing": "Processing…",
