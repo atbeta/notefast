@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from './useAPI'
+import { currentLocale } from '../lib/time'
 
 const MAX_VIEWS = 50
 
@@ -10,7 +11,7 @@ const MAX_VIEWS = 50
  * 读侧统一 canonical 化，兼容已存库的旧数据。
  */
 export function canonicalViewQuery(q: string): string {
-  return q.replace(/^\?+/, '')
+  return q.replace(/^[?]+/, '')
 }
 
 export interface PinnedView {
@@ -19,6 +20,15 @@ export interface PinnedView {
   query: string
   /** 服务端原样返回 created_at（snake_case） */
   created_at: string
+}
+
+/**
+ * 按名称排序（locale 感知：中文按拼音、英文按字母、数字前缀自然序）。
+ * 固定视图没有拖拽排序，用户用 01- / 02- 前缀即可控制展示顺序。
+ */
+export function sortPinnedViewsByName(views: PinnedView[]): PinnedView[] {
+  const collator = new Intl.Collator(currentLocale(), { numeric: true, sensitivity: 'base' })
+  return [...views].sort((a, b) => collator.compare(a.name, b.name))
 }
 
 /**
@@ -35,7 +45,7 @@ export function usePinnedViews() {
     try {
       // api.get 直接返回解析后的响应体（数组本身），不是 { body } 包装
       const res = await api.get<PinnedView[]>('/pinned-views')
-      if (Array.isArray(res)) setViews(res)
+      if (Array.isArray(res)) setViews(sortPinnedViewsByName(res))
     } catch { /* ignore */ }
   }, [])
 
