@@ -11,8 +11,9 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { BookMarked, ChevronRight, GitMerge, Loader2, Search, Waypoints } from 'lucide-react'
+import { BookMarked, ChevronRight, GitMerge, Loader2, Search, Sparkles, Waypoints } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import PageHeader from '../components/PageHeader'
@@ -48,12 +49,14 @@ interface TermDictEntry {
 export default function EntitiesPage() {
   const { t } = useTranslation()
   const toast = useToast()
+  const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [openId, setOpenId] = useState<string | null>(null)
   const [autoMerged, setAutoMerged] = useState(0)
   const [adopting, setAdopting] = useState(false)
+  const [generatingId, setGeneratingId] = useState<string | null>(null)
 
   // 300ms 防抖；空关键词回全量列表
   useEffect(() => {
@@ -122,6 +125,20 @@ export default function EntitiesPage() {
       toast.error({ title: t('entities.adoptFailed'), description: e instanceof Error ? e.message : String(e) })
     } finally {
       setAdopting(false)
+    }
+  }
+
+  /** 手动生成/重新生成 AI 描述（POST describe 清旧值后调 LLM）；成功后刷新列表 */
+  const regenerateDescription = async (id: string) => {
+    setGeneratingId(id)
+    try {
+      const r = await api.post<{ regenerated: boolean; description: string | null }>(`/entities/${id}/describe`, {})
+      if (r.regenerated) refetch()
+      else toast.error({ title: t('graph.describeFailed') })
+    } catch {
+      toast.error({ title: t('graph.describeFailed') })
+    } finally {
+      setGeneratingId(null)
     }
   }
 
@@ -307,8 +324,18 @@ export default function EntitiesPage() {
                             {t('entities.notesMentioned', { n: e.mention_count })}
                           </p>
                           {e.description && (
-                            <p className="text-[12px] text-muted-foreground/80 mt-1 line-clamp-1 leading-relaxed">
-                              {e.description}
+                            <p className="text-[12px] text-muted-foreground/80 mt-1 leading-relaxed flex items-start gap-1.5">
+                              {e.description_source === 'dict' && (
+                                <span className="shrink-0 inline-flex items-center gap-1 rounded border border-primary/20 bg-primary-soft px-1.5 py-px text-[10px] text-primary font-medium">
+                                  {t('graph.dictSource')}
+                                </span>
+                              )}
+                              {e.description_source === 'ai' && (
+                                <span className="shrink-0 inline-flex items-center gap-1 rounded border border-border/60 bg-muted/40 px-1.5 py-px text-[10px] text-muted-foreground">
+                                  {t('graph.aiSource')}
+                                </span>
+                              )}
+                              <span className="line-clamp-1">{e.description}</span>
                             </p>
                           )}
                         </div>
@@ -318,7 +345,32 @@ export default function EntitiesPage() {
                         />
                       </button>
                       {open && (
-                        <div className="mt-2.5 border-t border-border/50 pt-2.5">
+                        <div className="mt-2.5 border-t border-border/50 pt-2.5 space-y-2">
+                          <div className="flex items-center gap-2">
+                            {e.description_source !== 'dict' && (
+                              <button
+                                type="button"
+                                onClick={() => void regenerateDescription(e.id)}
+                                disabled={generatingId === e.id}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border/70 bg-background text-[11.5px] text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50"
+                              >
+                                {generatingId === e.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
+                                ) : (
+                                  <Sparkles className="w-3 h-3" strokeWidth={1.75} />
+                                )}
+                                {e.description ? t('graph.regenerateDescription') : t('graph.generateDescription')}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => navigate('/settings')}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border/70 bg-background text-[11.5px] text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                            >
+                              <BookMarked className="w-3 h-3" strokeWidth={1.75} />
+                              {t('graph.openInDict')}
+                            </button>
+                          </div>
                           <EntityMentions entityId={e.id} />
                         </div>
                       )}

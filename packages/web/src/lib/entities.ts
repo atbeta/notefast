@@ -13,8 +13,10 @@ export interface EntitySummary {
   display: string
   kind: string
   mention_count: number
-  /** 一句话描述（后台 LLM 生成；null = 未生成） */
+  /** 有效描述：词典（用户声明）优先于 AI 生成；null = 未生成 */
   description?: string | null
+  /** 描述来源（dict = 词典声明，ai = AI 生成） */
+  description_source?: 'dict' | 'ai' | null
 }
 
 /** 文档级实体（GET /docs/:id/entities），比 EntitySummary 少 name、多 surface */

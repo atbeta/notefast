@@ -173,6 +173,14 @@ export function resolveDictTerm(name: string): { name: string; display: string; 
 }
 
 /**
+ * 实体描述（词典层）：标准名/别名命中即返回词典描述；未命中 undefined。
+ * 有效描述 = dictDescriptionFor(name) ?? entities.description（词典 > AI 生成）。
+ */
+export function dictDescriptionFor(name: string): string | undefined {
+  return resolveDictTerm(name)?.description
+}
+
+/**
  * 查询端展开：term 命中词典 → [原 term, 标准名, ...别名]（去重）。
  * 未命中返回 null（调用方保持单 term）。匹配键 = normalizeEntityName(term)。
  */

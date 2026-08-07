@@ -17,6 +17,7 @@ import {
   listEntityMentions,
 } from '../../store/entities'
 import { toText, toolError, type ToolContext } from './helpers'
+import { dictDescriptionFor } from '../../termDict'
 
 const SNIPPET_LEN = 200
 
@@ -43,7 +44,8 @@ export function registerEntityTools(ctx: ToolContext): void {
               display: e.display,
               kind: e.kind,
               mention_count: e.mention_count,
-              description: e.description ?? null,
+              // 有效描述：词典（用户声明）优先于 AI 生成
+              description: dictDescriptionFor(e.name) ?? e.description ?? null,
             })),
           }),
         ],
@@ -82,7 +84,7 @@ export function registerEntityTools(ctx: ToolContext): void {
               display: entity.display,
               kind: entity.kind,
               mention_count: entity.mention_count,
-              description: entity.description ?? null,
+              description: dictDescriptionFor(entity.name) ?? entity.description ?? null,
             },
             notes: mentions.map((m) => ({
               doc_id: m.doc_id,

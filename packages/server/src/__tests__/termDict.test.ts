@@ -31,6 +31,7 @@ import { lexicalSearch } from '../lexicalSearch'
 import { entitySearch } from '../ai/entitySearch'
 import { findEntityByName, listEntities } from '../store/entities'
 import termDictRouter from '../api/termDict'
+import entitiesRouter from '../api/entities'
 
 let testDir: string
 let nb: string
@@ -309,6 +310,39 @@ describe('存量归并（rebuildDictEntities）', () => {
     const result = rebuildDictEntities()
     expect(result.kindUpdated).toBe(1)
     expect(findEntityByName(getDb(), '晶圆')!.kind).toBe('concept')
+  })
+})
+
+describe('有效描述合并（词典 > AI 生成）', () => {
+  test('GET /entities：词典描述优先，description_source 标注来源', async () => {
+    writeDict([
+      { name: '晶圆', aliases: ['wafer'], description: '词典描述：半导体基底材料' },
+      { name: '流片', aliases: ['tape-out'] }, // 词典无描述
+    ])
+    const db = getDb()
+    const now = new Date().toISOString()
+    const mk = (name: string, aiDesc: string | null) =>
+      db
+        .query(
+          `INSERT INTO entities (id, name, display, kind, mention_count, description, created_at, updated_at)
+           VALUES (?, ?, ?, 'concept', 3, ?, ?, ?)`,
+        )
+        .run(crypto.randomUUID(), name, name, aiDesc, now, now)
+    mk('晶圆', 'AI 描述：旧值') // 词典 + AI 都有 → 词典赢
+    mk('流片', 'AI 描述：流片相关') // 仅 AI
+    mk('rag', 'AI 描述：RAG 相关') // 不在词典
+
+    const res = await entitiesRouter.request('/')
+    const body = (await res.json()) as {
+      entities: Array<{ name: string; description: string | null; description_source: string | null }>
+    }
+    const byName = new Map(body.entities.map((e) => [e.name, e]))
+    expect(byName.get('晶圆')?.description).toBe('词典描述：半导体基底材料')
+    expect(byName.get('晶圆')?.description_source).toBe('dict')
+    expect(byName.get('流片')?.description).toBe('AI 描述：流片相关')
+    expect(byName.get('流片')?.description_source).toBe('ai')
+    expect(byName.get('rag')?.description).toBe('AI 描述：RAG 相关')
+    expect(byName.get('rag')?.description_source).toBe('ai')
   })
 })
 

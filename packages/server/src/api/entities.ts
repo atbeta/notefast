@@ -15,6 +15,7 @@ import { z } from 'zod'
 import { getDb } from '../db'
 import { getLiveDocById } from '../store/blocks'
 import { describeEntity } from '../ai/entityDescribe'
+import { dictDescriptionFor } from '../termDict'
 import {
   findPotentialDuplicates,
   getEntityById,
@@ -29,6 +30,21 @@ const BLOCK_SNIPPET_LEN = 120
 
 const entities = new Hono()
 
+/**
+ * 有效描述：词典（用户声明）> AI 生成（entities.description）。description_source
+ * 供 UI 标注来源徽标（dict/ai/null）。
+ */
+function withEffectiveDescription(e: { name: string; description?: string | null }): {
+  description: string | null
+  description_source: 'dict' | 'ai' | null
+} {
+  const dictDesc = dictDescriptionFor(e.name)
+  return {
+    description: dictDesc ?? e.description ?? null,
+    description_source: dictDesc ? 'dict' : e.description ? 'ai' : null,
+  }
+}
+
 entities.get('/', (c) => {
   const db = getDb()
   const q = c.req.query('q') ?? ''
@@ -42,7 +58,7 @@ entities.get('/', (c) => {
       display: e.display,
       kind: e.kind,
       mention_count: e.mention_count,
-      description: e.description ?? null,
+      ...withEffectiveDescription(e),
     })),
   })
 })
@@ -161,7 +177,7 @@ entities.get('/:id', (c) => {
       display: entity.display,
       kind: entity.kind,
       mention_count: entity.mention_count,
-      description: entity.description ?? null,
+      ...withEffectiveDescription(entity),
     },
     mentions,
   })
