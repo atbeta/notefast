@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RefreshCw, FolderOpen, Cloud, CheckCircle2, AlertCircle, Download, Upload, Settings as SettingsIcon } from 'lucide-react'
 import { api, fetchWithAuth } from '../hooks/useAPI'
-import { parseContentDispositionFilename, triggerBlobDownload } from '../lib/download'
+import { parseContentDispositionFilename, deliverExport } from '../lib/download'
 import { type LocalFsAdapterConfig, type SyncAdapterConfig } from '@notefast/core'
 import LocationSelect from './LocationSelect'
 import { useStorageLocations } from '../hooks/useStorageLocations'
-import { ActionButton, useToast, Toggle } from './ui'
+import { ActionButton, Button, useToast, Toggle } from './ui'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
 import { formatIsoDateTime } from '../lib/time'
 
@@ -113,9 +113,12 @@ export default function SyncPanel() {
     ).catch(() => undefined)
   }
 
-  /** 整库导出存档：下载自包含 zip（md + media/ + manifest） */
+  /** 整库导出存档：Tauri 壳弹「另存为」选路径；浏览器直接下载（与单文档导出一致） */
   const importRef = useRef<HTMLInputElement>(null)
+  const [busyExport, setBusyExport] = useState(false)
+  const [busyImport, setBusyImport] = useState(false)
   const handleExportArchive = async () => {
+    setBusyExport(true)
     try {
       const res = await fetchWithAuth('/export/archive')
       if (!res.ok) {
@@ -126,14 +129,22 @@ export default function SyncPanel() {
       const filename =
         parseContentDispositionFilename(res.headers.get('Content-Disposition'))
         || 'notefast-export.zip'
-      triggerBlobDownload(blob, filename)
-      toast.success({ title: t('sync.exportDone') })
-    } catch {
-      toast.error({ title: t('sync.exportFailed') })
+      const delivery = await deliverExport(blob, filename)
+      if (delivery.mode === 'saved') {
+        toast.success({ title: t('sync.exportSavedTo', { path: delivery.savedPath }) })
+      } else if (delivery.mode === 'downloaded') {
+        toast.success({ title: t('sync.exportDone') })
+      }
+      // cancelled：用户主动放弃，不提示
+    } catch (e) {
+      toast.error({ title: t('sync.exportFailed'), description: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setBusyExport(false)
     }
   }
 
   const handleImportArchiveFile = async (file: File) => {
+    setBusyImport(true)
     const form = new FormData()
     form.append('file', file)
     const id = toast.loading({ title: t('sync.importing') })
@@ -149,6 +160,8 @@ export default function SyncPanel() {
     } catch (e) {
       toast.dismiss(id)
       toast.error({ title: t('sync.importFailed'), description: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setBusyImport(false)
     }
   }
 
@@ -366,21 +379,26 @@ export default function SyncPanel() {
 
         {/* 便携副本：整库导出 / 导入（与归档推送同构的 zip，无需配置存储连接） */}
         <div className="flex items-center gap-3 pt-4 border-t border-border/40">
-          <ActionButton
+          <Button
             variant="secondary"
-            onAction={handleExportArchive}
-            errorToast={(e) => ({ title: t('sync.exportFailed'), description: e instanceof Error ? e.message : String(e) })}
+            loading={busyExport}
+            disabled={busyImport}
+            onClick={() => { void handleExportArchive() }}
           >
             <Download className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
             {t('sync.exportArchive')}
-          </ActionButton>
-          <ActionButton
+          </Button>
+          <Button
             variant="secondary"
-            onAction={() => importRef.current?.click()}
+            loading={busyImport}
+            disabled={busyExport}
+            onClick={() => {
+              if (!busyImport) importRef.current?.click()
+            }}
           >
             <Upload className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
             {t('sync.importArchive')}
-          </ActionButton>
+          </Button>
           <input
             ref={importRef}
             type="file"

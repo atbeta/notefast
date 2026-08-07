@@ -91,6 +91,7 @@
     "importArchive": "Import archive",
     "exportHint": "Self-contained zip (.md + media/), no storage config needed to download or re-import",
     "exportDone": "Archive exported",
+    "exportSavedTo": "Archive saved to {{path}}",
     "exportFailed": "Export failed",
     "importing": "Importing archive…",
     "importDone": "Import complete: {{imported}} new, {{skipped}} skipped, {{failed}} failed",

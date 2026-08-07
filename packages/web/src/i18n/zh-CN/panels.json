@@ -91,6 +91,7 @@
     "importArchive": "导入存档",
     "exportHint": "自包含 zip（.md + media/），无需配置即可下载或回导",
     "exportDone": "存档已导出",
+    "exportSavedTo": "存档已导出到 {{path}}",
     "exportFailed": "导出失败",
     "importing": "正在导入存档…",
     "importDone": "导入完成：新增 {{imported}}，跳过 {{skipped}}，失败 {{failed}}",
