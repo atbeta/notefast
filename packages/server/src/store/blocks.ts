@@ -524,6 +524,20 @@ export function restoreBlocks(db: Db, ids: string[]): void {
   )
 }
 
+/** 物理删除 block 行（永久删除）。FTS 由 AFTER DELETE 触发器清理；其余级联（refs/提及/分享/修订/快照/向量）由调用方在事务内完成。 */
+export function hardDeleteBlocks(db: Db, ids: string[]): void {
+  if (ids.length === 0) return
+  const placeholders = ids.map(() => '?').join(',')
+  db.query(`DELETE FROM blocks WHERE id IN (${placeholders})`).run(...(ids as [string, ...string[]]))
+}
+
+/** 物理删除 block 的历史修订（永久删除时随块清除） */
+export function deleteBlockRevisions(db: Db, ids: string[]): void {
+  if (ids.length === 0) return
+  const placeholders = ids.map(() => '?').join(',')
+  db.query(`DELETE FROM block_revisions WHERE block_id IN (${placeholders})`).run(...(ids as [string, ...string[]]))
+}
+
 /** 笔记本下全部未删除 block id（删除笔记本时的级联清理用） */
 export function listLiveBlockIdsByNotebook(db: Db, notebookId: string): string[] {
   const rows = db

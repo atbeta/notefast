@@ -1,7 +1,8 @@
 /**
- * 回收站（Trash）— 软删除文档的恢复入口
+ * 回收站（Trash）— 软删除文档的恢复/永久删除入口
  *
  * 删除是软删除（tombstone）：内容仍在库中，恢复整子树回到「所有文档」。
+ * 永久删除（DELETE /docs/:id/permanent）物理清库，不可恢复。
  * 两个不可恢复的副作用（既定语义，在描述里明示）：
  * - 分享旧链接永久失效（重开是新 token）
  * - 实体提及/链接由恢复路径自动重抽（reanalyzeDoc），非即时完成
@@ -9,13 +10,14 @@
 
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ArchiveRestore, Loader2, Trash2 } from 'lucide-react'
+import { ArchiveRestore, Loader2, Trash2, X } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import { useDocChanges } from '../hooks/useDocEvents'
 import { formatRelative } from '../lib/time'
 import PageHeader from '../components/PageHeader'
-import { ListRowsSkeleton } from '../components/ui'
+import ConfirmDialog from '../components/ConfirmDialog'
+import { ListRowsSkeleton, useToast } from '../components/ui'
 
 interface TrashItem {
   id: string
@@ -25,7 +27,12 @@ interface TrashItem {
 
 export default function TrashPage() {
   const { t } = useTranslation()
+  const toast = useToast()
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [busyAll, setBusyAll] = useState(false)
+  // 待确认的永久删除目标（null = 未打开对话框）
+  const [confirmDelete, setConfirmDelete] = useState<TrashItem | null>(null)
+  const [confirmEmpty, setConfirmEmpty] = useState(false)
 
   const { data, loading, error, refetch } = useApiQuery(
     () => api.get<TrashItem[]>('/docs/trash'),
@@ -45,6 +52,36 @@ export default function TrashPage() {
     }
   }
 
+  /** 永久删除单个文档（不可恢复） */
+  const permanentDelete = async (id: string) => {
+    setBusyId(id)
+    setConfirmDelete(null)
+    try {
+      await api.del(`/docs/${id}/permanent`)
+      refetch()
+      toast.success({ title: t('trash.delete') })
+    } catch {
+      toast.error({ title: t('trash.deleteFailed') })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  /** 清空回收站（不可恢复） */
+  const emptyTrash = async () => {
+    setBusyAll(true)
+    setConfirmEmpty(false)
+    try {
+      await api.del('/docs/trash')
+      refetch()
+      toast.success({ title: t('trash.emptyTrash') })
+    } catch {
+      toast.error({ title: t('trash.emptyTrashFailed') })
+    } finally {
+      setBusyAll(false)
+    }
+  }
+
   return (
     <div className="animate-fade-in">
       <PageHeader innerClassName="flex items-center justify-between gap-4">
@@ -58,6 +95,21 @@ export default function TrashPage() {
             </span>
           )}
         </div>
+        {!loading && docs.length > 0 && (
+          <button
+            type="button"
+            disabled={busyAll}
+            onClick={() => setConfirmEmpty(true)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 shrink-0"
+          >
+            {busyAll ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
+            ) : (
+              <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+            )}
+            {t('trash.emptyTrash')}
+          </button>
+        )}
       </PageHeader>
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
@@ -96,7 +148,7 @@ export default function TrashPage() {
                   type="button"
                   disabled={busyId === doc.id}
                   onClick={() => restore(doc.id)}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 shrink-0"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 shrink-0 disabled:opacity-40"
                   title={t('trash.restoreTitle')}
                 >
                   {busyId === doc.id ? (
@@ -106,11 +158,44 @@ export default function TrashPage() {
                   )}
                   {t('trash.restore')}
                 </button>
+                <button
+                  type="button"
+                  disabled={busyId === doc.id}
+                  onClick={() => setConfirmDelete(doc)}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 shrink-0 disabled:opacity-40"
+                  title={t('trash.delete')}
+                >
+                  <X className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  {t('trash.delete')}
+                </button>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title={t('trash.deleteTitle')}
+        message={t('trash.deleteMessage')}
+        confirmLabel={t('trash.delete')}
+        destructive
+        onConfirm={() => {
+          if (confirmDelete) void permanentDelete(confirmDelete.id)
+        }}
+        onCancel={() => setConfirmDelete(null)}
+      />
+      <ConfirmDialog
+        open={confirmEmpty}
+        title={t('trash.emptyTrashTitle')}
+        message={t('trash.emptyTrashMessage', { count: docs.length })}
+        confirmLabel={t('trash.emptyTrash')}
+        destructive
+        onConfirm={() => {
+          void emptyTrash()
+        }}
+        onCancel={() => setConfirmEmpty(false)}
+      />
     </div>
   )
 }

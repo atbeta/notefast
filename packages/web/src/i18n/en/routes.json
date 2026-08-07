@@ -63,7 +63,15 @@
     "restoreTitle": "Restore document (back to all documents)",
     "restore": "Restore",
     "emptyTitle": "Trash is empty",
-    "emptyDesc": "Deleted documents will show up here and can be restored anytime."
+    "emptyDesc": "Deleted documents will show up here and can be restored anytime.",
+    "delete": "Delete permanently",
+    "deleteTitle": "Delete document permanently?",
+    "deleteMessage": "The document and all its content will be permanently deleted. This cannot be undone. History, references, and share links are removed as well.",
+    "deleteFailed": "Failed to permanently delete",
+    "emptyTrash": "Empty trash",
+    "emptyTrashTitle": "Empty trash?",
+    "emptyTrashMessage": "{{count}} documents in trash will be permanently deleted. This cannot be undone.",
+    "emptyTrashFailed": "Failed to empty trash"
   },
   "newDoc": {
     "tabCreate": "New document",

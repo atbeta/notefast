@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:tes
 import { mkdtempSync, rmSync, unlinkSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Hono } from 'hono'
-import { initDb, closeDb } from '../db'
+import { initDb, closeDb, getDb } from '../db'
 import { createPluginSystem, type DocumentEventPayload } from '@notefast/core'
 import { initAiRuntime, _setRuntimeForTests } from '../services/aiRuntime'
 import docsRouter from '../api/docs'
@@ -225,5 +225,87 @@ describe('回收站（GET /docs/trash + restore）', () => {
     // 重复恢复 = 没有可恢复的已删除 block
     const again = await app.request(`/blocks/${docId}/restore`, { method: 'POST' })
     expect(again.status).toBe(404)
+  })
+
+  test('永久删除：物理清库，回收站消失，恢复 404', async () => {
+    const docId = await createDoc('永久删除测试')
+
+    await app.request(`/docs/${docId}`, { method: 'DELETE' })
+
+    // 软删除后物理行仍在（tombstone）
+    const before = getDb().query('SELECT count(*) as c FROM blocks WHERE id = ?').get(docId) as { c: number }
+    expect(before.c).toBe(1)
+
+    const res = await app.request(`/docs/${docId}/permanent`, { method: 'DELETE' })
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { deleted: boolean }).deleted).toBe(true)
+
+    // blocks 物理删除（含子树）
+    const after = getDb()
+      .query('SELECT count(*) as c FROM blocks WHERE root_id = ? OR id = ?')
+      .get(docId, docId) as { c: number }
+    expect(after.c).toBe(0)
+
+    // 回收站不再可见；恢复 404
+    const trash = await app.request('/docs/trash')
+    expect(((await trash.json()) as Array<{ id: string }>).some((d) => d.id === docId)).toBe(false)
+
+    const restore = await app.request(`/blocks/${docId}/restore`, { method: 'POST' })
+    expect(restore.status).toBe(404)
+  })
+
+  test('永久删除连带清理修订历史', async () => {
+    const docId = await createDoc('修订清理')
+    const child = getDb()
+      .query("SELECT id FROM blocks WHERE root_id = ? AND type != 'document' LIMIT 1")
+      .get(docId) as { id: string }
+
+    // 改一次内容 → 生成一条 block_revision
+    await app.request(`/blocks/${child.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: '修订内容' }),
+    })
+    const revs = getDb().query('SELECT count(*) as c FROM block_revisions WHERE block_id = ?').get(child.id) as { c: number }
+    expect(revs.c).toBeGreaterThan(0)
+
+    await app.request(`/docs/${docId}`, { method: 'DELETE' })
+    await app.request(`/docs/${docId}/permanent`, { method: 'DELETE' })
+
+    const revsAfter = getDb().query('SELECT count(*) as c FROM block_revisions WHERE block_id = ?').get(child.id) as { c: number }
+    expect(revsAfter.c).toBe(0)
+  })
+
+  test('活文档永久删除 404（必须先软删除进回收站）', async () => {
+    const docId = await createDoc('活文档测试')
+    const res = await app.request(`/docs/${docId}/permanent`, { method: 'DELETE' })
+    expect(res.status).toBe(404)
+  })
+
+  test('清空回收站：全部物理删除', async () => {
+    const ids: string[] = []
+    for (let i = 0; i < 2; i++) {
+      const id = await createDoc(`清空测试${i}`)
+      ids.push(id)
+      await app.request(`/docs/${id}`, { method: 'DELETE' })
+    }
+
+    const res = await app.request('/docs/trash', { method: 'DELETE' })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { deleted: boolean; count: number; docs: number }
+    expect(body.deleted).toBe(true)
+    // 回收站可能含其他测试遗留的软删文档，只断言不少于本次的两个
+    expect(body.docs).toBeGreaterThanOrEqual(2)
+
+    const trash = await app.request('/docs/trash')
+    const remaining = (await trash.json()) as Array<{ id: string }>
+    for (const id of ids) {
+      expect(remaining.some((d) => d.id === id)).toBe(false)
+    }
+
+    const left = getDb()
+      .query('SELECT count(*) as c FROM blocks WHERE root_id IN (?, ?)')
+      .get(ids[0]!, ids[1]!) as { c: number }
+    expect(left.c).toBe(0)
   })
 })

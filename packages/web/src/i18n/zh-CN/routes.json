@@ -63,7 +63,15 @@
     "restoreTitle": "恢复文档（回到所有文档）",
     "restore": "恢复",
     "emptyTitle": "回收站是空的",
-    "emptyDesc": "删除的文档会出现在这里，可以随时恢复。"
+    "emptyDesc": "删除的文档会出现在这里，可以随时恢复。",
+    "delete": "永久删除",
+    "deleteTitle": "永久删除文档？",
+    "deleteMessage": "文档及其全部内容将被彻底删除，无法恢复。历史版本、引用与分享记录一并清除。",
+    "deleteFailed": "永久删除失败",
+    "emptyTrash": "清空回收站",
+    "emptyTrashTitle": "清空回收站？",
+    "emptyTrashMessage": "回收站中的 {{count}} 个文档将被彻底删除，无法恢复。",
+    "emptyTrashFailed": "清空回收站失败"
   },
   "newDoc": {
     "tabCreate": "新建文档",
