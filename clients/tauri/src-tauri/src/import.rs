@@ -77,7 +77,7 @@ fn import_and_open(app: &AppHandle, files: Vec<PathBuf>) {
             .and_then(|s| s.to_str())
             .unwrap_or("未命名文档")
             .to_string();
-        match post_import(info.port, &notebook_id, &title, &markdown) {
+        match post_import(info.port, &notebook_id, &title, &markdown, f) {
             Ok(doc_id) => {
                 if first_doc.is_none() {
                     first_doc = Some(doc_id);
@@ -125,12 +125,20 @@ fn wait_engine(app: &AppHandle) -> Option<EngineInfo> {
 
 /// POST /api/v1/import/markdown（status=inbox），返回 doc.id。
 /// 裸 TcpStream：Connection: close 后读到 EOF；兼容 Content-Length 与 chunked 两种响应。
-fn post_import(port: u16, notebook_id: &str, title: &str, markdown: &str) -> Result<String, String> {
+/// source 传文件绝对路径：服务端按「同路径+同内容 hash」去重——
+/// 重复打开同一文件直接返回既有文档，不再重复进收集箱。
+fn post_import(port: u16, notebook_id: &str, title: &str, markdown: &str, path: &Path) -> Result<String, String> {
+    let external_id = path
+        .canonicalize()
+        .unwrap_or_else(|_| path.to_path_buf())
+        .to_string_lossy()
+        .to_string();
     let body = json!({
         "notebook_id": notebook_id,
         "title": title,
         "markdown": markdown,
         "status": "inbox",
+        "source": { "provider": "file-open", "external_id": external_id },
     })
     .to_string();
 

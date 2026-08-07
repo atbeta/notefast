@@ -197,11 +197,17 @@ final class AppModel: ObservableObject {
                 continue
             }
             do {
+                // source 传文件绝对路径：服务端按「同路径+同内容 hash」去重——
+                // 重复打开同一文件直接返回既有文档，不再重复进收集箱
                 let res = try await client.post("/import/markdown", body: [
                     "notebook_id": notebookId,
                     "title": file.deletingPathExtension().lastPathComponent,
                     "markdown": markdown,
                     "status": "inbox",
+                    "source": [
+                        "provider": "file-open",
+                        "external_id": file.standardizedFileURL.path,
+                    ],
                 ], as: ImportMarkdownResult.self)
                 if firstDocId == nil { firstDocId = res.doc.id }
                 imported += 1

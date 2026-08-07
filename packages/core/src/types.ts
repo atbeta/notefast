@@ -289,6 +289,11 @@ export const importMarkdownSchema = z.object({
   title: z.string().max(500).optional(),
   status: z.enum(['note', 'inbox']).optional(),
   tags: z.array(z.string().min(1).max(64)).max(64).optional(),
+  /** 来源标识（打开即导入去重 / 未来连接器 upsert 锚点）；不携带则每次新建 */
+  source: z.object({
+    provider: z.string().min(1).max(64),
+    external_id: z.string().min(1).max(1000),
+  }).optional(),
 })
 
 export const updateDocStatusSchema = z.object({

@@ -159,3 +159,78 @@ describe('来源溯源（连接器预留）', () => {
     expect(findDocIdBySource(db, 'webhook', '')).toBeNull()
   })
 })
+
+describe('打开即导入去重（POST /import/markdown + source）', () => {
+  async function post(app: import('hono').Hono, markdown: string, source?: { provider: string; external_id: string }) {
+    return app.request('/import/markdown', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        notebook_id: notebookId,
+        title: 'A',
+        markdown,
+        status: 'inbox',
+        ...(source ? { source } : {}),
+      }),
+    })
+  }
+
+  test('同 source+同内容 → deduplicated 返回既有文档；内容变了 → 新建且 source 身份移交最新篇', async () => {
+    const { Hono } = await import('hono')
+    const { default: importRouter } = await import('../api/import')
+    const app = new Hono()
+    app.route('/import', importRouter)
+    const src = { provider: 'file-open', external_id: '/tmp/dedup-a.md' }
+
+    const r1 = await post(app, '# A\n\n第一版', src)
+    expect(r1.status).toBe(201)
+    const doc1 = ((await r1.json()) as { doc: { id: string } }).doc.id
+
+    // 重复打开同一文件：200 + deduplicated + 同一文档，不产生新文档
+    const r2 = await post(app, '# A\n\n第一版', src)
+    expect(r2.status).toBe(200)
+    const body2 = (await r2.json()) as { doc: { id: string }; deduplicated?: boolean }
+    expect(body2.deduplicated).toBe(true)
+    expect(body2.doc.id).toBe(doc1)
+
+    // 外部改过了内容：新建一篇（不覆盖应用内可能的编辑），source 身份移交新文档
+    const r3 = await post(app, '# A\n\n第二版', src)
+    expect(r3.status).toBe(201)
+    const doc3 = ((await r3.json()) as { doc: { id: string } }).doc.id
+    expect(doc3).not.toBe(doc1)
+    expect(findDocIdBySource(getDb(), 'file-open', '/tmp/dedup-a.md')).toBe(doc3)
+  })
+
+  test('不带 source 的导入不去重（Web / MCP 导入路径行为不变）', async () => {
+    const { Hono } = await import('hono')
+    const { default: importRouter } = await import('../api/import')
+    const app = new Hono()
+    app.route('/import', importRouter)
+
+    const r1 = await post(app, '# B\n\n同样的内容')
+    const r2 = await post(app, '# B\n\n同样的内容')
+    expect(r1.status).toBe(201)
+    expect(r2.status).toBe(201)
+    const id1 = ((await r1.json()) as { doc: { id: string } }).doc.id
+    const id2 = ((await r2.json()) as { doc: { id: string } }).doc.id
+    expect(id2).not.toBe(id1)
+  })
+
+  test('回收站中的既有导入不挡重新导入（findDocIdBySource 只看未删除）', async () => {
+    const { Hono } = await import('hono')
+    const { default: importRouter } = await import('../api/import')
+    const app = new Hono()
+    app.route('/import', importRouter)
+    const src = { provider: 'file-open', external_id: '/tmp/dedup-deleted.md' }
+
+    const r1 = await post(app, '# C\n\n内容', src)
+    const doc1 = ((await r1.json()) as { doc: { id: string } }).doc.id
+    const db = getDb()
+    db.query('UPDATE blocks SET is_deleted = 1 WHERE id = ?').run(doc1)
+
+    const r2 = await post(app, '# C\n\n内容', src)
+    expect(r2.status).toBe(201) // 重新导入为新文档，而非 deduplicated
+    const doc2 = ((await r2.json()) as { doc: { id: string } }).doc.id
+    expect(doc2).not.toBe(doc1)
+  })
+})

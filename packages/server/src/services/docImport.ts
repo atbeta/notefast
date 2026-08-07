@@ -48,12 +48,14 @@ export interface InsertDocFromMarkdownOptions {
 
 /** 外部来源标识（未来连接器：webhook / RSS / 剪藏插件等） */
 export interface DocSourceRef {
-  /** 来源提供方标识，如 'webhook' / 'rss' / 'chrome-clipper' */
+  /** 来源提供方标识，如 'webhook' / 'rss' / 'chrome-clipper' / 'file-open' */
   provider: string
-  /** 来源系统内的唯一 ID（原文 URL、条目 ID 等） */
+  /** 来源系统内的唯一 ID（原文 URL、条目 ID、文件绝对路径等） */
   external_id: string
   /** 最近一次同步时间（ISO） */
   synced_at?: string
+  /** 最近一次导入内容的 sha256（判同用：同 source + 同 hash = 重复导入，直接打开既有文档） */
+  content_hash?: string
 }
 
 /**

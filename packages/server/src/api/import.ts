@@ -1,13 +1,14 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
+import { createHash } from 'node:crypto'
 import { importMarkdownSchema, rowToBlock, readDocStatus, readTags } from '@notefast/core'
 import { getDb } from '../db'
-import { getBlockById, getBlocksByIds } from '../store/blocks'
+import { findDocIdBySource, getBlockById, getBlocksByIds, updateBlock } from '../store/blocks'
 import { fireAfterCreate, fireAfterCreateMany, fireDocAfterCreate } from '../services/hooks'
 import { emitAppEvent } from '../events'
 import { scheduleSyncNow } from '../sync/protocolManager'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
-import { EmptyMarkdownError, insertDocFromMarkdown, type InsertDocFromMarkdownResult } from '../services/docImport'
+import { EmptyMarkdownError, insertDocFromMarkdown, type DocSourceRef, type InsertDocFromMarkdownResult } from '../services/docImport'
 import {
   createDocFromMarkdownFile,
   DocFileImportError,
@@ -55,6 +56,25 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
   const input = c.req.valid('json')
   const title = input.title || extractTitleFromMarkdown(input.markdown) || '未命名文档'
 
+  // 打开即导入去重（壳层经 source 传文件路径）：
+  // - 同 source + 同内容 hash → 重复打开同一文件，直接返回既有文档（零副作用）
+  // - 同 source + 内容变了 → 新建一篇进收集箱（不覆盖应用内可能的编辑），
+  //   source 身份移交新文档，旧文档剥离 source 成为普通笔记（下次打开定位到最新篇）
+  let source: DocSourceRef | undefined
+  if (input.source) {
+    const incomingHash = createHash('sha256').update(input.markdown).digest('hex')
+    const existingId = findDocIdBySource(db, input.source.provider, input.source.external_id)
+    if (existingId) {
+      const existingRow = getBlockById(db, existingId)
+      const existingHash = readSourceContentHash(existingRow)
+      if (existingRow && existingHash === incomingHash) {
+        return c.json({ doc: rowToBlock(existingRow), deduplicated: true }, 200)
+      }
+      stripDocSource(db, existingId)
+    }
+    source = { ...input.source, content_hash: incomingHash, synced_at: new Date().toISOString() }
+  }
+
   let result: InsertDocFromMarkdownResult
   try {
     result = insertDocFromMarkdown(db, {
@@ -64,6 +84,7 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
       status: input.status,
       tags: input.tags,
       rejectEmpty: true,
+      source,
     })
   } catch (e) {
     if (e instanceof EmptyMarkdownError) {
@@ -74,6 +95,29 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
 
   return c.json(respondCreated(result, input.markdown), 201)
 })
+
+/** 读文档根 properties.source.content_hash（无则 undefined） */
+function readSourceContentHash(docRow: { properties: string } | null): string | undefined {
+  if (!docRow) return undefined
+  try {
+    const props = JSON.parse(docRow.properties) as { source?: { content_hash?: string } }
+    return props.source?.content_hash
+  } catch {
+    return undefined
+  }
+}
+
+/** 从文档根剥离 source 标识（身份移交新文档后，旧文档成为普通笔记） */
+function stripDocSource(db: ReturnType<typeof getDb>, docId: string): void {
+  const row = getBlockById(db, docId)
+  if (!row) return
+  try {
+    const props = JSON.parse(row.properties) as Record<string, unknown>
+    if (!('source' in props)) return
+    delete props.source
+    updateBlock(db, docId, { properties: JSON.stringify(props) })
+  } catch { /* properties 损坏时保持原样 */ }
+}
 
 /**
  * multipart 文件导入：字段 file（必填）、notebook_id（必填）、title / status / tags（可选）。
