@@ -45,6 +45,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const dark = resolvedTheme === 'dark'
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const maskRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -54,6 +55,34 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     setResults([])
     setActive(0)
     return () => clearTimeout(t)
+  }, [open])
+
+  // 遮罩虚化：CSS transition 的 backdrop-filter 在 WKWebView/Safari 不按帧插值（跳变），
+  // 造成「先糊满、黑色才淡入」的二段式。改用 rAF 逐帧写 blur(0↔4px)，与遮罩 opacity
+  // 过渡（150ms, var(--ease)）同步——任何引擎都按帧生效。
+  useEffect(() => {
+    const el = maskRef.current
+    if (!el) return
+    let raf = 0
+    const start = performance.now()
+    const DUR = 150
+    // 近似 var(--ease) cubic-bezier(0.2,0,0,1) 的缓出曲线
+    const ease = (p: number) => 1 - Math.pow(1 - p, 3)
+    const step = (now: number) => {
+      const p = Math.min(1, (now - start) / DUR)
+      const v = open ? ease(p) * 4 : (1 - ease(p)) * 4
+      const style = el.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }
+      style.backdropFilter = `blur(${v.toFixed(2)}px)`
+      style.webkitBackdropFilter = `blur(${v.toFixed(2)}px)`
+      if (p < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => {
+      cancelAnimationFrame(raf)
+      const style = el.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }
+      style.backdropFilter = ''
+      style.webkitBackdropFilter = ''
+    }
   }, [open])
 
   // macOS WKWebView 焦点恢复（原生壳）：ESC 关闭时 WebKit 在 NSEvent 层结束
@@ -188,11 +217,11 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       aria-modal="true"
       aria-label={t('command.dialogLabel')}
     >
-      {/* backdrop-filter 与淡入同步过渡：否则 blur 瞬时满强度「先弹出来」，
-          黑色遮罩与面板才跟上，形成两段式虚化 */}
+      {/* 遮罩：blur 由 rAF 逐帧驱动（见上），黑色经外层 opacity 过渡淡入——两者同步，无二段式 */}
       <div
+        ref={maskRef}
         onClick={onClose}
-        className={`absolute inset-0 bg-black/40 transition-[backdrop-filter,-webkit-backdrop-filter] duration-[var(--dur)] ease-[var(--ease)] ${open ? 'backdrop-blur-sm' : 'backdrop-blur-[0px]'}`}
+        className="absolute inset-0 bg-black/40"
       />
       <div className={`relative w-full max-w-xl bg-popover rounded-2xl border border-border shadow-2xl overflow-hidden transition-transform duration-[var(--dur)] ease-[var(--ease)] ${open ? 'translate-y-0 scale-100' : 'translate-y-2 scale-[0.98]'}`}>
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
