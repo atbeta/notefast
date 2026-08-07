@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.47.1](https://github.com/atbeta/notefast/compare/v0.47.0...v0.47.1) (2026-08-07)
+
+
+### Bug Fixes
+
+* **clients:** drop unsupported fileAssociations icon on tauri ([223f374](https://github.com/atbeta/notefast/commit/223f374c92b5e9a88416af7646535880b550a74a))
+
 ## [0.47.0](https://github.com/atbeta/notefast/compare/v0.46.0...v0.47.0) (2026-08-07)
 
 
