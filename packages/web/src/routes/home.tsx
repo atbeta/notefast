@@ -130,7 +130,7 @@ export default function HomePage() {
 
   return (
     <div className="animate-fade-in">
-      <PageHeader innerClassName="flex items-center justify-between gap-4">
+      <PageHeader innerClassName="flex items-center gap-4">
         <div className="min-w-0 flex items-center gap-2">
           <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
             {title}
@@ -150,10 +150,6 @@ export default function HomePage() {
             </span>
           )}
         </div>
-        <button onClick={goNew} className="btn-primary-custom shrink-0">
-          <Plus className="w-3.5 h-3.5" strokeWidth={2.25} />
-          {t('home.newDoc')}
-        </button>
       </PageHeader>
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5 animate-fade-in">
