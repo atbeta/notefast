@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.49.0](https://github.com/atbeta/notefast/compare/v0.48.0...v0.49.0) (2026-08-07)
+
+
+### Features
+
+* **web:** effective entity description with dictionary priority ([27e2262](https://github.com/atbeta/notefast/commit/27e2262d14fa16fa1a84aba5676e0c29848abf80))
+* **web:** MCP config example supports OpenCode and Claude/Cursor ([2f4ed30](https://github.com/atbeta/notefast/commit/2f4ed301a9eaef319b24c4a12751199b9790847e))
+* **web:** structured entity dictionary editor with import/export ([d406917](https://github.com/atbeta/notefast/commit/d40691782863c10ee84f723236d68a99ba6c2c00))
+
+
+### Bug Fixes
+
+* **web:** CJK fallbacks for monospace stacks (tags/entities/code) ([267ca38](https://github.com/atbeta/notefast/commit/267ca38a24c30067fb099d567b0397822f3433c0))
+* **web:** clarify account security section without shell detection ([c4702e4](https://github.com/atbeta/notefast/commit/c4702e4ce110eff7a23602ed3f5ea43a085383bf))
+* **web:** Ctrl+J toggle stale closure breaks consecutive use ([2806ca3](https://github.com/atbeta/notefast/commit/2806ca37f02d54df070659908b8c3d0742f75d93))
+* **web:** smooth graph hover dimming transitions ([f7fdc87](https://github.com/atbeta/notefast/commit/f7fdc87553f96528e7835ceade278bd0ff722716))
+
 ## [0.48.0](https://github.com/atbeta/notefast/compare/v0.47.1...v0.48.0) (2026-08-07)
 
 
