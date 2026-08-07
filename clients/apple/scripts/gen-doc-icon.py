@@ -2,8 +2,9 @@
 """NoteFast .md 文档图标生成器（Typora 风格：文档页 + markdown M↓ logo）。
 
 生成产物（供文件关联使用，区别于 App 图标）：
-  - clients/apple/Resources/DocIcon.icns   macOS 文档图标
-  - clients/tauri/src-tauri/icons/md-doc.ico  Windows 关联图标
+  - clients/apple/Resources/DocIcon.icns   macOS 文档图标（Info.plist CFBundleTypeIconFile 引用，已生效）
+  - clients/tauri/src-tauri/icons/md-doc.ico  Windows 关联图标（暂未接入：Tauri v2 schema 不支持
+    fileAssociations.icon，上游 issue #13302 未实现；接入后再提交产物）
   - clients/tauri/src-tauri/icons/md-doc.png  512 预览
 
 用法: python3 gen-doc-icon.py
