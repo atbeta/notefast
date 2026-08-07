@@ -87,9 +87,10 @@ export default {
         'color-primary': 'rgb(var(--primary) / <alpha-value>)',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"PingFang SC"', '"Microsoft YaHei"', '"Noto Sans CJK SC"', 'sans-serif'],
         serif: ['"Source Serif 4"', '"Source Serif Pro"', 'Iowan Old Style', 'Charter', 'Georgia', 'Songti SC', 'serif'],
-        mono: ['"JetBrains Mono"', '"Fira Code"', '"SF Mono"', 'ui-monospace', 'Menlo', 'monospace'],
+        // 等宽栈补 CJK 回退：JetBrains Mono/Consolas 无中文字形，缺了会掉到宋体
+        mono: ['"JetBrains Mono"', '"Fira Code"', '"SF Mono"', 'ui-monospace', 'Menlo', 'Consolas', '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', '"Noto Sans CJK SC"', 'monospace'],
       },
       fontSize: {
         xs:    ['var(--text-xs)',     { lineHeight: '1.5' }],
