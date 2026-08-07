@@ -226,9 +226,14 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
                 if (cur.empty) return null
                 const text = v.state.sliceDoc(cur.from, cur.to)
                 if (!text.trim()) return null
-                const rect = v.coordsAtPos(cur.to)
+                // 锚点取选区末端坐标；末端滚出视口（CM 只渲染视口行，coordsAtPos 返回 null）
+                // 回退首端。多行选区两端都可见时锚到更高的一端（首行），避免气泡悬在末端几行之下
+                const rectTo = v.coordsAtPos(cur.to)
+                const rectFrom = v.coordsAtPos(cur.from)
+                const rect = rectTo ?? rectFrom
                 if (!rect) return null
-                return { rect, text, from: cur.from, to: cur.to }
+                const anchored = rectFrom && rectTo && rectFrom.top < rectTo.top ? rectFrom : rect
+                return { rect: anchored, text, from: cur.from, to: cur.to }
               })
             }),
             EditorView.domEventHandlers({
