@@ -13,6 +13,7 @@ import SyncPanel from '../components/SyncPanel'
 import StorageLocationsPanel from '../components/StorageLocationsPanel'
 import ApiTokensPanel from '../components/ApiTokensPanel'
 import McpPanel from '../components/McpPanel'
+import CapturePanel from '../components/CapturePanel'
 import AuthEventsPanel from '../components/AuthEventsPanel'
 import ImageUploadPanel from '../components/ImageUploadPanel'
 import TermDictPanel from '../components/TermDictPanel'
@@ -62,6 +63,7 @@ export default function SettingsPage() {
       <SettingsSection id="tokens" title={t('settings.tabs.tokens')}>
         <McpPanel />
         <ApiTokensPanel />
+        <CapturePanel />
       </SettingsSection>
 
       <SettingsSection id="security" title={t('settings.tabs.security')}>
