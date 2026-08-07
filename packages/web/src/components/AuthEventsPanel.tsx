@@ -96,7 +96,10 @@ export default function AuthEventsPanel() {
       </div>
 
       {events.length === 0 ? (
-        <p className="text-[12px] text-muted-foreground">{t('authEvents.empty')}</p>
+        <div className="space-y-1">
+          <p className="text-[12px] text-muted-foreground">{t('authEvents.empty')}</p>
+          <p className="text-[11.5px] text-muted-foreground/70 leading-relaxed">{t('authEvents.emptyHint')}</p>
+        </div>
       ) : (
         <div className="rounded-lg border border-border overflow-hidden">
           {events.map((ev, i) => {

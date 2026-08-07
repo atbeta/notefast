@@ -187,8 +187,9 @@
     "dateTime": "{{month}}/{{day}} {{hour}}:{{minute}}",
     "title": "Sign-in activity",
     "recentCount": "Last 30 sign-ins",
-    "helpTip": "If you spot an unfamiliar IP or device, change your password immediately.",
-    "empty": "No sign-in records yet. New sign-ins will appear here.",
+    "helpTip": "Password is configured at deployment (AUTH_PASSWORD env) and can't be changed in-app; this only records password sign-ins. Check deployment config if you see unfamiliar records.",
+    "empty": "No sign-in records yet",
+    "emptyHint": "Desktop client / API-token connections don't go through password sign-in, so this may stay empty. The password is configured at deployment (AUTH_PASSWORD), not in-app.",
     "latest": "Latest"
   },
   "storageLoc": {
