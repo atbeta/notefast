@@ -309,3 +309,52 @@ describe('回收站（GET /docs/trash + restore）', () => {
     expect(left.c).toBe(0)
   })
 })
+
+describe('侧栏计数（GET /docs/counts）', () => {
+  interface Counts { inbox: number; archived: number; trash: number; untagged: number; ai_exclude: number }
+
+  async function readCounts(): Promise<Counts> {
+    const res = await app.request('/docs/counts')
+    expect(res.status).toBe(200)
+    return (await res.json()) as Counts
+  }
+
+  test('inbox/trash 队列与 untagged/ai_exclude 审计计数', async () => {
+    // delta 断言：本文件其他测试可能遗留文档，只校验本次操作的净变化
+    const before = await readCounts()
+
+    const idA = await createDoc('计数A') // note + untagged → 打标签
+    const idB = await createDoc('计数B') // note + untagged → inbox
+    const idC = await createDoc('计数C') // note + untagged → archived → 软删除进回收站
+    const idD = await createDoc('计数D') // note + untagged → ai_exclude
+
+    await app.request(`/docs/${idA}/tags`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: ['tag'] }),
+    })
+    await app.request(`/docs/${idB}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'inbox' }),
+    })
+    await app.request(`/docs/${idC}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'archived' }),
+    })
+    await app.request(`/docs/${idD}/ai-exclude`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ai_exclude: true }),
+    })
+    await app.request(`/docs/${idC}`, { method: 'DELETE' })
+
+    const after = await readCounts()
+    expect(after.inbox - before.inbox).toBe(1)            // B
+    expect(after.archived - before.archived).toBe(0)      // C 已进回收站
+    expect(after.trash - before.trash).toBe(1)            // C
+    expect(after.ai_exclude - before.ai_exclude).toBe(1)  // D
+    expect(after.untagged - before.untagged).toBe(2)      // B(inbox) + D(ai_exclude)；A 已打标签，C 在回收站
+  })
+})

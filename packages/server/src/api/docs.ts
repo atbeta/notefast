@@ -173,6 +173,27 @@ docs.get('/trash', (c) => {
   )
 })
 
+/** 侧栏徽章计数：一次请求返回各集合文档数（与 /list 同谓词，Node 端统计） */
+docs.get('/counts', (c) => {
+  const db = getDb()
+  const rows = listDocRows(db, {})
+  let inbox = 0
+  let archived = 0
+  let untagged = 0
+  let aiExclude = 0
+  for (const r of rows) {
+    const status = readDocStatus(r)
+    if (status === 'inbox') inbox++
+    else if (status === 'archived') archived++
+    if (readTags(r).length === 0) untagged++
+    if (readAiExclude(r)) aiExclude++
+  }
+  const trashRow = db
+    .query("SELECT count(*) AS c FROM blocks WHERE type = 'document' AND is_deleted = 1")
+    .get() as { c: number }
+  return c.json({ inbox, archived, untagged, ai_exclude: aiExclude, trash: trashRow.c })
+})
+
 docs.get('/:id', (c) => {
   const db = getDb()
   const id = c.req.param('id')

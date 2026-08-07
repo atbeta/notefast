@@ -44,6 +44,25 @@ interface SidebarProps {
   onToggleAiChat?: () => void
 }
 
+/** GET /docs/counts 返回的侧栏徽章计数（inbox/trash 是队列，untagged/ai_exclude 是债务与审计） */
+interface SidebarCounts {
+  inbox: number
+  archived: number
+  trash: number
+  untagged: number
+  ai_exclude: number
+}
+
+const EMPTY_COUNTS: SidebarCounts = { inbox: 0, archived: 0, trash: 0, untagged: 0, ai_exclude: 0 }
+
+/** 计数徽章统一样式（收集箱 / 回收站 / 智能视图共用） */
+const COUNT_BADGE_CLS =
+  'ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-sidebar-accent text-sidebar-muted tabular-nums'
+
+function formatCount(n: number): string {
+  return n > 99 ? '99+' : String(n)
+}
+
 const RECENT_PREVIEW = 6
 const RECENT_MAX = 15
 
@@ -198,8 +217,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const { t } = useTranslation()
   const location = useLocation()
-  const [inboxCount, setInboxCount] = useState(0)
-  const [archivedCount, setArchivedCount] = useState(0)
+  const [counts, setCounts] = useState<SidebarCounts>(EMPTY_COUNTS)
   const [recentExpanded, setRecentExpanded] = useState(false)
   const [smartOpen, toggleSmart] = useSidebarSectionOpen('smart', true)
   const [pinnedOpen, togglePinned] = useSidebarSectionOpen('pinned', true)
@@ -241,13 +259,10 @@ export default function Sidebar({
     return () => window.removeEventListener(DRAFT_CHANGED_EVENT, compute)
   }, [allRecent])
 
-  // 收集箱计数 + 归档计数（SSE 变更即时刷新 + 15s 兜底轮询）
+  // 侧栏徽章计数（收集箱/回收站/智能视图）：一次 /docs/counts，SSE 变更即时刷新 + 15s 兜底轮询
   const refreshCounts = useCallback(() => {
-    api.get<DocSummary[]>('/docs/list?status=inbox')
-      .then((list) => { setInboxCount(list.length) })
-      .catch(() => {})
-    api.get<DocSummary[]>('/docs/list?status=archived')
-      .then((list) => { setArchivedCount(list.length) })
+    api.get<SidebarCounts>('/docs/counts')
+      .then(setCounts)
       .catch(() => {})
   }, [])
 
@@ -262,19 +277,10 @@ export default function Sidebar({
   )
 
   useEffect(() => {
-    let cancelled = false
-    const refresh = () => {
-      api.get<DocSummary[]>('/docs/list?status=inbox')
-        .then((list) => { if (!cancelled) setInboxCount(list.length) })
-        .catch(() => {})
-      api.get<DocSummary[]>('/docs/list?status=archived')
-        .then((list) => { if (!cancelled) setArchivedCount(list.length) })
-        .catch(() => {})
-    }
-    refresh()
-    const t = setInterval(refresh, 15_000)
-    return () => { cancelled = true; clearInterval(t) }
-  }, [location.pathname])
+    refreshCounts()
+    const t = setInterval(refreshCounts, 15_000)
+    return () => clearInterval(t)
+  }, [location.pathname, refreshCounts])
 
   const closeAfterNav = useCallback(() => {
     onNavigate?.()
@@ -385,24 +391,20 @@ export default function Sidebar({
         <Link to="/inbox" onClick={closeAfterNav} className={location.pathname === '/inbox' ? 'sidebar-link-active' : 'sidebar-link'}>
           <Inbox className="w-[15px] h-[15px]" strokeWidth={1.75} />
           <span className="flex-1">{t('sidebar.inbox')}</span>
-          {inboxCount > 0 && (
-            <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-sidebar-accent text-sidebar-muted tabular-nums">
-              {inboxCount > 99 ? '99+' : inboxCount}
-            </span>
+          {counts.inbox > 0 && (
+            <span className={COUNT_BADGE_CLS}>{formatCount(counts.inbox)}</span>
           )}
         </Link>
         <Link to="/archived" onClick={closeAfterNav} className={location.pathname === '/archived' ? 'sidebar-link-active' : 'sidebar-link'}>
           <Archive className="w-[15px] h-[15px]" strokeWidth={1.75} />
           <span className="flex-1">{t('sidebar.archived')}</span>
-          {archivedCount > 0 && (
-            <span className="ml-auto text-[10px] text-sidebar-muted/70 tabular-nums">
-              {archivedCount > 99 ? '99+' : archivedCount}
-            </span>
-          )}
         </Link>
         <Link to="/trash" onClick={closeAfterNav} className={location.pathname === '/trash' ? 'sidebar-link-active' : 'sidebar-link'}>
           <Trash2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
           <span className="flex-1">{t('sidebar.trash')}</span>
+          {counts.trash > 0 && (
+            <span className={COUNT_BADGE_CLS}>{formatCount(counts.trash)}</span>
+          )}
         </Link>
         <Link to="/entities" onClick={closeAfterNav} className={location.pathname === '/entities' ? 'sidebar-link-active' : 'sidebar-link'}>
           <Waypoints className="w-[15px] h-[15px]" strokeWidth={1.75} />
@@ -450,7 +452,10 @@ export default function Sidebar({
                 className={location.search.includes('ai_exclude=1') ? 'sidebar-link-active' : 'sidebar-link'}
               >
                 <EyeOff className="w-[15px] h-[15px]" strokeWidth={1.75} />
-                {t('sidebar.aiHidden')}
+                <span className="flex-1">{t('sidebar.aiHidden')}</span>
+                {counts.ai_exclude > 0 && (
+                  <span className={COUNT_BADGE_CLS}>{formatCount(counts.ai_exclude)}</span>
+                )}
               </Link>
               <Link
                 to="/?view=untagged"
@@ -458,7 +463,10 @@ export default function Sidebar({
                 className={location.search.includes('untagged') || location.search.includes('view=untagged') ? 'sidebar-link-active' : 'sidebar-link'}
               >
                 <Tag className="w-[15px] h-[15px]" strokeWidth={1.75} />
-                {t('sidebar.untagged')}
+                <span className="flex-1">{t('sidebar.untagged')}</span>
+                {counts.untagged > 0 && (
+                  <span className={COUNT_BADGE_CLS}>{formatCount(counts.untagged)}</span>
+                )}
               </Link>
             </>
           )}
