@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 import Darwin
 
@@ -169,3 +170,4 @@ public final class EngineProcess {
         }
     }
 }
+#endif
