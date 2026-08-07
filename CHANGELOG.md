@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.48.0](https://github.com/atbeta/notefast/compare/v0.47.1...v0.48.0) (2026-08-07)
+
+
+### Features
+
+* **web:** tag picker popover for reusing existing tags ([c5aa3ce](https://github.com/atbeta/notefast/commit/c5aa3cec1d2a9c22e3ae98d9e0201019d71b0294))
+
+
+### Bug Fixes
+
+* **web:** drive palette backdrop blur with rAF for smooth fade ([2d4df7e](https://github.com/atbeta/notefast/commit/2d4df7e6b789f229cd708d08aff0a8e6469ba24d))
+
 ## [0.47.1](https://github.com/atbeta/notefast/compare/v0.47.0...v0.47.1) (2026-08-07)
 
 
