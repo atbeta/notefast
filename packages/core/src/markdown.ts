@@ -181,13 +181,15 @@ function parseLine(line: string): Omit<ParsedBlock, 'depth' | 'children'> {
     }
   }
 
-  const listMatch = line.match(/^(\t| {2,})*[-*+]\s+(.*)/)
+  const listMatch = line.match(/^(\t| {2,})*([-*+])\s+(.*)/)
   if (listMatch) {
-    const t = stripTaskPrefix(listMatch[2])
+    const t = stripTaskPrefix(listMatch[3])
     return {
       type: BlockType.ListItem,
       content: t.content,
-      properties: { ordered: false, ...t.taskProps },
+      // marker 保真：记录原始列表标记符（+ / * / -），导出时优先回写，
+      // 避免用户的 `+` 列表被归一化成 `-`（存量数据无此字段，导出回退 `-`）
+      properties: { ordered: false, marker: listMatch[2], ...t.taskProps },
     }
   }
 
@@ -285,13 +287,26 @@ function blocksToCreateInputs(root: ParsedBlock, notebookId: string): CreateBloc
 export function blocksToMarkdown(blocks: Block[]): string {
   const lines: string[] = []
 
-  function traverse(children: Block[], depth: number) {
-    for (const block of children) {
+  // compact：引用块内部不插空行（空行会把一个 quote 拆成两段）
+  function traverse(children: Block[], depth: number, compact = false) {
+    for (let i = 0; i < children.length; i++) {
+      const block = children[i]
+      // 块间空行：标准 CommonMark 渲染器需要空行分隔段落/标题/代码等块级元素，
+      // 不空行会让外部渲染把多段并成一段（用户感知的「空行消失」）；
+      // 仅连续列表项之间不空行（会拆散列表），列表与前后块之间照常空行；
+      // 多空行由末尾 \n{3,}→\n\n 收敛
+      const prev = children[i - 1]
+      const inListRun = block.type === BlockType.ListItem && prev?.type === BlockType.ListItem
+      if (i > 0 && !compact && !inListRun) {
+        lines.push('')
+      }
       switch (block.type) {
         case BlockType.Document: {
           const title = (block.content || '').trim()
           if (title && depth === 0) {
             lines.push(`# ${title}`)
+            // 标题与正文之间空行（同块间空行规则，防外部渲染并段）
+            lines.push('')
           }
           // 若首个子块是与文档标题同文的 H1，跳过该行（仍导出其子内容），
           // 避免 `# title` + `# title` 双行（strip 因有子块未剥、或 API 直写同名 H1）
@@ -337,8 +352,9 @@ export function blocksToMarkdown(blocks: Block[]): string {
 
         case BlockType.ListItem: {
           const indent = '  '.repeat(Math.max(0, depth - 1))
-          // ordered 存为「1.」（CommonMark 渲染时自动重编号）；task 回写 [ ]/[x]
-          const bullet = block.properties.ordered ? '1.' : '-'
+          // ordered 存为「1.」（CommonMark 渲染时自动重编号）；task 回写 [ ]/[x]；
+          // 无序 marker 优先用 parse 记录的原始字符（+ / *），缺省回退 -
+          const bullet = block.properties.ordered ? '1.' : (block.properties.marker as string) || '-'
           const task = block.properties.task
             ? `[${block.properties.checked ? 'x' : ' '}] `
             : ''
@@ -364,7 +380,7 @@ export function blocksToMarkdown(blocks: Block[]): string {
           for (const l of contentLines) {
             lines.push(`${prefix}${l}`)
           }
-          traverse(block.children, depth)
+          traverse(block.children, depth, true)
           break
         }
 

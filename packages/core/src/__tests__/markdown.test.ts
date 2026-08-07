@@ -241,7 +241,7 @@ describe('blocksToMarkdown', () => {
       ]),
     ]
     const md = blocksToMarkdown(blocks)
-    expect(md).toBe('# 标题\n正文\n')
+    expect(md).toBe('# 标题\n\n正文\n')
   })
 
   test('文档标题与不同文首 H1 都保留', () => {
@@ -251,7 +251,7 @@ describe('blocksToMarkdown', () => {
       ]),
     ]
     const md = blocksToMarkdown(blocks)
-    expect(md).toBe('# 文档名\n# 章节\n')
+    expect(md).toBe('# 文档名\n\n# 章节\n')
   })
 
   test('导出代码块', () => {
@@ -352,5 +352,58 @@ describe('列表增强（ordered / task）', () => {
     const reItems = re.filter((i) => i.type === BlockType.ListItem)
     expect(reItems.filter((i) => i.properties?.task).length).toBe(2)
     expect(reItems.filter((i) => i.properties?.ordered === true).length).toBe(2)
+  })
+})
+
+describe('格式保真（marker / 块间空行）', () => {
+  // makeBlock 定义在上方 blocksToMarkdown describe 内（作用域不可达），此处本地复刻
+  function makeBlock(id: string, type: string, content: string, parentId: string | null, children: any[] = [], props: Record<string, unknown> = {}): any {
+    return {
+      id, notebook_id: 'nb1', parent_id: parentId, root_id: 'doc',
+      type, content, properties: props, sort: 0, level: parentId ? 1 : 0,
+      created_at: '', updated_at: '', children,
+    }
+  }
+
+  test('无序列表原始 marker 保真：+ 和 * 不再被归一化成 -', () => {
+    const inputs = parseMarkdownToBlocks('+ 苹果\n* 香蕉\n- 橘子', 'nb')
+    expect(inputs[0]!.properties?.marker).toBe('+')
+    expect(inputs[1]!.properties?.marker).toBe('*')
+    expect(inputs[2]!.properties?.marker).toBe('-')
+
+    const blocks = inputs.map((inp, i) =>
+      makeBlock(`l${i}`, 'list_item', inp.content ?? '', 'doc', [], inp.properties),
+    )
+    const md = blocksToMarkdown(blocks)
+    expect(md).toContain('+ 苹果')
+    expect(md).toContain('* 香蕉')
+    expect(md).toContain('- 橘子')
+  })
+
+  test('存量数据无 marker 字段时导出回退 -', () => {
+    const blocks = [makeBlock('l1', 'list_item', '旧数据', 'doc', [], { ordered: false })]
+    expect(blocksToMarkdown(blocks)).toContain('- 旧数据')
+  })
+
+  test('段落/标题/代码块之间导出空行（外部渲染不并段），列表项之间不空行', () => {
+    const blocks = [
+      makeBlock('h1', 'heading', '章节', null, [], { headingLevel: 2 }),
+      makeBlock('p1', 'paragraph', '第一段', null),
+      makeBlock('p2', 'paragraph', '第二段', null),
+      makeBlock('l1', 'list_item', '项目A', null),
+      makeBlock('l2', 'list_item', '项目B', null),
+    ]
+    const md = blocksToMarkdown(blocks)
+    expect(md).toBe('## 章节\n\n第一段\n\n第二段\n\n- 项目A\n- 项目B\n')
+  })
+
+  test('块间空行不破坏 round-trip（parse 跳过空行）', () => {
+    const original = '## 章节\n\n第一段\n\n第二段\n\n+ 项目A\n+ 项目B\n'
+    const inputs = parseMarkdownToBlocks(original, 'nb')
+    const blocks = inputs.map((inp, i) =>
+      makeBlock(`b${i}`, inp.type, inp.content ?? '', null, [], inp.properties),
+    )
+    // 重建导出（list_item 平铺，无 List 容器嵌套）
+    expect(blocksToMarkdown(blocks)).toBe(original)
   })
 })
