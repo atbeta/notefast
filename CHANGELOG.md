@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.47.0](https://github.com/atbeta/notefast/compare/v0.46.0...v0.47.0) (2026-08-07)
+
+
+### Features
+
+* **clients:** dedicated markdown document icon for .md association ([0136915](https://github.com/atbeta/notefast/commit/0136915735c4cd49506f8d16c8b4747540c45ff3))
+* **trash:** permanent delete and empty trash ([ff8177b](https://github.com/atbeta/notefast/commit/ff8177b572172f1cc626556910ee92cc918b5cf3))
+* **web:** honest local-link hint in share dialog ([db11513](https://github.com/atbeta/notefast/commit/db11513a315ea5fa466079ed5ccc7025953aae9c))
+* **web:** pinned views sorted by name for predictable order ([ad0a8ec](https://github.com/atbeta/notefast/commit/ad0a8ec3ecc360811ae222581e7d719170ee7ed8))
+* **web:** show document creation time in list and doc header ([f921be4](https://github.com/atbeta/notefast/commit/f921be4c892995fd3904e5d5f763cbaed1ceb191))
+* **web:** sidebar count badges for queues and audit views ([2d44249](https://github.com/atbeta/notefast/commit/2d44249ad2468b0516a1b7de0323815fcce6b722))
+* **web:** surface built-in MCP in settings panel ([9e676d0](https://github.com/atbeta/notefast/commit/9e676d0b0797da6b1b46d85b44ac10be9c9a7dc2))
+
+
+### Bug Fixes
+
+* **server:** tag and ai-exclude edits no longer bump updated_at ([836e175](https://github.com/atbeta/notefast/commit/836e175b84eb960a4b7b91d3ffa5c86de5efd010))
+* **sync:** archive export save dialog and honest import feedback ([9b9f907](https://github.com/atbeta/notefast/commit/9b9f90729c72e45e060132ff5c077af8bc84b0d3))
+* **web:** code block body is a flush solid block under the header ([6324e25](https://github.com/atbeta/notefast/commit/6324e250f70fb41a71d5bef052721591a224c3de))
+* **web:** command palette backdrop blur animates with fade-in ([a43f54d](https://github.com/atbeta/notefast/commit/a43f54d3533ec7d0c12d747993341e5ae916845a))
+
 ## [0.46.0](https://github.com/atbeta/notefast/compare/v0.45.0...v0.46.0) (2026-08-07)
 
 
