@@ -140,6 +140,24 @@
     "remove": "移除",
     "deviceHint": "设备注册存放在共享存储中（每设备一记录）；「移除」仅移除注册记录，已持有 S3 凭证的设备仍需更换凭证才能真正拦截。"
   },
+  "mcp": {
+    "title": "MCP 接入",
+    "helpTip": "让外部 AI 助手（Claude Desktop / Cursor / Cline 等）通过 MCP 协议读写你的知识库",
+    "enabled": "已启用",
+    "endpointLabel": "端点地址",
+    "configLabel": "连接配置",
+    "configHint": "粘贴到 Claude Desktop / Cursor 等客户端的 MCP 配置",
+    "copyConfig": "复制配置",
+    "copied": "已复制",
+    "tokenLabel": "访问令牌",
+    "tokenDesc": "MCP 使用 Bearer Token 鉴权。生成一个专用令牌，连接配置会自动填入。",
+    "generateToken": "生成连接令牌",
+    "tokenOnce": "令牌只显示这一次，关闭后无法再查看；可在「API 令牌」面板撤销",
+    "tokenName": "MCP 连接",
+    "tokenFailed": "令牌生成失败",
+    "manageHint": "已有令牌在「API 令牌」面板管理",
+    "toolsLabel": "能力清单（{{n}} 个工具）"
+  },
   "apiTokens": {
     "scopeRequired": "请至少选择一项权限",
     "createFailed": "创建失败",

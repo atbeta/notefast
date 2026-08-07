@@ -17,7 +17,7 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { getDb } from '../db'
-import { createRegisterTool, type ToolContext } from './tools/helpers'
+import { createRegisterTool, resetMcpToolRegistry, type ToolContext } from './tools/helpers'
 import { registerDocReadTools } from './tools/docRead'
 import { registerDocWriteTools } from './tools/docWrite'
 import { registerAiChatTools } from './tools/aiChat'
@@ -26,6 +26,7 @@ import { registerEntityTools } from './tools/entityTools'
 import { registerShareTools } from './tools/share'
 
 export function registerMcpTools(server: McpServer, notebookId: string): void {
+  resetMcpToolRegistry()
   const ctx: ToolContext = {
     server,
     db: getDb(),

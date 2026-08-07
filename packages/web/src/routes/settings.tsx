@@ -12,6 +12,7 @@ import SyncProtocolPanel from '../components/SyncProtocolPanel'
 import SyncPanel from '../components/SyncPanel'
 import StorageLocationsPanel from '../components/StorageLocationsPanel'
 import ApiTokensPanel from '../components/ApiTokensPanel'
+import McpPanel from '../components/McpPanel'
 import AuthEventsPanel from '../components/AuthEventsPanel'
 import ImageUploadPanel from '../components/ImageUploadPanel'
 import TermDictPanel from '../components/TermDictPanel'
@@ -59,6 +60,7 @@ export default function SettingsPage() {
       </SettingsSection>
 
       <SettingsSection id="tokens" title={t('settings.tabs.tokens')}>
+        <McpPanel />
         <ApiTokensPanel />
       </SettingsSection>
 

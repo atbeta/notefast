@@ -8,7 +8,7 @@
       "termdict": "实体词典",
       "images": "图床与图片",
       "backup": "灾备与归档",
-      "tokens": "API Tokens",
+      "tokens": "API 与外部接入",
       "security": "账户安全"
     },
     "language": {

@@ -27,6 +27,8 @@ import { createRateLimit } from './middleware/rateLimit'
 import { eventContextMiddleware } from './middleware/eventContext'
 import { emitAppEvent } from './events'
 import { handleMcpRequest } from './mcp/server'
+import { registerMcpTools } from './mcp/tools'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { startAutoExport } from './services/autoExport'
 import { initAiRuntime } from './services/aiRuntime'
 import { initSyncManager } from './sync/manager'
@@ -58,6 +60,7 @@ import apiTokens from './api/apiTokens'
 import pinnedViews from './api/pinnedViews'
 import preferences from './api/preferences'
 import statusRouter from './api/status'
+import mcpRouter from './api/mcp'
 import termDict from './api/termDict'
 import eventsRouter from './api/events'
 import syncProtocolRouter from './api/syncProtocol'
@@ -246,6 +249,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   app.route('/api/v1/preferences', preferences)
   app.route('/api/v1/status', statusRouter)
   app.route('/api/v1/term-dict', termDict)
+  app.route('/api/v1/mcp', mcpRouter)
   app.route('/api/v1/events', eventsRouter)
   app.route('/api/v1/sync/protocol', syncProtocolRouter)
 
@@ -284,6 +288,13 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     initAiRuntime(pluginSystem, dataDir)
     initTermDict(dataDir)
     startEntityDescribe()
+
+    // MCP 工具注册表预填充：真实 SDK 注册在首次 MCP 会话时（createSession 懒加载），
+    // 但设置页 /api/v1/mcp/tools 需要启动即有数据；重复注册幂等（reset + 重推）
+    registerMcpTools(
+      new McpServer({ name: 'notefast', version: '0.1.0' }, { capabilities: { tools: {}, resources: {} } }),
+      notebookId,
+    )
 
     app.all('/mcp', authMiddleware, async (c) => {
       return handleMcpRequest(notebookId, c)

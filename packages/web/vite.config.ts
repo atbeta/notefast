@@ -14,6 +14,12 @@ export default defineConfig({
         target: 'http://localhost:3140',
         changeOrigin: true,
       },
+      // MCP 端点同源代理：设置页展示的 MCP URL 用 location.origin + /mcp，
+      // dev 下页面在 :5173，需把 /mcp 转发到后端
+      '/mcp': {
+        target: 'http://localhost:3140',
+        changeOrigin: true,
+      },
     },
   },
 })

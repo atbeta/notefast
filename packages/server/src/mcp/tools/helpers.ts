@@ -161,8 +161,21 @@ export type RegisterToolFn = McpServer['registerTool']
 
 /** 统一在注册处包一层日志，避免逐个 handler 手动包裹 */
 export function createRegisterTool(server: McpServer): RegisterToolFn {
-  return ((name: string, config: unknown, handler: (args: never) => Promise<unknown>) =>
-    server.registerTool(name, config as never, withToolLogging(name, handler) as never)) as RegisterToolFn
+  return ((name: string, config: unknown, handler: (args: never) => Promise<unknown>) => {
+    const desc = typeof config === 'object' && config !== null && 'description' in config
+      ? String((config as { description: unknown }).description)
+      : ''
+    mcpToolRegistry.push({ name, description: desc })
+    return server.registerTool(name, config as never, withToolLogging(name, handler) as never)
+  }) as RegisterToolFn
+}
+
+/** MCP 工具注册表：注册时收集（供 GET /api/v1/mcp/tools 展示，设置页「MCP 能力清单」用） */
+export const mcpToolRegistry: Array<{ name: string; description: string }> = []
+
+/** 清空注册表（registerMcpTools 开头调用，保证重复初始化不叠加） */
+export function resetMcpToolRegistry(): void {
+  mcpToolRegistry.length = 0
 }
 
 /** 工具组注册上下文：server + db + 默认 notebook + 包日志的 registerTool */

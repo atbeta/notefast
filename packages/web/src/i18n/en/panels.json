@@ -140,6 +140,24 @@
     "remove": "Remove",
     "deviceHint": "Device registrations live in the shared storage (one record per device); “Remove” only deletes the record — a device holding S3 credentials still needs its credentials rotated to be truly blocked."
   },
+  "mcp": {
+    "title": "MCP Access",
+    "helpTip": "Let external AI assistants (Claude Desktop, Cursor, Cline…) read and write your knowledge base over MCP",
+    "enabled": "Enabled",
+    "endpointLabel": "Endpoint",
+    "configLabel": "Connection config",
+    "configHint": "Paste into the MCP config of Claude Desktop, Cursor, etc.",
+    "copyConfig": "Copy config",
+    "copied": "Copied",
+    "tokenLabel": "Access token",
+    "tokenDesc": "MCP authenticates with a Bearer token. Generate a dedicated token and the config fills in automatically.",
+    "generateToken": "Generate connection token",
+    "tokenOnce": "This token is shown only once and cannot be viewed again; revoke it anytime in the API Tokens panel",
+    "tokenName": "MCP connection",
+    "tokenFailed": "Failed to generate token",
+    "manageHint": "Existing tokens are managed in the API Tokens panel",
+    "toolsLabel": "Available tools ({{n}})"
+  },
   "apiTokens": {
     "scopeRequired": "Please select at least one permission",
     "createFailed": "Failed to create",
