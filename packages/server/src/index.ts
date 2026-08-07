@@ -35,6 +35,10 @@ if (!isAuthEnabled()) {
   console.warn('⚠️  未配置任何鉴权（API_TOKEN / AUTH_PASSWORD / READ_TOKEN / WRITE_TOKEN）')
   console.warn('⚠️  所有 API/MCP 请求将以 admin 权限放行，仅适用于本地开发或可信内网')
   console.warn('⚠️  暴露到公网前请务必配置鉴权（见 .env.example）')
+  // 免鉴权 + CORS 通配 = 任意网页可跨域读写整个库（bookmarklet 本机开发场景才需要这个组合）
+  if ((process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).includes('*')) {
+    console.warn('⚠️  CORS_ORIGINS 含 * 且当前免鉴权：任意网页都能读写整个知识库，仅限本机开发，切勿监听非回环地址')
+  }
 }
 
 // 优雅停机：docker restart / systemd stop 的 SIGTERM 先停止接收新连接，
