@@ -273,17 +273,20 @@ export default function EntitiesPage() {
                   {suggests.map((g, i) => {
                     const [a, b] = g.entities
                     if (!a || !b) return null
+                    // 行内直接呈现合并方向（与 mergeGroups 同一判定）：from 并入 target，target 存活
+                    const target = a.mention_count >= b.mention_count ? a : b
+                    const from = target === a ? b : a
                     return (
                       <div
                         key={i}
                         className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2"
                       >
                         <span className="text-[12px] text-muted-foreground tabular-nums min-w-0">
-                          <span className="text-foreground">{a.display}</span>
-                          <span className="mx-1 text-muted-foreground/50">({a.mention_count})</span>
+                          <span className="text-foreground">{from.display}</span>
+                          <span className="mx-1 text-muted-foreground/50">({from.mention_count})</span>
                           <span className="text-muted-foreground/60">→</span>
-                          <span className="ml-1 text-foreground">{b.display}</span>
-                          <span className="mx-1 text-muted-foreground/50">({b.mention_count})</span>
+                          <span className="ml-1 text-foreground font-medium">{target.display}</span>
+                          <span className="mx-1 text-muted-foreground/50">({target.mention_count})</span>
                           <span className="hidden sm:inline text-muted-foreground/60"> · {g.reason}</span>
                         </span>
                         <button
