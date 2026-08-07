@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { initDb, closeDb, getDb } from '../db'
 import { insertBlock, updateBlock, softDeleteBlocks, restoreBlocks, nowTimestamp } from '../store/blocks'
-import { listChanges, getChangesAnchor } from '../store/changeFeed'
+import { listChanges, getChangesAnchor, pruneChanges } from '../store/changeFeed'
 
 /**
  * 变更馈送（change feed）：entity_changes 由 blocks 表 trigger 驱动，
@@ -92,5 +92,50 @@ describe('change feed（entity_changes）', () => {
     const page2 = listChanges(db, { sinceSeq: page1[page1.length - 1]!.seq, limit: 2 })
     expect(page2.length).toBe(1)
     expect([...page1, ...page2].map((c) => c.entity_id)).toEqual(ids)
+  })
+})
+
+describe('pruneChanges（同步 compaction 裁剪）', () => {
+  test('按锚点裁剪：seq <= 锚点的行删除，之后的行保留', () => {
+    const db = getDb()
+    insertParagraph(crypto.randomUUID())
+    const anchor = getChangesAnchor(db)
+    insertParagraph(crypto.randomUUID())
+    insertParagraph(crypto.randomUUID())
+
+    const before = listChanges(db)
+    const deleted = pruneChanges(db, anchor)
+    expect(deleted).toBe(before.filter((c) => c.seq <= anchor).length)
+
+    const remaining = listChanges(db)
+    expect(remaining.length).toBe(2)
+    expect(remaining.every((c) => c.seq > anchor)).toBe(true)
+  })
+
+  test('锚点为 0 / 负数时零裁剪（未配置同步防静默漏数据的回归钉）', () => {
+    const db = getDb()
+    insertParagraph(crypto.randomUUID())
+    const before = listChanges(db).length
+    expect(before).toBeGreaterThan(0)
+    // 未配置同步 / 空快照锚点时绝不能裁：首次发布会从 seq=0 全量回放
+    expect(pruneChanges(db, 0)).toBe(0)
+    expect(pruneChanges(db, -1)).toBe(0)
+    expect(listChanges(db).length).toBe(before)
+  })
+
+  test('裁剪后新变更 seq 不回退（sqlite_sequence 不随删除重置）', () => {
+    const db = getDb()
+    const anchor = getChangesAnchor(db)
+    expect(anchor).toBeGreaterThan(0)
+    // 裁掉全部历史
+    pruneChanges(db, anchor)
+    expect(listChanges(db)).toEqual([])
+    expect(getChangesAnchor(db)).toBe(0)
+
+    // 新变更的 seq 从旧锚点之后继续，publish 从锚点续拉可拿到
+    insertParagraph(crypto.randomUUID())
+    const next = listChanges(db, { sinceSeq: anchor })
+    expect(next.length).toBe(1)
+    expect(next[0]!.seq).toBeGreaterThan(anchor)
   })
 })

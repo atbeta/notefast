@@ -14,7 +14,7 @@ import {
   readManifest,
   updateManifest,
 } from '../sync/protocol'
-import { getChangesAnchor } from '../store/changeFeed'
+import { getChangesAnchor, listChanges } from '../store/changeFeed'
 import { createS3ObjectStore } from '../storage/objectStore'
 import {
   CHANGES_PER_SEGMENT,
@@ -225,6 +225,33 @@ describe('sync protocol (publish → consume)', () => {
     expect([...objects.keys()].some((k) => k.endsWith('snapshot.db'))).toBe(true)
     // 旧增量段被清空
     expect([...objects.keys()].some((k) => k.includes(`${SYNC_S3_DIR}/changes/`))).toBe(false)
+  })
+
+  test('compactChanges 以快照锚点裁剪本地 entity_changes，之后的新变更照常发布', async () => {
+    const { client, objects } = makeMockS3()
+    const store = createS3ObjectStore(S3_STORE_CFG, client)
+    const workDir = join(testDir, `compact-prune-${crypto.randomUUID()}`)
+
+    insertBlockRow(crypto.randomUUID(), '待裁剪块')
+    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0, 'dev-test')
+    expect(listChanges(sourceDb).length).toBeGreaterThan(0)
+
+    // compaction：快照覆盖到锚点 → 本地 <= 锚点的历史行被裁剪
+    const anchor = await compactChanges(sourceDb, store, CFG.prefix, workDir)
+    expect(anchor).toBe(lastSeq)
+    expect(listChanges(sourceDb)).toEqual([])
+    expect(getChangesAnchor(sourceDb)).toBe(0)
+
+    // 裁剪不重置 seq：新变更从锚点之后继续，publish 从锚点续拉恰好导出它
+    const d = crypto.randomUUID()
+    insertBlockRow(d, '裁剪后的新块')
+    expect(getChangesAnchor(sourceDb)).toBe(anchor + 1)
+    const nextPublished = await publishChanges(sourceDb, store, CFG.prefix, anchor, 'dev-test')
+    expect(nextPublished).toBe(anchor + 1)
+    const segKey = [...objects.keys()].find((k) => k.includes(`${SYNC_S3_DIR}/changes/`))!
+    const lines = String(objects.get(segKey)).split('\n').filter((l) => l.trim())
+    expect(lines.length).toBe(1)
+    expect(JSON.parse(lines[0]!).entity_id).toBe(d)
   })
 
   test('consumeSnapshot 拉取快照写入目标文件（可校验）', async () => {

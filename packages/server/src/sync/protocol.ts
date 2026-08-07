@@ -25,7 +25,7 @@ import {
   type SyncManifest,
 } from '@notefast/core'
 import type { getDb } from '../db'
-import { listChanges, getChangesAnchor } from '../store/changeFeed'
+import { listChanges, getChangesAnchor, pruneChanges } from '../store/changeFeed'
 import { nowTimestamp } from '../store/blocks'
 import { createLocalSnapshot, verifySnapshotFile } from '../backup/snapshot'
 import { durableReplaceFile } from '../backup/durableFs'
@@ -194,6 +194,7 @@ export async function consumeSnapshot(
 /**
  * Compaction：生成新快照（覆盖旧快照）后，删除所有旧 changes 段。
  * 快照已涵盖到锚点 seq，旧增量不再需要（消费端首次/超窗直接拉快照）。
+ * 同时以快照锚点为下界裁剪本地 entity_changes 历史行（pruneChanges）。
  * 返回新快照锚点 seq。
  */
 export async function compactChanges(
@@ -211,6 +212,10 @@ export async function compactChanges(
   if (res.errors.length > 0) {
     console.warn('[sync] compact 部分删除失败:', res.errors.length, '个')
   }
+  // 3) 裁剪本地历史行：必须在快照上传成功之后——下界 seq 已被远端快照覆盖，
+  //    本地发布（publishedSeq 被调用方重置为该锚点）与消费端都不再需要它们。
+  //    锚点为 0（空库快照）时 pruneChanges 内部不裁。
+  pruneChanges(db, anchor)
   return anchor
 }
 

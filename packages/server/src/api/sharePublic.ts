@@ -36,6 +36,9 @@ function resolveShare(token: string) {
  * 文档 → 其引用的 asset sha 集合缓存。
  * 失效令牌用 entity_changes 的全局 MAX(seq)：任何写操作（不限于本文档）都会
  * 使其前进，从而触发重扫；无写时一次 MAX 查询（主键索引）即可复用缓存。
+ * 同步 compaction 裁剪（pruneChanges）会让锚点回退（清空后归 0）：AUTOINCREMENT
+ * 不复用 seq，旧缓存条目不会被错误命中，仅裁剪后缓存于 seq=0 的条目在「再次裁剪」
+ * 的极窄窗口内可能短暂沿用旧引用集合，锚点离开 0 后的首次访问即重扫自愈。
  * 不能用 doc 根的 updated_at 做失效令牌——子 block 编辑不碰根行。
  * 规模：key 仅出现在有公开分享的文档上，天然有界，无需 LRU。
  */

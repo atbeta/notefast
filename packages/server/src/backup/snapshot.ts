@@ -1,9 +1,13 @@
 /**
  * SQLite 在线一致快照：VACUUM INTO + quick_check + SHA-256
  *
- * 快照剥离可重建的向量索引（block_vectors / vec_blocks / vector_entries…）：
- * 向量是可从正文重算的二级索引，占比可达 99%（4096 维 JSON 文本时代 425M 库中 ~415M）；
- * 剥离后备份/同步快照只含核心内容（KB~MB 级），恢复后经「重建索引」按需重建。
+ * 快照剥离两类非核心数据（只清快照副本，VACUUM INTO 不修改源库）：
+ * - 可重建的向量索引（block_vectors / vec_blocks / vector_entries…）：
+ *   向量是可从正文重算的二级索引，占比可达 99%（4096 维 JSON 文本时代 425M 库中 ~415M）；
+ *   剥离后备份/同步快照只含核心内容（KB~MB 级），恢复后经「重建索引」按需重建。
+ * - entity_changes 同步拉取历史：新端以快照为基线起步（锚点之后的增量走 changes 段），
+ *   基线之内的历史用不上，不随快照分发膨胀；源库历史的裁剪由同步 compaction
+ *   （pruneChanges）负责。
  */
 
 import { createHash } from 'node:crypto'
@@ -31,7 +35,7 @@ export async function createLocalSnapshot(workDir: string): Promise<LocalSnapsho
   const live = getDb()
   // VACUUM INTO 生成与当前库一致的紧凑快照（不修改原库）
   live.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`)
-  stripVectorIndexFromSnapshot(dest)
+  stripSecondaryDataFromSnapshot(dest)
 
   const check = verifySnapshotFile(dest)
   const sizeBytes = statSync(dest).size
@@ -46,8 +50,11 @@ export async function createLocalSnapshot(workDir: string): Promise<LocalSnapsho
   }
 }
 
-/** 备份/同步快照剥离向量索引：清空数据、置 stale、回收空间（保留表结构供恢复后重建） */
-function stripVectorIndexFromSnapshot(path: string): void {
+/**
+ * 备份/同步快照剥离非核心数据：清空向量索引并置 stale、清空 entity_changes 历史、
+ * 回收空间（保留表结构供恢复后重建 / 继续累积）。
+ */
+function stripSecondaryDataFromSnapshot(path: string): void {
   const snap = new Database(path)
   try {
     const vecTables = snap.query(
@@ -78,6 +85,8 @@ function stripVectorIndexFromSnapshot(path: string): void {
          WHERE id = 'default'`,
       )
     } catch { /* 表可能不存在，忽略 */ }
+    // entity_changes：同步拉取历史不随快照分发（新端以快照为基线，只需锚点之后的增量）
+    try { snap.exec('DELETE FROM entity_changes') } catch { /* 表可能不存在，忽略 */ }
     snap.exec('VACUUM')
   } finally {
     snap.close()

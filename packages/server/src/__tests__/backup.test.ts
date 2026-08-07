@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { Database } from 'bun:sqlite'
 import {
   buildManifestObjectKey,
   isBackupManifest,
@@ -188,6 +189,37 @@ describe('snapshot', () => {
     verifySnapshotFile(snap.path)
     expect(await hashFile(snap.path)).toBe(snap.sha256)
     cleanupSnapshot(snap.tempDir)
+  })
+
+  test('快照副本剥离 entity_changes 历史（源库不动）', async () => {
+    const db = getDb()
+    // 造一条变更（trigger 写 entity_changes）
+    const nb = (db.query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }).id
+    const docId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
+    ).run(docId, nb, docId, '快照剥离文档', now, now)
+    const feedCount = () =>
+      (db.query('SELECT COUNT(*) AS c FROM entity_changes').get() as { c: number }).c
+    const srcBefore = feedCount()
+    expect(srcBefore).toBeGreaterThan(0)
+
+    const work = join(testDir, `snap-strip-${crypto.randomUUID()}`)
+    mkdirSync(work, { recursive: true })
+    const snap = await createLocalSnapshot(work)
+    try {
+      const copy = new Database(snap.path, { readonly: true })
+      const stripped = (copy.query('SELECT COUNT(*) AS c FROM entity_changes').get() as { c: number }).c
+      copy.close()
+      // 快照副本内同步历史被清空（新端以快照为基线，只需锚点之后的增量）
+      expect(stripped).toBe(0)
+      // 源库一行未动（裁剪源库只走同步 compaction 的 pruneChanges）
+      expect(feedCount()).toBe(srcBefore)
+    } finally {
+      cleanupSnapshot(snap.tempDir)
+    }
   })
 })
 
