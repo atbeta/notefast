@@ -608,6 +608,16 @@ html.theme-fading *::after {
   padding: 0;
   border-radius: 0;
 }
+/* 文档代码块（HighlightedCodeBlock）：代码区整体一块，无上下 padding、
+   无自带背景/边框（交给外层容器），与 header 的区分靠 border-b + 色差。
+   特异性高于 .reading-prose pre，覆盖其 14px/18px 默认内边距。 */
+.reading-prose pre.code-block-body {
+  margin: 0;
+  padding: 0 18px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
 .reading-prose ul,
 .reading-prose ol {
   padding-left: 1.2em;
@@ -728,7 +738,8 @@ html.theme-fading *::after {
 }
 .chat-code-block pre {
   margin: 0;
-  padding: 0.65em 0.75em;
+  /* 代码区整体一块：去掉上下 padding，与 header 的区分靠背景色差 + border-b */
+  padding: 0 0.75em;
   overflow-x: auto;
   font-family: var(--font-mono);
   font-size: 12px;

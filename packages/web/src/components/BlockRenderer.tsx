@@ -293,7 +293,9 @@ function HighlightedCodeBlock({ block, lang }: { block: Block; lang: string }) {
           showText
         />
       </div>
-      <pre className="p-4 overflow-x-auto text-[13px] font-mono leading-[1.6] text-foreground">
+      {/* 代码区：整体一块，无上下 padding（区分靠 header 的 border-b + 色差）；
+          code-block-body 覆盖 .reading-prose pre 的 14px/18px，px-4 作非 reading-prose 兜底 */}
+      <pre className="code-block-body px-4 overflow-x-auto text-[13px] font-mono leading-[1.6] text-foreground">
         {highlighted ? (
           <code
             className={`hljs language-${lang}`}
