@@ -430,6 +430,7 @@ export default function EntityGraph({
             return (
               <line
                 key={i}
+                className="graph-edge"
                 x1={s.x}
                 y1={s.y}
                 x2={t.x}
@@ -450,6 +451,7 @@ export default function EntityGraph({
             return (
               <g
                 key={n.id}
+                className="graph-node"
                 transform={`translate(${n.x},${n.y})`}
                 opacity={opacity}
                 onPointerDown={(e) => onNodePointerDown(e, n.id)}

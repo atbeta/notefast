@@ -216,6 +216,13 @@
     animation: graph-pop 0.35s var(--ease);
     transform-origin: center;
   }
+  /* 悬浮聚焦的变暗/高亮平滑过渡：避免节点间快速移动时 opacity 瞬时翻转「一闪一闪」 */
+  .graph-node {
+    transition: opacity var(--dur) var(--ease);
+  }
+  .graph-edge {
+    transition: stroke-opacity var(--dur) var(--ease), stroke var(--dur) var(--ease);
+  }
   .sidebar-link {
     @apply flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] text-sidebar-foreground
            transition-colors duration-150;
