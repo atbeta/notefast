@@ -10,7 +10,7 @@
  * - 输出直接回填编辑器，不需要引用
  */
 
-import { buildWritePrompt, type WriteMode } from '@notefast/core'
+import { buildWritePrompt, ThinkStreamParser, type WriteMode } from '@notefast/core'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 
 export interface WriteEvent {
@@ -54,12 +54,34 @@ export async function* streamWrite(opts: WriteOptions): AsyncGenerator<WriteEven
   })
 
   try {
+    // 与 chat.ts 同一套拆分：reasoning 独立字段天然不下发；
+    // content 里内嵌的 <think> 块（部分推理模型/代理会合进正文）经流式拆分剔除，
+    // 否则思考过程会被当作改写/续写结果写回编辑器
+    const thinkParser = new ThinkStreamParser()
+    // think 块与正文之间的分隔换行（"</think>\n\n"）会被拆分器计入正文，
+    // 缓冲到首个非空白字符再下发，剥掉这段前导空白
+    let buffered = ''
+    let contentStarted = false
+    const takeContent = (s: string): string => {
+      if (contentStarted) return s
+      buffered += s
+      if (!/\S/.test(buffered)) return ''
+      contentStarted = true
+      const out = buffered.replace(/^\s+/, '')
+      buffered = ''
+      return out
+    }
     for await (const chunk of runtime.streamChat(messages, {
       temperature: opts.temperature ?? 0.4,
       maxTokens: opts.maxTokens ?? 1024,
     })) {
-      if (chunk.content) yield { type: 'token', content: chunk.content }
+      if (chunk.content) {
+        const out = takeContent(thinkParser.push(chunk.content).content)
+        if (out) yield { type: 'token', content: out }
+      }
     }
+    const tail = takeContent(thinkParser.flush().content)
+    if (tail) yield { type: 'token', content: tail }
     yield { type: 'done' }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
