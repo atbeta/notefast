@@ -137,6 +137,11 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
 
   const shareUrl = info?.path ? `${window.location.origin}${info.path}` : ''
 
+  // 本地部署（localhost / 127.0.0.1，覆盖客户端壳与浏览器本地 dev）时链接仅本机可访问，
+  // 轻提示让用户明白「分享」的真实范围，不隐藏功能
+  const isLocalHost =
+    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+
   const setSharedState = useCallback((next: ShareInfo) => {
     setInfo(next)
     onSharedChange?.(next.shared)
@@ -269,6 +274,10 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
                 {copied ? t('common.copied') : t('common.copy')}
               </button>
             </div>
+
+            {isLocalHost && (
+              <p className="text-[11px] text-muted-foreground/70 -mt-1">{t('share.localOnlyHint')}</p>
+            )}
 
             <div className="flex items-center justify-between gap-2 text-[12.5px]">
               <span className="text-muted-foreground">{t('share.expiry')}</span>

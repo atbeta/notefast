@@ -103,6 +103,7 @@
     "expiryNever": "永不过期",
     "expiryDays": "{{n}} 天",
     "expiresAt": "将于 {{time}}",
+    "localOnlyHint": "当前为本地链接，仅本机可访问",
     "disable": "关闭分享",
     "enableDesc": "开启后生成公开只读链接，任何人无需登录即可阅读。可随时关闭。",
     "enable": "开启公开链接"

@@ -103,6 +103,7 @@
     "expiryNever": "Never expires",
     "expiryDays": "{{n}} days",
     "expiresAt": "Expires {{time}}",
+    "localOnlyHint": "Local link — accessible only on this device",
     "disable": "Disable sharing",
     "enableDesc": "Creates a public read-only link that anyone can open without logging in. You can turn it off anytime.",
     "enable": "Enable public link"
