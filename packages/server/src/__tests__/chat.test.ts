@@ -480,6 +480,74 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
     expect(secondCallBody).not.toContain('正式笔记ZZZ')
   })
 
+  /**
+   * 非法 status（模型漏枚举约束，如传中文）必须显式报错而非静默返回空列表——
+   * 空列表会让模型误判「收集箱为空」（skill「整理收集箱」误报空的根因）。
+   */
+  test('agent loop: notefast_list_docs 非法 status 返回纠错提示', async () => {
+    applyNewConfig(
+      {
+        version: 1,
+        chat: {
+          id: 'x',
+          label: 'x',
+          preset: 'custom',
+          baseUrl: 'http://mock',
+          apiKey: '',
+          embeddingModel: '',
+          chatModel: 'fake-chat',
+          timeoutMs: 5000,
+          extraHeaders: {},
+        },
+        embedding: null,
+        autoIndex: false,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+
+    let callCount = 0
+    let secondCallBody = ''
+    const encoder = new TextEncoder()
+    const sseResponse = (chunks: string[]) =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            for (const ch of chunks) c.enqueue(encoder.encode(ch))
+            c.close()
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+
+    const fetcher: typeof fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      callCount++
+      if (callCount === 1) {
+        return sseResponse([
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"notefast_list_docs","arguments":""}}]}}]}\n\n',
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"status\\":\\"收集箱\\"}"}}]}}]}\n\n',
+          'data: [DONE]\n\n',
+        ]) as unknown as Response
+      }
+      secondCallBody = String(init?.body ?? '')
+      return sseResponse([
+        'data: {"choices":[{"delta":{"content":"明白了，我重新传 status=inbox"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ]) as unknown as Response
+    }) as unknown as typeof fetch
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl(fetcher)
+
+    const events: Array<{ type: string }> = []
+    for await (const ev of runChat({ messages: [{ role: 'user', content: '整理收集箱' }] })) {
+      events.push({ type: ev.type })
+    }
+
+    // 纠错提示回填给模型（含合法值与 inbox 指引），而不是空列表
+    expect(secondCallBody).toContain('无效的 status')
+    expect(secondCallBody).toContain('inbox')
+  })
+
   /** 多模态消息：图片段原样透传给模型，文本段用于检索（不报 no_user_message） */
   test('带图片的 user 消息：文本段参与检索，图片段透传', async () => {
     applyNewConfig(

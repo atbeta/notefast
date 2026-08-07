@@ -145,7 +145,7 @@ function getListDocsToolDefinition(lang: AiLang): ToolDefinition {
       parameters: {
         type: 'object',
         properties: {
-          status: { type: 'string', enum: ['note', 'inbox', 'archived', 'all'], description: en ? 'note=notes (default); inbox=inbox; archived=archive; all=everything' : 'note=正式笔记（默认）；inbox=收集箱；archived=归档；all=全部' },
+          status: { type: 'string', enum: ['note', 'inbox', 'archived', 'all'], description: en ? 'note=notes (default, excludes inbox); to list the inbox you MUST pass "inbox" explicitly; archived=archive; all=everything' : 'note=正式笔记（默认，不含收集箱）；查收集箱必须显式传 inbox；archived=归档；all=全部' },
           stale_within: { type: 'string', enum: ['30d', '90d'], description: en ? 'Only documents not updated for longer than this' : '仅返回超过该时长未更新的文档（找过时内容用）' },
           updated_within: { type: 'string', enum: ['24h', '7d'], description: en ? 'Only recently updated documents' : '仅返回最近更新的文档' },
           limit: { type: 'number', description: en ? 'Number of results (1-50), default 20' : '返回数量（1-50），默认 20' },
@@ -317,7 +317,21 @@ async function executeToolCall(
 
   if (name === 'notefast_list_docs') {
     const db = getDb()
+    // status 白名单校验：schema enum 只是给模型看的提示，执行层不做校验时
+    // 漏传（默认 note 排除收集箱）或传非法值（如中文）都会静默返回空列表，
+    // 模型据此误判「收集箱为空」。显式报错让 agent 自我纠正重试。
+    const VALID_STATUS = ['note', 'inbox', 'archived', 'all'] as const
     const status = typeof args.status === 'string' ? args.status : 'note'
+    if (!VALID_STATUS.includes(status as (typeof VALID_STATUS)[number])) {
+      return {
+        content: JSON.stringify({
+          error: ctx.lang === 'en'
+            ? `Invalid status "${status}". Valid values: note / inbox / archived / all. To list the inbox you must pass status="inbox" explicitly (default note excludes it).`
+            : `无效的 status "${status}"。合法值：note / inbox / archived / all；查收集箱必须显式传 status="inbox"（默认 note 不含收集箱）。`,
+        }),
+        resultCount: 0,
+      }
+    }
     const limit = typeof args.limit === 'number' ? Math.min(50, Math.max(1, args.limit)) : 20
     const staleMs = parseStaleWithin(typeof args.stale_within === 'string' ? args.stale_within : null)
     const updatedMs = parseUpdatedWithin(typeof args.updated_within === 'string' ? args.updated_within : null)

@@ -103,7 +103,11 @@ function buildContextBlock(citations: Citation[], currentDocTitle?: string, curr
   }
   const items = citations
     .map((c, i) => {
-      const head = en ? `[${i + 1}] Document "${c.doc_title}" · ${c.type}` : `[${i + 1}] 文档《${c.doc_title}》 · ${c.type}`
+      // doc_id / block_id 必须随结果注入：read_doc / update_block 的指引是「ID 从检索结果获取」，
+      // 不渲染出来模型就只能报「检索结果中没有 doc_id」
+      const head = en
+        ? `[${i + 1}] Document "${c.doc_title}" · ${c.type} · doc_id: ${c.doc_id} · block_id: ${c.block_id}`
+        : `[${i + 1}] 文档《${c.doc_title}》 · ${c.type} · doc_id: ${c.doc_id} · block_id: ${c.block_id}`
       const body = c.content
       const tail = c.type === 'code' ? '\n```' : ''
       const prefix = c.type === 'code' ? '```\n' : ''

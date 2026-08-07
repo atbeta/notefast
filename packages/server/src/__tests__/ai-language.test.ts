@@ -44,3 +44,31 @@ describe('AI 语言跟随 UI', () => {
     expect(seen!).not.toContain('你是')
   })
 })
+
+describe('检索结果注入 prompt 携带 ID', () => {
+  // read_doc / update_block 的指引是「ID 从检索结果获取」——citations 渲染必须带 doc_id/block_id，
+  // 否则模型只能报「检索结果中没有 doc_id」（用户实测踩坑）
+  test('citations 渲染含 doc_id 与 block_id（zh/en 均带）', async () => {
+    const { buildChatPrompt } = await import('../ai/prompt')
+    const citation = {
+      block_id: 'b-123',
+      doc_id: 'd-456',
+      doc_title: '配置指南',
+      type: 'paragraph',
+      content: '正文片段',
+      snippet: '正文片段',
+      score: 0.9,
+      rrf_score: 0.05,
+    }
+    for (const lang of ['zh', 'en'] as const) {
+      const msgs = buildChatPrompt({
+        messages: [{ role: 'user', content: '怎么配置' }],
+        citations: [citation],
+        lang,
+      })
+      const sys = String(msgs[0]?.content ?? '')
+      expect(sys).toContain('doc_id: d-456')
+      expect(sys).toContain('block_id: b-123')
+    }
+  })
+})
