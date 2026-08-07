@@ -3,8 +3,10 @@
  *
  * 思路：query 整句与各 term 对 entities.name 做 normalized 精确匹配（优先）+
  * LIKE 子串匹配（实体表规模小，LIKE 免费；CJK 无空格查询靠「实体名是查询子串」
- * 方向覆盖）→ 命中实体反查 entity_mentions → blocks。词典别名经 resolveDictTerm
- * 反向收敛到标准名——用户查「tape-out」能精确命中标准实体「流片」。
+ * 方向覆盖）→ 命中实体反查 entity_mentions → blocks。别名两路反查：词典别名经
+ * resolveDictTerm 收敛到标准名（查「tape-out」命中标准实体「流片」）；实体别名
+ * （合并遗留旧名，entity_aliases）经 resolveAlias 命中存活实体（查「qdrnt」命中
+ * 已合并的「qdrant」）。
  *
  * 排序：精确匹配实体的块在前，其后按实体 mention_count 倒序；位置即 RRF rank。
  * 实体表为空或无命中时零成本短路。ai_exclude / inbox / archived 过滤在
@@ -14,7 +16,7 @@
 import { getDb } from '../db'
 import { fullToHalfWidth } from '@notefast/core'
 import { resolveDictTerm } from '../termDict'
-import { normalizeEntityName } from '../store/entities'
+import { normalizeEntityName, resolveAlias } from '../store/entities'
 
 export interface EntitySearchHit {
   block_id: string
@@ -59,6 +61,17 @@ function matchEntities(query: string): MatchedEntity[] {
     const row = db
       .query('SELECT id, mention_count FROM entities WHERE name = ?')
       .get(name) as { id: string; mention_count: number } | undefined
+    if (row) byId.set(row.id, { ...row, exact: true })
+  }
+
+  // 实体别名反查（合并遗留旧名 → 存活实体）：alias 列存规范化名，与 names 同形态；
+  // 与精确命中同级对待
+  for (const name of names) {
+    const entityId = resolveAlias(db, name)
+    if (!entityId || byId.has(entityId)) continue
+    const row = db
+      .query('SELECT id, mention_count FROM entities WHERE id = ?')
+      .get(entityId) as { id: string; mention_count: number } | undefined
     if (row) byId.set(row.id, { ...row, exact: true })
   }
 

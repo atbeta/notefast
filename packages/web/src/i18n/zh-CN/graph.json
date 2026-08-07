@@ -61,11 +61,13 @@
     "noKind": "暂无「{{kind}}」类实体",
     "notesMentioned": "{{n}} 篇笔记提及",
     "autoMerged": "已自动合并 {{n}} 对拼写变体实体（编辑距离信号，高置信）",
-    "suggestTitle": "可能是同一实体（确认后加入词典自动归并，可审计可回滚）",
-    "adoptButton": "加入词典",
-    "adoptAll": "全部加入词典",
-    "adopted": "已加入词典，实体已自动归并",
-    "adoptFailed": "加入词典失败"
+    "suggestTitle": "可能是同一实体（确认后直接合并，旧名保留为别名）",
+    "mergeButton": "合并",
+    "mergeAll": "全部合并",
+    "merged": "已合并 {{n}} 对实体（旧名保留为别名）",
+    "mergeFailed": "合并失败",
+    "mergeAllTitle": "合并全部建议实体",
+    "mergeAllMessage": "以下 {{n}} 对实体将被合并（前者并入后者，旧名保留为别名；合并不可撤销）：{{pairs}}"
   },
   "entityPanel": {
     "untitled": "无标题文档",

@@ -45,6 +45,7 @@ import {
   listEntities,
   listEntitiesNeedingDescription,
   listEntityMentions,
+  mergeEntities,
   normalizeEntityName,
   updateEntityDescription,
   upsertEntity,
@@ -479,6 +480,26 @@ describe('实体召回路', () => {
     // 块内容不含查询词，纯靠实体通道召回
     const report = await hybridSearch({ query: '向量数据库怎么选', topK: 5 })
     expect(report.citations.map((c) => c.block_id)).toContain('hs-b1')
+  })
+
+  test('实体别名反查：合并遗留旧名命中存活实体', () => {
+    const db = getDb()
+    seedDocWithBlocks({
+      docTitle: 'T',
+      blocks: [{ id: 'al-b1', content: '记录一下选型心得，改天再展开' }],
+    })
+    const main = upsertEntity(db, { name: 'qdrant', display: 'qdrant', kind: 'tool' })
+    const variant = upsertEntity(db, { name: 'qdrnt', display: 'qdrnt', kind: 'tool' })
+    addMention(db, variant.id, 'al-b1', 'qdrnt')
+    // 合并：提及迁移 + 旧名 qdrnt 登记为 qdrant 的别名
+    mergeEntities(db, variant.id, main.id)
+
+    // 块内容不含「qdrnt」之外的线索；查旧名应命中存活实体的迁移提及
+    const hits = entitySearch('qdrnt')
+    expect(hits.length).toBe(1)
+    expect(hits[0]!.block_id).toBe('al-b1')
+    // 别名反查与精确命中同级（rrf_rank 从 1 起）
+    expect(hits[0]!.rrf_rank).toBe(1)
   })
 
   test('实体表为空时零成本短路', async () => {

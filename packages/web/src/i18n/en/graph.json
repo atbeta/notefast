@@ -61,11 +61,13 @@
     "noKind": "No “{{kind}}” entities yet",
     "notesMentioned": "mentioned by {{n}} notes",
     "autoMerged": "Auto-merged {{n}} pair(s) of spelling-variant entities (edit-distance signal)",
-    "suggestTitle": "Possibly the same entity (adopt to dictionary for automatic merging)",
-    "adoptButton": "Adopt",
-    "adoptAll": "Adopt all",
-    "adopted": "Adopted into the dictionary; entities merged",
-    "adoptFailed": "Failed to adopt"
+    "suggestTitle": "Possibly the same entity (confirmed pairs merge directly; old names are kept as aliases)",
+    "mergeButton": "Merge",
+    "mergeAll": "Merge all",
+    "merged": "Merged {{n}} entity pair(s) (old names kept as aliases)",
+    "mergeFailed": "Merge failed",
+    "mergeAllTitle": "Merge all suggested entities",
+    "mergeAllMessage": "The following {{n}} pair(s) will be merged (the first into the second; old names are kept as aliases; this cannot be undone): {{pairs}}"
   },
   "entityPanel": {
     "untitled": "Untitled document",

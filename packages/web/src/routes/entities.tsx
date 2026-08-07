@@ -6,8 +6,8 @@
  *
  * 实体准确性由系统自行保持，不做逐对人工合并：
  * - 拼写变体（typo 信号，编辑距离）页面加载时自动合并
- * - 子串包含（substring 信号，可能是上下位而非同义）只作为「词典建议」展示，
- *   确认后一键写入 term-dict（声明式、可审计），PUT 自动触发存量归并
+ * - 子串包含（substring 信号，可能是上下位而非同义）经人工确认后直接合并实体
+ *   （mergeEntities：提及迁移 + 旧名登记为实体别名；不写词典——词典是设置页的人工策展层）
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -17,6 +17,7 @@ import { BookMarked, ChevronRight, GitMerge, Loader2, Search, Sparkles, Waypoint
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import PageHeader from '../components/PageHeader'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { ListRowsSkeleton, useToast } from '../components/ui'
 import { graphKindColor } from '../lib/graph'
 import { EntityMentions } from '../components/EntityPanel'
@@ -40,12 +41,6 @@ interface SuggestGroup {
   entities: Array<{ id: string; display: string; kind: string; mention_count: number }>
 }
 
-interface TermDictEntry {
-  name: string
-  aliases: string[]
-  kind?: string
-}
-
 export default function EntitiesPage() {
   const { t } = useTranslation()
   const toast = useToast()
@@ -56,6 +51,7 @@ export default function EntitiesPage() {
   const [openId, setOpenId] = useState<string | null>(null)
   const [autoMerged, setAutoMerged] = useState(0)
   const [adopting, setAdopting] = useState(false)
+  const [mergeAllOpen, setMergeAllOpen] = useState(false)
   const [generatingId, setGeneratingId] = useState<string | null>(null)
 
   // 300ms 防抖；空关键词回全量列表
@@ -97,36 +93,48 @@ export default function EntitiesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  /** 把候选组写入词典（标准名 = 提及多的一方，别名 = 另一方）；PUT 自动归并 */
-  const adoptToDict = async (groups: SuggestGroup[]) => {
+  /** 直接合并候选组：mention_count 大者存活；旧名由 mergeEntities 登记为实体别名（不写词典） */
+  const mergeGroups = async (groups: SuggestGroup[]) => {
     if (groups.length === 0) return
     setAdopting(true)
-    try {
-      const { terms } = await api.get<{ terms: TermDictEntry[] }>('/term-dict')
-      const byName = new Map(terms.map((e) => [e.name, e]))
-      for (const g of groups) {
-        const [a, b] = g.entities
-        if (!a || !b) continue
-        const target = a.mention_count >= b.mention_count ? a : b
-        const alias = (target === a ? b : a).display
-        const existing = byName.get(target.display)
-        if (existing) {
-          existing.aliases = [...new Set([...(existing.aliases ?? []), alias])]
-        } else {
-          byName.set(target.display, { name: target.display, aliases: [alias] })
-        }
+    let merged = 0
+    for (const g of groups) {
+      const [a, b] = g.entities
+      if (!a || !b) continue
+      const target = a.mention_count >= b.mention_count ? a : b
+      const from = target === a ? b : a
+      try {
+        await api.post(`/entities/${from.id}/merge`, { target_id: target.id })
+        merged++
+      } catch {
+        // 单组失败（候选对引用了已被本批前组合并的实体）跳过，其余继续
       }
-      const d = await api.put<{ count: number }>('/term-dict', { terms: [...byName.values()] })
-      void d
-      toast.success({ title: t('entities.adopted') })
+    }
+    setAdopting(false)
+    if (merged > 0) {
+      toast.success({ title: t('entities.merged', { n: merged }) })
       refetch()
       refetchDuplicates()
-    } catch (e) {
-      toast.error({ title: t('entities.adoptFailed'), description: e instanceof Error ? e.message : String(e) })
-    } finally {
-      setAdopting(false)
+    } else {
+      toast.error({ title: t('entities.mergeFailed') })
     }
   }
+
+  /** 「全部合并」确认弹层的方向预览：被并方 → 存活方 */
+  const mergePairPreview = useMemo(
+    () =>
+      suggests
+        .map((g) => {
+          const [a, b] = g.entities
+          if (!a || !b) return ''
+          const target = a.mention_count >= b.mention_count ? a : b
+          const from = target === a ? b : a
+          return `${from.display} → ${target.display}`
+        })
+        .filter(Boolean)
+        .join('；'),
+    [suggests],
+  )
 
   /** 手动生成/重新生成 AI 描述（POST describe 清旧值后调 LLM）；成功后刷新列表 */
   const regenerateDescription = async (id: string) => {
@@ -244,21 +252,21 @@ export default function EntitiesPage() {
               <div className="rounded-xl border border-warn/25 bg-warn/5 px-3.5 py-3">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-1.5 text-[12px] font-medium text-foreground">
-                    <BookMarked className="w-3.5 h-3.5 text-warn" strokeWidth={1.75} />
+                    <GitMerge className="w-3.5 h-3.5 text-warn" strokeWidth={1.75} />
                     {t('entities.suggestTitle')}
                   </div>
                   <button
                     type="button"
                     disabled={adopting}
-                    onClick={() => void adoptToDict(suggests)}
+                    onClick={() => setMergeAllOpen(true)}
                     className="shrink-0 inline-flex items-center gap-1 rounded-md border border-border bg-background hover:bg-accent hover:border-foreground/20 px-2 py-1 text-[11.5px] text-foreground transition-colors disabled:opacity-50"
                   >
                     {adopting ? (
                       <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
                     ) : (
-                      <BookMarked className="w-3 h-3" strokeWidth={1.75} />
+                      <GitMerge className="w-3 h-3" strokeWidth={1.75} />
                     )}
-                    {t('entities.adoptAll')}
+                    {t('entities.mergeAll')}
                   </button>
                 </div>
                 <div className="flex flex-col gap-2">
@@ -281,10 +289,10 @@ export default function EntitiesPage() {
                         <button
                           type="button"
                           disabled={adopting}
-                          onClick={() => void adoptToDict([g])}
+                          onClick={() => void mergeGroups([g])}
                           className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-md border border-border bg-background hover:bg-accent hover:border-foreground/20 px-2 py-1 text-[11.5px] text-foreground transition-colors disabled:opacity-50"
                         >
-                          {t('entities.adoptButton')}
+                          {t('entities.mergeButton')}
                         </button>
                       </div>
                     )
@@ -382,6 +390,18 @@ export default function EntitiesPage() {
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={mergeAllOpen}
+        title={t('entities.mergeAllTitle')}
+        message={t('entities.mergeAllMessage', { n: suggests.length, pairs: mergePairPreview })}
+        confirmLabel={t('entities.mergeAll')}
+        onConfirm={() => {
+          setMergeAllOpen(false)
+          void mergeGroups(suggests)
+        }}
+        onCancel={() => setMergeAllOpen(false)}
+      />
     </div>
   )
 }
