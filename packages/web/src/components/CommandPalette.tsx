@@ -188,9 +188,11 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       aria-modal="true"
       aria-label={t('command.dialogLabel')}
     >
+      {/* backdrop-filter 与淡入同步过渡：否则 blur 瞬时满强度「先弹出来」，
+          黑色遮罩与面板才跟上，形成两段式虚化 */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
+        className={`absolute inset-0 bg-black/40 transition-[backdrop-filter,-webkit-backdrop-filter] duration-[var(--dur)] ease-[var(--ease)] ${open ? 'backdrop-blur-sm' : 'backdrop-blur-[0px]'}`}
       />
       <div className={`relative w-full max-w-xl bg-popover rounded-2xl border border-border shadow-2xl overflow-hidden transition-transform duration-[var(--dur)] ease-[var(--ease)] ${open ? 'translate-y-0 scale-100' : 'translate-y-2 scale-[0.98]'}`}>
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
