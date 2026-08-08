@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
 import { api } from '../hooks/useAPI'
+import { useApiMutation } from '../hooks/useApiMutation'
 import { deliverExport, fetchDocExportFile } from '../lib/download'
 import ConfirmDialog from './ConfirmDialog'
 import ShareDialog from './ShareDialog'
@@ -148,6 +149,20 @@ export default function DocActionsMenu({
     onDone?.()
   }, [onDone])
 
+  // PATCH 是幂等可重试的；useApiMutation 默认 3 次指数退避，仅 network error 重试
+  const toggleAiExcludeMut = useApiMutation<
+    { docId: string; ai_exclude: boolean },
+    { ok: boolean }
+  >({
+    method: 'patch',
+    path: '/docs/:docId/ai-exclude',
+    onSuccess: () => {
+      afterMutation()
+      toast.success({ title: aiExclude ? t('docActions.aiRestore') : t('docActions.aiHide') })
+    },
+    onError: () => toast.error({ title: t('docActions.operationFailed') }),
+  })
+
   const handleRenameSubmit = async () => {
     const next = renameDraft.trim()
     if (!next || next === doc.title) {
@@ -204,11 +219,7 @@ export default function DocActionsMenu({
     setBusy(true)
     close()
     try {
-      await api.patch(`/docs/${doc.id}/ai-exclude`, { ai_exclude: !aiExclude })
-      afterMutation()
-      toast.success({ title: aiExclude ? t('docActions.aiRestore') : t('docActions.aiHide') })
-    } catch {
-      toast.error({ title: t('docActions.operationFailed') })
+      await toggleAiExcludeMut.mutate({ docId: doc.id, ai_exclude: !aiExclude })
     } finally {
       setBusy(false)
     }
