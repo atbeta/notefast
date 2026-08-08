@@ -151,13 +151,18 @@
   .scroll-fade[data-fade-bottom='true'] {
     --sf-bottom: 16px;
   }
-  /* 焦点环：精致的双层 ring（底色 + 主色），键盘可访问；
-     文本输入类元素（input/textarea）不套用 —— 它们有自己的聚焦语义 */
+  /* 焦点环：精致的双层 ring（底色 + 主色），键盘可访问。
+     全局兜底：组件内常 `outline-none focus:ring-X` 或仅改 border——焦点环丢失成
+     a11y 隐患。这里给 input/ textarea / select / [contenteditable] 加默认 ring，
+     组件自己写 `focus:ring-1` 仍然生效（外层 ring 覆盖优先级）；没写的补上。 */
   :focus-visible {
     outline: none;
   }
   :is(button, a, [role='button'], [tabindex]:not(input):not(textarea)):focus-visible {
     box-shadow: 0 0 0 2px rgb(var(--background)), 0 0 0 4px rgb(var(--ring) / 0.55);
+  }
+  :is(input, textarea, select):focus-visible:not([data-no-focus-ring]) {
+    box-shadow: 0 0 0 3px rgb(var(--primary) / 0.18);
   }
   /* 交互节奏全局统一 */
   button, a, [role='button'] {
