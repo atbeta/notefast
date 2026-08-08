@@ -651,6 +651,33 @@
         "个人知识库的标签体系设计"
       ],
       "note": "尾部问句 + 语义同义"
+    },
+    {
+      "id": "q71",
+      "query": "怎么选向量数据库",
+      "type": "mid_question",
+      "relevant_docs": [
+        "向量数据库选型对比"
+      ],
+      "note": "中置问句：确定性后缀剥离无效，查询理解应对"
+    },
+    {
+      "id": "q72",
+      "query": "如何备份 SQLite",
+      "type": "mid_question",
+      "relevant_docs": [
+        "SQLite 备份方案"
+      ],
+      "note": "中置问句 + 专有名词"
+    },
+    {
+      "id": "q73",
+      "query": "帮我了解一下 FTS5 中文怎么搜",
+      "type": "mid_question",
+      "relevant_docs": [
+        "FTS5 中文分词实践"
+      ],
+      "note": "礼貌前缀 + 中置式；理解后应落到 FTS5/中文"
     }
   ]
 }

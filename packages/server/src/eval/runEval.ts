@@ -13,6 +13,7 @@
  *   --config <path>   活体模式的 ai.config.json（默认 $DATA_DIR/ai.config.json 或 ./data/ai.config.json）
  *   --report <path>   报告 JSON 输出路径（默认只打 console 摘要）
  *   --topk <n>        hybridSearch topK（默认 20，需 ≥ Block Recall 的 K）
+ *   --understand      开启 LLM 查询理解（对照增强前后召回；需 chat，失败降级）
  */
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -27,6 +28,7 @@ import {
   type CorpusFile,
   type QueriesFile,
 } from './evalCore'
+import { getRuntime, hasRuntime } from '../services/aiRuntime'
 
 /** 仓库根目录（本文件在 packages/server/src/eval/ 下） */
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
@@ -64,10 +66,11 @@ async function main(): Promise<void> {
   const corpusPath = args.corpus ? resolveInput(String(args.corpus)) : null
   const queriesPath = args.queries ? resolveInput(String(args.queries)) : null
   if (!corpusPath || !queriesPath) {
-    console.error('用法: bun run src/eval/runEval.ts --corpus <path> --queries <path> [--mock] [--config <path>] [--report <out.json>] [--topk 20]')
+    console.error('用法: bun run src/eval/runEval.ts --corpus <path> --queries <path> [--mock] [--understand] [--config <path>] [--report <out.json>] [--topk 20]')
     process.exit(1)
   }
   const mock = args.mock === true
+  const understand = args.understand === true
   const topk = args.topk ? parseInt(String(args.topk), 10) : 20
   const reportPath = args.report
     ? (isAbsolute(String(args.report)) ? String(args.report) : resolve(REPO_ROOT, String(args.report)))
@@ -78,7 +81,7 @@ async function main(): Promise<void> {
 
   const corpus = (await Bun.file(corpusPath).json()) as CorpusFile
   const queriesFile = (await Bun.file(queriesPath).json()) as QueriesFile
-  console.log(`📦 语料 ${corpus.docs.length} 篇 / 查询 ${queriesFile.queries.length} 条 / 模式: ${mock ? 'mock' : 'live'}`)
+  console.log(`📦 语料 ${corpus.docs.length} 篇 / 查询 ${queriesFile.queries.length} 条 / 模式: ${mock ? 'mock' : 'live'}${understand ? ' +understand' : ''}`)
 
   const env = await setupEvalEnv({ mock, configPath: mock ? undefined : configPath })
   try {
@@ -89,8 +92,11 @@ async function main(): Promise<void> {
     } else {
       console.warn('⚠️  无 embedding：语义通道关闭，退化为纯 FTS 评测')
     }
+    if (understand && !(hasRuntime() && getRuntime().hasChat())) {
+      console.warn('⚠️  --understand 已开但无 chat：查询理解会 skipped，结果等同默认检索')
+    }
 
-    const results = await runEvalQueries(queriesFile.queries, { topK: topk })
+    const results = await runEvalQueries(queriesFile.queries, { topK: topk, understandQuery: understand })
     const report = computeMetrics(queriesFile.queries, results, titleToDocId, {
       mode: mock ? 'mock' : 'live',
       corpusDocs: corpus.docs.length,

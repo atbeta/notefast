@@ -93,6 +93,7 @@ describe('retrieval timing', () => {
     const report = await hybridSearch({ query: 'NoteFast 检索' })
     expect(report.retrieval.timing).toBeDefined()
     expect(report.retrieval.timing.total_ms).toBeGreaterThanOrEqual(0)
+    expect(report.retrieval.timing.understand_ms).toBe(0) // 未请求查询理解
     expect(report.retrieval.timing.fts_ms).toBeGreaterThanOrEqual(0)
     expect(report.retrieval.timing.embed_query_ms).toBe(0) // 未配置 embedding
     expect(report.retrieval.timing.semantic_ms).toBe(0)

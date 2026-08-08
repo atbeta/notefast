@@ -722,6 +722,9 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
       minScore: opts.minScore,
       // RAG 场景放宽多样性上限：同文档连续段落对回答有价值
       maxPerDoc: 3,
+      // 首检索默认开查询理解：延迟摊进 chat 等待，失败则降级普通检索
+      understandQuery: true,
+      understandLang: lang,
     })
   } catch (e) {
     initialReport = {
@@ -731,7 +734,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
         semantic_hits: 0,
         reranked: false,
         score_kind: 'rrf',
-        timing: { fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
+        timing: { understand_ms: 0, fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
       },
     }
     console.error('[chat] retrieval failed:', e)
@@ -967,7 +970,7 @@ export async function runChatSync(opts: RunChatOptions): Promise<{
     semantic_hits: 0,
     reranked: false,
     score_kind: 'rrf',
-    timing: { fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
+    timing: { understand_ms: 0, fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
   }
   let toolTrace: ToolTraceEntry[] = []
 

@@ -6,18 +6,22 @@
  * 若 runtime 配置了 reranker，再对融合后的 topM 做交叉精排（score 为 reranker 原始分，
  * RRF 融合分保留在 rrf_score）；精排/融合后按 maxPerDoc 做文档多样性选择再截断。
  *
+ * 可选 understandQuery：召回前用 LLM 拆 term / 短改写（queryUnderstanding），失败则
+ * 与默认路径一致；chat 首检索默认开，Web/MCP/autoLink 默认关。
+ *
  * 设计原则：
  * - 每条路线都可单独关闭：FTS5 总是可用；语义召回需要 embedding；rerank 需要 reranker
  * - 任何一层失败都不让整个流程崩——降级到下一层
  * - 返回统一的 Citation 对象，方便前端展示和 prompt 拼装
- * - 分阶段 timing（fts / embed_query / semantic / rerank / total）可量化 Fast
+ * - 分阶段 timing（understand / fts / embed_query / semantic / rerank / total）可量化 Fast
  */
 
 import { highlightSnippet } from '@notefast/core'
-import { lexicalSearch } from '../lexicalSearch'
+import { lexicalSearch, type LexicalTermGroup } from '../lexicalSearch'
 import { semanticSearch } from './indexer'
 import { entitySearch } from './entitySearch'
 import { graphContextCandidates } from './graphContext'
+import { understandQuery, type QueryUnderstandingStatus } from './queryUnderstanding'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { loadAiExcludedDocIds, loadInboxDocIds, loadArchivedDocIds } from './aiExcludeQuery'
 
@@ -65,6 +69,14 @@ export interface SearchOptions {
    * 显式查历史时置 true）。
    */
   includeArchived?: boolean
+  /**
+   * 启用 LLM 查询理解（拆 term / 短改写）。默认 false。
+   * chat 首检索传 true；失败则与普通检索路径一致（fail-closed）。
+   * autoLink / Web ⌘K / MCP 默认检索不要开。
+   */
+  understandQuery?: boolean
+  /** 查询理解提示语言（跟随 UI/chat；缺省由 query 是否含 CJK 推断） */
+  understandLang?: 'zh' | 'en'
 }
 
 export interface Citation {
@@ -85,6 +97,8 @@ export interface Citation {
 
 /** 检索各阶段耗时（毫秒）；未跑的阶段为 0 */
 export interface RetrievalTiming {
+  /** 查询理解（未请求时为 0） */
+  understand_ms: number
   fts_ms: number
   embed_query_ms: number
   semantic_ms: number
@@ -105,6 +119,8 @@ export interface HybridSearchReport {
     model?: string
     /** 被 minScore 门槛过滤掉的引用数（0 = 没有过滤） */
     discarded_low_score?: number
+    /** 查询理解状态（未请求时省略） */
+    query_understanding?: QueryUnderstandingStatus
     /** 分阶段耗时（NoteFast：可量化） */
     timing: RetrievalTiming
   }
@@ -145,10 +161,31 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
   const includeInbox = opts.includeInbox === true
   const includeArchived = opts.includeArchived === true
 
+  // 查询理解（可选）：串在召回前；失败则 termGroups 为空，后续与默认路径一致
+  let understand_ms = 0
+  let quStatus: QueryUnderstandingStatus | undefined
+  let lexicalTermGroups: LexicalTermGroup[] | undefined
+  let lexicalSentence: string | undefined
+  /** 语义/实体通道用的查询（理解成功时可能是短改写） */
+  let channelQuery = opts.query
+  if (opts.understandQuery) {
+    const u = await understandQuery(opts.query, { lang: opts.understandLang })
+    understand_ms = u.ms
+    quStatus = u.status
+    if (u.status === 'applied' && u.termGroups && u.termGroups.length > 0) {
+      lexicalTermGroups = u.termGroups
+      lexicalSentence = u.sentence
+      channelQuery = u.semanticQuery
+    }
+  }
+
   const ftsPromise = (async (): Promise<{ hits: FtsHit[]; fts_ms: number }> => {
     const t0 = Date.now()
     try {
-      const hits = runFts(opts.query, opts.notebookId, ftsLimit, opts.since, opts.until)
+      const hits = runFts(opts.query, opts.notebookId, ftsLimit, opts.since, opts.until, {
+        termGroups: lexicalTermGroups,
+        sentence: lexicalSentence,
+      })
       return { hits, fts_ms: Date.now() - t0 }
     } catch (e) {
       console.error('[hybridSearch] FTS failed:', e)
@@ -156,7 +193,7 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
     }
   })()
 
-  const semanticPromise = runSemantic(opts.query, opts.notebookId, semanticLimit, opts.since, opts.until, {
+  const semanticPromise = runSemantic(channelQuery, opts.notebookId, semanticLimit, opts.since, opts.until, {
     includeInbox,
     includeArchived,
   })
@@ -181,6 +218,8 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
       limit: 5,
       strictOnly: true,
       titleOnly: true,
+      termGroups: lexicalTermGroups,
+      sentence: lexicalSentence,
     }).map((h, i) => ({
       block_id: h.id,
       doc_id: h.root_id,
@@ -199,7 +238,7 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
   // 实体表为空时零成本短路；图谱越写越厚，这条路的召回随之增强
   let entityHits0: FtsHit[] = []
   try {
-    entityHits0 = entitySearch(opts.query).map((h) => ({
+    entityHits0 = entitySearch(channelQuery).map((h) => ({
       block_id: h.block_id,
       doc_id: h.doc_id,
       doc_title: h.doc_title,
@@ -273,6 +312,7 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
   }
 
   const timing: RetrievalTiming = {
+    understand_ms,
     fts_ms: ftsResult.fts_ms,
     embed_query_ms: semanticResult.embed_query_ms,
     semantic_ms: semanticResult.semantic_ms,
@@ -287,6 +327,7 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
     reranked: Boolean(reranked),
     returned: citations.length,
     discarded_low_score: discardedLowScore,
+    query_understanding: quStatus,
     ...timing,
     duration_ms: timing.total_ms,
   }))
@@ -301,6 +342,7 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
       score_kind: reranked ? 'rerank' : 'rrf',
       model: reranked ? getRuntime().rerankerConfig()?.model : undefined,
       discarded_low_score: discardedLowScore,
+      ...(quStatus ? { query_understanding: quStatus } : {}),
       timing,
     },
   }
@@ -338,11 +380,19 @@ function runFts(
   limit: number,
   since?: string,
   until?: string,
+  preprocess?: { termGroups?: LexicalTermGroup[]; sentence?: string },
 ): FtsHit[] {
-  if (!query.trim()) return []
+  if (!query.trim() && !(preprocess?.termGroups && preprocess.termGroups.length > 0)) return []
   // 双路词法检索（FTS5 + LIKE）：无空格中文走 LIKE 子串召回，ASCII 沿用 FTS bm25。
   // ai_exclude / inbox 不过取：在 hybridSearch 融合层与语义召回一起过滤
-  return lexicalSearch(query, { notebookId, limit, since, until }).map((h, i) => ({
+  return lexicalSearch(query, {
+    notebookId,
+    limit,
+    since,
+    until,
+    termGroups: preprocess?.termGroups,
+    sentence: preprocess?.sentence,
+  }).map((h, i) => ({
     block_id: h.id,
     doc_id: h.root_id,
     doc_title: h.doc_title,

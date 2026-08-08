@@ -49,6 +49,38 @@ beforeEach(() => {
   initAiRuntime(pluginSystem, testDir)
 })
 
+/**
+ * chat 首检索会先打一枪非流式 json_object（queryUnderstanding）。
+ * 测试 mock 若一律回 SSE，会污染 callCount / 解析失败。此包装拦截理解请求，不计入 inner。
+ */
+function withQueryUnderstandingStub(inner: typeof fetch): typeof fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    let body: {
+      response_format?: { type?: string }
+      stream?: boolean
+      messages?: Array<{ content?: unknown }>
+    } | null = null
+    try {
+      if (init?.body) body = JSON.parse(String(init.body))
+    } catch { /* ignore */ }
+    if (body?.response_format?.type === 'json_object' && body.stream !== true) {
+      const last = body.messages?.at(-1)?.content
+      const q = (typeof last === 'string' ? last : 'query').trim().slice(0, 40) || 'query'
+      return new Response(
+        JSON.stringify({
+          choices: [{
+            message: {
+              content: JSON.stringify({ terms: [[q]], rewritten: q }),
+            },
+          }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )
+    }
+    return inner(input, init)
+  }) as unknown as typeof fetch
+}
+
 async function consumeSSE(res: Response): Promise<Array<{ event: string; data: unknown }>> {
   const reader = res.body!.getReader()
   const decoder = new TextDecoder()
@@ -154,7 +186,7 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
         { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
       )) as unknown as typeof fetch
     const { getRuntime } = await import('../services/aiRuntime')
-    getRuntime().setFetchImpl(fetcher)
+    getRuntime().setFetchImpl(withQueryUnderstandingStub(fetcher))
 
     const res = await app.fetch(
       new Request('http://localhost/api/v1/ai/chat', {
@@ -240,7 +272,7 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
       ]) as unknown as Response
     }) as unknown as typeof fetch
     const { getRuntime } = await import('../services/aiRuntime')
-    getRuntime().setFetchImpl(fetcher)
+    getRuntime().setFetchImpl(withQueryUnderstandingStub(fetcher))
 
     const events: Array<{ type: string; payload?: unknown }> = []
     for await (const ev of runChat({ messages: [{ role: 'user', content: 'tell me about KMP' }] })) {
@@ -297,7 +329,7 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
         { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
       )) as unknown as typeof fetch
     const { getRuntime } = await import('../services/aiRuntime')
-    getRuntime().setFetchImpl(fetcher)
+    getRuntime().setFetchImpl(withQueryUnderstandingStub(fetcher))
 
     const reasoning: string[] = []
     const tokens: string[] = []
@@ -370,7 +402,7 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
       ]) as unknown as Response
     }) as unknown as typeof fetch
     const { getRuntime } = await import('../services/aiRuntime')
-    getRuntime().setFetchImpl(fetcher)
+    getRuntime().setFetchImpl(withQueryUnderstandingStub(fetcher))
 
     const created: Array<{ type: string; content: string }> = []
     pluginSystem.note.afterCreate.tap('test-create-note-spy', (block) => {
@@ -466,7 +498,7 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
       ]) as unknown as Response
     }) as unknown as typeof fetch
     const { getRuntime } = await import('../services/aiRuntime')
-    getRuntime().setFetchImpl(fetcher)
+    getRuntime().setFetchImpl(withQueryUnderstandingStub(fetcher))
 
     const events: Array<{ type: string; payload?: unknown }> = []
     for await (const ev of runChat({ messages: [{ role: 'user', content: '收集箱里有什么' }] })) {
@@ -536,7 +568,7 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
       ]) as unknown as Response
     }) as unknown as typeof fetch
     const { getRuntime } = await import('../services/aiRuntime')
-    getRuntime().setFetchImpl(fetcher)
+    getRuntime().setFetchImpl(withQueryUnderstandingStub(fetcher))
 
     const events: Array<{ type: string }> = []
     for await (const ev of runChat({ messages: [{ role: 'user', content: '整理收集箱' }] })) {
@@ -588,7 +620,7 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
       ) as unknown as Response
     }) as unknown as typeof fetch
     const { getRuntime } = await import('../services/aiRuntime')
-    getRuntime().setFetchImpl(fetcher)
+    getRuntime().setFetchImpl(withQueryUnderstandingStub(fetcher))
 
     const events: string[] = []
     for await (const ev of runChat({

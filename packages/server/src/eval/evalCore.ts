@@ -231,11 +231,15 @@ async function measureTop1SemanticCosine(query: string): Promise<number | null> 
 
 export async function runEvalQueries(
   queries: EvalQuery[],
-  opts: { topK: number },
+  opts: { topK: number; /** 对照增强检索：开 LLM 查询理解（需 chat；失败降级） */ understandQuery?: boolean },
 ): Promise<PerQueryResult[]> {
   const results: PerQueryResult[] = []
   for (const q of queries) {
-    const report = await hybridSearch({ query: q.query, topK: opts.topK })
+    const report = await hybridSearch({
+      query: q.query,
+      topK: opts.topK,
+      understandQuery: opts.understandQuery === true,
+    })
     results.push({
       id: q.id,
       query: q.query,

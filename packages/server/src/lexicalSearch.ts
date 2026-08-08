@@ -16,6 +16,9 @@
  *
  * 供 hybridSearch / web /search / MCP notefast_search / autoLink 四处共用；
  * ai_exclude / 生命周期状态等后置过滤仍由调用方负责。
+ *
+ * 可选 termGroups：外部预处理（queryUnderstanding）注入时跳过 split/CJK 剥离，
+ * 仍做词典展开；未注入时行为与历史完全一致。
  */
 
 import { fullToHalfWidth, halfToFullPunct } from '@notefast/core'
@@ -36,6 +39,14 @@ export interface LexicalHit {
   matched_by: 'fts' | 'like_and' | 'like_or' | 'title'
 }
 
+/**
+ * term 组：组内 OR（多写法）、组间 AND。
+ * 供 queryUnderstanding 等外部预处理注入；注入后仍会再走词典展开。
+ */
+export interface LexicalTermGroup {
+  variants: string[]
+}
+
 export interface LexicalSearchOptions {
   notebookId?: string
   limit: number
@@ -48,6 +59,16 @@ export interface LexicalSearchOptions {
   strictOnly?: boolean
   /** true 时只查文档根块（type='document'）——标题通道 */
   titleOnly?: boolean
+  /**
+   * 外部预处理的 term 组（如 LLM 查询理解）。提供时跳过 query 的 split / CJK
+   * 问句剥离，但仍对组内每个 variant 做词典展开。组间 AND、组内 OR。
+   */
+  termGroups?: LexicalTermGroup[]
+  /**
+   * 整句命中打分用的原文（与 termGroups 配套）。缺省用各组首个 variant 拼接；
+   * 无 termGroups 时忽略，改用内部归一化后的 terms。
+   */
+  sentence?: string
 }
 
 /** CJK 统一表意文字基本区：含任一即视为 CJK term（FTS 帮不上忙，走 LIKE） */
@@ -111,12 +132,10 @@ function escapeLike(s: string): string {
 }
 
 /**
- * term 组：词典命中时一个查询 term 展开为多个候选写法（原词 + 标准名 + 别名）。
- * 组内是「多选一」（OR），组间沿用 AND/OR 语义——展开绝不能变成新的 AND 条件。
+ * 内部 term 组（与 LexicalTermGroup 同形；词典命中时一个查询 term 展开为
+ * 多个候选写法）。组内 OR，组间 AND——展开绝不能变成新的 AND 条件。
  */
-interface TermGroup {
-  variants: string[]
-}
+type TermGroup = LexicalTermGroup
 
 /**
  * 组内形态展开：每个 variant 生成半角/标点全角两种形态（去重）。
@@ -214,22 +233,60 @@ interface FtsRow extends LikeRow {
   rank: number
 }
 
+/** 词典展开一组：每个 seed variant 走 expandDictTerm，去重保序 */
+function expandGroup(seeds: string[]): TermGroup {
+  const seen = new Set<string>()
+  const variants: string[] = []
+  for (const seed of seeds) {
+    const expanded = expandDictTerm(seed)
+    const list = expanded && expanded.length > 0 ? expanded : [seed]
+    for (const v of list) {
+      if (!v || seen.has(v)) continue
+      seen.add(v)
+      variants.push(v)
+    }
+  }
+  return { variants }
+}
+
 export function lexicalSearch(query: string, opts: LexicalSearchOptions): LexicalHit[] {
-  let terms = query.split(/\s+/).filter(Boolean)
-  if (terms.length === 0 || opts.limit <= 0) return []
+  if (opts.limit <= 0) return []
 
-  // 全角→半角（术语高频变体：全角括号/数字/标点），再 CJK 问句归一化：
-  // 「什么是XXX」→ 核心词「XXX」（无空格中文整句是一个 term，子串匹配要求完整
-  // 句序，文档里是「XXX是什么」就漏检）。匹配/打分统一用核心词。
-  terms = [...new Set(terms.map((t) => fullToHalfWidth(t)).map((t) => (CJK_RE.test(t) ? cjkCoreTerm(t) : t)))]
+  let groups: TermGroup[]
+  let sentence: string
+  /** 用于判断是否跑 FTS 路（含 ASCII term 才跑） */
+  let asciiProbe: string[]
 
-  // 词典展开：term 命中实体词典 → 组（原词 + 标准名 + 别名）；组内 OR，组间沿用原语义
-  const groups: TermGroup[] = terms.map((t) => {
-    const expanded = expandDictTerm(t)
-    return { variants: expanded && expanded.length > 0 ? expanded : [t] }
-  })
-  // 整句命中按展开前（词典剥离前）的核心词判断
-  const sentence = terms.join(' ')
+  if (opts.termGroups && opts.termGroups.length > 0) {
+    // 外部预处理：跳过 split / CJK 剥离，只做形态归一 + 词典展开
+    groups = []
+    asciiProbe = []
+    for (const g of opts.termGroups) {
+      const seeds = [...new Set(
+        (g.variants ?? [])
+          .map((v) => fullToHalfWidth(String(v ?? '').trim()))
+          .filter((v) => v.length >= 2),
+      )]
+      if (seeds.length === 0) continue
+      asciiProbe.push(...seeds)
+      const expanded = expandGroup(seeds)
+      if (expanded.variants.length > 0) groups.push(expanded)
+    }
+    if (groups.length === 0) return []
+    sentence = (opts.sentence?.trim() || asciiProbe.join(' ') || query).trim()
+  } else {
+    let terms = query.split(/\s+/).filter(Boolean)
+    if (terms.length === 0) return []
+
+    // 全角→半角（术语高频变体：全角括号/数字/标点），再 CJK 问句归一化：
+    // 「什么是XXX」→ 核心词「XXX」（无空格中文整句是一个 term，子串匹配要求完整
+    // 句序，文档里是「XXX是什么」就漏检）。匹配/打分统一用核心词。
+    terms = [...new Set(terms.map((t) => fullToHalfWidth(t)).map((t) => (CJK_RE.test(t) ? cjkCoreTerm(t) : t)))]
+    asciiProbe = terms
+    groups = terms.map((t) => expandGroup([t]))
+    // 整句命中按展开前（词典剥离前）的核心词判断
+    sentence = terms.join(' ')
+  }
 
   // ── LIKE 路（所有 term，含 ASCII——SQLite LIKE 对 ASCII 不区分大小写）──
   let likeRows = runLikePath(groups, opts, false, sentence)
@@ -256,7 +313,7 @@ export function lexicalSearch(query: string, opts: LexicalSearchOptions): Lexica
   // ── FTS 路（含 ASCII 原词的查询才跑；匹配用全组——CJK 组以引号短语形式进
   // MATCH 提供 AND 约束，避免「wafer 光刻」只查 wafer 变体而漏掉光刻约束）──
   let ftsHits: LexicalHit[] = []
-  if (terms.some((t) => !CJK_RE.test(t))) {
+  if (asciiProbe.some((t) => !CJK_RE.test(t))) {
     // 组内 OR（"wafer" OR "晶圆"），组间 AND；转义规则与 buildFtsQuery 一致
     const match = groups
       .map((g) => {
