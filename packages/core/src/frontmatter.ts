@@ -42,7 +42,7 @@ function yamlQuote(s: string): string {
  */
 function needsYamlQuotes(s: string): boolean {
   if (s.length === 0) return true
-  if (/^[-?:,\[\]{}#&*!|>'"%@`]/.test(s)) return true
+  if (/^[-?:,[\]{}#&*!|>'"%@`]/.test(s)) return true
   if (/[\n\r:#]/.test(s) || /\s/.test(s)) return true
   // 纯数字 / bool 形态加引，避免被解析器当成非字符串
   if (/^(true|false|null|~)$/i.test(s)) return true
