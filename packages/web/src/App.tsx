@@ -12,6 +12,7 @@ import GraphPage from './routes/graph'
 import SharePage from './routes/share'
 import Layout from './components/Layout'
 import RouteTransition from './components/RouteTransition'
+import RouteBoundary from './components/RouteBoundary'
 import AuthPrompt from './components/AuthPrompt'
 import { ToastProvider } from './components/ui'
 import { getStoredToken } from './hooks/useAPI'
@@ -40,7 +41,7 @@ export default function App() {
   if (isPublicShare) {
     return (
       <Routes>
-        <Route path="/s/:token" element={<SharePage />} />
+        <Route path="/s/:token" element={<RouteBoundary name="share"><SharePage /></RouteBoundary>} />
       </Routes>
     )
   }
@@ -62,15 +63,15 @@ export default function App() {
       <Layout contentClassName={contentClassName}>
         <RouteTransition>
           <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/new" element={<NewDocPage />} />
-            <Route path="/doc/:id" element={<DocPage />} />
-            <Route path="/inbox" element={<InboxPage />} />
-            <Route path="/archived" element={<ArchivedPage />} />
-            <Route path="/trash" element={<TrashPage />} />
-            <Route path="/entities" element={<EntitiesPage />} />
-            <Route path="/graph" element={<GraphPage />} />
-            <Route path="/settings/*" element={<SettingsPage />} />
+            <Route path="/" element={<RouteBoundary name="home"><HomePage /></RouteBoundary>} />
+            <Route path="/new" element={<RouteBoundary name="new"><NewDocPage /></RouteBoundary>} />
+            <Route path="/doc/:id" element={<RouteBoundary name="doc"><DocPage /></RouteBoundary>} />
+            <Route path="/inbox" element={<RouteBoundary name="inbox"><InboxPage /></RouteBoundary>} />
+            <Route path="/archived" element={<RouteBoundary name="archived"><ArchivedPage /></RouteBoundary>} />
+            <Route path="/trash" element={<RouteBoundary name="trash"><TrashPage /></RouteBoundary>} />
+            <Route path="/entities" element={<RouteBoundary name="entities"><EntitiesPage /></RouteBoundary>} />
+            <Route path="/graph" element={<RouteBoundary name="graph"><GraphPage /></RouteBoundary>} />
+            <Route path="/settings/*" element={<RouteBoundary name="settings"><SettingsPage /></RouteBoundary>} />
           </Routes>
         </RouteTransition>
       </Layout>
