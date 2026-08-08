@@ -381,6 +381,7 @@ function ListItemView({ block, depth = 0 }: { block: Block; depth?: number }) {
   return (
     <li
       id={block.id}
+      data-block-id={block.id}
       className={`group/bs relative scroll-mt-20 leading-[1.75] text-foreground/95${
         // hover 桥：li 盒外的 24px marker 区铺 before 伪元素，消除正文 → handle 之间的 hover 死区
         depth === 0 ? " before:absolute before:-left-6 before:top-0 before:bottom-0 before:w-6 before:content-['']" : ''

@@ -13,6 +13,7 @@ import { useEditorDraft } from '../hooks/useEditorDraft'
 import { useImageUploader } from '../hooks/useImageUploader'
 import BlockRenderer from './BlockRenderer'
 import EditorToolbar, { ShortcutsHelp } from './editor/EditorToolbar'
+import { useDocContextMenu } from './editor/DocContextMenu'
 import EditorFooter from './editor/EditorFooter'
 import CodeMirrorEditor from './editor/CodeMirrorEditor'
 import type { CodeMirrorEditorHandle } from './editor/CodeMirrorEditor'
@@ -385,6 +386,9 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
       })()
     : null
 
+  // 预览态自定义右键菜单（与 routes/doc.tsx 同步：依靠 data-block-id 查回 Block）
+  const ctxMenu = useDocContextMenu({ rootBlock: previewTree, disabled: mode !== 'view' })
+
   return (
     <div className="animate-fade-in">
       <EditorToolbar
@@ -433,9 +437,16 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
           )}
 
           {mode === 'view' ? (
-            <div className="min-h-[200px]">
+            <div
+              className="min-h-[200px]"
+              onContextMenu={ctxMenu.onContextMenu}
+              onKeyDown={ctxMenu.onKeyDown}
+            >
               {previewTree ? (
-                <BlockRenderer block={previewTree} />
+                <>
+                  <BlockRenderer block={previewTree} />
+                  {ctxMenu.menu}
+                </>
               ) : (
                 <div className="text-sm text-muted-foreground/70 italic py-4">{t('mdEditor.emptyPreview')}</div>
               )}

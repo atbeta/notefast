@@ -27,6 +27,7 @@ import BlockRenderer from '../components/BlockRenderer'
 import MarkdownEditor from '../components/MarkdownEditor'
 import TagEditor from '../components/TagEditor'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { useDocContextMenu } from '../components/editor/DocContextMenu'
 import EntityPanel from '../components/EntityPanel'
 import PageHeader from '../components/PageHeader'
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
@@ -544,6 +545,9 @@ export default function DocPage() {
   const createdAt = doc ? formatRelative(doc.created_at, 'long') : ''
   const wordCount = doc ? countWords(doc) : 0
   const isEmpty = wordCount === 0
+  // 阅读态文档区自定义右键菜单；为空文档 / 编辑态不下文阔（空文档只出猜不打是，复用
+  // BlockRenderer 下的 data-block-id 查回 Block 做 md 序列化）
+  const ctxMenu = useDocContextMenu({ rootBlock: doc, disabled: isEditing || isEmpty })
 
   // 首屏骨架：结构与正式布局一致（header + 内容列 + 右栏），加载完成后布局零跳动
   if (!doc && loading && showSkeleton) {
@@ -887,8 +891,12 @@ export default function DocPage() {
                   </div>
                 )}
 
-                <article>
+                <article
+                  onContextMenu={ctxMenu.onContextMenu}
+                  onKeyDown={ctxMenu.onKeyDown}
+                >
                   <BlockRenderer block={doc} />
+                  {ctxMenu.menu}
                 </article>
                </div>
              )}

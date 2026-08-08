@@ -16,6 +16,13 @@
     "assetFailed": "Upload failed — click to retry",
     "assetUploaded": "Uploaded to image host"
   },
+  "contextMenu": {
+    "menuLabel": "Document actions",
+    "copySelection": "Copy",
+    "selectionCopied": "Copied",
+    "askAiAboutSelection": "Ask AI about selection",
+    "noSelectionHint": "Right-click on a block to copy or ask"
+  },
   "mermaid": {
     "emptyDiagram": "Empty diagram",
     "renderFailed": "Mermaid render failed",

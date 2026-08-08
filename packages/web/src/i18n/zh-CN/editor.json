@@ -16,6 +16,13 @@
     "assetFailed": "上传失败，点击重试",
     "assetUploaded": "已上传至图床"
   },
+  "contextMenu": {
+    "menuLabel": "文档操作",
+    "copySelection": "复制",
+    "selectionCopied": "已复制",
+    "askAiAboutSelection": "问 AI 关于选区",
+    "noSelectionHint": "在块上右键可以复制或问 AI"
+  },
   "mermaid": {
     "emptyDiagram": "空图表",
     "renderFailed": "Mermaid 渲染失败",
