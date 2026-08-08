@@ -195,7 +195,7 @@ function IconBtn({
         type="button"
         onClick={onClick}
         aria-label={title}
-        className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+        className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-all active:scale-[0.92] ${
           active
             ? 'bg-primary/10 text-primary'
             : 'text-muted-foreground hover:text-foreground hover:bg-accent'
