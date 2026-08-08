@@ -61,4 +61,18 @@ describe('SelectionReporter（选区上报）', () => {
     await sleep(40)
     expect(reports).toHaveLength(0)
   })
+
+  test('IME 合成中 schedule 不上报（选区坐标/文本不稳定）', async () => {
+    const reports: Array<SelectionAnchor | null> = []
+    const r = new SelectionReporter((a) => reports.push(a), 20)
+    r.setComposing(true)
+    r.schedule(() => anchor)
+    await sleep(40)
+    expect(reports).toHaveLength(0)
+    // 合成结束后选区状态稳定，再调 schedule 应正常上报
+    r.setComposing(false)
+    r.schedule(() => anchor)
+    await sleep(40)
+    expect(reports).toEqual([anchor])
+  })
 })

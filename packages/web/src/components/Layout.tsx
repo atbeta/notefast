@@ -73,6 +73,9 @@ export default function Layout({ children, contentClassName }: { children: React
       return false
     }
     const handler = (e: KeyboardEvent) => {
+      // IME 合成中：用户正在用拼音/日文输入法候选，Cmd+K 之类绝不该插足——否则
+      // 候选确认时带上 “k”，还会一路触发命令面板
+      if (e.isComposing || e.keyCode === 229) return
       const mod = e.metaKey || e.ctrlKey
       const key = e.key.toLowerCase()
       // ⌘K/⌘J 在面板/聊天已开时优先关闭——即使焦点在面板输入框内

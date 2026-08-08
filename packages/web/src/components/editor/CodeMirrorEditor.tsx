@@ -198,6 +198,14 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
                 propsRef.current.onImageFile(file)
                 return true
               },
+              // IME 合成：compositionstart/end 上报至 SelectionReporter，
+              // 期间跳过选区上报（CM 本身在合成期内不重渲，但选区坐标 / text 仍会跳变）
+              compositionstart() {
+                selectionReporter.setComposing(true)
+              },
+              compositionend() {
+                selectionReporter.setComposing(false)
+              },
             }),
             EditorView.updateListener.of((update) => {
               if (!update.docChanged) return

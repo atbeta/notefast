@@ -25,6 +25,7 @@ export const SELECTION_DEBOUNCE_MS = 200
 export class SelectionReporter {
   private timer: ReturnType<typeof setTimeout> | null = null
   private lastWasNull = true
+  private _composing = false
 
   constructor(
     private readonly report: (anchor: SelectionAnchor | null) => void,
@@ -35,11 +36,24 @@ export class SelectionReporter {
     this.cancelTimer()
     this.timer = setTimeout(() => {
       this.timer = null
+      // IME 合成期：选区坐标会随候选词位置跳、 text 也不稳，报上去气泡会闪烁或跟错位置。
+      // 跳过本次上报，等用户确认候选后 select-on-empty / commit 后再走正常路径
+      // （CodeMirror 会在 compositionend 后再次触发 updateListener.schedule）
+      if (this.composing()) return
       const anchor = read()
       if (!anchor) return
       this.lastWasNull = false
       this.report(anchor)
     }, this.debounceMs)
+  }
+
+  /** 提供 IME 合成状态的查询；调用方接 CodeMirror view.composing */
+  composing(): boolean {
+    return this._composing
+  }
+
+  setComposing(v: boolean): void {
+    this._composing = v
   }
 
   clear(): void {
