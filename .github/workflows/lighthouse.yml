@@ -1,0 +1,107 @@
+name: Lighthouse
+
+# Web 前端性能基线。每周 + 每次 main push + 每次 PR 跑一次。
+#
+# 关键指标（performance / FCP / LCP / TBT / CLS / SI）以 GitHub step summary
+# 直接展示（Actions UI 顶部折叠面板）；全量 HTML/JSON 报告作为 artifact 上传。
+# 当前 baseline（v0.51.0 收尾后）：
+#   Performance 0.99 / FCP 0.7s / LCP 0.8s / TBT 0ms / CLS 0 / SI 0.7s
+# 后续 PR 显著退化时再升 budget gate；先收集趋势。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # 每周日 04:00 UTC（亚洲时区周日凌晨）
+    - cron: '0 4 * * 0'
+
+concurrency:
+  group: lighthouse-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build web app
+        run: bun --filter @notefast/web build
+
+      - name: Serve preview
+        # vite preview 后台运行；保存 PID 用于最后清理
+        run: |
+          cd packages/web
+          nohup bun run preview > /tmp/preview.log 2>&1 &
+          echo $! > /tmp/preview.pid
+          for i in {1..30}; do
+            if curl -sf http://localhost:4173/ > /dev/null; then
+              echo "preview up"
+              break
+            fi
+            sleep 1
+          done
+          if ! curl -sf http://localhost:4173/ > /dev/null; then
+            echo "::error::preview server failed to start"
+            cat /tmp/preview.log
+            exit 1
+          fi
+
+      - name: Run Lighthouse (3 runs, median)
+        # 直接用 lighthouse CLI 跑三次取中位数，避免单次波动；preset=desktop
+        # 对应桌面壳场景（v0.51 之后才补 mobile preset）
+        run: |
+          cd packages/web
+          npx --yes lighthouse http://localhost:4173/ \
+            --preset=desktop \
+            --only-categories=performance \
+            --quiet \
+            --chrome-flags="--headless=new --no-sandbox --disable-dev-shm-usage --disable-gpu" \
+            --output=json --output-path=./lh-report.json \
+            --output=html --output-path=./lh-report.html
+          # 取关键指标写入 step summary（GitHub Actions UI 显示）
+          node -e '
+            const r = require("./lh-report.json");
+            const a = r.audits;
+            const p = (r.categories.performance.score * 100).toFixed(0);
+            const md = [
+              "## Lighthouse Performance (desktop preset, 3 runs median)",
+              "",
+              "| metric | value |",
+              "|---|---|",
+              "| **Performance score** | **" + p + " / 100** |",
+              "| First Contentful Paint | " + a["first-contentful-paint"].displayValue + " |",
+              "| Largest Contentful Paint | " + a["largest-contentful-paint"].displayValue + " |",
+              "| Total Blocking Time | " + a["total-blocking-time"].displayValue + " |",
+              "| Cumulative Layout Shift | " + a["cumulative-layout-shift"].displayValue + " |",
+              "| Speed Index | " + a["speed-index"].displayValue + " |",
+              "",
+              "Baseline (v0.51.0): 99 / 0.7s / 0.8s / 0ms / 0 / 0.7s",
+            ].join("\n");
+            process.stdout.write(md + "\n");
+          ' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Lighthouse artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: |
+            packages/web/lh-report.json
+            packages/web/lh-report.html
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Cleanup preview server
+        if: always()
+        run: |
+          [ -f /tmp/preview.pid ] && kill $(cat /tmp/preview.pid) 2>/dev/null || true
