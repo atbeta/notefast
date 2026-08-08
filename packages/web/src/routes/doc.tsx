@@ -33,6 +33,7 @@ import PageHeader from '../components/PageHeader'
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
 import { useAiChatOpen } from '../components/Layout'
 import { scrollToElement, findScrollableAncestor } from '../lib/scroll'
+import { useActiveHeading } from '../hooks/useActiveHeading'
 import { formatRelative, relativeTime, formatSqliteDateTime, currentLocale } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
@@ -541,6 +542,10 @@ export default function DocPage() {
   }
 
   const flatHeadings = flattenHeadings(headings)
+  // 滚动联动 outline 高亮：传入 heading id 列表，hook 返回当前可见的顶部 heading。
+  // hook 内部用 IntersectionObserver + rootMargin '-72px 0px -85% 0px'，
+  // 不会误响应嵌套 .overflow-y-auto 容器外层的 scroll。
+  const activeHeadingId = useActiveHeading(flatHeadings.map((h) => h.id))
   const updatedAt = doc ? formatRelative(doc.updated_at, 'long') : ''
   const createdAt = doc ? formatRelative(doc.created_at, 'long') : ''
   const wordCount = doc ? countWords(doc) : 0
@@ -885,7 +890,7 @@ export default function DocPage() {
                     </button>
                     {tocOpen && (
                       <div className="mt-2 pl-5">
-                        <OutlineView headings={flatHeadings} loading={auxLoading} />
+                        <OutlineView headings={flatHeadings} loading={auxLoading} activeId={activeHeadingId} />
                       </div>
                     )}
                   </div>
@@ -945,7 +950,7 @@ export default function DocPage() {
             {/* key=railTab：切 Tab 重新挂载触发 140ms 纯 opacity 淡入 */}
             <div key={railTab} className="animate-fade-soft">
             {railTab === 'outline' && (
-              <OutlineView headings={flatHeadings} loading={auxLoading} />
+              <OutlineView headings={flatHeadings} loading={auxLoading} activeId={activeHeadingId} />
             )}
             {railTab === 'backlinks' && (
               <BacklinksView backlinks={backlinks} loading={auxLoading} />
@@ -993,8 +998,12 @@ export default function DocPage() {
 }
 
 function OutlineView({
-  headings, loading
-}: { headings: Array<HeadingNode & { depth: number }>; loading: boolean }) {
+  headings, loading, activeId,
+}: {
+  headings: Array<HeadingNode & { depth: number }>;
+  loading: boolean;
+  activeId: string | null;
+}) {
   const { t } = useTranslation()
   // 仅首次加载（无数据）时显示加载态；切换文档时保留旧大纲直至新数据到达，避免闪烁
   if (loading && headings.length === 0) {
@@ -1009,24 +1018,32 @@ function OutlineView({
   }
   return (
     <div className="flex flex-col">
-      {headings.map((h) => (
-        <a
-          key={h.id}
-          href={`#${h.id}`}
-          onClick={(e) => {
-            e.preventDefault()
-            // heading id = block.id（见 BlockRenderer）；手动 rAF 平滑滚动，规避部分环境原生 smooth 失效
-            const el = document.getElementById(h.id)
-            if (el) scrollToElement(el)
-            history.replaceState(null, '', `#${h.id}`)
-          }}
-          className="px-1.5 -mx-1.5 py-1 text-[12px] text-muted-foreground/85 hover:text-foreground rounded transition-colors truncate"
-          style={{ paddingLeft: `${(h.depth * 12) + 6}px` }}
-          title={h.content}
-        >
-          {h.content}
-        </a>
-      ))}
+      {headings.map((h) => {
+        const isActive = h.id === activeId
+        return (
+          <a
+            key={h.id}
+            href={`#${h.id}`}
+            aria-current={isActive ? 'location' : undefined}
+            onClick={(e) => {
+              e.preventDefault()
+              // heading id = block.id（见 BlockRenderer）；手动 rAF 平滑滚动，规避部分环境原生 smooth 失效
+              const el = document.getElementById(h.id)
+              if (el) scrollToElement(el)
+              history.replaceState(null, '', `#${h.id}`)
+            }}
+            className={`px-1.5 -mx-1.5 py-1 text-[12px] rounded transition-colors truncate ${
+              isActive
+                ? 'text-primary font-medium bg-primary-soft'
+                : 'text-muted-foreground/85 hover:text-foreground'
+            }`}
+            style={{ paddingLeft: `${(h.depth * 12) + 6}px` }}
+            title={h.content}
+          >
+            {h.content}
+          </a>
+        )
+      })}
     </div>
   )
 }
