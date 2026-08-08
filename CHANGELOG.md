@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.51.0](https://github.com/atbeta/notefast/compare/v0.50.0...v0.51.0) (2026-08-08)
+
+
+### Features
+
+* **web:** custom context menu for reading and preview doc areas ([f3d166d](https://github.com/atbeta/notefast/commit/f3d166d1b3abc25821b790665615a40cb176d445))
+* **web:** drop capture panel and bookmarklet generator ([9077e62](https://github.com/atbeta/notefast/commit/9077e62356dba4f8432678d801ad64aa61170fc4))
+
+
+### Bug Fixes
+
+* **web:** drive palette mask opacity and blur in single rAF ([c0bad24](https://github.com/atbeta/notefast/commit/c0bad245daa5dcaba0f17e3c369e8deb6c5c323b))
+
 ## [0.50.0](https://github.com/atbeta/notefast/compare/v0.49.0...v0.50.0) (2026-08-07)
 
 
