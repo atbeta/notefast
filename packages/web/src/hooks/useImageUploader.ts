@@ -36,7 +36,7 @@ export function useImageUploader({ insertAtCursor }: UseImageUploaderOpts) {
 
       const token = getStoredToken()
       const headers: Record<string, string> = { 'Content-Type': file.type }
-      if (token) headers.Authorization = `Bearer ***`
+      if (token) headers.Authorization = `Bearer ${token}`
 
       try {
         const result = await new Promise<{ ref: string }>((resolve, reject) => {
