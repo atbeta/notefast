@@ -34,6 +34,7 @@ import EntityPanel from '../components/EntityPanel'
 import PageHeader from '../components/PageHeader'
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
 import { useAiChatOpen } from '../components/Layout'
+import { readDocRailCollapsed, writeDocRailCollapsed } from '../hooks/useDocRailCollapsed'
 
 import { scrollToElement, findScrollableAncestor } from '../lib/scroll'
 import { useActiveHeading } from '../hooks/useActiveHeading'
@@ -241,12 +242,10 @@ export default function DocPage() {
   /** 桌面右栏：大纲 / 反向链接 / 实体 / 历史 标签页 */
   const [railTab, setRailTab] = useState<'outline' | 'backlinks' | 'entities' | 'history'>('outline')
   useEffect(() => { setRailTab('outline') }, [id])
-  /** 桌面右栏收起状态（localStorage 记忆） */
-  const [railCollapsed, setRailCollapsed] = useState(() => {
-    try { return localStorage.getItem('nf_doc_rail_collapsed') === '1' } catch { return false }
-  })
+  /** 桌面右栏收起状态（localStorage 记忆；写路径广播给 GlobalSyncStatus 等避让方） */
+  const [railCollapsed, setRailCollapsed] = useState(readDocRailCollapsed)
   useEffect(() => {
-    try { localStorage.setItem('nf_doc_rail_collapsed', railCollapsed ? '1' : '0') } catch { /* ignore */ }
+    writeDocRailCollapsed(railCollapsed)
   }, [railCollapsed])
   const aiChatOpen = useAiChatOpen()
   /** 移动端目录折叠 */

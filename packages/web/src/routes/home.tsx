@@ -215,7 +215,7 @@ export default function HomePage() {
                 onClick={() => {
                   localStorage.setItem('nf_first_run_done', '1')
                   setShowWelcome(false)
-                  navigate('/settings')
+                  navigate('/settings/tokens')
                 }}
                 className="px-4 py-2 text-[13px] font-medium border border-border rounded-lg hover:bg-muted transition-colors"
               >

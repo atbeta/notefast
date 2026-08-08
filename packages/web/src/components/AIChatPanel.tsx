@@ -219,9 +219,8 @@ export default function AIChatPanel({
     return () => { cancelled = true }
   }, [isOpen])
 
-  /** 打开时自动聚焦输入框：避免用户键入聊天内容时按到了背景的文档编辑器
-   *  （同时解决打开后首键入丢失的体验问题）。delay 让 slide-in 动画开始后再聚焦。
-   *  vision 模式下若有待发送图片附件，聚焦会被 deferred 跳过——避免抢占用户正在选择的视图。 */
+  /** 打开时自动聚焦输入框：避免键入落到背景文档编辑器，并解决首键丢失。
+   *  delay 让 slide-in 动画开始后再聚焦。仅在 isOpen 翻转时跑一次（附件后加不重跑）。 */
   useEffect(() => {
     if (!isOpen) return
     const id = window.setTimeout(() => inputRef.current?.focus(), 200)
@@ -482,11 +481,11 @@ export default function AIChatPanel({
       <div
         aria-hidden={!isOpen}
         onKeyDown={(e) => {
-          // 桌面端在面板内按下 Esc 也应关闭（移动端遮罩点击关闭已覆盖）
-          if (e.key === 'Escape' && isOpen && window.matchMedia('(min-width: 768px)').matches) {
-            e.stopPropagation()
-            onClose()
-          }
+          // 桌面端面板内 Esc 关闭；清空确认打开时由 ConfirmDialog 处理，勿连带关面板
+          if (e.key !== 'Escape' || !isOpen || showClearConfirm) return
+          if (!window.matchMedia('(min-width: 768px)').matches) return
+          e.stopPropagation()
+          onClose()
         }}
         className={`fixed right-0 ${shellTop} bg-card border-l border-border shadow-[var(--shadow-floating)] z-40 flex flex-col
           w-full md:w-[400px] ${expanded ? 'md:w-[600px]' : ''}

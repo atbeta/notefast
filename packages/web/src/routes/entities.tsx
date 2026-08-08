@@ -375,7 +375,7 @@ export default function EntitiesPage() {
                             )}
                             <button
                               type="button"
-                              onClick={() => navigate('/settings')}
+                              onClick={() => navigate('/settings/termdict')}
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border/70 bg-background text-[11.5px] text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
                             >
                               <BookMarked className="w-3 h-3" strokeWidth={1.75} />
