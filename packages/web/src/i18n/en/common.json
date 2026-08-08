@@ -40,5 +40,9 @@
     "saved": "Saved",
     "deleteFailed": "Failed to delete",
     "copyFailed": "Failed to copy"
+  },
+  "serverHealth": {
+    "offlineBanner": "Cannot reach the local server. Retrying; check that the service process is still running.",
+    "retry": "Retry now"
   }
 }

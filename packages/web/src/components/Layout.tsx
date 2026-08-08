@@ -8,6 +8,7 @@ import CommandPalette from './CommandPalette'
 import AIChatPanel from './AIChatPanel'
 import GlobalSyncStatus from './GlobalSyncStatus'
 import TitleBar from './TitleBar'
+import { ServerOfflineBanner } from './ServerHealthBar'
 import { useTheme } from '../hooks/useTheme'
 import { ASK_AI_EVENT } from '../lib/askAi'
 
@@ -173,6 +174,8 @@ export default function Layout({ children, contentClassName }: { children: React
             </div>
           </div>
           <main className={`flex-1 flex flex-col min-h-0 relative transition-[padding] duration-300 ${aiChatOpen ? (aiChatExpanded ? 'md:pr-[600px]' : 'md:pr-[400px]') : ''}`}>
+            {/* 服务不可达总览条：探测成功会自动消失，无需手动清除 */}
+            <ServerOfflineBanner />
             {/* 统一滚动容器：文档页内部自管滚动（h-full 正好一屏），其余页面由此容器滚动 */}
             <div className={`${contentClassName ?? 'w-full h-full'} flex flex-col overflow-y-auto`}>
               <AiChatOpenContext.Provider value={aiChatOpen}>

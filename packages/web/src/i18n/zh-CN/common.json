@@ -40,5 +40,9 @@
     "saved": "已保存",
     "deleteFailed": "删除失败",
     "copyFailed": "复制失败"
+  },
+  "serverHealth": {
+    "offlineBanner": "无法连接到本地服务。正在重试；检查服务进程是否仍在运行。",
+    "retry": "立即重试"
   }
 }
