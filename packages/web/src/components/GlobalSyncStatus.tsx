@@ -11,7 +11,7 @@ import { formatIsoDateTime } from '../lib/time'
  * 展示优先级：同步中 > 同步失败 > 有待同步 > 已同步；点击进入「备份与同步」设置。
  *
  * 位置：文档页右侧有 rail（大纲/实体/历史），lg 屏让出 rail 宽 + 边距，锚到主栏右下；
- * rail 收起为 w-9 / 展开为 w-56；非文档页贴窗口右下角。
+ * rail 收起为 w-9 / 展开为 w-72；非文档页贴窗口右下角。
  */
 export default function GlobalSyncStatus() {
   const { t } = useTranslation()
@@ -47,10 +47,10 @@ export default function GlobalSyncStatus() {
       : t('syncStatus.neverSynced')
   }
 
-  // 文档页 rail 让位：w-56=14rem / 收起 w-9=2.25rem，另加 0.75rem 边距
+  // 文档页 rail 让位：w-72=18rem / 收起 w-9=2.25rem，另加 0.75rem 边距
   const onDocPage = location.pathname.startsWith('/doc/')
   const positionClass = onDocPage
-    ? (railCollapsed ? 'lg:right-[calc(2.25rem+0.75rem)]' : 'lg:right-[calc(14rem+0.75rem)]')
+    ? (railCollapsed ? 'lg:right-[calc(2.25rem+0.75rem)]' : 'lg:right-[calc(18rem+0.75rem)]')
     : ''
 
   return (

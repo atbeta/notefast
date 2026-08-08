@@ -374,7 +374,8 @@ export default function Sidebar({
           aria-label={t('sidebar.openPalette')}
         >
           <Search className="w-3.5 h-3.5" strokeWidth={1.75} />
-          <span className="flex-1 text-left">{t('sidebar.searchPlaceholder')}</span>
+          {/* 无文案：英文 Search documents… 在 w-60 会换行；图标 + ⌘K + aria-label 已够 */}
+          <span className="flex-1 min-w-0" aria-hidden="true" />
           <ShortcutKeys keys={['mod', 'K']} />
         </button>
       </div>

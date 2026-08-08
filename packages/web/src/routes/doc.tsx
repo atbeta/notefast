@@ -581,7 +581,7 @@ export default function DocPage() {
             </div>
           </div>
         </div>
-        <div className="hidden lg:flex lg:flex-col w-56 shrink-0 bg-sidebar/30">
+        <div className="hidden lg:flex lg:flex-col w-72 shrink-0 bg-sidebar/30">
           <div className="h-14 shrink-0 border-b border-border/50" />
         </div>
       </div>
@@ -924,7 +924,7 @@ export default function DocPage() {
       {!aiChatOpen && (
         <div
           className={`hidden lg:flex flex-col shrink-0 bg-sidebar/30 h-full transition-[width] duration-200 ${
-            railCollapsed ? 'w-9' : 'w-56'
+            railCollapsed ? 'w-9' : 'w-72'
           }`}
         >
           {/* 顶栏：标签页切换，与主栏 h-14 对齐 */}
