@@ -1,73 +1,17 @@
 import { Sun, Moon, Monitor, Globe } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useTheme } from '../hooks/useTheme'
-import { useLocale } from '../hooks/useLocale'
-import { SUPPORTED_LOCALES } from '../i18n/locales'
-import { SettingsLayout, SettingsSection } from '../components/settings/ui'
+import { useTheme } from '../../hooks/useTheme'
+import { useLocale } from '../../hooks/useLocale'
+import { SUPPORTED_LOCALES } from '../../i18n/locales'
+import { SettingsSection } from '../../components/settings/ui'
 
-// Import the panels
-import AISettingsPanel from '../components/ai-settings/AISettingsPanel'
-import BackupPanel from '../components/BackupPanel'
-import SyncProtocolPanel from '../components/SyncProtocolPanel'
-import SyncPanel from '../components/SyncPanel'
-import StorageLocationsPanel from '../components/StorageLocationsPanel'
-import ApiTokensPanel from '../components/ApiTokensPanel'
-import McpPanel from '../components/McpPanel'
-import AuthEventsPanel from '../components/AuthEventsPanel'
-import ImageUploadPanel from '../components/ImageUploadPanel'
-import TermDictPanel from '../components/TermDictPanel'
-
-export default function SettingsPage() {
+export default function SettingsGeneral() {
   const { t } = useTranslation()
-  const tabs = [
-    { id: 'general', label: t('settings.tabs.general') },
-    { id: 'ai', label: t('settings.tabs.ai') },
-    { id: 'termdict', label: t('settings.tabs.termdict') },
-    { id: 'images', label: t('settings.tabs.images') },
-    { id: 'backup', label: t('settings.tabs.backup') },
-    { id: 'tokens', label: t('settings.tabs.tokens') },
-    { id: 'security', label: t('settings.tabs.security') },
-  ]
-
   return (
-    <SettingsLayout
-      title={t('settings.title')}
-      description={t('settings.description')}
-      tabs={tabs}
-    >
-      <SettingsSection id="general" title={t('settings.tabs.general')}>
-        <ThemePicker />
-        <LanguagePicker />
-      </SettingsSection>
-
-      <SettingsSection id="ai" title={t('settings.tabs.ai')}>
-        <AISettingsPanel />
-      </SettingsSection>
-
-      <SettingsSection id="termdict" title={t('settings.tabs.termdict')}>
-        <TermDictPanel />
-      </SettingsSection>
-
-      <SettingsSection id="images" title={t('settings.tabs.images')}>
-        <ImageUploadPanel />
-      </SettingsSection>
-
-      <SettingsSection id="backup" title={t('settings.tabs.backup')}>
-        <StorageLocationsPanel />
-        <BackupPanel />
-        <SyncProtocolPanel />
-        <SyncPanel />
-      </SettingsSection>
-
-      <SettingsSection id="tokens" title={t('settings.tabs.tokens')}>
-        <McpPanel />
-        <ApiTokensPanel />
-      </SettingsSection>
-
-      <SettingsSection id="security" title={t('settings.tabs.security')}>
-        <AuthEventsPanel />
-      </SettingsSection>
-    </SettingsLayout>
+    <SettingsSection id="general" title={t('settings.tabs.general')}>
+      <ThemePicker />
+      <LanguagePicker />
+    </SettingsSection>
   )
 }
 

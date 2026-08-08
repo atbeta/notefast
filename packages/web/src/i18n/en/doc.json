@@ -68,6 +68,8 @@
     "snapshotSection": "Full snapshots",
     "blockEditSection": "Block edits",
     "collapse": "Collapse",
+    "collapseRail": "Collapse side panel",
+    "expandRail": "Expand side panel",
     "preview": "Preview",
     "revert": "Revert",
     "emptyContent": "(empty)",

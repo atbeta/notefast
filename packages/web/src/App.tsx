@@ -1,5 +1,5 @@
 import { useEffect, useState, lazy, Suspense } from 'react'
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import HomePage from './routes/home'
 import DocPage from './routes/doc'
 import NewDocPage from './routes/new'
@@ -10,7 +10,14 @@ import TrashPage from './routes/trash'
 // 主页（home/doc/new/inbox/archived/trash）是主路径，不 lazy——首屏体验优先。
 const EntitiesPage = lazy(() => import('./routes/entities'))
 const GraphPage = lazy(() => import('./routes/graph'))
-const SettingsPage = lazy(() => import('./routes/settings'))
+const SettingsLayout = lazy(() => import('./routes/settings'))
+const SettingsGeneral = lazy(() => import('./routes/settings/General'))
+const SettingsAI = lazy(() => import('./routes/settings/AI'))
+const SettingsTermDict = lazy(() => import('./routes/settings/TermDict'))
+const SettingsImages = lazy(() => import('./routes/settings/Images'))
+const SettingsBackup = lazy(() => import('./routes/settings/Backup'))
+const SettingsTokens = lazy(() => import('./routes/settings/Tokens'))
+const SettingsSecurity = lazy(() => import('./routes/settings/Security'))
 const SharePage = lazy(() => import('./routes/share'))
 import Layout from './components/Layout'
 import RouteTransition from './components/RouteTransition'
@@ -102,15 +109,75 @@ export default function App() {
               }
             />
             <Route
-              path="/settings/*"
+              path="/settings"
               element={
                 <RouteBoundary name="settings">
                   <Suspense fallback={<RouteLoadingShell />}>
-                    <SettingsPage />
+                    <SettingsLayout />
                   </Suspense>
                 </RouteBoundary>
               }
-            />
+            >
+              <Route index element={<Navigate to="general" replace />} />
+              <Route
+                path="general"
+                element={
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <SettingsGeneral />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="ai"
+                element={
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <SettingsAI />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="termdict"
+                element={
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <SettingsTermDict />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="images"
+                element={
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <SettingsImages />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="backup"
+                element={
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <SettingsBackup />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="tokens"
+                element={
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <SettingsTokens />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="security"
+                element={
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <SettingsSecurity />
+                  </Suspense>
+                }
+              />
+              {/* 兜底：未识别子路径跳到 general */}
+              <Route path="*" element={<Navigate to="general" replace />} />
+            </Route>
           </Routes>
         </RouteTransition>
       </Layout>

@@ -138,6 +138,7 @@
     "discard": "Discard",
     "delete": "Delete",
     "moreActionsFor": "More actions for “{{title}}”",
+    "moreActionsTooltip": "More actions",
     "menuLabel": "Document actions",
     "confirmDiscardTitle": "Discard inbox item",
     "confirmDeleteTitle": "Delete document",

@@ -138,6 +138,7 @@
     "discard": "丢弃",
     "delete": "删除",
     "moreActionsFor": "「{{title}}」的更多操作",
+    "moreActionsTooltip": "更多操作",
     "menuLabel": "文档操作",
     "confirmDiscardTitle": "丢弃收集项",
     "confirmDeleteTitle": "删除文档",

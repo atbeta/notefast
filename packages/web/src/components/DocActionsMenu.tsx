@@ -386,6 +386,7 @@ export default function DocActionsMenu({
           aria-expanded={open}
           aria-controls={open ? menuId : undefined}
           aria-label={t('docActions.moreActionsFor', { title })}
+          title={t('docActions.moreActionsTooltip')}
           disabled={busy}
           onClick={(e) => {
             e.preventDefault()
@@ -395,7 +396,7 @@ export default function DocActionsMenu({
           onPointerDown={(e) => e.stopPropagation()}
           className={`${triggerSize} inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-all ${triggerVisible}`}
         >
-          <MoreHorizontal className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} strokeWidth={1.75} />
+          <MoreHorizontal className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} strokeWidth={1.75} aria-hidden="true" />
         </button>
       </div>
 
@@ -448,8 +449,10 @@ export default function DocActionsMenu({
             ? t('docActions.confirmDiscardMsg', { title })
             : t('docActions.confirmDeleteMsg', { title })
         }
-        confirmLabel={busy ? (surface === 'inbox' ? t('docActions.discarding') : t('docActions.deleting')) : (surface === 'inbox' ? t('docActions.discard') : t('docActions.delete'))}
-        destructive
+        confirmLabel={surface === 'inbox' ? t('docActions.discard') : t('docActions.delete')}
+        busy={busy}
+        busyLabel={surface === 'inbox' ? t('docActions.discarding') : t('docActions.deleting')}
+        tone="destructive"
         onConfirm={() => { void handleDelete() }}
         onCancel={() => setShowDelete(false)}
       />

@@ -221,6 +221,11 @@ export default function Sidebar({
   const [recentExpanded, setRecentExpanded] = useState(false)
   const [smartOpen, toggleSmart] = useSidebarSectionOpen('smart', true)
   const [pinnedOpen, togglePinned] = useSidebarSectionOpen('pinned', true)
+  /**
+   * 最近文档：默认收起（首页主列表已按时间倒序展示，侧栏再列一份是重复）。
+   * 主动展开时再发请求；折叠态不发，路由变化/外部更新触发 refetch 时仍按需拉
+   */
+  const [recentOpen, toggleRecent] = useSidebarSectionOpen('recent', false)
   const { views: pinnedViews, unpin, rename } = usePinnedViews()
   const navFadeRef = useScrollFade<HTMLElement>()
 
@@ -233,8 +238,8 @@ export default function Sidebar({
    * 展开 / 路由变化时重拉，失败静默保留旧数据
    */
   const { data: docList, refetch: refetchRecent } = useApiQuery(
-    () => (collapsed ? new Promise<DocSummary[]>(() => {}) : api.get<DocSummary[]>('/docs/list')),
-    [collapsed, location.pathname],
+    () => (collapsed || !recentOpen ? new Promise<DocSummary[]>(() => {}) : api.get<DocSummary[]>('/docs/list')),
+    [collapsed, recentOpen, location.pathname],
   )
   const allRecent = (docList ?? []).slice(0, RECENT_MAX)
   const recentDocs = recentExpanded ? allRecent : allRecent.slice(0, RECENT_PREVIEW)
@@ -488,9 +493,14 @@ export default function Sidebar({
           </div>
         )}
 
-        {allRecent.length > 0 && (
-          <div className="mt-5">
-            <SidebarSectionLabel label={t('sidebar.recentDocs')} />
+        <div className="mt-5">
+            <SidebarSectionLabel
+              label={t('sidebar.recentDocs')}
+              collapsible
+              open={recentOpen}
+              onToggle={toggleRecent}
+            />
+            {recentOpen && allRecent.length > 0 && (
             <div className="flex flex-col gap-0.5">
               {recentDocs.map(doc => {
                 const isActive = location.pathname === `/doc/${doc.id}`
@@ -541,8 +551,8 @@ export default function Sidebar({
                 </button>
               )}
             </div>
-          </div>
-        )}
+            )}
+        </div>
       </nav>
 
       <div className="border-t border-sidebar-border shrink-0">

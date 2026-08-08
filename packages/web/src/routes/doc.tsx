@@ -20,6 +20,8 @@ import {
   PencilLine,
   Network,
   Download,
+  PanelRightClose,
+  PanelLeftOpen,
 } from 'lucide-react'
 import i18next from '../i18n'
 import { api, request } from '../hooks/useAPI'
@@ -32,6 +34,7 @@ import EntityPanel from '../components/EntityPanel'
 import PageHeader from '../components/PageHeader'
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
 import { useAiChatOpen } from '../components/Layout'
+
 import { scrollToElement, findScrollableAncestor } from '../lib/scroll'
 import { useActiveHeading } from '../hooks/useActiveHeading'
 import { formatRelative, relativeTime, formatSqliteDateTime, currentLocale } from '../lib/time'
@@ -156,7 +159,6 @@ export default function DocPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
-  const aiChatOpen = useAiChatOpen()
   const toast = useToast()
   const [doc, setDoc] = useState<Block | null>(null)
   const [loading, setLoading] = useState(true)
@@ -239,6 +241,14 @@ export default function DocPage() {
   /** 桌面右栏：大纲 / 反向链接 / 实体 / 历史 标签页 */
   const [railTab, setRailTab] = useState<'outline' | 'backlinks' | 'entities' | 'history'>('outline')
   useEffect(() => { setRailTab('outline') }, [id])
+  /** 桌面右栏收起状态（localStorage 记忆） */
+  const [railCollapsed, setRailCollapsed] = useState(() => {
+    try { return localStorage.getItem('nf_doc_rail_collapsed') === '1' } catch { return false }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('nf_doc_rail_collapsed', railCollapsed ? '1' : '0') } catch { /* ignore */ }
+  }, [railCollapsed])
+  const aiChatOpen = useAiChatOpen()
   /** 移动端目录折叠 */
   const [tocOpen, setTocOpen] = useState(false)
   useEffect(() => { setTocOpen(false) }, [id])
@@ -913,39 +923,59 @@ export default function DocPage() {
 
       {/* Right Sidebar (Desktop only) — AI 聊天打开时让位（替换右栏，不额外压正文） */}
       {!aiChatOpen && (
-        <div className="hidden lg:flex flex-col w-56 shrink-0 bg-sidebar/30 h-full">
+        <div
+          className={`hidden lg:flex flex-col shrink-0 bg-sidebar/30 h-full transition-[width] duration-200 ${
+            railCollapsed ? 'w-9' : 'w-56'
+          }`}
+        >
           {/* 顶栏：标签页切换，与主栏 h-14 对齐 */}
           <div className="h-14 shrink-0 border-b border-border/50 flex items-end px-2 gap-0.5">
-            {(
-              [
-                { id: 'outline' as const, label: t('doc.outline'), count: flatHeadings.length },
-                { id: 'backlinks' as const, label: t('doc.backlinks'), count: backlinks.length },
-                { id: 'entities' as const, label: t('doc.entities'), count: null },
-                { id: 'history' as const, label: t('doc.history'), count: null },
-              ] as const
-            ).map((tab) => {
-              const active = railTab === tab.id
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setRailTab(tab.id)}
-                  className={`flex-1 pb-2.5 pt-3 text-[11.5px] font-medium transition-colors border-b-2 -mb-px ${
-                    active
-                      ? 'text-primary border-primary'
-                      : 'text-muted-foreground border-transparent hover:text-foreground'
-                  }`}
-                >
-                  {tab.label}
-                  {tab.count !== null && tab.count > 0 && (
-                    <span className={`ml-0.5 tabular-nums ${active ? 'text-primary/70' : 'text-muted-foreground/60'}`}>
-                      {tab.count}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
+            {!railCollapsed && (
+              <>
+                {(
+                  [
+                    { id: 'outline' as const, label: t('doc.outline'), count: flatHeadings.length },
+                    { id: 'backlinks' as const, label: t('doc.backlinks'), count: backlinks.length },
+                    { id: 'entities' as const, label: t('doc.entities'), count: null },
+                    { id: 'history' as const, label: t('doc.history'), count: null },
+                  ] as const
+                ).map((tab) => {
+                  const active = railTab === tab.id
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setRailTab(tab.id)}
+                      className={`flex-1 pb-2.5 pt-3 text-[11.5px] font-medium transition-colors border-b-2 -mb-px ${
+                        active
+                          ? 'text-primary border-primary'
+                          : 'text-muted-foreground border-transparent hover:text-foreground'
+                      }`}
+                    >
+                      {tab.label}
+                      {tab.count !== null && tab.count > 0 && (
+                        <span className={`ml-0.5 tabular-nums ${active ? 'text-primary/70' : 'text-muted-foreground/60'}`}>
+                          {tab.count}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => setRailCollapsed((v) => !v)}
+              title={railCollapsed ? t('doc.expandRail') : t('doc.collapseRail')}
+              aria-label={railCollapsed ? t('doc.expandRail') : t('doc.collapseRail')}
+              className={`shrink-0 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ${
+                railCollapsed ? 'w-7 h-7 mx-auto mt-3.5' : 'w-7 h-7 mb-2 ml-auto'
+              }`}
+            >
+              {railCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" strokeWidth={1.75} /> : <PanelRightClose className="w-3.5 h-3.5" strokeWidth={1.75} />}
+            </button>
           </div>
+          {!railCollapsed && (
           <div className="flex-1 overflow-y-auto px-3.5 py-4">
             {/* key=railTab：切 Tab 重新挂载触发 140ms 纯 opacity 淡入 */}
             <div key={railTab} className="animate-fade-soft">
@@ -970,17 +1000,20 @@ export default function DocPage() {
                 }}
               />
             )}
-            </div>
-          </div>
-        </div>
-      )}
+</div>
+           </div>
+           )}
+         </div>
+       )}
 
-      <ConfirmDialog
+       <ConfirmDialog
         open={showDelete}
         title={t('doc.confirmDeleteTitle')}
         message={t('doc.confirmDeleteDescription')}
-        confirmLabel={deleting ? t('doc.deleting') : t('common.delete')}
-        destructive
+        confirmLabel={t('common.delete')}
+        busy={deleting}
+        busyLabel={t('doc.deleting')}
+        tone="destructive"
         onConfirm={handleDelete}
         onCancel={() => setShowDelete(false)}
       />

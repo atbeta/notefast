@@ -219,6 +219,15 @@ export default function AIChatPanel({
     return () => { cancelled = true }
   }, [isOpen])
 
+  /** 打开时自动聚焦输入框：避免用户键入聊天内容时按到了背景的文档编辑器
+   *  （同时解决打开后首键入丢失的体验问题）。delay 让 slide-in 动画开始后再聚焦。
+   *  vision 模式下若有待发送图片附件，聚焦会被 deferred 跳过——避免抢占用户正在选择的视图。 */
+  useEffect(() => {
+    if (!isOpen) return
+    const id = window.setTimeout(() => inputRef.current?.focus(), 200)
+    return () => window.clearTimeout(id)
+  }, [isOpen])
+
   // 阅读态块菜单「问 AI 关于这一段」：预填引用草稿（不自动发送，用户审阅后自行发出）
   useEffect(() => {
     const onAsk = (e: Event) => {
@@ -460,14 +469,31 @@ export default function AIChatPanel({
   const shellTop = isTauriShell() ? 'top-9 h-[calc(100vh-2.25rem)]' : 'top-0 h-screen'
 
   return (
-    <div
-      aria-hidden={!isOpen}
-      className={`fixed right-0 ${shellTop} bg-card border-l border-border shadow-[var(--shadow-floating)] z-40 flex flex-col
-        w-full md:w-[400px] ${expanded ? 'md:w-[600px]' : ''}
-        transition-[transform,width] duration-[var(--dur)] ease-[var(--ease)]
-        ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
-      `}
-    >
+    <>
+      {/* 移动端遮罩：全宽面板覆盖整屏，半透明遮罩提示「面板模式下」的边界。
+       *  桌面端（>=md）右栏只占 400/600px，遮罩会干扰阅读文档，不显示。 */}
+      <div
+        aria-hidden="true"
+        onClick={() => onClose()}
+        className={`fixed inset-0 z-30 bg-black/30 backdrop-blur-[1px] md:hidden transition-opacity duration-[var(--dur)] ${
+          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      />
+      <div
+        aria-hidden={!isOpen}
+        onKeyDown={(e) => {
+          // 桌面端在面板内按下 Esc 也应关闭（移动端遮罩点击关闭已覆盖）
+          if (e.key === 'Escape' && isOpen && window.matchMedia('(min-width: 768px)').matches) {
+            e.stopPropagation()
+            onClose()
+          }
+        }}
+        className={`fixed right-0 ${shellTop} bg-card border-l border-border shadow-[var(--shadow-floating)] z-40 flex flex-col
+          w-full md:w-[400px] ${expanded ? 'md:w-[600px]' : ''}
+          transition-[transform,width] duration-[var(--dur)] ease-[var(--ease)]
+          ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
+        `}
+      >
       {/* Header */}
       <div className="h-14 flex items-center justify-between px-4 border-b border-border shrink-0 bg-primary-softer">
         <div className="flex items-center gap-2.5 text-foreground font-medium min-w-0">
@@ -731,7 +757,7 @@ export default function AIChatPanel({
         )}
         <form
           onSubmit={handleSubmit}
-          className="relative flex items-end gap-2 bg-card border border-border rounded-xl shadow-sm focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all p-2"
+          className="relative flex items-end gap-2 bg-card border border-border rounded-xl shadow-sm focus-within:border-primary/50 transition-colors p-2"
         >
           {capabilities?.vision && (
             <>
@@ -761,6 +787,7 @@ export default function AIChatPanel({
           )}
           <textarea
             ref={inputRef}
+            data-no-focus-ring
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onPaste={(e) => {
@@ -816,7 +843,7 @@ export default function AIChatPanel({
         title={t('chat.clearDialogTitle')}
         message={t('chat.clearDialogMessage')}
         confirmLabel={t('chat.clear')}
-        destructive
+        tone="destructive"
         onCancel={() => setShowClearConfirm(false)}
         onConfirm={() => {
           setShowClearConfirm(false)
@@ -824,6 +851,7 @@ export default function AIChatPanel({
         }}
       />
     </div>
+    </>
   )
 }
 

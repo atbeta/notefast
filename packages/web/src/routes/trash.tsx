@@ -179,7 +179,7 @@ export default function TrashPage() {
         title={t('trash.deleteTitle')}
         message={t('trash.deleteMessage')}
         confirmLabel={t('trash.delete')}
-        destructive
+        tone="destructive"
         onConfirm={() => {
           if (confirmDelete) void permanentDelete(confirmDelete.id)
         }}
@@ -190,7 +190,7 @@ export default function TrashPage() {
         title={t('trash.emptyTrashTitle')}
         message={t('trash.emptyTrashMessage', { count: docs.length })}
         confirmLabel={t('trash.emptyTrash')}
-        destructive
+        tone="destructive"
         onConfirm={() => {
           void emptyTrash()
         }}

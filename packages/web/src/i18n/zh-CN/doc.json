@@ -68,6 +68,8 @@
     "snapshotSection": "整篇快照",
     "blockEditSection": "块级修改",
     "collapse": "收起",
+    "collapseRail": "收起侧栏",
+    "expandRail": "展开侧栏",
     "preview": "预览",
     "revert": "回退",
     "emptyContent": "（空内容）",
