@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.52.0](https://github.com/atbeta/notefast/compare/v0.51.0...v0.52.0) (2026-08-08)
+
+
+### Features
+
+* **server,web:** client error telemetry to backend ([1f3af40](https://github.com/atbeta/notefast/commit/1f3af4006b4279961df6af032cfb5ac244fc8465))
+* **web:** lazy-load secondary routes (entities / graph / settings / share) ([48512c0](https://github.com/atbeta/notefast/commit/48512c00a6f39cdc85c7c43d4e98e8290fe0c764))
+* **web:** route-level error boundary isolates crashes ([f0d16bf](https://github.com/atbeta/notefast/commit/f0d16bf23ab99c013162b5d25e40f7aa8f022b2d))
+* **web:** server health probe + offline banner ([3351b99](https://github.com/atbeta/notefast/commit/3351b9938b053a7328dccbd9439aa5354476fca8))
+* **web:** shared useAiCapabilities + toolbar hint when AI unconfigured ([4f5137f](https://github.com/atbeta/notefast/commit/4f5137fa8c8af1eda51074d45d5d864280e5438f))
+* **web:** useApiMutation hook with network-error retry ([5f4e080](https://github.com/atbeta/notefast/commit/5f4e0808ee5ce2dbe8c9cafb174b1ceb08eae6d6))
+
+
+### Bug Fixes
+
+* **ci:** lighthouse CLI v13 output-path syntax ([49a8e81](https://github.com/atbeta/notefast/commit/49a8e814e4e1448cfdb4ffe5df5844e45459d63c))
+* **web:** IME composition guard for shortcuts + selection bubble ([7df2fb5](https://github.com/atbeta/notefast/commit/7df2fb5b6bf9618f2a8bdf8706e5cc241fa79b7f))
+
 ## [0.51.0](https://github.com/atbeta/notefast/compare/v0.50.0...v0.51.0) (2026-08-08)
 
 
