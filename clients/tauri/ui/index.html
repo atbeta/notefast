@@ -5,23 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>NoteFast</title>
   <style>
+    /* 默认亮色（与 Web tokens 一致）；暗色走 media，避免亮色系统下 CSS 先暗后亮 */
     :root {
       /* 品牌色（与主 UI tokens.css --primary 同源：#5A74B0 石板靛蓝） */
       --brand: #5a74b0;
-      --brand-soft: rgba(90, 116, 176, 0.35);
-      --bg: #15161a;
-      --bg-glow: #1b1d24;
-      --fg: #e8e9ed;
-      --fg-dim: rgba(232, 233, 237, 0.45);
+      --brand-soft: rgba(90, 116, 176, 0.28);
+      --bg: #f4f5f9;
+      --bg-glow: #eceef5;
+      --fg: #26272e;
+      --fg-dim: rgba(38, 39, 46, 0.45);
     }
-    @media (prefers-color-scheme: light) {
+    @media (prefers-color-scheme: dark) {
       :root {
-        --brand: #5a74b0;
-        --brand-soft: rgba(90, 116, 176, 0.28);
-        --bg: #f4f5f9;
-        --bg-glow: #eceef5;
-        --fg: #26272e;
-        --fg-dim: rgba(38, 39, 46, 0.45);
+        --brand-soft: rgba(90, 116, 176, 0.35);
+        --bg: #15161a;
+        --bg-glow: #1b1d24;
+        --fg: #e8e9ed;
+        --fg-dim: rgba(232, 233, 237, 0.45);
       }
     }
 

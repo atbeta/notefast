@@ -126,16 +126,15 @@ pub fn run() {
         .manage(EngineState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![engine_start])
         .setup(move |app| {
-            // 窗口背景色跟随系统主题（tauri.conf.json 的 backgroundColor 是静态深色，
-            // 亮色系统下 webview 加载前会闪一块深色）——必须在窗口显示前设置
+            // 启动闪屏：conf 里 visible=false，先按系统主题设 webview 底色再 show。
+            // 否则静态 backgroundColor=#18181b 会在亮色 Windows 上先闪一块黑再变白启动页。
             if let Some(win) = app.get_webview_window("main") {
-                if let Ok(theme) = win.theme() {
-                    let (r, g, b) = match theme {
-                        tauri::Theme::Light => (0xfa, 0xfa, 0xfa),
-                        _ => (0x18, 0x18, 0x1b),
-                    };
-                    let _ = win.set_background_color(Some(tauri::webview::Color::from((r, g, b, 255))));
-                }
+                let (r, g, b) = match win.theme() {
+                    Ok(tauri::Theme::Light) => (0xfa, 0xfa, 0xfa),
+                    _ => (0x18, 0x18, 0x1b),
+                };
+                let _ = win.set_background_color(Some(tauri::webview::Color::from((r, g, b, 255))));
+                let _ = win.show();
             }
             // 冷启动带入的 .md：engine 由前端启动页拉起，import 内部会等它就绪
             if !initial_files.is_empty() {
