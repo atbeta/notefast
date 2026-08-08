@@ -64,6 +64,8 @@ import mcpRouter from './api/mcp'
 import termDict from './api/termDict'
 import eventsRouter from './api/events'
 import syncProtocolRouter from './api/syncProtocol'
+import clientErrors from './api/clientErrors'
+import { initClientErrors } from './api/clientErrors'
 import storageLocations from './api/storageLocations'
 import sharePublic from './api/sharePublic'
 import { initDocEvents } from './services/docEvents'
@@ -256,6 +258,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   app.route('/api/v1/mcp', mcpRouter)
   app.route('/api/v1/events', eventsRouter)
   app.route('/api/v1/sync/protocol', syncProtocolRouter)
+  app.route('/api/v1/client-errors', clientErrors)
 
   // 分享公开端点：挂在 /api/* 之外，无需鉴权
   app.route('/share', sharePublic)
@@ -286,6 +289,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     setImageUploadConfig(initImageUploadConfig(dataDir))
     initStorageLocations(dataDir)
     initPreferences(dataDir)
+    initClientErrors()
     initSyncManager(dataDir)
     initBackupManager(dataDir)
     initProtocolManager(dataDir)

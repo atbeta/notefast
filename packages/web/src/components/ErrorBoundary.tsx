@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import { reportBoundaryError } from '../lib/errorReporter'
 
 interface Props {
   children: ReactNode
@@ -29,9 +30,10 @@ export default class ErrorBoundary extends Component<Props, State> {
     return { error }
   }
 
-  componentDidCatch(error: Error): void {
-    // 占位埋点：P0 #3 client-errors 接进来后会替换为 POST /api/v1/client-errors
+  componentDidCatch(error: Error, info: { componentStack?: string }): void {
+    // 本地日志 + 远程埋点（同一事件，不丢任何一种）
     console.error('[ErrorBoundary]', error)
+    reportBoundaryError(error, info.componentStack)
   }
 
   handleReset = (): void => {

@@ -10,12 +10,15 @@ import '@fontsource-variable/jetbrains-mono'
 import './index.css'
 import { initNativeShell } from './lib/nativeShell'
 import { initNoAutofill } from './lib/noAutofill'
+import { install as installErrorReporter } from './lib/errorReporter'
 import ErrorBoundary from './components/ErrorBoundary'
 
 // 原生壳适配（右键菜单屏蔽等）：浏览器形态内部自动跳过
 initNativeShell()
 // 全局禁用输入历史记忆（密码框豁免）——桌面壳里浏览器式历史下拉很违和
 initNoAutofill()
+// 客户端错误埋点（componentDidCatch / window.onerror / unhandledrejection）→ POST /api/v1/client-errors
+installErrorReporter()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
