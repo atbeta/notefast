@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   Loader2,
   Pencil,
+  ImageDown,
 } from 'lucide-react'
 import { parseMarkdownToBlocks, inputsToBlockTree, stripTitleFromMarkdown } from '@notefast/core'
 import type { Block } from '@notefast/core'
@@ -70,6 +71,8 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<Mode>('edit')
+  const [imageDragOver, setImageDragOver] = useState(false)
+  const imageDragCounter = useRef(0)
   const [showHelp, setShowHelp] = useState(false)
   const [ghostText, setGhostText] = useState('')
   const editorRef = useRef<CodeMirrorEditorHandle>(null)
@@ -453,6 +456,34 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
             </div>
           ) : (
             <>
+              <div
+              className="relative"
+              onDragEnter={(e) => {
+                if (e.dataTransfer.types.includes('Files')) {
+                  e.preventDefault()
+                  imageDragCounter.current += 1
+                  setImageDragOver(true)
+                }
+              }}
+              onDragOver={(e) => {
+                if (e.dataTransfer.types.includes('Files')) {
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'copy'
+                }
+              }}
+              onDragLeave={(e) => {
+                if (e.dataTransfer.types.includes('Files')) {
+                  imageDragCounter.current = Math.max(0, imageDragCounter.current - 1)
+                  if (imageDragCounter.current === 0) setImageDragOver(false)
+                }
+              }}
+              onDrop={() => {
+                // CodeMirror 的 domEventHandlers 还会接走这个 drop 并调 onImageFile；
+                // 这里只重置拖拽状态
+                imageDragCounter.current = 0
+                setImageDragOver(false)
+              }}
+            >
               <CodeMirrorEditor
                 ref={editorRef}
                 value={content}
@@ -469,6 +500,23 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
                 autoFocus
                 placeholder={t('mdEditor.placeholder')}
               />
+              {/* 图片拖入反馈：拖拽文件进入区域时铺底高亮，提示“松开即上传”。
+                  CM 的 domEventHandlers 仍然处理 drop、CodeMirrorFocus 里调 uploadImage。 */}
+              {imageDragOver && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-primary/8 border-2 border-dashed border-primary/40 rounded-md animate-fade-in"
+                >
+                  <div className="flex flex-col items-center gap-2 text-primary">
+                    <ImageDown className="w-7 h-7" strokeWidth={1.5} />
+                    <span className="text-[13px] font-medium">
+                      {t('mdEditor.dropImageHint', { defaultValue: '松开上传图片' })}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
               <SelectionBubble
                 anchor={selAnchor}
                 refining={refining}

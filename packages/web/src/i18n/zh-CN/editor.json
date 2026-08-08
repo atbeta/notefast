@@ -85,6 +85,7 @@
     "discard": "丢弃",
     "emptyPreview": "（空文档，无法预览）",
     "placeholder": "开始写…（⌘B 加粗 / ⌘I 斜体 / # 标题 / - 列表；⌘P 预览；⌘S 保存）",
+    "dropImageHint": "松开上传图片",
     "helpSave": "保存",
     "helpTogglePreview": "切换 预览 / 编辑",
     "helpBold": "加粗",
