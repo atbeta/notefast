@@ -31,6 +31,8 @@ interface EditorToolbarProps {
   saving: boolean
   loading: boolean
   uploadingImage: boolean
+  /** 上传进度 0-100。>0 时在图片按钮上叠加进度环与百分比。 */
+  uploadProgress?: number
   showHelp: boolean
   onToggleHelp: (show: boolean) => void
   onSave: () => void
@@ -47,6 +49,7 @@ export default function EditorToolbar({
   saving,
   loading,
   uploadingImage,
+  uploadProgress = 0,
   showHelp,
   onToggleHelp,
   onSave,
@@ -114,11 +117,15 @@ export default function EditorToolbar({
           <Link2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
         <IconBtn
-          title={uploadingImage ? t('editorToolbar.uploading') : t('editorToolbar.insertImage')}
+          title={
+            uploadingImage
+              ? t('editorToolbar.uploadingProgress', { pct: uploadProgress, defaultValue: `上传中… ${uploadProgress}%` })
+              : t('editorToolbar.insertImage')
+          }
           onClick={() => imageInputRef.current?.click()}
         >
           {uploadingImage ? (
-            <Loader2 className="w-[15px] h-[15px] animate-spin" strokeWidth={1.75} />
+            <UploadProgressRing progress={uploadProgress} />
           ) : (
             <ImagePlus className="w-[15px] h-[15px]" strokeWidth={1.75} />
           )}
@@ -209,6 +216,37 @@ function IconBtn({
 
 function ToolbarDivider() {
   return <span className="w-px h-4 bg-border/80 mx-1.5" />
+}
+
+/**
+ * 小尺寸上传进度环（16×16）—— SVG 圆环 + 中心百分比文字。
+ * 为紧凑：环 stroke-width=2、padding=2、字 8px。单文件上传足够看。
+ */
+function UploadProgressRing({ progress }: { progress: number }) {
+  const r = 6
+  const c = 2 * Math.PI * r
+  const dash = (Math.min(99, Math.max(0, progress)) / 100) * c
+  return (
+    <div className="relative w-[16px] h-[16px] grid place-items-center">
+      <svg viewBox="0 0 16 16" className="absolute inset-0 -rotate-90" aria-hidden="true">
+        <circle cx="8" cy="8" r={r} stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" fill="none" />
+        <circle
+          cx="8"
+          cy="8"
+          r={r}
+          stroke="currentColor"
+          strokeWidth="2"
+          fill="none"
+          strokeDasharray={`${dash} ${c}`}
+          strokeLinecap="round"
+          className="text-primary transition-[stroke-dasharray] duration-150 ease-out"
+        />
+      </svg>
+      <span className="relative text-[8px] font-medium tabular-nums leading-none text-foreground/80">
+        {Math.min(99, Math.max(0, progress))}
+      </span>
+    </div>
+  )
 }
 
 export function ShortcutsHelp({ keys, desc }: { keys: string[]; desc: string }) {

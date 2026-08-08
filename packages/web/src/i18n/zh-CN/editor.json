@@ -48,6 +48,7 @@
     "inlineCode": "行内代码 ({{shortcut}})",
     "link": "链接 ({{shortcut}})",
     "uploading": "上传中…",
+    "uploadingProgress": "上传中… {{pct}}%",
     "insertImage": "插入图片（也可直接粘贴/拖入）",
     "backToEdit": "返回编辑 ({{shortcut}})",
     "preview": "预览 ({{shortcut}})",

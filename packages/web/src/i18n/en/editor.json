@@ -48,6 +48,7 @@
     "inlineCode": "Inline code ({{shortcut}})",
     "link": "Link ({{shortcut}})",
     "uploading": "Uploading…",
+    "uploadingProgress": "Uploading… {{pct}}%",
     "insertImage": "Insert image (or paste / drag in)",
     "backToEdit": "Back to edit ({{shortcut}})",
     "preview": "Preview ({{shortcut}})",

@@ -400,6 +400,7 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
         saving={saving}
         loading={loading}
         uploadingImage={imageUploader.uploading}
+        uploadProgress={imageUploader.progress}
         showHelp={showHelp}
         onToggleHelp={setShowHelp}
         onSave={handleSave}
