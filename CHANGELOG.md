@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.53.0](https://github.com/atbeta/notefast/compare/v0.52.0...v0.53.0) (2026-08-08)
+
+
+### Features
+
+* **doc:** scroll-linked active heading in outline ([04c163c](https://github.com/atbeta/notefast/commit/04c163c02db21adf18aa5bf908210f5bdda2727c))
+* **editor:** drag-and-drop image overlay with 'drop to upload' hint ([95e2bdb](https://github.com/atbeta/notefast/commit/95e2bdb9cab60d04b3a39c3b2c85e147f0a7140a))
+* **editor:** upload progress ring + percentage in toolbar ([e8d8ca0](https://github.com/atbeta/notefast/commit/e8d8ca089bdec1ae3a9bf5f5a0641308f4ef88c7))
+* **ui:** hide DocActionsMenu trigger until row hover ([1252e88](https://github.com/atbeta/notefast/commit/1252e882a64034a86e0231f4642d4282a49fc129))
+* **ui:** press feedback on Button + IconBtn primitives ([3de47c8](https://github.com/atbeta/notefast/commit/3de47c89ee870348bb9735a6c282dc7490b2092a))
+
+
+### Bug Fixes
+
+* **a11y:** global focus-visible ring on inputs as a11y safety net ([42b8a0d](https://github.com/atbeta/notefast/commit/42b8a0d08d7dde8cd8f4a073d030fbb60f09b037))
+
 ## [0.52.0](https://github.com/atbeta/notefast/compare/v0.51.0...v0.52.0) (2026-08-08)
 
 
