@@ -58,7 +58,10 @@ jobs:
 
       - name: Run Lighthouse (3 runs, median)
         # 直接用 lighthouse CLI 跑三次取中位数，避免单次波动；preset=desktop
-        # 对应桌面壳场景（v0.51 之后才补 mobile preset）
+        # 对应桌面壳场景（v0.51 之后才补 mobile preset）。
+        # lighthouse 13+ 接受 --output=json,html + --output-path=BASE（无扩展名），
+        # 自动产出 BASE.report.json 与 BASE.report.html；以前的 --output-path=a.json,b.html
+        # 在 13+ 里会被当成"单独路径 a.json"，最后产出 a.json.report.html（错）。
         run: |
           cd packages/web
           npx --yes lighthouse http://localhost:4173/ \
@@ -66,11 +69,11 @@ jobs:
             --only-categories=performance \
             --quiet \
             --chrome-flags="--headless=new --no-sandbox --disable-dev-shm-usage --disable-gpu" \
-            --output=json --output-path=./lh-report.json \
-            --output=html --output-path=./lh-report.html
+            --output=json,html \
+            --output-path=./lh-report
           # 取关键指标写入 step summary（GitHub Actions UI 显示）
           node -e '
-            const r = require("./lh-report.json");
+            const r = require("./lh-report.report.json");
             const a = r.audits;
             const p = (r.categories.performance.score * 100).toFixed(0);
             const md = [
@@ -96,8 +99,8 @@ jobs:
         with:
           name: lighthouse-report
           path: |
-            packages/web/lh-report.json
-            packages/web/lh-report.html
+            packages/web/lh-report.report.json
+            packages/web/lh-report.report.html
           retention-days: 14
           if-no-files-found: warn
 
