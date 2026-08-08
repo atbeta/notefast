@@ -215,29 +215,5 @@
     "password": "Password",
     "save": "Save connection",
     "addNew": "Add storage connection"
-  },
-  "capture": {
-    "title": "Capture",
-    "helpTip": "Send web selections and page links to your inbox: browser bookmarklet, iOS Shortcuts, or any HTTP client",
-    "bookmarkletLabel": "Bookmarklet",
-    "bookmarkletDesc": "Save the generated code as a browser bookmark. Click it on any page to send the selected text (or the page link when nothing is selected) to your inbox. Re-clipping the same page is deduplicated automatically.",
-    "endpointLabel": "Instance URL",
-    "tokenLabel": "Token",
-    "tokenPlaceholder": "nf_paste-your-token-here",
-    "tokenHint": "Use a revocable token created via \"Generate token\" above (needs read+write scopes) — not your master API_TOKEN. The token is shown only once at creation.",
-    "copyCode": "Copy bookmark code",
-    "copied": "Copied",
-    "saveAsBookmark": "Copy, then create a bookmark and paste the code as its URL",
-    "tokenWarning": "The token is stored in plaintext inside the bookmark code — anyone who opens the bookmark can write as you. Revoke it in the token list below if leaked.",
-    "corsHint": "The bookmarklet calls cross-origin: set CORS_ORIGINS on the instance (self-hosted setups typically use *; note that unauthenticated mode + * means any web page can read/write the entire knowledge base — local/LAN use only).",
-    "iosLabel": "iOS Shortcuts",
-    "iosStep1": "Create a shortcut that accepts \"URLs\" or \"Text\" from the share sheet",
-    "iosStep2": "Add a \"Get Contents of URL\" action: method POST, address as in the example below, request body JSON",
-    "iosStep3": "Add header Authorization: Bearer <token>; put the content in markdown, status=inbox, and source.provider=ios-shortcut with external_id=<page URL>",
-    "copyCurl": "Copy example",
-    "iosNoCors": "Shortcuts does not go through a browser — no CORS setup needed",
-    "curlBody": "content here",
-    "alertSuccess": "Saved to NoteFast inbox",
-    "alertFailed": "NoteFast capture failed"
   }
 }

@@ -215,29 +215,5 @@
     "password": "密码",
     "save": "保存连接",
     "addNew": "新增存储连接"
-  },
-  "capture": {
-    "title": "采集",
-    "helpTip": "把网页选区、页面链接收进收集箱：浏览器 Bookmarklet、iOS 快捷指令或任意 HTTP 客户端",
-    "bookmarkletLabel": "Bookmarklet",
-    "bookmarkletDesc": "把生成的代码存为浏览器书签；在任意网页点击它，选中文本（无选区时为页面链接）会收进收集箱。同一页面重复采集会自动去重。",
-    "endpointLabel": "实例地址",
-    "tokenLabel": "令牌",
-    "tokenPlaceholder": "nf_在此粘贴令牌",
-    "tokenHint": "使用上方「生成连接令牌」创建的可撤销令牌（需 read+write 权限），不要用主 API_TOKEN。令牌明文只在创建时显示一次。",
-    "copyCode": "复制书签代码",
-    "copied": "已复制",
-    "saveAsBookmark": "复制后在书签栏新建书签，把代码粘贴为网址",
-    "tokenWarning": "令牌明文保存在书签代码中，任何能打开该书签的人都能以你的身份写入。泄露时在下方令牌列表撤销即可。",
-    "corsHint": "Bookmarklet 是跨域调用：实例需配置 CORS_ORIGINS（自托管一般设为 *；注意免鉴权模式 + * 意味着任意网页可读写整个知识库，仅限本地/内网使用）。",
-    "iosLabel": "iOS 快捷指令",
-    "iosStep1": "新建快捷指令，通过分享表单接收「URL」或「文本」",
-    "iosStep2": "添加「获取 URL 内容」动作：方法 POST，地址见下方示例，请求体类型 JSON",
-    "iosStep3": "头部加 Authorization: Bearer <令牌>；正文 markdown 放内容，status 填 inbox，source.provider 填 ios-shortcut、external_id 填页面 URL",
-    "copyCurl": "复制示例",
-    "iosNoCors": "快捷指令不经过浏览器，无需配置 CORS",
-    "curlBody": "正文内容",
-    "alertSuccess": "已收集到 NoteFast 收集箱",
-    "alertFailed": "NoteFast 收集失败"
   }
 }

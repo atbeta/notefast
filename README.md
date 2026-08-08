@@ -98,10 +98,6 @@ External AI agents (Claude Desktop, Cursor, etc.) connect to NoteFast via MCP:
 
 Available tools: `search`, `get_doc`, `get_block`, `create_doc`, `create_block`, `update_block`, `semantic_search`, `chat`, `list_docs`, `set_doc_tags`, `autolink_run`, and more.
 
-## Capture
-
-Send web selections, page links, or any external content into the inbox via a browser bookmarklet, iOS Shortcuts, or plain HTTP — deduplicated by source URL. Setup guide: [docs/capture.md](docs/capture.md).
-
 ## Keyboard Shortcuts
 
 | Key | Action |
