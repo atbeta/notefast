@@ -184,11 +184,13 @@ export default function InboxPage() {
                     <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={1.75} />
                     {t('inbox.addToNotes')}
                   </button>
-                  <DocActionsMenu
-                    doc={{ ...doc, status: 'inbox' }}
-                    surface="inbox"
-                    onDone={refetch}
-                  />
+                  <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+                    <DocActionsMenu
+                      doc={{ ...doc, status: 'inbox' }}
+                      surface="inbox"
+                      onDone={refetch}
+                    />
+                  </div>
                 </div>
               </div>
             ))}

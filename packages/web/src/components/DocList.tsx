@@ -121,12 +121,14 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
               · {t('docList.createdAt', { date: formatRelative(doc.created_at) })}
             </span>
           )}
-          <DocActionsMenu
-            doc={doc}
-            surface="list"
-            onDone={onRefresh}
-            onRename={() => { setEditing(true); setTitle(doc.title) }}
-          />
+          <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+            <DocActionsMenu
+              doc={doc}
+              surface="list"
+              onDone={onRefresh}
+              onRename={() => { setEditing(true); setTitle(doc.title) }}
+            />
+          </div>
         </div>
       )}
     </div>

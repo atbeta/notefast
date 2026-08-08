@@ -520,13 +520,14 @@ export default function Sidebar({
                         />
                       )}
                     </Link>
-                    <DocActionsMenu
-                      doc={doc}
-                      surface="sidebar"
-                      compact
-                      onDone={() => refetchRecent()}
-                      className="pr-0.5"
-                    />
+                    <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0 pr-0.5">
+                      <DocActionsMenu
+                        doc={doc}
+                        surface="sidebar"
+                        compact
+                        onDone={() => refetchRecent()}
+                      />
+                    </div>
                   </div>
                 )
               })}

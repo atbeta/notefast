@@ -114,11 +114,13 @@ export default function ArchivedPage() {
           )}
           {t('archived.restore')}
         </button>
-        <DocActionsMenu
-          doc={{ ...doc, status: 'archived' }}
-          surface="archived"
-          onDone={refetch}
-        />
+        <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+          <DocActionsMenu
+            doc={{ ...doc, status: 'archived' }}
+            surface="archived"
+            onDone={refetch}
+          />
+        </div>
       </div>
     </div>
   )
