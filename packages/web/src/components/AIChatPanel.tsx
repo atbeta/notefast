@@ -622,7 +622,7 @@ export default function AIChatPanel({
                         : 'bg-primary-soft text-primary'
                     }`}
                   >
-                    {/* 用户 = 人形（中性灰）；AI = Sparkles（与侧栏 AI 入口同标识 + 品牌色） */}
+                    {/* 用户 = 人形（中性灰）；AI = Sparkles（与全局 AI 入口同标识 + 品牌色） */}
                     {msg.role === 'user' ? (
                       <User className="w-4 h-4" strokeWidth={1.75} />
                     ) : (

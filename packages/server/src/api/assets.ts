@@ -2,6 +2,7 @@
  * Assets API
  *
  * - POST   /api/v1/assets            上传图片（body = 原始字节，Content-Type = 图片 mime）→ { id, url, dedup }
+ * - GET    /api/v1/assets            资源库列表（?limit&offset）→ { items, total }
  * - GET    /api/v1/assets/:id        读取图片（Bearer/Basic 或会话 cookie；内容寻址，强缓存）
  * - POST   /api/v1/assets/gc         孤儿回收（无引用且超过宽限期的 asset 删除）
  */
@@ -17,6 +18,7 @@ import {
   findMissingAssets,
   getAssetUploadStatus,
   getUploadBatchStatus,
+  listAssets,
   MAX_ASSET_BYTES,
   maybeUploadToRemote,
   readAsset,
@@ -61,6 +63,15 @@ assets.post('/', async (c) => {
     },
     dedup ? 200 : 201,
   )
+})
+
+/** 资源库列表——必须在 /:id 之前注册 */
+assets.get('/', (c) => {
+  const limitRaw = parseInt(c.req.query('limit') || '100', 10)
+  const offsetRaw = parseInt(c.req.query('offset') || '0', 10)
+  const limit = Number.isFinite(limitRaw) ? limitRaw : 100
+  const offset = Number.isFinite(offsetRaw) ? offsetRaw : 0
+  return c.json(listAssets({ limit, offset }))
 })
 
 /** 图床上传配置：读取（无密钥，原样返回）——必须在 /:id 之前注册，否则被当作 asset id */

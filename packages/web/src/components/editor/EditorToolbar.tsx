@@ -1,4 +1,5 @@
-import { useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import {
@@ -17,11 +18,14 @@ import {
   Heading3,
   X,
   ImagePlus,
+  Images,
   Sparkles,
+  Upload,
 } from 'lucide-react'
 import { Tooltip, ShortcutKeys, shortcutLabel } from '../ui'
 import { useAiCapabilities } from '../../hooks/useAiCapabilities'
 import type { CodeMirrorEditorHandle } from './CodeMirrorEditor'
+import AssetPickerDialog from './AssetPickerDialog'
 
 type Mode = 'edit' | 'view'
 
@@ -61,6 +65,11 @@ export default function EditorToolbar({
 }: EditorToolbarProps) {
   const { t } = useTranslation()
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const imageBtnRef = useRef<HTMLButtonElement>(null)
+  const imageMenuRef = useRef<HTMLDivElement>(null)
+  const [imageMenuOpen, setImageMenuOpen] = useState(false)
+  const [imageMenuPos, setImageMenuPos] = useState<{ top: number; left: number } | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
   // AI 能力探测：有 chat/embedding/reranker 任一能力时静默成功；
   // 三个都 false 时在工具栏右侧出现一个链接入口指向 settings/ai。
   const ai = useAiCapabilities()
@@ -77,6 +86,44 @@ export default function EditorToolbar({
       insertAtCursor(ins, { cursorOffset: linkText.length + 3 })
     }
   }
+
+  const insertAssetRef = (ref: string) => {
+    const alt = t('editorToolbar.imageAlt')
+    insertAtCursor(`\n![${alt}](${ref})\n`)
+    setPickerOpen(false)
+  }
+
+  useLayoutEffect(() => {
+    if (!imageMenuOpen) {
+      setImageMenuPos(null)
+      return
+    }
+    const el = imageBtnRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const menuW = 180
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - menuW - 8))
+    setImageMenuPos({ top: r.bottom + 6, left })
+  }, [imageMenuOpen])
+
+  useEffect(() => {
+    if (!imageMenuOpen) return
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (imageMenuRef.current?.contains(target)) return
+      if (imageBtnRef.current?.contains(target)) return
+      setImageMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setImageMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [imageMenuOpen])
 
   return (
     <div className="sticky top-14 z-10 -mx-4 sm:-mx-8 px-4 sm:px-8 mb-2 bg-background/85 backdrop-blur-md">
@@ -116,20 +163,37 @@ export default function EditorToolbar({
         <IconBtn title={t('editorToolbar.link', { shortcut: shortcutLabel(['mod', '⇧K']) })} onClick={handleInsertLink}>
           <Link2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn
-          title={
+        <Tooltip
+          label={
             uploadingImage
-              ? t('editorToolbar.uploadingProgress', { pct: uploadProgress, defaultValue: `上传中… ${uploadProgress}%` })
+              ? t('editorToolbar.uploadingProgress', { pct: uploadProgress })
               : t('editorToolbar.insertImage')
           }
-          onClick={() => imageInputRef.current?.click()}
         >
-          {uploadingImage ? (
-            <UploadProgressRing progress={uploadProgress} />
-          ) : (
-            <ImagePlus className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          )}
-        </IconBtn>
+          <button
+            ref={imageBtnRef}
+            type="button"
+            disabled={uploadingImage}
+            aria-label={t('editorToolbar.insertImage')}
+            aria-expanded={imageMenuOpen}
+            aria-haspopup="menu"
+            onClick={() => {
+              if (uploadingImage) return
+              setImageMenuOpen((v) => !v)
+            }}
+            className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-all active:scale-[0.92] disabled:opacity-50 ${
+              imageMenuOpen
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+            }`}
+          >
+            {uploadingImage ? (
+              <UploadProgressRing progress={uploadProgress} />
+            ) : (
+              <ImagePlus className="w-[15px] h-[15px]" strokeWidth={1.75} />
+            )}
+          </button>
+        </Tooltip>
         <input
           ref={imageInputRef}
           type="file"
@@ -140,6 +204,46 @@ export default function EditorToolbar({
             if (f) void uploadImage(f)
             e.target.value = ''
           }}
+        />
+        {imageMenuOpen && imageMenuPos && createPortal(
+          <div
+            ref={imageMenuRef}
+            role="menu"
+            aria-label={t('editorToolbar.insertImage')}
+            className="fixed z-[80] min-w-[180px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
+            style={{ top: imageMenuPos.top, left: imageMenuPos.left }}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] text-left text-foreground hover:bg-accent transition-colors"
+              onClick={() => {
+                setImageMenuOpen(false)
+                imageInputRef.current?.click()
+              }}
+            >
+              <Upload className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.75} />
+              <span>{t('editorToolbar.uploadLocal')}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] text-left text-foreground hover:bg-accent transition-colors"
+              onClick={() => {
+                setImageMenuOpen(false)
+                setPickerOpen(true)
+              }}
+            >
+              <Images className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.75} />
+              <span>{t('editorToolbar.fromLibrary')}</span>
+            </button>
+          </div>,
+          document.body,
+        )}
+        <AssetPickerDialog
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          onPick={insertAssetRef}
         />
 
         <div className="flex items-center gap-1 ml-auto">

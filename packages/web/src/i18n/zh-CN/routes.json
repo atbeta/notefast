@@ -97,6 +97,18 @@
     "importAnother": "再导入一个",
     "backToLibrary": "返回文档库"
   },
+  "resources": {
+    "title": "资源",
+    "description": "粘贴或上传到笔记里的图片会保存在这里。目前支持图片；本地存储是主数据，图床外链为可选。",
+    "emptyTitle": "还没有资源",
+    "emptyDesc": "在编辑器里粘贴或拖入图片后，会出现在这里。",
+    "openImageSettings": "图床与图片设置",
+    "count": "共 {{n}} 项",
+    "local": "本地",
+    "remote": "已外链",
+    "inUse": "使用中",
+    "unused": "未引用"
+  },
   "share": {
     "notFoundTitle": "链接不存在或已关闭",
     "notFoundDesc": "这篇文档的分享可能已被作者关闭。",

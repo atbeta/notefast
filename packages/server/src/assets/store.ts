@@ -325,6 +325,58 @@ export function collectReferencedAssetIds(): Set<string> {
   return refs
 }
 
+export interface AssetListItem {
+  id: string
+  mime: string
+  size: number
+  created_at: string
+  /** 是否已挂图床外链 */
+  remote: boolean
+  /** 是否被任意未删除文档引用 */
+  referenced: boolean
+}
+
+/**
+ * 资源库列表（按创建时间倒序）。
+ * referenced 来自内容扫描，不建关联表。
+ */
+export function listAssets(opts: { limit?: number; offset?: number } = {}): {
+  items: AssetListItem[]
+  total: number
+} {
+  const limit = Math.min(Math.max(opts.limit ?? 100, 1), 200)
+  const offset = Math.max(opts.offset ?? 0, 0)
+  const db = getDb()
+  const totalRow = db.query('SELECT COUNT(*) AS n FROM assets').get() as { n: number }
+  const total = totalRow?.n ?? 0
+  const rows = db
+    .query(
+      `SELECT id, mime, size, created_at, remote_url
+       FROM assets
+       ORDER BY created_at DESC, id DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .all(limit, offset) as Array<{
+    id: string
+    mime: string
+    size: number
+    created_at: string
+    remote_url: string | null
+  }>
+  const referenced = rows.length > 0 ? collectReferencedAssetIds() : new Set<string>()
+  return {
+    total,
+    items: rows.map((r) => ({
+      id: r.id,
+      mime: r.mime,
+      size: r.size,
+      created_at: r.created_at,
+      remote: Boolean(r.remote_url),
+      referenced: referenced.has(r.id),
+    })),
+  }
+}
+
 /** 校验一组 id 是否都存在；返回缺失列表（写入路径对账用，告警不阻断） */
 export function findMissingAssets(ids: string[]): string[] {
   if (ids.length === 0) return []

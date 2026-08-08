@@ -12,7 +12,6 @@ import {
   Inbox,
   Archive,
   Trash2,
-  Sparkles,
   Settings,
   Tag,
   Star,
@@ -23,6 +22,7 @@ import {
   Waypoints,
   Network,
   ChevronDown,
+  Images,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
@@ -39,9 +39,6 @@ interface SidebarProps {
   onToggle: () => void
   onOpenPalette: () => void
   onNavigate?: () => void
-  /** AI 聊天面板状态与开关 — 入口收敛在侧边栏导航，替代右下角 FAB */
-  aiChatOpen?: boolean
-  onToggleAiChat?: () => void
 }
 
 /** GET /docs/counts 返回的侧栏徽章计数（inbox/trash 是队列，untagged/ai_exclude 是债务与审计） */
@@ -212,13 +209,13 @@ export default function Sidebar({
   onToggle,
   onOpenPalette,
   onNavigate,
-  aiChatOpen,
-  onToggleAiChat,
 }: SidebarProps) {
   const { t } = useTranslation()
   const location = useLocation()
   const [counts, setCounts] = useState<SidebarCounts>(EMPTY_COUNTS)
   const [recentExpanded, setRecentExpanded] = useState(false)
+  const [notesOpen, toggleNotes] = useSidebarSectionOpen('notes', true)
+  const [relationsOpen, toggleRelations] = useSidebarSectionOpen('relations', false)
   const [smartOpen, toggleSmart] = useSidebarSectionOpen('smart', true)
   const [pinnedOpen, togglePinned] = useSidebarSectionOpen('pinned', true)
   /**
@@ -310,21 +307,18 @@ export default function Sidebar({
               <FileText className="w-4 h-4" strokeWidth={1.75} />
             </Link>
           </Tooltip>
-          {onToggleAiChat && (
-            <Tooltip label={t('sidebar.aiAssistant')}>
-              <button
-                type="button"
-                onClick={onToggleAiChat}
-                className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
-                  aiChatOpen
-                    ? 'bg-primary-soft text-primary'
-                    : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-                }`}
-              >
-                <Sparkles className="w-4 h-4" strokeWidth={1.75} />
-              </button>
-            </Tooltip>
-          )}
+          <Tooltip label={t('sidebar.resources')}>
+            <Link
+              to="/resources"
+              className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
+                location.pathname.startsWith('/resources')
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+              }`}
+            >
+              <Images className="w-4 h-4" strokeWidth={1.75} />
+            </Link>
+          </Tooltip>
           <div className="flex-1" />
           <Tooltip label={t('sidebar.settings')}>
             <Link
@@ -363,11 +357,13 @@ export default function Sidebar({
             Beta
           </span>
         </div>
-        <Tooltip label={t('sidebar.collapseSidebar')}>
-          <button onClick={onToggle} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group">
-            <PanelLeftClose className="w-4 h-4" strokeWidth={1.75} />
-          </button>
-        </Tooltip>
+        <div className="flex items-center gap-0.5">
+          <Tooltip label={t('sidebar.collapseSidebar')}>
+            <button onClick={onToggle} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group">
+              <PanelLeftClose className="w-4 h-4" strokeWidth={1.75} />
+            </button>
+          </Tooltip>
+        </div>
       </div>
 
       <div className="px-3 pt-3 pb-2 shrink-0">
@@ -384,52 +380,61 @@ export default function Sidebar({
       </div>
 
       <nav ref={navFadeRef} className="scroll-fade px-2 pt-2 pb-1 flex-1 overflow-y-auto">
-        <SidebarSectionLabel label={t('sidebar.navigation')} />
-        <Link to="/" onClick={closeAfterNav} className={location.pathname === '/' && !location.search ? 'sidebar-link-active' : 'sidebar-link'}>
-          <LayoutGrid className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          {t('sidebar.allDocs')}
-        </Link>
-        <Link to="/new" onClick={closeAfterNav} className={location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'} title={t('sidebar.newDocTitle', { shortcut: shortcutLabel(['mod', 'N']) })}>
-          <Plus className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          {t('sidebar.newDoc')}
-        </Link>
-        <Link to="/inbox" onClick={closeAfterNav} className={location.pathname === '/inbox' ? 'sidebar-link-active' : 'sidebar-link'}>
-          <Inbox className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          <span className="flex-1">{t('sidebar.inbox')}</span>
-          {counts.inbox > 0 && (
-            <span className={COUNT_BADGE_CLS}>{formatCount(counts.inbox)}</span>
-          )}
-        </Link>
-        <Link to="/archived" onClick={closeAfterNav} className={location.pathname === '/archived' ? 'sidebar-link-active' : 'sidebar-link'}>
-          <Archive className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          <span className="flex-1">{t('sidebar.archived')}</span>
-        </Link>
-        <Link to="/trash" onClick={closeAfterNav} className={location.pathname === '/trash' ? 'sidebar-link-active' : 'sidebar-link'}>
-          <Trash2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          <span className="flex-1">{t('sidebar.trash')}</span>
-          {counts.trash > 0 && (
-            <span className={COUNT_BADGE_CLS}>{formatCount(counts.trash)}</span>
-          )}
-        </Link>
-        <Link to="/entities" onClick={closeAfterNav} className={location.pathname === '/entities' ? 'sidebar-link-active' : 'sidebar-link'}>
-          <Waypoints className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          <span className="flex-1">{t('sidebar.entities')}</span>
-        </Link>
-        <Link to="/graph" onClick={closeAfterNav} className={location.pathname === '/graph' ? 'sidebar-link-active' : 'sidebar-link'}>
-          <Network className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          <span className="flex-1">{t('sidebar.graph')}</span>
-        </Link>
-        {onToggleAiChat && (
-          <button
-            type="button"
-            onClick={onToggleAiChat}
-            className={`w-full text-left ${aiChatOpen ? 'sidebar-link-active' : 'sidebar-link'}`}
-          >
-            <Sparkles className="w-[15px] h-[15px]" strokeWidth={1.75} />
-            <span className="flex-1">{t('sidebar.aiAssistant')}</span>
-            <ShortcutKeys keys={['mod', 'J']} className="ml-auto" />
-          </button>
+        <SidebarSectionLabel label={t('sidebar.sectionNotes')} collapsible open={notesOpen} onToggle={toggleNotes} />
+        {notesOpen && (
+          <>
+            <Link to="/" onClick={closeAfterNav} className={location.pathname === '/' && !location.search ? 'sidebar-link-active' : 'sidebar-link'}>
+              <LayoutGrid className="w-[15px] h-[15px]" strokeWidth={1.75} />
+              {t('sidebar.allDocs')}
+            </Link>
+            <Link to="/new" onClick={closeAfterNav} className={location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'} title={t('sidebar.newDocTitle', { shortcut: shortcutLabel(['mod', 'N']) })}>
+              <Plus className="w-[15px] h-[15px]" strokeWidth={1.75} />
+              {t('sidebar.newDoc')}
+            </Link>
+            <Link to="/inbox" onClick={closeAfterNav} className={location.pathname === '/inbox' ? 'sidebar-link-active' : 'sidebar-link'}>
+              <Inbox className="w-[15px] h-[15px]" strokeWidth={1.75} />
+              <span className="flex-1">{t('sidebar.inbox')}</span>
+              {counts.inbox > 0 && (
+                <span className={COUNT_BADGE_CLS}>{formatCount(counts.inbox)}</span>
+              )}
+            </Link>
+            <Link to="/archived" onClick={closeAfterNav} className={location.pathname === '/archived' ? 'sidebar-link-active' : 'sidebar-link'}>
+              <Archive className="w-[15px] h-[15px]" strokeWidth={1.75} />
+              <span className="flex-1">{t('sidebar.archived')}</span>
+            </Link>
+            <Link to="/trash" onClick={closeAfterNav} className={location.pathname === '/trash' ? 'sidebar-link-active' : 'sidebar-link'}>
+              <Trash2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
+              <span className="flex-1">{t('sidebar.trash')}</span>
+              {counts.trash > 0 && (
+                <span className={COUNT_BADGE_CLS}>{formatCount(counts.trash)}</span>
+              )}
+            </Link>
+          </>
         )}
+
+        <div className="mt-5">
+          <SidebarSectionLabel label={t('sidebar.sectionResources')} />
+          <Link to="/resources" onClick={closeAfterNav} className={location.pathname.startsWith('/resources') ? 'sidebar-link-active' : 'sidebar-link'}>
+            <Images className="w-[15px] h-[15px]" strokeWidth={1.75} />
+            <span className="flex-1">{t('sidebar.resources')}</span>
+          </Link>
+        </div>
+
+        <div className="mt-5">
+          <SidebarSectionLabel label={t('sidebar.sectionRelations')} collapsible open={relationsOpen} onToggle={toggleRelations} />
+          {relationsOpen && (
+            <>
+              <Link to="/entities" onClick={closeAfterNav} className={location.pathname === '/entities' ? 'sidebar-link-active' : 'sidebar-link'}>
+                <Waypoints className="w-[15px] h-[15px]" strokeWidth={1.75} />
+                <span className="flex-1">{t('sidebar.entities')}</span>
+              </Link>
+              <Link to="/graph" onClick={closeAfterNav} className={location.pathname === '/graph' ? 'sidebar-link-active' : 'sidebar-link'}>
+                <Network className="w-[15px] h-[15px]" strokeWidth={1.75} />
+                <span className="flex-1">{t('sidebar.graph')}</span>
+              </Link>
+            </>
+          )}
+        </div>
 
         <div className="mt-5">
           <SidebarSectionLabel label={t('sidebar.smartViews')} collapsible open={smartOpen} onToggle={toggleSmart} />

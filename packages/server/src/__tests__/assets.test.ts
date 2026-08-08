@@ -91,6 +91,40 @@ describe('AssetStore — 上传与去重', () => {
     const missing = await app.fetch(new Request('http://localhost/api/v1/assets/' + '0'.repeat(64)))
     expect(missing.status).toBe(404)
   })
+
+  test('列表：返回 items/total，referenced 随正文引用变化', async () => {
+    const empty = await app.fetch(new Request('http://localhost/api/v1/assets'))
+    expect(empty.status).toBe(200)
+    expect(await empty.json()).toEqual({ items: [], total: 0 })
+
+    const { body } = await upload()
+    const id = body.id as string
+    const listed = await app.fetch(new Request('http://localhost/api/v1/assets?limit=10'))
+    const listBody = await listed.json() as {
+      total: number
+      items: Array<{ id: string; referenced: boolean; remote: boolean }>
+    }
+    expect(listBody.total).toBe(1)
+    expect(listBody.items[0]!.id).toBe(id)
+    expect(listBody.items[0]!.referenced).toBe(false)
+
+    const nb = crypto.randomUUID()
+    const docId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    getDb().query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
+    ).run(docId, nb, docId, 'Doc', now, now)
+    getDb().query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'paragraph', ?, 0, 1, ?, ?)`,
+    ).run(crypto.randomUUID(), nb, docId, docId, `见 ![](asset:${id})`, now, now)
+
+    const listed2 = await app.fetch(new Request('http://localhost/api/v1/assets'))
+    const listBody2 = await listed2.json() as { items: Array<{ referenced: boolean }> }
+    expect(listBody2.items[0]!.referenced).toBe(true)
+  })
 })
 
 describe('AssetStore — 引用对账', () => {

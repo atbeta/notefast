@@ -12,9 +12,11 @@ import { ServerOfflineBanner } from './ServerHealthBar'
 import { useTheme } from '../hooks/useTheme'
 import { ASK_AI_EVENT } from '../lib/askAi'
 
-/** AI 聊天面板开关状态 — 页面（如文档页右栏）可据此避让空间 */
-const AiChatOpenContext = createContext(false)
-export const useAiChatOpen = () => useContext(AiChatOpenContext)
+/** AI 聊天面板控制 — 开合状态 + toggle（内容顶栏常驻入口 / 文档右栏避让共用） */
+type AiChatCtl = { open: boolean; toggle: () => void }
+const AiChatCtlContext = createContext<AiChatCtl>({ open: false, toggle: () => {} })
+export const useAiChatCtl = () => useContext(AiChatCtlContext)
+export const useAiChatOpen = () => useContext(AiChatCtlContext).open
 
 export default function Layout({ children, contentClassName }: { children: ReactNode; contentClassName?: string }) {
   const { t } = useTranslation()
@@ -130,8 +132,6 @@ export default function Layout({ children, contentClassName }: { children: React
             collapsed={sidebarCollapsed}
             onToggle={toggleSidebar}
             onOpenPalette={openPalette}
-            aiChatOpen={aiChatOpen}
-            onToggleAiChat={toggleAiChat}
           />
         </div>
 
@@ -145,8 +145,6 @@ export default function Layout({ children, contentClassName }: { children: React
                 onToggle={closeMobile}
                 onOpenPalette={openPalette}
                 onNavigate={closeMobile}
-                aiChatOpen={aiChatOpen}
-                onToggleAiChat={toggleAiChat}
               />
             </div>
           </div>
@@ -183,9 +181,9 @@ export default function Layout({ children, contentClassName }: { children: React
             <ServerOfflineBanner />
             {/* 统一滚动容器：文档页内部自管滚动（h-full 正好一屏），其余页面由此容器滚动 */}
             <div className={`${contentClassName ?? 'w-full h-full'} flex flex-col overflow-y-auto`}>
-              <AiChatOpenContext.Provider value={aiChatOpen}>
+              <AiChatCtlContext.Provider value={{ open: aiChatOpen, toggle: toggleAiChat }}>
                 {children}
-              </AiChatOpenContext.Provider>
+              </AiChatCtlContext.Provider>
             </div>
           </main>
         </div>
@@ -199,7 +197,12 @@ export default function Layout({ children, contentClassName }: { children: React
           onToggleExpand={toggleAiChatExpand}
         />
 
-        <CommandPalette open={paletteOpen} onClose={closePalette} />
+        <CommandPalette
+          open={paletteOpen}
+          onClose={closePalette}
+          onToggleAiChat={toggleAiChat}
+          aiChatOpen={aiChatOpen}
+        />
       </div>
     </div>
   )

@@ -9,6 +9,8 @@ import {
   Moon,
   Sun,
   Hash,
+  Images,
+  Sparkles,
   CornerDownLeft,
   ArrowUp,
   ArrowDown,
@@ -22,6 +24,9 @@ import { Kbd, ShortcutKeys } from './ui'
 interface CommandPaletteProps {
   open: boolean
   onClose: () => void
+  /** 打开/关闭 AI 聊天面板（分散入口之一；侧栏不常驻） */
+  onToggleAiChat?: () => void
+  aiChatOpen?: boolean
 }
 
 type PaletteItem = {
@@ -35,7 +40,7 @@ type PaletteItem = {
   action: () => void
 }
 
-export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
+export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOpen }: CommandPaletteProps) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
@@ -164,6 +169,27 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         action: () => { onClose(); navigate('/') },
       },
       {
+        id: 'cmd-resources',
+        icon: Images,
+        title: t('command.goResources'),
+        hint: t('command.goResourcesHint'),
+        section: 'command',
+        keywords: ['resources', 'images', 'media', 'asset', '资源', '图片'],
+        action: () => { onClose(); navigate('/resources') },
+      },
+      ...(onToggleAiChat
+        ? [{
+            id: 'cmd-ai',
+            icon: Sparkles,
+            title: aiChatOpen ? t('command.closeAiChat') : t('command.openAiChat'),
+            hint: t('command.toggleAiChatHint'),
+            section: 'command' as const,
+            shortcut: ['mod', 'J'],
+            keywords: ['ai', 'chat', 'assistant', 'ask', '助手', '聊天', '问答'],
+            action: () => { onClose(); onToggleAiChat() },
+          }]
+        : []),
+      {
         id: 'cmd-theme',
         icon: dark ? Sun : Moon,
         title: dark ? t('command.switchToLight') : t('command.switchToDark'),
@@ -174,7 +200,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         action: toggleDark,
       },
     ]
-  }, [dark, navigate, onClose, t])
+  }, [aiChatOpen, dark, navigate, onClose, onToggleAiChat, t])
 
   const docItems: PaletteItem[] = useMemo(() => results.map((r) => ({
     id: 'doc-' + r.block.id,

@@ -97,6 +97,18 @@
     "importAnother": "Import another",
     "backToLibrary": "Back to library"
   },
+  "resources": {
+    "title": "Resources",
+    "description": "Images pasted or uploaded into notes are stored here. Images only for now — local storage is primary; remote hosting is optional.",
+    "emptyTitle": "No resources yet",
+    "emptyDesc": "Paste or drop an image in the editor and it will show up here.",
+    "openImageSettings": "Image upload settings",
+    "count": "{{n}} items",
+    "local": "Local",
+    "remote": "Remote",
+    "inUse": "In use",
+    "unused": "Unused"
+  },
   "share": {
     "notFoundTitle": "This link doesn't exist or has been closed",
     "notFoundDesc": "The author may have turned off sharing for this document.",

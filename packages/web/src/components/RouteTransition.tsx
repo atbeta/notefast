@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { useLocation, matchPath } from 'react-router-dom'
 
 /** 应用路由表（与 App.tsx 一致）：用于判断「同路由仅参数变化」的导航 */
-const ROUTE_PATTERNS = ['/', '/new', '/doc/:id', '/inbox', '/archived', '/entities', '/graph', '/settings/*']
+const ROUTE_PATTERNS = ['/', '/new', '/doc/:id', '/inbox', '/archived', '/trash', '/resources', '/entities', '/graph', '/settings/*']
 
 /**
  * 路由切换过渡：旧路径分支不立刻卸载，靠 useLayoutEffect 在浏览器绘制前

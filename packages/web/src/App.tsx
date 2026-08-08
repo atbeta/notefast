@@ -6,10 +6,11 @@ import NewDocPage from './routes/new'
 import InboxPage from './routes/inbox'
 import ArchivedPage from './routes/archived'
 import TrashPage from './routes/trash'
-// 二级路由（entities/graph/settings/share）：用户不常跳，提起代码分割。
+// 二级路由（entities/graph/resources/settings/share）：用户不常跳，提起代码分割。
 // 主页（home/doc/new/inbox/archived/trash）是主路径，不 lazy——首屏体验优先。
 const EntitiesPage = lazy(() => import('./routes/entities'))
 const GraphPage = lazy(() => import('./routes/graph'))
+const ResourcesPage = lazy(() => import('./routes/resources'))
 const SettingsLayout = lazy(() => import('./routes/settings'))
 const SettingsGeneral = lazy(() => import('./routes/settings/General'))
 const SettingsAI = lazy(() => import('./routes/settings/AI'))
@@ -88,6 +89,16 @@ export default function App() {
             <Route path="/inbox" element={<RouteBoundary name="inbox"><InboxPage /></RouteBoundary>} />
             <Route path="/archived" element={<RouteBoundary name="archived"><ArchivedPage /></RouteBoundary>} />
             <Route path="/trash" element={<RouteBoundary name="trash"><TrashPage /></RouteBoundary>} />
+            <Route
+              path="/resources"
+              element={
+                <RouteBoundary name="resources">
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <ResourcesPage />
+                  </Suspense>
+                </RouteBoundary>
+              }
+            />
             <Route
               path="/entities"
               element={
