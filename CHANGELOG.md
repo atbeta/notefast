@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.54.0](https://github.com/atbeta/notefast/compare/v0.53.0...v0.54.0) (2026-08-08)
+
+
+### Features
+
+* **server:** LLM query understanding for chat retrieval ([1d2f04e](https://github.com/atbeta/notefast/commit/1d2f04e8ac576c61dcff8d2261df4701e8823166))
+* **web:** ux polish — confirm dialog a11y, settings routing, sidebar/rail collapse, focus styles ([ec199a6](https://github.com/atbeta/notefast/commit/ec199a6f23261e783170bd2f3716395f6ac30952))
+
+
+### Bug Fixes
+
+* **web:** image uploader sent literal 'Bearer ***' since XHR refactor ([4c561ce](https://github.com/atbeta/notefast/commit/4c561ce3a4276fc911d29769cab4a9e3a80021eb))
+* **web:** settings deep links and sync capsule rail offset ([00dfc91](https://github.com/atbeta/notefast/commit/00dfc91aa2d01b413f0b0665168aa97e0034d772))
+
 ## [0.53.0](https://github.com/atbeta/notefast/compare/v0.52.0...v0.53.0) (2026-08-08)
 
 
