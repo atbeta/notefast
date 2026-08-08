@@ -14,7 +14,7 @@
  * - 子块 level 按父链深度计算（文档根 = 0，顶层子块 = 1，逐层 +1）
  */
 
-import { parseMarkdownToBlocks, stripTitleHeading } from '@notefast/core'
+import { normalizeTagList, parseMarkdownToBlocks, stripDocFrontmatter, stripTitleHeading } from '@notefast/core'
 import type { CreateBlockInput } from '@notefast/core'
 import type { getDb } from '../db'
 import { findDocIdBySource, getMaxChildSort, insertBlock, nowTimestamp } from '../store/blocks'
@@ -80,7 +80,10 @@ export function insertDocFromMarkdown(
   db: Db,
   opts: InsertDocFromMarkdownOptions,
 ): InsertDocFromMarkdownResult {
-  const rawInputs = parseMarkdownToBlocks(opts.markdown, opts.notebookId)
+  // 便携导出的 frontmatter：正文剥离由 parseMarkdownToBlocks 完成；
+  // 若调用方未显式传 tags，则采用 frontmatter 中的 tags（不按 notefast_id 覆盖既有文档）
+  const stripped = stripDocFrontmatter(opts.markdown)
+  const rawInputs = parseMarkdownToBlocks(stripped.body, opts.notebookId)
   if (opts.rejectEmpty && rawInputs.length === 0) {
     throw new EmptyMarkdownError('无法解析 Markdown 内容')
   }
@@ -90,13 +93,17 @@ export function insertDocFromMarkdown(
   const docStatus = opts.status === 'inbox' ? 'inbox' : 'note'
   const docId = opts.docId ?? crypto.randomUUID()
   const now = nowTimestamp()
+  const tagsFromFm = stripped.meta?.tags?.length
+    ? normalizeTagList(stripped.meta.tags)
+    : []
+  const resolvedTags = opts.tags?.length ? opts.tags : tagsFromFm
 
   let blockIds: string[] = []
   db.transaction(() => {
     // 安全网：PRAGMA 作用域限本事务，提交时检查 FK，避免 immediate 阶段炸开
     db.run('PRAGMA defer_foreign_keys = ON')
 
-    const initialTags = opts.tags?.length ? JSON.stringify(opts.tags) : '[]'
+    const initialTags = resolvedTags.length ? JSON.stringify(resolvedTags) : '[]'
     const docProperties = opts.source ? JSON.stringify({ source: opts.source }) : '{}'
 
     insertBlock(db, {

@@ -14,13 +14,10 @@
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  blocksToMarkdown,
-  buildBlockTree,
-} from '@notefast/core'
 import { isSyncConfigured, syncPush } from '../sync/manager'
 import { getDb } from '../db'
-import { fetchDocBlocks, listDocRows } from '../store/blocks'
+import { listDocRows } from '../store/blocks'
+import { portableDocMarkdown } from './portableMarkdown'
 
 /** 老入口：保留 API 形态；底层逻辑已切到 sync manager */
 export function startAutoExport(dir: string): void {
@@ -64,8 +61,7 @@ export function legacyExportMarkdown(dir: string): LegacyExportResult {
   const results: LegacyExportFileResult[] = []
   for (const doc of docs) {
     try {
-      const tree = buildBlockTree(fetchDocBlocks(db, doc.id))
-      const markdown = blocksToMarkdown(tree)
+      const markdown = portableDocMarkdown(doc)
       const slug = sanitizeFilename(doc.content || 'untitled')
       const filename = `${slug}.md`
       writeFileSync(join(dir, filename), markdown, 'utf-8')

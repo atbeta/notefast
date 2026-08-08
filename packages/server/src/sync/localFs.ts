@@ -5,8 +5,6 @@
 import { mkdirSync, writeFileSync, existsSync, readdirSync, statSync, readFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import {
-  blocksToMarkdown,
-  buildBlockTree,
   type SyncAdapter,
   type SyncInfo,
   type SyncResult,
@@ -14,7 +12,8 @@ import {
   type LocalFsAdapterConfig,
 } from '@notefast/core'
 import { getDb } from '../db'
-import { countDocRows, fetchDocBlocks, listDocRows } from '../store/blocks'
+import { countDocRows, listDocRows } from '../store/blocks'
+import { portableDocMarkdown } from '../services/portableMarkdown'
 import {
   ARCHIVE_MANIFEST_NAME,
   archiveFilename,
@@ -101,8 +100,7 @@ export function createLocalFsAdapter(cfg: LocalFsAdapterConfig): SyncAdapter {
 
       for (const doc of docs) {
         try {
-          const tree = buildBlockTree(fetchDocBlocks(db, doc.id))
-          const markdown = blocksToMarkdown(tree)
+          const markdown = portableDocMarkdown(doc)
           const filename = archiveFilename(doc.content || 'untitled', doc.id)
           const outName = prefix ? `${prefix}${filename}` : filename
           writeFileSync(join(dir, outName), markdown, 'utf-8')

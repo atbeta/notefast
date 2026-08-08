@@ -3,13 +3,13 @@
  * 整库导出：与 Markdown 归档同构的自包含 zip（<slug>--<docId>.md + media/ + manifest）。
  */
 
-import { blocksToMarkdown, buildBlockTree } from '@notefast/core'
 import { extractAssetRefs, getAssetRemoteUrl, readAsset, readAssetBytes } from '../assets/store'
 import { getDb } from '../db'
-import { fetchDocBlocks, getDocById, listDocRows } from '../store/blocks'
+import { getDocById, listDocRows } from '../store/blocks'
 import { extForMime, archiveMediaKey } from '../sync/archiveMedia'
 import { buildZipStore, type ZipEntry } from '../lib/zipStore'
 import { sanitizeFilename, archiveFilename, buildArchiveManifest, ARCHIVE_MANIFEST_NAME, type ArchiveManifest } from '../sync/archive'
+import { portableDocMarkdown } from './portableMarkdown'
 
 /** Content-Disposition：ASCII fallback + UTF-8 filename* */
 export function contentDispositionAttachment(filename: string): string {
@@ -46,8 +46,8 @@ export function buildDocExportFile(docId: string): DocExportFile | null {
 
   const title = docRow.content || 'untitled'
   const slug = sanitizeFilename(title)
-  const tree = buildBlockTree(fetchDocBlocks(db, docId))
-  let markdown = blocksToMarkdown(tree)
+  // 便携导出：正文 + frontmatter（tags / 时间 / notefast_id）；编辑器加载不走此路径
+  let markdown = portableDocMarkdown(docRow)
   const refs = extractAssetRefs(markdown)
 
   // 外链优先：已上传图床的 asset 在导出产物里直接用图床 URL（可分享、不依赖本地），
@@ -128,7 +128,7 @@ export function buildFullArchiveExport(): { filename: string; body: Uint8Array }
   for (const doc of docs) {
     const title = doc.content || 'untitled'
     const filename = archiveFilename(title, doc.id)
-    const markdown = blocksToMarkdown(buildBlockTree(fetchDocBlocks(db, doc.id)))
+    const markdown = portableDocMarkdown(doc)
     const rewritten = markdown.replace(/asset:([0-9a-f]{64})/g, (full, id: string) => {
       const rel = idToRel.get(id)
       if (rel) return rel

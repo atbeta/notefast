@@ -5,7 +5,7 @@
 | 能力 | 作用 | 覆盖范围 |
 |------|------|----------|
 | **数据库备份** | SQLite 一致快照 → S3 | 完整实例数据（blocks、refs、vectors、FTS、AutoLink 等） |
-| **Markdown 归档** | 单向推送 `.md` | 仅正文结构；丢失 ID / 标签 / 引用 / 向量 |
+| **Markdown 归档** | 单向推送 `.md` | 正文 + YAML frontmatter（tags / 时间 / `notefast_id`）；仍丢失引用图 / 向量等关系数据 |
 
 完整灾备请使用数据库备份。Markdown 归档用于可读副本与内容主权，不能替代恢复。
 

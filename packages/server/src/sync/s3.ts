@@ -13,8 +13,6 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3'
 import {
-  blocksToMarkdown,
-  buildBlockTree,
   type SyncAdapter,
   type SyncInfo,
   type SyncResult,
@@ -22,7 +20,8 @@ import {
   type S3LocationConfig,
 } from '@notefast/core'
 import { getDb } from '../db'
-import { fetchDocBlocks, listDocRows } from '../store/blocks'
+import { listDocRows } from '../store/blocks'
+import { portableDocMarkdown } from '../services/portableMarkdown'
 import { readAssetBytes } from '../assets/store'
 import {
   ARCHIVE_MANIFEST_NAME,
@@ -140,8 +139,7 @@ export function createS3Adapter(
       const mediaRefs = new Map<string, string>() // sha → relativeKey（media/<sha><ext>）
       for (const doc of docs) {
         try {
-          const tree = buildBlockTree(fetchDocBlocks(db, doc.id))
-          const markdown = blocksToMarkdown(tree)
+          const markdown = portableDocMarkdown(doc)
           for (const [sha, rel] of collectArchiveMediaRefs(markdown)) mediaRefs.set(sha, rel)
           const filename = archiveFilename(doc.content || 'untitled', doc.id)
           pending.push({ docId: doc.id, key: `${keyPrefix}${filename}`, filename, title: doc.content || 'untitled', markdown })

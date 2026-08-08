@@ -1,5 +1,6 @@
 import { BlockType } from './types'
 import type { Block, CreateBlockInput } from './types'
+import { stripDocFrontmatter } from './frontmatter'
 
 export interface ParsedBlock {
   type: BlockType
@@ -19,7 +20,9 @@ const CONTAINER_TYPES = new Set<BlockType>([
 ])
 
 export function parseMarkdownToBlocks(markdown: string, notebookId: string): CreateBlockInput[] {
-  const lines = markdown.split('\n')
+  // 便携导出可能带 frontmatter；解析前剥离，避免 --- 块落入正文
+  const { body: markdownBody } = stripDocFrontmatter(markdown)
+  const lines = markdownBody.split('\n')
   const root: ParsedBlock = {
     type: BlockType.Document,
     content: '',

@@ -39,11 +39,11 @@ beforeEach(() => {
   getDb().exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
 })
 
-async function createDoc(title: string, markdown: string): Promise<string> {
+async function createDoc(title: string, markdown: string, tags?: string[]): Promise<string> {
   const res = await app.fetch(new Request('http://localhost/api/v1/docs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ notebook_id: notebookId, title, markdown }),
+    body: JSON.stringify({ notebook_id: notebookId, title, markdown, tags }),
   }))
   const body = await res.json() as { id: string }
   expect(res.status).toBe(201)
@@ -70,13 +70,17 @@ describe('contentDispositionAttachment', () => {
 })
 
 describe('buildDocExportFile / GET export/file', () => {
-  test('无图文档 → markdown 文件', async () => {
-    const id = await createDoc('纯文本笔记', '第一段\n\n第二段')
+  test('无图文档 → markdown 文件（含 frontmatter）', async () => {
+    const id = await createDoc('纯文本笔记', '第一段\n\n第二段', ['alpha', 'beta'])
     const file = buildDocExportFile(id)
     expect(file).not.toBeNull()
     expect(file!.kind).toBe('markdown')
     expect(file!.filename).toMatch(/\.md$/)
     const text = new TextDecoder().decode(file!.body)
+    expect(text.startsWith('---\n')).toBe(true)
+    expect(text).toContain('notefast_id:')
+    expect(text).toContain(id)
+    expect(text).toContain('  - alpha')
     expect(text).toContain('第一段')
 
     const res = await app.fetch(new Request(`http://localhost/api/v1/docs/${id}/export/file`))
@@ -85,6 +89,7 @@ describe('buildDocExportFile / GET export/file', () => {
     expect(res.headers.get('Content-Disposition')).toContain('attachment')
     const body = await res.text()
     expect(body).toContain('第二段')
+    expect(body).toContain('tags:')
   })
 
   test('有图文档 → zip，asset: 改写为 media/ 相对路径', async () => {
