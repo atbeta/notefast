@@ -56,7 +56,9 @@
     "saveAndReturn": "Save and return to reading ({{shortcut}})",
     "savingShort": "Saving",
     "save": "Save",
-    "exitEdit": "Exit edit (Esc)"
+    "exitEdit": "Exit edit (Esc)",
+    "aiNotConfiguredHint": "AI is not configured — click to set up",
+    "aiSetup": "AI not set up"
   },
   "editorFooter": {
     "stats": "{{chars}} chars · {{lines}} lines · ~{{minutes}} min read",
@@ -69,7 +71,9 @@
     "discardDraftTitle": "Discard local draft and reload",
     "discardDraft": "Discard draft",
     "appendFileTitle": "Append a local Markdown file (.md)",
-    "appendFile": "Append a local Markdown file"
+    "appendFile": "Append a local Markdown file",
+    "aiNotConfiguredHint": "AI is not configured — click to set up",
+    "aiSetup": "AI not set up"
   },
   "mdEditor": {
     "edit": "Edit",

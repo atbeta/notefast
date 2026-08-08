@@ -56,7 +56,9 @@
     "saveAndReturn": "保存并返回阅读 ({{shortcut}})",
     "savingShort": "保存中",
     "save": "保存",
-    "exitEdit": "退出编辑 (Esc)"
+    "exitEdit": "退出编辑 (Esc)",
+    "aiNotConfiguredHint": "AI 未配置，点此去设置",
+    "aiSetup": "AI 未配置"
   },
   "editorFooter": {
     "stats": "{{chars}} 字 · {{lines}} 行 · 约 {{minutes}} 分钟",
@@ -69,7 +71,9 @@
     "discardDraftTitle": "丢弃本地草稿并重新加载",
     "discardDraft": "丢弃草稿",
     "appendFileTitle": "追加本地 Markdown 文件 (.md)",
-    "appendFile": "追加本地 Markdown 文件"
+    "appendFile": "追加本地 Markdown 文件",
+    "aiNotConfiguredHint": "AI 未配置，点此去设置",
+    "aiSetup": "AI 未配置"
   },
   "mdEditor": {
     "edit": "编辑",

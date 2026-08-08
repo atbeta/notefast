@@ -15,7 +15,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Loader2, Sparkles, Wand2 } from 'lucide-react'
 import { dispatchAskAi } from '../../lib/askAi'
-import { request } from '../../hooks/useAPI'
+import { useAiCapabilities } from '../../hooks/useAiCapabilities'
 import type { SelectionAnchor, SelectionRect } from './cm/selectionReport'
 
 /** 预填引用的长度上限（与 BlockSurface 一致），避免整段长文塞进输入框 */
@@ -52,15 +52,10 @@ export default function SelectionBubble({
   const [desktop, setDesktop] = useState(() => window.matchMedia(DESKTOP_MQ).matches)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   /** chat 能力：null=探测中（不出气泡），false=未配置（不出气泡） */
-  const [chatOk, setChatOk] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    request<{ chat: boolean }>('/ai/capabilities')
-      .then((cap) => { if (!cancelled) setChatOk(cap.chat) })
-      .catch(() => { if (!cancelled) setChatOk(false) })
-    return () => { cancelled = true }
-  }, [])
+  // 复用 useAiCapabilities 单例探测，避免 SelectionBubble / AIChatPanel / EditorToolbar
+  // 各自 fetch 一次；都订阅同一个 /ai/capabilities 响应
+  const ai = useAiCapabilities()
+  const chatOk = ai.chat
 
   const active = refining || anchor !== null
   const rect = refining ? refineRect : (anchor?.rect ?? null)

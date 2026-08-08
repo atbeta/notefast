@@ -1,5 +1,6 @@
 import { useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 import {
   Edit3,
   Loader2,
@@ -16,8 +17,10 @@ import {
   Heading3,
   X,
   ImagePlus,
+  Sparkles,
 } from 'lucide-react'
 import { Tooltip, ShortcutKeys, shortcutLabel } from '../ui'
+import { useAiCapabilities } from '../../hooks/useAiCapabilities'
 import type { CodeMirrorEditorHandle } from './CodeMirrorEditor'
 
 type Mode = 'edit' | 'view'
@@ -55,6 +58,10 @@ export default function EditorToolbar({
 }: EditorToolbarProps) {
   const { t } = useTranslation()
   const imageInputRef = useRef<HTMLInputElement>(null)
+  // AI 能力探测：有 chat/embedding/reranker 任一能力时静默成功；
+  // 三个都 false 时在工具栏右侧出现一个链接入口指向 settings/ai。
+  const ai = useAiCapabilities()
+  const aiConfigured = ai.chat || ai.embedding || ai.reranker
 
   const handleInsertLink = () => {
     const sel = editorRef.current?.getSelectionText() ?? ''
@@ -129,6 +136,17 @@ export default function EditorToolbar({
         />
 
         <div className="flex items-center gap-1 ml-auto">
+          {!aiConfigured && (
+            <Tooltip label={t('editorToolbar.aiNotConfiguredHint', { defaultValue: 'AI 未配置，点此去设置' })}>
+              <Link
+                to="/settings/ai"
+                className="inline-flex items-center gap-1 px-2 h-7 rounded-md text-[11.5px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5 opacity-70" strokeWidth={1.75} />
+                {t('editorToolbar.aiSetup', { defaultValue: 'AI 未配置' })}
+              </Link>
+            </Tooltip>
+          )}
           <IconBtn
             title={mode === 'view' ? t('editorToolbar.backToEdit', { shortcut: shortcutLabel(['mod', 'P']) }) : t('editorToolbar.preview', { shortcut: shortcutLabel(['mod', 'P']) })}
             onClick={() => onModeToggle(mode === 'edit' ? 'view' : 'edit')}
