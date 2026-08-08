@@ -46,6 +46,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const maskRef = useRef<HTMLDivElement>(null)
+  const outerRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -58,30 +59,47 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   }, [open])
 
   // 遮罩虚化：CSS transition 的 backdrop-filter 在 WKWebView/Safari 不按帧插值（跳变），
-  // 造成「先糊满、黑色才淡入」的二段式。改用 rAF 逐帧写 blur(0↔4px)，与遮罩 opacity
-  // 过渡（150ms, var(--ease)）同步——任何引擎都按帧生效。
+  // 造成「先糊满、黑色才淡入」的二段式。改用 rAF 逐帧同时写 opacity 与 blur(0↔4px)，
+  // 走同一条 ease 曲线——任何引擎每帧同步生效，绝无 opacity/blur 不同步错位。
+  // 首帧 (initial mount) 不动画：直接设到终态，避免 open=false 初挂就闪一帧。
   useEffect(() => {
-    const el = maskRef.current
-    if (!el) return
+    const mask = maskRef.current
+    const outer = outerRef.current
+    if (!mask || !outer) return
+    const style = mask.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }
+
+    // 首帧检测：outer.style.opacity 为空字符串说明从未被本 hook 设过，
+    // 则是初次挂载——按 open 直接定终态，不进 rAF 动画。
+    if (outer.style.opacity === '') {
+      const o = open ? 1 : 0
+      const v = open ? 4 : 0
+      outer.style.opacity = String(o)
+      style.backdropFilter = `blur(${v.toFixed(2)}px)`
+      style.webkitBackdropFilter = `blur(${v.toFixed(2)}px)`
+      return
+    }
+
+    // [open] 状态变化：同一个 rAF 驱动 opacity 与 blur，同条 ease 曲线
     let raf = 0
     const start = performance.now()
     const DUR = 150
-    // 近似 var(--ease) cubic-bezier(0.2,0,0,1) 的缓出曲线
     const ease = (p: number) => 1 - Math.pow(1 - p, 3)
     const step = (now: number) => {
       const p = Math.min(1, (now - start) / DUR)
-      const v = open ? ease(p) * 4 : (1 - ease(p)) * 4
-      const style = el.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }
+      const eased = open ? ease(p) : 1 - ease(p)
+      const v = eased * 4
       style.backdropFilter = `blur(${v.toFixed(2)}px)`
       style.webkitBackdropFilter = `blur(${v.toFixed(2)}px)`
+      outer.style.opacity = String(eased)
       if (p < 1) raf = requestAnimationFrame(step)
     }
     raf = requestAnimationFrame(step)
     return () => {
       cancelAnimationFrame(raf)
-      const style = el.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }
       style.backdropFilter = ''
       style.webkitBackdropFilter = ''
+      // 不清 outer.style.opacity：保留作为「本 hook 已掌管过该元素」的标志，
+      // 下一次 [open] 变化时跳过首帧分支、跑动画
     }
   }, [open])
 
@@ -211,13 +229,15 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   return (
     <div
+      ref={outerRef}
       aria-hidden={!open}
-      className={`fixed inset-0 z-[100] flex items-start justify-center pt-[12vh] px-4 transition-opacity duration-[var(--dur)] ease-[var(--ease)] ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      className={`fixed inset-0 z-[100] flex items-start justify-center pt-[12vh] px-4 ${open ? 'pointer-events-auto' : 'pointer-events-none'}`}
       role="dialog"
       aria-modal="true"
       aria-label={t('command.dialogLabel')}
     >
-      {/* 遮罩：blur 由 rAF 逐帧驱动（见上），黑色经外层 opacity 过渡淡入——两者同步，无二段式 */}
+      {/* 遮罩：opacity 与 backdrop-filter 同个 rAF、同条 ease 曲线逐帧驱动，
+          保证任何引擎每帧同步（不然黑与糊两条动画通道进争不同步，仍二段式） */}
       <div
         ref={maskRef}
         onClick={onClose}
