@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.55.0](https://github.com/atbeta/notefast/compare/v0.54.0...v0.55.0) (2026-08-08)
+
+
+### Features
+
+* add related-docs rail tab with fast lexical neighbors ([6065cca](https://github.com/atbeta/notefast/commit/6065cca8ae12293fd221fde24cff4ded9dd2c3c8))
+* project doc metadata into markdown frontmatter on export ([76647c6](https://github.com/atbeta/notefast/commit/76647c6cc4b6db1c34c9b8fa800e7e19277662ea))
+* resources library, sidebar IA, and insert from assets ([761c0ae](https://github.com/atbeta/notefast/commit/761c0ae87ca67ee2b514eda09d5ee451f1e7dc45))
+
+
+### Bug Fixes
+
+* **core:** drop useless regex escape in frontmatter YAML check ([c9f909a](https://github.com/atbeta/notefast/commit/c9f909abdc330c123c5064e511f5efae9504eeba))
+* **web:** drop sidebar search placeholder and widen doc rail ([8d067a3](https://github.com/atbeta/notefast/commit/8d067a3f62d35de0df63322a444949c92c8e210b))
+
 ## [0.54.0](https://github.com/atbeta/notefast/compare/v0.53.0...v0.54.0) (2026-08-08)
 
 
