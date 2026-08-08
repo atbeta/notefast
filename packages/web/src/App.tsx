@@ -1,18 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import HomePage from './routes/home'
 import DocPage from './routes/doc'
 import NewDocPage from './routes/new'
-import SettingsPage from './routes/settings'
 import InboxPage from './routes/inbox'
 import ArchivedPage from './routes/archived'
 import TrashPage from './routes/trash'
-import EntitiesPage from './routes/entities'
-import GraphPage from './routes/graph'
-import SharePage from './routes/share'
+// 二级路由（entities/graph/settings/share）：用户不常跳，提起代码分割。
+// 主页（home/doc/new/inbox/archived/trash）是主路径，不 lazy——首屏体验优先。
+const EntitiesPage = lazy(() => import('./routes/entities'))
+const GraphPage = lazy(() => import('./routes/graph'))
+const SettingsPage = lazy(() => import('./routes/settings'))
+const SharePage = lazy(() => import('./routes/share'))
 import Layout from './components/Layout'
 import RouteTransition from './components/RouteTransition'
 import RouteBoundary from './components/RouteBoundary'
+import RouteLoadingShell from './components/RouteLoadingShell'
 import AuthPrompt from './components/AuthPrompt'
 import { ToastProvider } from './components/ui'
 import { getStoredToken } from './hooks/useAPI'
@@ -41,7 +44,16 @@ export default function App() {
   if (isPublicShare) {
     return (
       <Routes>
-        <Route path="/s/:token" element={<RouteBoundary name="share"><SharePage /></RouteBoundary>} />
+        <Route
+          path="/s/:token"
+          element={
+            <RouteBoundary name="share">
+              <Suspense fallback={<RouteLoadingShell />}>
+                <SharePage />
+              </Suspense>
+            </RouteBoundary>
+          }
+        />
       </Routes>
     )
   }
@@ -69,9 +81,36 @@ export default function App() {
             <Route path="/inbox" element={<RouteBoundary name="inbox"><InboxPage /></RouteBoundary>} />
             <Route path="/archived" element={<RouteBoundary name="archived"><ArchivedPage /></RouteBoundary>} />
             <Route path="/trash" element={<RouteBoundary name="trash"><TrashPage /></RouteBoundary>} />
-            <Route path="/entities" element={<RouteBoundary name="entities"><EntitiesPage /></RouteBoundary>} />
-            <Route path="/graph" element={<RouteBoundary name="graph"><GraphPage /></RouteBoundary>} />
-            <Route path="/settings/*" element={<RouteBoundary name="settings"><SettingsPage /></RouteBoundary>} />
+            <Route
+              path="/entities"
+              element={
+                <RouteBoundary name="entities">
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <EntitiesPage />
+                  </Suspense>
+                </RouteBoundary>
+              }
+            />
+            <Route
+              path="/graph"
+              element={
+                <RouteBoundary name="graph">
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <GraphPage />
+                  </Suspense>
+                </RouteBoundary>
+              }
+            />
+            <Route
+              path="/settings/*"
+              element={
+                <RouteBoundary name="settings">
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <SettingsPage />
+                  </Suspense>
+                </RouteBoundary>
+              }
+            />
           </Routes>
         </RouteTransition>
       </Layout>
