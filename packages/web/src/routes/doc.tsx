@@ -239,9 +239,12 @@ export default function DocPage() {
   const [auxLoading, setAuxLoading] = useState(false)
   const [indexJob, setIndexJob] = useState<IndexJob | null>(null)
   const [showSkeleton, setShowSkeleton] = useState(false)
-  /** 桌面右栏：大纲 / 反向链接 / 实体 / 历史 标签页 */
-  const [railTab, setRailTab] = useState<'outline' | 'backlinks' | 'entities' | 'history'>('outline')
-  useEffect(() => { setRailTab('outline') }, [id])
+  /** 桌面右栏：大纲 / 链接 / 实体 / 相关 / 历史；切换文档时保持 Tab（相关 Tab 会重拉） */
+  const [railTab, setRailTab] = useState<'outline' | 'backlinks' | 'entities' | 'related' | 'history'>('outline')
+  /** 相关笔记：打开文档即预取，点 Tab 时尽量秒出 */
+  const [relatedItems, setRelatedItems] = useState<RelatedDocItem[] | null>(null)
+  const [relatedError, setRelatedError] = useState<string | null>(null)
+  const [relatedLoading, setRelatedLoading] = useState(false)
   /** 桌面右栏收起状态（localStorage 记忆；写路径广播给 GlobalSyncStatus 等避让方） */
   const [railCollapsed, setRailCollapsed] = useState(readDocRailCollapsed)
   useEffect(() => {
@@ -298,6 +301,35 @@ export default function DocPage() {
     void fetchDocShared(id).then((shared) => {
       if (!cancelled) setDocShared(shared)
     })
+    return () => { cancelled = true }
+  }, [id])
+
+  // 相关笔记预取（打开文档即拉；轻量检索，点 Tab 尽量无等待）
+  useEffect(() => {
+    if (!id) {
+      setRelatedItems(null)
+      setRelatedError(null)
+      setRelatedLoading(false)
+      return
+    }
+    let cancelled = false
+    setRelatedItems(null)
+    setRelatedError(null)
+    setRelatedLoading(true)
+    api
+      .get<{ items: RelatedDocItem[] }>(`/docs/${id}/related?limit=8`)
+      .then((res) => {
+        if (!cancelled) setRelatedItems(Array.isArray(res?.items) ? res.items : [])
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setRelatedError(e instanceof Error ? e.message : String(e))
+          setRelatedItems([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setRelatedLoading(false)
+      })
     return () => { cancelled = true }
   }, [id])
 
@@ -927,16 +959,17 @@ export default function DocPage() {
             railCollapsed ? 'w-9' : 'w-72'
           }`}
         >
-          {/* 顶栏：标签页切换，与主栏 h-14 对齐 */}
-          <div className="h-14 shrink-0 border-b border-border/50 flex items-end px-2 gap-0.5">
+          {/* 顶栏：五 Tab 均分居中（中/英都不横滚）；折叠钮单独占位 */}
+          <div className="h-14 shrink-0 border-b border-border/50 flex items-stretch px-1 gap-0.5">
             {!railCollapsed && (
-              <>
+              <div className="flex-1 min-w-0 grid grid-cols-5 items-stretch">
                 {(
                   [
-                    { id: 'outline' as const, label: t('doc.outline'), count: flatHeadings.length },
-                    { id: 'backlinks' as const, label: t('doc.backlinks'), count: backlinks.length },
-                    { id: 'entities' as const, label: t('doc.entities'), count: null },
-                    { id: 'history' as const, label: t('doc.history'), count: null },
+                    { id: 'outline' as const, label: t('doc.outline') },
+                    { id: 'backlinks' as const, label: t('doc.backlinks') },
+                    { id: 'entities' as const, label: t('doc.entities') },
+                    { id: 'related' as const, label: t('doc.related') },
+                    { id: 'history' as const, label: t('doc.history') },
                   ] as const
                 ).map((tab) => {
                   const active = railTab === tab.id
@@ -944,31 +977,27 @@ export default function DocPage() {
                     <button
                       key={tab.id}
                       type="button"
+                      title={tab.label}
                       onClick={() => setRailTab(tab.id)}
-                      className={`flex-1 pb-2.5 pt-3 text-[11.5px] font-medium transition-colors border-b-2 -mb-px ${
+                      className={`min-w-0 px-0.5 pb-2.5 pt-3 text-[11px] font-medium transition-colors border-b-2 -mb-px truncate text-center ${
                         active
                           ? 'text-primary border-primary'
                           : 'text-muted-foreground border-transparent hover:text-foreground'
                       }`}
                     >
                       {tab.label}
-                      {tab.count !== null && tab.count > 0 && (
-                        <span className={`ml-0.5 tabular-nums ${active ? 'text-primary/70' : 'text-muted-foreground/60'}`}>
-                          {tab.count}
-                        </span>
-                      )}
                     </button>
                   )
                 })}
-              </>
+              </div>
             )}
             <button
               type="button"
               onClick={() => setRailCollapsed((v) => !v)}
               title={railCollapsed ? t('doc.expandRail') : t('doc.collapseRail')}
               aria-label={railCollapsed ? t('doc.expandRail') : t('doc.collapseRail')}
-              className={`shrink-0 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ${
-                railCollapsed ? 'w-7 h-7 mx-auto mt-3.5' : 'w-7 h-7 mb-2 ml-auto'
+              className={`shrink-0 self-center inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ${
+                railCollapsed ? 'w-7 h-7 mx-auto' : 'w-7 h-7'
               }`}
             >
               {railCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" strokeWidth={1.75} /> : <PanelRightClose className="w-3.5 h-3.5" strokeWidth={1.75} />}
@@ -987,6 +1016,13 @@ export default function DocPage() {
             {railTab === 'entities' && id && (
               <EntityPanel docId={id} variant="bare" />
             )}
+            {railTab === 'related' && (
+              <RelatedView
+                items={relatedItems}
+                loading={relatedLoading}
+                error={relatedError}
+              />
+            )}
             {railTab === 'history' && (
               <HistoryView
                 docId={id ?? ''}
@@ -999,11 +1035,11 @@ export default function DocPage() {
                 }}
               />
             )}
-</div>
-           </div>
-           )}
-         </div>
-       )}
+            </div>
+          </div>
+          )}
+        </div>
+      )}
 
        <ConfirmDialog
         open={showDelete}
@@ -1106,6 +1142,65 @@ function BacklinksView({ backlinks, loading }: { backlinks: Backlink[]; loading:
           <p className="text-[12.5px] text-muted-foreground group-hover:text-foreground line-clamp-2 leading-relaxed transition-colors">
             {bl.source_content}
           </p>
+        </Link>
+      ))}
+    </div>
+  )
+}
+
+interface RelatedDocItem {
+  doc_id: string
+  title: string
+  snippet: string
+  score: number
+}
+
+/** 语义邻居：数据由父组件打开文档时预取 */
+function RelatedView({
+  items,
+  loading,
+  error,
+}: {
+  items: RelatedDocItem[] | null
+  loading: boolean
+  error: string | null
+}) {
+  const { t } = useTranslation()
+
+  if (loading && items === null) {
+    return <div className="px-1 text-[12px] text-muted-foreground/70">{t('common.loading')}</div>
+  }
+  if (error) {
+    return (
+      <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
+        {error}
+      </div>
+    )
+  }
+  if (!items || items.length === 0) {
+    return (
+      <div className="px-1 space-y-1.5">
+        <p className="text-[12px] text-muted-foreground/60 leading-relaxed">{t('doc.noRelated')}</p>
+        <p className="text-[11.5px] text-muted-foreground/50 leading-relaxed">{t('doc.noRelatedHint')}</p>
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      {items.map((item) => (
+        <Link
+          key={item.doc_id}
+          to={'/doc/' + item.doc_id}
+          className="group block px-2.5 py-2 -mx-1 rounded-lg hover:bg-accent transition-colors"
+        >
+          <div className="text-[11px] font-medium text-foreground/75 line-clamp-1 mb-0.5">
+            {item.title || t('doc.untitledDocument')}
+          </div>
+          {item.snippet && (
+            <p className="text-[12.5px] text-muted-foreground group-hover:text-foreground line-clamp-2 leading-relaxed transition-colors">
+              {item.snippet}
+            </p>
+          )}
         </Link>
       ))}
     </div>

@@ -77,6 +77,15 @@ export interface SearchOptions {
   understandQuery?: boolean
   /** 查询理解提示语言（跟随 UI/chat；缺省由 query 是否含 CJK 推断） */
   understandLang?: 'zh' | 'en'
+  /**
+   * 跳过语义召回（无 embed 往返）。相关面板等要「秒出」的路径用：
+   * 仍走词法 + 标题 + 实体 + 图谱。
+   */
+  skipSemantic?: boolean
+  /**
+   * 跳过 reranker。相关面板默认开：精排一次远程调用会拖到数百 ms+。
+   */
+  skipRerank?: boolean
 }
 
 export interface Citation {
@@ -193,10 +202,12 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
     }
   })()
 
-  const semanticPromise = runSemantic(channelQuery, opts.notebookId, semanticLimit, opts.since, opts.until, {
-    includeInbox,
-    includeArchived,
-  })
+  const semanticPromise = opts.skipSemantic
+    ? Promise.resolve({ hits: [] as SemanticRawHit[], embed_query_ms: 0, semantic_ms: 0 })
+    : runSemantic(channelQuery, opts.notebookId, semanticLimit, opts.since, opts.until, {
+        includeInbox,
+        includeArchived,
+      })
 
   const [ftsResult, semanticResult] = await Promise.all([
     ftsPromise,
@@ -293,7 +304,7 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
   const fused = rrfMerge(ftsRaw, semanticRaw, titleRaw, entityRaw, contextRaw)
   const rerankCandidates = fused.slice(0, rerankWindow)
   const rerankT0 = Date.now()
-  const reranked = await maybeRerank(opts.query, rerankCandidates)
+  const reranked = opts.skipRerank ? null : await maybeRerank(opts.query, rerankCandidates)
   const rerank_ms = reranked ? Date.now() - rerankT0 : 0
   const ranked = reranked ?? rerankCandidates
 

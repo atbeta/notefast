@@ -36,6 +36,7 @@ import { reanalyzeDoc } from '../ai/autoLink'
 import { deleteVector } from '../ai/indexer'
 import { scheduleDocIndex } from '../ai/indexJobs'
 import { buildDocExportFile, contentDispositionAttachment } from '../services/docExport'
+import { listRelatedDocs } from '../services/docRelated'
 import { emitAppEvent } from '../events'
 import { scheduleSyncNow } from '../sync/protocolManager'
 
@@ -206,6 +207,30 @@ docs.get('/:id', (c) => {
   const tree = buildBlockTree(fetchDocBlocks(db, id))
 
   return c.json(tree.length > 0 ? tree[0] : null)
+})
+
+/**
+ * 语义邻居（右栏「相关」）：hybridSearch(标题+tags, contextDocId) → 文档级列表，排除自身。
+ */
+docs.get('/:id/related', async (c) => {
+  const id = c.req.param('id')
+  const limitRaw = parseInt(c.req.query('limit') || '8', 10)
+  const limit = Number.isFinite(limitRaw) ? limitRaw : 8
+  try {
+    const result = await listRelatedDocs(id, { limit })
+    if (!result) {
+      return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
+    }
+    return c.json(result)
+  } catch (e) {
+    return c.json(
+      {
+        error: 'search_error',
+        message: e instanceof Error ? e.message : String(e),
+      },
+      500,
+    )
+  }
 })
 
 docs.post('/', zValidator('json', createDocSchema), (c) => {
