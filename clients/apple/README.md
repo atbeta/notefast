@@ -20,6 +20,8 @@ SwiftUI App（NoteFastApp）
 - 导航策略：同源放行（target=_blank 当前页打开）、**外链交系统浏览器**、下载（`<a download>`/blob 导出/不可展示 MIME）存 `~/Downloads` 重名自动加序号
 - 菜单栏：⌘N 新建笔记、⌘, 设置、⌘[ ⌘] 后退/前进、⌘+ ⌘- ⌘0 缩放、⌘P 打印、⌘R 刷新、复制本机 MCP 地址、显示 engine 日志/数据目录
 - engine stderr 落盘 `~/Library/Logs/NoteFast/engine.log`（>4MB 截断，只留最近一段）
+- **菜单栏常驻图标**（NSStatusItem，SF Symbol 模板渲染）：显示主窗口 / 新建笔记 / 打开收集箱 / 退出
+- **关窗不退出**：关窗后驻留菜单栏/Dock，点 Dock、菜单栏项、深链、文件导入均重建主窗口（`openWindow(id:)` 注入 + `start()` 幂等守卫防二次 spawn）
 - 多端同步：web 端 GlobalSyncStatus 胶囊 + 设置页同步面板呈现
 - 深链：`notefast://doc/<id>`（Info.plist 已注册 URL scheme）
 - 窗口标题跟随页面 `<title>`；engine 版本校验（低于 0.31.0 提示不兼容）
@@ -52,10 +54,10 @@ swift test
 
 - P1：⌘S 显式保存（web autosave 已覆盖，需菜单项时加）、原生搜索/标签面板
 - P2：同步配置面板（S3 连接，当前复用 web 设置页）
-- P3：系统分享（NSSharingService / 分享扩展）、菜单栏图标（届时再评估「关窗不退出」）、自动更新通道（Sparkle/appcast）
+- P3：系统分享（NSSharingService / 分享扩展）、自动更新通道（Sparkle/appcast）
 - P4：MCP 本机 agent 引导、系统通知（同步失败等）、深链带查询参数（`notefast://search?q=`）
 - iOS：同一 SPM 包加 app target（不内嵌 engine，同步协议直连 S3）
 
 ## 已确认决策
 
-- **关窗即退出**（2026-08）：drain 已提速到 ~0.2s，重启成本低；「关窗不退出 + Dock 常驻」留给菜单栏图标一起做，避免隐形后台进程
+- **关窗不退出 + 菜单栏图标**（2026-08，替代此前的「关窗即退出」）：两者是一套——菜单栏图标提供驻留入口，关窗后 app 靠它/Dock/深链回访；退出走 ⌘Q 或菜单栏「退出」

@@ -7,7 +7,7 @@ struct NoteFastApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             ContentView(model: model)
                 .onAppear { appDelegate.model = model }
                 .onOpenURL { url in
@@ -23,13 +23,30 @@ struct NoteFastApp: App {
     }
 }
 
-/// 单窗口应用：关闭最后一个窗口即退出（engine 随退出优雅停机，drain 已提速）
+/// 关窗不退出（菜单栏图标常驻，见 StatusBarController；两者是一套决策）：
+/// 关窗后 app 驻留菜单栏/Dock，点 Dock、菜单栏项、深链、文件导入都会重建主窗口。
+/// 退出走 ⌘Q / 菜单栏「退出」→ willTerminate → engine SIGTERM drain。
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     /// App 结构体注入（ContentView.onAppear）：文件打开事件转发给 AppModel 做「打开即导入」
-    weak var model: AppModel?
+    weak var model: AppModel? {
+        didSet {
+            if statusBar == nil {
+                statusBar = StatusBarController(model: model)
+            }
+        }
+    }
+    /// 菜单栏常驻图标（强引用在 AppDelegate，生命周期 = app 生命周期）
+    private var statusBar: StatusBarController?
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        false
+    }
+
+    /// 点 Dock 图标且无可见窗口：重建主窗口（SwiftUI WindowGroup 默认不会自己重建）
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { model?.showMainWindow() }
+        return true
     }
 
     /// 双击 .md / 拖到 Dock 图标（Info.plist 的 CFBundleDocumentTypes 注册后由 LaunchServices 派发；

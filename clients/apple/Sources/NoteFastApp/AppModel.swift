@@ -81,6 +81,9 @@ final class AppModel: ObservableObject {
     // MARK: - 生命周期
 
     func start() async {
+        // 窗口重建（关窗不退出后点 Dock/菜单栏重开）会再次触发 .task：
+        // engine 还活着就直接返回，避免二次 spawn 报 alreadyRunning
+        guard engine?.isRunning != true else { return }
         state = .starting
         let engineDir: URL
         do {
@@ -243,6 +246,7 @@ final class AppModel: ObservableObject {
         }
         guard imported > 0 else { return }
         showTransientMessage(files.count > 1 ? "已导入 \(imported) 篇到收集箱" : "已导入到收集箱")
+        showMainWindow() // 拖到 Dock 触发导入时可能无窗口
         if imported == 1, let docId = firstDocId, let url = docURL(docId) {
             navigator.navigate(to: url)
         } else if let url = pageURL("/inbox") {
@@ -260,6 +264,7 @@ final class AppModel: ObservableObject {
             return
         }
         guard url.scheme == "notefast", isRunning else { return }
+        showMainWindow() // 关窗不退出：深链到来时窗口可能不存在，先确保有窗口再导航
         switch (url.host, url.pathComponents) {
         case ("doc", let parts) where parts.count >= 2:
             if let target = docURL(parts[1]) { navigator.navigate(to: target) }
@@ -272,9 +277,27 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - 窗口管理（关窗不退出：菜单栏 / Dock / 深链重开主窗口）
+
+    /// ContentView.onAppear 注入的 SwiftUI openWindow（Environment 只能视图侧取，壳层借道）
+    var openWindowAction: (() -> Void)?
+
+    /// 前置 app 并确保主窗口存在（已存在则 openWindow 只把它带到最前）
+    func showMainWindow() {
+        NSApp.activate()
+        openWindowAction?()
+    }
+
+    func openInbox() {
+        showMainWindow()
+        guard let url = pageURL("/inbox") else { return }
+        navigator.navigate(to: url)
+    }
+
     // MARK: - 壳层命令
 
     func newDoc() {
+        showMainWindow()
         guard let url = pageURL("/new") else { return }
         navigator.navigate(to: url)
     }
@@ -298,6 +321,7 @@ final class AppModel: ObservableObject {
     }
 
     func openSettings() {
+        showMainWindow()
         guard let url = pageURL("/settings") else { return }
         navigator.navigate(to: url)
     }

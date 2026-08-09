@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var model: AppModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Group {
@@ -25,6 +26,10 @@ struct ContentView: View {
         }
         .task {
             await model.start()
+        }
+        .onAppear {
+            // openWindow 只能在视图侧取，注入 AppModel 供菜单栏/Dock/深链重建主窗口
+            model.openWindowAction = { openWindow(id: "main") }
         }
     }
 }
