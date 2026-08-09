@@ -365,12 +365,16 @@ final class AppModel: ObservableObject {
 
     // MARK: - 原生导航条（左上角红绿灯旁的后退/前进，见 NavStripView）
 
+    /// 主窗口句柄（weak：关窗即释放）。openWindow(id:) 的复用语义不可靠
+    /// （实测会重复开窗），壳层自己跟踪并复用
+    private weak var mainWindow: NSWindow?
     private var navStrip: NavStripView?
     private var windowResizeObserver: NSObjectProtocol?
 
     /// MainView 的 WindowAccessor 探针拿到窗口后调用（只挂一次；窗口重建时 navStrip 已
     /// 随旧窗口销毁，重新挂）
     func attachNavStrip(to window: NSWindow) {
+        mainWindow = window
         guard let content = window.contentView, navStrip?.window !== window else { return }
         navStrip?.removeFromSuperview()
         if let observer = windowResizeObserver {
@@ -407,10 +411,16 @@ final class AppModel: ObservableObject {
         navStrip?.applyWebTheme(dark: dark)
     }
 
-    /// 前置 app 并确保主窗口存在（已存在则 openWindow 只把它带到最前）
+    /// 前置 app 并确保主窗口存在：已跟踪到窗口就复用（置前/取消最小化），
+    /// 没有才 openWindow 新建——openWindow(id:) 在窗口已存在时不保证复用，不能依赖
     func showMainWindow() {
         NSApp.activate()
-        openWindowAction?()
+        if let window = mainWindow {
+            if window.isMiniaturized { window.deminiaturize(nil) }
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            openWindowAction?()
+        }
     }
 
     func openInbox() {
