@@ -23,6 +23,8 @@ export default function Layout({ children, contentClassName }: { children: React
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  /** 深链 palette_search 的预填 query（关闭面板时清空，下次 ⌘K 回到空查询） */
+  const [palettePrefill, setPalettePrefill] = useState('')
   const [aiChatOpen, setAiChatOpen] = useState(false)
   const [aiChatExpanded, setAiChatExpanded] = useState(false)
 
@@ -48,7 +50,10 @@ export default function Layout({ children, contentClassName }: { children: React
     setMobileOpen(false)
   }, [])
 
-  const closePalette = useCallback(() => setPaletteOpen(false), [])
+  const closePalette = useCallback(() => {
+    setPaletteOpen(false)
+    setPalettePrefill('')
+  }, [])
 
   const closeAiChat = useCallback(() => setAiChatOpen(false), [])
   const toggleAiChat = useCallback(() => setAiChatOpen((v) => !v), [])
@@ -63,6 +68,19 @@ export default function Layout({ children, contentClassName }: { children: React
     window.addEventListener(ASK_AI_EVENT, open)
     return () => window.removeEventListener(ASK_AI_EVENT, open)
   }, [])
+
+  // macOS 壳深链 notefast://search?q=xxx → /?palette_search=xxx：
+  // 打开命令面板并预填 query，消费后清掉参数防刷新复触发（URL 方案无事件时序问题）
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const q = params.get('palette_search')
+    if (!q) return
+    setPalettePrefill(q)
+    setPaletteOpen(true)
+    params.delete('palette_search')
+    const search = params.toString()
+    navigate({ search: search ? `?${search}` : '' }, { replace: true })
+  }, [location.search, navigate])
 
   // 全局快捷键：⌘K / Ctrl+K, ⌘N / Ctrl+N, ⌘\ / Ctrl+\, ⌘J / Ctrl+J, ⌘⇧D / Ctrl+Shift+D
   // capture 阶段拦截，在浏览器默认行为之前处理（⌘N 可能被浏览器截为新窗口）
@@ -202,6 +220,7 @@ export default function Layout({ children, contentClassName }: { children: React
           onClose={closePalette}
           onToggleAiChat={toggleAiChat}
           aiChatOpen={aiChatOpen}
+          initialQuery={palettePrefill}
         />
       </div>
     </div>

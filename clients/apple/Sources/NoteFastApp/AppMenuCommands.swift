@@ -67,6 +67,15 @@ struct AppMenuCommands: Commands {
         }
 
         CommandMenu("帮助") {
+            Button("检查更新…") {
+                model.checkForUpdates(userInitiated: true)
+            }
+            if let update = model.availableUpdate {
+                Button("下载新版 v\(update.version)") {
+                    model.openUpdateDownload()
+                }
+            }
+            Divider()
             Button("复制本机 MCP 地址") {
                 model.copyMCPAddress()
             }

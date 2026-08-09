@@ -169,5 +169,8 @@
     "syncedAt": "Synced {{time}}",
     "neverSynced": "Never synced",
     "statusLabel": "Sync status: {{status}}"
+  },
+  "notify": {
+    "syncFailed": "Sync failed"
   }
 }

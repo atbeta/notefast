@@ -23,8 +23,10 @@ SwiftUI App（NoteFastApp）
 - **菜单栏常驻图标**（NSStatusItem，SF Symbol 模板渲染）：显示主窗口 / 新建笔记 / 打开收集箱 / 退出
 - **关窗不退出**：关窗后驻留菜单栏/Dock，点 Dock、菜单栏项、深链、文件导入均重建主窗口（`openWindow(id:)` 注入 + `start()` 幂等守卫防二次 spawn）
 - 多端同步：web 端 GlobalSyncStatus 胶囊 + 设置页同步面板呈现
-- 深链：`notefast://doc/<id>`（Info.plist 已注册 URL scheme）
-- 窗口标题跟随页面 `<title>`；engine 版本校验（低于 0.31.0 提示不兼容）
+- 深链：`notefast://doc/<id>`、`notefast://search?q=xxx`（命令面板预填搜索，Info.plist 已注册 URL scheme）
+- 窗口标题跟随页面 `<title>`；engine 版本校验（低于 0.31.0 出阻断页，可「仍要继续」）
+- 轻量更新检查：启动后静默查 GitHub Releases，有新版发系统通知 + 帮助菜单「下载新版」（非 Sparkle，只指路）
+- 系统通知：`WKScriptMessageHandler` 桥（web 侧 `lib/nativeNotify.ts`，同步失败转场去重后推送）+ 壳层自身（engine 崩溃 / 新版本）
 - 组装脚本支持 Developer ID 签名 + `notarize.sh` 公证链路（CI：`macos-release.yml` 签名/公证/DMG/Release 全自动）
 
 ## 构建
@@ -54,8 +56,8 @@ swift test
 
 - P1：⌘S 显式保存（web autosave 已覆盖，需菜单项时加）、原生搜索/标签面板
 - P2：同步配置面板（S3 连接，当前复用 web 设置页）
-- P3：系统分享（NSSharingService / 分享扩展）、自动更新通道（Sparkle/appcast）
-- P4：MCP 本机 agent 引导、系统通知（同步失败等）、深链带查询参数（`notefast://search?q=`）
+- P3：系统分享（NSSharingService / 分享扩展——成本=整套沙盒+App Group 改造，价值低，暂搁置）、自动更新升级 Sparkle/appcast（当前为轻量检查+指路，装机量值得时再上）
+- P4：MCP 本机 agent 引导
 - iOS：同一 SPM 包加 app target（不内嵌 engine，同步协议直连 S3）
 
 ## 已确认决策

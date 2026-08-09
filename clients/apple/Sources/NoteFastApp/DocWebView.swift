@@ -21,6 +21,8 @@ struct DocWebView: NSViewRepresentable {
         webView.navigationDelegate = coordinator
         webView.allowsMagnification = true
         webView.allowsBackForwardNavigationGestures = true
+        // web → 壳层消息通道（lib/nativeNotify.ts：同步失败等系统通知）
+        config.userContentController.add(coordinator, name: "notefast")
         coordinator.onTitleChange = onTitleChange
         navigator?.attach(webView: webView)
         return webView
@@ -33,13 +35,29 @@ struct DocWebView: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKDownloadDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKDownloadDelegate, WKScriptMessageHandler {
         var onTitleChange: ((String) -> Void)?
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             webView.evaluateJavaScript("document.title") { result, _ in
                 guard let title = result as? String, !title.isEmpty else { return }
                 self.onTitleChange?(title)
+            }
+        }
+
+        // MARK: web → 壳层消息（window.webkit.messageHandlers.notefast）
+
+        func userContentController(
+            _ userContentController: WKUserContentController,
+            didReceive message: WKScriptMessage
+        ) {
+            guard message.name == "notefast",
+                  let dict = message.body as? [String: Any],
+                  dict["type"] as? String == "notify",
+                  let title = dict["title"] as? String, !title.isEmpty else { return }
+            let body = dict["body"] as? String ?? ""
+            Task { @MainActor in
+                NotificationManager.shared.post(title: title, body: body)
             }
         }
 

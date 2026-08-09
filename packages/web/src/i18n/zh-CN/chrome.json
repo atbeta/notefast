@@ -169,5 +169,8 @@
     "syncedAt": "已同步 {{time}}",
     "neverSynced": "尚未同步",
     "statusLabel": "同步状态：{{status}}"
+  },
+  "notify": {
+    "syncFailed": "同步失败"
   }
 }

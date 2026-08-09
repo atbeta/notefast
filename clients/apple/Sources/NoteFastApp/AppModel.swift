@@ -18,7 +18,11 @@ final class AppModel: ObservableObject {
     @Published var windowTitle = "NoteFast"
     @Published var engineVersion: String?
     @Published var versionIncompatible = false
+    /// 版本不兼容阻断页的用户豁免（「仍要继续」）
+    @Published var dismissedVersionWarning = false
     @Published var syncActionMessage: String?
+    /// 有新版可下载（检查更新后非空；帮助菜单出现「下载新版」入口）
+    @Published var availableUpdate: ReleaseInfo?
 
     let navigator = WebNavigator()
 
@@ -78,6 +82,21 @@ final class AppModel: ObservableObject {
         return URL(string: "http://127.0.0.1:\(hs.port)\(path)?native=macos")
     }
 
+    /// 命令面板预填搜索的首页 URL（query 经 URLComponents 正确转义）
+    private func paletteSearchURL(_ query: String) -> URL? {
+        guard case .running(let hs) = state else { return nil }
+        var comps = URLComponents()
+        comps.scheme = "http"
+        comps.host = "127.0.0.1"
+        comps.port = hs.port
+        comps.path = "/"
+        comps.queryItems = [
+            URLQueryItem(name: "native", value: "macos"),
+            URLQueryItem(name: "palette_search", value: query),
+        ]
+        return comps.url
+    }
+
     // MARK: - 生命周期
 
     func start() async {
@@ -94,11 +113,15 @@ final class AppModel: ObservableObject {
         }
         let engine = EngineProcess(engineDir: engineDir, dataDir: Self.dataDir())
         self.engine = engine
-        // 运行期崩溃监控：握手成功后进程意外退出 → 进入失败态（FailureView 可一键重试）
+        // 运行期崩溃监控：握手成功后进程意外退出 → 进入失败态（FailureView 可一键重试）+ 系统通知
         engine.onUnexpectedExit = { [weak self] code in
             Task { @MainActor in
                 guard let self, self.isRunning else { return }
                 self.state = .failed(EngineError.processExited(code))
+                NotificationManager.shared.post(
+                    title: "NoteFast 已停止运行",
+                    body: "本地引擎意外退出（code=\(code)），点击窗口内的「重试」重启。"
+                )
             }
         }
         do {
@@ -108,6 +131,7 @@ final class AppModel: ObservableObject {
             verifyEngineVersion(hs.version)
             navigator.navigate(to: entryURL ?? URL(string: "http://127.0.0.1")!)
             drainPendingImports()
+            scheduleAutoUpdateCheck()
         } catch {
             state = .failed(error)
         }
@@ -129,6 +153,48 @@ final class AppModel: ObservableObject {
         if versionIncompatible {
             windowTitle = "⚠️ 引擎版本过低 (\(version))"
         }
+    }
+
+    // MARK: - 轻量更新检查（GitHub Releases；非 Sparkle，只提示跳下载页）
+
+    /// 当前客户端版本 = bundle 版本（组装时写入 engine VERSION），swift run 时回退 engine 握手版本
+    var currentVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+            ?? engineVersion ?? "0"
+    }
+
+    /// 启动后静默检查一次（延迟 8s 让启动链路先稳；失败静默，有新版发系统通知 + 菜单入口）
+    private func scheduleAutoUpdateCheck() {
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.checkForUpdates(userInitiated: false)
+        }
+    }
+
+    func checkForUpdates(userInitiated: Bool) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let latest = try await UpdateChecker.fetchLatestRelease()
+                if UpdateChecker.isNewer(latest: latest.version, than: self.currentVersion) {
+                    self.availableUpdate = latest
+                    NotificationManager.shared.post(
+                        title: "NoteFast 有新版本",
+                        body: "v\(latest.version) 已发布（当前 v\(self.currentVersion)），帮助菜单可前往下载。"
+                    )
+                    if userInitiated { self.openUpdateDownload() }
+                } else if userInitiated {
+                    self.showTransientMessage("已是最新版本 (v\(self.currentVersion))")
+                }
+            } catch {
+                if userInitiated { self.showTransientMessage("检查更新失败，请稍后重试") }
+            }
+        }
+    }
+
+    func openUpdateDownload() {
+        NSWorkspace.shared.open(availableUpdate?.url ?? UpdateChecker.releasesPage)
     }
 
     /// engine 产物目录：优先 bundle 内 Resources/engine（组装期注入）；
@@ -271,7 +337,14 @@ final class AppModel: ObservableObject {
         case ("new", _):
             if let url = pageURL("/new") { navigator.navigate(to: url) }
         case ("search", _):
-            if let url = pageURL("/") { navigator.navigate(to: url) }
+            // notefast://search?q=xxx → /?palette_search=xxx（web Layout 消费后打开命令面板并预填）
+            let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first { $0.name == "q" }?.value
+            if let q, !q.isEmpty, let target = paletteSearchURL(q) {
+                navigator.navigate(to: target)
+            } else if let url = pageURL("/") {
+                navigator.navigate(to: url)
+            }
         default:
             break
         }

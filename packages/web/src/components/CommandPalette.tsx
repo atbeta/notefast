@@ -27,6 +27,8 @@ interface CommandPaletteProps {
   /** 打开/关闭 AI 聊天面板（分散入口之一；侧栏不常驻） */
   onToggleAiChat?: () => void
   aiChatOpen?: boolean
+  /** 打开时预填的查询（深链 palette_search；空串 = 正常空白打开） */
+  initialQuery?: string
 }
 
 type PaletteItem = {
@@ -40,7 +42,7 @@ type PaletteItem = {
   action: () => void
 }
 
-export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOpen }: CommandPaletteProps) {
+export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOpen, initialQuery }: CommandPaletteProps) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
@@ -57,11 +59,11 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
   useEffect(() => {
     if (!open) return
     const t = setTimeout(() => inputRef.current?.focus(), 30)
-    setQuery('')
+    setQuery(initialQuery ?? '')
     setResults([])
     setActive(0)
     return () => clearTimeout(t)
-  }, [open])
+  }, [open, initialQuery])
 
   // 遮罩虚化：CSS transition 的 backdrop-filter 在 WKWebView/Safari 不按帧插值（跳变），
   // 造成「先糊满、黑色才淡入」的二段式。改用 rAF 逐帧同时写 opacity 与 blur(0↔4px)，
