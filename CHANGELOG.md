@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.56.0](https://github.com/atbeta/notefast/compare/v0.55.0...v0.56.0) (2026-08-09)
+
+
+### Features
+
+* **apple:** harden macOS shell — navigation policy, downloads, crash recovery, engine logging ([ad4a9b0](https://github.com/atbeta/notefast/commit/ad4a9b0782c9b0e6cdd16ad81afd4ab94f32bfbb))
+* **apple:** menu bar status item + keep-running on window close ([00f7735](https://github.com/atbeta/notefast/commit/00f77351b48d5c1ada8424b9b337930f5fa213e0))
+* **apple:** native back/forward buttons in top-left title strip ([bd24a8f](https://github.com/atbeta/notefast/commit/bd24a8f12c923341ceee2a7c2947a92d00c9dad3))
+* **apple:** update check, blocking version gate, search deep link, system notifications ([a6ee5c8](https://github.com/atbeta/notefast/commit/a6ee5c8249b5f5253dbd0a852e6d11af35e1e060))
+
+
+### Bug Fixes
+
+* **apple:** reuse main window instead of spawning duplicates ([c22e876](https://github.com/atbeta/notefast/commit/c22e876700ed1300c3b8dbeb9ec760708a25a918))
+* **tauri:** avoid dark flash on light Windows startup ([d828985](https://github.com/atbeta/notefast/commit/d828985cf0d09a7b1b0f0e84ae8838e6348c878c))
+
 ## [0.55.0](https://github.com/atbeta/notefast/compare/v0.54.0...v0.55.0) (2026-08-08)
 
 
