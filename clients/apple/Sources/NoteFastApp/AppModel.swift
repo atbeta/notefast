@@ -23,6 +23,9 @@ final class AppModel: ObservableObject {
     @Published var syncActionMessage: String?
     /// 有新版可下载（检查更新后非空；帮助菜单出现「下载新版」入口）
     @Published var availableUpdate: ReleaseInfo?
+    /// WebView 历史栈状态（KVO 自 navigator，驱动左上角原生导航条按钮可用态）
+    @Published var canGoBack = false
+    @Published var canGoForward = false
 
     let navigator = WebNavigator()
 
@@ -31,6 +34,11 @@ final class AppModel: ObservableObject {
     private var transientMessageTask: Task<Void, Never>?
 
     init() {
+        // 历史栈状态 → 原生导航条按钮可用态
+        navigator.onHistoryStateChange = { [weak self] back, forward in
+            self?.canGoBack = back
+            self?.canGoForward = forward
+        }
         // App 退出前优雅停机 engine（SIGTERM drain → 关 DB）。
         // queue: .main 保证回调在主线程同步执行（termination 期间 Task 可能被推迟）；
         // assumeIsolated 让编译器认可「此处确在主 actor」，避免误报并发隔离。
@@ -354,6 +362,50 @@ final class AppModel: ObservableObject {
 
     /// ContentView.onAppear 注入的 SwiftUI openWindow（Environment 只能视图侧取，壳层借道）
     var openWindowAction: (() -> Void)?
+
+    // MARK: - 原生导航条（左上角红绿灯旁的后退/前进，见 NavStripView）
+
+    private var navStrip: NavStripView?
+    private var windowResizeObserver: NSObjectProtocol?
+
+    /// MainView 的 WindowAccessor 探针拿到窗口后调用（只挂一次；窗口重建时 navStrip 已
+    /// 随旧窗口销毁，重新挂）
+    func attachNavStrip(to window: NSWindow) {
+        guard let content = window.contentView, navStrip?.window !== window else { return }
+        navStrip?.removeFromSuperview()
+        if let observer = windowResizeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        let strip = NavStripView(model: self)
+        content.addSubview(strip)
+        strip.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            strip.topAnchor.constraint(equalTo: content.topAnchor),
+            strip.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            strip.widthAnchor.constraint(equalToConstant: 240),
+            strip.heightAnchor.constraint(equalToConstant: 30),
+        ])
+        navStrip = strip
+        // 窄窗口（web 切移动顶栏，汉堡按钮在左上）时隐藏整条防重叠
+        let updateVisibility: (NSWindow) -> Void = { [weak strip] w in
+            strip?.isHidden = w.frame.width < 820
+        }
+        updateVisibility(window)
+        windowResizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification,
+            object: window,
+            queue: .main
+        ) { notification in
+            MainActor.assumeIsolated {
+                if let w = notification.object as? NSWindow { updateVisibility(w) }
+            }
+        }
+    }
+
+    /// web 主题（data-theme 经消息桥回报）→ 导航条颜色跟随 web 而非系统外观
+    func applyWebTheme(dark: Bool) {
+        navStrip?.applyWebTheme(dark: dark)
+    }
 
     /// 前置 app 并确保主窗口存在（已存在则 openWindow 只把它带到最前）
     func showMainWindow() {

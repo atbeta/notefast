@@ -21,6 +21,7 @@ SwiftUI App（NoteFastApp）
 - 菜单栏：⌘N 新建笔记、⌘, 设置、⌘[ ⌘] 后退/前进、⌘+ ⌘- ⌘0 缩放、⌘P 打印、⌘R 刷新、复制本机 MCP 地址、显示 engine 日志/数据目录
 - engine stderr 落盘 `~/Library/Logs/NoteFast/engine.log`（>4MB 截断，只留最近一段）
 - **菜单栏常驻图标**（NSStatusItem，SF Symbol 模板渲染）：显示主窗口 / 新建笔记 / 打开收集箱 / 退出
+- **左上角原生导航条**（NavStripView，红绿灯右侧）：后退/前进按钮（KVO canGoBack/Forward 驱动可用态，窄窗口自动隐藏，颜色经消息桥跟随 web 明暗主题）——填补隐藏式标题栏净空带，web 无对应 UI 不重复
 - **关窗不退出**：关窗后驻留菜单栏/Dock，点 Dock、菜单栏项、深链、文件导入均重建主窗口（`openWindow(id:)` 注入 + `start()` 幂等守卫防二次 spawn）
 - 多端同步：web 端 GlobalSyncStatus 胶囊 + 设置页同步面板呈现
 - 深链：`notefast://doc/<id>`、`notefast://search?q=xxx`（命令面板预填搜索，Info.plist 已注册 URL scheme）

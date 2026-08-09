@@ -12,6 +12,8 @@ import WebKit
 struct DocWebView: NSViewRepresentable {
     var navigator: WebNavigator?
     var onTitleChange: ((String) -> Void)?
+    /// web 主题（data-theme=light|dark）变化回调，壳层原生控件据此跟随 web 明暗
+    var onThemeChange: ((Bool) -> Void)?
 
     func makeNSView(context: Context) -> WKWebView {
         let coordinator = context.coordinator
@@ -24,6 +26,7 @@ struct DocWebView: NSViewRepresentable {
         // web → 壳层消息通道（lib/nativeNotify.ts：同步失败等系统通知）
         config.userContentController.add(coordinator, name: "notefast")
         coordinator.onTitleChange = onTitleChange
+        coordinator.onThemeChange = onThemeChange
         navigator?.attach(webView: webView)
         return webView
     }
@@ -31,18 +34,41 @@ struct DocWebView: NSViewRepresentable {
     func updateNSView(_ webView: WKWebView, context: Context) {
         // 无 url prop：导航一律走 navigator，这里不做任何加载
         context.coordinator.onTitleChange = onTitleChange
+        context.coordinator.onThemeChange = onThemeChange
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKDownloadDelegate, WKScriptMessageHandler {
         var onTitleChange: ((String) -> Void)?
+        var onThemeChange: ((Bool) -> Void)?
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             webView.evaluateJavaScript("document.title") { result, _ in
                 guard let title = result as? String, !title.isEmpty else { return }
                 self.onTitleChange?(title)
             }
+            // 注入 data-theme 观察器：web 主题切换经消息桥回报（壳层原生控件跟随 web 明暗）。
+            // 运行时注入不算改 web 侧；__nfThemeObs 幂等守卫防 didFinish 重复挂
+            webView.evaluateJavaScript("""
+            (function(){
+              var post = function(){
+                try {
+                  window.webkit.messageHandlers.notefast.postMessage({
+                    type: 'theme',
+                    value: document.documentElement.getAttribute('data-theme') || ''
+                  });
+                } catch (e) {}
+              };
+              if (!window.__nfThemeObs) {
+                window.__nfThemeObs = 1;
+                new MutationObserver(post).observe(document.documentElement, {
+                  attributes: true, attributeFilter: ['data-theme']
+                });
+              }
+              post();
+            })();
+            """, completionHandler: nil)
         }
 
         // MARK: web → 壳层消息（window.webkit.messageHandlers.notefast）
@@ -53,11 +79,19 @@ struct DocWebView: NSViewRepresentable {
         ) {
             guard message.name == "notefast",
                   let dict = message.body as? [String: Any],
-                  dict["type"] as? String == "notify",
-                  let title = dict["title"] as? String, !title.isEmpty else { return }
-            let body = dict["body"] as? String ?? ""
-            Task { @MainActor in
-                NotificationManager.shared.post(title: title, body: body)
+                  let type = dict["type"] as? String else { return }
+            switch type {
+            case "notify":
+                guard let title = dict["title"] as? String, !title.isEmpty else { return }
+                let body = dict["body"] as? String ?? ""
+                Task { @MainActor in
+                    NotificationManager.shared.post(title: title, body: body)
+                }
+            case "theme":
+                let dark = dict["value"] as? String == "dark"
+                onThemeChange?(dark)
+            default:
+                break
             }
         }
 

@@ -7,6 +7,9 @@ import NoteFast
 /// 侧栏 brand 行已预留红绿灯净空并兼作窗口拖拽区（data-drag-region，见 web Sidebar）。
 /// 壳层只保留菜单栏命令（新建/命令面板/刷新/MCP 地址）；同步状态与手动同步由
 /// web 端 GlobalSyncStatus 胶囊与设置页多端同步面板呈现，不再重复造原生工具栏。
+///
+/// 左上角净空带（红绿灯右侧）叠加原生导航条（NavStripView：后退/前进），
+/// 由 WindowAccessor 探针拿窗口句柄挂载，见 AppModel.attachNavStrip。
 struct MainView: View {
     @ObservedObject var model: AppModel
     let handshake: EngineHandshake
@@ -17,7 +20,13 @@ struct MainView: View {
             onTitleChange: { title in
                 guard !model.versionIncompatible else { return }
                 model.windowTitle = title.isEmpty ? "NoteFast" : title
+            },
+            onThemeChange: { dark in
+                model.applyWebTheme(dark: dark)
             }
         )
+        .background(WindowAccessor { window in
+            model.attachNavStrip(to: window)
+        })
     }
 }
