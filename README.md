@@ -1,89 +1,76 @@
 # NoteFast
 
-**AI-first knowledge base — block-level API + MCP, AI writes and understands, humans read.**
+**AI-first, self-hosted knowledge base — Markdown is the surface, SQLite is the source of truth, and AI is a first-class citizen.**
 
-NoteFast is a single-user, self-hosted knowledge base where Markdown is the surface and SQLite is the source of truth. Its core is a block tree model with full-text search, semantic retrieval, RAG chat, and AI-assisted writing — all exposed through REST and MCP.
+NoteFast is a single-user knowledge base built around a block-tree model: hybrid full-text + semantic search, RAG chat with citations, automatic inter-note linking, and AI-assisted writing — all exposed through a stable REST API and MCP, with native desktop apps on top.
 
 ## Quick Start
 
-```bash
-# Local development
-bun install
-bun --filter @notefast/server dev     # API + MCP on :3140
-bun --filter @notefast/web dev        # Web UI on :5173
+### Download the app (easiest)
 
-# Docker
+Grab the latest installer from [GitHub Releases](https://github.com/atbeta/notefast/releases):
+
+- **macOS** — signed & notarized DMG; embeds the local server, no runtime dependencies
+- **Windows** — Tauri-based installer
+
+The app runs a local engine on `127.0.0.1` and stores everything under the per-user data directory. No account, no cloud required.
+
+### Docker (self-hosted server)
+
+```bash
 docker compose up -d
 ```
 
-Set a password for the Web UI and an API token for MCP access:
+Then open `http://localhost:3140`. Set `AUTH_PASSWORD` and `API_TOKEN` before exposing it to a network — see [Deployment & Security](#deployment--security).
+
+### From source (development)
 
 ```bash
-export AUTH_PASSWORD=your-password
-export API_TOKEN=nf_your-secret-token
+bun install
+bun --filter @notefast/server dev     # API + MCP on :3140
+bun --filter @notefast/web dev        # Web UI on :5173
 ```
 
-Optionally configure an AI provider to unlock search, chat, and writing:
+## Why NoteFast
 
-```bash
-export AI_PROVIDER=openai         # or: deepseek, siliconflow, ollama, etc.
-export AI_API_KEY=sk-...
-export EMBEDDING_PROVIDER=openai
-export EMBEDDING_API_KEY=sk-...
-```
+- **Your data, one file.** Everything lives in a single SQLite database under `data/` — no external database, no vendor lock-in. Vectors are a rebuildable secondary index, not a separate store.
+- **AI is a first-class citizen.** Retrieval, chat, auto-linking, and writing assistance are built into the core and exposed via MCP — external agents (Claude Desktop, Cursor, …) get the same capabilities as the built-in UI.
+- **Real writing experience.** A CodeMirror-based hybrid editor (Typora-lite) with image/table/LaTeX previews, Mermaid rendering, ghost-text continuation, and selection-level AI rewrite.
+- **Open by contract.** Every capability is API-first; portable Markdown export with frontmatter, and verified backup/restore paths.
 
-AI settings can also be managed at runtime through the Web UI (`/settings`).
+## Features
 
-## Architecture
+**Writing & reading**
+- Block-tree documents with inline Markdown; hybrid editor with live previews (images, tables, LaTeX via KaTeX, Mermaid diagrams)
+- Tags with AND/OR filtering, smart views, inbox / archive / trash lifecycle
+- Block-level reading surface: copy block links, ask AI about a passage
+- Chinese & English UI (i18n), dark/light themes
 
-```
-notefast/
-├── packages/
-│   ├── core/          # Shared types, block model, markdown↔block, AI config
-│   ├── server/        # REST API (Hono), MCP Server, AI engine
-│   └── web/           # React reading/writing UI
-```
+**AI**
+- Hybrid search: FTS5 + LIKE lexical, semantic embeddings, title, entity and graph-context channels fused with RRF, optional reranker
+- RAG chat with citations and an agent loop (the AI can search, read, and suggest edits)
+- AutoLink: after each write, high-confidence concept matches automatically create inter-note references; entity mentions power the knowledge graph
+- AI writing: ghost-text continuation (Ctrl+J, Tab to accept), selection rewrite, title suggestion
+- Bring your own provider: OpenAI-compatible chat/embedding/reranker slots with presets (OpenAI, DeepSeek, SiliconFlow, DashScope, Ollama, …), configured in Settings
 
-### Data Model
+**Knowledge graph**
+- Automatic entity extraction (concepts / people / tools / docs) with a force-directed co-occurrence graph
+- Entity dictionary for alias normalization and query expansion
 
-Everything is a **block** — a tree node with type and inline Markdown content:
+**Sync, backup & capture**
+- Multi-device sync over your own object storage (S3 / WebDAV) — peer model, no central server, automatic
+- Disaster recovery: in-app SQLite→S3 snapshots with offline restore CLI; one-way Markdown archive (LocalFS / S3 / WebDAV) for portable copies — see [docs/backup.md](docs/backup.md)
+- Capture: `POST /import/markdown` for web clippers / iOS shortcuts / file-open, with path+hash dedup — see [docs/capture.md](docs/capture.md)
+- Public read-only share links per document (optional expiry)
 
-```
-document
-├── heading "Architecture"
-├── paragraph "NoteFast uses a block tree model..."
-├── code "const x = 1"
-└── list
-    ├── list_item "Point one"
-    └── list_item "Point two"
-```
-
-Blocks are the atomic unit. No raw file manipulation — all operations go through the block API.
-
-### Storage
-
-- **SQLite** single-file database in `data/` — schema migrations, FTS5 search, block tree CRUD
-- **sqlite-vec** extension for vector search (production) with JSON fallback
-- **Content-addressed media** in `data/media/<sha256>` — deduplicated images, stable `asset:<sha256>` references in Markdown
-- **AI configuration** persists to `data/ai.config.json` with masked API keys in public views
-
-## AI Capabilities
-
-All AI features require an LLM provider (OpenAI-compatible API). 18 presets available: OpenAI, DeepSeek, Gemini, Ollama, SiliconFlow, etc.
-
-| Capability | What it does |
-|---|---|
-| **Hybrid Search** | FTS5 + semantic embedding with RRF fusion, optional reranker |
-| **RAG Chat** | Conversational AI with note citations, agent loop, tool calling |
-| **AI Writing** | Ctrl+Enter inline continuation, refine, translate, summarise |
-| **AutoLink** | After each write, the LLM extracts key concepts; high-confidence semantic matches automatically create inter-note links (`ref_type=ai_auto`) — no manual review |
-| **Web Search** | Optional Brave Search integration for external knowledge |
-| **Title/Suggest** | AI-generated document titles and summaries |
-| **MCP Server** | Full read/write/search/chat tools for external AI agents |
+**Desktop apps (macOS / Windows)**
+- Embedded local engine with graceful lifecycle, crash recovery, and engine logs
+- Menu-bar presence, system notifications, deep links (`notefast://doc/<id>`, `notefast://search?q=…`)
+- Open-and-import for `.md` files, native back/forward navigation, lightweight update check
 
 ## MCP Integration
 
-External AI agents (Claude Desktop, Cursor, etc.) connect to NoteFast via MCP:
+External AI agents connect to NoteFast over MCP:
 
 ```json
 {
@@ -96,52 +83,63 @@ External AI agents (Claude Desktop, Cursor, etc.) connect to NoteFast via MCP:
 }
 ```
 
-Available tools: `search`, `get_doc`, `get_block`, `create_doc`, `create_block`, `update_block`, `semantic_search`, `chat`, `list_docs`, `set_doc_tags`, `autolink_run`, and more.
+Tools cover the full surface: `notefast_search` / `notefast_semantic_search`, `notefast_get_doc`, `notefast_create_doc` / `notefast_update_block`, `notefast_stage_markdown` + `notefast_create_doc_from_file` for large imports, `notefast_share_doc`, `notefast_restore_block`, `notefast_chat`, and more.
 
 ## Keyboard Shortcuts
 
 | Key | Action |
 |---|---|
-| ⌘K | Command palette |
+| ⌘K | Command palette / search |
 | ⌘J | AI chat panel |
-| ⌘Enter | AI continue writing |
 | ⌘N | New document |
-| ⌘S | Save (in editor) |
-| ⌘P | Preview / Edit (in editor) |
+| ⌘Enter | AI ghost-text continuation (Tab to accept, Esc to dismiss) |
+| ⌘S / ⌘P | Save / toggle preview (in editor) |
 | ⌘B / I / E | Bold / Italic / Inline code |
 | ⌘⇧K | Insert link |
+| ⌘[ / ⌘] | Back / forward (desktop app) |
 
-## Environment Variables
+## Deployment & Security
+
+Before exposing NoteFast beyond `127.0.0.1`, set:
+
+- `AUTH_PASSWORD` — Web UI login password
+- `API_TOKEN` (or split `READ_TOKEN` + `WRITE_TOKEN`) — API / MCP Bearer token
+- `CORS_ORIGINS` — origin allowlist for the Web UI; a literal `*` entry disables it and is **dangerous** without auth: any web page could read/write the entire knowledge base
+
+Auth mode: if **any** auth variable is set, the server requires authentication; if **none** are set, it runs in unauthenticated local mode (with a startup warning).
+
+Common environment variables:
 
 | Variable | Description |
 |---|---|
-| `AUTH_PASSWORD` | Web UI login password |
-| `API_TOKEN` | API / MCP Bearer token |
 | `PORT` | Server port (default 3140) |
 | `DATA_DIR` | SQLite + media storage path |
-| `AI_PROVIDER` | LLM provider preset ID |
-| `AI_API_KEY` | LLM API key |
-| `EMBEDDING_PROVIDER` | Embedding provider preset ID |
-| `EMBEDDING_API_KEY` | Embedding API key |
-| `CORS_ORIGINS` | Comma-separated allowed origins for the Web UI (default `http://localhost:5173`); **must set for production**. A literal `*` entry allows any origin — **dangerous**: in unauthenticated mode (no auth variables set) any web page can read/write the entire knowledge base; never use `*` in production |
+| `AUTH_PASSWORD` / `API_TOKEN` | Web password / API token (see above) |
+| `READ_TOKEN` / `WRITE_TOKEN` | Optional split read/write tokens |
+| `CORS_ORIGINS` | Comma-separated origin allowlist |
 
-### ⚠️ Production Deployment
+AI providers are configured at runtime in **Settings → AI** (three slots: chat / embedding / reranker).
 
-Before exposing NoteFast publicly (not just `127.0.0.1`), set:
+## Development
 
-- `AUTH_PASSWORD` — required for Web UI login
-- `API_TOKEN` (or split `READ_TOKEN` + `WRITE_TOKEN`) — required for API / MCP access
-- `CORS_ORIGINS` — comma-separated origin allowlist; the default `http://localhost:5173` is **insecure** for production, and `*` disables the allowlist entirely (only acceptable for local development)
-
-Auth-mode behavior: if **any** auth variable is set, the server runs in authenticated mode and rejects unauthenticated requests. If **none** are set, it runs in unauthenticated dev mode (every request treated as admin) and prints a startup warning to stderr.
-
-## Quality
+```
+notefast/
+├── packages/
+│   ├── core/          # Shared types, block model, markdown↔block, AI config
+│   ├── server/        # REST API (Hono), MCP server, AI engine, sync & backup
+│   └── web/           # React reading/writing UI
+└── clients/
+    ├── apple/         # macOS (SwiftUI + WKWebView, embedded engine)
+    └── tauri/         # Windows (Tauri)
+```
 
 ```bash
-bun lint        # oxlint, zero tolerance for correctness violations
-bun run typecheck   # strict TypeScript across all packages
-bun test        # 350+ tests across 33 suites
+bun lint              # oxlint
+bun run typecheck     # strict TypeScript
+bun test              # 800+ tests
 ```
+
+Contributor conventions and deep architectural notes live in [AGENTS.md](AGENTS.md).
 
 ## License
 
