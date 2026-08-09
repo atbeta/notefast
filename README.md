@@ -1,8 +1,8 @@
 # NoteFast
 
-**AI-first, self-hosted knowledge base — Markdown is the surface, SQLite is the source of truth, and AI is a first-class citizen.**
+**An AI-native Markdown knowledge base — every note you write is automatically indexed, linked, and retrievable. Self-hosted, multi-platform, and your data stays in your hands.**
 
-NoteFast is a single-user knowledge base built around a block-tree model: hybrid full-text + semantic search, RAG chat with citations, automatic inter-note linking, and AI-assisted writing — all exposed through a stable REST API and MCP, with native desktop apps on top.
+NoteFast automatically indexes every note — full-text and semantic — links related ideas together, and makes it all retrievable through hybrid search, RAG chat with citations, and an entity graph. It's a single-user, self-hosted system built on one SQLite file, with native clients for macOS and Windows, and every capability exposed through a stable REST API and MCP server for AI agents.
 
 ## Quick Start
 
