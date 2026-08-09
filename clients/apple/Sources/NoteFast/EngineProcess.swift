@@ -53,6 +53,10 @@ public final class EngineProcess {
     private var resolved = false
     private var outcome: Result<EngineHandshake, Error> = .failure(EngineError.handshakeTimeout)
     private let ready = DispatchSemaphore(value: 0)
+    /// 握手成功后进程意外退出的回调（stop() 主动停机不触发）；在任意队列触发，回调方自行切换 actor
+    public var onUnexpectedExit: ((Int32) -> Void)?
+    /// stop() 主动停机标记：区分「我们杀的」与「意外崩溃」
+    private var stopping = false
 
     public init(engineDir: URL, dataDir: URL) {
         self.engineDir = engineDir
@@ -89,11 +93,18 @@ public final class EngineProcess {
         proc.arguments = ["--data-dir", dataDir.path, "--assets-dir", engineDir.path]
         let outPipe = Pipe()
         proc.standardOutput = outPipe
-        // stderr 不接管：engine 日志（含启动告警）不进握手通道
-        proc.standardError = FileHandle.nullDevice
+        // stderr 落盘日志（~/Library/Logs/NoteFast/engine.log）：不进握手通道，但出问题时要有线索可查
+        let logHandle = Self.openLogFile()
+        proc.standardError = logHandle ?? FileHandle.nullDevice
         proc.terminationHandler = { [weak self] p in
-            // 进程提前退出（或我们 stop 后的正常退出）：若握手未成功则报错，否则忽略
-            self?.resolve(.failure(EngineError.processExited(p.terminationStatus)))
+            guard let self else { return }
+            if !self.resolved {
+                // 握手窗口内提前退出：报启动失败
+                self.resolve(.failure(EngineError.processExited(p.terminationStatus)))
+            } else if !self.stopping {
+                // 运行期意外崩溃：通知壳层（stop() 主动停机已置 stopping，不触发）
+                self.onUnexpectedExit?(p.terminationStatus)
+            }
         }
 
         do {
@@ -101,6 +112,8 @@ public final class EngineProcess {
         } catch {
             throw EngineError.launchFailed(error.localizedDescription)
         }
+        // 子进程已继承 stderr fd，父进程副本立即关闭防泄漏
+        try? logHandle?.close()
         process = proc
         pipe = outPipe
 
@@ -118,6 +131,7 @@ public final class EngineProcess {
 
     /// SIGTERM 优雅停机（engine drain + 关 DB）；超时未退则 SIGKILL 兜底。
     public func stop(wait: TimeInterval = 10) {
+        stopping = true
         guard let proc = process, proc.isRunning else { return }
         proc.terminate() // SIGTERM → engine bootstrap 优雅停机
         let deadline = Date().addingTimeInterval(wait)
@@ -161,6 +175,38 @@ public final class EngineProcess {
         outcome = result
         resolveLock.unlock()
         ready.signal()
+    }
+
+    // MARK: - 日志
+
+    /// engine stderr 日志路径：~/Library/Logs/NoteFast/engine.log
+    public static func logFileURL() -> URL {
+        let base = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return base.appendingPathComponent("Logs/NoteFast/engine.log")
+    }
+
+    /// 打开日志文件（超 4MB 截断重写，只留最近一段），启动失败回退 nil（调用方用 nullDevice 兜底）
+    private static func openLogFile() -> FileHandle? {
+        let url = logFileURL()
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if !FileManager.default.fileExists(atPath: url.path) {
+                FileManager.default.createFile(atPath: url.path, contents: nil)
+            }
+            if let size = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int,
+               size > 4 * 1024 * 1024 {
+                try Data().write(to: url) // 截断
+            }
+            let handle = try FileHandle(forWritingTo: url)
+            try handle.seekToEnd()
+            let marker = "\n--- engine start \(ISO8601DateFormatter().string(from: Date())) ---\n"
+            handle.write(Data(marker.utf8))
+            return handle
+        } catch {
+            return nil
+        }
     }
 
     deinit {

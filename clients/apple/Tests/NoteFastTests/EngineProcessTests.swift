@@ -107,4 +107,58 @@ final class EngineProcessTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - stderr 落盘 / 崩溃回调
+
+    func testStart_stderrWrittenToLogFile() throws {
+        let engineDir = try makeFakeEngine(script: """
+        #!/bin/sh
+        echo 'NF_READY {"port":55151,"version":"0.31.0"}'
+        echo 'fake-engine-stderr-marker' >&2
+        trap 'exit 0' TERM
+        while true; do sleep 1; done
+        """)
+        let engine = EngineProcess(engineDir: engineDir, dataDir: tempDir.appendingPathComponent("data"))
+        _ = try engine.start(timeout: 5)
+        engine.stop(wait: 3)
+
+        let log = try String(contentsOf: EngineProcess.logFileURL(), encoding: .utf8)
+        XCTAssertTrue(log.contains("--- engine start"), "日志应含启动分隔行")
+        XCTAssertTrue(log.contains("fake-engine-stderr-marker"), "stderr 应落盘")
+    }
+
+    func testUnexpectedExit_afterHandshake() throws {
+        let engineDir = try makeFakeEngine(script: """
+        #!/bin/sh
+        echo 'NF_READY {"port":55152,"version":"0.31.0"}'
+        sleep 0.2
+        exit 7
+        """)
+        let engine = EngineProcess(engineDir: engineDir, dataDir: tempDir.appendingPathComponent("data"))
+        let exp = expectation(description: "onUnexpectedExit 应触发")
+        var exitCode: Int32?
+        engine.onUnexpectedExit = { code in
+            exitCode = code
+            exp.fulfill()
+        }
+        _ = try engine.start(timeout: 5)
+        waitForExpectations(timeout: 5)
+        XCTAssertEqual(exitCode, 7)
+    }
+
+    func testStop_doesNotTriggerUnexpectedExit() throws {
+        let engineDir = try makeFakeEngine(script: """
+        #!/bin/sh
+        echo 'NF_READY {"port":55153,"version":"0.31.0"}'
+        trap 'exit 0' TERM
+        while true; do sleep 1; done
+        """)
+        let engine = EngineProcess(engineDir: engineDir, dataDir: tempDir.appendingPathComponent("data"))
+        let exp = expectation(description: "主动 stop 不应触发 onUnexpectedExit")
+        exp.isInverted = true
+        engine.onUnexpectedExit = { _ in exp.fulfill() }
+        _ = try engine.start(timeout: 5)
+        engine.stop(wait: 3)
+        waitForExpectations(timeout: 1)
+    }
 }

@@ -91,6 +91,13 @@ final class AppModel: ObservableObject {
         }
         let engine = EngineProcess(engineDir: engineDir, dataDir: Self.dataDir())
         self.engine = engine
+        // 运行期崩溃监控：握手成功后进程意外退出 → 进入失败态（FailureView 可一键重试）
+        engine.onUnexpectedExit = { [weak self] code in
+            Task { @MainActor in
+                guard let self, self.isRunning else { return }
+                self.state = .failed(EngineError.processExited(code))
+            }
+        }
         do {
             let hs = try engine.start(timeout: 20)
             state = .running(hs)
@@ -143,6 +150,24 @@ final class AppModel: ObservableObject {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         return base.appendingPathComponent("NoteFast", isDirectory: true)
+    }
+
+    // MARK: - 诊断入口（帮助菜单：Finder 中显示 engine 日志 / 数据目录）
+
+    /// engine stderr 日志（启动告警、运行期错误都落这里）
+    func revealEngineLog() {
+        let url = EngineProcess.logFileURL()
+        if FileManager.default.fileExists(atPath: url.path) {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } else {
+            NSWorkspace.shared.open(url.deletingLastPathComponent())
+        }
+    }
+
+    func revealDataDir() {
+        let dir = Self.dataDir()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(dir)
     }
 
     // MARK: - 瞬时消息（菜单命令反馈：Help 菜单展示 syncActionMessage）

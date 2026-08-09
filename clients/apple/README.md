@@ -15,14 +15,15 @@ SwiftUI App（NoteFastApp）
 
 ## 已实现（P0 壳 + 阅读为主）
 
-- 内嵌 server 生命周期：spawn（`--data-dir / --port 0 / --assets-dir`）→ stdout `NF_READY` 握手 → 退出 SIGTERM drain（SSE 长连接兜底 ~10s）
-- 原生侧栏文档列表（选中态驱动 WebView 导航）+ WKWebView 内容区（`/?native=macos`）
-- 菜单栏：⌘N 新建笔记（覆盖默认 New Window）、⌘R 刷新、复制本机 MCP 地址
-- 工具栏：同步状态指示（绿/橙/灰 + 待发布角标）、新建、设置（跳转 web `/settings`）
-- 多端同步面板：状态轮询（10s）、立即同步、从云端恢复（`/sync/protocol/pull`，带确认）
+- 内嵌 server 生命周期：spawn（`--data-dir / --assets-dir`）→ stdout `NF_READY` 握手 → 退出 SIGTERM drain；**运行期崩溃自愈**（engine 意外退出 → 失败态 UI 一键重试）
+- WKWebView 内容区（`/?native=macos`，全窗口 Web 应用，隐藏式标题栏）
+- 导航策略：同源放行（target=_blank 当前页打开）、**外链交系统浏览器**、下载（`<a download>`/blob 导出/不可展示 MIME）存 `~/Downloads` 重名自动加序号
+- 菜单栏：⌘N 新建笔记、⌘, 设置、⌘[ ⌘] 后退/前进、⌘+ ⌘- ⌘0 缩放、⌘P 打印、⌘R 刷新、复制本机 MCP 地址、显示 engine 日志/数据目录
+- engine stderr 落盘 `~/Library/Logs/NoteFast/engine.log`（>4MB 截断，只留最近一段）
+- 多端同步：web 端 GlobalSyncStatus 胶囊 + 设置页同步面板呈现
 - 深链：`notefast://doc/<id>`（Info.plist 已注册 URL scheme）
 - 窗口标题跟随页面 `<title>`；engine 版本校验（低于 0.31.0 提示不兼容）
-- 组装脚本支持 Developer ID 签名 + `notarize.sh` 公证链路
+- 组装脚本支持 Developer ID 签名 + `notarize.sh` 公证链路（CI：`macos-release.yml` 签名/公证/DMG/Release 全自动）
 
 ## 构建
 
@@ -51,6 +52,10 @@ swift test
 
 - P1：⌘S 显式保存（web autosave 已覆盖，需菜单项时加）、原生搜索/标签面板
 - P2：同步配置面板（S3 连接，当前复用 web 设置页）
-- P3：系统分享（NSSharingService）、菜单栏图标、Developer ID 签名流水线验证
-- P4：⌘J 聊天面板原生入口（web 已有，WKWebView 内可达）、MCP 本机 agent 引导
+- P3：系统分享（NSSharingService / 分享扩展）、菜单栏图标（届时再评估「关窗不退出」）、自动更新通道（Sparkle/appcast）
+- P4：MCP 本机 agent 引导、系统通知（同步失败等）、深链带查询参数（`notefast://search?q=`）
 - iOS：同一 SPM 包加 app target（不内嵌 engine，同步协议直连 S3）
+
+## 已确认决策
+
+- **关窗即退出**（2026-08）：drain 已提速到 ~0.2s，重启成本低；「关窗不退出 + Dock 常驻」留给菜单栏图标一起做，避免隐形后台进程
