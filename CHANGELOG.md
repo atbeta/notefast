@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.58.0](https://github.com/atbeta/notefast/compare/v0.57.0...v0.58.0) (2026-08-10)
+
+
+### Features
+
+* **resources:** preview images fullscreen and delete unused assets ([1b96f7a](https://github.com/atbeta/notefast/commit/1b96f7a62d3f8a556d81dfa29fdd90512c91dc22))
+* **web:** replace sidebar recent-updated list with recently viewed ([074f71b](https://github.com/atbeta/notefast/commit/074f71b88226d922c822f34a58699f262229ac3d))
+
+
+### Bug Fixes
+
+* **ci:** ship complete Windows portable zip with engine on release ([69abb56](https://github.com/atbeta/notefast/commit/69abb560192b5536a81826c910ea95c8c2fc2d55))
+* **web:** degrade AI entry points gracefully when Chat is unset ([bde0425](https://github.com/atbeta/notefast/commit/bde042515eb4b46696669a83352d5be7e9c892e6))
+* **web:** drop focus outline on command palette search input ([0aff627](https://github.com/atbeta/notefast/commit/0aff6275244a94739ba3822d73b25e7a192f3b54))
+* **web:** stop per-line borders leaking into fenced code blocks ([37619fd](https://github.com/atbeta/notefast/commit/37619fd0defc18d57d68a992c707052ee7e7c340))
+
 ## [0.57.0](https://github.com/atbeta/notefast/compare/v0.56.0...v0.57.0) (2026-08-10)
 
 
