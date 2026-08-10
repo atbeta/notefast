@@ -43,10 +43,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
-    /// 点 Dock 图标且无可见窗口：重建主窗口（SwiftUI WindowGroup 默认不会自己重建）
+    /// 点 Dock 图标且无可见窗口：重建主窗口（SwiftUI WindowGroup 默认不会自己重建）。
+    /// 已自行 openWindow 时必须 return false——return true 会让 AppKit 再开一扇空窗
+    /// （表现为「两个空白窗口」）。
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { model?.showMainWindow() }
-        return true
+        if flag { return true }
+        model?.showMainWindow()
+        return false
     }
 
     /// 双击 .md / 拖到 Dock 图标（Info.plist 的 CFBundleDocumentTypes 注册后由 LaunchServices 派发；

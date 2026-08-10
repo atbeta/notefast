@@ -8,9 +8,10 @@ import WebKit
 final class WebNavigator {
     /// DocWebView 挂载时注册（weak：壳层不持有 WebView，其生命周期归 SwiftUI）
     private weak var webView: WKWebView?
-    /// attach 前发起的导航（如启动握手刚完成、WebView 尚未挂载）：挂载后立即补发；
-    /// 之后记录最近一次导航目标，WebView 重建时可回放
+    /// attach 前发起的导航（如启动握手刚完成、WebView 尚未挂载）：挂载后立即补发
     private var pendingURL: URL?
+    /// 最近一次导航目标：关窗后 WKWebView 销毁，重开挂载时回放（pending 可能已清空）
+    private var lastURL: URL?
     /// 历史栈变化回调（canGoBack / canGoForward，驱动原生导航条按钮可用态）
     var onHistoryStateChange: ((Bool, Bool) -> Void)?
     private var historyObservers: [NSKeyValueObservation] = []
@@ -31,13 +32,15 @@ final class WebNavigator {
                 }
             },
         ]
-        if let url = pendingURL {
+        // 优先 pending（刚 navigate 还未 attach）；否则回放 lastURL（窗口重建）
+        if let url = pendingURL ?? lastURL {
             pendingURL = nil
             webView.load(URLRequest(url: url))
         }
     }
 
     func navigate(to url: URL) {
+        lastURL = url
         pendingURL = url
         webView?.load(URLRequest(url: url))
     }

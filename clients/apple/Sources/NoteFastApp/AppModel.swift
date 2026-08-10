@@ -109,8 +109,14 @@ final class AppModel: ObservableObject {
 
     func start() async {
         // 窗口重建（关窗不退出后点 Dock/菜单栏重开）会再次触发 .task：
-        // engine 还活着就直接返回，避免二次 spawn 报 alreadyRunning
-        guard engine?.isRunning != true else { return }
+        // engine 还活着就别二次 spawn；但必须把入口 URL 再灌进新挂载的 WKWebView，
+        // 否则 DocWebView 是空 about:blank（只防 alreadyRunning、忘了重载 → 空白窗）。
+        if engine?.isRunning == true {
+            if let url = entryURL {
+                navigator.navigate(to: url)
+            }
+            return
+        }
         state = .starting
         let engineDir: URL
         do {
@@ -414,12 +420,22 @@ final class AppModel: ObservableObject {
     /// 前置 app 并确保主窗口存在：已跟踪到窗口就复用（置前/取消最小化），
     /// 没有才 openWindow 新建——openWindow(id:) 在窗口已存在时不保证复用，不能依赖
     func showMainWindow() {
-        NSApp.activate()
-        if let window = mainWindow {
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = mainWindow ?? findExistingMainWindow() {
+            mainWindow = window
             if window.isMiniaturized { window.deminiaturize(nil) }
             window.makeKeyAndOrderFront(nil)
         } else {
             openWindowAction?()
+        }
+    }
+
+    /// 关窗后 weak mainWindow 已空时，复用仍存活的可成为 key 的内容窗（排除菜单栏 NSPanel）
+    private func findExistingMainWindow() -> NSWindow? {
+        NSApp.windows.first { window in
+            !(window is NSPanel)
+                && window.canBecomeKey
+                && window.contentView != nil
         }
     }
 
