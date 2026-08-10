@@ -64,6 +64,8 @@
     "untagged": "Untagged",
     "pinnedViews": "Pinned views",
     "recentDocs": "Recent documents",
+    "recentVisited": "Recently viewed",
+    "recentVisitedEmpty": "Documents you open will show up here",
     "untitled": "Untitled document",
     "hasDraft": "Unsaved draft",
     "collapse": "Collapse",

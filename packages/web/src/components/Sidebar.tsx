@@ -30,6 +30,12 @@ import { useDocChanges } from '../hooks/useDocEvents'
 import { usePinnedViews, canonicalViewQuery, type PinnedView } from '../hooks/usePinnedViews'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { DRAFT_CHANGED_EVENT, hasDraftSync } from '../hooks/useEditorDraft'
+import {
+  getRecentVisitIds,
+  orderDocsByVisits,
+  pruneVisitsNotIn,
+  subscribeRecentVisits,
+} from '../lib/recentVisits'
 import type { DocSummary } from '@notefast/core'
 import DocActionsMenu from './DocActionsMenu'
 import { Tooltip, ShortcutKeys, shortcutLabel } from './ui'
@@ -219,10 +225,13 @@ export default function Sidebar({
   const [smartOpen, toggleSmart] = useSidebarSectionOpen('smart', true)
   const [pinnedOpen, togglePinned] = useSidebarSectionOpen('pinned', true)
   /**
-   * 最近文档：默认收起（首页主列表已按时间倒序展示，侧栏再列一份是重复）。
-   * 主动展开时再发请求；折叠态不发，路由变化/外部更新触发 refetch 时仍按需拉
+   * 最近访问：按本机打开足迹排序（localStorage），与首页「最近更新」分开。
+   * 默认展开——现在有独立价值；折叠态不发列表请求。
    */
-  const [recentOpen, toggleRecent] = useSidebarSectionOpen('recent', false)
+  const [recentOpen, toggleRecent] = useSidebarSectionOpen('recentVisited', true)
+  const [visitIds, setVisitIds] = useState(() => getRecentVisitIds())
+  useEffect(() => subscribeRecentVisits(() => setVisitIds(getRecentVisitIds())), [])
+
   const { views: pinnedViews, unpin, rename } = usePinnedViews()
   const navFadeRef = useScrollFade<HTMLElement>()
 
@@ -231,16 +240,25 @@ export default function Sidebar({
   const version = versionInfo?.version ?? null
 
   /**
-   * 最近文档：折叠态不展示也不发请求（挂起的 Promise 保持旧数据，重新展开时无闪烁）；
-   * 展开 / 路由变化时重拉，失败静默保留旧数据
+   * 最近访问：折叠态不展示也不发请求；展开时拉 status=all（含收集箱/归档，
+   * 你刚打开过的仍能找到），再按足迹序裁剪。失败静默保留旧数据。
    */
   const { data: docList, refetch: refetchRecent } = useApiQuery(
-    () => (collapsed || !recentOpen ? new Promise<DocSummary[]>(() => {}) : api.get<DocSummary[]>('/docs/list')),
+    () => (collapsed || !recentOpen ? new Promise<DocSummary[]>(() => {}) : api.get<DocSummary[]>('/docs/list?status=all')),
     [collapsed, recentOpen, location.pathname],
   )
-  const allRecent = (docList ?? []).slice(0, RECENT_MAX)
+
+  // 列表回来后清掉足迹里已不存在的 id（软删 / 换库残留）
+  useEffect(() => {
+    if (!docList) return
+    pruneVisitsNotIn(new Set(docList.map((d) => d.id)))
+  }, [docList])
+
+  const allRecent = orderDocsByVisits(docList ?? [], visitIds).slice(0, RECENT_MAX)
   const recentDocs = recentExpanded ? allRecent : allRecent.slice(0, RECENT_PREVIEW)
   const recentHasMore = allRecent.length > RECENT_PREVIEW
+  const recentEmpty = recentOpen && visitIds.length === 0
+  const recentGone = recentOpen && visitIds.length > 0 && Boolean(docList) && allRecent.length === 0
 
   // 草稿圆点：逐条同步探测 + 订阅草稿变更事件（编辑器防抖暂存后实时出现/消失）
   const [draftIds, setDraftIds] = useState<ReadonlySet<string>>(new Set())
@@ -501,11 +519,21 @@ export default function Sidebar({
 
         <div className="mt-5">
             <SidebarSectionLabel
-              label={t('sidebar.recentDocs')}
+              label={t('sidebar.recentVisited')}
               collapsible
               open={recentOpen}
               onToggle={toggleRecent}
             />
+            {recentOpen && recentEmpty && (
+              <p className="px-2.5 py-1.5 text-[11.5px] text-sidebar-muted leading-relaxed">
+                {t('sidebar.recentVisitedEmpty')}
+              </p>
+            )}
+            {recentOpen && recentGone && (
+              <p className="px-2.5 py-1.5 text-[11.5px] text-sidebar-muted leading-relaxed">
+                {t('sidebar.recentVisitedEmpty')}
+              </p>
+            )}
             {recentOpen && allRecent.length > 0 && (
             <div className="flex flex-col gap-0.5">
               {recentDocs.map(doc => {

@@ -64,6 +64,8 @@
     "untagged": "未加标签",
     "pinnedViews": "固定视图",
     "recentDocs": "最近文档",
+    "recentVisited": "最近访问",
+    "recentVisitedEmpty": "打开过的文档会出现在这里",
     "untitled": "无标题文档",
     "hasDraft": "有未保存草稿",
     "collapse": "收起",

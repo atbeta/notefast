@@ -43,6 +43,7 @@ import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIn
 import { useEditorDraft } from '../hooks/useEditorDraft'
 import { Kbd, Tooltip, useToast } from '../components/ui'
 import { deliverExport, fetchDocExportFile } from '../lib/download'
+import { recordVisit } from '../lib/recentVisits'
 
 interface Backlink {
   id: number
@@ -272,7 +273,11 @@ export default function DocPage() {
     api
       .get<Block>('/docs/' + id)
       .then((d) => {
-        if (!cancelled) setDoc(d)
+        if (!cancelled) {
+          setDoc(d)
+          // 本机最近访问足迹（侧栏用）；读成功才记，404/失败不污染列表
+          recordVisit(id)
+        }
       })
       .catch((e) => {
         if (!cancelled) setError(e.message)
