@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.58.1](https://github.com/atbeta/notefast/compare/v0.58.0...v0.58.1) (2026-08-10)
+
+
+### Bug Fixes
+
+* **tauri:** hold splash longer and align startup backgrounds ([55bc70a](https://github.com/atbeta/notefast/commit/55bc70a3f620d76468bf484790b2ea2d609f83a2))
+* **web:** cache AI capabilities snapshot to stop React [#185](https://github.com/atbeta/notefast/issues/185) ([6619941](https://github.com/atbeta/notefast/commit/66199413b7d073eeace4fb08dfd8bba2653efb2f))
+
 ## [0.58.0](https://github.com/atbeta/notefast/compare/v0.57.0...v0.58.0) (2026-08-10)
 
 
