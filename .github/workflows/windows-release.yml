@@ -74,7 +74,8 @@ jobs:
         # 不 gate 在 tag 上：手动 dispatch 也能出 zip 供上上传到 GitHub release
         # （tag 情况下多一个 gh release upload 步骤）
         # Tauri 2 Windows 不产出 `bundle/app/`（那是 macOS / Linux 的），裸 exe 在
-        # `target/release/notefast.exe`（Tauri install / build 都生成）。
+        # `target/release/notefast-tauri.exe`（cargo 用 Cargo.toml 的 name 字段，
+        # 不是 tauri.conf.json 的 productName）。
         # GITHUB_WORKSPACE 在 bash 是 Windows 混斜杠路径（"D:\a\..."），不能直接
         # 拼给 cd；先 cd 进 workspace，再走相对路径。
         shell: bash
@@ -82,11 +83,15 @@ jobs:
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
           cd clients/tauri/src-tauri/target/release
-          # 确认 raw exe 存在（文件名跟 tauri.conf.json 的 productName 走 cargo 规则）
+          # 列出该目录下的 exe 确认名字（项目升级重命名时要看到 是 notefast-tauri.exe
+          # 还是别的；避免静默 zip 出错）
           ls -la notefast*.exe
           TAG="${{ github.ref_name }}"
           # ZIP 名形如 NoteFast-0.56.0-portable-windows.zip
           ZIP="NoteFast-${TAG#v}-portable-windows.zip"
+          # cargo 出来的 exe 名是 Cargo.toml 的 name（notefast-tauri）。
+          # 复制为 notefast.exe 让 README 文档 / 用户命令一致。
+          cp notefast-tauri.exe notefast.exe
           # 便携模式标记文件 —— 壳层读到它就走同目录 data/，不再是 AppData
           : > notefast-portable
           # README（随 zip 走，用户解压能看到）
@@ -102,8 +107,26 @@ jobs:
             · 如要重装为标准版，卸载后到 %APPDATA%\com.notefast.desktop 删数据
           EOF
           # 7z 在 windows-latest runner 上默认安装；用 7z 压缩快且免依赖
-          7z a -r "$ZIP" notefast*.exe notefast-portable README-PORTABLE.txt
+          7z a -r "$ZIP" notefast.exe notefast-portable README-PORTABLE.txt
           echo "=== portable zip ===" && ls -la "$ZIP"
+
+      - name: Attach portable zip to GitHub Release
+        # 只 tag 跑：dispatch 没 release 可上传
+        if: github.ref_type == 'tag'
+        working-directory: clients/tauri/src-tauri/target/release
+        env:
+          GH_TOKEN: *** github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          ZIP="NoteFast-${TAG#v}-portable-windows.zip"
+          # release-please 与 tag 推送并发，等 Release 对象出现（最多 150s）
+          for ($i = 0; $i -lt 30; $i++) {
+            if (gh release view $TAG 2>$null) { break }
+            Start-Sleep -Seconds 5
+          }
+          ls -la "$ZIP"
           gh release upload "$TAG" "$ZIP" --clobber
 
       - name: Upload installer artifact
