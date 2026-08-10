@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.57.0](https://github.com/atbeta/notefast/compare/v0.56.0...v0.57.0) (2026-08-10)
+
+
+### Features
+
+* **tauri:** windows portable zip alongside NSIS installer ([96f1d56](https://github.com/atbeta/notefast/commit/96f1d565fdd22c3deede6db7cabf654acf38cf69))
+
+
+### Bug Fixes
+
+* **ci:** cd to workspace first, then relative path ([80f9e16](https://github.com/atbeta/notefast/commit/80f9e16c2ab5b2d33a3ad9dd038cc93d1c19ca05))
+* **ci:** portable artifact path points to target/release (was bundle/app) ([8a3019b](https://github.com/atbeta/notefast/commit/8a3019bde6a997c41719b17ec7f9bbb166f4996d))
+* **ci:** portable zip reads raw exe from target/release, not bundle/app ([edbbcf0](https://github.com/atbeta/notefast/commit/edbbcf01f09e3600449c65d4d24a77e07f7d5792))
+* **ci:** portable zip step uses cd instead of working-directory ([7f8219d](https://github.com/atbeta/notefast/commit/7f8219d2346b1c62ee5fd0368b4a786899b134cc))
+* **ci:** separate portable zip build from release upload; rename exe ([c13aec0](https://github.com/atbeta/notefast/commit/c13aec030a58300bea603e8970078b275e75495c))
+* **ci:** valid YAML — use \${{ github.token }} instead of *** placeholder ([b95cb6d](https://github.com/atbeta/notefast/commit/b95cb6d96fd1d3a4031c988c962ee2b2e549ff4e))
+
 ## [0.56.0](https://github.com/atbeta/notefast/compare/v0.55.0...v0.56.0) (2026-08-09)
 
 
