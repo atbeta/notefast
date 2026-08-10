@@ -71,7 +71,8 @@ jobs:
           gh release upload $TAG *.exe --clobber
 
       - name: Build portable zip (app bundle + marker + README)
-        if: github.ref_type == 'tag'
+        # 不 gate 在 tag 上：手动 dispatch 也能出 zip 供上上传到 GitHub release
+        # （tag 情况下多一个 gh release upload 步骤）
         working-directory: clients/tauri/src-tauri/target/release/bundle/app
         shell: bash
         run: |
