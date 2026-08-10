@@ -11,9 +11,15 @@ NoteFast automatically indexes every note — full-text and semantic — links r
 Grab the latest installer from [GitHub Releases](https://github.com/atbeta/notefast/releases):
 
 - **macOS** — signed & notarized DMG; embeds the local server, no runtime dependencies
-- **Windows** — Tauri-based installer
+- **Windows** — Tauri-based installer (NSIS) **or** a [portable zip](#windows-portable-zip) for USB / no-install use
 
 The app runs a local engine on `127.0.0.1` and stores everything under the per-user data directory. No account, no cloud required.
+
+### Windows portable zip
+
+If you prefer not to install (e.g., running from a USB stick or a read-only folder), grab `NoteFast-<version>-portable-windows.zip` from the release. Extract anywhere, run `notefast.exe`. Data lives in the same folder under `data/`, so the whole tree is your portable install — copy/move/backup by moving the folder. No auto-update; download a new zip when you want to upgrade.
+
+How it works: the zip contains an empty `notefast-portable` marker file alongside `notefast.exe`. The shell sees the marker and routes user data to `<exe>/data/` instead of `%APPDATA%\com.notefast.desktop\`. One binary, two storage modes — selected at runtime by what the shell finds next to itself.
 
 ### Docker (self-hosted server)
 

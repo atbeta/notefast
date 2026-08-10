@@ -86,8 +86,27 @@ fn resolve_engine_dir(app: &AppHandle) -> Result<PathBuf, String> {
     ))
 }
 
-/// 数据目录：%APPDATA%/NoteFast/data（macOS 壳为 ~/Library/Application Support/NoteFast/ 的对应物）
+/// 便携模式标记文件：存在于 exe 父目录时启用。发布便携版 zip 时手动用空文件填入，
+/// 不存在则认为是 NSIS 安装版（走 AppData）。
+const PORTABLE_MARKER: &str = "notefast-portable";
+
+/// 数据目录：
+/// - 便携模式（exe 同目录存在 `notefast-portable`）→ `<exe 父目录>/data`，整个文件夹复制走即可
+/// - NSIS 安装模式 → `%APPDATA%/com.notefast.desktop/data`（macOS 壳同理）
+/// - `NOTEFAST_DATA_DIR` 环境变量可覆盖（CI / 自定义部署）
 fn default_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Ok(custom) = std::env::var("NOTEFAST_DATA_DIR") {
+        let custom = custom.trim();
+        if !custom.is_empty() {
+            return Ok(PathBuf::from(custom));
+        }
+    }
+    if let Some(exe_dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf())) {
+        let marker = exe_dir.join(PORTABLE_MARKER);
+        if marker.is_file() {
+            return Ok(exe_dir.join("data"));
+        }
+    }
     let base = app
         .path()
         .app_data_dir()

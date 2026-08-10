@@ -45,14 +45,16 @@ jobs:
         working-directory: clients/tauri
         run: bun run prepare:engine
 
-      - name: Build NSIS installer
+      - name: Build NSIS installer + app bundle
         working-directory: clients/tauri
         run: |
           # clients/tauri 非 bun workspace 包，必须单独安装（@tauri-apps/cli 在 node_modules/.bin）
           bun install
+          # tauri.conf.json 的 bundle.targets = ["nsis", "app"] —— 同一次构建同时产出
+          # NSIS 安装包（用户首次安装）和 app bundle（裸 exe，用于便携 zip）。
           bun run build
 
-      - name: Attach to GitHub Release
+      - name: Attach NSIS installer to GitHub Release
         if: github.ref_type == 'tag'
         working-directory: clients/tauri/src-tauri/target/release/bundle/nsis
         env:
@@ -68,9 +70,46 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Error "Release $TAG 未找到"; exit 1 }
           gh release upload $TAG *.exe --clobber
 
-      - name: Upload installer
+      - name: Build portable zip (app bundle + marker + README)
+        if: github.ref_type == 'tag'
+        working-directory: clients/tauri/src-tauri/target/release/bundle/app
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          # ZIP 名形如 NoteFast-0.56.0-portable-windows.zip
+          ZIP="NoteFast-${TAG#v}-portable-windows.zip"
+          # 便携模式标记文件 —— 壳层读到它就走同目录 data/，不再是 AppData
+          : > notefast-portable
+          # README（随 zip 走，用户解压能看到）
+          cat > README-PORTABLE.txt <<EOF
+          NoteFast 便携版 ${TAG}
+
+          解压后直接运行 notefast.exe 即可。数据（含文档、设置、图床缓存）会保存在
+          notefast.exe 同目录下的 data/ 文件夹里。整个文件夹可随时复制 / U 盘携带 / 备份。
+
+          注意：
+            · 不要删除 notefast-portable 文件 —— 它是便携模式标记
+            · 便携版不自动更新；新版本请到 GitHub Releases 手动下
+            · 如要重装为标准版，卸载后到 %APPDATA%\com.notefast.desktop 删数据
+          EOF
+          # 7z 在 windows-latest runner 上默认安装；用 7z 压缩快且免依赖
+          7z a -r "$ZIP" notefast.exe notefast-portable README-PORTABLE.txt
+          echo "=== portable zip ===" && ls -la "$ZIP"
+          gh release upload "$TAG" "$ZIP" --clobber
+
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NoteFast-windows-${{ github.ref_name }}
+          name: NoteFast-windows-installer-${{ github.ref_name }}
           path: clients/tauri/src-tauri/target/release/bundle/nsis/*.exe
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload portable zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NoteFast-windows-portable-${{ github.ref_name }}
+          path: clients/tauri/src-tauri/target/release/bundle/app/NoteFast-*-portable-windows.zip
+          retention-days: 14
           if-no-files-found: error
