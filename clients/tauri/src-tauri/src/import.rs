@@ -20,8 +20,9 @@ use tauri::{AppHandle, Manager};
 
 /// 等 engine 就绪（engine 由前端启动页拉起，文件打开可能先于它完成）
 const ENGINE_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
-/// 导入完成到导航的固定延时：让 app.js 的启动跳转先落地（见模块注释）
-const NAV_DELAY: Duration = Duration::from_millis(800);
+/// 导入完成到导航的固定延时：让 app.js 的启动跳转先落地（见模块注释）。
+/// 须 ≥ 启动页最短停留 + 淡出（app.js MIN_SPLASH_MS + FADE_MS ≈ 1.7s）。
+const NAV_DELAY: Duration = Duration::from_millis(1800);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// 判断 Markdown 后缀（与 macOS 壳的集合一致）

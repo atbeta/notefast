@@ -146,11 +146,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![engine_start])
         .setup(move |app| {
             // 启动闪屏：conf 里 visible=false，先按系统主题设 webview 底色再 show。
-            // 否则静态 backgroundColor=#18181b 会在亮色 Windows 上先闪一块黑再变白启动页。
+            // 色值对齐 ui/index.html 的 --bg（#f4f5f9 / #15161a），避免先闪 conf 默认深色。
             if let Some(win) = app.get_webview_window("main") {
                 let (r, g, b) = match win.theme() {
-                    Ok(tauri::Theme::Light) => (0xfa, 0xfa, 0xfa),
-                    _ => (0x18, 0x18, 0x1b),
+                    Ok(tauri::Theme::Light) => (0xf4, 0xf5, 0xf9),
+                    _ => (0x15, 0x16, 0x1a),
                 };
                 let _ = win.set_background_color(Some(tauri::webview::Color::from((r, g, b, 255))));
                 let _ = win.show();
