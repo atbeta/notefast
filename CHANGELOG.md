@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.58.2](https://github.com/atbeta/notefast/compare/v0.58.1...v0.58.2) (2026-08-10)
+
+
+### Bug Fixes
+
+* **macos:** restore a single populated window on Dock reopen ([bdd6df0](https://github.com/atbeta/notefast/commit/bdd6df095107d52809ec475748b533c32c0bad66))
+
 ## [0.58.1](https://github.com/atbeta/notefast/compare/v0.58.0...v0.58.1) (2026-08-10)
 
 
