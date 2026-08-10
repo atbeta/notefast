@@ -73,10 +73,13 @@ jobs:
       - name: Build portable zip (app bundle + marker + README)
         # 不 gate 在 tag 上：手动 dispatch 也能出 zip 供上上传到 GitHub release
         # （tag 情况下多一个 gh release upload 步骤）
-        working-directory: clients/tauri/src-tauri/target/release/bundle/app
+        # 用 $GITHUB_WORKSPACE + cd 脚本里：不走 working-directory，避免 bash step
+        # 在 windows-latest runner 上被传 Windows 路径却吃 Unix 斜杠——上面那个
+        # dispatch 报 "The directory name is invalid" 就是这个原因
         shell: bash
         run: |
           set -euo pipefail
+          cd "$GITHUB_WORKSPACE/clients/tauri/src-tauri/target/release/bundle/app"
           TAG="${{ github.ref_name }}"
           # ZIP 名形如 NoteFast-0.56.0-portable-windows.zip
           ZIP="NoteFast-${TAG#v}-portable-windows.zip"
