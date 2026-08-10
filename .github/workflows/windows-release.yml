@@ -141,6 +141,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: NoteFast-windows-portable-${{ github.ref_name }}
-          path: clients/tauri/src-tauri/target/release/bundle/app/NoteFast-*-portable-windows.zip
+          path: clients/tauri/src-tauri/target/release/NoteFast-*-portable-windows.zip
           retention-days: 14
           if-no-files-found: error
