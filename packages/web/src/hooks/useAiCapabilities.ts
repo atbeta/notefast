@@ -9,6 +9,9 @@
  *  - ready：首探完成（失败也算 ready，按全 false 处理）
  *  - 探测失败（网络错 / 401 等）一律视为"全 false"，让上游按"未配置"
  *    处理；具体错误由 useServerHealth 单独接管
+ *
+ * 注意：getSnapshot 必须返回引用稳定的快照——useSyncExternalStore 用
+ * Object.is 比较，每次 new 对象会触发无限重渲染（React #185）。
  */
 
 import { useSyncExternalStore } from 'react'
@@ -24,11 +27,18 @@ export interface AiCapabilities {
 export type AiCapabilitiesSnapshot = AiCapabilities & { ready: boolean }
 
 const EMPTY: AiCapabilities = { chat: false, embedding: false, reranker: false }
+const SERVER_SNAPSHOT: AiCapabilitiesSnapshot = { ...EMPTY, ready: false }
 
 let snapshot: AiCapabilities = EMPTY
 let loaded = false
+/** 缓存给 useSyncExternalStore 的不可变快照；仅在数据变化时换新引用 */
+let clientSnapshot: AiCapabilitiesSnapshot = SERVER_SNAPSHOT
 let mounted = 0
 const listeners = new Set<() => void>()
+
+function rebuildClientSnapshot(): void {
+  clientSnapshot = { ...snapshot, ready: loaded }
+}
 
 function emit(): void {
   listeners.forEach((l) => l())
@@ -46,6 +56,7 @@ async function fetchCapabilities(): Promise<void> {
     snapshot = EMPTY
   }
   loaded = true
+  rebuildClientSnapshot()
   emit()
 }
 
@@ -64,11 +75,11 @@ function subscribe(listener: () => void): () => void {
 }
 
 function getSnapshot(): AiCapabilitiesSnapshot {
-  return { ...snapshot, ready: loaded }
+  return clientSnapshot
 }
 
 function getServerSnapshot(): AiCapabilitiesSnapshot {
-  return { ...EMPTY, ready: false }
+  return SERVER_SNAPSHOT
 }
 
 export function useAiCapabilities(): AiCapabilitiesSnapshot {
@@ -84,6 +95,7 @@ export function getAiCapabilitiesLoaded(): boolean {
 export function refreshAiCapabilities(): void {
   loaded = false
   snapshot = EMPTY
+  rebuildClientSnapshot()
   emit()
   void fetchCapabilities()
 }
