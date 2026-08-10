@@ -44,6 +44,7 @@ import { useEditorDraft } from '../hooks/useEditorDraft'
 import { Kbd, Tooltip, useToast } from '../components/ui'
 import { deliverExport, fetchDocExportFile } from '../lib/download'
 import { recordVisit } from '../lib/recentVisits'
+import { useAiCapabilities } from '../hooks/useAiCapabilities'
 
 interface Backlink {
   id: number
@@ -162,6 +163,7 @@ export default function DocPage() {
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const toast = useToast()
+  const ai = useAiCapabilities()
   const [doc, setDoc] = useState<Block | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -484,6 +486,10 @@ export default function DocPage() {
 
   const handleSuggestTitle = async () => {
     if (!doc || generatingTitle || aiExclude) return
+    if (!ai.chat) {
+      toast.info({ title: t('doc.generateTitleNeedChat') })
+      return
+    }
     const texts: string[] = []
     const walk = (b: Block) => { if (b.content && b.type !== 'document') texts.push(b.content); b.children.forEach(walk) }
     walk(doc)
@@ -500,7 +506,9 @@ export default function DocPage() {
         await api.patch('/blocks/' + id, { content: res.title })
         setRefreshKey((k) => k + 1)
       }
-    } catch { /* silent fail */ }
+    } catch {
+      toast.error({ title: t('doc.generateTitleNeedChat') })
+    }
     finally { setGeneratingTitle(false) }
   }
 
@@ -804,10 +812,12 @@ export default function DocPage() {
                 className="input-underline font-bold text-foreground"
                 placeholder={t('doc.untitledDocument')}
               />
+              {/* 未配置 Chat 时不展示：避免「可点但静默失败」；ai_exclude 仍显示禁用态 */}
+              {(ai.chat || aiExclude) && (
               <button
                 type="button"
                 onClick={handleSuggestTitle}
-                disabled={generatingTitle || aiExclude}
+                disabled={generatingTitle || aiExclude || !ai.chat}
                 className="absolute right-1 sm:-right-8 top-3 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-50 p-1.5 text-muted-foreground hover:text-foreground transition-all rounded disabled:opacity-30"
                 title={aiExclude ? t('doc.aiHiddenNoTitle') : t('doc.generateTitleAi')}
               >
@@ -817,6 +827,7 @@ export default function DocPage() {
                   <Sparkles className="w-4 h-4" strokeWidth={1.75} />
                 )}
               </button>
+              )}
             </div>
 
             {/* Meta row — 阅读态展示，融入标题与正文之间 */}

@@ -6,6 +6,7 @@
  *
  * 取 /api/v1/ai/capabilities（无 key 版本），结果原样转发：
  *  - { chat, embedding, reranker } 为三个能力开关
+ *  - ready：首探完成（失败也算 ready，按全 false 处理）
  *  - 探测失败（网络错 / 401 等）一律视为"全 false"，让上游按"未配置"
  *    处理；具体错误由 useServerHealth 单独接管
  */
@@ -18,6 +19,9 @@ export interface AiCapabilities {
   embedding: boolean
   reranker: boolean
 }
+
+/** 含探测完成标志，便于空态区分「还在探测」与「确认未配置」 */
+export type AiCapabilitiesSnapshot = AiCapabilities & { ready: boolean }
 
 const EMPTY: AiCapabilities = { chat: false, embedding: false, reranker: false }
 
@@ -59,15 +63,15 @@ function subscribe(listener: () => void): () => void {
   }
 }
 
-function getSnapshot(): AiCapabilities {
-  return snapshot
+function getSnapshot(): AiCapabilitiesSnapshot {
+  return { ...snapshot, ready: loaded }
 }
 
-function getServerSnapshot(): AiCapabilities {
-  return EMPTY
+function getServerSnapshot(): AiCapabilitiesSnapshot {
+  return { ...EMPTY, ready: false }
 }
 
-export function useAiCapabilities(): AiCapabilities {
+export function useAiCapabilities(): AiCapabilitiesSnapshot {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 }
 

@@ -48,6 +48,7 @@ import { Copy, Link2, Sparkles } from 'lucide-react'
 import { blocksToMarkdown, type Block } from '@notefast/core'
 import { dispatchAskAi } from '../../lib/askAi'
 import { useToast } from '../ui'
+import { useAiCapabilities } from '../../hooks/useAiCapabilities'
 
 /** 与 BlockSurface.QUOTE_MAX 对齐，避免长选区塞爆聊天草稿 */
 const QUOTE_MAX = 600
@@ -105,6 +106,7 @@ export function useDocContextMenu({
 }: UseDocContextMenuOptions): UseDocContextMenuResult {
   const { t } = useTranslation()
   const toast = useToast()
+  const ai = useAiCapabilities()
   const triggerRef = useRef<HTMLElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const [snap, setSnap] = useState<{
@@ -183,7 +185,8 @@ export function useDocContextMenu({
         })
       }
 
-      if (askQuote) {
+      // 未配置 Chat 时不展示：打开面板只会看到空态
+      if (askQuote && ai.chat) {
         out.push({
           id: 'ask-ai',
           label: selection
@@ -196,7 +199,7 @@ export function useDocContextMenu({
 
       return out
     },
-    [blockIndex, copyText, dispatchAskAiWithQuote, t],
+    [ai.chat, blockIndex, copyText, dispatchAskAiWithQuote, t],
   )
 
   const computePos = useCallback((clientX: number, clientY: number, host: HTMLElement): MenuPos => {

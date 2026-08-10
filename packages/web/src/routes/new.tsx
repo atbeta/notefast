@@ -8,10 +8,14 @@ import { currentLocale } from '../lib/time'
 import PageHeader from '../components/PageHeader'
 import SubNavTabs from '../components/SubNavTabs'
 import TagPickerPopover from '../components/TagPickerPopover'
+import { useAiCapabilities } from '../hooks/useAiCapabilities'
+import { useToast } from '../components/ui'
 
 export default function NewDocPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const toast = useToast()
+  const ai = useAiCapabilities()
   const [notebookId, setNotebookId] = useState('')
   const [title, setTitle] = useState('')
   const [markdown, setMarkdown] = useState('')
@@ -87,6 +91,10 @@ export default function NewDocPage() {
   const handleSuggestTitle = async () => {
     const source = markdown.trim() || title.trim()
     if (!source || generating) return
+    if (!ai.chat) {
+      toast.info({ title: t('newDoc.aiTitleNeedChat') })
+      return
+    }
     setGenerating(true)
     try {
       const res = await request<{ title: string; summary: string }>('/ai/suggest-title', {
@@ -95,7 +103,9 @@ export default function NewDocPage() {
       })
       if (!title.trim()) setTitle(res.title)
       else if (!title.trim().includes(res.title)) setTitle(res.title)
-    } catch { /* AI 服务不可用，静默失败 */ }
+    } catch {
+      toast.error({ title: t('newDoc.aiTitleNeedChat') })
+    }
     finally { setGenerating(false) }
   }
 
@@ -174,6 +184,7 @@ export default function NewDocPage() {
           <div>
             <div className="flex items-baseline justify-between mb-1">
               <label htmlFor="doc-title" className="text-[12px] font-medium text-muted-foreground">{t('common.title')}</label>
+              {ai.chat && (
               <button
                 type="button"
                 onClick={handleSuggestTitle}
@@ -188,6 +199,7 @@ export default function NewDocPage() {
                 )}
                 {generating ? t('newDoc.generating') : t('newDoc.aiTitle')}
               </button>
+              )}
             </div>
             <input
               id="doc-title"

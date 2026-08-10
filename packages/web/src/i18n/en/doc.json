@@ -35,6 +35,8 @@
     "viewArchived": "View archive",
     "aiHiddenNoTitle": "Hidden from AI — title cannot be generated",
     "generateTitleAi": "Generate title with AI",
+    "generateTitleNeedChat": "Configure a Chat model first",
+    "aiContinueNeedChat": "Configure a Chat model to use AI continue",
     "charCount": "chars",
     "updatedAtLabel": "Updated {{time}}",
     "createdAtLabel": "Created {{time}}",

@@ -13,9 +13,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Crosshair, FileText, Loader2, Network, RefreshCw, Scan, Search, X } from 'lucide-react'
-import { useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
+import { useAiCapabilities } from '../hooks/useAiCapabilities'
 import PageHeader from '../components/PageHeader'
 import EntityGraph from '../components/EntityGraph'
 import { EntityMentions } from '../components/EntityPanel'
@@ -198,6 +199,7 @@ function DetailPanel({
 
 export default function GraphPage() {
   const { t } = useTranslation()
+  const ai = useAiCapabilities()
   const location = useLocation()
   const initial = useMemo(() => parseGraphUrl(location.search), [location.search])
   const [mode, setMode] = useState<GraphMode>(initial.mode)
@@ -485,24 +487,35 @@ export default function GraphPage() {
               <Network className="w-5 h-5" />
             </div>
             <h3 className="text-[15px] font-medium text-foreground mb-1.5">
-              {mode === 'docs'
-                ? titleQ
-                  ? t('graph.emptyNoResults')
-                  : t('graph.emptyInitial')
-                : center
-                  ? t('graph.emptyNoRelated')
-                  : t('graph.emptyInitial')}
+              {ai.ready && !ai.chat && !center && !(mode === 'docs' && titleQ)
+                ? t('graph.emptyNeedChat')
+                : mode === 'docs'
+                  ? titleQ
+                    ? t('graph.emptyNoResults')
+                    : t('graph.emptyInitial')
+                  : center
+                    ? t('graph.emptyNoRelated')
+                    : t('graph.emptyInitial')}
             </h3>
             <p className="text-[13px] text-muted-foreground mb-5 max-w-[340px] leading-relaxed">
-              {mode === 'docs'
-                ? titleQ
-                  ? t('graph.emptyNoResultsDesc')
-                  : t('graph.emptyInitialDesc')
-                : center
-                  ? t('graph.emptyNoRelatedDesc')
-                  : t('graph.emptyInitialEntityDesc')}
+              {ai.ready && !ai.chat && !center && !(mode === 'docs' && titleQ)
+                ? t('graph.emptyNeedChatDesc')
+                : mode === 'docs'
+                  ? titleQ
+                    ? t('graph.emptyNoResultsDesc')
+                    : t('graph.emptyInitialDesc')
+                  : center
+                    ? t('graph.emptyNoRelatedDesc')
+                    : t('graph.emptyInitialEntityDesc')}
             </p>
-            {center && (
+            {ai.ready && !ai.chat && !center && !(mode === 'docs' && titleQ) ? (
+              <Link
+                to="/settings/ai"
+                className="rounded-md bg-primary px-3 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:bg-primary-hover transition-colors"
+              >
+                {t('entities.configureChat')}
+              </Link>
+            ) : center ? (
               <button
                 type="button"
                 onClick={resetView}
@@ -510,7 +523,7 @@ export default function GraphPage() {
               >
                 {t('graph.backToOverview')}
               </button>
-            )}
+            ) : null}
           </div>
         ) : error ? (
           <div className="flex-1 min-h-[55vh] card rounded-xl flex items-center justify-center text-[13px] text-destructive">

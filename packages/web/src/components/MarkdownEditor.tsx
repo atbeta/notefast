@@ -22,6 +22,7 @@ import SelectionBubble from './editor/SelectionBubble'
 import type { SelectionAnchor } from './editor/cm/selectionReport'
 import { RefineSession } from './editor/refineSession'
 import { useAiWriting } from '../ai/useAiWriting'
+import { useAiCapabilities } from '../hooks/useAiCapabilities'
 
 interface MarkdownEditorProps {
   docId: string
@@ -82,6 +83,7 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
   const [refineRect, setRefineRect] = useState<SelectionAnchor['rect'] | null>(null)
   const refineSessionRef = useRef<RefineSession | null>(null)
 
+  const ai = useAiCapabilities()
   const aiWriting = useAiWriting()
 
   const lastSavedContentRef = useRef('')
@@ -252,6 +254,10 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
 
   const handleAiContinue = useCallback(() => {
     if (aiWriting.isStreaming || refineSessionRef.current) return
+    if (!ai.chat) {
+      toast.info({ title: t('doc.aiContinueNeedChat') })
+      return
+    }
     let accumulated = ''
     void aiWriting.streamContinue(content, {
       onToken: (token) => {
@@ -260,8 +266,9 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
       },
     }).catch(() => {
       setGhostText('')
+      toast.error({ title: t('aiWrite.failed') })
     })
-  }, [content, aiWriting])
+  }, [ai.chat, content, aiWriting, toast, t])
 
   // AI 续写 ghost：Tab 接受（插入光标处），Esc / 任意输入取消（由 CM keymap 与 updateListener 触发）
   const handleGhostAccept = useCallback(() => {

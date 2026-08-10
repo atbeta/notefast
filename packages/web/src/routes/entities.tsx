@@ -11,11 +11,12 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { BookMarked, ChevronRight, GitMerge, Loader2, Search, Sparkles, Waypoints } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
+import { useAiCapabilities } from '../hooks/useAiCapabilities'
 import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { ListRowsSkeleton, useToast } from '../components/ui'
@@ -45,6 +46,7 @@ export default function EntitiesPage() {
   const { t } = useTranslation()
   const toast = useToast()
   const navigate = useNavigate()
+  const ai = useAiCapabilities()
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
@@ -194,8 +196,16 @@ export default function EntitiesPage() {
             </div>
             <h3 className="text-[15px] font-medium text-foreground mb-1.5">{t('entities.emptyTitle')}</h3>
             <p className="text-[13px] text-muted-foreground mb-5 max-w-[300px] leading-relaxed">
-              {t('entities.emptyDesc')}
+              {ai.ready && !ai.chat ? t('entities.emptyNeedChatDesc') : t('entities.emptyDesc')}
             </p>
+            {ai.ready && !ai.chat && (
+              <Link
+                to="/settings/ai"
+                className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:bg-primary-hover transition-colors"
+              >
+                {t('entities.configureChat')}
+              </Link>
+            )}
           </div>
         ) : (
           <>

@@ -37,6 +37,8 @@
     "emptyNoRelated": "No related entities found",
     "emptyNoResultsDesc": "Try a different title keyword.",
     "emptyInitialDesc": "Once you write documents, shared entities and references weave your notes into a graph.",
+    "emptyNeedChat": "The graph needs a Chat model for entity extraction",
+    "emptyNeedChatDesc": "Configure Chat in Settings — entities are recognized as you write and weave into a relatedness graph.",
     "emptyNoRelatedDesc": "This entity doesn't have enough co-occurrence links yet; try focusing on another entity.",
     "emptyInitialEntityDesc": "Once you write documents, AI automatically recognizes concepts, people and tools, and their co-occurrence weaves a knowledge graph here.",
     "backToOverview": "Back to overview",
@@ -56,6 +58,8 @@
     "description": "Concepts, people, tools and documents automatically recognized by AI on write, sorted by mention count.",
     "emptyTitle": "No entities yet",
     "emptyDesc": "Once you write documents, AI automatically recognizes the concepts, people and tools inside, gradually building your knowledge graph here.",
+    "emptyNeedChatDesc": "Entity recognition needs a Chat model. Configure it in Settings — concepts, people and tools are extracted as you write.",
+    "configureChat": "Configure Chat",
     "searchPlaceholder": "Search entities…",
     "noMatch": "No entities match “{{query}}”",
     "noKind": "No “{{kind}}” entities yet",
@@ -74,7 +78,8 @@
     "noRelatedNotes": "No related notes",
     "title": "Entities",
     "aiRecognize": "Entities automatically recognized by AI on write",
-    "noEntitiesYet": "No entities recognized in this document yet"
+    "noEntitiesYet": "No entities recognized in this document yet",
+    "noEntitiesNeedChat": "Configure Chat to recognize entities in this document as you write"
   },
   "entityGraph": {
     "layoutComputing": "Computing layout…",

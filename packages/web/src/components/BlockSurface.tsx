@@ -21,6 +21,7 @@ import { Copy, Link2, MoreVertical, Sparkles } from 'lucide-react'
 import { blocksToMarkdown, type Block } from '@notefast/core'
 import { dispatchAskAi } from '../lib/askAi'
 import { useToast } from './ui'
+import { useAiCapabilities } from '../hooks/useAiCapabilities'
 
 /** 预填引用的长度上限，避免整篇长文塞进输入框 */
 const QUOTE_MAX = 600
@@ -36,6 +37,7 @@ interface BlockHandleProps {
 export function BlockHandle({ block, className }: BlockHandleProps) {
   const { t } = useTranslation()
   const toast = useToast()
+  const ai = useAiCapabilities()
   const menuId = useId()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -130,12 +132,15 @@ export function BlockHandle({ block, className }: BlockHandleProps) {
       icon: <Copy className={iconCls} strokeWidth={1.75} />,
       onSelect: handleCopyContent,
     },
-    {
-      id: 'ask-ai',
-      label: t('block.askAi'),
-      icon: <Sparkles className={iconCls} strokeWidth={1.75} />,
-      onSelect: handleAskAi,
-    },
+    // 未配置 Chat 时不展示：打开面板只会看到空态
+    ...(ai.chat
+      ? [{
+          id: 'ask-ai',
+          label: t('block.askAi'),
+          icon: <Sparkles className={iconCls} strokeWidth={1.75} />,
+          onSelect: handleAskAi,
+        }]
+      : []),
   ]
 
   // 打开后常显（避免移入菜单时消失）。

@@ -37,6 +37,8 @@
     "emptyNoRelated": "未找到相关实体",
     "emptyNoResultsDesc": "换个标题关键词试试。",
     "emptyInitialDesc": "写入文档后，共享实体与引用会把笔记连成关联图谱。",
+    "emptyNeedChat": "图谱依赖 Chat 模型抽取实体",
+    "emptyNeedChatDesc": "在设置中配置 Chat 后，写入文档时会自动识别概念并织成关联图谱。",
     "emptyNoRelatedDesc": "该实体还没有足够的共现关联，换个实体聚焦试试。",
     "emptyInitialEntityDesc": "写入文档后，AI 会自动识别其中的概念、人物与工具，共现关系会在这里织成一张知识图谱。",
     "backToOverview": "返回总览",
@@ -56,6 +58,8 @@
     "description": "AI 在写入时自动识别的概念、人物、工具与文档，按提及次数排序。",
     "emptyTitle": "还没有实体",
     "emptyDesc": "写入文档后，AI 会自动识别其中的概念、人物与工具，在这里逐步沉淀知识关联。",
+    "emptyNeedChatDesc": "实体识别需要 Chat 模型。在设置中配置后，写入文档时会自动抽取概念、人物与工具。",
+    "configureChat": "去配置 Chat",
     "searchPlaceholder": "搜索实体…",
     "noMatch": "没有匹配「{{query}}」的实体",
     "noKind": "暂无「{{kind}}」类实体",
@@ -74,7 +78,8 @@
     "noRelatedNotes": "暂无相关笔记",
     "title": "实体",
     "aiRecognize": "AI 在写入时自动识别的实体",
-    "noEntitiesYet": "本文尚未识别到实体"
+    "noEntitiesYet": "本文尚未识别到实体",
+    "noEntitiesNeedChat": "配置 Chat 后，写入时会自动识别本文实体"
   },
   "entityGraph": {
     "layoutComputing": "计算布局…",

@@ -77,6 +77,7 @@
     "tabCreate": "新建文档",
     "tabImport": "导入",
     "aiTitleHint": "AI 生成标题",
+    "aiTitleNeedChat": "需先配置 Chat 模型",
     "generating": "生成中…",
     "aiTitle": "AI 标题",
     "untitledPlaceholder": "无标题文档",

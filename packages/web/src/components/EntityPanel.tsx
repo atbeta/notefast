@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
+import { useAiCapabilities } from '../hooks/useAiCapabilities'
 import {
   entityDocStatusLabel,
   type DocEntity,
@@ -82,6 +83,7 @@ interface EntityPanelProps {
 
 export default function EntityPanel({ docId, variant }: EntityPanelProps) {
   const { t } = useTranslation()
+  const ai = useAiCapabilities()
   const { data, error, loading } = useApiQuery(
     () => api.get<{ entities: DocEntity[] }>(`/docs/${docId}/entities`),
     [docId],
@@ -114,7 +116,9 @@ export default function EntityPanel({ docId, variant }: EntityPanelProps) {
         <div className="px-1 text-[12px] text-muted-foreground/70">{t('common.loading')}</div>
       ) : empty ? (
         <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
-          {t('entityPanel.noEntitiesYet')}
+          {ai.ready && !ai.chat
+            ? t('entityPanel.noEntitiesNeedChat')
+            : t('entityPanel.noEntitiesYet')}
         </div>
       ) : (
         <>
