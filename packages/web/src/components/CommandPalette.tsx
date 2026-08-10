@@ -280,6 +280,9 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('command.placeholder')}
+            // 全局 input:focus-visible outline 在透明无圆角输入上会画出丑的直角框；
+            // 面板本身已是焦点上下文，同 AIChatPanel 用 data-no-focus-ring 跳过。
+            data-no-focus-ring
             className="flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground outline-none"
           />
           <Kbd className="text-[11px]">esc</Kbd>
