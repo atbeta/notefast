@@ -45,13 +45,12 @@ jobs:
         working-directory: clients/tauri
         run: bun run prepare:engine
 
-      - name: Build NSIS installer + app bundle
+      - name: Build NSIS installer
         working-directory: clients/tauri
         run: |
           # clients/tauri 非 bun workspace 包，必须单独安装（@tauri-apps/cli 在 node_modules/.bin）
           bun install
-          # tauri.conf.json 的 bundle.targets = ["nsis", "app"] —— 同一次构建同时产出
-          # NSIS 安装包（用户首次安装）和 app bundle（裸 exe，用于便携 zip）。
+          # tauri.conf.json bundle.targets = ["nsis"]；便携 zip 另取 target/release 裸 exe
           bun run build
 
       - name: Attach NSIS installer to GitHub Release
@@ -70,32 +69,36 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Error "Release $TAG 未找到"; exit 1 }
           gh release upload $TAG *.exe --clobber
 
-      - name: Build portable zip (raw exe + marker + README)
-        # 不 gate 在 tag 上：手动 dispatch 也能出 zip 供上上传到 GitHub release
-        # （tag 情况下多一个 gh release upload 步骤）
-        # Tauri 2 Windows 不产出 `bundle/app/`（那是 macOS / Linux 的），裸 exe 在
-        # `target/release/notefast-tauri.exe`（cargo 用 Cargo.toml 的 name 字段，
-        # 不是 tauri.conf.json 的 productName）。
-        # GITHUB_WORKSPACE 在 bash 是 Windows 混斜杠路径（"D:\a\..."），不能直接
-        # 拼给 cd；先 cd 进 workspace，再走相对路径。
+      - name: Build portable zip (exe + engine + marker + README)
+        # 不 gate 在 tag 上：手动 dispatch 也能出 zip artifact。
+        # Tauri 2 Windows 不产出 bundle/app/；裸壳在 target/release/notefast-tauri.exe。
+        # NSIS 安装布局（installer.nsi）：$INSTDIR/{主程序, engine/...}，resource_dir=安装目录。
+        # 便携包必须镜像同布局——只打裸 exe（~9MB）缺 engine（~60MB）会启动失败。
+        # GITHUB_WORKSPACE 在 bash 是 Windows 混斜杠路径，先 cd workspace 再相对路径。
         shell: bash
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          cd clients/tauri/src-tauri/target/release
-          # 列出该目录下的 exe 确认名字（项目升级重命名时要看到 是 notefast-tauri.exe
-          # 还是别的；避免静默 zip 出错）
-          ls -la notefast*.exe
           TAG="${{ github.ref_name }}"
-          # ZIP 名形如 NoteFast-0.56.0-portable-windows.zip
-          ZIP="NoteFast-${TAG#v}-portable-windows.zip"
-          # cargo 出来的 exe 名是 Cargo.toml 的 name（notefast-tauri）。
-          # 复制为 notefast.exe 让 README 文档 / 用户命令一致。
-          cp notefast-tauri.exe notefast.exe
-          # 便携模式标记文件 —— 壳层读到它就走同目录 data/，不再是 AppData
-          : > notefast-portable
-          # README（随 zip 走，用户解压能看到）
-          cat > README-PORTABLE.txt <<EOF
+          ZIP_NAME="NoteFast-${TAG#v}-portable-windows.zip"
+          RELEASE_DIR="clients/tauri/src-tauri/target/release"
+          ENGINE_SRC="clients/tauri/src-tauri/resources/engine"
+          STAGE="clients/tauri/src-tauri/target/portable-stage"
+
+          ls -la "$RELEASE_DIR"/notefast*.exe
+          test -f "$ENGINE_SRC/notefast-server.exe" || {
+            echo "engine 缺失: $ENGINE_SRC（prepare:engine 未跑或失败）" >&2
+            exit 1
+          }
+
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE/engine"
+          # cargo name → 用户可见名
+          cp "$RELEASE_DIR/notefast-tauri.exe" "$STAGE/notefast.exe"
+          # 与 NSIS $INSTDIR/engine 同布局；壳 resolve_engine_dir = resource_dir/engine
+          cp -R "$ENGINE_SRC"/. "$STAGE/engine/"
+          : > "$STAGE/notefast-portable"
+          cat > "$STAGE/README-PORTABLE.txt" <<EOF
           NoteFast 便携版 ${TAG}
 
           解压后直接运行 notefast.exe 即可。数据（含文档、设置、图床缓存）会保存在
@@ -103,32 +106,27 @@ jobs:
 
           注意：
             · 不要删除 notefast-portable 文件 —— 它是便携模式标记
+            · 不要删除 engine/ 目录 —— 内嵌服务端，缺了应用起不来
             · 便携版不自动更新；新版本请到 GitHub Releases 手动下
             · 如要重装为标准版，卸载后到 %APPDATA%\com.notefast.desktop 删数据
           EOF
-          # 7z 在 windows-latest runner 上默认安装；用 7z 压缩快且免依赖
-          7z a -r "$ZIP" notefast.exe notefast-portable README-PORTABLE.txt
-          echo "=== portable zip ===" && ls -la "$ZIP"
 
-      - name: Attach portable zip to GitHub Release
-        # 只 tag 跑：dispatch 没 release 可上传
-        if: github.ref_type == 'tag'
-        working-directory: clients/tauri/src-tauri/target/release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${{ github.ref_name }}"
-          ZIP="NoteFast-${TAG#v}-portable-windows.zip"
-          # release-please 与 tag 推送并发，等 Release 对象出现（最多 150s）
-          for ($i = 0; $i -lt 30; $i++) {
-            if (gh release view $TAG 2>$null) { break }
-            Start-Sleep -Seconds 5
-          }
-          ls -la "$ZIP"
-          gh release upload "$TAG" "$ZIP" --clobber
+          # 在 stage 内打包，保证 zip 根即运行目录（无多余父目录）
+          (
+            cd "$STAGE"
+            7z a -tzip "$ZIP_NAME" notefast.exe engine notefast-portable README-PORTABLE.txt
+          )
+          mv "$STAGE/$ZIP_NAME" "$RELEASE_DIR/$ZIP_NAME"
 
+          # 体积门禁：裸壳 zip ~2.6MB；含 engine 应接近 NSIS 量级（数十 MB）
+          ZIP_BYTES=$(wc -c < "$RELEASE_DIR/$ZIP_NAME" | tr -d ' ')
+          echo "=== portable zip ===" && ls -la "$RELEASE_DIR/$ZIP_NAME"
+          if [ "$ZIP_BYTES" -lt 20000000 ]; then
+            echo "portable zip 过小 (${ZIP_BYTES} bytes)——疑似未打入 engine" >&2
+            exit 1
+          fi
+
+      # artifact 先于 release upload：即便后续 attach 失败，仍能从 Actions 拿到产物
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
@@ -144,3 +142,30 @@ jobs:
           path: clients/tauri/src-tauri/target/release/NoteFast-*-portable-windows.zip
           retention-days: 14
           if-no-files-found: error
+
+      - name: Attach portable zip to GitHub Release
+        # 只 tag 跑：dispatch 没 release 可上传
+        # 注意：本 step 用 shell: bash，等待循环必须是 bash 语法；
+        # 勿从上面 NSIS step（默认 pwsh）复制 for ($i=...) / Start-Sleep。
+        if: github.ref_type == 'tag'
+        working-directory: clients/tauri/src-tauri/target/release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          ZIP="NoteFast-${TAG#v}-portable-windows.zip"
+          # release-please 与 tag 推送并发，等 Release 对象出现（最多 150s）
+          for _ in $(seq 1 30); do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 5
+          done
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG 未找到" >&2
+            exit 1
+          fi
+          ls -la "$ZIP"
+          gh release upload "$TAG" "$ZIP" --clobber
