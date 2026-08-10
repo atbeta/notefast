@@ -70,16 +70,20 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Error "Release $TAG 未找到"; exit 1 }
           gh release upload $TAG *.exe --clobber
 
-      - name: Build portable zip (app bundle + marker + README)
+      - name: Build portable zip (raw exe + marker + README)
         # 不 gate 在 tag 上：手动 dispatch 也能出 zip 供上上传到 GitHub release
         # （tag 情况下多一个 gh release upload 步骤）
-        # GITHUB_WORKSPACE 在 bash 是 Windows 混斜杠路径（"D:\a\..."），直接拼接
-        # 给 `cd` 会“文件不存在”。先 cd 进 workspace，后续再走相对路径。
+        # Tauri 2 Windows 不产出 `bundle/app/`（那是 macOS / Linux 的），裸 exe 在
+        # `target/release/notefast.exe`（Tauri install / build 都生成）。
+        # GITHUB_WORKSPACE 在 bash 是 Windows 混斜杠路径（"D:\a\..."），不能直接
+        # 拼给 cd；先 cd 进 workspace，再走相对路径。
         shell: bash
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          cd clients/tauri/src-tauri/target/release/bundle/app
+          cd clients/tauri/src-tauri/target/release
+          # 确认 raw exe 存在（文件名跟 tauri.conf.json 的 productName 走 cargo 规则）
+          ls -la notefast*.exe
           TAG="${{ github.ref_name }}"
           # ZIP 名形如 NoteFast-0.56.0-portable-windows.zip
           ZIP="NoteFast-${TAG#v}-portable-windows.zip"
@@ -98,7 +102,7 @@ jobs:
             · 如要重装为标准版，卸载后到 %APPDATA%\com.notefast.desktop 删数据
           EOF
           # 7z 在 windows-latest runner 上默认安装；用 7z 压缩快且免依赖
-          7z a -r "$ZIP" notefast.exe notefast-portable README-PORTABLE.txt
+          7z a -r "$ZIP" notefast*.exe notefast-portable README-PORTABLE.txt
           echo "=== portable zip ===" && ls -la "$ZIP"
           gh release upload "$TAG" "$ZIP" --clobber
 

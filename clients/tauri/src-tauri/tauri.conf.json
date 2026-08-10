@@ -29,8 +29,7 @@
   "bundle": {
     "active": true,
     "targets": [
-      "nsis",
-      "app"
+      "nsis"
     ],
     "resources": {
       "resources/engine": "engine"
