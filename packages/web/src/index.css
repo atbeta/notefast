@@ -621,9 +621,13 @@ html.theme-fading *::after {
   color: rgb(var(--foreground));
 }
 .reading-prose pre code {
+  /* 必须清掉上面 .reading-prose code 的 border：code 默认 inline，
+     多行时浏览器会给每一行画上下边框（「代码区每行浅边」的来源），无设计意图。 */
+  display: block;
   background: transparent;
   color: inherit;
   padding: 0;
+  border: 0;
   border-radius: 0;
 }
 /* 文档代码块（HighlightedCodeBlock）：代码区整体一块，无上下 padding、
