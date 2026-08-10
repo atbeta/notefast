@@ -6,6 +6,7 @@
  * - 读取（mime、immutable 缓存、404）
  * - 引用对账（/check 与 import 的 missing_assets）
  * - 孤儿回收（引用扫描推导 + 宽限期）
+ * - 显式删除（未引用可删；引用中 409）
  * - 会话 cookie 鉴权（<img> 场景，仅放行读）
  */
 
@@ -153,6 +154,38 @@ describe('AssetStore — 引用对账', () => {
     expect(res.status).toBe(201)
     const data = await res.json() as { missing_assets?: string[] }
     expect(data.missing_assets).toEqual(['e'.repeat(64)])
+  })
+})
+
+describe('AssetStore — 显式删除', () => {
+  test('未引用 → DELETE 成功；被引用 → 409 in_use；缺失 → 404', async () => {
+    const { body: free } = await upload(Buffer.from([1, 2, 3, 4, 5]), 'image/png')
+    const freeId = free.id as string
+
+    const { body: used } = await upload(Buffer.from([9, 8, 7, 6, 5]), 'image/png')
+    const usedId = used.id as string
+    const db = getDb()
+    const now = new Date().toISOString()
+    const docId = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(docId, 'T')
+    db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+      VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`).run(docId, docId, docId, 'doc', now, now)
+    db.query(`INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'paragraph', ?, 0, 1, ?, ?)`).run('p-del', docId, docId, docId, `![x](asset:${usedId})`, now, now)
+
+    const ok = await app.fetch(new Request(`http://localhost/api/v1/assets/${freeId}`, { method: 'DELETE' }))
+    expect(ok.status).toBe(200)
+    expect(readAsset(freeId)).toBeNull()
+    expect(existsSync(join(testDir, 'media', freeId))).toBe(false)
+
+    const blocked = await app.fetch(new Request(`http://localhost/api/v1/assets/${usedId}`, { method: 'DELETE' }))
+    expect(blocked.status).toBe(409)
+    const blockedBody = await blocked.json() as { error: string }
+    expect(blockedBody.error).toBe('in_use')
+    expect(readAsset(usedId)).not.toBeNull()
+
+    const missing = await app.fetch(new Request(`http://localhost/api/v1/assets/${'f'.repeat(64)}`, { method: 'DELETE' }))
+    expect(missing.status).toBe(404)
   })
 })
 

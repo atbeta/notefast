@@ -4,6 +4,7 @@
  * - POST   /api/v1/assets            上传图片（body = 原始字节，Content-Type = 图片 mime）→ { id, url, dedup }
  * - GET    /api/v1/assets            资源库列表（?limit&offset）→ { items, total }
  * - GET    /api/v1/assets/:id        读取图片（Bearer/Basic 或会话 cookie；内容寻址，强缓存）
+ * - DELETE /api/v1/assets/:id        删除未引用资源（仍被引用 → 409 in_use）
  * - POST   /api/v1/assets/gc         孤儿回收（无引用且超过宽限期的 asset 删除）
  */
 
@@ -15,6 +16,7 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import {
   collectOrphanAssets,
+  deleteAsset,
   findMissingAssets,
   getAssetUploadStatus,
   getUploadBatchStatus,
@@ -182,6 +184,22 @@ assets.get('/:id', (c) => {
       'X-Content-Type-Options': 'nosniff',
     },
   })
+})
+
+/** 删除未引用资源（资源库手动清理）；仍被引用 → 409，不静默删 */
+assets.delete('/:id', (c) => {
+  const id = c.req.param('id')
+  if (!/^[0-9a-f]{64}$/.test(id)) {
+    return c.json({ error: 'bad_request', message: '非法 asset id' }, 400)
+  }
+  const result = deleteAsset(id)
+  if (!result.ok && result.reason === 'not_found') {
+    return c.json({ error: 'not_found', message: '图片不存在' }, 404)
+  }
+  if (!result.ok) {
+    return c.json({ error: 'in_use', message: '图片仍被文档引用，无法删除' }, 409)
+  }
+  return c.json({ ok: true })
 })
 
 assets.post('/gc', (c) => {

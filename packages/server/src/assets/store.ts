@@ -7,6 +7,7 @@
  * - 引用关系不建关联表：真值在 markdown 内容里（asset:<id>），用 SQL LIKE 扫描推导，
  *   无对账代码、无漂移可能
  * - 孤儿回收：引用扫描 + 宽限期，手动触发（POST /assets/gc）
+ * - 显式删除：DELETE /assets/:id，仅允许当前无引用的资源（无宽限期，用户确认即删）
  */
 
 import { createHash } from 'node:crypto'
@@ -391,6 +392,27 @@ export function findMissingAssets(ids: string[]): string[] {
     if (!row || !existsSync(join(mediaDir, id))) missing.push(id)
   }
   return missing
+}
+
+export type DeleteAssetResult =
+  | { ok: true }
+  | { ok: false; reason: 'not_found' | 'in_use' }
+
+/**
+ * 显式删除单个资源：仅当当前无任何 block 引用时允许（含软删文档内引用，恢复后仍要可用）。
+ * 与 GC 不同：无宽限期——用户在资源库确认删除即执行。
+ */
+export function deleteAsset(id: string): DeleteAssetResult {
+  if (!/^[0-9a-f]{64}$/.test(id)) return { ok: false, reason: 'not_found' }
+  if (!readAsset(id)) return { ok: false, reason: 'not_found' }
+  if (collectReferencedAssetIds().has(id)) return { ok: false, reason: 'in_use' }
+  getDb().query('DELETE FROM assets WHERE id = ?').run(id)
+  try {
+    unlinkSync(join(mediaDir, id))
+  } catch {
+    /* 文件已不存在 */
+  }
+  return { ok: true }
 }
 
 /**

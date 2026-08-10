@@ -99,7 +99,7 @@
   },
   "resources": {
     "title": "资源",
-    "description": "粘贴或上传到笔记里的图片会保存在这里。目前支持图片；本地存储是主数据，图床外链为可选。",
+    "description": "粘贴或上传到笔记里的图片会保存在这里。目前支持图片；本地存储是主数据，图床外链为可选。点击可放大；未引用的可删除。",
     "emptyTitle": "还没有资源",
     "emptyDesc": "在编辑器里粘贴或拖入图片后，会出现在这里。",
     "openImageSettings": "图床与图片设置",
@@ -107,7 +107,14 @@
     "local": "本地",
     "remote": "已外链",
     "inUse": "使用中",
-    "unused": "未引用"
+    "unused": "未引用",
+    "preview": "查看大图",
+    "deleteTitle": "删除这张图片？",
+    "deleteMessage": "仅删除本地资源文件。确认后不可恢复；使用中的图片无法删除。",
+    "deleting": "删除中…",
+    "deleted": "已删除",
+    "deleteFailed": "删除失败",
+    "deleteInUse": "图片仍被文档引用，无法删除"
   },
   "share": {
     "notFoundTitle": "链接不存在或已关闭",

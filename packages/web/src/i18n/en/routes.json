@@ -99,7 +99,7 @@
   },
   "resources": {
     "title": "Resources",
-    "description": "Images pasted or uploaded into notes are stored here. Images only for now — local storage is primary; remote hosting is optional.",
+    "description": "Images pasted or uploaded into notes are stored here. Images only for now — local storage is primary; remote hosting is optional. Click to enlarge; unused images can be deleted.",
     "emptyTitle": "No resources yet",
     "emptyDesc": "Paste or drop an image in the editor and it will show up here.",
     "openImageSettings": "Image upload settings",
@@ -107,7 +107,14 @@
     "local": "Local",
     "remote": "Remote",
     "inUse": "In use",
-    "unused": "Unused"
+    "unused": "Unused",
+    "preview": "View full size",
+    "deleteTitle": "Delete this image?",
+    "deleteMessage": "Removes the local asset file. This cannot be undone. Images still used in notes cannot be deleted.",
+    "deleting": "Deleting…",
+    "deleted": "Deleted",
+    "deleteFailed": "Delete failed",
+    "deleteInUse": "This image is still referenced by a document"
   },
   "share": {
     "notFoundTitle": "This link doesn't exist or has been closed",

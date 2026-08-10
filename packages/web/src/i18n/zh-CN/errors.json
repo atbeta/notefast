@@ -25,6 +25,7 @@
     "apply_failed": "应用失败",
     "already_rebuilding": "已在重建中",
     "ai_not_configured": "AI 未配置",
-    "ai_exclude_share_needs_confirm": "请先确认分享对 AI 隐藏的文档"
+    "ai_exclude_share_needs_confirm": "请先确认分享对 AI 隐藏的文档",
+    "in_use": "仍被引用，无法删除"
   }
 }
