@@ -2,7 +2,6 @@ import { useCallback, useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  BookOpen,
   Search,
   FileText,
   PanelLeftClose,
@@ -310,18 +309,16 @@ export default function Sidebar({
 
   if (collapsed) {
     return (
-      <aside className="w-14 flex flex-col items-center py-3 shrink-0 h-full relative bg-sidebar border-r border-border/50">
-        <div
-          data-drag-region
-          className="h-[calc(3.5rem+var(--shell-top-inset,0px))] pt-[var(--shell-top-inset,0px)] w-full flex items-center justify-center border-b border-border/50 shrink-0 absolute top-0 left-0"
-        >
+      <aside className="w-14 flex flex-col items-center shrink-0 h-full bg-sidebar border-r border-border/50 pt-[var(--shell-top-inset,0px)]">
+        {/* 折叠态顶：展开钮；macOS 仅留红绿灯净空（拖拽走系统标题栏） */}
+        <div className="h-10 w-full flex items-center justify-center border-b border-border/50 shrink-0">
           <Tooltip label={t('sidebar.expandSidebar')}>
             <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group">
               <PanelLeft className="w-4 h-4" strokeWidth={1.75} />
             </button>
           </Tooltip>
         </div>
-        <div className="mt-[calc(3.5rem+var(--shell-top-inset,0px))] w-full flex-1 flex flex-col items-center pt-4 gap-1">
+        <div className="w-full flex-1 flex flex-col items-center pt-4 pb-3 gap-1">
           <Tooltip label={t('sidebar.docs')}>
             <Link to="/" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-primary transition-colors">
               <FileText className="w-4 h-4" strokeWidth={1.75} />
@@ -358,45 +355,30 @@ export default function Sidebar({
   }
 
   return (
-    <aside className="w-60 flex flex-col shrink-0 h-full bg-sidebar border-r border-border/50">
-      <div
-        data-drag-region
-        className="h-[calc(3.5rem+var(--shell-top-inset,0px))] pt-[var(--shell-top-inset,0px)] flex items-center justify-between px-3 border-b border-border/50 shrink-0"
-      >
-        <div className="flex items-center gap-2">
-          <Link to="/" onClick={closeAfterNav} className="flex items-center gap-2 font-semibold text-[15px] text-foreground hover:text-foreground/80 transition-colors tracking-[-0.01em]">
-            <span className="w-7 h-7 grid place-items-center rounded-md bg-foreground text-background">
-              <BookOpen className="w-3.5 h-3.5" strokeWidth={2.25} />
-            </span>
-            NoteFast
-          </Link>
-          <Tooltip label="NoteFast v0.1">
-            <span className="text-[10px] font-medium uppercase tracking-[0.06em] px-1.5 py-[1px] rounded border border-border/60 text-muted-foreground/80 bg-muted/40">
-              Beta
-            </span>
-          </Tooltip>
-        </div>
-        <div className="flex items-center gap-0.5">
-          <Tooltip label={t('sidebar.collapseSidebar')}>
-            <button onClick={onToggle} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group">
-              <PanelLeftClose className="w-4 h-4" strokeWidth={1.75} />
-            </button>
-          </Tooltip>
-        </div>
-      </div>
-
-      <div className="px-3 pt-3 pb-2 shrink-0">
+    <aside className="w-60 flex flex-col shrink-0 h-full bg-sidebar border-r border-border/50 pt-[var(--shell-top-inset,0px)]">
+      {/* 品牌已迁出：Tauri→TitleBar，macOS/浏览器→系统铬或标签页；收起并入 ⌘K 行 */}
+      <div className="px-3 pt-3 pb-2 shrink-0 flex items-center gap-1">
         <button
           type="button"
           onClick={onOpenPalette}
-          className="group w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background text-muted-foreground hover:text-foreground hover:border-foreground/15 transition-colors text-[13px]"
+          className="group min-w-0 flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background text-muted-foreground hover:text-foreground hover:border-foreground/15 transition-colors text-[13px]"
           aria-label={t('sidebar.openPalette')}
         >
-          <Search className="w-3.5 h-3.5" strokeWidth={1.75} />
+          <Search className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
           {/* 无文案：英文 Search documents… 在 w-60 会换行；图标 + ⌘K + aria-label 已够 */}
           <span className="flex-1 min-w-0" aria-hidden="true" />
           <ShortcutKeys keys={['mod', 'K']} />
         </button>
+        <Tooltip label={t('sidebar.collapseSidebar')}>
+          <button
+            type="button"
+            onClick={onToggle}
+            className="w-8 h-8 shrink-0 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors"
+            aria-label={t('sidebar.collapseSidebar')}
+          >
+            <PanelLeftClose className="w-4 h-4" strokeWidth={1.75} />
+          </button>
+        </Tooltip>
       </div>
 
       <nav ref={navFadeRef} className="scroll-fade px-2 pt-2 pb-1 flex-1 overflow-y-auto">

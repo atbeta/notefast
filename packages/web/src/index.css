@@ -967,8 +967,8 @@ html.native-shell [data-drag-region] [contenteditable] {
 }
 
 /* macOS 壳（Swift WKWebView，隐藏式系统标题栏）：红绿灯直接悬浮在 web 内容左上。
-   通过 --shell-top-inset 给侧栏 brand 行 / 移动顶栏预留净空（见 Sidebar.tsx / Layout.tsx），
-   该净空区同时是窗口拖拽区；浏览器与 Tauri 壳此变量为 0，布局不受影响。 */
+   通过 --shell-top-inset 给侧栏顶 / 移动顶栏预留净空（见 Sidebar.tsx / Layout.tsx）；
+   窗口拖拽走系统标题栏，侧栏不再做品牌拖拽条。浏览器与 Tauri 壳此变量为 0。 */
 html.native-shell[data-shell='macos'] {
   --shell-top-inset: 30px;
 }
