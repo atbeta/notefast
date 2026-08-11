@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.61.1](https://github.com/atbeta/notefast/compare/v0.61.0...v0.61.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* **web:** doc header layout — centered title, actions on both sides ([751ca6e](https://github.com/atbeta/notefast/commit/751ca6e72aeea71ecda67223a901ad4c615e4c04))
+
 ## [0.61.0](https://github.com/atbeta/notefast/compare/v0.60.0...v0.61.0) (2026-08-11)
 
 
