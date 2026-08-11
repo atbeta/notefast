@@ -163,6 +163,57 @@ describe('sync protocol (publish → consume)', () => {
     target.close()
   })
 
+  test('ai_exclude 文档照常同步（不发假 tombstone；回归：曾误把隐藏当删除）', async () => {
+    const { client, objects } = makeMockS3()
+    const store = createS3ObjectStore(S3_STORE_CFG, client)
+    const docId = crypto.randomUUID()
+    const childId = crypto.randomUUID()
+    insertBlockRow(docId, '密钥汇总')
+    insertBlock(sourceDb, {
+      id: childId,
+      notebook_id: notebookId,
+      parent_id: docId,
+      root_id: docId,
+      type: 'paragraph',
+      content: 'secret-token',
+      sort: 0,
+      level: 1,
+      now: nowTimestamp(),
+    })
+    // 标记对 AI 隐藏（只隔离检索/MCP，不该影响同步）
+    updateBlock(sourceDb, docId, { ai_exclude: 1 })
+
+    const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0, 'dev-test')
+
+    // 发布行里：ai_exclude 文档根必须带 block，且 is_erased=0
+    const changeKeys = [...objects.keys()].filter((k) => k.includes(`${SYNC_S3_DIR}/changes/`))
+    const lines = changeKeys.flatMap((k) => String(objects.get(k)).split('\n').filter(Boolean))
+    const docLines = lines
+      .map((l) => JSON.parse(l) as { entity_id: string; is_erased: number; block?: { ai_exclude: number; content: string } })
+      .filter((c) => c.entity_id === docId)
+    expect(docLines.length).toBeGreaterThan(0)
+    const latestDoc = docLines[docLines.length - 1]!
+    expect(latestDoc.is_erased).toBe(0)
+    expect(latestDoc.block?.ai_exclude).toBe(1)
+    expect(latestDoc.block?.content).toBe('密钥汇总')
+
+    const target = makeTargetDb()
+    await consumeChanges(target, store, CFG.prefix, 0, lastSeq)
+    const row = target
+      .query('SELECT content, ai_exclude, is_deleted FROM blocks WHERE id = ?')
+      .get(docId) as { content: string; ai_exclude: number; is_deleted: number } | undefined
+    expect(row).toBeTruthy()
+    expect(row!.is_deleted).toBe(0)
+    expect(row!.ai_exclude).toBe(1)
+    expect(row!.content).toBe('密钥汇总')
+    const child = target
+      .query('SELECT content, is_deleted FROM blocks WHERE id = ?')
+      .get(childId) as { content: string; is_deleted: number } | undefined
+    expect(child?.is_deleted).toBe(0)
+    expect(child?.content).toBe('secret-token')
+    target.close()
+  })
+
   test('LWW：目标已有更新的块不被旧值覆盖', async () => {
     const { client } = makeMockS3()
     const store = createS3ObjectStore(S3_STORE_CFG, client)

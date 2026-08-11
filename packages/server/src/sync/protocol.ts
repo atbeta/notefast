@@ -116,12 +116,13 @@ export async function publishChanges(
     const lines: string[] = []
     for (const r of rows) {
       const change: SyncChange = { ...r, device_id: deviceId }
-      // 非 tombstone：附加块当前状态（join blocks；块可能已被软删 → 状态为空则发 tombstone）
+      // 非 tombstone：附加块当前状态（join blocks；块可能已被软删 → 状态为空则发 tombstone）。
+      // ai_exclude 只隔离 AI/MCP，同步必须照常携带——误把隐藏当 erase 会自同步删进回收站。
       if (!r.is_erased) {
         const block = db
           .query('SELECT * FROM blocks WHERE id = ?')
           .get(r.entity_id) as SyncBlockState | undefined
-        if (block && !block.ai_exclude) {
+        if (block) {
           change.block = block
         } else {
           change.is_erased = 1
