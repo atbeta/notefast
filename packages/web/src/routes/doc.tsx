@@ -814,7 +814,7 @@ export default function DocPage() {
         <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
           {/* 切换文档时保留旧内容完整展示，新数据到了直接替换 */}
           <div>
-            <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-14 pb-32 animate-fade-in">
+            <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-8 pb-32 animate-fade-in">
             {indexJob && (indexJob.state === 'pending' || indexJob.state === 'running') && (
               <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
                 <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" strokeWidth={1.75} />

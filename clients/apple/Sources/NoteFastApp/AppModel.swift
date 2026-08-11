@@ -23,9 +23,6 @@ final class AppModel: ObservableObject {
     @Published var syncActionMessage: String?
     /// 有新版可下载（检查更新后非空；帮助菜单出现「下载新版」入口）
     @Published var availableUpdate: ReleaseInfo?
-    /// WebView 历史栈状态（KVO 自 navigator，驱动左上角原生导航条按钮可用态）
-    @Published var canGoBack = false
-    @Published var canGoForward = false
 
     let navigator = WebNavigator()
 
@@ -34,11 +31,6 @@ final class AppModel: ObservableObject {
     private var transientMessageTask: Task<Void, Never>?
 
     init() {
-        // 历史栈状态 → 原生导航条按钮可用态
-        navigator.onHistoryStateChange = { [weak self] back, forward in
-            self?.canGoBack = back
-            self?.canGoForward = forward
-        }
         // App 退出前优雅停机 engine（SIGTERM drain → 关 DB）。
         // queue: .main 保证回调在主线程同步执行（termination 期间 Task 可能被推迟）；
         // assumeIsolated 让编译器认可「此处确在主 actor」，避免误报并发隔离。
@@ -369,52 +361,84 @@ final class AppModel: ObservableObject {
     /// ContentView.onAppear 注入的 SwiftUI openWindow（Environment 只能视图侧取，壳层借道）
     var openWindowAction: (() -> Void)?
 
-    // MARK: - 原生导航条（左上角红绿灯旁的后退/前进，见 NavStripView）
+    // MARK: - 窗口铬（标题栏双击缩放；不再挂原生后退/前进条）
 
     /// 主窗口句柄（weak：关窗即释放）。openWindow(id:) 的复用语义不可靠
     /// （实测会重复开窗），壳层自己跟踪并复用
     private weak var mainWindow: NSWindow?
-    private var navStrip: NavStripView?
-    private var windowResizeObserver: NSObjectProtocol?
+    /// 系统标题栏命中层盖住 WebView 顶缘；本地监听补「双击缩放」
+    private var titlebarZoomMonitor: Any?
+    private var lastTitlebarClick: (time: TimeInterval, point: NSPoint)?
 
-    /// MainView 的 WindowAccessor 探针拿到窗口后调用（只挂一次；窗口重建时 navStrip 已
-    /// 随旧窗口销毁，重新挂）
-    func attachNavStrip(to window: NSWindow) {
+    /// MainView 的 WindowAccessor 探针拿到窗口后调用：只装标题栏双击 zoom。
+    func attachWindowChrome(to window: NSWindow) {
         mainWindow = window
-        guard let content = window.contentView, navStrip?.window !== window else { return }
-        navStrip?.removeFromSuperview()
-        if let observer = windowResizeObserver {
-            NotificationCenter.default.removeObserver(observer)
+        installTitlebarZoomMonitor(for: window)
+    }
+
+    /// 隐藏标题栏仍有系统 titlebar 命中层（拖窗/红绿灯），默认不响应双击缩放。
+    /// 手动双击判定（titlebar 上 clickCount 不可靠）→ 与绿键相同的 zoom(nil)。
+    private func installTitlebarZoomMonitor(for window: NSWindow) {
+        if let existing = titlebarZoomMonitor {
+            NSEvent.removeMonitor(existing)
+            titlebarZoomMonitor = nil
         }
-        let strip = NavStripView(model: self)
-        content.addSubview(strip)
-        strip.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            strip.topAnchor.constraint(equalTo: content.topAnchor),
-            strip.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            strip.widthAnchor.constraint(equalToConstant: 240),
-            strip.heightAnchor.constraint(equalToConstant: 30),
-        ])
-        navStrip = strip
-        // 窄窗口（web 切移动顶栏，汉堡按钮在左上）时隐藏整条防重叠
-        let updateVisibility: (NSWindow) -> Void = { [weak strip] w in
-            strip?.isHidden = w.frame.width < 820
-        }
-        updateVisibility(window)
-        windowResizeObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didResizeNotification,
-            object: window,
-            queue: .main
-        ) { notification in
-            MainActor.assumeIsolated {
-                if let w = notification.object as? NSWindow { updateVisibility(w) }
+        lastTitlebarClick = nil
+        titlebarZoomMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp]) { [weak self, weak window] event in
+            guard let self, let window, event.window === window else { return event }
+            let titlebarH = Self.titlebarHitHeight(for: window)
+            let fromTop = window.frame.height - event.locationInWindow.y
+            guard fromTop >= 0, fromTop <= titlebarH else {
+                self.lastTitlebarClick = nil
+                return event
             }
+            if Self.hitWindowButton(window: window, event: event) {
+                self.lastTitlebarClick = nil
+                return event
+            }
+            let now = event.timestamp
+            let pt = event.locationInWindow
+            let isDouble: Bool
+            if event.clickCount >= 2 {
+                isDouble = true
+            } else if let last = self.lastTitlebarClick,
+                      now - last.time <= NSEvent.doubleClickInterval,
+                      hypot(pt.x - last.point.x, pt.y - last.point.y) <= 6 {
+                isDouble = true
+            } else {
+                isDouble = false
+            }
+            if isDouble {
+                self.lastTitlebarClick = nil
+                window.zoom(nil)
+                return nil
+            }
+            self.lastTitlebarClick = (now, pt)
+            return event
         }
     }
 
-    /// web 主题（data-theme 经消息桥回报）→ 导航条颜色跟随 web 而非系统外观
+    private static func titlebarHitHeight(for window: NSWindow) -> CGFloat {
+        if let container = window.standardWindowButton(.closeButton)?.superview {
+            return max(container.frame.height, 28)
+        }
+        return 28
+    }
+
+    private static func hitWindowButton(window: NSWindow, event: NSEvent) -> Bool {
+        let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        for type in buttons {
+            guard let btn = window.standardWindowButton(type),
+                  let parent = btn.superview else { continue }
+            let p = parent.convert(event.locationInWindow, from: nil)
+            if btn.frame.insetBy(dx: -2, dy: -2).contains(p) { return true }
+        }
+        return false
+    }
+
+    /// web 主题（data-theme 经消息桥回报）——保留入口；目前无原生控件需跟随
     func applyWebTheme(dark: Bool) {
-        navStrip?.applyWebTheme(dark: dark)
+        _ = dark
     }
 
     /// 前置 app 并确保主窗口存在：已跟踪到窗口就复用（置前/取消最小化），

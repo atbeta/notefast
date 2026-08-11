@@ -12,26 +12,10 @@ final class WebNavigator {
     private var pendingURL: URL?
     /// 最近一次导航目标：关窗后 WKWebView 销毁，重开挂载时回放（pending 可能已清空）
     private var lastURL: URL?
-    /// 历史栈变化回调（canGoBack / canGoForward，驱动原生导航条按钮可用态）
-    var onHistoryStateChange: ((Bool, Bool) -> Void)?
-    private var historyObservers: [NSKeyValueObservation] = []
 
     /// DocWebView 挂载时注册（每次挂载覆盖，单一内容区）
     func attach(webView: WKWebView) {
         self.webView = webView
-        historyObservers = [
-            webView.observe(\.canGoBack) { [weak self] view, _ in
-                // WKWebView 的 KVO 在主线程触发；assumeIsolated 对齐编译器认知
-                MainActor.assumeIsolated {
-                    self?.onHistoryStateChange?(view.canGoBack, view.canGoForward)
-                }
-            },
-            webView.observe(\.canGoForward) { [weak self] view, _ in
-                MainActor.assumeIsolated {
-                    self?.onHistoryStateChange?(view.canGoBack, view.canGoForward)
-                }
-            },
-        ]
         // 优先 pending（刚 navigate 还未 attach）；否则回放 lastURL（窗口重建）
         if let url = pendingURL ?? lastURL {
             pendingURL = nil

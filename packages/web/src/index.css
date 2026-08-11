@@ -966,9 +966,10 @@ html.native-shell [data-drag-region] [contenteditable] {
   -webkit-app-region: no-drag;
 }
 
-/* macOS 壳（Swift WKWebView，隐藏式系统标题栏）：红绿灯直接悬浮在 web 内容左上。
-   通过 --shell-top-inset 给侧栏顶 / 移动顶栏预留净空（见 Sidebar.tsx / Layout.tsx）；
-   窗口拖拽走系统标题栏，侧栏不再做品牌拖拽条。浏览器与 Tauri 壳此变量为 0。 */
+/* macOS 壳：与 web 同高、同左右边距——不铺空顶带、不额外左推搜框。
+   红绿灯直接叠在侧栏首行左侧（可点区域仍是搜框/按钮，灯下空白可拖窗）。
+   折叠轨过窄整列在灯下，仅此时用 --shell-traffic-top-collapsed 下移展开钮。 */
 html.native-shell[data-shell='macos'] {
-  --shell-top-inset: 30px;
+  --shell-top-inset: 0px;
+  --shell-traffic-top-collapsed: 28px;
 }

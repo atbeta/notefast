@@ -12,6 +12,7 @@ import { ServerOfflineBanner } from './ServerHealthBar'
 import { useTheme } from '../hooks/useTheme'
 import { ASK_AI_EVENT } from '../lib/askAi'
 import { useDemoMode } from '../hooks/useDemoMode'
+import { isWindowZoomDoubleClickTarget, nativeToggleWindowZoom } from '../lib/nativeWindow'
 
 /** AI 聊天面板控制 — 开合状态 + toggle（内容顶栏常驻入口 / 文档右栏避让共用） */
 type AiChatCtl = { open: boolean; toggle: () => void }
@@ -175,7 +176,14 @@ export default function Layout({ children, contentClassName }: { children: React
         )}
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
-          <div className="md:hidden flex items-center h-[calc(3rem+var(--shell-top-inset,0px))] pt-[var(--shell-top-inset,0px)] px-4 border-b border-border bg-card gap-3 shrink-0" data-drag-region>
+          <div
+            className="md:hidden flex items-center h-12 px-4 border-b border-border bg-card gap-3 shrink-0"
+            data-drag-region
+            onDoubleClick={(e) => {
+              if (!isWindowZoomDoubleClickTarget(e.target)) return
+              nativeToggleWindowZoom()
+            }}
+          >
             <button onClick={toggleMobileSidebar} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-foreground transition-colors" aria-label={t('layout.openMenu')}>
               <Menu className="w-5 h-5" />
             </button>

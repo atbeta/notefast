@@ -6,7 +6,7 @@
  *   notefast-server              # bun build --compile 单文件可执行（内嵌 Bun 运行时 + 全部业务）
  *   native/vec0.<dylib|dll|so>   # sqlite-vec——编译单文件不内嵌可用 dylib，必须显式旁置并经 SQLITE_VEC_PATH
  *   libsqlite3.dylib             # macOS 专用：支持扩展加载的 SQLite（brew），经 SQLITE_LIBRARY_PATH
- *   web-dist/                    # vite 构建的 Web 前端（serveStatic 静态服务，WEB_DIST）
+ *   web-dist/                    # 本脚本内先 bun run build web，再拷贝 vite 产物（勿复用陈旧 packages/web/dist）
  *   VERSION                      # 引擎版本（bootstrap 读它注入 APP_VERSION；编译产物里 import.meta.dir 失效）
  *   notefast-engine-<version>-<platform>.tar.gz
  *
@@ -27,11 +27,19 @@ const serverRoot = join(import.meta.dir, '..')
 const outDir = join(serverRoot, 'dist-engine')
 const execName = process.platform === 'win32' ? 'notefast-server.exe' : 'notefast-server'
 
+function buildWeb(): void {
+  const webRoot = join(serverRoot, '..', 'web')
+  console.log('[engine] 构建 web（vite）…')
+  const result = spawnSync('bun', ['run', 'build'], { cwd: webRoot, stdio: 'inherit' })
+  if (result.status !== 0) {
+    throw new Error(`web build 失败（exit=${result.status}）`)
+  }
+}
+
 function copyWebDist(): void {
   const src = join(serverRoot, '..', 'web', 'dist')
   if (!existsSync(src)) {
-    console.warn(`[engine] 跳过 web-dist：未构建（${src} 不存在），请先 bun --filter @notefast/web build`)
-    return
+    throw new Error(`[engine] web-dist 缺失：${src}（buildWeb 应已产出）`)
   }
   cpSync(src, join(outDir, 'web-dist'), { recursive: true })
   console.log(`[engine] web-dist → dist-engine/web-dist/`)
@@ -105,6 +113,7 @@ function archiveName(): string {
 rmSync(outDir, { recursive: true, force: true })
 mkdirSync(outDir, { recursive: true })
 
+buildWeb()
 compile()
 copySqliteVec()
 copyMacSqlite()

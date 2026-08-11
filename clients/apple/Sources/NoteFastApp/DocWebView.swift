@@ -17,14 +17,14 @@ struct DocWebView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let coordinator = context.coordinator
+        // web → 壳层消息通道须在 WKWebView 创建前挂上（configuration 创建后改无效）
         let config = WKWebViewConfiguration()
         config.defaultWebpagePreferences.allowsContentJavaScript = true
+        config.userContentController.add(coordinator, name: "notefast")
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = coordinator
         webView.allowsMagnification = true
         webView.allowsBackForwardNavigationGestures = true
-        // web → 壳层消息通道（lib/nativeNotify.ts：同步失败等系统通知）
-        config.userContentController.add(coordinator, name: "notefast")
         coordinator.onTitleChange = onTitleChange
         coordinator.onThemeChange = onThemeChange
         navigator?.attach(webView: webView)
@@ -90,6 +90,10 @@ struct DocWebView: NSViewRepresentable {
             case "theme":
                 let dark = dict["value"] as? String == "dark"
                 onThemeChange?(dark)
+            case "windowZoom":
+                Task { @MainActor in
+                    message.webView?.window?.zoom(nil)
+                }
             default:
                 break
             }

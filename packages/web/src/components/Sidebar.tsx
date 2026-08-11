@@ -35,6 +35,7 @@ import {
   pruneVisitsNotIn,
   subscribeRecentVisits,
 } from '../lib/recentVisits'
+import { isWindowZoomDoubleClickTarget, nativeToggleWindowZoom } from '../lib/nativeWindow'
 import type { DocSummary } from '@notefast/core'
 import DocActionsMenu from './DocActionsMenu'
 import { Tooltip, ShortcutKeys, shortcutLabel } from './ui'
@@ -309,9 +310,16 @@ export default function Sidebar({
 
   if (collapsed) {
     return (
-      <aside className="w-14 flex flex-col items-center shrink-0 h-full bg-sidebar border-r border-border/50 pt-[var(--shell-top-inset,0px)]">
-        {/* 折叠态顶：展开钮；macOS 仅留红绿灯净空（拖拽走系统标题栏） */}
-        <div className="h-10 w-full flex items-center justify-center border-b border-border/50 shrink-0">
+      <aside className="w-14 flex flex-col items-center shrink-0 h-full bg-sidebar border-r border-border/50">
+        {/* 折叠轨窄于红绿灯：仅此处下移展开钮；展开态用左侧让位、与 web 同高 */}
+        <div
+          data-drag-region
+          onDoubleClick={(e) => {
+            if (!isWindowZoomDoubleClickTarget(e.target)) return
+            nativeToggleWindowZoom()
+          }}
+          className="w-full flex items-center justify-center border-b border-border/50 shrink-0 h-[calc(2.5rem+var(--shell-traffic-top-collapsed,0px))] pt-[var(--shell-traffic-top-collapsed,0px)]"
+        >
           <Tooltip label={t('sidebar.expandSidebar')}>
             <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group">
               <PanelLeft className="w-4 h-4" strokeWidth={1.75} />
@@ -355,9 +363,16 @@ export default function Sidebar({
   }
 
   return (
-    <aside className="w-60 flex flex-col shrink-0 h-full bg-sidebar border-r border-border/50 pt-[var(--shell-top-inset,0px)]">
-      {/* 品牌已迁出：Tauri→TitleBar，macOS/浏览器→系统铬或标签页；收起并入 ⌘K 行 */}
-      <div className="px-3 pt-3 pb-2 shrink-0 flex items-center gap-1">
+    <aside className="w-60 flex flex-col shrink-0 h-full bg-sidebar border-r border-border/50">
+      {/* 与 web 同高：macOS 只加左侧让位给红绿灯，不铺全宽空顶带 */}
+      <div
+        data-drag-region
+        onDoubleClick={(e) => {
+          if (!isWindowZoomDoubleClickTarget(e.target)) return
+          nativeToggleWindowZoom()
+        }}
+        className="px-3 pb-2 pt-3 shrink-0 flex items-center gap-1"
+      >
         <button
           type="button"
           onClick={onOpenPalette}
