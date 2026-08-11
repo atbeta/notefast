@@ -83,6 +83,14 @@
     "exportedTo": "已保存到 {{path}}",
     "exportFailed": "导出失败",
     "exportedWithImages": "已导出（含图片）",
-    "exportedMarkdown": "已导出 Markdown"
+    "exportedMarkdown": "已导出 Markdown",
+    "fontSize": {
+      "label": "字号",
+      "sm": "小",
+      "md": "中",
+      "lg": "大",
+      "xl": "特大",
+      "shortcutHint": "Ctrl+=/Ctrl+- 调节 / Ctrl+0 复位"
+    }
   }
 }

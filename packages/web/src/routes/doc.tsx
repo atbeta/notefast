@@ -38,6 +38,7 @@ import { readDocRailCollapsed, writeDocRailCollapsed } from '../hooks/useDocRail
 
 import { scrollToElement, findScrollableAncestor } from '../lib/scroll'
 import { useActiveHeading } from '../hooks/useActiveHeading'
+import { useDocFontSize, setDocFontSize, SIZE_ORDER, SIZES } from '../hooks/useDocFontSize'
 import { formatRelative, relativeTime, formatSqliteDateTime, currentLocale } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
@@ -848,6 +849,10 @@ export default function DocPage() {
                 )}
               </div>
             )}
+            {/* 字号控制（demo 给别人看时放大；编辑不需）— 只在阅读态展示 */}
+            {!isEditing && (
+              <DocFontSizeControl />
+            )}
             {isEditing && <div className="mb-2" />}
 
             {/* Tags + 归档/对 AI 隐藏（默认可见，不展示锁图标；仅隐藏态强调） */}
@@ -1437,6 +1442,39 @@ function ErrorState({ message }: { message: string }) {
         <ArrowLeft className="w-4 h-4" />
         {t('doc.backToHome')}
       </Link>
+    </div>
+  )
+}
+function DocFontSizeControl() {
+  const { t } = useTranslation()
+  const size = useDocFontSize()
+  return (
+    <div
+      className="flex items-center gap-1.5 mb-2 text-[11.5px] text-muted-foreground/70"
+      role="group"
+      aria-label={t('doc.fontSize.label')}
+      title={t('doc.fontSize.shortcutHint')}
+    >
+      <span aria-hidden="true">Aa</span>
+      {SIZE_ORDER.map((s) => {
+        const active = s === size
+        return (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setDocFontSize(s)}
+            aria-pressed={active}
+            className={`min-w-[24px] h-6 px-1.5 rounded text-[11.5px] font-mono tabular-nums transition-colors ${
+              active
+                ? 'bg-primary/12 text-foreground border border-primary/30'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent'
+            }`}
+            title={t(SIZES[s].labelKey)}
+          >
+            {s.toUpperCase()}
+          </button>
+        )
+      })}
     </div>
   )
 }

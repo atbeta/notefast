@@ -83,6 +83,14 @@
     "exportedTo": "Saved to {{path}}",
     "exportFailed": "Export failed",
     "exportedWithImages": "Exported (with images)",
-    "exportedMarkdown": "Exported Markdown"
+    "exportedMarkdown": "Exported Markdown",
+    "fontSize": {
+      "label": "Font size",
+      "sm": "Small",
+      "md": "Medium",
+      "lg": "Large",
+      "xl": "X-Large",
+      "shortcutHint": "Ctrl+=/Ctrl+- to adjust, Ctrl+0 to reset"
+    }
   }
 }

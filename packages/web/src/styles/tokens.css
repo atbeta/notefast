@@ -118,6 +118,11 @@
   /* ───────────── 动效（全局统一） ───────────── */
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --dur: 150ms;
+
+  /* ───────────── 文档阅读 / 编辑正文字号（4 档：S/M/L/XL，默认 M=16） ─────────────
+     设 :root 上，.reading-prose + CodeMirror .cm-content 引用；运行时 useDocFontSize
+     设到 px；比例感保（表格 / 列表 / 图片都 em 跟着 scale）。 */
+  --notefast-doc-font-size: 16px;
 }
 
 :root[data-theme='dark'] {

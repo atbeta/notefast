@@ -13,7 +13,8 @@ export const editorTheme = EditorView.theme({
   '&': {
     color: 'rgb(var(--foreground))',
     backgroundColor: 'transparent',
-    fontSize: '16px',
+    // 跟随 useDocFontSize 写的 :root 变量（S/M/L/XL = 14/16/19/22 px）
+    fontSize: 'var(--notefast-doc-font-size, 16px)',
   },
   '.cm-scroller': {
     fontFamily: 'var(--font-sans)',
