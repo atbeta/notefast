@@ -14,7 +14,7 @@ import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { getDb } from '../db'
 import type { ImageUploadConfig } from '@notefast/core'
 import { extForMime, mimeForExt } from '../sync/archiveMedia'
@@ -483,6 +483,7 @@ export function ingestLocalImageRefs(
 /**
  * file-open 场景的 readCandidate：相对引用按「md 文件同目录」解析。
  * 只读普通文件、图片扩展名由 ingestLocalImageRefs 二次把关。
+ * 目录归属用 path.relative 判断（跨平台；Windows 反斜杠路径不能 startsWith 正斜杠前缀）。
  */
 export function readLocalImageCandidate(mdPath: string): (relPath: string) => Buffer | null {
   const baseDir = dirname(mdPath)
@@ -490,7 +491,8 @@ export function readLocalImageCandidate(mdPath: string): (relPath: string) => Bu
     try {
       const abs = resolve(baseDir, relPath)
       // 防路径穿越读取任意文件：只允许 md 同目录树内
-      if (abs !== baseDir && !abs.startsWith(baseDir + '/')) return null
+      const rel = relative(baseDir, abs)
+      if (rel === '..' || rel.startsWith('..' + '/') || rel.startsWith('..' + '\\') || isAbsolute(rel)) return null
       if (!existsSync(abs)) return null
       const st = statSync(abs)
       if (!st.isFile()) return null
@@ -498,6 +500,29 @@ export function readLocalImageCandidate(mdPath: string): (relPath: string) => Bu
     } catch {
       return null
     }
+  }
+}
+
+/**
+ * web 上传场景（multipart）的 readCandidate：从「相对路径 → 文件字节」映射构建。
+ * 前端 File 带 webkitRelativePath（拖文件夹）或 name（多选），统一做 key。
+ * 匹配时先精确相对路径，再退回到 basename（`images/foo.png` 与 `foo.png` 同源）。
+ */
+export function readUploadedImageCandidate(files: Array<{ path: string; data: Buffer }>): (relPath: string) => Buffer | null {
+  const byPath = new Map<string, Buffer>()
+  const byBase = new Map<string, Buffer>()
+  for (const f of files) {
+    const norm = f.path.replace(/\\/g, '/').replace(/^\.\//, '')
+    byPath.set(norm, f.data)
+    const base = norm.split('/').pop() ?? norm
+    if (base && !byBase.has(base)) byBase.set(base, f.data)
+  }
+  return (relPath: string) => {
+    const norm = relPath.replace(/\\/g, '/').replace(/^\.\//, '')
+    const hit = byPath.get(norm)
+    if (hit) return hit
+    const base = norm.split('/').pop() ?? norm
+    return byBase.get(base) ?? null
   }
 }
 

@@ -19,6 +19,8 @@ export default function NewDocPage() {
   const [notebookId, setNotebookId] = useState('')
   const [title, setTitle] = useState('')
   const [markdown, setMarkdown] = useState('')
+  /** 随 md 导入的图片文件（webkitRelativePath 或 name 保留相对路径，收编用） */
+  const [imageFiles, setImageFiles] = useState<File[]>([])
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'create' | 'import'>('create')
@@ -57,12 +59,31 @@ export default function NewDocPage() {
       let docId: string
       let indexJobId: string | undefined
       if (markdown.trim()) {
-        const res = await request<{ doc: { id: string }; index_job?: { id: string } }>('/import/markdown', {
-          method: 'POST',
-          body: JSON.stringify({ notebook_id: notebookId, markdown, title: finalTitle, tags }),
-        })
-        docId = res.doc.id
-        indexJobId = res.index_job?.id
+        if (imageFiles.length > 0) {
+          // 带图片：multipart 上传，服务端按相对路径收编为 asset:<sha> 并重写引用
+          const fd = new FormData()
+          fd.append('markdown', markdown)
+          fd.append('notebook_id', notebookId)
+          fd.append('title', finalTitle)
+          if (tags.length > 0) fd.append('tags', JSON.stringify(tags))
+          for (const f of imageFiles) {
+            // 相对路径优先 webkitRelativePath（拖文件夹），否则 name（多选文件）
+            const rel = f.webkitRelativePath || f.name
+            fd.append('images', f, rel)
+          }
+          const res = await fetchWithAuth('/import/markdown-files', { method: 'POST', body: fd })
+          const body = await res.json() as { doc: { id: string }; index_job?: { id: string } }
+          if (!res.ok) throw new ApiError((body as { message?: string } | null)?.message || `HTTP ${res.status}`, res.status, body)
+          docId = body.doc.id
+          indexJobId = body.index_job?.id
+        } else {
+          const res = await request<{ doc: { id: string }; index_job?: { id: string } }>('/import/markdown', {
+            method: 'POST',
+            body: JSON.stringify({ notebook_id: notebookId, markdown, title: finalTitle, tags }),
+          })
+          docId = res.doc.id
+          indexJobId = res.index_job?.id
+        }
       } else {
         const res = await request<{ id: string; index_job?: { id: string } }>('/docs', {
           method: 'POST',
@@ -109,20 +130,27 @@ export default function NewDocPage() {
     finally { setGenerating(false) }
   }
 
-  const handleFile = (file: File) => {
+  const handleFiles = (files: FileList | File[]) => {
+    const list = Array.from(files)
     // zip：直接上传批量导入（后端 /import/zip：每个 .md 建一篇文档，自家导出档按 manifest 还原）
-    if (file.name.toLowerCase().endsWith('.zip') || file.type === 'application/zip') {
-      void handleZipFile(file)
+    const zip = list.find((f) => f.name.toLowerCase().endsWith('.zip') || f.type === 'application/zip')
+    if (zip) {
+      void handleZipFile(zip)
       return
     }
+    // 取第一个 md（或非图片非 zip 文本）作为文档内容；其余图片文件收集供收编
+    const mdFile = list.find((f) => /\.(md|markdown|mdown|mkd)$/i.test(f.name)) ?? list[0]
+    if (!mdFile) return
+    const images = list.filter((f) => f !== mdFile && f.type.startsWith('image/'))
     const reader = new FileReader()
     reader.onload = () => {
       const text = String(reader.result || '')
       setMarkdown(text)
-      if (!title.trim()) setTitle(file.name.replace(/\.md$/i, ''))
+      setImageFiles(images)
+      if (!title.trim()) setTitle(mdFile.name.replace(/\.(md|markdown|mdown|mkd)$/i, ''))
       setActiveTab('create')
     }
-    reader.readAsText(file)
+    reader.readAsText(mdFile)
   }
 
   /** 上传 zip 批量导入；结果原地展示（成功/跳过/失败明细），可继续导入或返回文档库 */
@@ -150,8 +178,8 @@ export default function NewDocPage() {
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
-    const file = e.dataTransfer.files[0]
-    if (file) handleFile(file)
+    // 支持拖入文件夹/多选：webkitRelativePath 保留相对路径供图片收编
+    if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files)
   }
 
   return (
@@ -314,11 +342,12 @@ export default function NewDocPage() {
               <p className="text-xs text-muted-foreground">{t('newDoc.dropHintSub')}</p>
               <input
                 type="file"
-                accept=".md,.markdown,text/markdown,.zip,application/zip"
+                accept=".md,.markdown,text/markdown,.zip,application/zip,image/*"
+                multiple
                 className="hidden"
                 onChange={(e) => {
-                  const f = e.target.files?.[0]
-                  if (f) handleFile(f)
+                  if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files)
+                  e.target.value = ''
                 }}
               />
             </label>

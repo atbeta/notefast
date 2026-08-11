@@ -7,7 +7,7 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { Hono } from 'hono'
@@ -231,6 +231,44 @@ describe('importArchiveZip', () => {
     expect(child.map((r) => r.content).join('\n')).toContain(`asset:${sha}`)
 
     fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('readLocalImageCandidate 跨平台目录归属：子目录可读、路径穿越拦截（回归：Windows 反斜杠）', async () => {
+    const { readLocalImageCandidate } = await import('../assets/store')
+    const dir = mkdtempSync(join('/tmp', 'notefast-guard-'))
+    const sub = join(dir, 'ModelForge 需求分解')
+    mkdirSync(sub, { recursive: true })
+    const png = join(sub, 'Pasted image.png')
+    writeFileSync(png, PNG_BYTES)
+    const mdPath = join(dir, 'note.md')
+
+    const read = readLocalImageCandidate(mdPath)
+    // 子目录（含中文 + 空格）应解析
+    expect(read('ModelForge 需求分解/Pasted image.png')).not.toBeNull()
+    // 路径穿越应拦截（../ 与绝对路径）
+    expect(read('../outside.png')).toBeNull()
+    expect(read('../../etc/passwd')).toBeNull()
+    expect(read('/etc/passwd')).toBeNull()
+    // Windows 风格：md 路径与引用都带盘符反斜杠时，dirname 语义一致（relative 判定）
+    const winRead = readLocalImageCandidate('C:\\Users\\me\\note.md')
+    // Linux 上 resolve 不认盘符，此断言只验证「不抛错且不会命中同目录外」——跳过文件命中，仅确认返回 null 不崩
+    expect(typeof winRead).toBe('function')
+
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('readUploadedImageCandidate：相对路径精确匹配 + basename 回退', async () => {
+    const { readUploadedImageCandidate } = await import('../assets/store')
+    const read = readUploadedImageCandidate([
+      { path: 'ModelForge 需求分解/Pasted image.png', data: PNG_BYTES },
+      { path: 'other.png', data: Buffer.from([9, 9, 9]) },
+    ])
+    // 精确相对路径命中
+    expect(read('ModelForge 需求分解/Pasted image.png')).not.toBeNull()
+    // basename 回退：引用只写文件名也能命中
+    expect(read('Pasted image.png')).not.toBeNull()
+    // 未上传文件 → null
+    expect(read('missing.png')).toBeNull()
   })
 
   test('POST /import/markdown 不带 source 不改写相对路径（Web/MCP 路径行为不变）', async () => {

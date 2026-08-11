@@ -7,7 +7,7 @@ import { findDocIdBySource, getBlockById, getBlocksByIds, updateBlock } from '..
 import { fireAfterCreate, fireAfterCreateMany, fireDocAfterCreate } from '../services/hooks'
 import { emitAppEvent } from '../events'
 import { scheduleSyncNow } from '../sync/protocolManager'
-import { extractAssetRefs, findMissingAssets, ingestLocalImageRefs, readLocalImageCandidate } from '../assets/store'
+import { extractAssetRefs, findMissingAssets, ingestLocalImageRefs, readLocalImageCandidate, readUploadedImageCandidate } from '../assets/store'
 import { EmptyMarkdownError, insertDocFromMarkdown, normalizeDocTags, type DocSourceRef, type InsertDocFromMarkdownResult } from '../services/docImport'
 import {
   createDocFromMarkdownFile,
@@ -58,9 +58,11 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
   // 打开即收编：file-open（原生壳双击/拖入）场景，把 md 里相对路径图片
   // 读同目录文件入库并重写为 asset:<sha>（否则渲染碎图）。其他来源不改写。
   let markdown = input.markdown
+  let ingestedCount = 0
   if (input.source?.provider === 'file-open' && input.source.external_id) {
     const ingested = ingestLocalImageRefs(markdown, readLocalImageCandidate(input.source.external_id))
     markdown = ingested.markdown
+    ingestedCount = ingested.ingested
     if (ingested.unresolved.length > 0) {
       console.warn(`[import] ${input.source.external_id}: ${ingested.unresolved.length} 张本地图片未找到，保留原引用`)
     }
@@ -112,7 +114,88 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
     throw e
   }
 
-  return c.json(respondCreated(result, markdown), 201)
+  return c.json(
+    {
+      ...respondCreated(result, markdown),
+      ...(ingestedCount > 0 ? { media_imported: ingestedCount } : {}),
+    },
+    201,
+  )
+})
+
+/**
+ * Web 端「从 Markdown 文件导入」（multipart）：markdown 文本 + 可选图片文件列表。
+ * 图片按相对路径（webkitRelativePath / name）收编为 asset:<sha>，引用重写。
+ * 解决浏览器 FileReader 只读文本、同目录图片无法上传的缺口。
+ */
+importRouter.post('/markdown-files', async (c) => {
+  const body = await c.req.parseBody({ all: true })
+  const markdownRaw = body['markdown']
+  if (typeof markdownRaw !== 'string' || !markdownRaw.trim()) {
+    return c.json({ error: 'bad_request', message: '缺少 markdown 文本' }, 400)
+  }
+
+  // 收集图片文件（multipart 同名 images 字段 → File[]；单文件时是 File）
+  const imagesRaw = body['images']
+  const imageEntries = Array.isArray(imagesRaw) ? imagesRaw : imagesRaw && typeof imagesRaw !== 'string' ? [imagesRaw] : []
+  const files: Array<{ path: string; data: Buffer }> = []
+  for (const img of imageEntries) {
+    const f = img as File
+    const buf = Buffer.from(await f.arrayBuffer())
+    if (buf.length === 0) continue
+    // File.name 在前端 append 时已设为相对路径（webkitRelativePath 或 name）
+    files.push({ path: f.name, data: buf })
+  }
+
+  // 收编：md 相对路径图片按上传文件列表解析 → asset:<sha>
+  let markdown = markdownRaw
+  let ingestedCount = 0
+  if (files.length > 0) {
+    const ingested = ingestLocalImageRefs(markdown, readUploadedImageCandidate(files))
+    markdown = ingested.markdown
+    ingestedCount = ingested.ingested
+    if (ingested.unresolved.length > 0) {
+      console.warn(`[import/markdown-files]: ${ingested.unresolved.length} 张图片未在上传文件中找到，保留原引用`)
+    }
+  }
+
+  const notebookId = resolveNotebookId(body['notebook_id'])
+  if (!notebookId) {
+    return c.json({ error: 'bad_request', message: '未找到可用的笔记本' }, 400)
+  }
+
+  const title =
+    (typeof body['title'] === 'string' && body['title'].trim() ? body['title'].trim() : undefined)
+    || extractTitleFromMarkdown(markdown)
+    || '未命名文档'
+  const tagsRaw = typeof body['tags'] === 'string' ? body['tags'] : undefined
+  const tags = tagsRaw ? normalizeDocTags(parseTagsField(tagsRaw) ?? []) : undefined
+  const db = getDb()
+
+  let result: InsertDocFromMarkdownResult
+  try {
+    result = insertDocFromMarkdown(db, {
+      notebookId,
+      title,
+      markdown,
+      status: 'inbox',
+      tags,
+      rejectEmpty: true,
+    })
+  } catch (e) {
+    if (e instanceof EmptyMarkdownError) {
+      return c.json({ error: 'bad_request', message: e.message }, 400)
+    }
+    throw e
+  }
+
+  return c.json(
+    {
+      ...respondCreated(result, markdown),
+      ...(ingestedCount > 0 ? { media_imported: ingestedCount } : {}),
+    },
+    201,
+  )
 })
 
 /** 读文档根 properties.source.content_hash（无则 undefined） */
