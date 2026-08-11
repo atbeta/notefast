@@ -9,7 +9,20 @@
       "images": "图床与图片",
       "backup": "灾备与归档",
       "tokens": "API 与外部接入",
-      "security": "账户安全"
+      "security": "账户安全",
+      "about": "关于"
+    },
+    "about": {
+      "version": "版本 {{version}}",
+      "versionLoading": "正在读取版本…",
+      "blurb": "NoteFast 是一个 AI 原生的 Markdown 知识库，可自动索引、链接和检索你的每一条笔记。",
+      "checkUpdates": "检查更新",
+      "openReleases": "下载页",
+      "upToDate": "已是最新版本（v{{version}}）",
+      "updateAvailable": "发现新版本 v{{latest}}（当前 v{{current}}）",
+      "download": "前往下载",
+      "checkFailed": "检查失败，请稍后再试或直接打开",
+      "manualHint": "检查更新仅在你点击时访问 GitHub；启动与日常使用不会主动联网查版本。"
     },
     "language": {
       "title": "界面语言",

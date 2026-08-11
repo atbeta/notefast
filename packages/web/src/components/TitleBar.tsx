@@ -10,7 +10,7 @@ import { Tooltip } from './ui'
  * - 浏览器形态与 macOS 壳不渲染：前者无此概念，后者用系统标题栏（macOS 壳
  *   没有 Tauri window API，误渲染会抛错——所以 gate 在 isTauriShell 且点击前
  *   仍有 __TAURI__ 存在性防御）
- * - 左侧店名 NoteFast：壳内身份落在本栏（侧栏不再放品牌，避免与标题栏重复）
+ * - 左侧应用图标 + 店名 NoteFast：Win 无边框标题栏惯例（侧栏不再放品牌）
  * - 拖拽：data-tauri-drag-region（wry 对 button 等可交互元素自动豁免，点击正常）
  * - 双击空白区域切换最大化（Windows 无边框窗口惯例交互）
  * - 最大化状态经 onResized 事件同步，切换 最大化/还原 图标
@@ -60,8 +60,17 @@ export default function TitleBar() {
       }}
       className="h-9 shrink-0 flex items-center justify-between pl-3 pr-1 border-b border-border bg-background select-none"
     >
-      {/* 左侧店名：侧栏不再放品牌，Tauri 壳身份落在系统铬（浏览器 / macOS 壳不挂本组件） */}
-      <div data-tauri-drag-region className="min-w-0 flex-1 flex items-center">
+      {/* 左侧图标 + 店名：填满 Win 标题栏左侧，避免只有文字显得空 */}
+      <div data-tauri-drag-region className="min-w-0 flex-1 flex items-center gap-2">
+        <img
+          src="/favicon.svg"
+          alt=""
+          aria-hidden
+          width={16}
+          height={16}
+          draggable={false}
+          className="w-4 h-4 rounded-[3px] shrink-0 pointer-events-none"
+        />
         <span className="text-[13px] font-semibold tracking-[-0.01em] text-foreground/90 truncate pointer-events-none">
           NoteFast
         </span>

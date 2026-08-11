@@ -364,7 +364,7 @@ export default function Sidebar({
 
   return (
     <aside className="w-60 flex flex-col shrink-0 h-full bg-sidebar border-r border-border/50">
-      {/* 与 web 同高：macOS 只加左侧让位给红绿灯，不铺全宽空顶带 */}
+      {/* ⌘K 行：与浏览器同高（仅 pt-3）。勿再叠 --shell-top-inset / 空顶带——曾两度叠出「两段留白」 */}
       <div
         data-drag-region
         onDoubleClick={(e) => {
@@ -609,7 +609,14 @@ export default function Sidebar({
             </Tooltip>
           </div>
           {version && (
-            <span className="text-[10px] font-mono tabular-nums text-sidebar-muted/55">v{version}</span>
+            <Link
+              to="/settings/about"
+              onClick={closeAfterNav}
+              className="text-[10px] font-mono tabular-nums text-sidebar-muted/55 hover:text-sidebar-muted transition-colors"
+              title={t('settings.tabs.about')}
+            >
+              v{version}
+            </Link>
           )}
         </div>
       </div>

@@ -8,6 +8,7 @@ import {
   HardDriveDownload,
   Plug,
   ShieldCheck,
+  Info,
 } from 'lucide-react'
 import AiChatTrigger from '../../components/AiChatTrigger'
 
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { to: 'backup', tabKey: 'backup', Icon: HardDriveDownload },
   { to: 'tokens', tabKey: 'tokens', Icon: Plug },
   { to: 'security', tabKey: 'security', Icon: ShieldCheck },
+  { to: 'about', tabKey: 'about', Icon: Info },
 ] as const
 
 export default function SettingsLayout() {

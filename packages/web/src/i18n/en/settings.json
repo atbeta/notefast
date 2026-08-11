@@ -9,7 +9,20 @@
       "images": "Images & Hosting",
       "backup": "Backup & Archive",
       "tokens": "API & External Access",
-      "security": "Account Security"
+      "security": "Account Security",
+      "about": "About"
+    },
+    "about": {
+      "version": "Version {{version}}",
+      "versionLoading": "Loading version…",
+      "blurb": "NoteFast is an AI-native Markdown knowledge base that automatically indexes, links, and searches every note.",
+      "checkUpdates": "Check for updates",
+      "openReleases": "Releases",
+      "upToDate": "You’re up to date (v{{version}})",
+      "updateAvailable": "New version v{{latest}} available (current v{{current}})",
+      "download": "Download",
+      "checkFailed": "Check failed. Try again later or open",
+      "manualHint": "Update checks only run when you click; the app does not phone home on launch."
     },
     "language": {
       "title": "Interface language",

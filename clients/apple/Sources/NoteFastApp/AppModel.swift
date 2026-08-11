@@ -137,7 +137,6 @@ final class AppModel: ObservableObject {
             verifyEngineVersion(hs.version)
             navigator.navigate(to: entryURL ?? URL(string: "http://127.0.0.1")!)
             drainPendingImports()
-            scheduleAutoUpdateCheck()
         } catch {
             state = .failed(error)
         }
@@ -169,16 +168,8 @@ final class AppModel: ObservableObject {
             ?? engineVersion ?? "0"
     }
 
-    /// 启动后静默检查一次（延迟 8s 让启动链路先稳；失败静默，有新版发系统通知 + 菜单入口）
-    private func scheduleAutoUpdateCheck() {
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 8_000_000_000)
-            guard !Task.isCancelled else { return }
-            self?.checkForUpdates(userInitiated: false)
-        }
-    }
-
-    func checkForUpdates(userInitiated: Bool) {
+    /// 仅用户主动触发（设置「关于」/ 帮助菜单）；启动不再静默打 GitHub。
+    func checkForUpdates(userInitiated: Bool = true) {
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -187,7 +178,7 @@ final class AppModel: ObservableObject {
                     self.availableUpdate = latest
                     NotificationManager.shared.post(
                         title: "NoteFast 有新版本",
-                        body: "v\(latest.version) 已发布（当前 v\(self.currentVersion)），帮助菜单可前往下载。"
+                        body: "v\(latest.version) 已发布（当前 v\(self.currentVersion)），可前往下载页获取。"
                     )
                     if userInitiated { self.openUpdateDownload() }
                 } else if userInitiated {
@@ -498,6 +489,13 @@ final class AppModel: ObservableObject {
     func openSettings() {
         showMainWindow()
         guard let url = pageURL("/settings") else { return }
+        navigator.navigate(to: url)
+    }
+
+    /// 设置 → 关于（Logo / 版本 / 手动检查更新）
+    func openAbout() {
+        showMainWindow()
+        guard let url = pageURL("/settings/about") else { return }
         navigator.navigate(to: url)
     }
 

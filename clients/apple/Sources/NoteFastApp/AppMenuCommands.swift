@@ -67,6 +67,9 @@ struct AppMenuCommands: Commands {
         }
 
         CommandMenu("帮助") {
+            Button("关于 NoteFast") {
+                model.openAbout()
+            }
             Button("检查更新…") {
                 model.checkForUpdates(userInitiated: true)
             }

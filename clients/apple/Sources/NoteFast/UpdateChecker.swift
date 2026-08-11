@@ -1,7 +1,7 @@
 import Foundation
 
-/// GitHub Releases 轻量更新检查。
-/// 非 Sparkle：只查最新 release 版本号并与当前版比较，有新版提示用户去下载页。
+/// GitHub Releases 轻量更新检查（仅用户主动触发，启动不联网）。
+/// 非 Sparkle：查最新 release 版本号并与当前版比较，有新版引导用户去下载页。
 /// 等装机量值得时再升级 Sparkle/appcast 全自动更新。
 public struct ReleaseInfo: Equatable, Sendable {
     /// 去掉 v 前缀的语义化版本（tag "v0.55.0" → "0.55.0"）
