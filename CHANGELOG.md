@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.60.0](https://github.com/atbeta/notefast/compare/v0.59.0...v0.60.0) (2026-08-11)
+
+
+### Features
+
+* **web:** demo mode (whole-doc zoom) replaces 4-step font size; rail 288/400 ([b0a96b1](https://github.com/atbeta/notefast/commit/b0a96b1ddcc55fe057f341508984a9385bba3f0f))
+
 ## [0.59.0](https://github.com/atbeta/notefast/compare/v0.58.2...v0.59.0) (2026-08-11)
 
 
