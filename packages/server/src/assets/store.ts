@@ -333,6 +333,8 @@ export interface AssetListItem {
   created_at: string
   /** 是否已挂图床外链 */
   remote: boolean
+  /** 图床外链地址（remote 时非空；供资源页悬浮展示/复制） */
+  remote_url: string | null
   /** 是否被任意未删除文档引用 */
   referenced: boolean
 }
@@ -373,6 +375,7 @@ export function listAssets(opts: { limit?: number; offset?: number } = {}): {
       size: r.size,
       created_at: r.created_at,
       remote: Boolean(r.remote_url),
+      remote_url: r.remote_url,
       referenced: referenced.has(r.id),
     })),
   }

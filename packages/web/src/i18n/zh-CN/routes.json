@@ -115,7 +115,14 @@
     "deleting": "删除中…",
     "deleted": "已删除",
     "deleteFailed": "删除失败",
-    "deleteInUse": "图片仍被文档引用，无法删除"
+    "deleteInUse": "图片仍被文档引用，无法删除",
+    "uploadExisting": "上传存量图片",
+    "batchRunning": "正在上传 {{done}}/{{total}}…",
+    "batchDone": "✓ 存量上传完成：成功 {{ok}} 张，失败 {{failed}} 张",
+    "uploaded": "已上传至图床",
+    "uploadFailed": "上传失败",
+    "uploadLocal": "上传到图床",
+    "uploadShort": "上传"
   },
   "share": {
     "notFoundTitle": "链接不存在或已关闭",

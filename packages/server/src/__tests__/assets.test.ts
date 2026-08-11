@@ -292,6 +292,13 @@ describe('AssetStore — 图床上传（命令契约）', () => {
     }
     expect(url).toBe('https://img.example.test/abc.png')
 
+    // 资源列表应带 remote_url（资源页悬浮展示外链地址用）
+    const list = await app.fetch(new Request('http://localhost/api/v1/assets?limit=10'))
+    const listBody = await list.json() as { items: Array<{ id: string; remote: boolean; remote_url: string | null }> }
+    const listed = listBody.items.find((i) => i.id === meta.id)
+    expect(listed?.remote).toBe(true)
+    expect(listed?.remote_url).toBe('https://img.example.test/abc.png')
+
     // 显示不走 302（避免图床防盗链/跨域）：本地字节返回
     const res = await app.fetch(new Request(`http://localhost/api/v1/assets/${meta.id}`))
     expect(res.status).toBe(200)

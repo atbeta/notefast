@@ -115,7 +115,14 @@
     "deleting": "Deleting…",
     "deleted": "Deleted",
     "deleteFailed": "Delete failed",
-    "deleteInUse": "This image is still referenced by a document"
+    "deleteInUse": "This image is still referenced by a document",
+    "uploadExisting": "Upload existing images",
+    "batchRunning": "Uploading {{done}}/{{total}}…",
+    "batchDone": "✓ Existing upload done: {{ok}} ok, {{failed}} failed",
+    "uploaded": "Uploaded to image host",
+    "uploadFailed": "Upload failed",
+    "uploadLocal": "Upload to image host",
+    "uploadShort": "Upload"
   },
   "share": {
     "notFoundTitle": "This link doesn't exist or has been closed",

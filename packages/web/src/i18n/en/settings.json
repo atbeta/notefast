@@ -45,10 +45,7 @@
       "testOk": "✓ Command works, returned: {{url}}",
       "testFailed": "Command failed:",
       "exitCode": "Exit code: {{code}}",
-      "lastError": "Last upload failure",
-      "uploadExisting": "Upload existing images",
-      "batchRunning": "Uploading {{done}}/{{total}}…",
-      "batchDone": "✓ Existing upload done: {{ok}} ok, {{failed}} failed"
+      "lastError": "Last upload failure"
     },
     "termDict": {
       "title": "Entity Dictionary",

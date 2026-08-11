@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ImageIcon, Loader2, X } from 'lucide-react'
+import { ImageIcon, X } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useToast } from './ui'
 
@@ -22,15 +22,6 @@ interface UploadTestResult {
   exit_code?: number | null
 }
 
-interface UploadBatchStatus {
-  running: boolean
-  total: number
-  done: number
-  ok: number
-  failed: number
-  lastError: string | null
-}
-
 /**
  * 图床上传设置（Typora 式命令契约）
  *
@@ -48,8 +39,6 @@ export default function ImageUploadPanel() {
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<UploadTestResult | null>(null)
-  const [batch, setBatch] = useState<UploadBatchStatus | null>(null)
-  const [batchStarting, setBatchStarting] = useState(false)
   const [lastError, setLastError] = useState<{ at: string; message: string } | null>(null)
   const [loaded, setLoaded] = useState(false)
 
@@ -102,30 +91,7 @@ export default function ImageUploadPanel() {
     }
   }
 
-  /** 存量图片补传：启动后台队列 + 轮询进度 */
-  const handleBatchUpload = async () => {
-    if (mode !== 'auto' || !command.trim()) return
-    setBatchStarting(true)
-    try {
-      const res = await api.post<{ queued: number; running: boolean }>('/assets/upload-missing', {})
-      if (res.queued === 0 && !res.running) {
-        setBatch({ running: false, total: 0, done: 0, ok: 0, failed: 0, lastError: null })
-      }
-    } catch (e) {
-      setTestResult({ ok: false, error: e instanceof Error ? e.message : String(e) })
-    } finally {
-      setBatchStarting(false)
-    }
-  }
-
-  // 批量补传进行中：轮询进度
-  useEffect(() => {
-    if (!batch?.running) return
-    const timer = setInterval(() => {
-      void api.get<UploadBatchStatus>('/assets/upload-status').then(setBatch).catch(() => {})
-    }, 1200)
-    return () => clearInterval(timer)
-  }, [batch?.running])
+  /** 存量图片补传已迁至 资源页（资源 → 上传存量图片）——本面板只保留配置 + 测试 */
 
   if (!loaded) return null
 
@@ -247,48 +213,19 @@ export default function ImageUploadPanel() {
               )}
             </div>
           )}
-
-          {batch && (batch.running || batch.total > 0) && (
-            <div className="rounded-md border border-border bg-muted/25 px-3 py-2 text-[11.5px] space-y-1">
-              {batch.running ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                  <span>{t('settings.imageUpload.batchRunning', { done: batch.done, total: batch.total })}</span>
-                </div>
-              ) : (
-                <p className="text-emerald-600 dark:text-emerald-400">
-                  {t('settings.imageUpload.batchDone', { ok: batch.ok, failed: batch.failed })}
-                </p>
-              )}
-              {batch.failed > 0 && batch.lastError && (
-                <p className="text-destructive/90 break-all">{batch.lastError}</p>
-              )}
-            </div>
-          )}
         </div>
       )}
 
       <div className="flex items-center justify-end gap-2">
         {mode === 'auto' && (
-          <>
-            <button
-              type="button"
-              onClick={() => void handleBatchUpload()}
-              disabled={batchStarting || batch?.running}
-              className="btn-ghost-custom"
-            >
-              <ImageIcon className="w-3.5 h-3.5" strokeWidth={2} />
-              {batchStarting ? t('common.loading') : t('settings.imageUpload.uploadExisting')}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleTest()}
-              disabled={testing || !command.trim()}
-              className="btn-ghost-custom"
-            >
-              {testing ? t('common.loading') : t('settings.imageUpload.test')}
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={() => void handleTest()}
+            disabled={testing || !command.trim()}
+            className="btn-ghost-custom"
+          >
+            {testing ? t('common.loading') : t('settings.imageUpload.test')}
+          </button>
         )}
         <button type="button" onClick={() => void handleSave()} disabled={saving} className="btn-primary-custom">
           <ImageIcon className="w-3.5 h-3.5" strokeWidth={2} />

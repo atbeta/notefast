@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Cloud, ImageIcon, Link2Off, Trash2, X } from 'lucide-react'
+import { Cloud, CloudUpload, ImageIcon, Link2Off, Loader2, Trash2, X } from 'lucide-react'
 import { api, ApiError } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import { formatRelative } from '../lib/time'
@@ -24,7 +24,17 @@ interface AssetListItem {
   size: number
   created_at: string
   remote: boolean
+  remote_url: string | null
   referenced: boolean
+}
+
+interface UploadBatchStatus {
+  running: boolean
+  total: number
+  done: number
+  ok: number
+  failed: number
+  lastError: string | null
 }
 
 function formatBytes(n: number): string {
@@ -46,8 +56,60 @@ export default function ResourcesPage() {
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<AssetListItem | null>(null)
   const [deleting, setDeleting] = useState(false)
+  /** 单图上传中 id 集合（仅本地图片可点上传） */
+  const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set())
+  /** 存量补传进度（从设置页 ImageUploadPanel 迁来） */
+  const [batch, setBatch] = useState<UploadBatchStatus | null>(null)
+  const [batchStarting, setBatchStarting] = useState(false)
 
   const preview = previewId ? items.find((i) => i.id === previewId) ?? null : null
+
+  /** 单图触发上传：成功刷新列表，失败 toast 显示原因（含未启用自动上传） */
+  async function handleUpload(item: AssetListItem) {
+    if (uploadingIds.has(item.id)) return
+    setUploadingIds((prev) => new Set(prev).add(item.id))
+    try {
+      const res = await api.post<{ ok: boolean; url: string | null; error: string | null }>(`/assets/${item.id}/upload`, {})
+      if (res.ok) {
+        toast.success({ title: t('resources.uploaded') })
+        refetch()
+      } else {
+        toast.error({ title: res.error || t('resources.uploadFailed') })
+      }
+    } catch (e) {
+      toast.error({ title: e instanceof Error ? e.message : t('resources.uploadFailed') })
+    } finally {
+      setUploadingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(item.id)
+        return next
+      })
+    }
+  }
+
+  /** 存量图片补传：启动后台队列 + 轮询进度 */
+  async function handleBatchUpload() {
+    setBatchStarting(true)
+    try {
+      const res = await api.post<{ queued: number; running: boolean }>('/assets/upload-missing', {})
+      if (res.queued === 0 && !res.running) {
+        setBatch({ running: false, total: 0, done: 0, ok: 0, failed: 0, lastError: null })
+      }
+    } catch (e) {
+      toast.error({ title: e instanceof Error ? e.message : t('resources.uploadFailed') })
+    } finally {
+      setBatchStarting(false)
+    }
+  }
+
+  // 批量补传进行中：轮询进度（同 ImageUploadPanel）
+  useEffect(() => {
+    if (!batch?.running) return
+    const timer = setInterval(() => {
+      void api.get<UploadBatchStatus>('/assets/upload-status').then(setBatch).catch(() => {})
+    }, 1200)
+    return () => clearInterval(timer)
+  }, [batch?.running])
 
   useEffect(() => {
     if (!previewId) return
@@ -108,6 +170,38 @@ export default function ResourcesPage() {
           {t('resources.description')}
         </p>
 
+        {/* 存量补传：设置页迁来（图床命令配置仍在设置 → 图床与图片） */}
+        <div className="flex items-center justify-between gap-3 px-1">
+          <div className="flex-1 min-w-0">
+            {batch && (batch.running || batch.total > 0) && (
+              <div className="rounded-md border border-border bg-muted/25 px-3 py-2 text-[11.5px] space-y-1">
+                {batch.running ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                    <span>{t('resources.batchRunning', { done: batch.done, total: batch.total })}</span>
+                  </div>
+                ) : (
+                  <p className="text-emerald-600 dark:text-emerald-400">
+                    {t('resources.batchDone', { ok: batch.ok, failed: batch.failed })}
+                  </p>
+                )}
+                {batch.failed > 0 && batch.lastError && (
+                  <p className="text-destructive/90 break-all">{batch.lastError}</p>
+                )}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleBatchUpload()}
+            disabled={batchStarting || batch?.running}
+            className="btn-ghost-custom shrink-0"
+          >
+            <CloudUpload className="w-3.5 h-3.5" strokeWidth={2} />
+            {batchStarting ? t('common.loading') : t('resources.uploadExisting')}
+          </button>
+        </div>
+
         {loading && !data ? (
           <ListRowsSkeleton rows={6} />
         ) : items.length === 0 ? (
@@ -163,7 +257,10 @@ export default function ResourcesPage() {
                 <div className="px-2.5 py-2 space-y-1">
                   <div className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
                     {item.remote ? (
-                      <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
+                      <span
+                        className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"
+                        title={item.remote_url ?? undefined}
+                      >
                         <Cloud className="w-3 h-3" strokeWidth={1.75} />
                         {t('resources.remote')}
                       </span>
@@ -178,6 +275,22 @@ export default function ResourcesPage() {
                         <Link2Off className="w-3 h-3" strokeWidth={1.75} />
                         {t('resources.unused')}
                       </span>
+                    )}
+                    {!item.remote && (
+                      <button
+                        type="button"
+                        onClick={() => void handleUpload(item)}
+                        disabled={uploadingIds.has(item.id)}
+                        className="ml-auto inline-flex items-center gap-0.5 text-muted-foreground/70 hover:text-primary transition-colors disabled:opacity-50"
+                        title={t('resources.uploadLocal')}
+                      >
+                        {uploadingIds.has(item.id) ? (
+                          <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
+                        ) : (
+                          <CloudUpload className="w-3 h-3" strokeWidth={1.75} />
+                        )}
+                        {t('resources.uploadShort')}
+                      </button>
                     )}
                   </div>
                   <div className="flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground/80 tabular-nums">
