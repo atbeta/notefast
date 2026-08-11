@@ -1588,7 +1588,11 @@ function DemoModeButton() {
       setZoomMenuOpen(false)
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setZoomMenuOpen(false)
+      if (e.key !== 'Escape') return
+      // 先关菜单，阻止冒泡到全局 Esc→退出演示
+      e.preventDefault()
+      e.stopPropagation()
+      setZoomMenuOpen(false)
     }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)

@@ -93,6 +93,13 @@ export function exitDemoMode(): void {
   setState({ active: false, zoomIndex: restore })
 }
 
+/** Esc 退出演示；未激活返回 false（供全局 keydown 调用） */
+export function tryExitDemoOnEscape(): boolean {
+  if (!state.active) return false
+  exitDemoMode()
+  return true
+}
+
 /** 切换演示模式开关 */
 export function toggleDemoMode(): void {
   if (state.active) exitDemoMode()

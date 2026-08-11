@@ -94,7 +94,7 @@
       "enter": "进入演示",
       "exit": "退出演示",
       "active": "演示中",
-      "shortcutHint": "Ctrl+=/Ctrl+- 放大缩小 / Ctrl+0 复位"
+      "shortcutHint": "Ctrl+=/Ctrl+- 放大缩小 / Ctrl+0 复位 / Esc 退出演示"
     },
     "zoom": {
       "label": "缩放",

@@ -94,7 +94,7 @@
       "enter": "Enter demo",
       "exit": "Exit demo",
       "active": "Demo on",
-      "shortcutHint": "Ctrl+=/Ctrl+- zoom, Ctrl+0 reset"
+      "shortcutHint": "Ctrl+=/Ctrl+- zoom, Ctrl+0 reset, Esc exit demo"
     },
     "zoom": {
       "label": "Zoom",

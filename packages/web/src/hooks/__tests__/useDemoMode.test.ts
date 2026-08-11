@@ -94,6 +94,16 @@ describe('演示开关（active）', () => {
     expect(getDemoState().active).toBe(false)
     expect(getDemoState().zoomIndex).toBe(0)
   })
+
+  test('tryExitDemoOnEscape：仅激活时退出并恢复档位', async () => {
+    const { getDemoState, enterDemoMode, tryExitDemoOnEscape } = await import('../useDemoMode')
+    expect(tryExitDemoOnEscape()).toBe(false)
+    enterDemoMode()
+    expect(tryExitDemoOnEscape()).toBe(true)
+    expect(getDemoState().active).toBe(false)
+    expect(getDemoState().zoomIndex).toBe(0)
+    expect(tryExitDemoOnEscape()).toBe(false)
+  })
 })
 
 describe('cycleDemoZoom（边界）', () => {
