@@ -96,6 +96,8 @@
       "active": "演示中",
       "shortcutHint": "Ctrl+=/Ctrl+- 放大缩小 / Ctrl+0 复位"
     },
-    "zoomReset": "恢复 100%"
+    "zoomReset": "恢复 100%",
+    "widenReading": "加宽正文（图表友好）",
+    "narrowReading": "恢复最佳行宽"
   }
 }

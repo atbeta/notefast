@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from 'react'
 import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { Block, HeadingNode } from '@notefast/core'
@@ -44,6 +44,7 @@ import { readDocRailWidth, writeDocRailWidth, type DocRailWidth } from '../hooks
 import { scrollToElement, findScrollableAncestor } from '../lib/scroll'
 import { useActiveHeading } from '../hooks/useActiveHeading'
 import { useDemoMode, DEMO_ZOOMS, setDemoZoomIndex, toggleDemoMode } from '../hooks/useDemoMode'
+import { useDocReadingWidth, writeDocReadingWidth, DOC_READING_WIDTH_REM } from '../hooks/useDocReadingWidth'
 import { formatRelative, relativeTime, formatSqliteDateTime, currentLocale } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
@@ -269,6 +270,9 @@ export default function DocPage() {
   useEffect(() => {
     writeDocRailWidth(railWidth)
   }, [railWidth])
+  /** 阅读列宽度档位：normal=46rem（最佳行宽）/ wide=64rem（图表友好）；持久化 */
+  const readingWidth = useDocReadingWidth()
+  const readingMaxW = DOC_READING_WIDTH_REM[readingWidth]
   /** 演示模式：整体 zoom 放大 + 左侧隐藏（Layout 处理）+ 右栏默认折叠可展开 */
   const demo = useDemoMode()
   /** 演示模式下右栏是否展开（不持久化；演示默认折叠，用户可手动展开） */
@@ -668,7 +672,7 @@ export default function DocPage() {
         <div className="flex-1 min-w-0 flex flex-col h-full border-r border-border/50">
           <div className="h-14 shrink-0 border-b border-border/50" />
           <div className="flex-1 overflow-hidden">
-            <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-10 space-y-3">
+            <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-10 space-y-3">
               <div className="mx-auto max-w-[var(--reading-max-w)] space-y-3">
                 <div className="h-9 bg-secondary rounded w-1/2" />
                 <div className="h-3.5 bg-secondary rounded w-28" />
@@ -804,7 +808,7 @@ export default function DocPage() {
         <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
           {/* 切换文档时保留旧内容完整展示，新数据到了直接替换 */}
           <div>
-            <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-14 pb-32 animate-fade-in">
+            <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-14 pb-32 animate-fade-in">
             {indexJob && (indexJob.state === 'pending' || indexJob.state === 'running') && (
               <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
                 <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" strokeWidth={1.75} />
@@ -873,8 +877,12 @@ export default function DocPage() {
               </div>
             )}
             {/* 阅读列：标题/meta/tags/正文 走 --reading-max-w；状态横幅保留在外层 max-w-4xl。
-                demo-zoom：缩放档位整体等比放大（阅读/演示通用；仅编辑态不缩放） */}
-            <div className={`mx-auto max-w-[var(--reading-max-w)] ${!isEditing ? 'demo-zoom' : ''}`}>
+                demo-zoom：缩放档位整体等比放大（阅读/演示通用；仅编辑态不缩放）。
+                readingWidth 两档：normal=46rem（最佳行宽）/ wide=64rem（图表友好） */}
+            <div
+              className={`mx-auto max-w-[var(--reading-max-w)] ${!isEditing ? 'demo-zoom' : ''}`}
+              style={{ '--reading-max-w': `${readingMaxW}rem` } as CSSProperties}
+            >
             {/* Title — always editable, AI-generate on hover */}
             <div className="group relative">
               <input
@@ -1529,12 +1537,15 @@ function ErrorState({ message }: { message: string }) {
     </div>
   )
 }
-/** 缩放 + 演示（右上角，仅阅读态）：
+/** 缩放 + 阅读宽度 + 演示（右上角，仅阅读态）：
  *  - 档位组 100/125/150/175/200% 常显，阅读模式即可调（独立于演示开关）
+ *  - 宽度切换 normal=46rem（最佳行宽）/ wide=64rem（图表友好），持久化
  *  - Presentation 图标 = 演示模式开关（隐藏侧栏/窗口标题栏，纯展示态） */
 function DemoModeButton() {
   const { t } = useTranslation()
   const demo = useDemoMode()
+  const readingWidth = useDocReadingWidth()
+  const toggleReadingWidth = () => writeDocReadingWidth(readingWidth === 'normal' ? 'wide' : 'normal')
   return (
     <div
       className="flex items-center gap-1"
@@ -1562,6 +1573,19 @@ function DemoModeButton() {
         )
       })}
       <div className="w-px h-4 bg-border/60 mx-0.5" />
+      <button
+        type="button"
+        onClick={toggleReadingWidth}
+        aria-pressed={readingWidth === 'wide'}
+        className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+          readingWidth === 'wide'
+            ? 'text-primary bg-primary/12 hover:bg-primary/15'
+            : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+        }`}
+        title={readingWidth === 'wide' ? t('doc.narrowReading') : t('doc.widenReading')}
+      >
+        {readingWidth === 'wide' ? <Minimize2 className="w-3.5 h-3.5" strokeWidth={1.75} /> : <Maximize2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
+      </button>
       <button
         type="button"
         onClick={() => toggleDemoMode()}

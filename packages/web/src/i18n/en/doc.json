@@ -96,6 +96,8 @@
       "active": "Demo on",
       "shortcutHint": "Ctrl+=/Ctrl+- zoom, Ctrl+0 reset"
     },
-    "zoomReset": "Reset to 100%"
+    "zoomReset": "Reset to 100%",
+    "widenReading": "Widen content (diagram-friendly)",
+    "narrowReading": "Restore optimal line width"
   }
 }
