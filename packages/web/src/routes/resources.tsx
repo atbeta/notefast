@@ -163,6 +163,17 @@ export default function ResourcesPage() {
             </span>
           )}
         </div>
+        {/* 存量补传入口（header 右侧；图床命令配置仍在设置 → 图床与图片） */}
+        <button
+          type="button"
+          onClick={() => void handleBatchUpload()}
+          disabled={batchStarting || batch?.running}
+          className="btn-ghost-custom shrink-0 ml-auto"
+          title={t('resources.uploadExistingHint')}
+        >
+          <CloudUpload className="w-3.5 h-3.5" strokeWidth={2} />
+          {batchStarting ? t('common.loading') : t('resources.uploadExisting')}
+        </button>
       </PageHeader>
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
@@ -170,37 +181,24 @@ export default function ResourcesPage() {
           {t('resources.description')}
         </p>
 
-        {/* 存量补传：设置页迁来（图床命令配置仍在设置 → 图床与图片） */}
-        <div className="flex items-center justify-between gap-3 px-1">
-          <div className="flex-1 min-w-0">
-            {batch && (batch.running || batch.total > 0) && (
-              <div className="rounded-md border border-border bg-muted/25 px-3 py-2 text-[11.5px] space-y-1">
-                {batch.running ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                    <span>{t('resources.batchRunning', { done: batch.done, total: batch.total })}</span>
-                  </div>
-                ) : (
-                  <p className="text-emerald-600 dark:text-emerald-400">
-                    {t('resources.batchDone', { ok: batch.ok, failed: batch.failed })}
-                  </p>
-                )}
-                {batch.failed > 0 && batch.lastError && (
-                  <p className="text-destructive/90 break-all">{batch.lastError}</p>
-                )}
+        {/* 存量补传进度（仅运行时出现，平时不占空间） */}
+        {batch && (batch.running || batch.total > 0) && (
+          <div className="rounded-md border border-border bg-muted/25 px-3 py-2 text-[11.5px] space-y-1">
+            {batch.running ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                <span>{t('resources.batchRunning', { done: batch.done, total: batch.total })}</span>
               </div>
+            ) : (
+              <p className="text-emerald-600 dark:text-emerald-400">
+                {t('resources.batchDone', { ok: batch.ok, failed: batch.failed })}
+              </p>
+            )}
+            {batch.failed > 0 && batch.lastError && (
+              <p className="text-destructive/90 break-all">{batch.lastError}</p>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => void handleBatchUpload()}
-            disabled={batchStarting || batch?.running}
-            className="btn-ghost-custom shrink-0"
-          >
-            <CloudUpload className="w-3.5 h-3.5" strokeWidth={2} />
-            {batchStarting ? t('common.loading') : t('resources.uploadExisting')}
-          </button>
-        </div>
+        )}
 
         {loading && !data ? (
           <ListRowsSkeleton rows={6} />

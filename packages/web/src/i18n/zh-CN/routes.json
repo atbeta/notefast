@@ -117,6 +117,7 @@
     "deleteFailed": "删除失败",
     "deleteInUse": "图片仍被文档引用，无法删除",
     "uploadExisting": "上传存量图片",
+    "uploadExistingHint": "将本地未外链的图片批量上传到图床",
     "batchRunning": "正在上传 {{done}}/{{total}}…",
     "batchDone": "✓ 存量上传完成：成功 {{ok}} 张，失败 {{failed}} 张",
     "uploaded": "已上传至图床",

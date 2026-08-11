@@ -117,6 +117,7 @@
     "deleteFailed": "Delete failed",
     "deleteInUse": "This image is still referenced by a document",
     "uploadExisting": "Upload existing images",
+    "uploadExistingHint": "Batch-upload local images without a hosted URL",
     "batchRunning": "Uploading {{done}}/{{total}}…",
     "batchDone": "✓ Existing upload done: {{ok}} ok, {{failed}} failed",
     "uploaded": "Uploaded to image host",
