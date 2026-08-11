@@ -696,7 +696,7 @@ export default function DocPage() {
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col h-full border-r border-border/50">
         {/* Global Sticky Header — 左：上一篇/下一篇 ｜ 中：标题（居中） ｜ 右：操作 */}
-        <PageHeader bare className="shrink-0 grid grid-cols-[auto_1fr_auto] items-center px-3 sm:px-6 gap-2">
+        <PageHeader bare className="shrink-0 px-3 sm:px-6">
           {/* 左：顺序导航（Obsidian 式；按创建顺序，单篇两侧禁用） */}
           <div className="flex items-center gap-1">
             <button
@@ -720,8 +720,8 @@ export default function DocPage() {
               <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
             </button>
           </div>
-          {/* 中：文档标题（居中截断） */}
-          <div className="min-w-0 flex justify-center">
+          {/* 中：文档标题（flex-1 撑满中间，居中截断） */}
+          <div className="flex-1 min-w-0 flex justify-center">
             <span className="font-medium text-foreground truncate text-sm max-w-full">
               {doc.content || t('doc.untitledDocument')}
             </span>
