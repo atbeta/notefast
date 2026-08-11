@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.62.1](https://github.com/atbeta/notefast/compare/v0.62.0...v0.62.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* **server,web:** ingest relative-path images on open and web import ([a789596](https://github.com/atbeta/notefast/commit/a78959651729099839f4448f5ffa49fc90eb3a73))
+
 ## [0.62.0](https://github.com/atbeta/notefast/compare/v0.61.1...v0.62.0) (2026-08-11)
 
 
