@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { Block, HeadingNode } from '@notefast/core'
@@ -15,6 +16,7 @@ import {
   Archive,
   Share2,
   Globe,
+  Check,
   ChevronDown,
   ChevronRight,
   SquarePen,
@@ -26,6 +28,7 @@ import {
   Minimize2,
   Maximize2,
   Presentation,
+  ZoomIn,
 } from 'lucide-react'
 import i18next from '../i18n'
 import { api, request } from '../hooks/useAPI'
@@ -1538,7 +1541,7 @@ function ErrorState({ message }: { message: string }) {
   )
 }
 /** 缩放 + 阅读宽度 + 演示（右上角，仅阅读态）：
- *  - 档位组 100/125/150/175/200% 常显，阅读模式即可调（独立于演示开关）
+ *  - 缩放：ZoomIn 图标（与邻钮同形）→ 点击弹出 5 档菜单；非 100% 时浅选中态
  *  - 宽度切换 normal=46rem（最佳行宽）/ wide=64rem（图表友好），持久化
  *  - Presentation 图标 = 演示模式开关（隐藏侧栏/窗口标题栏，纯展示态） */
 function DemoModeButton() {
@@ -1546,32 +1549,102 @@ function DemoModeButton() {
   const demo = useDemoMode()
   const readingWidth = useDocReadingWidth()
   const toggleReadingWidth = () => writeDocReadingWidth(readingWidth === 'normal' ? 'wide' : 'normal')
+  const zoomPct = Math.round((DEMO_ZOOMS[demo.zoomIndex] ?? 1) * 100)
+  const zoomBtnRef = useRef<HTMLButtonElement>(null)
+  const zoomMenuRef = useRef<HTMLDivElement>(null)
+  const [zoomMenuOpen, setZoomMenuOpen] = useState(false)
+  const [zoomMenuPos, setZoomMenuPos] = useState<{ top: number; left: number } | null>(null)
+
+  useLayoutEffect(() => {
+    if (!zoomMenuOpen) {
+      setZoomMenuPos(null)
+      return
+    }
+    const el = zoomBtnRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const menuW = 140
+    const left = Math.max(8, Math.min(r.right - menuW, window.innerWidth - menuW - 8))
+    setZoomMenuPos({ top: r.bottom + 6, left })
+  }, [zoomMenuOpen])
+
+  useEffect(() => {
+    if (!zoomMenuOpen) return
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (zoomMenuRef.current?.contains(target)) return
+      if (zoomBtnRef.current?.contains(target)) return
+      setZoomMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setZoomMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [zoomMenuOpen])
+
   return (
     <div
       className="flex items-center gap-1"
       role="group"
       aria-label={t('doc.demoMode.label')}
-      title={t('doc.demoMode.shortcutHint')}
     >
-      {DEMO_ZOOMS.map((z, i) => {
-        const active = demo.zoomIndex === i
-        return (
-          <button
-            key={z}
-            type="button"
-            onClick={() => setDemoZoomIndex(i)}
-            aria-pressed={active}
-            className={`min-w-[30px] h-6 px-1 rounded text-[11px] font-mono tabular-nums transition-colors ${
-              active
-                ? 'bg-primary/12 text-foreground border border-primary/30'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent'
-            }`}
-            title={i === 0 ? t('doc.zoomReset') : undefined}
-          >
-            {Math.round(z * 100)}%
-          </button>
-        )
-      })}
+      <button
+        ref={zoomBtnRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={zoomMenuOpen}
+        aria-label={t('doc.zoom.current', { pct: zoomPct })}
+        title={`${t('doc.zoom.current', { pct: zoomPct })} · ${t('doc.demoMode.shortcutHint')}`}
+        onClick={() => setZoomMenuOpen((v) => !v)}
+        className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+          zoomMenuOpen || demo.zoomIndex !== 0
+            ? 'text-primary bg-primary/12 hover:bg-primary/15'
+            : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+        }`}
+      >
+        <ZoomIn className="w-3.5 h-3.5" strokeWidth={1.75} />
+      </button>
+      {zoomMenuOpen && zoomMenuPos && createPortal(
+        <div
+          ref={zoomMenuRef}
+          role="menu"
+          aria-label={t('doc.zoom.label')}
+          className="fixed z-[80] min-w-[140px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
+          style={{ top: zoomMenuPos.top, left: zoomMenuPos.left }}
+        >
+          {DEMO_ZOOMS.map((z, i) => {
+            const active = demo.zoomIndex === i
+            const pct = Math.round(z * 100)
+            return (
+              <button
+                key={z}
+                type="button"
+                role="menuitemradio"
+                aria-checked={active}
+                title={i === 0 ? t('doc.zoomReset') : undefined}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] text-left text-foreground hover:bg-accent transition-colors"
+                onClick={() => {
+                  setDemoZoomIndex(i)
+                  setZoomMenuOpen(false)
+                }}
+              >
+                <Check
+                  className={`w-3.5 h-3.5 shrink-0 ${active ? 'opacity-100' : 'opacity-0'}`}
+                  strokeWidth={2}
+                  aria-hidden
+                />
+                <span className="font-mono tabular-nums">{pct}%</span>
+              </button>
+            )
+          })}
+        </div>,
+        document.body,
+      )}
       <div className="w-px h-4 bg-border/60 mx-0.5" />
       <button
         type="button"

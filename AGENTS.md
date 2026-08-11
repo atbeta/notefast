@@ -155,15 +155,15 @@ docker compose up -d
 - 坚持 SQLite 单文件主库，不为单用户知识库引入 Qdrant/pgvector 等独立向量库作为默认依赖；向量是可重建二级索引（经 sqlite-vec），不以检索延迟为由另起向量库
 - 备份与 Markdown 归档分轨：单向 Markdown 推送不是灾难恢复；完整灾备用应用内 SQLite→S3 快照，恢复走停服 CLI
 - 功能分支合回 `main` 默认 `--ff-only`，避免多余 merge commit
-- 笔记组织优先 tag + 智能视图，不主推多笔记本 UI；底层保留单 Notebook 即可；侧栏按对象分「笔记 / 资源 / 关系」，不默认加「已分享」智能视图（访问面审计，非内容组织）；「新建」侧栏入口先保留
+- 笔记组织优先 tag + 智能视图，不主推多笔记本 UI；底层保留单 Notebook 即可；侧栏按对象分「笔记 / 资源 / 关系」，不默认加「已分享」智能视图（访问面审计，非内容组织）；「新建」侧栏入口先保留；侧栏「最近访问」= 本机打开足迹（`localStorage` `notefast.recentVisits`），与首页「最近更新」分开，勿再做成最近更新的缩略重复
 - 文档默认对 AI 可见；「对 AI 隐藏」入口应低调（勿用锁图标或「对 AI 可见」易被读成需点击才可见）；已隐藏态再显式状态与恢复；暂不需要全局「默认 AI 可见性」，少数敏感笔记手动 opt-out
-- 人类写作体验视为正轨（非整站副产品）；可服务「同步写读找」轻量用户，不对打思源式块级 PKM 全家桶；Markdown 富渲染含 Mermaid / LaTeX、编辑器块级公式预览与桌面选区气泡（问 AI / 改写）
+- 人类写作体验视为正轨（非整站副产品）；可服务「同步写读找」轻量用户，不对打思源式块级 PKM 全家桶；Markdown 富渲染含 Mermaid / LaTeX、编辑器块级公式预览与桌面选区气泡（问 AI / 改写）；**零模型配置须优雅降级**——基础读写与词法检索可用，AI 入口隐藏/禁用而非报错墙或整站不可用
 - Markdown 仅作表达与导出，不作权威存储；主权靠自托管 SQLite + 可验证导出讲清楚，不为安抚退回文件夹 MD；便携导出/归档可将 tags、时间、`notefast_id` 投影为 YAML frontmatter（DB 仍是唯一写入真相，导入可读 tags，不按 id 静默覆盖）
 - AI 设置三个模型槽（chat/embedding/reranker）新增时默认预设一律为「自定义」空表单（本地优先姿态，不按 locale 替用户预选云端厂商）；预设含 DashScope 阿里云百炼（chat `qwen3.8-max` / embedding `qwen3.7-text-embedding` / reranker `qwen3-rerank`，rerank 走 `compatible-api` 段的 `/reranks` 复数路径、Jina 风格协议，由 `createReranker` 按 aliyuncs.com 域名分派并把 baseUrl 的 `compatible-mode/v1` 替换为 `compatible-api/v1`——chat/embeddings 的 compatible-mode 不含 /reranks，2026 起调用即 404）；reranker 默认模型与 embedding 解耦，走预设的 `rerankerModel` 字段（SiliconFlow = `BAAI/bge-reranker-v2-m3`）；查询理解复用单一 chat 槽即可，不必另加小模型槽
 - 本地可写 SQLite 的原生客户端是一等拓扑；官方免配置 Sync 云暂缓；PWA 只做「可安装壳」（manifest + 图标 + meta + safe-area），**不做 Service Worker / 离线缓存**（避免内嵌原生壳拿到陈旧资源，离线能力归原生壳），手机与轻客户端优先复用现有 Web
 - Web 运行时零外部 CDN 依赖（中国大陆部署友好）：字体经 `@fontsource-variable/*` npm 自托管（main.tsx 引入，family 名带 ` Variable` 后缀），**禁止恢复 Google Fonts 等外链**；mermaid 等均为 npm 打包
 - MCP 做强：能力落在 NoteFast 自身 MCP/API，不为本地另封一层 API 调用；大文件建档正文不经 LLM，走 stage/upload 通道
-- Web chrome：分享用顶栏轻量 popover（已分享 Globe 态）；文档级操作走列表/侧栏项悬浮 `⋯`；AI 助手左侧导航不常驻，分散 ⌘J / ⌘K / 桌面内容顶栏 / 移动顶栏 / 情境「问 AI」；「资源」是媒体浏览层（非图床/DAM），列表页顶栏对齐其他页（无前缀图标），编辑器可从资源库插已有图；文档右栏含「相关」语义邻居（挂现有检索，勿默认拉宽到 AI 面板）；批量化 AI 注入 UI 暂缓，批量先靠 MCP
+- Web chrome：分享用顶栏轻量 popover（已分享 Globe 态）；文档级操作走列表/侧栏项悬浮 `⋯`；AI 助手左侧导航不常驻，分散 ⌘J / ⌘K / 桌面内容顶栏 / 移动顶栏 / 情境「问 AI」；「资源」是媒体浏览层（非图床/DAM），列表页顶栏对齐其他页（无前缀图标），编辑器可从资源库插已有图；文档右栏含「相关」语义邻居（挂现有检索，勿默认拉宽到 AI 面板）；批量化 AI 注入 UI 暂缓，批量先靠 MCP；**阅读缩放偶发使用**：顶栏用 `ZoomIn` 图标 + 档位 popover（100–200%），勿横排多百分比按钮、勿在图标栏放文字 `%` 胶囊；演示模式进入可抬到 150%，**退出须恢复进入前缩放**（演示中再调档也不影响恢复；`useDemoMode`）
 
 ## Learned Workspace Facts
 
@@ -178,7 +178,7 @@ docker compose up -d
 - Docker 部署需显式打包 sqlite-vec 原生扩展（linux amd64/arm64 的 `vec0`），不能依赖完整 `node_modules`
 - Markdown 归档（LocalFS/S3/WebDAV）是单向内容副本，会丢失 ID/引用/标签等元数据；完整灾备用应用内 SQLite→S3 快照（设置页 / `docs/backup.md`）
 - Markdown 归档 = 便捷迁移 / 便携副本，**仅手动触发**：文档与引用的图片一起推送（带 frontmatter 的 `.md` + `media/<sha><ext>`，`asset:<sha>` 改写为相对路径，见 `sync/archiveMedia.ts`）；远端文件名为 `<slug>--<docId>.md`，由 `notefast-archive.manifest.json` 跟踪并清理陈旧文档与 media（`staleArchiveMedia`）；S3 与 WebDAV 适配器同时只能启用一个，且仅为单向 push
-- **资源库**：`GET /api/v1/assets` 列表 + Web `/resources` 只读浏览（本地/已外链、使用中/未引用）；图床配置仍在设置；编辑器工具栏 ImagePlus →「上传本地」/「从资源库」（`AssetPickerDialog` 单选插入 `![](asset:<sha>)`）；不做相册/批量修图/DAM；`asset:` 对用户保持内部引用
+- **资源库**：`GET /api/v1/assets` 列表 + Web `/resources`（本地/已外链、使用中/未引用）；缩略图可 lightbox 放大；未引用可删（`DELETE /assets/:id`，使用中拒绝）及一键清理未引用；图床配置仍在设置；编辑器工具栏 ImagePlus →「上传本地」/「从资源库」（`AssetPickerDialog` 单选插入 `![](asset:<sha>)`）；不做相册/批量修图/DAM；`asset:` 对用户保持内部引用
 - 文档 markdown 导出在根写入 `# {title}` 为有意设计；编辑器加载需 strip 与标题同文的首 H1（含子块时提升其子块）；便携导出/Markdown 归档经 `core/frontmatter.ts` + `services/portableMarkdown.ts` 在正文前投影 YAML（tags / created / modified / `notefast_id`），编辑器 `/export/markdown` 加载路径不注入；导入剥离 frontmatter 后若未显式传 tags 可采用其中 tags
 - 数据库备份配置在 `data/backup.config.json`；恢复须停服后跑 `bun --filter @notefast/server backup:restore`
 - **对象存储抽象层** `server/src/storage/objectStore.ts`：`ObjectStore`（testConnection / putObject / getObject / listObjects / deleteObject / deleteObjects），备份（`backup/s3Store.ts` 的 `BackupStore` + `backup/mediaBackup.ts`）与多端同步（`sync/protocol.ts`）全部构建其上，现仅 S3 实现（`createS3ObjectStore`，key 为相对 bucket 的完整键）；加 WebDAV/LocalFS 只需新增 ObjectStore 实现。**存储连接库** `data/storage-locations.json`（`storage/locations.ts` + `api/storageLocations.ts`，支持 S3/WebDAV）：备份、多端同步、Markdown 归档三能力**共享连接、各自引用 locationId + 前缀**（能力配置 `backup.config.json` / `sync-protocol.config.json` + 状态 `sync-state.json` / `sync.config.json` 均不再内嵌凭据）；多端同步 `syncNow` 会上送 media 使同步位置自包含；seq 游标绑定「存储位置指纹」，换连接/前缀自动重置防漏发

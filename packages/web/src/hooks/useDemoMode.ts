@@ -6,10 +6,11 @@
  * 整个阅读列，所有元素同步放大。
  *
  * 设计决策（2026-08-11 / 2026-08-12 更新）：
- * - **缩放与演示解耦**：zoom 是独立能力，阅读模式即可调（顶栏档位组常显），
+ * - **缩放与演示解耦**：zoom 是独立能力，阅读模式即可调（顶栏 ZoomIn 图标 + 菜单），
  *   立即生效；active 只决定「是否隐藏 UI（侧栏/窗口标题栏/rail 默认折叠）」
- * - 档位 100/125/150/175/200%（100% = 阅读默认，演示自动跳到 150%）
- * - **不持久化**：临时场景，需要时自己开，刷新/退出即恢复
+ * - 档位 100/125/150/175/200%（100% = 阅读默认；进入演示时若仍在 100% 则跳到 150%）
+ * - **退出演示恢复进入前档位**（演示中改缩放也只影响当次演示；阅读态缩放仍独立）
+ * - **不持久化**：临时场景，需要时自己开，刷新即恢复
  * - 演示模式下隐藏左侧全局导航 + 原生壳标题栏；右侧大纲 rail 默认折叠可展开
  * - 编辑态不缩放（自己写不需要）；lightbox 是 portal 不受影响
  */
@@ -32,6 +33,8 @@ interface DemoState {
 }
 
 let state: DemoState = { active: false, zoomIndex: DEFAULT_ZOOM_INDEX }
+/** 进入演示前的缩放档；退出时恢复。非演示中为 null */
+let zoomBeforeDemo: number | null = null
 const listeners = new Set<() => void>()
 
 function emit(): void {
@@ -77,13 +80,17 @@ export function useDemoZoom(): number {
 /** 进入演示模式：隐藏 UI 骨架；未手动调过缩放时跳到默认演示档（150%） */
 export function enterDemoMode(): void {
   if (state.active) return
+  zoomBeforeDemo = state.zoomIndex
   const zoomIndex = state.zoomIndex === DEFAULT_ZOOM_INDEX ? DEMO_ENTER_INDEX : state.zoomIndex
   setState({ active: true, zoomIndex })
 }
 
-/** 退出演示模式（不重置档位，下次进入沿用） */
+/** 退出演示模式：恢复进入前的缩放档位 */
 export function exitDemoMode(): void {
-  if (state.active) setState({ active: false, zoomIndex: state.zoomIndex })
+  if (!state.active) return
+  const restore = zoomBeforeDemo ?? state.zoomIndex
+  zoomBeforeDemo = null
+  setState({ active: false, zoomIndex: restore })
 }
 
 /** 切换演示模式开关 */
@@ -101,6 +108,7 @@ export function cycleDemoZoom(dir: 1 | -1): number {
 
 /** 复位到 100%（Ctrl+0）；同时退出演示模式 */
 export function resetDemoZoom(): void {
+  zoomBeforeDemo = null
   setState({ active: false, zoomIndex: DEFAULT_ZOOM_INDEX })
 }
 

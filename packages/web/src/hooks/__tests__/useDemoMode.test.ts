@@ -65,16 +65,34 @@ describe('演示开关（active）', () => {
     expect(getDemoState().zoomIndex).toBe(4)
   })
 
-  test('exitDemoMode 退出但保留档位；toggleDemoMode 翻转', async () => {
-    const { getDemoState, enterDemoMode, exitDemoMode, toggleDemoMode } = await import('../useDemoMode')
+  test('exitDemoMode 恢复进入前档位（100%→演示 150%→退出回 100%）', async () => {
+    const { getDemoState, enterDemoMode, exitDemoMode } = await import('../useDemoMode')
+    expect(getDemoState().zoomIndex).toBe(0)
     enterDemoMode()
+    expect(getDemoState().zoomIndex).toBe(2)
     exitDemoMode()
     expect(getDemoState().active).toBe(false)
-    expect(getDemoState().zoomIndex).toBe(2) // 保留 150%
+    expect(getDemoState().zoomIndex).toBe(0)
+  })
+
+  test('exitDemoMode 恢复进入前档位（即便演示中改过缩放）', async () => {
+    const { getDemoState, enterDemoMode, exitDemoMode, setDemoZoomIndex } = await import('../useDemoMode')
+    setDemoZoomIndex(1) // 阅读 125%
+    enterDemoMode()
+    expect(getDemoState().zoomIndex).toBe(1) // 非 100% 进入不跳档
+    setDemoZoomIndex(4) // 演示中改到 200%
+    exitDemoMode()
+    expect(getDemoState().zoomIndex).toBe(1) // 回到进入前的 125%
+  })
+
+  test('toggleDemoMode 翻转并在退出时恢复档位', async () => {
+    const { getDemoState, toggleDemoMode } = await import('../useDemoMode')
     toggleDemoMode()
     expect(getDemoState().active).toBe(true)
+    expect(getDemoState().zoomIndex).toBe(2)
     toggleDemoMode()
     expect(getDemoState().active).toBe(false)
+    expect(getDemoState().zoomIndex).toBe(0)
   })
 })
 
