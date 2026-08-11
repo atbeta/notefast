@@ -21,8 +21,8 @@ initNoAutofill()
 // 客户端错误埋点（componentDidCatch / window.onerror / unhandledrejection）→ POST /api/v1/client-errors
 installErrorReporter()
 
-// 演示模式快捷键（整体 zoom 放大；演示是临时场景，不持久化）
-// 全局 Ctrl+= / Ctrl+- / Ctrl+0：阅读态随时能开（输入区不抢，让浏览器原生行为处理）
+// 缩放快捷键（整体 zoom；阅读模式即可用，不强制进入演示；临时场景不持久化）
+// 全局 Ctrl+= / Ctrl+- / Ctrl+0：阅读态随时能调（输入区不抢，让浏览器原生行为处理）
 if (typeof window !== 'undefined') {
   window.addEventListener('keydown', (e) => {
     const mod = e.metaKey || e.ctrlKey

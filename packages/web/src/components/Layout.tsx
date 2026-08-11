@@ -143,8 +143,9 @@ export default function Layout({ children, contentClassName }: { children: React
   return (
     // 根容器 pt/pb 用 env() 吸收刘海/Home 指示条安全区（非 standalone/无刘海环境恒为 0，不影响现有布局）
     <div className="flex flex-col h-screen overflow-hidden bg-background relative w-full pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-      {/* 原生壳自绘标题栏（仅 Tauri 壳渲染；macOS 壳走系统标题栏，浏览器不渲染） */}
-      <TitleBar />
+      {/* 原生壳自绘标题栏（仅 Tauri 壳渲染；macOS 壳走系统标题栏，浏览器不渲染）。
+          演示模式隐藏：避免用户把窗口关闭按钮误当「退出演示」 */}
+      {!demo.active && <TitleBar />}
       <div className="flex flex-1 min-h-0 relative">
         <GlobalSyncStatus />
         {/* 桌面侧边栏 — 演示模式隐藏（正文最大化，退出后恢复） */}

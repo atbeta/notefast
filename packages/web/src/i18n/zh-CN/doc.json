@@ -91,9 +91,11 @@
     "exportedMarkdown": "已导出 Markdown",
     "demoMode": {
       "label": "演示模式",
-      "enter": "演示",
+      "enter": "进入演示",
+      "exit": "退出演示",
       "active": "演示中",
-      "shortcutHint": "Ctrl+=/Ctrl+- 放大缩小 / Ctrl+0 退出"
-    }
+      "shortcutHint": "Ctrl+=/Ctrl+- 放大缩小 / Ctrl+0 复位"
+    },
+    "zoomReset": "恢复 100%"
   }
 }

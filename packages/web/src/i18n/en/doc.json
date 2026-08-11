@@ -91,9 +91,11 @@
     "exportedMarkdown": "Exported Markdown",
     "demoMode": {
       "label": "Demo mode",
-      "enter": "Demo",
+      "enter": "Enter demo",
+      "exit": "Exit demo",
       "active": "Demo on",
-      "shortcutHint": "Ctrl+=/Ctrl+- zoom, Ctrl+0 exit"
-    }
+      "shortcutHint": "Ctrl+=/Ctrl+- zoom, Ctrl+0 reset"
+    },
+    "zoomReset": "Reset to 100%"
   }
 }

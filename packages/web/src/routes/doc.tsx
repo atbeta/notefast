@@ -43,7 +43,7 @@ import { readDocRailWidth, writeDocRailWidth, type DocRailWidth } from '../hooks
 
 import { scrollToElement, findScrollableAncestor } from '../lib/scroll'
 import { useActiveHeading } from '../hooks/useActiveHeading'
-import { useDemoMode, DEMO_ZOOMS, cycleDemoZoom, resetDemoZoom, setDemoZoomIndex } from '../hooks/useDemoMode'
+import { useDemoMode, DEMO_ZOOMS, setDemoZoomIndex, toggleDemoMode } from '../hooks/useDemoMode'
 import { formatRelative, relativeTime, formatSqliteDateTime, currentLocale } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
@@ -873,8 +873,8 @@ export default function DocPage() {
               </div>
             )}
             {/* 阅读列：标题/meta/tags/正文 走 --reading-max-w；状态横幅保留在外层 max-w-4xl。
-                demo-zoom：演示模式整体等比放大（仅阅读态；编辑态不缩放） */}
-            <div className={`mx-auto max-w-[var(--reading-max-w)] ${demo.active && !isEditing ? 'demo-zoom' : ''}`}>
+                demo-zoom：缩放档位整体等比放大（阅读/演示通用；仅编辑态不缩放） */}
+            <div className={`mx-auto max-w-[var(--reading-max-w)] ${!isEditing ? 'demo-zoom' : ''}`}>
             {/* Title — always editable, AI-generate on hover */}
             <div className="group relative">
               <input
@@ -1529,7 +1529,9 @@ function ErrorState({ message }: { message: string }) {
     </div>
   )
 }
-/** 演示模式按钮（右上角，仅阅读态）：平时一个小图标开关；激活后展开档位组（125/150/175/200%） */
+/** 缩放 + 演示（右上角，仅阅读态）：
+ *  - 档位组 100/125/150/175/200% 常显，阅读模式即可调（独立于演示开关）
+ *  - Presentation 图标 = 演示模式开关（隐藏侧栏/窗口标题栏，纯展示态） */
 function DemoModeButton() {
   const { t } = useTranslation()
   const demo = useDemoMode()
@@ -1540,43 +1542,39 @@ function DemoModeButton() {
       aria-label={t('doc.demoMode.label')}
       title={t('doc.demoMode.shortcutHint')}
     >
+      {DEMO_ZOOMS.map((z, i) => {
+        const active = demo.zoomIndex === i
+        return (
+          <button
+            key={z}
+            type="button"
+            onClick={() => setDemoZoomIndex(i)}
+            aria-pressed={active}
+            className={`min-w-[30px] h-6 px-1 rounded text-[11px] font-mono tabular-nums transition-colors ${
+              active
+                ? 'bg-primary/12 text-foreground border border-primary/30'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent'
+            }`}
+            title={i === 0 ? t('doc.zoomReset') : undefined}
+          >
+            {Math.round(z * 100)}%
+          </button>
+        )
+      })}
+      <div className="w-px h-4 bg-border/60 mx-0.5" />
       <button
         type="button"
-        onClick={() => {
-          if (demo.active) resetDemoZoom()
-          else cycleDemoZoom(0 as 1)
-        }}
+        onClick={() => toggleDemoMode()}
         aria-pressed={demo.active}
         className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
           demo.active
             ? 'text-primary bg-primary/12 hover:bg-primary/15'
             : 'text-muted-foreground hover:text-foreground hover:bg-accent'
         }`}
+        title={demo.active ? t('doc.demoMode.exit') : t('doc.demoMode.enter')}
       >
         <Presentation className="w-3.5 h-3.5" strokeWidth={1.75} />
       </button>
-      {demo.active && (
-        <>
-          {DEMO_ZOOMS.map((z, i) => {
-            const active = demo.zoomIndex === i
-            return (
-              <button
-                key={z}
-                type="button"
-                onClick={() => setDemoZoomIndex(i)}
-                aria-pressed={active}
-                className={`min-w-[32px] h-6 px-1 rounded text-[11px] font-mono tabular-nums transition-colors ${
-                  active
-                    ? 'bg-primary/12 text-foreground border border-primary/30'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent'
-                }`}
-              >
-                {Math.round(z * 100)}%
-              </button>
-            )
-          })}
-        </>
-      )}
     </div>
   )
 }
