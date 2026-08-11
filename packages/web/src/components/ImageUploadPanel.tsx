@@ -135,31 +135,31 @@ export default function ImageUploadPanel() {
         {t('settings.imageUpload.description')}
       </p>
 
-      {/* 模式选择：不处理 / 自动上传 */}
+      {/* 模式选择：不处理 / 自动上传（选中样式与 SyncPanel 双卡片选择器对齐） */}
       <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
           onClick={() => setMode('off')}
-          className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+          className={`rounded-lg border px-3 py-2.5 text-left transition-all ${
             mode === 'off'
-              ? 'border-primary/50 bg-primary-softer/50'
-              : 'border-border hover:border-foreground/30'
+              ? 'border-primary/45 bg-primary-soft shadow-sm'
+              : 'border-border bg-card hover:border-border-strong'
           }`}
         >
-          <p className="text-[13px] font-medium text-foreground">{t('settings.imageUpload.modeOff')}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">{t('settings.imageUpload.modeOffHint')}</p>
+          <p className={`text-[13px] font-medium ${mode === 'off' ? 'text-primary' : 'text-foreground/80'}`}>{t('settings.imageUpload.modeOff')}</p>
+          <p className="text-[11px] text-muted-foreground/80 mt-0.5">{t('settings.imageUpload.modeOffHint')}</p>
         </button>
         <button
           type="button"
           onClick={() => setMode('auto')}
-          className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+          className={`rounded-lg border px-3 py-2.5 text-left transition-all ${
             mode === 'auto'
-              ? 'border-primary/50 bg-primary-softer/50'
-              : 'border-border hover:border-foreground/30'
+              ? 'border-primary/45 bg-primary-soft shadow-sm'
+              : 'border-border bg-card hover:border-border-strong'
           }`}
         >
-          <p className="text-[13px] font-medium text-foreground">{t('settings.imageUpload.modeAuto')}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">{t('settings.imageUpload.modeAutoHint')}</p>
+          <p className={`text-[13px] font-medium ${mode === 'auto' ? 'text-primary' : 'text-foreground/80'}`}>{t('settings.imageUpload.modeAuto')}</p>
+          <p className="text-[11px] text-muted-foreground/80 mt-0.5">{t('settings.imageUpload.modeAutoHint')}</p>
         </button>
       </div>
 
