@@ -26,6 +26,7 @@ import {
   readAsset,
   runUploadCommand,
   saveAsset,
+  setImageUploadConfig,
   uploadMissingAssets,
   uploadSingleAsset,
 } from '../assets/store'
@@ -94,6 +95,8 @@ assets.get('/upload-config', (c) => {
 assets.put('/upload-config', zValidator('json', imageUploadConfigSchema), async (c) => {
   const body = c.req.valid('json') as ImageUploadConfigInput
   const next = applyImageUploadConfig(body)
+  // 同步到 store 层（实际上传路径读这里）——否则保存后测试成功但上传仍用启动时旧配置
+  setImageUploadConfig(next)
   return c.json(next)
 })
 

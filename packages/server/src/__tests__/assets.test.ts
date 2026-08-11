@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
-import { initAssetStore, readAsset, collectOrphanAssets, ORPHAN_GRACE_MS, setImageUploadConfig, saveAsset, maybeUploadToRemote, getAssetRemoteUrl } from '../assets/store'
+import { initAssetStore, readAsset, collectOrphanAssets, ORPHAN_GRACE_MS, setImageUploadConfig, saveAsset, maybeUploadToRemote, getAssetRemoteUrl, uploadSingleAsset } from '../assets/store'
 import { initImageUploadConfig, applyImageUploadConfig, getImageUploadConfig } from '../services/imageUploadConfig'
 import { authMiddleware, sessionTokenValue, SESSION_COOKIE } from '../middleware/auth'
 import assetsRouter from '../api/assets'
@@ -354,6 +354,31 @@ describe('AssetStore — 图床上传（命令契约）', () => {
     const getRes = await app.fetch(new Request('http://localhost/api/v1/assets/upload-config'))
     const loaded = await getRes.json() as { mode: string }
     expect(loaded.mode).toBe('auto')
+  })
+
+  test('PUT 保存配置后 store 层同步生效：上传路径立即用新配置（回归：测试端点读 services、上传读 store，两层曾不同步）', async () => {
+    // 先把 store 层复位为启动时状态（未配置）——模拟「保存配置后未重启」的旧 bug 场景
+    setImageUploadConfig(null)
+
+    // 仅走 API 保存（PUT 内部必须同步到 store 层，不允许手动 setImageUploadConfig 补漏）
+    const put = await app.fetch(new Request('http://localhost/api/v1/assets/upload-config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'auto',
+        command: process.execPath,
+        args: ['-e', 'console.log("https://img.example.test/regression.png")'],
+        timeoutMs: 10_000,
+      }),
+    }))
+    expect(put.status).toBe(200)
+
+    // 上传路径直接可用：单图触发上传（同步等待），应成功并写回 remote_url
+    const { meta } = saveAsset(PNG_BYTES, 'image/png')
+    const outcome = await uploadSingleAsset(meta.id)
+    expect(outcome.ok).toBe(true)
+    expect(outcome.url).toBe('https://img.example.test/regression.png')
+    expect(getAssetRemoteUrl(meta.id)).toBe('https://img.example.test/regression.png')
   })
 
   afterAll(() => {
