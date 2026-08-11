@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.59.0](https://github.com/atbeta/notefast/compare/v0.58.2...v0.59.0) (2026-08-11)
+
+
+### Features
+
+* **web:** click any doc image to view full size in a lightbox ([e8600df](https://github.com/atbeta/notefast/commit/e8600df325c4bf45bf1cd38aaf05053d9e613869))
+* **web:** doc font size control (4 sizes) for demo + accessibility ([ca87c33](https://github.com/atbeta/notefast/commit/ca87c3382a1f3ce9a56b27df64e957b750e7df15))
+* **web:** resources page — remote URL hover, per-image upload, batch upload moved from settings ([ac14936](https://github.com/atbeta/notefast/commit/ac1493662cfe9878684db86d727425773a3028f6))
+* **web:** side panel width toggle (400/600px, aligns with AI chat panel) ([7d2e5d1](https://github.com/atbeta/notefast/commit/7d2e5d1137b16fa10dc8d70d9d2e5e35d5073bf0))
+
+
+### Bug Fixes
+
+* **server:** sync image upload config to store layer on save ([85cf354](https://github.com/atbeta/notefast/commit/85cf3542e0663779e841d3189a4a0a1eb37ebe6a))
+* **web:** outline active-heading highlight now follows scroll reliably ([39e6c2a](https://github.com/atbeta/notefast/commit/39e6c2a0c5111993c4ec0495e7b174fd4629a151))
+
 ## [0.58.2](https://github.com/atbeta/notefast/compare/v0.58.1...v0.58.2) (2026-08-10)
 
 
