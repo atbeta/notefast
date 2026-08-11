@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.64.0](https://github.com/atbeta/notefast/compare/v0.63.1...v0.64.0) (2026-08-11)
+
+
+### Features
+
+* **web,clients:** add About page with manual updates and unify app icon ([d0f4d54](https://github.com/atbeta/notefast/commit/d0f4d54a8bf045df4cbec69f42123e9771e1d627))
+
+
+### Bug Fixes
+
+* **sync:** stop treating ai_exclude docs as tombstones ([694dc8f](https://github.com/atbeta/notefast/commit/694dc8f4f8115e71cb2473eb80f4744792a3a173))
+
 ## [0.63.1](https://github.com/atbeta/notefast/compare/v0.63.0...v0.63.1) (2026-08-11)
 
 
