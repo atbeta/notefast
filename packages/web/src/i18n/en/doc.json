@@ -86,13 +86,11 @@
     "exportFailed": "Export failed",
     "exportedWithImages": "Exported (with images)",
     "exportedMarkdown": "Exported Markdown",
-    "fontSize": {
-      "label": "Font size",
-      "sm": "Small",
-      "md": "Medium",
-      "lg": "Large",
-      "xl": "X-Large",
-      "shortcutHint": "Ctrl+=/Ctrl+- to adjust, Ctrl+0 to reset"
+    "demoMode": {
+      "label": "Demo mode",
+      "enter": "Demo",
+      "active": "Demo on",
+      "shortcutHint": "Ctrl+=/Ctrl+- zoom, Ctrl+0 exit"
     }
   }
 }

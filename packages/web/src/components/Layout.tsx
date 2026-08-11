@@ -11,6 +11,7 @@ import TitleBar from './TitleBar'
 import { ServerOfflineBanner } from './ServerHealthBar'
 import { useTheme } from '../hooks/useTheme'
 import { ASK_AI_EVENT } from '../lib/askAi'
+import { useDemoMode } from '../hooks/useDemoMode'
 
 /** AI 聊天面板控制 — 开合状态 + toggle（内容顶栏常驻入口 / 文档右栏避让共用） */
 type AiChatCtl = { open: boolean; toggle: () => void }
@@ -20,6 +21,8 @@ export const useAiChatOpen = () => useContext(AiChatCtlContext).open
 
 export default function Layout({ children, contentClassName }: { children: ReactNode; contentClassName?: string }) {
   const { t } = useTranslation()
+  /** 演示模式：隐藏左侧全局导航（doc.tsx 另有右侧 rail 折叠 + 正文 zoom） */
+  const demo = useDemoMode()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -144,7 +147,8 @@ export default function Layout({ children, contentClassName }: { children: React
       <TitleBar />
       <div className="flex flex-1 min-h-0 relative">
         <GlobalSyncStatus />
-        {/* 桌面侧边栏 */}
+        {/* 桌面侧边栏 — 演示模式隐藏（正文最大化，退出后恢复） */}
+        {!demo.active && (
         <div className={`hidden md:block transition-all duration-300 z-20 relative ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
           <Sidebar
             collapsed={sidebarCollapsed}
@@ -152,9 +156,10 @@ export default function Layout({ children, contentClassName }: { children: React
             onOpenPalette={openPalette}
           />
         </div>
+        )}
 
-        {/* 移动端 drawer */}
-        {mobileOpen && (
+        {/* 移动端 drawer — 演示模式不提供 */}
+        {mobileOpen && !demo.active && (
           <div className="md:hidden fixed inset-0 z-50 flex">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={closeMobile} />
             <div className="relative w-64 h-full bg-background shadow-xl animate-fade-in pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">

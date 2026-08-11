@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 /**
- * 文档页右栏宽度档位（普通 400px / 宽 600px——与 AI 聊天窗两档完全对齐）。
+ * 文档页右栏宽度档位（普通 288px / 宽 400px——默认回归旧值 288，展开对齐 AI 聊天窗默认态 400）。
  * 折叠态（w-9）由 useDocRailCollapsed 管理；宽度档位仅在展开时生效，两者互不干扰。
  */
 
@@ -10,10 +10,10 @@ export type DocRailWidth = 'normal' | 'wide'
 export const DOC_RAIL_WIDTH_KEY = 'nf_doc_rail_width'
 const DOC_RAIL_WIDTH_EVENT = 'nf:doc-rail-width'
 
-/** 档位 → 展开态实际宽度（px）。与 AIChatPanel 的 md:w-[400px] / md:w-[600px] 一致。 */
+/** 档位 → 展开态实际宽度（px）。normal 保持历史 288（w-72），wide=400 对齐聊天窗默认宽度。 */
 export const DOC_RAIL_WIDTH_PX: Record<DocRailWidth, number> = {
-  normal: 400,
-  wide: 600,
+  normal: 288,
+  wide: 400,
 }
 
 export function readDocRailWidth(): DocRailWidth {

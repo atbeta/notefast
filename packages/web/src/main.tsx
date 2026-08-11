@@ -11,7 +11,7 @@ import './index.css'
 import { initNativeShell } from './lib/nativeShell'
 import { initNoAutofill } from './lib/noAutofill'
 import { install as installErrorReporter } from './lib/errorReporter'
-import { cycleDocFontSize, resetDocFontSize } from './hooks/useDocFontSize'
+import { cycleDemoZoom, resetDemoZoom } from './hooks/useDemoMode'
 import ErrorBoundary from './components/ErrorBoundary'
 
 // 原生壳适配（右键菜单屏蔽等）：浏览器形态内部自动跳过
@@ -21,24 +21,23 @@ initNoAutofill()
 // 客户端错误埋点（componentDidCatch / window.onerror / unhandledrejection）→ POST /api/v1/client-errors
 installErrorReporter()
 
-// 文档正文字号（demo 放大）— 在 :root 上写 CSS 变量，.reading-prose 与 CodeMirror 都
-// 引用。App 树里挂 DocFontSizeApplier 一次即可，本文件只装键盘快捷键。
-// 全局 Ctrl+= / Ctrl+- / Ctrl+0 快捷键：随时能调（不依赖控件可见）
+// 演示模式快捷键（整体 zoom 放大；演示是临时场景，不持久化）
+// 全局 Ctrl+= / Ctrl+- / Ctrl+0：阅读态随时能开（输入区不抢，让浏览器原生行为处理）
 if (typeof window !== 'undefined') {
   window.addEventListener('keydown', (e) => {
     const mod = e.metaKey || e.ctrlKey
     if (!mod) return
-    // 文本输入区不抢 Ctrl+=（用户可能在调字号，但这是浏览器原生行为；让浏览器自己处理）
+    // 文本输入区不抢 Ctrl+=（用户在调字号/输入，浏览器原生行为留给浏览器）
     if (e.target instanceof HTMLElement && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return
     if (e.key === '=' || e.key === '+') {
       e.preventDefault()
-      cycleDocFontSize(1)
+      cycleDemoZoom(1)
     } else if (e.key === '-' || e.key === '_') {
       e.preventDefault()
-      cycleDocFontSize(-1)
+      cycleDemoZoom(-1)
     } else if (e.key === '0') {
       e.preventDefault()
-      resetDocFontSize()
+      resetDemoZoom()
     }
   })
 }

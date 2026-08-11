@@ -1,6 +1,6 @@
 import { useEffect, useState, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { DocFontSizeApplier } from './hooks/useDocFontSize'
+import { DemoModeApplier } from './hooks/useDemoMode'
 import HomePage from './routes/home'
 import DocPage from './routes/doc'
 import NewDocPage from './routes/new'
@@ -81,7 +81,7 @@ export default function App() {
 
   return (
     <ToastProvider>
-      <DocFontSizeApplier />
+      <DemoModeApplier />
       <Layout contentClassName={contentClassName}>
         <RouteTransition>
           <Routes>

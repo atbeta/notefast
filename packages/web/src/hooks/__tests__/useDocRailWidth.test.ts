@@ -61,9 +61,9 @@ describe('readDocRailWidth / writeDocRailWidth', () => {
 })
 
 describe('DOC_RAIL_WIDTH_PX', () => {
-  test('normal=400 / wide=600，与 AI 聊天窗两档对齐', async () => {
+  test('normal=288（历史 w-72）/ wide=400（对齐 AI 聊天窗默认态）', async () => {
     const { DOC_RAIL_WIDTH_PX } = await import('../useDocRailWidth')
-    expect(DOC_RAIL_WIDTH_PX.normal).toBe(400)
-    expect(DOC_RAIL_WIDTH_PX.wide).toBe(600)
+    expect(DOC_RAIL_WIDTH_PX.normal).toBe(288)
+    expect(DOC_RAIL_WIDTH_PX.wide).toBe(400)
   })
 })

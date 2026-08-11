@@ -86,13 +86,11 @@
     "exportFailed": "导出失败",
     "exportedWithImages": "已导出（含图片）",
     "exportedMarkdown": "已导出 Markdown",
-    "fontSize": {
-      "label": "字号",
-      "sm": "小",
-      "md": "中",
-      "lg": "大",
-      "xl": "特大",
-      "shortcutHint": "Ctrl+=/Ctrl+- 调节 / Ctrl+0 复位"
+    "demoMode": {
+      "label": "演示模式",
+      "enter": "演示",
+      "active": "演示中",
+      "shortcutHint": "Ctrl+=/Ctrl+- 放大缩小 / Ctrl+0 退出"
     }
   }
 }

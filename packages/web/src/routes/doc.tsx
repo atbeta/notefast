@@ -24,6 +24,7 @@ import {
   PanelLeftOpen,
   Minimize2,
   Maximize2,
+  Presentation,
 } from 'lucide-react'
 import i18next from '../i18n'
 import { api, request } from '../hooks/useAPI'
@@ -41,7 +42,7 @@ import { readDocRailWidth, writeDocRailWidth, type DocRailWidth } from '../hooks
 
 import { scrollToElement, findScrollableAncestor } from '../lib/scroll'
 import { useActiveHeading } from '../hooks/useActiveHeading'
-import { useDocFontSize, setDocFontSize, SIZE_ORDER, SIZES } from '../hooks/useDocFontSize'
+import { useDemoMode, DEMO_ZOOMS, cycleDemoZoom, resetDemoZoom, setDemoZoomIndex } from '../hooks/useDemoMode'
 import { formatRelative, relativeTime, formatSqliteDateTime, currentLocale } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
@@ -257,11 +258,21 @@ export default function DocPage() {
   useEffect(() => {
     writeDocRailCollapsed(railCollapsed)
   }, [railCollapsed])
-  /** 桌面右栏宽度档位：normal=400 / wide=600（与 AI 聊天窗两档对齐）；折叠态忽略 */
+  /** 桌面右栏宽度档位：normal=288 / wide=400（默认回归旧值，展开对齐聊天窗默认态）；折叠态忽略 */
   const [railWidth, setRailWidth] = useState<DocRailWidth>(readDocRailWidth)
   useEffect(() => {
     writeDocRailWidth(railWidth)
   }, [railWidth])
+  /** 演示模式：整体 zoom 放大 + 左侧隐藏（Layout 处理）+ 右栏默认折叠可展开 */
+  const demo = useDemoMode()
+  /** 演示模式下右栏是否展开（不持久化；演示默认折叠，用户可手动展开） */
+  const [demoRailOpen, setDemoRailOpen] = useState(false)
+  /** 右栏实际折叠态：演示模式用内存态（默认折叠），平时用持久化态 */
+  const railActuallyCollapsed = demo.active ? !demoRailOpen : railCollapsed
+  const toggleRailCollapsed = () => {
+    if (demo.active) setDemoRailOpen((v) => !v)
+    else setRailCollapsed((v) => !v)
+  }
   const aiChatOpen = useAiChatOpen()
   /** 移动端目录折叠 */
   const [tocOpen, setTocOpen] = useState(false)
@@ -635,7 +646,7 @@ export default function DocPage() {
             </div>
           </div>
         </div>
-        <div className="hidden lg:flex lg:flex-col w-[400px] shrink-0 bg-sidebar/30">
+        <div className="hidden lg:flex lg:flex-col w-[288px] shrink-0 bg-sidebar/30">
           <div className="h-14 shrink-0 border-b border-border/50" />
         </div>
       </div>
@@ -809,8 +820,9 @@ export default function DocPage() {
                 </Link>
               </div>
             )}
-            {/* 阅读列：标题/meta/tags/正文 走 --reading-max-w；状态横幅保留在外层 max-w-4xl */}
-            <div className="mx-auto max-w-[var(--reading-max-w)]">
+            {/* 阅读列：标题/meta/tags/正文 走 --reading-max-w；状态横幅保留在外层 max-w-4xl。
+                demo-zoom：演示模式整体等比放大（仅阅读态；编辑态不缩放） */}
+            <div className={`mx-auto max-w-[var(--reading-max-w)] ${demo.active && !isEditing ? 'demo-zoom' : ''}`}>
             {/* Title — always editable, AI-generate on hover */}
             <div className="group relative">
               <input
@@ -857,9 +869,9 @@ export default function DocPage() {
                 )}
               </div>
             )}
-            {/* 字号控制（demo 给别人看时放大；编辑不需）— 只在阅读态展示 */}
+            {/* 演示模式控制（整体 zoom 放大；平时只显示开关） */}
             {!isEditing && (
-              <DocFontSizeControl />
+              <DemoModeControl />
             )}
             {isEditing && <div className="mb-2" />}
 
@@ -985,12 +997,12 @@ export default function DocPage() {
       {!aiChatOpen && (
         <div
           className={`hidden lg:flex flex-col shrink-0 bg-sidebar/30 h-full transition-[width] duration-200 ${
-            railCollapsed ? 'w-9' : railWidth === 'wide' ? 'w-[600px]' : 'w-[400px]'
+            railActuallyCollapsed ? 'w-9' : railWidth === 'wide' ? 'w-[400px]' : 'w-[288px]'
           }`}
         >
           {/* 顶栏：五 Tab 均分居中（中/英都不横滚）；折叠钮单独占位 */}
           <div className="h-14 shrink-0 border-b border-border/50 flex items-stretch px-1 gap-0.5">
-            {!railCollapsed && (
+            {!railActuallyCollapsed && (
               <div className="flex-1 min-w-0 grid grid-cols-5 items-stretch">
                 {(
                   [
@@ -1020,7 +1032,7 @@ export default function DocPage() {
                 })}
               </div>
             )}
-            {!railCollapsed && (
+            {!railActuallyCollapsed && (
               <button
                 type="button"
                 onClick={() => setRailWidth((v) => (v === 'wide' ? 'normal' : 'wide'))}
@@ -1034,17 +1046,17 @@ export default function DocPage() {
             )}
             <button
               type="button"
-              onClick={() => setRailCollapsed((v) => !v)}
-              title={railCollapsed ? t('doc.expandRail') : t('doc.collapseRail')}
-              aria-label={railCollapsed ? t('doc.expandRail') : t('doc.collapseRail')}
+              onClick={toggleRailCollapsed}
+              title={railActuallyCollapsed ? t('doc.expandRail') : t('doc.collapseRail')}
+              aria-label={railActuallyCollapsed ? t('doc.expandRail') : t('doc.collapseRail')}
               className={`shrink-0 self-center inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ${
-                railCollapsed ? 'w-7 h-7 mx-auto' : 'w-7 h-7'
+                railActuallyCollapsed ? 'w-7 h-7 mx-auto' : 'w-7 h-7'
               }`}
             >
-              {railCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" strokeWidth={1.75} /> : <PanelRightClose className="w-3.5 h-3.5" strokeWidth={1.75} />}
+              {railActuallyCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" strokeWidth={1.75} /> : <PanelRightClose className="w-3.5 h-3.5" strokeWidth={1.75} />}
             </button>
           </div>
-          {!railCollapsed && (
+          {!railActuallyCollapsed && (
           <div className="flex-1 overflow-y-auto px-3.5 py-4">
             {/* key=railTab：切 Tab 重新挂载触发 140ms 纯 opacity 淡入 */}
             <div key={railTab} className="animate-fade-soft">
@@ -1465,36 +1477,56 @@ function ErrorState({ message }: { message: string }) {
     </div>
   )
 }
-function DocFontSizeControl() {
+/** 演示模式控制：平时只显示一个小开关；激活后显示放大档位组（125/150/175/200%） */
+function DemoModeControl() {
   const { t } = useTranslation()
-  const size = useDocFontSize()
+  const demo = useDemoMode()
   return (
     <div
       className="flex items-center gap-1.5 mb-2 text-[11.5px] text-muted-foreground/70"
       role="group"
-      aria-label={t('doc.fontSize.label')}
-      title={t('doc.fontSize.shortcutHint')}
+      aria-label={t('doc.demoMode.label')}
+      title={t('doc.demoMode.shortcutHint')}
     >
-      <span aria-hidden="true">Aa</span>
-      {SIZE_ORDER.map((s) => {
-        const active = s === size
-        return (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setDocFontSize(s)}
-            aria-pressed={active}
-            className={`min-w-[24px] h-6 px-1.5 rounded text-[11.5px] font-mono tabular-nums transition-colors ${
-              active
-                ? 'bg-primary/12 text-foreground border border-primary/30'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent'
-            }`}
-            title={t(SIZES[s].labelKey)}
-          >
-            {s.toUpperCase()}
-          </button>
-        )
-      })}
+      <button
+        type="button"
+        onClick={() => {
+          if (demo.active) resetDemoZoom()
+          else cycleDemoZoom(0 as 1)
+        }}
+        aria-pressed={demo.active}
+        className={`inline-flex items-center gap-1 h-6 px-2 rounded text-[11.5px] transition-colors border ${
+          demo.active
+            ? 'bg-primary/12 text-primary border-primary/30'
+            : 'text-muted-foreground hover:text-foreground hover:bg-accent border-transparent'
+        }`}
+      >
+        <Presentation className="w-3.5 h-3.5" strokeWidth={1.75} />
+        {demo.active ? t('doc.demoMode.active') : t('doc.demoMode.enter')}
+      </button>
+      {demo.active && (
+        <>
+          <span className="text-muted-foreground/40">·</span>
+          {DEMO_ZOOMS.map((z, i) => {
+            const active = demo.zoomIndex === i
+            return (
+              <button
+                key={z}
+                type="button"
+                onClick={() => setDemoZoomIndex(i)}
+                aria-pressed={active}
+                className={`min-w-[36px] h-6 px-1.5 rounded text-[11.5px] font-mono tabular-nums transition-colors ${
+                  active
+                    ? 'bg-primary/12 text-foreground border border-primary/30'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent'
+                }`}
+              >
+                {Math.round(z * 100)}%
+              </button>
+            )
+          })}
+        </>
+      )}
     </div>
   )
 }
