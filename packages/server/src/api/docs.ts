@@ -11,6 +11,7 @@ import {
   getBlockById,
   getDocById,
   getLiveDocById,
+  getDocNeighbors,
   getDeletedBlockById,
   getBlocksByIds,
   listDocRows,
@@ -193,6 +194,16 @@ docs.get('/counts', (c) => {
     .query("SELECT count(*) AS c FROM blocks WHERE type = 'document' AND is_deleted = 1")
     .get() as { c: number }
   return c.json({ inbox, archived, untagged, ai_exclude: aiExclude, trash: trashRow.c })
+})
+
+/** 文档顺序导航：按 created_at 顺序的上一篇/下一篇（Obsidian 式箭头；单篇两侧 null） */
+docs.get('/:id/neighbors', (c) => {
+  const db = getDb()
+  const id = c.req.param('id')
+  if (!getLiveDocById(db, id)) {
+    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
+  }
+  return c.json(getDocNeighbors(db, id))
 })
 
 docs.get('/:id', (c) => {

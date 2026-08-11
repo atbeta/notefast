@@ -5,6 +5,7 @@ import type { Block, HeadingNode } from '@notefast/core'
 import { buildHeadingTree } from '@notefast/core'
 import {
   ArrowLeft,
+  ArrowRight,
   Trash2,
   Sparkles,
   Loader2,
@@ -50,6 +51,11 @@ import { Kbd, Tooltip, useToast } from '../components/ui'
 import { deliverExport, fetchDocExportFile } from '../lib/download'
 import { recordVisit } from '../lib/recentVisits'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
+
+interface DocNeighbor {
+  id: string
+  title: string
+}
 
 interface Backlink {
   id: number
@@ -328,6 +334,22 @@ export default function DocPage() {
     void fetchDocShared(id).then((shared) => {
       if (!cancelled) setDocShared(shared)
     })
+    return () => { cancelled = true }
+  }, [id])
+
+  // 上一篇/下一篇（Obsidian 式顺序导航，按创建顺序）——顶栏箭头用
+  const [neighbors, setNeighbors] = useState<{ prev: DocNeighbor | null; next: DocNeighbor | null }>({ prev: null, next: null })
+  useEffect(() => {
+    if (!id) {
+      setNeighbors({ prev: null, next: null })
+      return
+    }
+    let cancelled = false
+    setNeighbors({ prev: null, next: null })
+    void api
+      .get<{ prev: DocNeighbor | null; next: DocNeighbor | null }>(`/docs/${id}/neighbors`)
+      .then((n) => { if (!cancelled) setNeighbors(n) })
+      .catch(() => {})
     return () => { cancelled = true }
   }, [id])
 
@@ -673,20 +695,38 @@ export default function DocPage() {
     <div className="flex flex-col lg:flex-row h-full">
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col h-full border-r border-border/50">
-        {/* Global Sticky Header */}
-        <PageHeader bare className="shrink-0 flex items-center justify-between px-3 sm:px-6">
-          <div className="flex items-center gap-4 text-sm">
-            <Link
-              to="/"
-              className="text-muted-foreground hover:text-foreground transition-colors"
+        {/* Global Sticky Header — 左：上一篇/下一篇 ｜ 中：标题（居中） ｜ 右：操作 */}
+        <PageHeader bare className="shrink-0 grid grid-cols-[auto_1fr_auto] items-center px-3 sm:px-6 gap-2">
+          {/* 左：顺序导航（Obsidian 式；按创建顺序，单篇两侧禁用） */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => neighbors.prev && navigate(`/doc/${neighbors.prev.id}`)}
+              disabled={!neighbors.prev}
+              title={neighbors.prev ? t('doc.prevDoc', { title: neighbors.prev.title }) : t('doc.noPrevDoc')}
+              className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:hover:bg-transparent"
+              aria-label={t('doc.prevDoc', { title: neighbors.prev?.title ?? '' })}
             >
-              {t('doc.allDocs')}
-            </Link>
-            <span className="text-border-strong">/</span>
-            <span className="font-medium text-foreground truncate max-w-[200px] lg:max-w-[400px]">
+              <ArrowLeft className="w-4 h-4" strokeWidth={1.75} />
+            </button>
+            <button
+              type="button"
+              onClick={() => neighbors.next && navigate(`/doc/${neighbors.next.id}`)}
+              disabled={!neighbors.next}
+              title={neighbors.next ? t('doc.nextDoc', { title: neighbors.next.title }) : t('doc.noNextDoc')}
+              className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:hover:bg-transparent"
+              aria-label={t('doc.nextDoc', { title: neighbors.next?.title ?? '' })}
+            >
+              <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
+            </button>
+          </div>
+          {/* 中：文档标题（居中截断） */}
+          <div className="min-w-0 flex justify-center">
+            <span className="font-medium text-foreground truncate text-sm max-w-full">
               {doc.content || t('doc.untitledDocument')}
             </span>
           </div>
+          {/* 右：操作按钮组 */}
           <div className="flex items-center gap-2">
             {!isEditing && (
               <button
@@ -707,6 +747,7 @@ export default function DocPage() {
                 {t('doc.editing')}
               </span>
             )}
+            {!isEditing && <DemoModeButton />}
             <div className="w-px h-4 bg-border/60 mx-1" />
             <Tooltip label={t('doc.exportDoc')}>
               <button
@@ -880,11 +921,7 @@ export default function DocPage() {
                 )}
               </div>
             )}
-            {/* 演示模式控制（整体 zoom 放大；平时只显示开关） */}
-            {!isEditing && (
-              <DemoModeControl />
-            )}
-            {isEditing && <div className="mb-2" />}
+            {/* 演示模式控制已移至右上角（仅阅读态） */}
 
             {/* Tags + 归档/对 AI 隐藏（默认可见，不展示锁图标；仅隐藏态强调） */}
             <div className="flex flex-wrap items-center justify-between gap-3 mt-4 mb-6">
@@ -1492,13 +1529,13 @@ function ErrorState({ message }: { message: string }) {
     </div>
   )
 }
-/** 演示模式控制：平时只显示一个小开关；激活后显示放大档位组（125/150/175/200%） */
-function DemoModeControl() {
+/** 演示模式按钮（右上角，仅阅读态）：平时一个小图标开关；激活后展开档位组（125/150/175/200%） */
+function DemoModeButton() {
   const { t } = useTranslation()
   const demo = useDemoMode()
   return (
     <div
-      className="flex items-center gap-1.5 mb-2 text-[11.5px] text-muted-foreground/70"
+      className="flex items-center gap-1"
       role="group"
       aria-label={t('doc.demoMode.label')}
       title={t('doc.demoMode.shortcutHint')}
@@ -1510,18 +1547,16 @@ function DemoModeControl() {
           else cycleDemoZoom(0 as 1)
         }}
         aria-pressed={demo.active}
-        className={`inline-flex items-center gap-1 h-6 px-2 rounded text-[11.5px] transition-colors border ${
+        className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
           demo.active
-            ? 'bg-primary/12 text-primary border-primary/30'
-            : 'text-muted-foreground hover:text-foreground hover:bg-accent border-transparent'
+            ? 'text-primary bg-primary/12 hover:bg-primary/15'
+            : 'text-muted-foreground hover:text-foreground hover:bg-accent'
         }`}
       >
         <Presentation className="w-3.5 h-3.5" strokeWidth={1.75} />
-        {demo.active ? t('doc.demoMode.active') : t('doc.demoMode.enter')}
       </button>
       {demo.active && (
         <>
-          <span className="text-muted-foreground/40">·</span>
           {DEMO_ZOOMS.map((z, i) => {
             const active = demo.zoomIndex === i
             return (
@@ -1530,7 +1565,7 @@ function DemoModeControl() {
                 type="button"
                 onClick={() => setDemoZoomIndex(i)}
                 aria-pressed={active}
-                className={`min-w-[36px] h-6 px-1.5 rounded text-[11.5px] font-mono tabular-nums transition-colors ${
+                className={`min-w-[32px] h-6 px-1 rounded text-[11px] font-mono tabular-nums transition-colors ${
                   active
                     ? 'bg-primary/12 text-foreground border border-primary/30'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent'

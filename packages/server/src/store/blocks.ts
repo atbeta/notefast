@@ -69,6 +69,36 @@ export function getLiveDocById(db: Db, id: string): BlockRow | null {
   )
 }
 
+export interface DocNeighbor {
+  id: string
+  title: string
+}
+
+export interface DocNeighbors {
+  prev: DocNeighbor | null
+  next: DocNeighbor | null
+}
+
+/**
+ * 文档顺序导航邻居：按 created_at ASC（rowid 决胜）排序的未删除文档中，
+ * 当前文档的前一篇 / 后一篇（Obsidian 式「上一篇/下一篇」）。
+ * 文档不存在或仅此一篇 → 两侧 null。
+ */
+export function getDocNeighbors(db: Db, id: string): DocNeighbors {
+  const rows = db
+    .query(
+      `SELECT id, content, created_at, rowid FROM blocks
+       WHERE type = 'document' AND is_deleted = 0
+       ORDER BY created_at ASC, rowid ASC`,
+    )
+    .all() as Array<{ id: string; content: string; created_at: string; rowid: number }>
+  const idx = rows.findIndex((r) => r.id === id)
+  if (idx === -1) return { prev: null, next: null }
+  const prev = idx > 0 ? { id: rows[idx - 1]!.id, title: rows[idx - 1]!.content } : null
+  const next = idx < rows.length - 1 ? { id: rows[idx + 1]!.id, title: rows[idx + 1]!.content } : null
+  return { prev, next }
+}
+
 /** create / move 需要的父块锚点信息 */
 export function getBlockAnchor(db: Db, id: string): { root_id: string; level: number } | null {
   return (
