@@ -22,6 +22,8 @@ import {
   Download,
   PanelRightClose,
   PanelLeftOpen,
+  Minimize2,
+  Maximize2,
 } from 'lucide-react'
 import i18next from '../i18n'
 import { api, request } from '../hooks/useAPI'
@@ -35,6 +37,7 @@ import PageHeader from '../components/PageHeader'
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
 import { useAiChatOpen } from '../components/Layout'
 import { readDocRailCollapsed, writeDocRailCollapsed } from '../hooks/useDocRailCollapsed'
+import { readDocRailWidth, writeDocRailWidth, type DocRailWidth } from '../hooks/useDocRailWidth'
 
 import { scrollToElement, findScrollableAncestor } from '../lib/scroll'
 import { useActiveHeading } from '../hooks/useActiveHeading'
@@ -254,6 +257,11 @@ export default function DocPage() {
   useEffect(() => {
     writeDocRailCollapsed(railCollapsed)
   }, [railCollapsed])
+  /** 桌面右栏宽度档位：normal=400 / wide=600（与 AI 聊天窗两档对齐）；折叠态忽略 */
+  const [railWidth, setRailWidth] = useState<DocRailWidth>(readDocRailWidth)
+  useEffect(() => {
+    writeDocRailWidth(railWidth)
+  }, [railWidth])
   const aiChatOpen = useAiChatOpen()
   /** 移动端目录折叠 */
   const [tocOpen, setTocOpen] = useState(false)
@@ -627,7 +635,7 @@ export default function DocPage() {
             </div>
           </div>
         </div>
-        <div className="hidden lg:flex lg:flex-col w-72 shrink-0 bg-sidebar/30">
+        <div className="hidden lg:flex lg:flex-col w-[400px] shrink-0 bg-sidebar/30">
           <div className="h-14 shrink-0 border-b border-border/50" />
         </div>
       </div>
@@ -977,7 +985,7 @@ export default function DocPage() {
       {!aiChatOpen && (
         <div
           className={`hidden lg:flex flex-col shrink-0 bg-sidebar/30 h-full transition-[width] duration-200 ${
-            railCollapsed ? 'w-9' : 'w-72'
+            railCollapsed ? 'w-9' : railWidth === 'wide' ? 'w-[600px]' : 'w-[400px]'
           }`}
         >
           {/* 顶栏：五 Tab 均分居中（中/英都不横滚）；折叠钮单独占位 */}
@@ -1011,6 +1019,18 @@ export default function DocPage() {
                   )
                 })}
               </div>
+            )}
+            {!railCollapsed && (
+              <button
+                type="button"
+                onClick={() => setRailWidth((v) => (v === 'wide' ? 'normal' : 'wide'))}
+                title={railWidth === 'wide' ? t('doc.narrowRail') : t('doc.widenRail')}
+                aria-label={railWidth === 'wide' ? t('doc.narrowRail') : t('doc.widenRail')}
+                aria-pressed={railWidth === 'wide'}
+                className="shrink-0 self-center inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              >
+                {railWidth === 'wide' ? <Minimize2 className="w-3.5 h-3.5" strokeWidth={1.75} /> : <Maximize2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
+              </button>
             )}
             <button
               type="button"

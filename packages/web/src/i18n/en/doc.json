@@ -75,6 +75,8 @@
     "collapse": "Collapse",
     "collapseRail": "Collapse side panel",
     "expandRail": "Expand side panel",
+    "widenRail": "Widen side panel",
+    "narrowRail": "Narrow side panel",
     "preview": "Preview",
     "revert": "Revert",
     "emptyContent": "(empty)",
