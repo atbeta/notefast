@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.62.0](https://github.com/atbeta/notefast/compare/v0.61.1...v0.62.0) (2026-08-11)
+
+
+### Features
+
+* **server:** ingest same-dir images when opening/importing markdown ([388c32d](https://github.com/atbeta/notefast/commit/388c32d939fe91a1ec08ea02e16df419cdecaf3e))
+* **web:** one-click cleanup of unreferenced images ([83ba179](https://github.com/atbeta/notefast/commit/83ba1796ac13bf8439cc4423a6d29950112f3374))
+* **web:** two-level reading column width (46rem / 64rem) ([0909d0e](https://github.com/atbeta/notefast/commit/0909d0ee90c822201bfa96c2fb6914998a6721f5))
+* **web:** zoom available in read mode; hide title bar in demo ([e705270](https://github.com/atbeta/notefast/commit/e705270fd0b1e25fc21a2e3b3a9fcc8f3f8f984d))
+
 ## [0.61.1](https://github.com/atbeta/notefast/compare/v0.61.0...v0.61.1) (2026-08-11)
 
 
