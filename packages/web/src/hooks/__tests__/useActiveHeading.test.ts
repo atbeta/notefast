@@ -65,3 +65,22 @@ describe('pickActiveHeadingIndex（边界/自定义激活线）', () => {
     expect(pickActiveHeadingIndex([90, 500], 100)).toBe(0)
   })
 })
+
+describe('pickActiveHeadingIndex（subpixel 容差——回归：点大纲亮上面那个）', () => {
+  test('目标停在 72.4px（scrollTop subpixel）→ 容差内仍算已滚过', () => {
+    // 旧实现严格 <=72，72.4 漏判 → 高亮上面那个；容差 4px 吸收
+    expect(pickActiveHeadingIndex([-300, 72.4, 800])).toBe(1)
+  })
+
+  test('目标停在 75.9px → 容差内高亮目标', () => {
+    expect(pickActiveHeadingIndex([-300, 75.9, 800])).toBe(1)
+  })
+
+  test('目标停在 76.1px（超容差）→ 不算已滚过，高亮上一个', () => {
+    expect(pickActiveHeadingIndex([-300, 76.1, 800])).toBe(0)
+  })
+
+  test('自定义容差 0（严格边界，旧行为）', () => {
+    expect(pickActiveHeadingIndex([-300, 72.4, 800], 72, 0)).toBe(0)
+  })
+})

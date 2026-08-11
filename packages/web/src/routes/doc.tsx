@@ -617,9 +617,20 @@ export default function DocPage() {
 
   const flatHeadings = flattenHeadings(headings)
   // 滚动联动 outline 高亮：传入 heading id 列表，hook 返回当前可见的顶部 heading。
-  // hook 内部用 IntersectionObserver + rootMargin '-72px 0px -85% 0px'，
-  // 不会误响应嵌套 .overflow-y-auto 容器外层的 scroll。
-  const activeHeadingId = useActiveHeading(flatHeadings.map((h) => h.id))
+  const scrollActiveHeadingId = useActiveHeading(flatHeadings.map((h) => h.id))
+  // 点击大纲项时立即高亮目标（不等平滑滚动结束）；滚动落定后交还 scroll 联动。
+  const [outlineJumpId, setOutlineJumpId] = useState<string | null>(null)
+  const outlineJumpTimer = useRef<number | null>(null)
+  const jumpToHeading = (id: string) => {
+    setOutlineJumpId(id)
+    if (outlineJumpTimer.current) window.clearTimeout(outlineJumpTimer.current)
+    // 平滑滚动 260ms + 余量；超时后交还滚动联动（此时 tolerance 已让目标保持高亮）
+    outlineJumpTimer.current = window.setTimeout(() => setOutlineJumpId(null), 500)
+  }
+  useEffect(() => () => {
+    if (outlineJumpTimer.current) window.clearTimeout(outlineJumpTimer.current)
+  }, [])
+  const activeHeadingId = outlineJumpId ?? scrollActiveHeadingId
   const updatedAt = doc ? formatRelative(doc.updated_at, 'long') : ''
   const createdAt = doc ? formatRelative(doc.created_at, 'long') : ''
   const wordCount = doc ? countWords(doc) : 0
@@ -972,7 +983,7 @@ export default function DocPage() {
                     </button>
                     {tocOpen && (
                       <div className="mt-2 pl-5">
-                        <OutlineView headings={flatHeadings} loading={auxLoading} activeId={activeHeadingId} />
+                        <OutlineView headings={flatHeadings} loading={auxLoading} activeId={activeHeadingId} onJump={jumpToHeading} />
                       </div>
                     )}
                   </div>
@@ -1061,7 +1072,7 @@ export default function DocPage() {
             {/* key=railTab：切 Tab 重新挂载触发 140ms 纯 opacity 淡入 */}
             <div key={railTab} className="animate-fade-soft">
             {railTab === 'outline' && (
-              <OutlineView headings={flatHeadings} loading={auxLoading} activeId={activeHeadingId} />
+              <OutlineView headings={flatHeadings} loading={auxLoading} activeId={activeHeadingId} onJump={jumpToHeading} />
             )}
             {railTab === 'backlinks' && (
               <BacklinksView backlinks={backlinks} loading={auxLoading} />
@@ -1119,11 +1130,13 @@ export default function DocPage() {
 }
 
 function OutlineView({
-  headings, loading, activeId,
+  headings, loading, activeId, onJump,
 }: {
   headings: Array<HeadingNode & { depth: number }>;
   loading: boolean;
   activeId: string | null;
+  /** 点击大纲项：立即高亮目标（可选；不传则纯滚动） */
+  onJump?: (id: string) => void;
 }) {
   const { t } = useTranslation()
   // 仅首次加载（无数据）时显示加载态；切换文档时保留旧大纲直至新数据到达，避免闪烁
@@ -1151,6 +1164,8 @@ function OutlineView({
               // heading id = block.id（见 BlockRenderer）；手动 rAF 平滑滚动，规避部分环境原生 smooth 失效
               const el = document.getElementById(h.id)
               if (el) scrollToElement(el)
+              // 立即高亮目标，不等滚动动画结束（滚动落定后 tolerance 保持高亮）
+              onJump?.(h.id)
               history.replaceState(null, '', `#${h.id}`)
             }}
             className={`px-1.5 -mx-1.5 py-1 text-[12px] rounded transition-colors truncate ${

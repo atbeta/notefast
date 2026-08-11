@@ -26,17 +26,25 @@ import { findScrollableAncestor } from '../lib/scroll'
 
 /** 激活线：与 doc.tsx scrollToElement 的 topOffset 一致（72px 顶栏） */
 const ACTIVATION_LINE = 72
+/** 激活容差：scrollTop 可能落在 subpixel（如 72.4px），严格 <= 72 会漏判——4px 内都算「已滚过」 */
+const ACTIVATION_TOLERANCE = 4
 
 /**
  * 从 heading 的视口 top 序列（document order）选出活跃项下标。
- * 规则：最后一个 top <= 激活线的下标；一个都没滚过 → 0（文档开头高亮第一节）。
+ * 规则：最后一个 top <= 激活线 + 容差 的下标；一个都没滚过 → 0（文档开头高亮第一节）。
+ * 容差吸收滚动定位的 subpixel 误差（scrollToElement 停在 72px 时 rect.top 可能是 72.4）。
  * 返回下标，供调用方映射回 heading id；空数组返回 -1。
  */
-export function pickActiveHeadingIndex(tops: readonly number[], activationLine = ACTIVATION_LINE): number {
+export function pickActiveHeadingIndex(
+  tops: readonly number[],
+  activationLine = ACTIVATION_LINE,
+  tolerance = ACTIVATION_TOLERANCE,
+): number {
   if (tops.length === 0) return -1
+  const line = activationLine + tolerance
   let current = -1
   for (let i = 0; i < tops.length; i++) {
-    if (tops[i]! <= activationLine) current = i
+    if (tops[i]! <= line) current = i
     else break // document order：后续只会更靠下
   }
   return current === -1 ? 0 : current
