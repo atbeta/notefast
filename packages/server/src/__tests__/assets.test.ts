@@ -222,6 +222,22 @@ describe('AssetStore — 孤儿回收', () => {
     expect(readAsset(orphanB)).not.toBeNull()
     expect(readAsset(cBody.id as string)).not.toBeNull()
   })
+
+  test('POST /api/v1/assets/gc 支持 grace_ms=0 立即清未引用（UI 一键清理路径）', async () => {
+    // 新上传、无引用、未满宽限期 → 默认 GC 不清，grace_ms=0 立即清
+    const { body } = await upload(Buffer.from([1, 2, 3, 4]), 'image/png')
+    const id = body.id as string
+    expect(readAsset(id)).not.toBeNull()
+
+    const defaultRes = await app.fetch(new Request('http://localhost/api/v1/assets/gc', { method: 'POST', body: '{}' }))
+    const gcDefault = await defaultRes.json() as { ids: string[] }
+    expect(gcDefault.ids).not.toContain(id)
+
+    const nowRes = await app.fetch(new Request('http://localhost/api/v1/assets/gc', { method: 'POST', body: JSON.stringify({ grace_ms: 0 }) }))
+    const gcNow = await nowRes.json() as { ids: string[] }
+    expect(gcNow.ids).toContain(id)
+    expect(readAsset(id)).toBeNull()
+  })
 })
 
 describe('AssetStore — 会话 cookie 鉴权', () => {

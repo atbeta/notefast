@@ -205,8 +205,12 @@ assets.delete('/:id', (c) => {
   return c.json({ ok: true })
 })
 
-assets.post('/gc', (c) => {
-  const result = collectOrphanAssets()
+assets.post('/gc', async (c) => {
+  // grace_ms 可选（默认 7 天防编辑器草稿误删）；UI 一键清理传 0 立即清未引用
+  const body = await c.req.json().catch(() => ({})) as { grace_ms?: unknown }
+  const raw = body.grace_ms
+  const graceMs = typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 ? raw : undefined
+  const result = collectOrphanAssets(graceMs)
   return c.json(result)
 })
 

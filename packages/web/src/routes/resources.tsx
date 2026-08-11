@@ -150,6 +150,24 @@ export default function ResourcesPage() {
     }
   }
 
+  /** 一键清理未引用图片（宽限期 0：收件箱放弃等场景立即可清，不等 7 天） */
+  const [cleanupOpen, setCleanupOpen] = useState(false)
+  const [cleaning, setCleaning] = useState(false)
+  async function confirmCleanup() {
+    if (cleaning) return
+    setCleaning(true)
+    try {
+      const res = await api.post<{ deleted: number; ids: string[] }>('/assets/gc', { grace_ms: 0 })
+      toast.success({ title: t('resources.cleanupDone', { n: res.deleted }) })
+      setCleanupOpen(false)
+      refetch()
+    } catch (e) {
+      toast.error({ title: e instanceof Error ? e.message : t('resources.cleanupFailed') })
+    } finally {
+      setCleaning(false)
+    }
+  }
+
   return (
     <div className="animate-fade-in">
       <PageHeader innerClassName="flex items-center gap-4">
@@ -163,12 +181,23 @@ export default function ResourcesPage() {
             </span>
           )}
         </div>
+        {/* 一键清理未引用（收件箱放弃等场景产生的孤儿图片；宽限期 0 立即清） */}
+        <button
+          type="button"
+          onClick={() => setCleanupOpen(true)}
+          disabled={cleaning}
+          className="btn-ghost-custom shrink-0"
+          title={t('resources.cleanupHint')}
+        >
+          <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
+          {cleaning ? t('common.loading') : t('resources.cleanupUnreferenced')}
+        </button>
         {/* 存量补传入口（header 右侧；图床命令配置仍在设置 → 图床与图片） */}
         <button
           type="button"
           onClick={() => void handleBatchUpload()}
           disabled={batchStarting || batch?.running}
-          className="btn-ghost-custom shrink-0 ml-auto"
+          className="btn-ghost-custom shrink-0"
           title={t('resources.uploadExistingHint')}
         >
           <CloudUpload className="w-3.5 h-3.5" strokeWidth={2} />
@@ -370,6 +399,20 @@ export default function ResourcesPage() {
         onConfirm={() => { void confirmDelete() }}
         onCancel={() => {
           if (!deleting) setPendingDelete(null)
+        }}
+      />
+
+      <ConfirmDialog
+        open={cleanupOpen}
+        tone="destructive"
+        title={t('resources.cleanupTitle')}
+        message={t('resources.cleanupMessage')}
+        confirmLabel={t('resources.cleanupConfirm')}
+        busy={cleaning}
+        busyLabel={t('resources.cleaning')}
+        onConfirm={() => { void confirmCleanup() }}
+        onCancel={() => {
+          if (!cleaning) setCleanupOpen(false)
         }}
       />
     </div>
