@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.63.0](https://github.com/atbeta/notefast/compare/v0.62.1...v0.63.0) (2026-08-11)
+
+
+### Features
+
+* **web:** exit demo mode with Escape ([1edbad6](https://github.com/atbeta/notefast/commit/1edbad64ac41c332529495e83b45814afd8d0c90))
+
+
+### Bug Fixes
+
+* **web:** compact doc zoom control and restore zoom on demo exit ([ecfab47](https://github.com/atbeta/notefast/commit/ecfab47af2bfd87899c8a74c03674d95a46f78df))
+* **web:** disable input history with nonstandard autocomplete token ([15b7123](https://github.com/atbeta/notefast/commit/15b712320ef7f9a35da50da58fe6c5e0ec804718))
+* **web:** drop redundant AI index refresh and feedback the status button ([99a925d](https://github.com/atbeta/notefast/commit/99a925df0d09ed399764fa2dbaf269c79e9a7d80))
+* **web:** hide image-host upload UI when not configured ([416b805](https://github.com/atbeta/notefast/commit/416b805dea1a6384f3776095cf4721272dac3ff2))
+* **web:** migrate chrome hover tips from title to Tooltip ([baaba72](https://github.com/atbeta/notefast/commit/baaba72f52d763295ce26c409f7e6ae8ec239072))
+* **web:** move app brand to TitleBar and drop sidebar brand row ([89604c6](https://github.com/atbeta/notefast/commit/89604c6ad47782c3e7757b263a6150da437acfa2))
+
 ## [0.62.1](https://github.com/atbeta/notefast/compare/v0.62.0...v0.62.1) (2026-08-11)
 
 
