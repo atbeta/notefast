@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.63.1](https://github.com/atbeta/notefast/compare/v0.63.0...v0.63.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* **macos:** align shell chrome density with web and drop NavStrip ([70c177f](https://github.com/atbeta/notefast/commit/70c177fb3e428bc6bb39d57ed6ac37fb70271fb4))
+
 ## [0.63.0](https://github.com/atbeta/notefast/compare/v0.62.1...v0.63.0) (2026-08-11)
 
 
