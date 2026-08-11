@@ -229,6 +229,9 @@ describe('AssetStore — 孤儿回收', () => {
     const id = body.id as string
     expect(readAsset(id)).not.toBeNull()
 
+    // 等 5ms：created_at < cutoff 是严格小于，同毫秒上传会导致 GC 漏判
+    await new Promise((r) => setTimeout(r, 5))
+
     const defaultRes = await app.fetch(new Request('http://localhost/api/v1/assets/gc', { method: 'POST', body: '{}' }))
     const gcDefault = await defaultRes.json() as { ids: string[] }
     expect(gcDefault.ids).not.toContain(id)

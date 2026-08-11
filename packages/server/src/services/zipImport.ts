@@ -9,7 +9,7 @@
 
 import { createHash } from 'node:crypto'
 import type { getDb } from '../db'
-import { saveAsset } from '../assets/store'
+import { ingestLocalImageRefs, saveAsset } from '../assets/store'
 import { mimeForExt } from '../sync/archiveMedia'
 import { ARCHIVE_MANIFEST_NAME, isArchiveManifest, type ArchiveManifest } from '../sync/archive'
 import { parseZip } from '../lib/zipStore'
@@ -78,11 +78,26 @@ export function importArchiveZip(
 
   const mdEntries = entries.filter((e) => /\.md$/i.test(e.name) && e.name !== ARCHIVE_MANIFEST_NAME)
 
+  /** zip 内相对路径图片的读取器：先按 md 所在目录解析，再退回 zip 根（Obsidian 习惯根目录放附件） */
+  const zipReader = (mdName: string) => (relPath: string): Buffer | null => {
+    const dir = mdName.includes('/') ? mdName.slice(0, mdName.lastIndexOf('/') + 1) : ''
+    const candidates = [dir + relPath, relPath]
+    for (const key of candidates) {
+      const data = byName.get(key)
+      if (data && data.length > 0) return Buffer.from(data)
+    }
+    return null
+  }
+
   for (const entry of mdEntries) {
     const filename = entry.name.split('/').pop() ?? entry.name
-    const markdown = rewriteMedia(
-      normalizeMarkdownFileContent(new TextDecoder().decode(entry.data)),
-    )
+    let markdown = normalizeMarkdownFileContent(new TextDecoder().decode(entry.data))
+    // 通用 zip：md 里相对路径图片（images/foo.png）按 zip entries 收编 → asset:<sha>
+    const ingested = ingestLocalImageRefs(markdown, zipReader(entry.name))
+    markdown = rewriteMedia(ingested.markdown)
+    if (ingested.unresolved.length > 0) {
+      console.warn(`[zip-import] ${entry.name}: ${ingested.unresolved.length} 张图片未在 zip 内找到，保留原引用`)
+    }
     if (!markdown.trim()) {
       result.skipped++
       continue

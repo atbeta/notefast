@@ -14,10 +14,10 @@ import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { getDb } from '../db'
 import type { ImageUploadConfig } from '@notefast/core'
-import { extForMime } from '../sync/archiveMedia'
+import { extForMime, mimeForExt } from '../sync/archiveMedia'
 
 export const ASSET_REF_PREFIX = 'asset:'
 const MEDIA_DIR_NAME = 'media'
@@ -416,6 +416,89 @@ export function deleteAsset(id: string): DeleteAssetResult {
     /* 文件已不存在 */
   }
   return { ok: true }
+}
+
+export interface IngestLocalImagesResult {
+  /** 重写后的 markdown（相对路径 → asset:<sha>） */
+  markdown: string
+  /** 成功入库的图片数 */
+  ingested: number
+  /** 找不到/非图片而未处理的引用（保持原样） */
+  unresolved: string[]
+}
+
+const LOCAL_IMG_REF_RE = /!\[([^\]]*)\]\(([^)\s]+)\)/g
+
+/**
+ * 打开/导入本地 markdown 时收编相对路径图片：md 里 `![](images/foo.png)`
+ * 这类引用在 NoteFast 语义里没有根（图片模型只有 asset: 与绝对 URL），
+ * 渲染必然碎图。此函数把「相对路径引用 → 解析为本地文件 → 内容寻址入库 →
+ * 引用重写为 asset:<sha>」。
+ *
+ * readCandidate 由调用方提供（file-open 读同目录 / zip 读 entries），
+ * 返回文件字节或 null（不存在/非图片）。返回重写后的 markdown 与统计。
+ */
+export function ingestLocalImageRefs(
+  markdown: string,
+  readCandidate: (relPath: string) => Buffer | null,
+): IngestLocalImagesResult {
+  let out = markdown
+  let ingested = 0
+  const unresolved = new Set<string>()
+  const used = new Set<string>() // 同路径多次引用只处理一次
+  out = out.replace(LOCAL_IMG_REF_RE, (full, _alt: string, rawSrc: string) => {
+    // 只处理相对路径：asset:/http(s)/data: 等已有语义的引用不动
+    if (
+      rawSrc.startsWith('asset:') ||
+      rawSrc.startsWith('http:') ||
+      rawSrc.startsWith('https:') ||
+      rawSrc.startsWith('data:') ||
+      rawSrc.startsWith('/') // 绝对路径：无 vault 根，跳过
+    ) {
+      return full
+    }
+    // 去 query/hash（`foo.png?v=2`）；%20 等 URL 编码还原
+    const clean = rawSrc.split(/[?#]/)[0]!.trim()
+    const decoded = decodeURIComponent(clean).replace(/\\/g, '/')
+    if (!decoded || used.has(decoded)) return full
+    const buf = readCandidate(decoded)
+    if (!buf || buf.length === 0) {
+      unresolved.add(decoded)
+      return full
+    }
+    const ext = decoded.split('.').pop()?.toLowerCase() ?? ''
+    const mime = mimeForExt(ext)
+    if (!mime?.startsWith('image/')) {
+      unresolved.add(decoded)
+      return full
+    }
+    const { meta } = saveAsset(buf, mime)
+    used.add(decoded)
+    ingested++
+    return full.replace(rawSrc, `asset:${meta.id}`)
+  })
+  return { markdown: out, ingested, unresolved: [...unresolved] }
+}
+
+/**
+ * file-open 场景的 readCandidate：相对引用按「md 文件同目录」解析。
+ * 只读普通文件、图片扩展名由 ingestLocalImageRefs 二次把关。
+ */
+export function readLocalImageCandidate(mdPath: string): (relPath: string) => Buffer | null {
+  const baseDir = dirname(mdPath)
+  return (relPath: string) => {
+    try {
+      const abs = resolve(baseDir, relPath)
+      // 防路径穿越读取任意文件：只允许 md 同目录树内
+      if (abs !== baseDir && !abs.startsWith(baseDir + '/')) return null
+      if (!existsSync(abs)) return null
+      const st = statSync(abs)
+      if (!st.isFile()) return null
+      return readFileSync(abs)
+    } catch {
+      return null
+    }
+  }
 }
 
 /**

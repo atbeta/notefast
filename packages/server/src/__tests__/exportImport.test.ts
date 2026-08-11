@@ -8,6 +8,7 @@
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
@@ -180,6 +181,72 @@ describe('importArchiveZip', () => {
     const titles = getDb().query("SELECT content FROM blocks WHERE type = 'document' ORDER BY created_at").all() as Array<{ content: string }>
     expect(titles.map((t) => t.content)).toContain('笔记一')
     expect(titles.map((t) => t.content)).toContain('笔记二')
+  })
+
+  test('通用 md zip 的相对路径图片（images/foo.png）收编为 asset: 并重写引用', async () => {
+    const zip = buildZipStore([
+      {
+        name: '带图笔记.md',
+        data: new TextEncoder().encode('# 带图笔记\n\n![示例图](images/foo.png)\n\n![找不到](images/missing.png)'),
+      },
+      { name: 'images/foo.png', data: new Uint8Array(PNG_BYTES) },
+    ])
+    const result = importArchiveZip(getDb(), { notebookId, bytes: zip })
+    expect(result.imported).toBe(1)
+
+    // 文档内容：images/foo.png → asset:<sha>；missing.png 保留原引用
+    const rows = getDb().query("SELECT content FROM blocks WHERE root_id IN (SELECT id FROM blocks WHERE type = 'document' AND content = '带图笔记') AND type != 'document' AND is_deleted = 0").all() as Array<{ content: string }>
+    const text = rows.map((r) => r.content).join('\n')
+    expect(text).toContain(`asset:${createHash('sha256').update(PNG_BYTES).digest('hex')}`)
+    expect(text).toContain('images/missing.png')
+    expect(readAsset(createHash('sha256').update(PNG_BYTES).digest('hex'))).not.toBeNull()
+  })
+
+  test('POST /import/markdown + source=file-open：同目录相对路径图片收编为 asset:', async () => {
+    // 构造「md + 同目录图片」的磁盘布局，external_id 指向 md 文件
+    const fs = await import('node:fs')
+    const dir = mkdtempSync(join('/tmp', 'notefast-fileopen-img-'))
+    fs.writeFileSync(join(dir, 'foo.png'), PNG_BYTES)
+    const mdPath = join(dir, 'note.md')
+    fs.writeFileSync(mdPath, '# 打开文档\n\n![图](foo.png)')
+
+    const res = await app.fetch(new Request('http://localhost/api/v1/import/markdown', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        notebook_id: notebookId,
+        title: '打开文档',
+        markdown: '# 打开文档\n\n![图](foo.png)',
+        status: 'inbox',
+        source: { provider: 'file-open', external_id: mdPath },
+      }),
+    }))
+    expect(res.status).toBe(201)
+
+    // 文档内引用已重写为 asset:<sha>，且图片已入库
+    const sha = createHash('sha256').update(PNG_BYTES).digest('hex')
+    expect(readAsset(sha)).not.toBeNull()
+    const docRows = getDb().query("SELECT id FROM blocks WHERE type = 'document' AND content = '打开文档' ORDER BY created_at DESC LIMIT 1").all() as Array<{ id: string }>
+    const child = getDb().query('SELECT content FROM blocks WHERE root_id = ? AND type != ? AND is_deleted = 0').all(docRows[0]!.id, 'document') as Array<{ content: string }>
+    expect(child.map((r) => r.content).join('\n')).toContain(`asset:${sha}`)
+
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('POST /import/markdown 不带 source 不改写相对路径（Web/MCP 路径行为不变）', async () => {
+    const res = await app.fetch(new Request('http://localhost/api/v1/import/markdown', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        notebook_id: notebookId,
+        title: '无 source 文档',
+        markdown: '# 无 source\n\n![图](foo.png)',
+      }),
+    }))
+    expect(res.status).toBe(201)
+    const docRows = getDb().query("SELECT id FROM blocks WHERE type = 'document' AND content = '无 source 文档' ORDER BY created_at DESC LIMIT 1").all() as Array<{ id: string }>
+    const child = getDb().query('SELECT content FROM blocks WHERE root_id = ? AND type != ? AND is_deleted = 0').all(docRows[0]!.id, 'document') as Array<{ content: string }>
+    expect(child.map((r) => r.content).join('\n')).toContain('foo.png')
   })
 
   test('损坏的 zip → 抛错（调用方映射 400）', () => {

@@ -7,7 +7,7 @@ import { findDocIdBySource, getBlockById, getBlocksByIds, updateBlock } from '..
 import { fireAfterCreate, fireAfterCreateMany, fireDocAfterCreate } from '../services/hooks'
 import { emitAppEvent } from '../events'
 import { scheduleSyncNow } from '../sync/protocolManager'
-import { extractAssetRefs, findMissingAssets } from '../assets/store'
+import { extractAssetRefs, findMissingAssets, ingestLocalImageRefs, readLocalImageCandidate } from '../assets/store'
 import { EmptyMarkdownError, insertDocFromMarkdown, normalizeDocTags, type DocSourceRef, type InsertDocFromMarkdownResult } from '../services/docImport'
 import {
   createDocFromMarkdownFile,
@@ -54,7 +54,19 @@ function respondCreated(
 importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => {
   const db = getDb()
   const input = c.req.valid('json')
-  const title = input.title || extractTitleFromMarkdown(input.markdown) || '未命名文档'
+
+  // 打开即收编：file-open（原生壳双击/拖入）场景，把 md 里相对路径图片
+  // 读同目录文件入库并重写为 asset:<sha>（否则渲染碎图）。其他来源不改写。
+  let markdown = input.markdown
+  if (input.source?.provider === 'file-open' && input.source.external_id) {
+    const ingested = ingestLocalImageRefs(markdown, readLocalImageCandidate(input.source.external_id))
+    markdown = ingested.markdown
+    if (ingested.unresolved.length > 0) {
+      console.warn(`[import] ${input.source.external_id}: ${ingested.unresolved.length} 张本地图片未找到，保留原引用`)
+    }
+  }
+
+  const title = input.title || extractTitleFromMarkdown(markdown) || '未命名文档'
 
   // 打开即导入去重（壳层经 source 传文件路径）：
   // - 同 source + 同内容 hash → 重复打开同一文件，直接返回既有文档（零副作用）
@@ -62,7 +74,7 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
   //   source 身份移交新文档，旧文档剥离 source 成为普通笔记（下次打开定位到最新篇）
   let source: DocSourceRef | undefined
   if (input.source) {
-    const incomingHash = createHash('sha256').update(input.markdown).digest('hex')
+    const incomingHash = createHash('sha256').update(markdown).digest('hex')
     const existingId = findDocIdBySource(db, input.source.provider, input.source.external_id)
     if (existingId) {
       const existingRow = getBlockById(db, existingId)
@@ -87,7 +99,7 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
     result = insertDocFromMarkdown(db, {
       notebookId,
       title,
-      markdown: input.markdown,
+      markdown,
       status: input.status,
       tags: input.tags ? normalizeDocTags(input.tags) : undefined,
       rejectEmpty: true,
@@ -100,7 +112,7 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
     throw e
   }
 
-  return c.json(respondCreated(result, input.markdown), 201)
+  return c.json(respondCreated(result, markdown), 201)
 })
 
 /** 读文档根 properties.source.content_hash（无则 undefined） */
