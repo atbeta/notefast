@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.61.0](https://github.com/atbeta/notefast/compare/v0.60.0...v0.61.0) (2026-08-11)
+
+
+### Features
+
+* **web:** obsidian-style doc navigation + demo button to header ([dddc1c3](https://github.com/atbeta/notefast/commit/dddc1c36bf54bd508a082f7819e5a662fdd195a9))
+
+
+### Bug Fixes
+
+* **web:** outline click highlights target immediately; tolerate subpixel scroll ([e687cf2](https://github.com/atbeta/notefast/commit/e687cf28f1bc1d6f8107eacd9f5c7a1f7df1931c))
+
 ## [0.60.0](https://github.com/atbeta/notefast/compare/v0.59.0...v0.60.0) (2026-08-11)
 
 
