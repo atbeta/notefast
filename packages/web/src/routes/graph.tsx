@@ -20,6 +20,7 @@ import { useAiCapabilities } from '../hooks/useAiCapabilities'
 import PageHeader from '../components/PageHeader'
 import EntityGraph from '../components/EntityGraph'
 import { EntityMentions } from '../components/EntityPanel'
+import { Tooltip } from '../components/ui'
 import { entityKindLabel, type EntitySummary } from '../lib/entities'
 import {
   GRAPH_NOTE_COLOR,
@@ -121,19 +122,21 @@ function DetailPanel({
             <div className="flex items-start gap-2 mt-1.5">
               <p className="text-[12px] text-foreground/80 leading-relaxed">{node.description}</p>
               {onRegenerate && (
-                <button
-                  type="button"
-                  onClick={() => onRegenerate(node.id)}
-                  disabled={regenerating}
-                  className="shrink-0 inline-flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                  title={t('graph.regenerateDescription')}
-                >
-                  {regenerating ? (
-                    <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
-                  ) : (
-                    <RefreshCw className="w-3 h-3" strokeWidth={1.75} />
-                  )}
-                </button>
+                <Tooltip label={t('graph.regenerateDescription')}>
+                  <button
+                    type="button"
+                    onClick={() => onRegenerate(node.id)}
+                    disabled={regenerating}
+                    className="shrink-0 inline-flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                    aria-label={t('graph.regenerateDescription')}
+                  >
+                    {regenerating ? (
+                      <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
+                    ) : (
+                      <RefreshCw className="w-3 h-3" strokeWidth={1.75} />
+                    )}
+                  </button>
+                </Tooltip>
               )}
             </div>
           )}
@@ -428,47 +431,51 @@ export default function GraphPage() {
                   )
                 })}
               </div>
-              <select
-                value={minMention}
-                onChange={(e) => setMinMention(Number(e.target.value))}
-                title={t('graph.mentionThreshold')}
-                className="rounded-md border border-border bg-card px-2 py-1 text-[12px] text-muted-foreground focus:outline-none"
-              >
-                {MIN_MENTION_OPTS.map((n) => (
-                  <option key={n} value={n}>
-                    {t('graph.mentionThresholdOption', { n })}
-                  </option>
-                ))}
-              </select>
+              <Tooltip label={t('graph.mentionThreshold')}>
+                <select
+                  value={minMention}
+                  onChange={(e) => setMinMention(Number(e.target.value))}
+                  aria-label={t('graph.mentionThreshold')}
+                  className="rounded-md border border-border bg-card px-2 py-1 text-[12px] text-muted-foreground focus:outline-none"
+                >
+                  {MIN_MENTION_OPTS.map((n) => (
+                    <option key={n} value={n}>
+                      {t('graph.mentionThresholdOption', { n })}
+                    </option>
+                  ))}
+                </select>
+              </Tooltip>
             </>
           )}
 
           {/* 选中节点后的聚焦入口（图标按钮，tooltip 带节点名） */}
           {selectedNode && (
-            <button
-              type="button"
-              onClick={() => focusNode(selectedNode.id)}
-              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors"
-              title={t('graph.focusNodeTooltip', { nodeName: selectedNode.display })}
-              aria-label={t('graph.focusNodeAria', { nodeName: selectedNode.display })}
-            >
-              <Crosshair className="w-4 h-4" strokeWidth={1.75} />
-            </button>
+            <Tooltip label={t('graph.focusNodeTooltip', { nodeName: selectedNode.display })}>
+              <button
+                type="button"
+                onClick={() => focusNode(selectedNode.id)}
+                className="inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors"
+                aria-label={t('graph.focusNodeAria', { nodeName: selectedNode.display })}
+              >
+                <Crosshair className="w-4 h-4" strokeWidth={1.75} />
+              </button>
+            </Tooltip>
           )}
 
-          <button
-            type="button"
-            onClick={() => {
-              // 完整重置：清除锚点回总览（聚焦后数据只有子图，仅重排布局恢复不了）+ 重排 + 视角复位
-              resetView()
-              setLayoutKey((k) => k + 1)
-            }}
-            className="inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors"
-            title={t('graph.resetTooltip')}
-            aria-label={t('graph.resetAria')}
-          >
-            <Scan className="w-4 h-4" strokeWidth={1.75} />
-          </button>
+          <Tooltip label={t('graph.resetTooltip')}>
+            <button
+              type="button"
+              onClick={() => {
+                // 完整重置：清除锚点回总览（聚焦后数据只有子图，仅重排布局恢复不了）+ 重排 + 视角复位
+                resetView()
+                setLayoutKey((k) => k + 1)
+              }}
+              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors"
+              aria-label={t('graph.resetAria')}
+            >
+              <Scan className="w-4 h-4" strokeWidth={1.75} />
+            </button>
+          </Tooltip>
 
           <span className="ml-auto hidden sm:inline text-[11px] text-muted-foreground/60">
             {t('graph.zoomTip')}

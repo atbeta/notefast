@@ -8,7 +8,7 @@ import MermaidDiagram from './MermaidDiagram'
 import MathBlock, { MathInline } from './MathBlock'
 import { INLINE_MATH_SRC } from '../lib/katex'
 import BlockSurface, { BlockHandle } from './BlockSurface'
-import { CopyButton } from './ui'
+import { CopyButton, Tooltip } from './ui'
 import { api } from '../hooks/useAPI'
 import ImageLightbox from './ImageLightbox'
 
@@ -111,14 +111,15 @@ function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: 
   const failed = !st?.remote && Boolean(st?.error)
   return (
     <span className="relative inline-block group/asset">
-      <img
-        src={src}
-        alt={alt}
-        loading="lazy"
-        onClick={() => zoom?.(src, alt)}
-        title={t('editor.previewImage')}
-        className="my-3 max-w-full rounded-md border border-border/50 cursor-zoom-in"
-      />
+      <Tooltip label={t('block.previewImage')}>
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          onClick={() => zoom?.(src, alt)}
+          className="my-3 max-w-full rounded-md border border-border/50 cursor-zoom-in"
+        />
+      </Tooltip>
       <span className="absolute bottom-4 right-1.5 opacity-0 group-hover/asset:opacity-100 transition-opacity z-10">
         {uploading ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-background/90 border border-border px-2 py-0.5 text-[10px] text-muted-foreground shadow-sm">
@@ -131,19 +132,23 @@ function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: 
             {t('block.assetSynced')}
           </span>
         ) : (
-          <button
-            type="button"
-            onClick={() => void ctx?.upload(assetId)}
-            title={failed ? st?.error ?? undefined : undefined}
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] shadow-sm transition-colors ${
-              failed
-                ? 'bg-destructive/10 border-destructive/30 text-destructive hover:bg-destructive/15'
-                : 'bg-background/90 border-border text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <CloudOff className="w-3 h-3" />
-            {failed ? t('block.assetFailed') : t('block.assetLocal')}
-          </button>
+          (() => {
+            const btn = (
+              <button
+                type="button"
+                onClick={() => void ctx?.upload(assetId)}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] shadow-sm transition-colors ${
+                  failed
+                    ? 'bg-destructive/10 border-destructive/30 text-destructive hover:bg-destructive/15'
+                    : 'bg-background/90 border-border text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <CloudOff className="w-3 h-3" />
+                {failed ? t('block.assetFailed') : t('block.assetLocal')}
+              </button>
+            )
+            return failed && st?.error ? <Tooltip label={st.error}>{btn}</Tooltip> : btn
+          })()
         )}
       </span>
     </span>

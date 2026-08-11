@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Minus, Square, Copy, X } from 'lucide-react'
 import { isTauriShell } from '../hooks/useShell'
+import { Tooltip } from './ui'
 
 /**
  * 原生壳窗口标题栏（仅 Tauri 家族壳渲染：data-shell = tauri | windows | linux）
@@ -104,18 +105,19 @@ function TitleBarButton({
   danger?: boolean
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      className={`w-10 h-8 grid place-items-center rounded-md transition-colors ${
-        danger
-          ? 'text-muted-foreground hover:bg-destructive/15 hover:text-destructive'
-          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-      }`}
-    >
-      {children}
-    </button>
+    <Tooltip label={label}>
+      <button
+        type="button"
+        aria-label={label}
+        onClick={onClick}
+        className={`w-10 h-8 grid place-items-center rounded-md transition-colors ${
+          danger
+            ? 'text-muted-foreground hover:bg-destructive/15 hover:text-destructive'
+            : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+        }`}
+      >
+        {children}
+      </button>
+    </Tooltip>
   )
 }

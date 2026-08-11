@@ -101,7 +101,7 @@
       "current": "Zoom {{pct}}%"
     },
     "zoomReset": "Reset to 100%",
-    "widenReading": "Widen content (diagram-friendly)",
+    "widenReading": "Widen content",
     "narrowReading": "Restore optimal line width"
   }
 }

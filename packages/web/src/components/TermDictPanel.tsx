@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BookMarked, Plus, RefreshCw, Trash2, Search, Pencil, X, Download, Upload, FileUp } from 'lucide-react'
 import { api } from '../hooks/useAPI'
-import { ActionButton, useToast } from './ui'
+import { ActionButton, Tooltip, useToast } from './ui'
 import { SettingsCard } from './settings/ui'
 
 interface TermDictEntry {
@@ -453,22 +453,26 @@ export default function TermDictPanel() {
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(index)}
-                      className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      title={t('settings.termDict.edit')}
-                    >
-                      <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteEntry(index)}
-                      className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                      title={t('settings.termDict.delete')}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-                    </button>
+                    <Tooltip label={t('settings.termDict.edit')}>
+                      <button
+                        type="button"
+                        onClick={() => startEdit(index)}
+                        className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label={t('settings.termDict.edit')}
+                      >
+                        <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      </button>
+                    </Tooltip>
+                    <Tooltip label={t('settings.termDict.delete')}>
+                      <button
+                        type="button"
+                        onClick={() => deleteEntry(index)}
+                        className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        aria-label={t('settings.termDict.delete')}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
               )

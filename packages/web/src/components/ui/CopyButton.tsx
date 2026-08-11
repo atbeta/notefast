@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Copy, Check } from 'lucide-react'
+import { Tooltip } from './Tooltip'
 
 /**
  * 复制按钮：写入剪贴板后 1500ms 内显示对勾反馈。
@@ -40,13 +41,12 @@ export function CopyButton({
     }
   }
 
-  return (
+  const btn = (
     <button
       type="button"
       onClick={handleCopy}
       className={className}
       aria-label={ariaLabel ? (copied ? t('copyBtn.copied') : ariaLabel) : undefined}
-      title={title}
     >
       {copied ? (
         <>
@@ -61,4 +61,5 @@ export function CopyButton({
       )}
     </button>
   )
+  return title ? <Tooltip label={title}>{btn}</Tooltip> : btn
 }

@@ -17,7 +17,7 @@ import { useDocChanges } from '../hooks/useDocEvents'
 import { formatRelative } from '../lib/time'
 import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
-import { ListRowsSkeleton, useToast } from '../components/ui'
+import { ListRowsSkeleton, Tooltip, useToast } from '../components/ui'
 
 interface TrashItem {
   id: string
@@ -144,30 +144,32 @@ export default function TrashPage() {
                     {t('trash.deletedAt', { time: formatRelative(doc.deleted_at) })}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  disabled={busyId === doc.id}
-                  onClick={() => restore(doc.id)}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 shrink-0 disabled:opacity-40"
-                  title={t('trash.restoreTitle')}
-                >
-                  {busyId === doc.id ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
-                  ) : (
-                    <ArchiveRestore className="w-3.5 h-3.5" strokeWidth={1.75} />
-                  )}
-                  {t('trash.restore')}
-                </button>
-                <button
-                  type="button"
-                  disabled={busyId === doc.id}
-                  onClick={() => setConfirmDelete(doc)}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 shrink-0 disabled:opacity-40"
-                  title={t('trash.delete')}
-                >
-                  <X className="w-3.5 h-3.5" strokeWidth={1.75} />
-                  {t('trash.delete')}
-                </button>
+                <Tooltip label={t('trash.restoreTitle')}>
+                  <button
+                    type="button"
+                    disabled={busyId === doc.id}
+                    onClick={() => restore(doc.id)}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 shrink-0 disabled:opacity-40"
+                  >
+                    {busyId === doc.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
+                    ) : (
+                      <ArchiveRestore className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    )}
+                    {t('trash.restore')}
+                  </button>
+                </Tooltip>
+                <Tooltip label={t('trash.delete')}>
+                  <button
+                    type="button"
+                    disabled={busyId === doc.id}
+                    onClick={() => setConfirmDelete(doc)}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 shrink-0 disabled:opacity-40"
+                  >
+                    <X className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    {t('trash.delete')}
+                  </button>
+                </Tooltip>
               </div>
             ))}
           </div>

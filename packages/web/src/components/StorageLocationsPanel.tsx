@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Pencil, Trash2, Cloud } from 'lucide-react'
 import { api } from '../hooks/useAPI'
-import { ActionButton, useToast } from './ui'
+import { ActionButton, Tooltip, useToast } from './ui'
 import { SettingsCard, InlineField } from './settings/ui'
 import { useStorageLocations } from '../hooks/useStorageLocations'
 import { STORAGE_SECRET_MASK, type StorageLocation } from '@notefast/core'
@@ -122,12 +122,16 @@ export default function StorageLocationsPanel() {
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <button type="button" onClick={() => startEdit(loc)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title={t('storageLoc.edit')}>
-                <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
-              </button>
-              <button type="button" onClick={() => handleDelete(loc)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title={t('storageLoc.delete')}>
-                <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-              </button>
+              <Tooltip label={t('storageLoc.edit')}>
+                <button type="button" onClick={() => startEdit(loc)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" aria-label={t('storageLoc.edit')}>
+                  <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
+                </button>
+              </Tooltip>
+              <Tooltip label={t('storageLoc.delete')}>
+                <button type="button" onClick={() => handleDelete(loc)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" aria-label={t('storageLoc.delete')}>
+                  <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                </button>
+              </Tooltip>
             </div>
           </div>
         ))}

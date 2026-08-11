@@ -27,7 +27,7 @@ import { useApiMutation } from '../hooks/useApiMutation'
 import { deliverExport, fetchDocExportFile } from '../lib/download'
 import ConfirmDialog from './ConfirmDialog'
 import ShareDialog from './ShareDialog'
-import { useToast } from './ui'
+import { Tooltip, useToast } from './ui'
 
 export type DocActionsSurface = 'list' | 'sidebar' | 'inbox' | 'archived'
 
@@ -379,25 +379,26 @@ export default function DocActionsMenu({
   return (
     <>
       <div className={`relative shrink-0 ${className}`}>
-        <button
-          ref={triggerRef}
-          type="button"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          aria-controls={open ? menuId : undefined}
-          aria-label={t('docActions.moreActionsFor', { title })}
-          title={t('docActions.moreActionsTooltip')}
-          disabled={busy}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            setOpen((v) => !v)
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
-          className={`${triggerSize} inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-all ${triggerVisible}`}
-        >
-          <MoreHorizontal className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} strokeWidth={1.75} aria-hidden="true" />
-        </button>
+        <Tooltip label={t('docActions.moreActionsTooltip')}>
+          <button
+            ref={triggerRef}
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={open}
+            aria-controls={open ? menuId : undefined}
+            aria-label={t('docActions.moreActionsFor', { title })}
+            disabled={busy}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setOpen((v) => !v)
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            className={`${triggerSize} inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-all ${triggerVisible}`}
+          >
+            <MoreHorizontal className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        </Tooltip>
       </div>
 
       {open && pos && createPortal(

@@ -16,7 +16,7 @@ import { useApiQuery } from '../hooks/useApiQuery'
 import { formatRelative } from '../lib/time'
 import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
-import { ListRowsSkeleton, useToast } from '../components/ui'
+import { ListRowsSkeleton, Tooltip, useToast } from '../components/ui'
 
 interface AssetListItem {
   id: string
@@ -182,27 +182,29 @@ export default function ResourcesPage() {
           )}
         </div>
         {/* 一键清理未引用（收件箱放弃等场景产生的孤儿图片；宽限期 0 立即清） */}
-        <button
-          type="button"
-          onClick={() => setCleanupOpen(true)}
-          disabled={cleaning}
-          className="btn-ghost-custom shrink-0"
-          title={t('resources.cleanupHint')}
-        >
-          <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
-          {cleaning ? t('common.loading') : t('resources.cleanupUnreferenced')}
-        </button>
+        <Tooltip label={t('resources.cleanupHint')}>
+          <button
+            type="button"
+            onClick={() => setCleanupOpen(true)}
+            disabled={cleaning}
+            className="btn-ghost-custom shrink-0"
+          >
+            <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
+            {cleaning ? t('common.loading') : t('resources.cleanupUnreferenced')}
+          </button>
+        </Tooltip>
         {/* 存量补传入口（header 右侧；图床命令配置仍在设置 → 图床与图片） */}
-        <button
-          type="button"
-          onClick={() => void handleBatchUpload()}
-          disabled={batchStarting || batch?.running}
-          className="btn-ghost-custom shrink-0"
-          title={t('resources.uploadExistingHint')}
-        >
-          <CloudUpload className="w-3.5 h-3.5" strokeWidth={2} />
-          {batchStarting ? t('common.loading') : t('resources.uploadExisting')}
-        </button>
+        <Tooltip label={t('resources.uploadExistingHint')}>
+          <button
+            type="button"
+            onClick={() => void handleBatchUpload()}
+            disabled={batchStarting || batch?.running}
+            className="btn-ghost-custom shrink-0"
+          >
+            <CloudUpload className="w-3.5 h-3.5" strokeWidth={2} />
+            {batchStarting ? t('common.loading') : t('resources.uploadExisting')}
+          </button>
+        </Tooltip>
       </PageHeader>
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
@@ -268,29 +270,36 @@ export default function ResourcesPage() {
                   />
                 </button>
                 {!item.referenced && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setPendingDelete(item)
-                    }}
-                    className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity inline-flex items-center justify-center w-7 h-7 rounded-md bg-background/90 border border-border/70 text-muted-foreground hover:text-destructive hover:border-destructive/40 shadow-sm"
-                    aria-label={t('common.delete')}
-                    title={t('common.delete')}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-                  </button>
+                  <Tooltip label={t('common.delete')}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setPendingDelete(item)
+                      }}
+                      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity inline-flex items-center justify-center w-7 h-7 rounded-md bg-background/90 border border-border/70 text-muted-foreground hover:text-destructive hover:border-destructive/40 shadow-sm"
+                      aria-label={t('common.delete')}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    </button>
+                  </Tooltip>
                 )}
                 <div className="px-2.5 py-2 space-y-1">
                   <div className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
                     {item.remote ? (
-                      <span
-                        className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"
-                        title={item.remote_url ?? undefined}
-                      >
-                        <Cloud className="w-3 h-3" strokeWidth={1.75} />
-                        {t('resources.remote')}
-                      </span>
+                      item.remote_url ? (
+                        <Tooltip label={item.remote_url}>
+                          <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
+                            <Cloud className="w-3 h-3" strokeWidth={1.75} />
+                            {t('resources.remote')}
+                          </span>
+                        </Tooltip>
+                      ) : (
+                        <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
+                          <Cloud className="w-3 h-3" strokeWidth={1.75} />
+                          {t('resources.remote')}
+                        </span>
+                      )
                     ) : (
                       <span>{t('resources.local')}</span>
                     )}
@@ -304,20 +313,21 @@ export default function ResourcesPage() {
                       </span>
                     )}
                     {!item.remote && (
-                      <button
-                        type="button"
-                        onClick={() => void handleUpload(item)}
-                        disabled={uploadingIds.has(item.id)}
-                        className="ml-auto inline-flex items-center gap-0.5 text-muted-foreground/70 hover:text-primary transition-colors disabled:opacity-50"
-                        title={t('resources.uploadLocal')}
-                      >
-                        {uploadingIds.has(item.id) ? (
-                          <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
-                        ) : (
-                          <CloudUpload className="w-3 h-3" strokeWidth={1.75} />
-                        )}
-                        {t('resources.uploadShort')}
-                      </button>
+                      <Tooltip label={t('resources.uploadLocal')}>
+                        <button
+                          type="button"
+                          onClick={() => void handleUpload(item)}
+                          disabled={uploadingIds.has(item.id)}
+                          className="ml-auto inline-flex items-center gap-0.5 text-muted-foreground/70 hover:text-primary transition-colors disabled:opacity-50"
+                        >
+                          {uploadingIds.has(item.id) ? (
+                            <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
+                          ) : (
+                            <CloudUpload className="w-3 h-3" strokeWidth={1.75} />
+                          )}
+                          {t('resources.uploadShort')}
+                        </button>
+                      </Tooltip>
                     )}
                   </div>
                   <div className="flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground/80 tabular-nums">

@@ -195,17 +195,19 @@ function PinnedViewItem({
           </span>
         )}
       </Link>
-      <button
-        onClick={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          onUnpin(view.id)
-        }}
-        className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 transition-all shrink-0"
-        title={t('sidebar.unpin')}
-      >
-        <X className="w-3 h-3" strokeWidth={2} />
-      </button>
+      <Tooltip label={t('sidebar.unpin')}>
+        <button
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onUnpin(view.id)
+          }}
+          className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 transition-all shrink-0"
+          aria-label={t('sidebar.unpin')}
+        >
+          <X className="w-3 h-3" strokeWidth={2} />
+        </button>
+      </Tooltip>
     </div>
   )
 }
@@ -368,12 +370,11 @@ export default function Sidebar({
             </span>
             NoteFast
           </Link>
-          <span
-            className="text-[10px] font-medium uppercase tracking-[0.06em] px-1.5 py-[1px] rounded border border-border/60 text-muted-foreground/80 bg-muted/40"
-            title="NoteFast v0.1"
-          >
-            Beta
-          </span>
+          <Tooltip label="NoteFast v0.1">
+            <span className="text-[10px] font-medium uppercase tracking-[0.06em] px-1.5 py-[1px] rounded border border-border/60 text-muted-foreground/80 bg-muted/40">
+              Beta
+            </span>
+          </Tooltip>
         </div>
         <div className="flex items-center gap-0.5">
           <Tooltip label={t('sidebar.collapseSidebar')}>
@@ -406,10 +407,12 @@ export default function Sidebar({
               <LayoutGrid className="w-[15px] h-[15px]" strokeWidth={1.75} />
               {t('sidebar.allDocs')}
             </Link>
-            <Link to="/new" onClick={closeAfterNav} className={location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'} title={t('sidebar.newDocTitle', { shortcut: shortcutLabel(['mod', 'N']) })}>
-              <Plus className="w-[15px] h-[15px]" strokeWidth={1.75} />
-              {t('sidebar.newDoc')}
-            </Link>
+            <Tooltip className="w-full" label={t('sidebar.newDocTitle', { shortcut: shortcutLabel(['mod', 'N']) })}>
+              <Link to="/new" onClick={closeAfterNav} className={`w-full ${location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'}`}>
+                <Plus className="w-[15px] h-[15px]" strokeWidth={1.75} />
+                {t('sidebar.newDoc')}
+              </Link>
+            </Tooltip>
             <Link to="/inbox" onClick={closeAfterNav} className={location.pathname === '/inbox' ? 'sidebar-link-active' : 'sidebar-link'}>
               <Inbox className="w-[15px] h-[15px]" strokeWidth={1.75} />
               <span className="flex-1">{t('sidebar.inbox')}</span>
@@ -557,11 +560,12 @@ export default function Sidebar({
                     >
                       <span className="truncate">{doc.title || t('sidebar.untitled')}</span>
                       {draftIds.has(doc.id) && (
-                        <span
-                          aria-label={t('sidebar.hasDraft')}
-                          title={t('sidebar.hasDraft')}
-                          className="w-1.5 h-1.5 rounded-full bg-warn shrink-0"
-                        />
+                        <Tooltip label={t('sidebar.hasDraft')}>
+                          <span
+                            aria-label={t('sidebar.hasDraft')}
+                            className="w-1.5 h-1.5 rounded-full bg-warn shrink-0"
+                          />
+                        </Tooltip>
                       )}
                     </Link>
                     <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0 pr-0.5">

@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next'
 import i18next from '../i18n'
 import { Check, Globe, Loader2, Link2, Trash2 } from 'lucide-react'
 import { api, ApiError } from '../hooks/useAPI'
-import { useToast } from './ui'
+import { Tooltip, useToast } from './ui'
 import { currentLocale } from '../lib/time'
 
 type ExpiryChoice = 'never' | '1' | '7' | '30'
@@ -262,17 +262,18 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
                 onFocus={(e) => e.target.select()}
                 className="flex-1 min-w-0 rounded-md border border-border bg-background px-2.5 py-1.5 text-[11.5px] font-mono text-foreground focus:outline-none focus:border-foreground/25"
               />
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-border text-[12px] text-foreground hover:bg-muted transition-colors"
-                title={t('share.copyLink')}
-              >
-                {copied
-                  ? <Check className="w-3.5 h-3.5 text-green-600" strokeWidth={2} />
-                  : <Link2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
-                {copied ? t('common.copied') : t('common.copy')}
-              </button>
+              <Tooltip label={t('share.copyLink')}>
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-border text-[12px] text-foreground hover:bg-muted transition-colors"
+                >
+                  {copied
+                    ? <Check className="w-3.5 h-3.5 text-green-600" strokeWidth={2} />
+                    : <Link2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
+                  {copied ? t('common.copied') : t('common.copy')}
+                </button>
+              </Tooltip>
             </div>
 
             {isLocalHost && (

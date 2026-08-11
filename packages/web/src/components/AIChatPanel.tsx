@@ -498,36 +498,40 @@ export default function AIChatPanel({
         <div className="flex items-center gap-2.5 text-foreground font-medium min-w-0">
           <Sparkles className="w-4 h-4 text-primary shrink-0" strokeWidth={1.75} />
           <span className="truncate">{t('chat.title')}</span>
-          <span
-            className="shrink-0 text-[10.5px] font-medium px-1.5 py-px rounded border border-primary/25 bg-primary-soft text-primary/90"
-            title={contextDocId ? t('chat.contextDocTitle') : t('chat.contextAllTitle')}
-          >
-            {contextDocId ? t('chat.contextDoc') : t('chat.contextAll')}
-          </span>
+          <Tooltip label={contextDocId ? t('chat.contextDocTitle') : t('chat.contextAllTitle')}>
+            <span className="shrink-0 text-[10.5px] font-medium px-1.5 py-px rounded border border-primary/25 bg-primary-soft text-primary/90">
+              {contextDocId ? t('chat.contextDoc') : t('chat.contextAll')}
+            </span>
+          </Tooltip>
           {capabilities && (
             <span className="flex items-center gap-1 text-muted-foreground shrink-0">
               {capabilities.embedding && (
-                <span title={t('chat.embeddingConfigured')}>
-                  <Binary className="w-3 h-3" strokeWidth={1.75} aria-label={t('chat.embeddingConfigured')} />
-                </span>
+                <Tooltip label={t('chat.embeddingConfigured')}>
+                  <span>
+                    <Binary className="w-3 h-3" strokeWidth={1.75} aria-label={t('chat.embeddingConfigured')} />
+                  </span>
+                </Tooltip>
               )}
               {capabilities.reranker && (
-                <span title={t('chat.rerankConfigured')}>
-                  <ArrowUpDown className="w-3 h-3" strokeWidth={1.75} aria-label={t('chat.rerankConfigured')} />
-                </span>
+                <Tooltip label={t('chat.rerankConfigured')}>
+                  <span>
+                    <ArrowUpDown className="w-3 h-3" strokeWidth={1.75} aria-label={t('chat.rerankConfigured')} />
+                  </span>
+                </Tooltip>
               )}
             </span>
           )}
           {messages.length > 0 && (
             <>
               <span className="text-border shrink-0">|</span>
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                className="text-[11px] text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                title={t('chat.clearTitle')}
-              >
-                {t('chat.clear')}
-              </button>
+              <Tooltip label={t('chat.clearTitle')}>
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  className="text-[11px] text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                >
+                  {t('chat.clear')}
+                </button>
+              </Tooltip>
             </>
           )}
         </div>
@@ -720,19 +724,19 @@ export default function AIChatPanel({
             {skills.map((s) => {
               const SkillIcon = SKILL_ICONS[s.icon] ?? MessageSquareText
               return (
-                <button
-                  key={s.id}
-                  type="button"
-                  title={s.description}
-                  onClick={() => {
-                    setInput(s.prompt)
-                    inputRef.current?.focus()
-                  }}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-primary/20 bg-primary-softer text-[11px] text-primary hover:border-primary/40 hover:bg-primary-soft transition-colors whitespace-nowrap shrink-0"
-                >
-                  <SkillIcon className="w-3 h-3" strokeWidth={1.75} />
-                  {s.name}
-                </button>
+                <Tooltip key={s.id} label={s.description}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInput(s.prompt)
+                      inputRef.current?.focus()
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-primary/20 bg-primary-softer text-[11px] text-primary hover:border-primary/40 hover:bg-primary-soft transition-colors whitespace-nowrap shrink-0"
+                  >
+                    <SkillIcon className="w-3 h-3" strokeWidth={1.75} />
+                    {s.name}
+                  </button>
+                </Tooltip>
               )
             })}
           </div>
@@ -742,14 +746,16 @@ export default function AIChatPanel({
             {attachments.map((a, i) => (
               <div key={i} className="relative group">
                 <img src={a.dataUrl} alt={a.name} className="h-14 w-14 rounded-md border border-border/60 object-cover" />
-                <button
-                  type="button"
-                  onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
-                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-ink text-ink-foreground text-[10px] leading-none flex items-center justify-center opacity-80 hover:opacity-100"
-                  title={t('chat.removeAttachment')}
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
+                <Tooltip label={t('chat.removeAttachment')}>
+                  <button
+                    type="button"
+                    onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-ink text-ink-foreground text-[10px] leading-none flex items-center justify-center opacity-80 hover:opacity-100"
+                    aria-label={t('chat.removeAttachment')}
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </Tooltip>
               </div>
             ))}
           </div>
@@ -946,28 +952,30 @@ function CitationSources({
                 <span className="shrink-0 text-[10.5px] text-muted-foreground tabular-nums">
                   {t('chat.segments', { n: group.items.length })}
                 </span>
-                <Link
-                  to={`/doc/${group.doc_id}`}
-                  className="ml-auto shrink-0 p-0.5 text-muted-foreground/50 hover:text-primary transition-colors"
-                  title={t('chat.openDoc')}
-                  aria-label={t('chat.openDoc')}
-                >
-                  <ExternalLink className="w-3 h-3" strokeWidth={1.75} />
-                </Link>
+                <Tooltip label={t('chat.openDoc')}>
+                  <Link
+                    to={`/doc/${group.doc_id}`}
+                    className="ml-auto shrink-0 p-0.5 text-muted-foreground/50 hover:text-primary transition-colors"
+                    aria-label={t('chat.openDoc')}
+                  >
+                    <ExternalLink className="w-3 h-3" strokeWidth={1.75} />
+                  </Link>
+                </Tooltip>
               </div>
               <ol className="space-y-0.5">
                 {visible.map((c, i) => (
                   <li key={c.block_id}>
-                    <Link
-                      to={`/doc/${c.doc_id}#block-${c.block_id}`}
-                      className="flex gap-2 rounded-md px-1.5 py-1.5 -mx-0.5 text-[11.5px] text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-colors group/snip"
-                      title={t('chat.jumpToBlock')}
-                    >
-                      <span className="shrink-0 w-4 text-right font-mono text-[10px] text-muted-foreground/55 group-hover/snip:text-primary/70 tabular-nums pt-px">
-                        {i + 1}
-                      </span>
-                      <span className="min-w-0 line-clamp-2 leading-relaxed">{c.snippet}</span>
-                    </Link>
+                    <Tooltip label={t('chat.jumpToBlock')}>
+                      <Link
+                        to={`/doc/${c.doc_id}#block-${c.block_id}`}
+                        className="flex gap-2 rounded-md px-1.5 py-1.5 -mx-0.5 text-[11.5px] text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-colors group/snip"
+                      >
+                        <span className="shrink-0 w-4 text-right font-mono text-[10px] text-muted-foreground/55 group-hover/snip:text-primary/70 tabular-nums pt-px">
+                          {i + 1}
+                        </span>
+                        <span className="min-w-0 line-clamp-2 leading-relaxed">{c.snippet}</span>
+                      </Link>
+                    </Tooltip>
                   </li>
                 ))}
               </ol>

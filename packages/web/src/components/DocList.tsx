@@ -6,6 +6,7 @@ import { api } from '../hooks/useAPI'
 import { formatRelative } from '../lib/time'
 import DocActionsMenu from './DocActionsMenu'
 import { useTranslation } from 'react-i18next'
+import { Tooltip } from './ui'
 
 interface DocListProps {
   docs: DocSummary[]
@@ -106,20 +107,20 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
 
       {!editing && (
         <div className="flex items-center gap-1 shrink-0">
-          <time
-            className="text-[11.5px] text-muted-foreground font-mono tabular-nums whitespace-nowrap text-right min-w-[4.5rem]"
-            dateTime={doc.updated_at}
-            title={t('docList.updatedAt', { date: doc.updated_at })}
-          >
-            {formatRelative(doc.updated_at)}
-          </time>
-          {doc.created_at && doc.created_at !== doc.updated_at && (
-            <span
-              className="text-[11.5px] text-muted-foreground/55 font-mono tabular-nums whitespace-nowrap"
-              title={t('docList.createdAt', { date: doc.created_at })}
+          <Tooltip label={t('docList.updatedAt', { date: doc.updated_at })}>
+            <time
+              className="text-[11.5px] text-muted-foreground font-mono tabular-nums whitespace-nowrap text-right min-w-[4.5rem]"
+              dateTime={doc.updated_at}
             >
-              · {t('docList.createdAt', { date: formatRelative(doc.created_at) })}
-            </span>
+              {formatRelative(doc.updated_at)}
+            </time>
+          </Tooltip>
+          {doc.created_at && doc.created_at !== doc.updated_at && (
+            <Tooltip label={t('docList.createdAt', { date: doc.created_at })}>
+              <span className="text-[11.5px] text-muted-foreground/55 font-mono tabular-nums whitespace-nowrap">
+                · {t('docList.createdAt', { date: formatRelative(doc.created_at) })}
+              </span>
+            </Tooltip>
           )}
           <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
             <DocActionsMenu

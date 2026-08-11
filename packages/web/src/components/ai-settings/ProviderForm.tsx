@@ -7,7 +7,7 @@ import {
   type ProviderDefinition,
   type ProviderPresetId,
 } from '@notefast/core'
-import { FieldRow } from '../ui'
+import { FieldRow, Tooltip } from '../ui'
 import { InlineField } from '../settings/ui'
 import type { FieldErrors } from './validation'
 
@@ -81,16 +81,17 @@ export function ProviderForm({
             ))}
           </select>
           {preset?.signupUrl && (
-            <a
-              href={preset.signupUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-              title={t('providerForm.getApiKeyTitle')}
-            >
-              <ExternalLink className="w-3 h-3" />
-              {t('providerForm.getApiKey')}
-            </a>
+            <Tooltip label={t('providerForm.getApiKeyTitle')}>
+              <a
+                href={preset.signupUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                <ExternalLink className="w-3 h-3" />
+                {t('providerForm.getApiKey')}
+              </a>
+            </Tooltip>
           )}
         </div>
       </FieldRow>

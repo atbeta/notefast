@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { type BackupRuntimeStatus, type BackupRestorePoint } from '@notefast/core'
-import { ActionButton, useToast } from './ui'
+import { ActionButton, Tooltip, useToast } from './ui'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
 import LocationSelect from './LocationSelect'
 import { formatIsoDateTime } from '../lib/time'
@@ -211,15 +211,16 @@ export default function BackupPanel() {
                       {(p.sizeBytes / 1024).toFixed(1)} KB · schema v{p.schemaVersion}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => copyRestoreCmd(p.objectKey)}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-accent hover:text-foreground text-muted-foreground shrink-0 transition-colors border border-transparent hover:border-border/50"
-                    title={t('backup.copyRestoreCmdTitle')}
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>{t('backup.command')}</span>
-                  </button>
+                  <Tooltip label={t('backup.copyRestoreCmdTitle')}>
+                    <button
+                      type="button"
+                      onClick={() => copyRestoreCmd(p.objectKey)}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-accent hover:text-foreground text-muted-foreground shrink-0 transition-colors border border-transparent hover:border-border/50"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>{t('backup.command')}</span>
+                    </button>
+                  </Tooltip>
                 </div>
               ))}
             </div>

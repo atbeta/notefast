@@ -16,7 +16,7 @@ import { useDocChanges } from '../hooks/useDocEvents'
 import { formatRelative } from '../lib/time'
 import DocActionsMenu from '../components/DocActionsMenu'
 import PageHeader from '../components/PageHeader'
-import { ListRowsSkeleton } from '../components/ui'
+import { ListRowsSkeleton, Tooltip } from '../components/ui'
 
 export default function ArchivedPage() {
   const { t } = useTranslation()
@@ -100,20 +100,21 @@ export default function ArchivedPage() {
         </p>
       </div>
       <div className="flex items-center gap-0.5 shrink-0">
-        <button
-          type="button"
-          disabled={busyId === doc.id}
-          onClick={() => restore(doc.id)}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-          title={t('archived.restoreTitle')}
-        >
-          {busyId === doc.id ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
-          ) : (
-            <ArchiveRestore className="w-3.5 h-3.5" strokeWidth={1.75} />
-          )}
-          {t('archived.restore')}
-        </button>
+        <Tooltip label={t('archived.restoreTitle')}>
+          <button
+            type="button"
+            disabled={busyId === doc.id}
+            onClick={() => restore(doc.id)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+          >
+            {busyId === doc.id ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
+            ) : (
+              <ArchiveRestore className="w-3.5 h-3.5" strokeWidth={1.75} />
+            )}
+            {t('archived.restore')}
+          </button>
+        </Tooltip>
         <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
           <DocActionsMenu
             doc={{ ...doc, status: 'archived' }}

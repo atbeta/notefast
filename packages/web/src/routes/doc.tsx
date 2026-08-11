@@ -706,26 +706,28 @@ export default function DocPage() {
         <PageHeader bare className="shrink-0 px-3 sm:px-6">
           {/* 左：顺序导航（Obsidian 式；按创建顺序，单篇两侧禁用） */}
           <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => neighbors.prev && navigate(`/doc/${neighbors.prev.id}`)}
-              disabled={!neighbors.prev}
-              title={neighbors.prev ? t('doc.prevDoc', { title: neighbors.prev.title }) : t('doc.noPrevDoc')}
-              className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:hover:bg-transparent"
-              aria-label={t('doc.prevDoc', { title: neighbors.prev?.title ?? '' })}
-            >
-              <ArrowLeft className="w-4 h-4" strokeWidth={1.75} />
-            </button>
-            <button
-              type="button"
-              onClick={() => neighbors.next && navigate(`/doc/${neighbors.next.id}`)}
-              disabled={!neighbors.next}
-              title={neighbors.next ? t('doc.nextDoc', { title: neighbors.next.title }) : t('doc.noNextDoc')}
-              className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:hover:bg-transparent"
-              aria-label={t('doc.nextDoc', { title: neighbors.next?.title ?? '' })}
-            >
-              <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
-            </button>
+            <Tooltip label={neighbors.prev ? t('doc.prevDoc', { title: neighbors.prev.title }) : t('doc.noPrevDoc')}>
+              <button
+                type="button"
+                onClick={() => neighbors.prev && navigate(`/doc/${neighbors.prev.id}`)}
+                disabled={!neighbors.prev}
+                className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:hover:bg-transparent"
+                aria-label={t('doc.prevDoc', { title: neighbors.prev?.title ?? '' })}
+              >
+                <ArrowLeft className="w-4 h-4" strokeWidth={1.75} />
+              </button>
+            </Tooltip>
+            <Tooltip label={neighbors.next ? t('doc.nextDoc', { title: neighbors.next.title }) : t('doc.noNextDoc')}>
+              <button
+                type="button"
+                onClick={() => neighbors.next && navigate(`/doc/${neighbors.next.id}`)}
+                disabled={!neighbors.next}
+                className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:hover:bg-transparent"
+                aria-label={t('doc.nextDoc', { title: neighbors.next?.title ?? '' })}
+              >
+                <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
+              </button>
+            </Tooltip>
           </div>
           {/* 中：文档标题（flex-1 撑满中间，居中截断） */}
           <div className="flex-1 min-w-0 flex justify-center">
@@ -736,23 +738,24 @@ export default function DocPage() {
           {/* 右：操作按钮组 */}
           <div className="flex items-center gap-2">
             {!isEditing && (
-              <button
-                type="button"
-                onClick={handleStartEdit}
-                className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent"
-                title={t('doc.enterEdit')}
-              >
-                <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
-              </button>
+              <Tooltip label={t('doc.enterEdit')}>
+                <button
+                  type="button"
+                  onClick={handleStartEdit}
+                  className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent"
+                  aria-label={t('doc.enterEdit')}
+                >
+                  <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
+                </button>
+              </Tooltip>
             )}
             {isEditing && (
-              <span
-                className="flex items-center gap-1.5 text-[12px] text-muted-foreground"
-                title={t('doc.editSaveHint')}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                {t('doc.editing')}
-              </span>
+              <Tooltip label={t('doc.editSaveHint')}>
+                <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                  {t('doc.editing')}
+                </span>
+              </Tooltip>
             )}
             {!isEditing && <DemoModeButton />}
             <div className="w-px h-4 bg-border/60 mx-1" />
@@ -898,19 +901,21 @@ export default function DocPage() {
               />
               {/* 未配置 Chat 时不展示：避免「可点但静默失败」；ai_exclude 仍显示禁用态 */}
               {(ai.chat || aiExclude) && (
-              <button
-                type="button"
-                onClick={handleSuggestTitle}
-                disabled={generatingTitle || aiExclude || !ai.chat}
-                className="absolute right-1 sm:-right-8 top-3 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-50 p-1.5 text-muted-foreground hover:text-foreground transition-all rounded disabled:opacity-30"
-                title={aiExclude ? t('doc.aiHiddenNoTitle') : t('doc.generateTitleAi')}
-              >
-                {generatingTitle ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Sparkles className="w-4 h-4" strokeWidth={1.75} />
-                )}
-              </button>
+              <Tooltip label={aiExclude ? t('doc.aiHiddenNoTitle') : t('doc.generateTitleAi')}>
+                <button
+                  type="button"
+                  onClick={handleSuggestTitle}
+                  disabled={generatingTitle || aiExclude || !ai.chat}
+                  className="absolute right-1 sm:-right-8 top-3 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-50 p-1.5 text-muted-foreground hover:text-foreground transition-all rounded disabled:opacity-30"
+                  aria-label={aiExclude ? t('doc.aiHiddenNoTitle') : t('doc.generateTitleAi')}
+                >
+                  {generatingTitle ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4" strokeWidth={1.75} />
+                  )}
+                </button>
+              </Tooltip>
               )}
             </div>
 
@@ -939,26 +944,28 @@ export default function DocPage() {
               {id && <TagEditor docId={id} tags={tags} onChange={setTags} />}
               <div className="flex items-center gap-3 shrink-0">
                 {docStatus !== 'archived' && (
-                  <button
-                    type="button"
-                    onClick={handleToggleArchive}
-                    disabled={statusSaving}
-                    className="text-[11.5px] text-muted-foreground/75 hover:text-foreground transition-colors"
-                    title={t('doc.archiveTooltip')}
-                  >
-                    {t('doc.archive')}
-                  </button>
+                  <Tooltip label={t('doc.archiveTooltip')}>
+                    <button
+                      type="button"
+                      onClick={handleToggleArchive}
+                      disabled={statusSaving}
+                      className="text-[11.5px] text-muted-foreground/75 hover:text-foreground transition-colors"
+                    >
+                      {t('doc.archive')}
+                    </button>
+                  </Tooltip>
                 )}
                 {!aiExclude && (
-                  <button
-                    type="button"
-                    onClick={handleToggleAiExclude}
-                    disabled={aiExcludeSaving}
-                    className="text-[11.5px] text-muted-foreground/75 hover:text-foreground transition-colors"
-                    title={t('doc.aiExcludeTooltip')}
-                  >
-                    {t('doc.aiExclude')}
-                  </button>
+                  <Tooltip label={t('doc.aiExcludeTooltip')}>
+                    <button
+                      type="button"
+                      onClick={handleToggleAiExclude}
+                      disabled={aiExcludeSaving}
+                      className="text-[11.5px] text-muted-foreground/75 hover:text-foreground transition-colors"
+                    >
+                      {t('doc.aiExclude')}
+                    </button>
+                  </Tooltip>
                 )}
               </div>
             </div>
@@ -1092,28 +1099,30 @@ export default function DocPage() {
               </div>
             )}
             {!railActuallyCollapsed && (
+              <Tooltip label={railWidth === 'wide' ? t('doc.narrowRail') : t('doc.widenRail')}>
+                <button
+                  type="button"
+                  onClick={() => setRailWidth((v) => (v === 'wide' ? 'normal' : 'wide'))}
+                  aria-label={railWidth === 'wide' ? t('doc.narrowRail') : t('doc.widenRail')}
+                  aria-pressed={railWidth === 'wide'}
+                  className="shrink-0 self-center inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                >
+                  {railWidth === 'wide' ? <Minimize2 className="w-3.5 h-3.5" strokeWidth={1.75} /> : <Maximize2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
+                </button>
+              </Tooltip>
+            )}
+            <Tooltip label={railActuallyCollapsed ? t('doc.expandRail') : t('doc.collapseRail')}>
               <button
                 type="button"
-                onClick={() => setRailWidth((v) => (v === 'wide' ? 'normal' : 'wide'))}
-                title={railWidth === 'wide' ? t('doc.narrowRail') : t('doc.widenRail')}
-                aria-label={railWidth === 'wide' ? t('doc.narrowRail') : t('doc.widenRail')}
-                aria-pressed={railWidth === 'wide'}
-                className="shrink-0 self-center inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                onClick={toggleRailCollapsed}
+                aria-label={railActuallyCollapsed ? t('doc.expandRail') : t('doc.collapseRail')}
+                className={`shrink-0 self-center inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ${
+                  railActuallyCollapsed ? 'w-7 h-7 mx-auto' : 'w-7 h-7'
+                }`}
               >
-                {railWidth === 'wide' ? <Minimize2 className="w-3.5 h-3.5" strokeWidth={1.75} /> : <Maximize2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
+                {railActuallyCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" strokeWidth={1.75} /> : <PanelRightClose className="w-3.5 h-3.5" strokeWidth={1.75} />}
               </button>
-            )}
-            <button
-              type="button"
-              onClick={toggleRailCollapsed}
-              title={railActuallyCollapsed ? t('doc.expandRail') : t('doc.collapseRail')}
-              aria-label={railActuallyCollapsed ? t('doc.expandRail') : t('doc.collapseRail')}
-              className={`shrink-0 self-center inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ${
-                railActuallyCollapsed ? 'w-7 h-7 mx-auto' : 'w-7 h-7'
-              }`}
-            >
-              {railActuallyCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" strokeWidth={1.75} /> : <PanelRightClose className="w-3.5 h-3.5" strokeWidth={1.75} />}
-            </button>
+            </Tooltip>
           </div>
           {!railActuallyCollapsed && (
           <div className="flex-1 overflow-y-auto px-3.5 py-4">
@@ -1482,14 +1491,16 @@ function RevisionItem({
             {formatSqliteDateTime(rev.created_at)}
           </span>
         </button>
-        <button
-          type="button"
-          onClick={() => onToggle(key)}
-          className="shrink-0 p-1 text-muted-foreground/50 hover:text-foreground transition-colors"
-          title={isOpen ? t('doc.collapse') : t('doc.preview')}
-        >
-          {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-        </button>
+        <Tooltip label={isOpen ? t('doc.collapse') : t('doc.preview')}>
+          <button
+            type="button"
+            onClick={() => onToggle(key)}
+            className="shrink-0 p-1 text-muted-foreground/50 hover:text-foreground transition-colors"
+            aria-label={isOpen ? t('doc.collapse') : t('doc.preview')}
+          >
+            {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+          </button>
+        </Tooltip>
         {!rev.is_current && (
           <button
             type="button"
@@ -1593,22 +1604,23 @@ function DemoModeButton() {
       role="group"
       aria-label={t('doc.demoMode.label')}
     >
-      <button
-        ref={zoomBtnRef}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={zoomMenuOpen}
-        aria-label={t('doc.zoom.current', { pct: zoomPct })}
-        title={`${t('doc.zoom.current', { pct: zoomPct })} · ${t('doc.demoMode.shortcutHint')}`}
-        onClick={() => setZoomMenuOpen((v) => !v)}
-        className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
-          zoomMenuOpen || demo.zoomIndex !== 0
-            ? 'text-primary bg-primary/12 hover:bg-primary/15'
-            : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-        }`}
-      >
-        <ZoomIn className="w-3.5 h-3.5" strokeWidth={1.75} />
-      </button>
+      <Tooltip label={`${t('doc.zoom.current', { pct: zoomPct })} · ${t('doc.demoMode.shortcutHint')}`}>
+        <button
+          ref={zoomBtnRef}
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={zoomMenuOpen}
+          aria-label={t('doc.zoom.current', { pct: zoomPct })}
+          onClick={() => setZoomMenuOpen((v) => !v)}
+          className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+            zoomMenuOpen || demo.zoomIndex !== 0
+              ? 'text-primary bg-primary/12 hover:bg-primary/15'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+          }`}
+        >
+          <ZoomIn className="w-3.5 h-3.5" strokeWidth={1.75} />
+        </button>
+      </Tooltip>
       {zoomMenuOpen && zoomMenuPos && createPortal(
         <div
           ref={zoomMenuRef}
@@ -1626,7 +1638,7 @@ function DemoModeButton() {
                 type="button"
                 role="menuitemradio"
                 aria-checked={active}
-                title={i === 0 ? t('doc.zoomReset') : undefined}
+                aria-label={i === 0 ? t('doc.zoomReset') : `${pct}%`}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] text-left text-foreground hover:bg-accent transition-colors"
                 onClick={() => {
                   setDemoZoomIndex(i)
@@ -1639,6 +1651,9 @@ function DemoModeButton() {
                   aria-hidden
                 />
                 <span className="font-mono tabular-nums">{pct}%</span>
+                {i === 0 && (
+                  <span className="ml-auto text-[11px] text-muted-foreground">{t('doc.zoomReset')}</span>
+                )}
               </button>
             )
           })}
@@ -1646,32 +1661,36 @@ function DemoModeButton() {
         document.body,
       )}
       <div className="w-px h-4 bg-border/60 mx-0.5" />
-      <button
-        type="button"
-        onClick={toggleReadingWidth}
-        aria-pressed={readingWidth === 'wide'}
-        className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
-          readingWidth === 'wide'
-            ? 'text-primary bg-primary/12 hover:bg-primary/15'
-            : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-        }`}
-        title={readingWidth === 'wide' ? t('doc.narrowReading') : t('doc.widenReading')}
-      >
-        {readingWidth === 'wide' ? <Minimize2 className="w-3.5 h-3.5" strokeWidth={1.75} /> : <Maximize2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
-      </button>
-      <button
-        type="button"
-        onClick={() => toggleDemoMode()}
-        aria-pressed={demo.active}
-        className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
-          demo.active
-            ? 'text-primary bg-primary/12 hover:bg-primary/15'
-            : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-        }`}
-        title={demo.active ? t('doc.demoMode.exit') : t('doc.demoMode.enter')}
-      >
-        <Presentation className="w-3.5 h-3.5" strokeWidth={1.75} />
-      </button>
+      <Tooltip label={readingWidth === 'wide' ? t('doc.narrowReading') : t('doc.widenReading')}>
+        <button
+          type="button"
+          onClick={toggleReadingWidth}
+          aria-pressed={readingWidth === 'wide'}
+          aria-label={readingWidth === 'wide' ? t('doc.narrowReading') : t('doc.widenReading')}
+          className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+            readingWidth === 'wide'
+              ? 'text-primary bg-primary/12 hover:bg-primary/15'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+          }`}
+        >
+          {readingWidth === 'wide' ? <Minimize2 className="w-3.5 h-3.5" strokeWidth={1.75} /> : <Maximize2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
+        </button>
+      </Tooltip>
+      <Tooltip label={demo.active ? t('doc.demoMode.exit') : t('doc.demoMode.enter')}>
+        <button
+          type="button"
+          onClick={() => toggleDemoMode()}
+          aria-pressed={demo.active}
+          aria-label={demo.active ? t('doc.demoMode.exit') : t('doc.demoMode.enter')}
+          className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+            demo.active
+              ? 'text-primary bg-primary/12 hover:bg-primary/15'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+          }`}
+        >
+          <Presentation className="w-3.5 h-3.5" strokeWidth={1.75} />
+        </button>
+      </Tooltip>
     </div>
   )
 }

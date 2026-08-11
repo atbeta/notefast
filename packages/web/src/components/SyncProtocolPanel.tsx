@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RefreshCw, ArrowDownToLine, ArrowUpFromLine, AlertCircle, Cloud } from 'lucide-react'
 import { api } from '../hooks/useAPI'
-import { ActionButton, useToast } from './ui'
+import { ActionButton, Tooltip, useToast } from './ui'
 import { SettingsCard, StatusBadge, InlineField } from './settings/ui'
 import LocationSelect from './LocationSelect'
 import { formatIsoDateTime } from '../lib/time'
@@ -167,14 +167,16 @@ export default function SyncProtocolPanel() {
               </ActionButton>
             </>
           )}
-          <button
-            type="button"
-            onClick={refresh}
-            className="ml-auto p-1.5 text-muted-foreground/60 hover:text-foreground rounded-md transition-colors"
-            title={t('syncProtocol.refreshStatus')}
-          >
-            <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
-          </button>
+          <Tooltip label={t('syncProtocol.refreshStatus')}>
+            <button
+              type="button"
+              onClick={refresh}
+              className="ml-auto p-1.5 text-muted-foreground/60 hover:text-foreground rounded-md transition-colors"
+              aria-label={t('syncProtocol.refreshStatus')}
+            >
+              <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
+            </button>
+          </Tooltip>
         </div>
 
         {status && (
@@ -228,14 +230,15 @@ export default function SyncProtocolPanel() {
                       {d.device_id.slice(0, 8)}…{d.last_seen ? ` · ${formatIsoDateTime(d.last_seen)}` : ''}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeDevice(d.device_id)}
-                    className="px-2 py-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
-                    title={t('syncProtocol.removeTitle')}
-                  >
-                    {t('syncProtocol.remove')}
-                  </button>
+                  <Tooltip label={t('syncProtocol.removeTitle')}>
+                    <button
+                      type="button"
+                      onClick={() => removeDevice(d.device_id)}
+                      className="px-2 py-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                    >
+                      {t('syncProtocol.remove')}
+                    </button>
+                  </Tooltip>
                 </div>
               ))}
             </div>

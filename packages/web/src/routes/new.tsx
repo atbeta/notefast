@@ -9,7 +9,7 @@ import PageHeader from '../components/PageHeader'
 import SubNavTabs from '../components/SubNavTabs'
 import TagPickerPopover from '../components/TagPickerPopover'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
-import { useToast } from '../components/ui'
+import { Tooltip, useToast } from '../components/ui'
 
 export default function NewDocPage() {
   const { t } = useTranslation()
@@ -213,20 +213,21 @@ export default function NewDocPage() {
             <div className="flex items-baseline justify-between mb-1">
               <label htmlFor="doc-title" className="text-[12px] font-medium text-muted-foreground">{t('common.title')}</label>
               {ai.chat && (
-              <button
-                type="button"
-                onClick={handleSuggestTitle}
-                disabled={generating || (!markdown.trim() && !title.trim())}
-                className="inline-flex items-center gap-1 text-[11.5px] text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
-                title={t('newDoc.aiTitleHint')}
-              >
-                {generating ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3 h-3" strokeWidth={1.75} />
-                )}
-                {generating ? t('newDoc.generating') : t('newDoc.aiTitle')}
-              </button>
+              <Tooltip label={t('newDoc.aiTitleHint')}>
+                <button
+                  type="button"
+                  onClick={handleSuggestTitle}
+                  disabled={generating || (!markdown.trim() && !title.trim())}
+                  className="inline-flex items-center gap-1 text-[11.5px] text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+                >
+                  {generating ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3 h-3" strokeWidth={1.75} />
+                  )}
+                  {generating ? t('newDoc.generating') : t('newDoc.aiTitle')}
+                </button>
+              </Tooltip>
               )}
             </div>
             <input

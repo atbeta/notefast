@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next'
 import { ImageIcon, Loader2, X } from 'lucide-react'
 import { api } from '../../hooks/useAPI'
 import { useFocusTrap } from '../../hooks/useFocusTrap'
-import { ListRowsSkeleton } from '../ui'
+import { ListRowsSkeleton, Tooltip } from '../ui'
 
 interface AssetListItem {
   id: string
@@ -125,19 +125,20 @@ export default function AssetPickerDialog({ open, onClose, onPick }: AssetPicker
             <ul className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {items.map((item) => (
                 <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => onPick(`asset:${item.id}`)}
-                    className="w-full aspect-square rounded-md border border-border/60 bg-muted/40 overflow-hidden hover:border-primary/50 hover:ring-1 hover:ring-primary/30 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                    title={item.id.slice(0, 12)}
-                  >
-                    <img
-                      src={`/api/v1/assets/${item.id}`}
-                      alt=""
-                      loading="lazy"
-                      className="w-full h-full object-contain"
-                    />
-                  </button>
+                  <Tooltip label={item.id.slice(0, 12)} className="w-full">
+                    <button
+                      type="button"
+                      onClick={() => onPick(`asset:${item.id}`)}
+                      className="w-full aspect-square rounded-md border border-border/60 bg-muted/40 overflow-hidden hover:border-primary/50 hover:ring-1 hover:ring-primary/30 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    >
+                      <img
+                        src={`/api/v1/assets/${item.id}`}
+                        alt=""
+                        loading="lazy"
+                        className="w-full h-full object-contain"
+                      />
+                    </button>
+                  </Tooltip>
                 </li>
               ))}
             </ul>

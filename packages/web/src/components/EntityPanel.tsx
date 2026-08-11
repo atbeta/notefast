@@ -19,6 +19,7 @@ import {
   type EntityDetail,
   type EntityMention,
 } from '../lib/entities'
+import { Tooltip } from './ui'
 
 /** 单条提及：笔记标题 + 非常态状态标注 + 所在块摘要，点击跳转文档 */
 export function MentionRow({ mention }: { mention: EntityMention }) {
@@ -101,16 +102,17 @@ export default function EntityPanel({ docId, variant }: EntityPanelProps) {
   return (
     <section>
       {variant !== 'bare' && (
-        <h3
-          className={
-            variant === 'aside'
-              ? 'text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2'
-              : 'text-sm font-medium text-foreground mb-3'
-          }
-          title={t('entityPanel.aiRecognize')}
-        >
-          {t('entityPanel.title')}
-        </h3>
+        <Tooltip label={t('entityPanel.aiRecognize')}>
+          <h3
+            className={
+              variant === 'aside'
+                ? 'text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2'
+                : 'text-sm font-medium text-foreground mb-3'
+            }
+          >
+            {t('entityPanel.title')}
+          </h3>
+        </Tooltip>
       )}
       {loading && entities.length === 0 ? (
         <div className="px-1 text-[12px] text-muted-foreground/70">{t('common.loading')}</div>

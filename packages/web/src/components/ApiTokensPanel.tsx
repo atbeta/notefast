@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Key, Plus, Trash2, Copy, Check, X } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { currentLocale } from '../lib/time'
-import { ActionButton, useToast } from './ui'
+import { ActionButton, Tooltip, useToast } from './ui'
 import { SettingsCard, StatusBadge } from './settings/ui'
 
 interface ApiTokenView {
@@ -176,13 +176,15 @@ export default function ApiTokensPanel() {
                     )}
                   </div>
                 </div>
-                <button 
-                  onClick={() => handleRevoke(tok.token_id)} 
-                  className="p-2 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive shrink-0 transition-colors"
-                  title={t('apiTokens.revokeTitle')}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <Tooltip label={t('apiTokens.revokeTitle')}>
+                  <button
+                    onClick={() => handleRevoke(tok.token_id)}
+                    className="p-2 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive shrink-0 transition-colors"
+                    aria-label={t('apiTokens.revokeTitle')}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </Tooltip>
               </div>
             ))}
           </div>

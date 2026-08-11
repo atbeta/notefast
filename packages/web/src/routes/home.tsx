@@ -12,7 +12,7 @@ import { usePinnedViews } from '../hooks/usePinnedViews'
 import DocList from '../components/DocList'
 import PageHeader from '../components/PageHeader'
 import TagFilter from '../components/TagFilter'
-import { ListRowsSkeleton } from '../components/ui'
+import { ListRowsSkeleton, Tooltip } from '../components/ui'
 
 function viewTitle(params: URLSearchParams): string {
   if (params.get('untagged') === '1' || params.get('view') === 'untagged') return i18next.t('home.viewUntagged')
@@ -136,13 +136,15 @@ export default function HomePage() {
             {title}
           </h1>
           {hasFilter && (
-            <button
-              onClick={() => { setPinName(title); setShowPinModal(true) }}
-              className="p-1 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              title={t('home.pinTitle')}
-            >
-              <Star className="w-3.5 h-3.5" strokeWidth={1.75} fill={isPinned(listQuery) ? 'currentColor' : 'none'} />
-            </button>
+            <Tooltip label={t('home.pinTitle')}>
+              <button
+                onClick={() => { setPinName(title); setShowPinModal(true) }}
+                className="p-1 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                aria-label={t('home.pinTitle')}
+              >
+                <Star className="w-3.5 h-3.5" strokeWidth={1.75} fill={isPinned(listQuery) ? 'currentColor' : 'none'} />
+              </button>
+            </Tooltip>
           )}
           {!loading && docs.length > 0 && (
             <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">

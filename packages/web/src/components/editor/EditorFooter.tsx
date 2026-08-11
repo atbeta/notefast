@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { FilePlus2, Loader2, Check, AlertTriangle } from 'lucide-react'
 import { currentLocale } from '../../lib/time'
+import { Tooltip } from '../ui'
 
 interface EditorFooterProps {
   charCount: number
@@ -63,37 +64,39 @@ export default function EditorFooter({
 
       <span className="ml-auto flex items-center gap-1">
         {hasDraft && (
-          <button
-            type="button"
-            onClick={onClearDraft}
-            title={t('editorFooter.discardDraftTitle')}
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-muted-foreground/80 hover:text-destructive transition-colors"
-          >
-            <Loader2 className="w-3 h-3" strokeWidth={1.75} />
-            {t('editorFooter.discardDraft')}
-          </button>
+          <Tooltip label={t('editorFooter.discardDraftTitle')}>
+            <button
+              type="button"
+              onClick={onClearDraft}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-muted-foreground/80 hover:text-destructive transition-colors"
+            >
+              <Loader2 className="w-3 h-3" strokeWidth={1.75} />
+              {t('editorFooter.discardDraft')}
+            </button>
+          </Tooltip>
         )}
         {onAppendFile && (
-          <button
-            type="button"
-            onClick={() => {
-              const input = document.createElement('input')
-              input.type = 'file'
-              input.accept = '.md,.markdown,.txt'
-              input.onchange = async () => {
-                const file = input.files?.[0]
-                if (!file) return
-                const text = await file.text()
-                onAppendFile('\n\n' + text + '\n\n')
-              }
-              input.click()
-            }}
-            title={t('editorFooter.appendFileTitle')}
-            aria-label={t('editorFooter.appendFile')}
-            className="inline-flex items-center justify-center w-6 h-6 rounded text-muted-foreground/80 hover:text-foreground hover:bg-accent transition-colors"
-          >
-            <FilePlus2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-          </button>
+          <Tooltip label={t('editorFooter.appendFileTitle')}>
+            <button
+              type="button"
+              onClick={() => {
+                const input = document.createElement('input')
+                input.type = 'file'
+                input.accept = '.md,.markdown,.txt'
+                input.onchange = async () => {
+                  const file = input.files?.[0]
+                  if (!file) return
+                  const text = await file.text()
+                  onAppendFile('\n\n' + text + '\n\n')
+                }
+                input.click()
+              }}
+              aria-label={t('editorFooter.appendFile')}
+              className="inline-flex items-center justify-center w-6 h-6 rounded text-muted-foreground/80 hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <FilePlus2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+            </button>
+          </Tooltip>
         )}
       </span>
     </div>

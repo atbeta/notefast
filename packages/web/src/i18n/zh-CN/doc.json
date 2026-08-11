@@ -101,7 +101,7 @@
       "current": "缩放 {{pct}}%"
     },
     "zoomReset": "恢复 100%",
-    "widenReading": "加宽正文（图表友好）",
+    "widenReading": "加宽正文",
     "narrowReading": "恢复最佳行宽"
   }
 }

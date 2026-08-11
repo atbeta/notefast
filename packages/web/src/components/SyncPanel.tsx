@@ -6,7 +6,7 @@ import { parseContentDispositionFilename, deliverExport } from '../lib/download'
 import { type LocalFsAdapterConfig, type SyncAdapterConfig } from '@notefast/core'
 import LocationSelect from './LocationSelect'
 import { useStorageLocations } from '../hooks/useStorageLocations'
-import { ActionButton, Button, useToast, Toggle } from './ui'
+import { ActionButton, Button, Tooltip, useToast, Toggle } from './ui'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
 import { formatIsoDateTime } from '../lib/time'
 
@@ -223,7 +223,9 @@ export default function SyncPanel() {
                       <span className={`font-medium text-[13px] ${isSelected ? 'text-foreground' : 'text-foreground/80'}`}>{opt.name}</span>
                     </div>
                     {isActive && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" title={t('sync.currentlyActive')}></span>
+                      <Tooltip label={t('sync.currentlyActive')}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                      </Tooltip>
                     )}
                   </div>
                   <span className="text-[11px] text-muted-foreground/80">{opt.desc}</span>

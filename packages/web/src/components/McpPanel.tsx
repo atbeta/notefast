@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next'
 import { Bot, Copy, Check, Key } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { SettingsCard, StatusBadge } from './settings/ui'
-import { Button, useToast } from './ui'
+import { Button, Tooltip, useToast } from './ui'
 
 interface McpTool {
   name: string
@@ -191,13 +191,11 @@ export default function McpPanel() {
             </div>
             <div className="flex flex-wrap gap-1.5">
               {sortedTools.map((tool) => (
-                <span
-                  key={tool.name}
-                  title={tool.description || tool.name}
-                  className="px-2 py-1 rounded-md border border-border/60 bg-muted/40 text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-border transition-colors cursor-default"
-                >
-                  {tool.name}
-                </span>
+                <Tooltip key={tool.name} label={tool.description || tool.name}>
+                  <span className="px-2 py-1 rounded-md border border-border/60 bg-muted/40 text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-border transition-colors cursor-default">
+                    {tool.name}
+                  </span>
+                </Tooltip>
               ))}
             </div>
           </div>

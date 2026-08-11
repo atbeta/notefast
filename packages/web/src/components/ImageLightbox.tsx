@@ -24,7 +24,7 @@ export default function ImageLightbox({ src, alt, onClose }: ImageLightboxProps)
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={alt || t('editor.previewImage')}
+        aria-label={alt || t('block.previewImage')}
         className="relative flex-1 flex flex-col min-h-0"
       >
         <div className="flex items-center justify-end px-4 py-3 shrink-0">
