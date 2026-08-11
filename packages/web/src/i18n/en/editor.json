@@ -10,6 +10,7 @@
     "emptyParagraph": "(empty paragraph)",
     "unknownBlockType": "[Unrecognized block type: {{type}}]",
     "emptyDocument": "Empty document",
+    "previewImage": "View full size",
     "assetSynced": "Synced to image host",
     "assetLocal": "Local only — click to upload",
     "assetUploading": "Uploading…",

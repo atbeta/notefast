@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, createElement, memo, createContext, useContext } from 'react'
+import { useState, useEffect, useMemo, createElement, memo, createContext, useContext, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, Cloud, CloudOff, Loader2 } from 'lucide-react'
@@ -10,6 +10,7 @@ import { INLINE_MATH_SRC } from '../lib/katex'
 import BlockSurface, { BlockHandle } from './BlockSurface'
 import { CopyButton } from './ui'
 import { api } from '../hooks/useAPI'
+import ImageLightbox from './ImageLightbox'
 
 interface BlockNodeProps {
   block: Block
@@ -30,6 +31,9 @@ interface AssetSyncValue {
 }
 
 const AssetSyncCtx = createContext<AssetSyncValue | null>(null)
+
+/** 图片放大查看：阅读页任意图片（asset 或外部 URL）点击打开 lightbox */
+const ImageZoomCtx = createContext<((src: string, alt?: string) => void) | null>(null)
 
 /**
  * 文档内 asset 图床状态查询 + 单图触发上传。
@@ -81,16 +85,40 @@ function useAssetSync(block: Block): AssetSyncValue {
   return useMemo(() => ({ statusMap, uploadingIds, upload }), [statusMap, uploadingIds])
 }
 
+/** 普通图片（外部 URL）：点击打开 lightbox 放大查看 */
+function ZoomableImg(props: React.ImgHTMLAttributes<HTMLImageElement>) {
+  const zoom = useContext(ImageZoomCtx)
+  return (
+    <img
+      {...props}
+      onClick={(e) => {
+        props.onClick?.(e)
+        if (!e.defaultPrevented) zoom?.(props.src ?? '', props.alt)
+      }}
+      title={props.title ?? undefined}
+      className={`${props.className ?? ''} cursor-zoom-in`}
+    />
+  )
+}
+
 /** 图片 + hover 状态徽章（已同步 / 仅本地可点击上传 / 失败重试） */
 function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: string }) {
   const { t } = useTranslation()
   const ctx = useContext(AssetSyncCtx)
+  const zoom = useContext(ImageZoomCtx)
   const st = ctx?.statusMap[assetId]
   const uploading = ctx?.uploadingIds.has(assetId)
   const failed = !st?.remote && Boolean(st?.error)
   return (
     <span className="relative inline-block group/asset">
-      <img src={src} alt={alt} loading="lazy" className="my-3 max-w-full rounded-md border border-border/50" />
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        onClick={() => zoom?.(src, alt)}
+        title={t('editor.previewImage')}
+        className="my-3 max-w-full rounded-md border border-border/50 cursor-zoom-in"
+      />
       <span className="absolute bottom-4 right-1.5 opacity-0 group-hover/asset:opacity-100 transition-opacity z-10">
         {uploading ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-background/90 border border-border px-2 py-0.5 text-[10px] text-muted-foreground shadow-sm">
@@ -173,7 +201,7 @@ function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
       } else {
         const src = rawSrc
         nodes.push(
-          <img
+          <ZoomableImg
             key={`${keyPrefix}-${k++}`}
             src={src}
             alt={im[1]}
@@ -516,6 +544,9 @@ const BlockNode = memo(function BlockNode({ block }: BlockNodeProps) {
 export default function BlockRenderer({ block, depth = 0 }: BlockRendererProps) {
   const { t } = useTranslation()
   const assetSync = useAssetSync(block)
+  // 图片放大查看：当前打开的 lightbox src（null = 关闭）
+  const [zoomSrc, setZoomSrc] = useState<{ src: string; alt?: string } | null>(null)
+  const openZoom = useCallback((src: string, alt?: string) => setZoomSrc({ src, alt }), [])
   if (!block) {
     return <p className="text-muted-foreground italic">{t('block.emptyDocument')}</p>
   }
@@ -524,15 +555,24 @@ export default function BlockRenderer({ block, depth = 0 }: BlockRendererProps) 
 
   return (
     <AssetSyncCtx.Provider value={assetSync}>
-      {block.type === 'document' ? (
-        <article className="reading-prose">
-          <ChildrenView children={block.children} />
-        </article>
-      ) : (
-        <div className="reading-prose">
-          <BlockNode block={block} depth={depth} />
-        </div>
-      )}
+      <ImageZoomCtx.Provider value={openZoom}>
+        {block.type === 'document' ? (
+          <article className="reading-prose">
+            <ChildrenView children={block.children} />
+          </article>
+        ) : (
+          <div className="reading-prose">
+            <BlockNode block={block} depth={depth} />
+          </div>
+        )}
+        {zoomSrc && (
+          <ImageLightbox
+            src={zoomSrc.src}
+            alt={zoomSrc.alt}
+            onClose={() => setZoomSrc(null)}
+          />
+        )}
+      </ImageZoomCtx.Provider>
     </AssetSyncCtx.Provider>
   )
 }
