@@ -132,6 +132,8 @@ export default function AISettingsPanel() {
   const [testing, setTesting] = useState(false)
   const [diagnose, setDiagnose] = useState<AiDiagnoseResult | null>(null)
   const [rebuilding, setRebuilding] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [entityRebuild, setEntityRebuild] = useState<EntityRebuildStatus | null>(null)
   const toast = useToast()
   // 字段级错误（红色内嵌到表单）+ 保存成功的最近一次描述（持久化显示在按钮旁）
   const [formErrors, setFormErrors] = useState<FormErrors>({})
@@ -157,6 +159,20 @@ export default function AISettingsPanel() {
     }
   }, [toast, t])
 
+  /** 底部「刷新状态」：显式转圈反馈（自动轮询不走这里，避免闪烁） */
+  const handleManualRefresh = async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await refresh()
+      // 实体重建进度与 /ai/status 分轨，手动刷新时一并拉
+      const er = await api.get<EntityRebuildStatus>('/ai/entities/rebuild/status').catch(() => null)
+      if (er) setEntityRebuild(er)
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   useEffect(() => {
     refresh()
   }, [refresh])
@@ -174,7 +190,6 @@ export default function AISettingsPanel() {
   }, [status?.vectorStore?.status, status?.indexJobs?.running, status?.indexJobs?.pending, refresh])
 
   // 实体重建进度轮询
-  const [entityRebuild, setEntityRebuild] = useState<EntityRebuildStatus | null>(null)
   useEffect(() => {
     if (!entityRebuild?.running) return
     const t = setInterval(() => {
@@ -624,14 +639,6 @@ export default function AISettingsPanel() {
                 {entityRebuild?.running && <Loader2 className="w-3 h-3 animate-spin" />}
                 {t('aiSettings.rebuildEntities')}
               </button>
-              <button
-                type="button"
-                onClick={() => void refresh()}
-                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md text-muted-foreground hover:text-foreground"
-              >
-                <RefreshCw className="w-3 h-3" />
-                {t('aiSettings.refresh')}
-              </button>
             </div>
             {entityRebuild && entityRebuild.total > 0 && (
               <p className="tabular-nums text-muted-foreground">
@@ -745,10 +752,11 @@ export default function AISettingsPanel() {
         </ActionButton>
         <button
           type="button"
-          onClick={refresh}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border bg-background hover:bg-accent"
+          onClick={() => void handleManualRefresh()}
+          disabled={refreshing}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border bg-background hover:bg-accent disabled:opacity-50"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
           {t('aiSettings.refreshStatus')}
         </button>
       </div>
