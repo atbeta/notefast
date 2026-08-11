@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ImageIcon, X } from 'lucide-react'
 import { api } from '../hooks/useAPI'
+import { refreshImageUploadEnabled } from '../hooks/useImageUploadEnabled'
 import { useToast } from './ui'
 
 interface ImageUploadConfig {
@@ -65,6 +66,7 @@ export default function ImageUploadPanel() {
         timeoutMs: timeoutSec * 1000,
       })
       toast.success({ title: t('settings.imageUpload.saved') })
+      refreshImageUploadEnabled()
       // 保存后刷新最近失败状态（语义：按最近上传尝试判定）
       void api.get<ImageUploadConfig>('/assets/upload-config')
         .then((cfg) => setLastError(cfg.last_error ?? null))

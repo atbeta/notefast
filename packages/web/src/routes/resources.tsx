@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next'
 import { Cloud, CloudUpload, ImageIcon, Link2Off, Loader2, Trash2, X } from 'lucide-react'
 import { api, ApiError } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
+import { useImageUploadEnabled } from '../hooks/useImageUploadEnabled'
 import { formatRelative } from '../lib/time'
 import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -46,6 +47,7 @@ function formatBytes(n: number): string {
 export default function ResourcesPage() {
   const { t } = useTranslation()
   const toast = useToast()
+  const imageUpload = useImageUploadEnabled()
   const { data, loading, error, refetch } = useApiQuery(
     () => api.get<{ items: AssetListItem[]; total: number }>('/assets?limit=200'),
     [],
@@ -193,18 +195,20 @@ export default function ResourcesPage() {
             {cleaning ? t('common.loading') : t('resources.cleanupUnreferenced')}
           </button>
         </Tooltip>
-        {/* 存量补传入口（header 右侧；图床命令配置仍在设置 → 图床与图片） */}
-        <Tooltip label={t('resources.uploadExistingHint')}>
-          <button
-            type="button"
-            onClick={() => void handleBatchUpload()}
-            disabled={batchStarting || batch?.running}
-            className="btn-ghost-custom shrink-0"
-          >
-            <CloudUpload className="w-3.5 h-3.5" strokeWidth={2} />
-            {batchStarting ? t('common.loading') : t('resources.uploadExisting')}
-          </button>
-        </Tooltip>
+        {/* 存量补传：仅图床已启用时显示（否则点了必 400） */}
+        {imageUpload.enabled && (
+          <Tooltip label={t('resources.uploadExistingHint')}>
+            <button
+              type="button"
+              onClick={() => void handleBatchUpload()}
+              disabled={batchStarting || batch?.running}
+              className="btn-ghost-custom shrink-0"
+            >
+              <CloudUpload className="w-3.5 h-3.5" strokeWidth={2} />
+              {batchStarting ? t('common.loading') : t('resources.uploadExisting')}
+            </button>
+          </Tooltip>
+        )}
       </PageHeader>
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
@@ -312,7 +316,7 @@ export default function ResourcesPage() {
                         {t('resources.unused')}
                       </span>
                     )}
-                    {!item.remote && (
+                    {!item.remote && imageUpload.enabled && (
                       <Tooltip label={t('resources.uploadLocal')}>
                         <button
                           type="button"

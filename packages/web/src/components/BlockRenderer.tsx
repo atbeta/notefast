@@ -10,6 +10,7 @@ import { INLINE_MATH_SRC } from '../lib/katex'
 import BlockSurface, { BlockHandle } from './BlockSurface'
 import { CopyButton, Tooltip } from './ui'
 import { api } from '../hooks/useAPI'
+import { useImageUploadEnabled } from '../hooks/useImageUploadEnabled'
 import ImageLightbox from './ImageLightbox'
 
 interface BlockNodeProps {
@@ -106,9 +107,13 @@ function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: 
   const { t } = useTranslation()
   const ctx = useContext(AssetSyncCtx)
   const zoom = useContext(ImageZoomCtx)
+  const imageUpload = useImageUploadEnabled()
   const st = ctx?.statusMap[assetId]
   const uploading = ctx?.uploadingIds.has(assetId)
   const failed = !st?.remote && Boolean(st?.error)
+  // 未配图床时不露出上传/重试（点了必 400）；已外链仍显示「已同步」
+  const showUploadActions = imageUpload.enabled
+  const showBadge = uploading || st?.remote || (showUploadActions && !st?.remote)
   return (
     <span className="relative inline-block group/asset">
       <Tooltip label={t('block.previewImage')}>
@@ -120,6 +125,7 @@ function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: 
           className="my-3 max-w-full rounded-md border border-border/50 cursor-zoom-in"
         />
       </Tooltip>
+      {showBadge && (
       <span className="absolute bottom-4 right-1.5 opacity-0 group-hover/asset:opacity-100 transition-opacity z-10">
         {uploading ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-background/90 border border-border px-2 py-0.5 text-[10px] text-muted-foreground shadow-sm">
@@ -131,7 +137,7 @@ function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: 
             <Cloud className="w-3 h-3" />
             {t('block.assetSynced')}
           </span>
-        ) : (
+        ) : showUploadActions ? (
           (() => {
             const btn = (
               <button
@@ -149,8 +155,9 @@ function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: 
             )
             return failed && st?.error ? <Tooltip label={st.error}>{btn}</Tooltip> : btn
           })()
-        )}
+        ) : null}
       </span>
+      )}
     </span>
   )
 }
