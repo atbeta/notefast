@@ -13,7 +13,7 @@ import { getDb } from '../db'
 import { fetchDocBlocks } from '../store/blocks'
 import { loadAiExcludedDocIds } from './aiExclude'
 import { hasRuntime, getRuntime } from '../services/aiRuntime'
-import { analyzeBlock } from './autoLink'
+import { analyzeBlockBatch } from './autoLink'
 
 export interface EntityRebuildProgress {
   running: boolean
@@ -70,20 +70,16 @@ async function runEntityRebuild(): Promise<void> {
   db.query('DELETE FROM entity_mentions').run()
   db.query('DELETE FROM entities').run()
 
-  const maxPerBlock = getRuntime().autoLinkConfig().maxPerBlock
-  for (const row of targets) {
-    try {
-      await analyzeBlock({
-        blockId: row.id,
-        content: row.content ?? '',
-        maxPerBlock,
-        entitiesOnly: row.type === 'document',
-      })
-    } catch {
-      progress.errors++
-    }
-    progress.done++
-  }
+  // 批量重建：按 8 块/次合并 LLM 抽取（调用次数 ÷8），逐块本地登记+建链；
+  // skipRateLimit=true 绕过 30/min 全局限速——重建是显式全量操作，限速只会导致
+  // 「大部分块被跳过、实体为空」（此前慢+空的同根源 bug）。
+  const blocks = targets.map((row) => ({
+    blockId: row.id,
+    content: row.content ?? '',
+    entitiesOnly: row.type === 'document',
+  }))
+  const res = await analyzeBlockBatch({ blocks, skipRateLimit: true })
+  progress = { ...progress, done: progress.total, errors: progress.errors + res.errors.length }
 }
 
 /** 测试用：重置重建状态（bun 测试跨文件共享模块状态） */

@@ -699,11 +699,13 @@ describe('实体描述（E2）', () => {
 describe('全库实体重建', () => {
   test('startEntityRebuild 清空后按当前配置重抽实体', async () => {
     _resetEntityRebuildForTests()
-    // 固定返回两个锚点：每块（含文档根）都会登记
+    // 批量抽取返回格式：{blocks:[{block_id, mentions}]}；对所有块返回同一组锚点，
+    // 块内登记按「锚点逐字出现」过滤（KMP 只在含它的块登记）。
     mockChat(() => JSON.stringify({
-      mentions: [
-        { anchor: 'KMP', kind: 'concept' },
-        { anchor: '后缀数组', kind: 'concept' },
+      blocks: [
+        { block_id: 'rb-a1', mentions: [{ anchor: 'KMP', kind: 'concept' }] },
+        { block_id: 'rb-a2', mentions: [{ anchor: '后缀数组', kind: 'concept' }] },
+        { block_id: 'rb-b1', mentions: [{ anchor: 'KMP', kind: 'concept' }, { anchor: '后缀数组', kind: 'concept' }] },
       ],
     }))
     seedDocWithBlocks({

@@ -56,12 +56,37 @@ const EXTRACT_SYSTEM_PROMPT = `你是 NoteFast 的实体抽取助手。从用户
 
 const MAX_CONTENT_CHARS = 1500
 
+/**
+ * 批量抽取 prompt（实体重建用）：一次 LLM 调用处理多个块。
+ * 输入是 JSON 数组 [{block_id, content}]，输出按块归属的 mentions；
+ * 单块规则与 EXTRACT_SYSTEM_PROMPT 一致（≥3 字、逐字出现、排除代码标识符等）。
+ */
+const EXTRACT_BATCH_SYSTEM_PROMPT = `你是 NoteFast 的实体抽取助手。用户会给你一个 JSON 数组，每项是一段笔记内容（block_id + content），你需要为每一段识别关键实体（概念 / 人物 / 工具 / 项目）作为名词短语（"锚点"）。
+
+严格规则：
+- 输出必须是合法 JSON：{"blocks": [{"block_id":"...", "mentions":[{"anchor":"...", "kind":"concept|person|tool|doc"} , ...]} , ...]}
+- 必须为输入里的每一段都输出一个 blocks 项（block_id 原样返回）；某段没有实体时 mentions 为 []
+- anchor 必须 ≥3 字、最长 20 字，在对应 content 里逐字出现
+- 排除：停用词、人称代词、纯数字、纯标点、连接词
+- 排除代码标识符：含 _ 或 . 的符号名（变量 / 字段 / 函数 / 表名 / API 名），如 block_refs、mention_count、fs.readFile——它们是实现细节，不是知识实体
+- 排除泛化短语：评价性 / 修饰性短语（如 高置信、零人工审核、硬指标）与过于宽泛的通用词（如 知识库、文档、笔记）
+- 工具 / 项目 / 产品名也要抽取（kind=tool）——它们是知识图谱中的一等实体；独立的版本号后缀只保留主名（CodeMirror 6 → CodeMirror），名称本身含数字的除外（FTS5、BM25）
+- 同一 anchor 在同一段内只出现一次
+- 每段最多输出 5 个 mentions；过短或没具体名词时返回 []
+- 拿不准就不要输出：锚点贵精不贵多
+- kind 只能是 concept / person / tool / doc 之一`
+
+/** 单次批量抽取的块数上限（保护 prompt 长度与输出预算） */
+const BATCH_BLOCKS_PER_CALL = 8
+
 export interface AnalyzeOptions {
   blockId: string
   content: string
   maxPerBlock: number
   /** true = 只登记实体不建链（文档根块：标题是强实体信号，但不作链接源） */
   entitiesOnly?: boolean
+  /** true = 绕过全局限速（用户显式触发的全量重建用；单次导入/保存仍限速） */
+  skipRateLimit?: boolean
 }
 
 /** 一条已自动建立的链接 */
@@ -102,6 +127,70 @@ export async function analyzeBlock(opts: AnalyzeOptions): Promise<AnalyzeResult>
   const p = doAnalyze(opts).finally(() => inflight.delete(opts.blockId))
   inflight.set(opts.blockId, p)
   return p
+}
+
+export interface BatchAnalyzeOptions {
+  /** 参与分析的块（content 已截断由内部处理）；entitiesOnly 按块传 */
+  blocks: Array<Pick<AnalyzeOptions, 'blockId' | 'content' | 'entitiesOnly'>>
+  /** 同 AnalyzeOptions.skipRateLimit：显式重建绕过限速 */
+  skipRateLimit?: boolean
+}
+
+export interface BatchAnalyzeResult {
+  analyzed: number
+  entities: number
+  applied: number
+  errors: string[]
+  rateLimited: boolean
+}
+
+/**
+ * 批量分析（实体重建用）：按 BATCH_BLOCKS_PER_CALL 分片，每片一次 LLM 抽取，
+ * 再逐块本地登记 + 建链。调用次数从「块数」降到「块数 ÷ 8」。
+ * 注意：无全局限速语义（skipRateLimit 由调用方决定；本函数内部不再 hitRateLimit）。
+ */
+export async function analyzeBlockBatch(opts: BatchAnalyzeOptions): Promise<BatchAnalyzeResult> {
+  if (!hasRuntime() || !getRuntime().hasChat()) {
+    throw new Error('Chat 模型未配置')
+  }
+  const runtime = getRuntime()
+  const max = Math.max(1, Math.min(10, runtime.autoLinkConfig().maxPerBlock || 2))
+
+  const result: BatchAnalyzeResult = { analyzed: 0, entities: 0, applied: 0, errors: [], rateLimited: false }
+
+  // 预过滤：AI 排除 / 软删 / 长度不足的块不进 LLM（与单块 doAnalyze 一致）
+  const eligible: Array<Pick<AnalyzeOptions, 'blockId' | 'content' | 'entitiesOnly'>> = []
+  for (const b of opts.blocks) {
+    if (isBlockAiExcluded(b.blockId)) continue
+    if (!getLiveBlockById(getDb(), b.blockId)) continue
+    const trimmed = (b.content ?? '').trim().slice(0, MAX_CONTENT_CHARS)
+    if (trimmed.length < (b.entitiesOnly ? 3 : 10)) continue
+    eligible.push({ blockId: b.blockId, content: trimmed, entitiesOnly: b.entitiesOnly })
+  }
+  if (eligible.length === 0) return result
+
+  for (let i = 0; i < eligible.length; i += BATCH_BLOCKS_PER_CALL) {
+    const slice = eligible.slice(i, i + BATCH_BLOCKS_PER_CALL)
+    let mentionsByBlock: Map<string, Mention[]>
+    try {
+      mentionsByBlock = await extractMentionsBatch(runtime, slice.map((b) => ({ blockId: b.blockId, content: b.content })))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      runtime.recordAutoLink(false, msg)
+      result.errors.push(msg)
+      // 抽取失败只丢这一片，继续后续片（与单块逐块 try/catch 语义一致）
+      continue
+    }
+    for (const b of slice) {
+      const mentions = mentionsByBlock.get(b.blockId) ?? []
+      const r = await applyMentionsToBlock({ blockId: b.blockId, content: b.content, maxPerBlock: max, entitiesOnly: b.entitiesOnly }, mentions)
+      result.analyzed += r.analyzed
+      result.entities += r.entities
+      result.applied += r.applied
+      if (r.errors.length > 0) result.errors.push(...r.errors)
+    }
+  }
+  return result
 }
 
 // ───────────────────── 全局限速（滑动窗口计数）─────────────────────
@@ -150,12 +239,12 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
 
   const cfg = runtime.autoLinkConfig()
 
-  // 全局限速：burst 时超出的直接跳过（不排队、不算错误）
-  if (hitRateLimit(cfg.rateLimitPerMinute ?? DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE)) {
+  // 全局限速：burst 时超出的直接跳过（不排队、不算错误）。
+  // 显式重建（skipRateLimit）不受此限制——重建是用户主动触发的全量操作，
+  // 限速会把它拖到「大部分块被跳过、实体为空」；单次导入/保存仍走限速。
+  if (!opts.skipRateLimit && hitRateLimit(cfg.rateLimitPerMinute ?? DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE)) {
     return { ...empty(), rateLimited: true }
   }
-
-  const max = Math.max(1, Math.min(10, opts.maxPerBlock || cfg.maxPerBlock || 2))
 
   let mentions: Mention[]
   try {
@@ -165,6 +254,16 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
     return { ...empty(), errors: [e instanceof Error ? e.message : String(e)] }
   }
 
+  return applyMentionsToBlock(opts, mentions)
+}
+
+/**
+ * 把已抽取的 mentions 落到库：实体登记 + 建链（与抽取解耦，供单块/批量共用）。
+ * - 实体登记：不过滤 kind、不受 maxPerBlock 限制，全量登记
+ * - 建链：kind 过滤 + maxPerBlock + 语义/分差门槛，本地 embedding 检索（不耗 LLM）
+ */
+async function applyMentionsToBlock(opts: AnalyzeOptions, mentions: Mention[]): Promise<AnalyzeResult> {
+  const runtime = getRuntime()
   // 实体登记：一次抽取的第二条消费线——不过滤 kind、不受 maxPerBlock 限制，全量登记
   const entities = registerMentions(opts.blockId, mentions)
 
@@ -174,8 +273,11 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
     return { ...empty(), analyzed: 1, entities }
   }
 
+  const cfg = runtime.autoLinkConfig()
+
   // kind 过滤只作用于建链：默认丢弃 tool 类锚点（工具名 → 工具描述是同义反复，不构成有效链接）
   const excludedKinds = new Set((cfg.excludeAnchorKinds ?? DEFAULT_AUTO_LINK_EXCLUDE_KINDS).map((k) => k.toLowerCase()))
+  const max = Math.max(1, Math.min(10, opts.maxPerBlock || cfg.maxPerBlock || 2))
   let linkMentions = mentions.slice(0, max)
   if (excludedKinds.size > 0) {
     linkMentions = linkMentions.filter((m) => !excludedKinds.has(m.kind.toLowerCase()))
@@ -330,6 +432,66 @@ function safeParseMentions(raw: string, sourceContent: string): Mention[] {
     if (!sourceContent.includes(a)) continue
     const kind = typeof k === 'string' && ['concept', 'tool', 'person', 'doc'].includes(k) ? k : 'concept'
     out.push({ anchor: a.trim(), kind })
+  }
+  return out
+}
+
+/** 批量抽取：一次 LLM 调用处理多个块（实体重建用，调用次数 ÷8） */
+async function extractMentionsBatch(
+  runtime: ReturnType<typeof getRuntime>,
+  entries: Array<{ blockId: string; content: string }>,
+): Promise<Map<string, Mention[]>> {
+  const payload = JSON.stringify(entries.map((e) => ({ block_id: e.blockId, content: e.content.slice(0, MAX_CONTENT_CHARS) })))
+  const messages: ChatMessage[] = [
+    { role: 'system', content: EXTRACT_BATCH_SYSTEM_PROMPT },
+    { role: 'user', content: payload },
+  ]
+  const raw = await runtime.chat(messages, {
+    temperature: 0,
+    maxTokens: 4000, // 8 块 × 5 mentions 的输出预算
+    responseFormat: { type: 'json_object' },
+  })
+  return safeParseMentionsBatch(raw, entries)
+}
+
+/** 解析批量抽取结果：{blocks:[{block_id, mentions}]} → Map<blockId, Mention[]> */
+function safeParseMentionsBatch(raw: string, entries: Array<{ blockId: string; content: string }>): Map<string, Mention[]> {
+  const cleaned = raw
+    .replace(/<think>[\s\S]*?(<\/think>|$)/g, '')
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/i, '')
+    .trim()
+  let json: unknown = null
+  try {
+    json = JSON.parse(cleaned)
+  } catch {
+    const m = cleaned.match(/\{[\s\S]*\}/)
+    if (m) {
+      try { json = JSON.parse(m[0]) } catch { /* fallthrough */ }
+    }
+  }
+  const out = new Map<string, Mention[]>()
+  const contentByBlock = new Map(entries.map((e) => [e.blockId, e.content]))
+  if (!json || typeof json !== 'object') return out
+  const arr = (json as { blocks?: unknown }).blocks
+  if (!Array.isArray(arr)) return out
+  for (const item of arr) {
+    if (!item || typeof item !== 'object') continue
+    const bid = (item as { block_id?: unknown }).block_id
+    const list = (item as { mentions?: unknown }).mentions
+    if (typeof bid !== 'string' || !Array.isArray(list)) continue
+    const sourceContent = contentByBlock.get(bid) ?? ''
+    const mentions: Mention[] = []
+    for (const m of list) {
+      if (!m || typeof m !== 'object') continue
+      const a = (m as { anchor?: unknown }).anchor
+      const k = (m as { kind?: unknown }).kind
+      if (typeof a !== 'string' || a.length < 3 || a.length > 20) continue
+      if (!sourceContent.includes(a)) continue
+      const kind = typeof k === 'string' && ['concept', 'tool', 'person', 'doc'].includes(k) ? k : 'concept'
+      mentions.push({ anchor: a.trim(), kind })
+    }
+    out.set(bid, mentions)
   }
   return out
 }

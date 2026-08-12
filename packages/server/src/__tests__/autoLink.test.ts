@@ -76,6 +76,8 @@ beforeEach(() => {
   getDb().query('DELETE FROM blocks').run()
   getDb().query('DELETE FROM block_refs').run()
   getDb().query('DELETE FROM block_vectors').run()
+  getDb().query('DELETE FROM entities').run()
+  getDb().query('DELETE FROM entity_mentions').run()
   getDb().query(
     `UPDATE vector_store_state
      SET active_backend = 'json', status = 'stale', model_fingerprint = NULL,
@@ -841,5 +843,87 @@ describe('AutoLink — 配置文件字段真实生效（Bug 14 回归）', () =>
     // concept 也在排除清单里 → 不建链
     expect(r.applied).toBe(0)
     expect(refCount()).toBe(0)
+  })
+
+  test('analyzeBlockBatch：一次 LLM 调用批量抽取多块并登记实体', async () => {
+    const { analyzeBlockBatch } = await import('../ai/autoLink')
+    // 批量格式：{blocks:[{block_id, mentions}]}
+    mockChatReturning(JSON.stringify({
+      blocks: [
+        { block_id: 'bat-a', mentions: [{ anchor: 'KMP', kind: 'concept' }] },
+        { block_id: 'bat-b', mentions: [{ anchor: '后缀数组', kind: 'concept' }] },
+      ],
+    }))
+    seedDocWithBlocks({
+      docTitle: '批量目标',
+      blocks: [
+        { id: 'bat-a', content: 'KMP 是高效的字符串匹配算法' },
+        { id: 'bat-b', content: '后缀数组用于字符串处理' },
+      ],
+    })
+
+    const r = await analyzeBlockBatch({
+      blocks: [
+        { blockId: 'bat-a', content: 'KMP 是高效的字符串匹配算法' },
+        { blockId: 'bat-b', content: '后缀数组用于字符串处理' },
+      ],
+      skipRateLimit: true,
+    })
+    expect(r.analyzed).toBe(2)
+    expect(r.errors).toEqual([])
+    // 实体已登记（锚点逐字出现才登记；JS sort 按 UTF-16，'kmp' < '后缀数组'）
+    const db = getDb()
+    const rows = db.query("SELECT name, mention_count FROM entities WHERE name IN ('kmp', '后缀数组')").all() as Array<{ name: string; mention_count: number }>
+    expect(rows.map((x) => x.name).sort()).toEqual(['kmp', '后缀数组'])
+    expect(rows.find((x) => x.name === 'kmp')?.mention_count).toBe(1)
+  })
+
+  test('analyzeBlockBatch：抽取失败的片不中断，后续片继续', async () => {
+    const { analyzeBlockBatch } = await import('../ai/autoLink')
+    // 9 块 → 分两片（8+1）：第一片失败，第二片仍成功
+    let calls = 0
+    applyMockConfig(false)
+    getRuntime().setFetchImpl((async () => {
+      calls++
+      if (calls === 1) throw new Error('429: Too Many Requests')
+      return chatResponse(JSON.stringify({
+        blocks: [{ block_id: 'bat-c9', mentions: [{ anchor: '后缀数组', kind: 'concept' }] }],
+      }))
+    }) as unknown as typeof fetch)
+    seedDocWithBlocks({
+      docTitle: '批量容错',
+      blocks: [
+        { id: 'bat-c1', content: 'KMP 是高效的字符串匹配算法' },
+        { id: 'bat-c2', content: 'KMP 与后缀数组都是字符串算法' },
+        { id: 'bat-c3', content: 'KMP 的 next 数组构建方法' },
+        { id: 'bat-c4', content: '后缀数组用于字符串处理' },
+        { id: 'bat-c5', content: 'KMP 匹配失败时回退' },
+        { id: 'bat-c6', content: '后缀数组与 KMP 对比' },
+        { id: 'bat-c7', content: 'KMP 算法的时间复杂度' },
+        { id: 'bat-c8', content: '后缀数组构建的 SA-IS 算法' },
+        { id: 'bat-c9', content: '后缀数组用于字符串处理' },
+      ],
+    })
+
+    const r = await analyzeBlockBatch({
+      blocks: [
+        { blockId: 'bat-c1', content: 'KMP 是高效的字符串匹配算法' },
+        { blockId: 'bat-c2', content: 'KMP 与后缀数组都是字符串算法' },
+        { blockId: 'bat-c3', content: 'KMP 的 next 数组构建方法' },
+        { blockId: 'bat-c4', content: '后缀数组用于字符串处理' },
+        { blockId: 'bat-c5', content: 'KMP 匹配失败时回退' },
+        { blockId: 'bat-c6', content: '后缀数组与 KMP 对比' },
+        { blockId: 'bat-c7', content: 'KMP 算法的时间复杂度' },
+        { blockId: 'bat-c8', content: '后缀数组构建的 SA-IS 算法' },
+        { blockId: 'bat-c9', content: '后缀数组用于字符串处理' },
+      ],
+      skipRateLimit: true,
+    })
+    // 第一片失败 → errors 记录；第二片成功 → 实体登记
+    expect(r.errors.length).toBe(1)
+    expect(calls).toBe(2)
+    const db = getDb()
+    const row = db.query("SELECT mention_count FROM entities WHERE name = '后缀数组'").get() as { mention_count: number } | undefined
+    expect(row?.mention_count).toBe(1)
   })
 })
