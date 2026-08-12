@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.64.3](https://github.com/atbeta/notefast/compare/v0.64.2...v0.64.3) (2026-08-12)
+
+
+### Bug Fixes
+
+* **i18n:** correct Markdown archive helpTip - frontmatter carries tags ([69bc208](https://github.com/atbeta/notefast/commit/69bc208abad40d89464b658f8c1f3fb8f18273f8))
+
 ## [0.64.2](https://github.com/atbeta/notefast/compare/v0.64.1...v0.64.2) (2026-08-12)
 
 
