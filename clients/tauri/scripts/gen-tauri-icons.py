@@ -74,9 +74,10 @@ def render_icon(size):
             n = SS * SS
             o = (y * size + x) * 4
             if a_acc > 0:
-                out[o] = min(255, r_acc * 255 // n)
-                out[o + 1] = min(255, g_acc * 255 // n)
-                out[o + 2] = min(255, b_acc * 255 // n)
+                # straight alpha：RGB 按覆盖样本平均（勿用 r*255//n，会把 #3b82f6 撑成纯白）
+                out[o] = r_acc * 255 // a_acc
+                out[o + 1] = g_acc * 255 // a_acc
+                out[o + 2] = b_acc * 255 // a_acc
                 out[o + 3] = a_acc // n
             else:
                 out[o] = out[o + 1] = out[o + 2] = out[o + 3] = 0
