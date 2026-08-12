@@ -880,43 +880,24 @@ describe('AutoLink — 配置文件字段真实生效（Bug 14 回归）', () =>
 
   test('analyzeBlockBatch：抽取失败的片不中断，后续片继续', async () => {
     const { analyzeBlockBatch } = await import('../ai/autoLink')
-    // 9 块 → 分两片（8+1）：第一片失败，第二片仍成功
+    // 33 个块（> BATCH_MAX_BLOCKS=32）→ 强制两片：第一片失败，第二片仍成功
     let calls = 0
     applyMockConfig(false)
     getRuntime().setFetchImpl((async () => {
       calls++
       if (calls === 1) throw new Error('429: Too Many Requests')
       return chatResponse(JSON.stringify({
-        blocks: [{ block_id: 'bat-c9', mentions: [{ anchor: '后缀数组', kind: 'concept' }] }],
+        blocks: [{ block_id: 'bat-c33', mentions: [{ anchor: '后缀数组', kind: 'concept' }] }],
       }))
     }) as unknown as typeof fetch)
-    seedDocWithBlocks({
-      docTitle: '批量容错',
-      blocks: [
-        { id: 'bat-c1', content: 'KMP 是高效的字符串匹配算法' },
-        { id: 'bat-c2', content: 'KMP 与后缀数组都是字符串算法' },
-        { id: 'bat-c3', content: 'KMP 的 next 数组构建方法' },
-        { id: 'bat-c4', content: '后缀数组用于字符串处理' },
-        { id: 'bat-c5', content: 'KMP 匹配失败时回退' },
-        { id: 'bat-c6', content: '后缀数组与 KMP 对比' },
-        { id: 'bat-c7', content: 'KMP 算法的时间复杂度' },
-        { id: 'bat-c8', content: '后缀数组构建的 SA-IS 算法' },
-        { id: 'bat-c9', content: '后缀数组用于字符串处理' },
-      ],
-    })
+    const blocks = Array.from({ length: 33 }, (_, i) => ({
+      id: `bat-c${i + 1}`,
+      content: i === 32 ? '后缀数组用于字符串处理' : `KMP 是第 ${i + 1} 种高效的字符串匹配算法`,
+    }))
+    seedDocWithBlocks({ docTitle: '批量容错', blocks })
 
     const r = await analyzeBlockBatch({
-      blocks: [
-        { blockId: 'bat-c1', content: 'KMP 是高效的字符串匹配算法' },
-        { blockId: 'bat-c2', content: 'KMP 与后缀数组都是字符串算法' },
-        { blockId: 'bat-c3', content: 'KMP 的 next 数组构建方法' },
-        { blockId: 'bat-c4', content: '后缀数组用于字符串处理' },
-        { blockId: 'bat-c5', content: 'KMP 匹配失败时回退' },
-        { blockId: 'bat-c6', content: '后缀数组与 KMP 对比' },
-        { blockId: 'bat-c7', content: 'KMP 算法的时间复杂度' },
-        { blockId: 'bat-c8', content: '后缀数组构建的 SA-IS 算法' },
-        { blockId: 'bat-c9', content: '后缀数组用于字符串处理' },
-      ],
+      blocks: blocks.map((b) => ({ blockId: b.id, content: b.content })),
       skipRateLimit: true,
     })
     // 第一片失败 → errors 记录；第二片成功 → 实体登记
@@ -925,5 +906,27 @@ describe('AutoLink — 配置文件字段真实生效（Bug 14 回归）', () =>
     const db = getDb()
     const row = db.query("SELECT mention_count FROM entities WHERE name = '后缀数组'").get() as { mention_count: number } | undefined
     expect(row?.mention_count).toBe(1)
+  })
+
+  test('analyzeBlockBatch：字符预算分片——短块一次调用吃下（与块数解耦）', async () => {
+    const { analyzeBlockBatch } = await import('../ai/autoLink')
+    let calls = 0
+    applyMockConfig(false)
+    getRuntime().setFetchImpl((async () => {
+      calls++
+      return chatResponse(JSON.stringify({ blocks: [] }))
+    }) as unknown as typeof fetch)
+    // 30 个短块（每块 ~14 字符，共 ~420 字符 << 6000 预算）→ 一片（内容 ≥10 字才参与分析）
+    const blocks = Array.from({ length: 30 }, (_, i) => ({
+      id: `bat-s${i + 1}`,
+      content: `短块内容第 ${i + 1} 项要长一些`,
+    }))
+    seedDocWithBlocks({ docTitle: '短块聚合', blocks })
+    const r = await analyzeBlockBatch({
+      blocks: blocks.map((b) => ({ blockId: b.id, content: b.content })),
+      skipRateLimit: true,
+    })
+    expect(calls).toBe(1) // 30 短块 = 1 次调用
+    expect(r.analyzed).toBe(30)
   })
 })

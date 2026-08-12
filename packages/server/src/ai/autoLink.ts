@@ -76,8 +76,10 @@ const EXTRACT_BATCH_SYSTEM_PROMPT = `你是 NoteFast 的实体抽取助手。用
 - 拿不准就不要输出：锚点贵精不贵多
 - kind 只能是 concept / person / tool / doc 之一`
 
-/** 单次批量抽取的块数上限（保护 prompt 长度与输出预算） */
-const BATCH_BLOCKS_PER_CALL = 8
+/** 单次批量抽取的输入字符预算（≈ 1.5-2k token，安全）；与块数解耦——短块多的文档一次吃下 */
+const BATCH_MAX_CHARS = 6000
+/** 硬上限：防单片输出 JSON 爆炸（每块最多 5 mentions） */
+const BATCH_MAX_BLOCKS = 32
 
 export interface AnalyzeOptions {
   blockId: string
@@ -145,8 +147,9 @@ export interface BatchAnalyzeResult {
 }
 
 /**
- * 批量分析（实体重建用）：按 BATCH_BLOCKS_PER_CALL 分片，每片一次 LLM 抽取，
- * 再逐块本地登记 + 建链。调用次数从「块数」降到「块数 ÷ 8」。
+ * 批量分析（实体重建用）：按「字符预算 + 块数硬上限」分片，每片一次 LLM 抽取，
+ * 再逐块本地登记 + 建链。调用次数从「块数」降到「总字符 ÷ 预算」——
+ * 短块多的文档（如 137 块/篇）一次调用吃下，长块自然多片。
  * 注意：无全局限速语义（skipRateLimit 由调用方决定；本函数内部不再 hitRateLimit）。
  */
 export async function analyzeBlockBatch(opts: BatchAnalyzeOptions): Promise<BatchAnalyzeResult> {
@@ -169,8 +172,23 @@ export async function analyzeBlockBatch(opts: BatchAnalyzeOptions): Promise<Batc
   }
   if (eligible.length === 0) return result
 
-  for (let i = 0; i < eligible.length; i += BATCH_BLOCKS_PER_CALL) {
-    const slice = eligible.slice(i, i + BATCH_BLOCKS_PER_CALL)
+  // 分片：贪心累积字符，超过 BATCH_MAX_CHARS 或 BATCH_MAX_BLOCKS 就开新片
+  const slices: Array<Array<Pick<AnalyzeOptions, 'blockId' | 'content' | 'entitiesOnly'>>> = []
+  let cur: Array<Pick<AnalyzeOptions, 'blockId' | 'content' | 'entitiesOnly'>> = []
+  let curChars = 0
+  for (const b of eligible) {
+    const cost = b.content.length
+    if (cur.length > 0 && (cur.length >= BATCH_MAX_BLOCKS || curChars + cost > BATCH_MAX_CHARS)) {
+      slices.push(cur)
+      cur = []
+      curChars = 0
+    }
+    cur.push(b)
+    curChars += cost
+  }
+  if (cur.length > 0) slices.push(cur)
+
+  for (const slice of slices) {
     let mentionsByBlock: Map<string, Mention[]>
     try {
       mentionsByBlock = await extractMentionsBatch(runtime, slice.map((b) => ({ blockId: b.blockId, content: b.content })))
@@ -448,7 +466,7 @@ async function extractMentionsBatch(
   ]
   const raw = await runtime.chat(messages, {
     temperature: 0,
-    maxTokens: 4000, // 8 块 × 5 mentions 的输出预算
+    maxTokens: 8000, // 32 块 × 5 mentions 的输出预算（BATCH_MAX_BLOCKS 上限）
     responseFormat: { type: 'json_object' },
   })
   return safeParseMentionsBatch(raw, entries)
