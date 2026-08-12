@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.64.2](https://github.com/atbeta/notefast/compare/v0.64.1...v0.64.2) (2026-08-12)
+
+
+### Bug Fixes
+
+* **server,web:** entity rebuild progress frozen + lost across pages ([5b199a0](https://github.com/atbeta/notefast/commit/5b199a0d306731d1e3d24c067fabab72950fb729))
+* **tauri:** regenerate icons with proper rounded corners ([e1d0041](https://github.com/atbeta/notefast/commit/e1d004114931358d32e3b13700440f3dca8f1418))
+* **web:** citation sources numbering must match in-text [n] refs ([bc69a1f](https://github.com/atbeta/notefast/commit/bc69a1fd086d869e7501291be6ad85dd5a60ceda))
+
 ## [0.64.1](https://github.com/atbeta/notefast/compare/v0.64.0...v0.64.1) (2026-08-12)
 
 
