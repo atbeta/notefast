@@ -246,17 +246,20 @@ export default function AIChatPanel({
     }
   }, [])
 
-  /** 同源引用合并：一份文档被引多个 block 时只列一次标题，片段以紧凑子列表收纳 */
+  /** 同源引用合并：一份文档被引多个 block 时只列一次标题，片段以紧凑子列表收纳。
+   *  每个 item 保留全局引用序号（citations 数组位置 + 1）——正文 [n] 按此编号，
+   *  来源列表必须同源，不能按文档分组后从 1 重排。 */
   const groupedCitations = useMemo(() => {
-    const map = new Map<string, { doc_id: string; doc_title: string; items: Citation[] }>()
-    for (const c of citations) {
+    const map = new Map<string, { doc_id: string; doc_title: string; items: Array<Citation & { ref: number }> }>()
+    citations.forEach((c, i) => {
       const existing = map.get(c.doc_id)
+      const item = { ...c, ref: i + 1 }
       if (existing) {
-        existing.items.push(c)
+        existing.items.push(item)
       } else {
-        map.set(c.doc_id, { doc_id: c.doc_id, doc_title: c.doc_title, items: [c] })
+        map.set(c.doc_id, { doc_id: c.doc_id, doc_title: c.doc_title, items: [item] })
       }
-    }
+    })
     return Array.from(map.values())
   }, [citations])
 
@@ -867,7 +870,7 @@ function CitationSources({
   groups,
   retrieval,
 }: {
-  groups: Array<{ doc_id: string; doc_title: string; items: Citation[] }>
+  groups: Array<{ doc_id: string; doc_title: string; items: Array<Citation & { ref: number }> }>
   retrieval: RetrievalInfo | null
 }) {
   const { t } = useTranslation()
@@ -963,7 +966,7 @@ function CitationSources({
                 </Tooltip>
               </div>
               <ol className="space-y-0.5">
-                {visible.map((c, i) => (
+                {visible.map((c) => (
                   <li key={c.block_id}>
                     <Tooltip label={t('chat.jumpToBlock')}>
                       <Link
@@ -971,7 +974,7 @@ function CitationSources({
                         className="flex gap-2 rounded-md px-1.5 py-1.5 -mx-0.5 text-[11.5px] text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-colors group/snip"
                       >
                         <span className="shrink-0 w-4 text-right font-mono text-[10px] text-muted-foreground/55 group-hover/snip:text-primary/70 tabular-nums pt-px">
-                          {i + 1}
+                          {c.ref}
                         </span>
                         <span className="min-w-0 line-clamp-2 leading-relaxed">{c.snippet}</span>
                       </Link>
