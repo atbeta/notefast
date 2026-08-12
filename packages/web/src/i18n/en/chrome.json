@@ -78,7 +78,7 @@
     "minimize": "Minimize",
     "maximize": "Maximize",
     "restore": "Restore",
-    "closeWindow": "Close window"
+    "closeWindow": "Close"
   },
   "command": {
     "newDoc": "New document",
