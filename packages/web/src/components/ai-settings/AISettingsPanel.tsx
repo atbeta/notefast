@@ -104,6 +104,8 @@ type EntityRebuildStatus = {
   done: number
   errors: number
   started_at: string | null
+  eta_ms: number | null
+  last_error: string | null
 }
 
 function defaultAutoLink(): AutoLinkConfig {
@@ -175,6 +177,11 @@ export default function AISettingsPanel() {
 
   useEffect(() => {
     refresh()
+    // 实体重建进度与 /ai/status 分轨：挂载时恢复（离开页面再回来，服务端仍在跑）
+    api
+      .get<EntityRebuildStatus>('/ai/entities/rebuild/status')
+      .then((er) => setEntityRebuild(er))
+      .catch(() => {})
   }, [refresh])
 
   // 重建中轮询 index/status（800ms）；增量索引作业进行中轮询（1.5s）
@@ -207,10 +214,18 @@ export default function AISettingsPanel() {
       toast.info({ title: t('aiSettings.entityRebuildStarted') })
       setEntityRebuild(await api.get<EntityRebuildStatus>('/ai/entities/rebuild/status'))
     } catch (e) {
-      toast.error({
-        title: t('aiSettings.entityRebuildFailed'),
-        description: e instanceof Error ? e.message : String(e),
-      })
+      // 已在重建：不报错，拉一次最新进度恢复展示（离开页面再回来时的场景）
+      const msg = e instanceof Error ? e.message : String(e)
+      const er = await api.get<EntityRebuildStatus>('/ai/entities/rebuild/status').catch(() => null)
+      if (er?.running) {
+        setEntityRebuild(er)
+        toast.info({ title: t('aiSettings.entityRebuildInProgress'), description: t('aiSettings.entityRebuildResumed') })
+      } else {
+        toast.error({
+          title: t('aiSettings.entityRebuildFailed'),
+          description: msg,
+        })
+      }
     }
   }
 
@@ -646,7 +661,15 @@ export default function AISettingsPanel() {
                   done: entityRebuild.done,
                   total: entityRebuild.total,
                 })}
+                {entityRebuild.eta_ms != null && entityRebuild.eta_ms > 0 && entityRebuild.running && (
+                  t('aiSettings.entityRebuildEta', { minutes: Math.max(1, Math.ceil(entityRebuild.eta_ms / 60000)) })
+                )}
                 {entityRebuild.errors > 0 && t('aiSettings.entityRebuildErrors', { n: entityRebuild.errors })}
+                {entityRebuild.last_error && (
+                  <span className="text-destructive" title={entityRebuild.last_error}>
+                    {' '}· {t('aiSettings.entityRebuildFailed')}
+                  </span>
+                )}
               </p>
             )}
           </div>

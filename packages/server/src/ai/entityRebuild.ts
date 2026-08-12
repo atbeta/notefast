@@ -21,10 +21,14 @@ export interface EntityRebuildProgress {
   done: number
   errors: number
   started_at: string | null
+  /** 预计剩余毫秒（有进度后估算） */
+  eta_ms: number | null
+  /** 最近一次错误信息（供 UI 展示失败原因） */
+  last_error: string | null
 }
 
 let rebuilding = false
-let progress: EntityRebuildProgress = { running: false, total: 0, done: 0, errors: 0, started_at: null }
+let progress: EntityRebuildProgress = { running: false, total: 0, done: 0, errors: 0, started_at: null, eta_ms: null, last_error: null }
 
 export function getEntityRebuildProgress(): EntityRebuildProgress {
   return { ...progress }
@@ -34,15 +38,25 @@ export function getEntityRebuildProgress(): EntityRebuildProgress {
 export function startEntityRebuild(): boolean {
   if (rebuilding) return false
   rebuilding = true
-  progress = { running: true, total: 0, done: 0, errors: 0, started_at: new Date().toISOString() }
+  progress = {
+    running: true,
+    total: 0,
+    done: 0,
+    errors: 0,
+    started_at: new Date().toISOString(),
+    eta_ms: null,
+    last_error: null,
+  }
   void runEntityRebuild()
     .catch((e) => {
-      console.error('[entity-rebuild]', e instanceof Error ? e.message : e)
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[entity-rebuild]', msg)
       progress.errors++
+      progress.last_error = msg
     })
     .finally(() => {
       rebuilding = false
-      progress = { ...progress, running: false }
+      progress = { ...progress, running: false, eta_ms: 0 }
     })
   return true
 }
@@ -70,20 +84,42 @@ async function runEntityRebuild(): Promise<void> {
   db.query('DELETE FROM entity_mentions').run()
   db.query('DELETE FROM entities').run()
 
-  // 批量重建：按 8 块/次合并 LLM 抽取（调用次数 ÷8），逐块本地登记+建链；
+  // 批量重建：按字符预算分片合并 LLM 抽取（调用次数 ÷8+），逐块本地登记+建链；
   // skipRateLimit=true 绕过 30/min 全局限速——重建是显式全量操作，限速只会导致
   // 「大部分块被跳过、实体为空」（此前慢+空的同根源 bug）。
+  // onProgress 每片回调 → 进度条逐批前进 + ETA 估算（此前一次性跑完、进度不动）。
+  const startedAt = Date.parse(progress.started_at ?? '') || Date.now()
   const blocks = targets.map((row) => ({
     blockId: row.id,
     content: row.content ?? '',
     entitiesOnly: row.type === 'document',
   }))
-  const res = await analyzeBlockBatch({ blocks, skipRateLimit: true })
-  progress = { ...progress, done: progress.total, errors: progress.errors + res.errors.length }
+  const res = await analyzeBlockBatch({
+    blocks,
+    skipRateLimit: true,
+    onProgress: (done, total, errors) => {
+      const elapsed = Math.max(0, Date.now() - startedAt)
+      const remaining = Math.max(0, total - done)
+      let eta: number | null = null
+      if (done > 0 && remaining > 0 && elapsed > 0) {
+        eta = Math.round((elapsed / done) * remaining)
+      } else if (remaining === 0) {
+        eta = 0
+      }
+      progress = { ...progress, done, total, errors, eta_ms: eta }
+    },
+  })
+  progress = {
+    ...progress,
+    done: progress.total,
+    errors: progress.errors + res.errors.length,
+    eta_ms: 0,
+    ...(res.errors.length > 0 ? { last_error: res.errors[res.errors.length - 1] ?? null } : {}),
+  }
 }
 
 /** 测试用：重置重建状态（bun 测试跨文件共享模块状态） */
 export function _resetEntityRebuildForTests(): void {
   rebuilding = false
-  progress = { running: false, total: 0, done: 0, errors: 0, started_at: null }
+  progress = { running: false, total: 0, done: 0, errors: 0, started_at: null, eta_ms: null, last_error: null }
 }

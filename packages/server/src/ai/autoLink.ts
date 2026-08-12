@@ -136,6 +136,8 @@ export interface BatchAnalyzeOptions {
   blocks: Array<Pick<AnalyzeOptions, 'blockId' | 'content' | 'entitiesOnly'>>
   /** 同 AnalyzeOptions.skipRateLimit：显式重建绕过限速 */
   skipRateLimit?: boolean
+  /** 每片处理完后回调（done=已处理块数, total=总块数, errors=累计错误数）——供进度展示 */
+  onProgress?: (done: number, total: number, errors: number) => void
 }
 
 export interface BatchAnalyzeResult {
@@ -188,6 +190,7 @@ export async function analyzeBlockBatch(opts: BatchAnalyzeOptions): Promise<Batc
   }
   if (cur.length > 0) slices.push(cur)
 
+  let sliceDone = 0
   for (const slice of slices) {
     let mentionsByBlock: Map<string, Mention[]>
     try {
@@ -196,6 +199,8 @@ export async function analyzeBlockBatch(opts: BatchAnalyzeOptions): Promise<Batc
       const msg = e instanceof Error ? e.message : String(e)
       runtime.recordAutoLink(false, msg)
       result.errors.push(msg)
+      sliceDone += slice.length
+      opts.onProgress?.(Math.min(sliceDone, eligible.length), eligible.length, result.errors.length)
       // 抽取失败只丢这一片，继续后续片（与单块逐块 try/catch 语义一致）
       continue
     }
@@ -207,6 +212,8 @@ export async function analyzeBlockBatch(opts: BatchAnalyzeOptions): Promise<Batc
       result.applied += r.applied
       if (r.errors.length > 0) result.errors.push(...r.errors)
     }
+    sliceDone += slice.length
+    opts.onProgress?.(Math.min(sliceDone, eligible.length), eligible.length, result.errors.length)
   }
   return result
 }
