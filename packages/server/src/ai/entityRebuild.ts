@@ -112,7 +112,8 @@ async function runEntityRebuild(): Promise<void> {
   progress = {
     ...progress,
     done: progress.total,
-    errors: progress.errors + res.errors.length,
+    // onProgress 已写入累计 errors，勿再 + res.errors.length（会翻倍）
+    errors: res.errors.length,
     eta_ms: 0,
     ...(res.errors.length > 0 ? { last_error: res.errors[res.errors.length - 1] ?? null } : {}),
   }
