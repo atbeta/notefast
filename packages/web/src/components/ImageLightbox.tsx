@@ -44,8 +44,7 @@ export default function ImageLightbox({ src, alt, onClose }: ImageLightboxProps)
           <img
             src={src}
             alt={alt ?? ''}
-            className="max-w-full max-h-full object-contain rounded-md shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="max-w-full max-h-full object-contain rounded-md shadow-2xl pointer-events-none"
           />
         </div>
       </div>

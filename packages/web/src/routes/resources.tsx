@@ -172,7 +172,7 @@ export default function ResourcesPage() {
 
   return (
     <div className="animate-fade-in">
-      <PageHeader innerClassName="flex items-center gap-4">
+      <PageHeader innerClassName="flex items-center justify-between gap-4">
         <div className="min-w-0 flex items-center gap-2">
           <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
             {t('resources.title')}
@@ -183,32 +183,38 @@ export default function ResourcesPage() {
             </span>
           )}
         </div>
-        {/* 一键清理未引用（收件箱放弃等场景产生的孤儿图片；宽限期 0 立即清） */}
-        <Tooltip label={t('resources.cleanupHint')}>
-          <button
-            type="button"
-            onClick={() => setCleanupOpen(true)}
-            disabled={cleaning}
-            className="btn-ghost-custom shrink-0"
-          >
-            <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
-            {cleaning ? t('common.loading') : t('resources.cleanupUnreferenced')}
-          </button>
-        </Tooltip>
-        {/* 存量补传：仅图床已启用时显示（否则点了必 400） */}
-        {imageUpload.enabled && (
-          <Tooltip label={t('resources.uploadExistingHint')}>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* 存量补传：仅图床已启用时显示（否则点了必 400） */}
+          {imageUpload.enabled && (
+            <Tooltip label={t('resources.uploadExistingHint')}>
+              <button
+                type="button"
+                onClick={() => void handleBatchUpload()}
+                disabled={batchStarting || batch?.running}
+                className="btn-ghost-custom shrink-0"
+              >
+                <CloudUpload className="w-3.5 h-3.5" strokeWidth={2} />
+                {batchStarting ? t('common.loading') : t('resources.uploadExisting')}
+              </button>
+            </Tooltip>
+          )}
+          {/* 一键清理未引用（与回收站「清空」同 destructive 样式；宽限期 0 立即清） */}
+          <Tooltip label={t('resources.cleanupHint')}>
             <button
               type="button"
-              onClick={() => void handleBatchUpload()}
-              disabled={batchStarting || batch?.running}
-              className="btn-ghost-custom shrink-0"
+              onClick={() => setCleanupOpen(true)}
+              disabled={cleaning}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 shrink-0"
             >
-              <CloudUpload className="w-3.5 h-3.5" strokeWidth={2} />
-              {batchStarting ? t('common.loading') : t('resources.uploadExisting')}
+              {cleaning ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
+              ) : (
+                <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+              )}
+              {t('resources.cleanupUnreferenced')}
             </button>
           </Tooltip>
-        )}
+        </div>
       </PageHeader>
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
@@ -393,8 +399,7 @@ export default function ResourcesPage() {
                 <img
                   src={`/api/v1/assets/${preview.id}`}
                   alt=""
-                  className="max-w-full max-h-full object-contain rounded-md shadow-2xl"
-                  onClick={(e) => e.stopPropagation()}
+                  className="max-w-full max-h-full object-contain rounded-md shadow-2xl pointer-events-none"
                 />
               </div>
             </div>
