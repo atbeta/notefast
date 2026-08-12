@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.64.2](https://github.com/atbeta/notefast/compare/v0.64.1...v0.64.2) (2026-08-12)
+
+
+### Bug Fixes
+
+* **i18n:** correct Markdown archive helpTip - frontmatter carries tags ([c40ac22](https://github.com/atbeta/notefast/commit/c40ac22648ddf2077ec88689d678a9a5b710f24b))
+* **server,web:** entity rebuild progress frozen + lost across pages ([aca3f79](https://github.com/atbeta/notefast/commit/aca3f79ad51435d757e3a4302051458a8564ac86))
+* **server:** avoid double-counting entity rebuild errors ([5d2f395](https://github.com/atbeta/notefast/commit/5d2f395ab544043bb85532b1ee2f99fb4a9f67de))
+* **tauri:** correct icon generator RGB averaging ([a02d1f9](https://github.com/atbeta/notefast/commit/a02d1f94a7068c0cf5f2784d6c58a1e74525f8f0))
+* **tauri:** regenerate icons from favicon geometry with AA corners ([1a364c3](https://github.com/atbeta/notefast/commit/1a364c32c5ab45276954be45f8c276e0c919b505))
+* **web:** citation sources numbering must match in-text [n] refs ([2ebfc53](https://github.com/atbeta/notefast/commit/2ebfc539feb7c32cc2461b43ccd444d7a8faabfa))
+* **web:** shorten Windows titlebar close tooltip to avoid wrap ([673c610](https://github.com/atbeta/notefast/commit/673c610a3d854fbdc8bbc941c78f60c27aa1b6ce))
+
 ## [0.64.1](https://github.com/atbeta/notefast/compare/v0.64.0...v0.64.1) (2026-08-12)
 
 
