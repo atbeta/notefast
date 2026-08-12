@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.64.1](https://github.com/atbeta/notefast/compare/v0.64.0...v0.64.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* **server:** entity rebuild was slow AND empty - bypass rate limit + batch extraction ([e591d9a](https://github.com/atbeta/notefast/commit/e591d9a3e17af2cfe3624905c9ad548c0adcbda4))
+
+
+### Performance Improvements
+
+* **server:** batch extraction slices by char budget, not block count ([05a818b](https://github.com/atbeta/notefast/commit/05a818be13a5a456f8adf659acc34be07f45dbaf))
+
 ## [0.64.0](https://github.com/atbeta/notefast/compare/v0.63.1...v0.64.0) (2026-08-11)
 
 
