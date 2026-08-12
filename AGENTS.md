@@ -20,6 +20,7 @@ AI 编码 Agent 与人类协作者的本仓库级行为规范。
 | 场景 | 工具 | 说明 |
 |------|------|------|
 | 安装依赖 | `bun install` | 替代 npm/pnpm，使用 bun.lock |
+| Bun 版本 | `.bun-version`（现钉 `1.3.14`） | CI / Docker 同源；升级须改此文件并验证 Windows engine 杀软误报 |
 | 运行脚本 | `bun run <script>` | 或简写 `bun <script>` |
 | Monorepo | `bun --filter <pkg> <script>` | 当 `bunfig.toml` 配置 workspaces 时使用 |
 
@@ -156,14 +157,14 @@ docker compose up -d
 - 备份与 Markdown 归档分轨：单向 Markdown 推送不是灾难恢复；完整灾备用应用内 SQLite→S3 快照，恢复走停服 CLI
 - 功能分支合回 `main` 默认 `--ff-only`，避免多余 merge commit
 - 笔记组织优先 tag + 智能视图，不主推多笔记本 UI；底层保留单 Notebook 即可；侧栏按对象分「笔记 / 资源 / 关系」，不默认加「已分享」智能视图（访问面审计，非内容组织）；「新建」侧栏入口先保留；侧栏「最近访问」= 本机打开足迹（`localStorage` `notefast.recentVisits`），与首页「最近更新」分开，勿再做成最近更新的缩略重复
-- 文档默认对 AI 可见；「对 AI 隐藏」入口应低调（勿用锁图标或「对 AI 可见」易被读成需点击才可见）；已隐藏态再显式状态与恢复；暂不需要全局「默认 AI 可见性」，少数敏感笔记手动 opt-out
+- 文档默认对 AI 可见；「对 AI 隐藏」入口应低调（勿用锁图标或「对 AI 可见」易被读成需点击才可见）；已隐藏态再显式状态与恢复；暂不需要全局「默认 AI 可见性」，少数敏感笔记手动 opt-out；**ai_exclude 只挡 AI 索引 / MCP 发现与按 ID 读取，多端同步与备份仍照常携带全文**（勿当成不同步或删除）
 - 人类写作体验视为正轨（非整站副产品）；可服务「同步写读找」轻量用户，不对打思源式块级 PKM 全家桶；Markdown 富渲染含 Mermaid / LaTeX、编辑器块级公式预览与桌面选区气泡（问 AI / 改写）；**零模型配置须优雅降级**——基础读写与词法检索可用，AI 入口隐藏/禁用而非报错墙或整站不可用
 - Markdown 仅作表达与导出，不作权威存储；主权靠自托管 SQLite + 可验证导出讲清楚，不为安抚退回文件夹 MD；便携导出/归档可将 tags、时间、`notefast_id` 投影为 YAML frontmatter（DB 仍是唯一写入真相，导入可读 tags，不按 id 静默覆盖）
 - AI 设置三个模型槽（chat/embedding/reranker）新增时默认预设一律为「自定义」空表单（本地优先姿态，不按 locale 替用户预选云端厂商）；预设含 DashScope 阿里云百炼（chat `qwen3.8-max` / embedding `qwen3.7-text-embedding` / reranker `qwen3-rerank`，rerank 走 `compatible-api` 段的 `/reranks` 复数路径、Jina 风格协议，由 `createReranker` 按 aliyuncs.com 域名分派并把 baseUrl 的 `compatible-mode/v1` 替换为 `compatible-api/v1`——chat/embeddings 的 compatible-mode 不含 /reranks，2026 起调用即 404）；reranker 默认模型与 embedding 解耦，走预设的 `rerankerModel` 字段（SiliconFlow = `BAAI/bge-reranker-v2-m3`）；查询理解复用单一 chat 槽即可，不必另加小模型槽
 - 本地可写 SQLite 的原生客户端是一等拓扑；官方免配置 Sync 云暂缓；PWA 只做「可安装壳」（manifest + 图标 + meta + safe-area），**不做 Service Worker / 离线缓存**（避免内嵌原生壳拿到陈旧资源，离线能力归原生壳），手机与轻客户端优先复用现有 Web
 - Web 运行时零外部 CDN 依赖（中国大陆部署友好）：字体经 `@fontsource-variable/*` npm 自托管（main.tsx 引入，family 名带 ` Variable` 后缀），**禁止恢复 Google Fonts 等外链**；mermaid 等均为 npm 打包
-- MCP 做强：能力落在 NoteFast 自身 MCP/API，不为本地另封一层 API 调用；大文件建档正文不经 LLM，走 stage/upload 通道
-- Web chrome：分享用顶栏轻量 popover（已分享 Globe 态）；文档级操作走列表/侧栏项悬浮 `⋯`；AI 助手左侧导航不常驻，分散 ⌘J / ⌘K / 桌面内容顶栏 / 移动顶栏 / 情境「问 AI」；「资源」是媒体浏览层（非图床/DAM），列表页顶栏对齐其他页（无前缀图标），编辑器可从资源库插已有图；文档右栏含「相关」语义邻居（挂现有检索，勿默认拉宽到 AI 面板）；批量化 AI 注入 UI 暂缓，批量先靠 MCP；**悬停提示** chrome 控件用 `Tooltip`（勿原生 `title`；截断全文除外）；**输入框禁用浏览器历史填充**（`initNoAutofill` 用非标准 `autocomplete=nope`，Blink 会忽略 `off`；密码/username 豁免）；**侧栏不放品牌行**（品牌：Tauri TitleBar 店名 / macOS 系统栏 / 浏览器标签；收起钮在 ⌘K 行右侧）；**阅读缩放偶发使用**：顶栏用 `ZoomIn` 图标 + 档位 popover（100–200%），勿横排多百分比按钮、勿在图标栏放文字 `%` 胶囊；演示模式进入可抬到 150%，**退出须恢复进入前缩放**（演示中再调档也不影响恢复；`useDemoMode`），**Esc 退出演示**（输入框/对话框/菜单打开时不抢）
+- MCP 做强：能力落在 NoteFast 自身 MCP/API，不为本地另封一层 API 调用；大文件建档正文不经 LLM，走 stage/upload 通道；**多数插件视为伪需求**——扩展走 MCP/连接器/内部生命周期钩子，不做 Obsidian 式社区插件宇宙
+- Web chrome：分享用顶栏轻量 popover（已分享 Globe 态）；文档级操作走列表/侧栏项悬浮 `⋯`；AI 助手左侧导航不常驻，分散 ⌘J / ⌘K / 桌面内容顶栏 / 移动顶栏 / 情境「问 AI」；「资源」是媒体浏览层（非图床/DAM），列表页顶栏对齐其他页（无前缀图标），编辑器可从资源库插已有图；文档右栏含「相关」语义邻居（挂现有检索，勿默认拉宽到 AI 面板）；批量化 AI 注入 UI 暂缓，批量先靠 MCP；**悬停提示** chrome 控件用 `Tooltip`（勿原生 `title`；截断全文除外）；**输入框禁用浏览器历史填充**（`initNoAutofill` 用非标准 `autocomplete=nope`，Blink 会忽略 `off`；密码/username 豁免）；**侧栏不放品牌行**（品牌：Tauri TitleBar 店名旁放 favicon 图标防空 / macOS 系统栏 / 浏览器标签；收起钮在 ⌘K 行右侧）；**阅读缩放偶发使用**：顶栏用 `ZoomIn` 图标 + 档位 popover（100–200%），勿横排多百分比按钮、勿在图标栏放文字 `%` 胶囊；演示模式进入可抬到 150%，**退出须恢复进入前缩放**（演示中再调档也不影响恢复；`useDemoMode`），**Esc 退出演示**（输入框/对话框/菜单打开时不抢）
 
 ## Learned Workspace Facts
 
@@ -188,7 +189,7 @@ docker compose up -d
 - **设备身份自持、无中心注册（peer 模型）**：Server 与客户端是对等写入者，共享同一份对象存储，不存在「向服务器注册」——身份=存储位置+凭据+自持 `device_id`（Server 存 `data/device.id`）；每条同步变更带 `device_id`（审计/推导设备集合），注册表=共享存储 `{prefix}sync/devices/<id>.json`（每设备一对象，无并发写冲突），API `GET/DELETE /sync/protocol/devices` 仅展示/移除记录，真实拦截靠用户更换 S3 凭证（scoped 由用户在存储控制台签发）
 - 旧 Litestream Compose profile 与根目录 `litestream.yml` 均已移除（`-exec true` 会导致复制进程退出）；灾备统一走应用内 SQLite→S3 快照
 - 文档组织：tag 多选默认 AND（同时包含），`tag_match=any` 为包含任一；智能视图为内置预设 + URL 参数（无自定义命名视图表）
-- `properties.ai_exclude: true` 软隔离：不进向量/RAG/AutoLink/MCP 发现与按 ID 读取；人类 Web 列表/编辑/Cmd+K 仍可用；备份与 Markdown 归档仍含全文
+- `properties.ai_exclude: true` 软隔离：不进向量/RAG/AutoLink/MCP 发现与按 ID 读取；人类 Web 列表/编辑/Cmd+K 仍可用；备份与 Markdown 归档仍含全文；**多端同步 `publishChanges` 必须照常附带 block 状态**——禁止把 ai_exclude 误判为 `is_erased` tombstone（曾导致隐藏文档自同步进回收站、内容重复叠块）
 - 收集箱：`properties.status: 'inbox'`；主列表 / tags 聚合 / MCP `list_docs` 默认排除；`GET /docs/list?status=inbox` 与侧栏「收集箱」；升格 `PATCH /docs/:id/status` → `note`
 - AutoLink（AI 主动建链）：block 写入/更新后 AI 自动抽取锚点，高置信（语义命中 ≥ minConfidence 且 top-1 margin ≥ minMargin）直接写 `block_refs(ref_type='ai_auto')`，低置信静默跳过，无人工审核；ai_exclude / inbox / archived 文档均不参与；REST 仅 `POST /auto-link/run`、`POST /auto-link/run-batch`、`DELETE /auto-link/refs`；原「链接建议」审核页（`/autolink`）与 suggestions/inbox/apply/dismiss 等审核 API 已移除
 - 归档：`blocks.status: 'archived'`（文档根显式列，无 CHECK 约束）；默认过滤语义统一为「仅 status='note'」（主列表 / tags 聚合 / MCP `list_docs` 同时排除 inbox 与 archived，`status=all` 全量）；AI 检索默认软排除归档（hybridSearch/semanticSearch 的 `includeArchived`、REST `/ai/search?include_archived=1`、chat `notefast_search_more` 的 `include_archived` 可显式包含）；Web 侧栏「归档」入口 + `/archived` 页 + 文档页归档/恢复（`PATCH /docs/:id/status`）；介于正常笔记与 ai_exclude 之间——保留内容、不再污染检索；创建路径不支持直接建归档
