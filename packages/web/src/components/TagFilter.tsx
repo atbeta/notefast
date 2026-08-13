@@ -130,36 +130,34 @@ export default function TagFilter({ onChange }: TagFilterProps) {
   const showMatchToggle = selected.length >= 2
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-1">
+    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5 px-1">
       <TagIcon className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" strokeWidth={1.75} />
       {showMatchToggle && (
         <TagMatchToggle mode={tagMatch} onChange={setTagMatch} />
       )}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {tags.map((t) => {
-          const isSelected = !untagged && selected.includes(t.tag)
-          return (
-            <button
-              key={t.tag}
-              type="button"
-              onClick={() => handleToggle(t.tag)}
-              aria-pressed={isSelected}
-              className={`group inline-flex items-center gap-1.5 pl-2 pr-1.5 py-0.5 rounded-full text-[11.5px] font-mono transition-colors ${
-                isSelected
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted/50 text-foreground/75 hover:bg-muted hover:text-foreground'
-              }`}
+      {tags.map((t) => {
+        const isSelected = !untagged && selected.includes(t.tag)
+        return (
+          <button
+            key={t.tag}
+            type="button"
+            onClick={() => handleToggle(t.tag)}
+            aria-pressed={isSelected}
+            className={`group inline-flex items-center gap-1.5 pl-2 pr-1.5 py-0.5 rounded-full text-[11.5px] font-mono transition-colors ${
+              isSelected
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted/50 text-foreground/75 hover:bg-muted hover:text-foreground'
+            }`}
+          >
+            <span>{t.tag}</span>
+            <span
+              className={`text-[10px] tabular-nums ${isSelected ? 'text-background/60' : 'text-muted-foreground/55'}`}
             >
-              <span>{t.tag}</span>
-              <span
-                className={`text-[10px] tabular-nums ${isSelected ? 'text-background/60' : 'text-muted-foreground/55'}`}
-              >
-                {t.count}
-              </span>
-            </button>
-          )
-        })}
-      </div>
+              {t.count}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
