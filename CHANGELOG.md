@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.64.3](https://github.com/atbeta/notefast/compare/v0.64.2...v0.64.3) (2026-08-13)
+
+
+### Bug Fixes
+
+* **server:** limit FTS trigger to content changes so doc delete is fast ([c6eeeca](https://github.com/atbeta/notefast/commit/c6eeeca37ad52f6f2b0b5b89b00ab2d190ee6236))
+* **tauri:** bold taskbar icon frames so small sizes stay legible ([d9e662d](https://github.com/atbeta/notefast/commit/d9e662d365f3453c475fd94fdeb201fc24861e6d))
+* **tauri:** skip document list flash when opening md on cold start ([7f3ba24](https://github.com/atbeta/notefast/commit/7f3ba243ce48e032e625bde297d46530fb4ceec4))
+* **web:** keep tag filter icon on same line as chips when wrapping ([4c6c0ef](https://github.com/atbeta/notefast/commit/4c6c0efb47a260676774e70c76f57ea519b93375))
+* **web:** lightbox click-to-close and resources header polish ([dc4a857](https://github.com/atbeta/notefast/commit/dc4a85767dd1bfb6010ab59f6db1214ea2389b00))
+
 ## [0.64.2](https://github.com/atbeta/notefast/compare/v0.64.1...v0.64.2) (2026-08-12)
 
 
