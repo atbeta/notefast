@@ -268,6 +268,9 @@ export async function consumeChanges(
       is_deleted = 0,
       updated_at = excluded.updated_at
   `)
+  const tombstone = db.query(
+    `UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = ? WHERE id = ? AND is_deleted = 0`,
+  )
 
   for (const key of keys) {
     const m = key.split('/').pop()?.match(/^(\d+)-(\d+)\.jsonl$/)
@@ -279,34 +282,36 @@ export async function consumeChanges(
 
     const text = await getText(store, key)
     if (!text) continue
-    for (const line of text.split('\n')) {
-      if (!line.trim()) continue
-      let change: SyncChange
-      try {
-        change = JSON.parse(line) as SyncChange
-      } catch { skipped++; continue }
-      if (change.seq <= consumedSeq || change.seq > upToSeq) continue
+    // 一段一次事务：默认 journal 下逐行 auto-commit 会 fsync 数百次，
+    // CI 上「500 条分段」测试会超过 bun 默认 5s。生产大增量同步同理。
+    db.transaction(() => {
+      for (const line of text.split('\n')) {
+        if (!line.trim()) continue
+        let change: SyncChange
+        try {
+          change = JSON.parse(line) as SyncChange
+        } catch { skipped++; continue }
+        if (change.seq <= consumedSeq || change.seq > upToSeq) continue
 
-      if (change.is_erased) {
-        db.query(
-          `UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = ? WHERE id = ? AND is_deleted = 0`,
-        ).run(nowTimestamp(), change.entity_id)
-        applied++
-      } else if (change.block && shouldApply(db, change.block)) {
-        const b = change.block
-        upsert.run(
-          b.id, b.notebook_id, b.parent_id, b.root_id, b.type, b.content,
-          b.properties ?? '{}', b.tags ?? '[]', b.status ?? 'note', b.ai_exclude ?? 0,
-          b.sort, b.level, b.created_at ?? nowTimestamp(), b.updated_at,
-        )
-        applied++
-      } else {
-        skipped++
+        if (change.is_erased) {
+          tombstone.run(nowTimestamp(), change.entity_id)
+          applied++
+        } else if (change.block && shouldApply(db, change.block)) {
+          const b = change.block
+          upsert.run(
+            b.id, b.notebook_id, b.parent_id, b.root_id, b.type, b.content,
+            b.properties ?? '{}', b.tags ?? '[]', b.status ?? 'note', b.ai_exclude ?? 0,
+            b.sort, b.level, b.created_at ?? nowTimestamp(), b.updated_at,
+          )
+          applied++
+        } else {
+          skipped++
+        }
+        if (change.seq > nextSeq) nextSeq = change.seq
       }
-      if (change.seq > nextSeq) nextSeq = change.seq
-    }
-    // 段整体消费完（含空行/跳过）：推进到段终点，避免同段重复拉
-    if (endSeq > nextSeq) nextSeq = endSeq
+      // 段整体消费完（含空行/跳过）：推进到段终点，避免同段重复拉
+      if (endSeq > nextSeq) nextSeq = endSeq
+    })()
   }
   return { applied, skipped, nextSeq }
 }

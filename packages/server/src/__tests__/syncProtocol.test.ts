@@ -87,6 +87,8 @@ function makeTargetDb(): Database {
   configureSqliteForExtensions()
   const db = new Database(join(testDir, `target-${crypto.randomUUID()}.db`))
   runMigrations(db)
+  db.exec('PRAGMA journal_mode=WAL')
+  db.exec('PRAGMA synchronous=NORMAL')
   db.exec('PRAGMA foreign_keys=ON')
   return db
 }
@@ -241,10 +243,12 @@ describe('sync protocol (publish → consume)', () => {
   test('分段：超过 CHANGES_PER_SEGMENT 产生多个 changes 对象', async () => {
     const { client, objects } = makeMockS3()
     const store = createS3ObjectStore(S3_STORE_CFG, client)
-    // 制造 CHANGES_PER_SEGMENT + 10 条变更
-    for (let i = 0; i < CHANGES_PER_SEGMENT + 10; i++) {
-      insertBlockRow(crypto.randomUUID(), `块${i}`)
-    }
+    // 制造 CHANGES_PER_SEGMENT + 10 条变更（同一事务，避免 500+ 次 auto-commit）
+    sourceDb.transaction(() => {
+      for (let i = 0; i < CHANGES_PER_SEGMENT + 10; i++) {
+        insertBlockRow(crypto.randomUUID(), `块${i}`)
+      }
+    })()
     const lastSeq = await publishChanges(sourceDb, store, CFG.prefix, 0, 'dev-test')
     const changesKeys = [...objects.keys()].filter((k) => k.includes(`${SYNC_S3_DIR}/changes/`))
     expect(changesKeys.length).toBeGreaterThanOrEqual(2)
