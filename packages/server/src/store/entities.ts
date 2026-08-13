@@ -197,31 +197,34 @@ export function mergeEntities(db: Db, fromId: string, intoId: string): void {
   const from = getEntityById(db, fromId)
   if (!from || !getEntityById(db, intoId)) return
 
-  // 迁移提及（同 block 已存在则跳过）
-  db.query(
-    `INSERT OR IGNORE INTO entity_mentions (entity_id, block_id, surface, created_at)
-     SELECT ?, block_id, surface, created_at FROM entity_mentions WHERE entity_id = ?`,
-  ).run(intoId, fromId)
-  db.query('DELETE FROM entity_mentions WHERE entity_id = ?').run(fromId)
-  // 重算 into 计数（迁移后以真实提及数为准）
-  db.query(
-    `UPDATE entities SET mention_count = (SELECT COUNT(*) FROM entity_mentions WHERE entity_id = ?), updated_at = datetime('now') WHERE id = ?`,
-  ).run(intoId, intoId)
+  // 多步写入包事务：任一失败整体回滚，不留「提及已迁但旧实体未删」的中间态
+  db.transaction(() => {
+    // 迁移提及（同 block 已存在则跳过）
+    db.query(
+      `INSERT OR IGNORE INTO entity_mentions (entity_id, block_id, surface, created_at)
+       SELECT ?, block_id, surface, created_at FROM entity_mentions WHERE entity_id = ?`,
+    ).run(intoId, fromId)
+    db.query('DELETE FROM entity_mentions WHERE entity_id = ?').run(fromId)
+    // 重算 into 计数（迁移后以真实提及数为准）
+    db.query(
+      `UPDATE entities SET mention_count = (SELECT COUNT(*) FROM entity_mentions WHERE entity_id = ?), updated_at = datetime('now') WHERE id = ?`,
+    ).run(intoId, intoId)
 
-  // 搬别名：from 的规范化名 + display 变体 + from 已有别名 → into
-  for (const a of [from.name, normalizeEntityName(from.display)]) {
-    if (a && a.length >= 2 && a !== intoId) addAlias(db, a, intoId)
-  }
-  db.query(
-    `INSERT OR IGNORE INTO entity_aliases (alias, entity_id) SELECT alias, ? FROM entity_aliases WHERE entity_id = ?`,
-  ).run(intoId, fromId)
+    // 搬别名：from 的规范化名 + display 变体 + from 已有别名 → into
+    for (const a of [from.name, normalizeEntityName(from.display)]) {
+      if (a && a.length >= 2 && a !== intoId) addAlias(db, a, intoId)
+    }
+    db.query(
+      `INSERT OR IGNORE INTO entity_aliases (alias, entity_id) SELECT alias, ? FROM entity_aliases WHERE entity_id = ?`,
+    ).run(intoId, fromId)
 
-  // description 兜底：into 无描述时沿用 from 的
-  if (!getEntityById(db, intoId)!.description && from.description) {
-    updateEntityDescription(db, intoId, from.description)
-  }
-  // 删除 from（entity_mentions 已清空；别名经 ON DELETE CASCADE 随行清理）
-  db.query('DELETE FROM entities WHERE id = ?').run(fromId)
+    // description 兜底：into 无描述时沿用 from 的
+    if (!getEntityById(db, intoId)!.description && from.description) {
+      updateEntityDescription(db, intoId, from.description)
+    }
+    // 删除 from（entity_mentions 已清空；别名经 ON DELETE CASCADE 随行清理）
+    db.query('DELETE FROM entities WHERE id = ?').run(fromId)
+  })()
 }
 
 // ───────────────────── 近义重复检测（E5）─────────────────────

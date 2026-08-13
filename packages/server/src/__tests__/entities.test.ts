@@ -50,7 +50,7 @@ import {
   updateEntityDescription,
   upsertEntity,
 } from '../store/entities'
-import { describeEntity, _resetDescribeRateLimitForTests } from '../ai/entityDescribe'
+import { describeEntity, _resetDescribeRateLimitForTests, _runDescribePassForTests } from '../ai/entityDescribe'
 import docsRouter from '../api/docs'
 import entitiesRouter, { docEntities } from '../api/entities'
 
@@ -693,6 +693,62 @@ describe('实体描述（E2）', () => {
 
     const missing = await api('POST', '/api/v1/entities/ghost/describe')
     expect(missing.status).toBe(404)
+  })
+
+  test('describeEntity 显式传 maxTokens（防推理模型 think 吃光默认预算返回空）', async () => {
+    mockChat(() => '概念一是一个测试概念')
+    // 捕获 chat 请求体，校验 max_tokens 显式下发
+    let capturedBody: Record<string, unknown> | null = null
+    getRuntime().setFetchImpl((async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+      return chatResponse('概念一是一个测试概念')
+    }) as unknown as typeof fetch)
+    seedDocWithBlocks({
+      docTitle: 'T',
+      blocks: [
+        { id: 'mt-b1', content: '首次提到概念一的内容' },
+        { id: 'mt-b2', content: '再次提到概念一的内容' },
+        { id: 'mt-b3', content: '第三次提到概念一的内容' },
+      ],
+    })
+    registerMentions('mt-b1', [{ anchor: '概念一', kind: 'concept' }])
+    registerMentions('mt-b2', [{ anchor: '概念一', kind: 'concept' }])
+    registerMentions('mt-b3', [{ anchor: '概念一', kind: 'concept' }])
+    const e = findEntityByName(getDb(), '概念一')!
+    expect(await describeEntity(e.id)).toBe(true)
+    expect(capturedBody).not.toBeNull()
+    expect(capturedBody!.max_tokens).toBe(1500)
+  })
+
+  test('runPass：生成失败的实体进入冷却，冷却窗内不再调 LLM', async () => {
+    // chat 恒返回空 → describeEntity 失败
+    let calls = 0
+    mockChat((n) => {
+      calls = n
+      return ''
+    })
+    seedDocWithBlocks({
+      docTitle: 'T',
+      blocks: [
+        { id: 'cd-b1', content: '首次提到概念一的内容' },
+        { id: 'cd-b2', content: '再次提到概念一的内容' },
+        { id: 'cd-b3', content: '第三次提到概念一的内容' },
+      ],
+    })
+    registerMentions('cd-b1', [{ anchor: '概念一', kind: 'concept' }])
+    registerMentions('cd-b2', [{ anchor: '概念一', kind: 'concept' }])
+    registerMentions('cd-b3', [{ anchor: '概念一', kind: 'concept' }])
+
+    // 第一圈：调 LLM 但失败 → 无产出（低频档），实体进冷却
+    expect(await _runDescribePassForTests()).toBe(false)
+    expect(calls).toBe(1)
+    // 第二圈：冷却窗内跳过，不再烧 token（修复前会每圈重复选中同一实体）
+    expect(await _runDescribePassForTests()).toBe(false)
+    expect(calls).toBe(1)
+    // 冷却表清空后（或冷却到期）可重试
+    _resetDescribeRateLimitForTests()
+    expect(await _runDescribePassForTests()).toBe(false)
+    expect(calls).toBe(2)
   })
 })
 

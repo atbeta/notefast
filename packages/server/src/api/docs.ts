@@ -288,14 +288,17 @@ docs.patch('/:id/status', zValidator('json', updateDocStatusSchema), (c) => {
   }
   const oldStatus = readDocStatus(docRow)
 
-  updateBlock(db, id, { status })
-
-  // 归档 = 退出活跃流通：与删除保持一致，级联关闭公开分享（旧链接立即 404）。
-  // 恢复为 note 不复活旧链接，需重新开启（与删除路径语义一致）
+  // 状态翻转与归档级联关闭分享需原子：任一失败整体回滚，
+  // 不留「已归档但公开链接仍有效」的中间态
   let shareRevoked = false
-  if (status === 'archived') {
-    shareRevoked = deleteShare(db, id)
-  }
+  db.transaction(() => {
+    updateBlock(db, id, { status })
+    // 归档 = 退出活跃流通：与删除保持一致，级联关闭公开分享（旧链接立即 404）。
+    // 恢复为 note 不复活旧链接，需重新开启（与删除路径语义一致）
+    if (status === 'archived') {
+      shareRevoked = deleteShare(db, id)
+    }
+  })()
 
   // 升格（inbox/archived → note）：文档重新进入流通，全 doc 重抽补齐实体与链
   // （fireAfterUpdate 只触发文档根，子块不经 hook；fire-and-forget，限速自然生效）
@@ -697,7 +700,9 @@ docs.get('/:id/export/markdown', (c) => {
 /** 文档级历史：跨块 revision 时间线（含标题与子块），按时间新→旧 */
 docs.get('/:id/revisions', (c) => {
   const id = c.req.param('id')
-  const limit = Math.min(200, Math.max(1, Number(c.req.query('limit') ?? 100)))
+  // 非数字 limit（Number → NaN）会被传进 SQLite LIMIT 抛 500，守卫后回退默认值
+  const limitRaw = Number(c.req.query('limit') ?? 100)
+  const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, limitRaw)) : 100
   const db = getDb()
 
   const docRow = getDocById(db, id)

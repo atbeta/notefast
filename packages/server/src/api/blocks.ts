@@ -36,12 +36,34 @@ import { fireAfterCreate, fireAfterUpdate, fireAfterDelete } from '../services/h
 import { applyAiExcludeChange } from '../ai/aiExclude'
 import { reanalyzeDoc } from '../ai/autoLink'
 import { scheduleDocIndex } from '../ai/indexJobs'
+import { scheduleSyncNow } from '../sync/protocolManager'
 
 const blocks = new Hono()
 
 /** 回退 revision 的请求体：仅 actor 可选（记录回退来源，缺省 'revert'） */
 const restoreRevisionSchema = z.object({
   actor: z.string().max(40).optional(),
+})
+
+// 回收站：最近软删除的 block 列表。
+// 必须注册在 /:id 之前，否则 'deleted' 被当作 block id。
+blocks.get('/deleted', (c) => {
+  const db = getDb()
+  const within = c.req.query('within') || '30d'
+  const days = within === '30d' ? 30 : within === '7d' ? 7 : parseInt(within, 10) || 30
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+
+  const rows = listRecentlyDeletedBlocks(db, cutoff)
+
+  return c.json(rows.map((r) => ({
+    id: r.id,
+    type: r.type,
+    content: r.content,
+    notebook_id: r.notebook_id,
+    root_id: r.root_id,
+    delete_id: r.delete_id,
+    deleted_at: r.updated_at,
+  })))
 })
 
 blocks.get('/:id', (c) => {
@@ -117,6 +139,8 @@ blocks.post('/', zValidator('json', createBlockSchema), (c) => {
 
   const block = rowToBlock(getBlockById(db, id)!)
   fireAfterCreate(block)
+  // 块写入后去抖自动同步（fire-and-forget，未配置同步时静默跳过）
+  scheduleSyncNow()
   return c.json(block, 201)
 })
 
@@ -166,6 +190,7 @@ blocks.patch('/:id', zValidator('json', updateBlockSchema), async (c) => {
     }
   }
 
+  scheduleSyncNow()
   return c.json(block)
 })
 
@@ -219,6 +244,7 @@ blocks.patch('/:id/move', zValidator('json', moveBlockSchema), (c) => {
 
   const block = rowToBlock(getBlockById(db, id)!)
   fireAfterUpdate(block)
+  scheduleSyncNow()
   return c.json(block)
 })
 
@@ -245,26 +271,8 @@ blocks.delete('/:id', (c) => {
   })()
 
   fireAfterDelete(id)
+  scheduleSyncNow()
   return c.json({ deleted: true, count: allIds.length })
-})
-
-blocks.get('/deleted', (c) => {
-  const db = getDb()
-  const within = c.req.query('within') || '30d'
-  const days = within === '30d' ? 30 : within === '7d' ? 7 : parseInt(within, 10) || 30
-  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
-
-  const rows = listRecentlyDeletedBlocks(db, cutoff)
-
-  return c.json(rows.map((r) => ({
-    id: r.id,
-    type: r.type,
-    content: r.content,
-    notebook_id: r.notebook_id,
-    root_id: r.root_id,
-    delete_id: r.delete_id,
-    deleted_at: r.updated_at,
-  })))
 })
 
 blocks.post('/:id/restore', (c) => {
@@ -288,6 +296,7 @@ blocks.post('/:id/restore', (c) => {
     reanalyzeDoc(id)
   }
 
+  scheduleSyncNow()
   return c.json({ restored: true, count: allIds.length })
 })
 
@@ -295,7 +304,9 @@ blocks.post('/:id/restore', (c) => {
 blocks.get('/:id/revisions', (c) => {
   const db = getDb()
   const id = c.req.param('id')
-  const limit = Math.min(100, Math.max(1, Number(c.req.query('limit') ?? 50)))
+  // 非数字 limit（Number → NaN）会被传进 SQLite LIMIT 抛 500，守卫后回退默认值
+  const limitRaw = Number(c.req.query('limit') ?? 50)
+  const limit = Number.isFinite(limitRaw) ? Math.min(100, Math.max(1, limitRaw)) : 50
 
   const existing = getBlockById(db, id)
   if (!existing) {
@@ -331,6 +342,7 @@ blocks.post(
 
     const block = rowToBlock(getBlockById(db, id)!)
     fireAfterUpdate(block)
+    scheduleSyncNow()
     return c.json({ restored: true, rev, block })
   },
 )

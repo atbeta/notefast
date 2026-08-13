@@ -9,11 +9,13 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test'
+import { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync, existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { initDb, closeDb, getDb } from '../db'
+import * as m013 from '../migrations/013_block_refs_unique_pair'
 import { createPluginSystem } from '@notefast/core'
 import {
   initAiRuntime,
@@ -928,5 +930,100 @@ describe('AutoLink — 配置文件字段真实生效（Bug 14 回归）', () =>
     })
     expect(calls).toBe(1) // 30 短块 = 1 次调用
     expect(r.analyzed).toBe(30)
+  })
+})
+
+describe('AutoLink — 并发串行化与唯一约束', () => {
+  /** 同块并发 analyzeBlock：promise 链保证严格串行，不重复建链 */
+  test('并发 analyzeBlock 同块严格串行，同 (source,target) 只落一条 ai_auto 引用', async () => {
+    applyMockConfig(true)
+    let inFlight = 0
+    let maxInFlight = 0
+    let chatCalls = 0
+    getRuntime().setFetchImpl((async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/embeddings')) {
+        return new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      // 拉长 chat 耗时放大竞态窗口；统计 doAnalyze 内 chat 的并发度
+      inFlight++
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      chatCalls++
+      await new Promise((r) => setTimeout(r, 20))
+      inFlight--
+      return chatResponse(JSON.stringify({ mentions: [{ anchor: 'KMP', kind: 'concept' }] }))
+    }) as unknown as typeof fetch)
+    seedDocWithBlocks({
+      docTitle: '目标',
+      blocks: [{ id: 'conc-tgt', content: 'KMP 算法的 next 数组构造' }],
+    })
+    seedDocWithBlocks({
+      docTitle: '源',
+      blocks: [{ id: 'conc-src', content: 'KMP 是高效的字符串匹配' }],
+    })
+    seedVector('conc-tgt', [1, 0])
+
+    const results = await Promise.all(
+      Array.from({ length: 3 }, () =>
+        analyzeBlock({ blockId: 'conc-src', content: 'KMP 是高效的字符串匹配', maxPerBlock: 5 }),
+      ),
+    )
+    // 三次都执行了抽取，但严格串行（旧实现 3+ 并发时会并发执行 doAnalyze）
+    expect(chatCalls).toBe(3)
+    expect(maxInFlight).toBe(1)
+    // 只有第一次建链；后续看到 already_linked
+    expect(results[0]!.applied).toBe(1)
+    expect(results[1]!.applied).toBe(0)
+    expect(results[2]!.applied).toBe(0)
+    expect(refCount('conc-src')).toBe(1)
+  })
+
+  /** 唯一索引兜底：TOCTOU 防线之外的 DB 级约束（语义不含 ref_type，同对只许一条） */
+  test('block_refs 唯一索引：同 (source,target) 重复插入被约束拒绝', () => {
+    seedDocWithBlocks({
+      docTitle: 'd',
+      blocks: [
+        { id: 'uniq-src', content: 'source text' },
+        { id: 'uniq-tgt', content: 'target text' },
+      ],
+    })
+    insertRef(getDb(), { sourceId: 'uniq-src', targetId: 'uniq-tgt', refType: 'link' })
+    // 人工 link 与 ai_auto 不允许同对共存（与 findRefByPair / api/refs 语义一致）
+    expect(() =>
+      insertRef(getDb(), { sourceId: 'uniq-src', targetId: 'uniq-tgt', refType: 'ai_auto' }),
+    ).toThrow()
+    expect(refCount('uniq-src')).toBe(1)
+  })
+
+  /** migration 013：存量重复行先去重（保留最早一行），再建唯一索引 */
+  test('migration 013 去重后建唯一索引', () => {
+    const mem = new Database(':memory:')
+    try {
+      mem.exec(`CREATE TABLE block_refs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_id TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        ref_type TEXT DEFAULT 'link',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`)
+      const ins = mem.query('INSERT INTO block_refs (source_id, target_id, ref_type) VALUES (?, ?, ?)')
+      ins.run('s', 't', 'ai_auto') // 最早一行，应被保留
+      ins.run('s', 't', 'ai_auto') // 重复行，应被去重
+      ins.run('s', 't2', 'link')
+
+      m013.up(mem)
+
+      const rows = mem.query('SELECT * FROM block_refs ORDER BY id').all() as Array<{ id: number; ref_type: string }>
+      expect(rows.length).toBe(2)
+      expect(rows[0]!.id).toBe(1) // 保留 id 最小（最早创建）的一行
+      // 唯一索引已生效
+      expect(() => ins.run('s', 't', 'ai_auto')).toThrow()
+      expect(() => ins.run('s', 't2', 'manual')).toThrow() // 不含 ref_type：换类型也不许同对
+    } finally {
+      mem.close()
+    }
   })
 })

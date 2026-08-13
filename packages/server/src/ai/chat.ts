@@ -777,6 +777,10 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
       if (enableTools) {
         let toolCalls: ToolCall[] = []
         let streamFailed = false
+        let streamError: unknown = null
+        // 本轮是否已向客户端发出正文 token：已发出时降级路径不能再全量重发，
+        // 否则客户端会拼出「半截答案 + 完整新答案」
+        let sentTokens = false
         const llmStart = Date.now()
         try {
           const gen = emitStreamChunks(
@@ -788,6 +792,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
           )
           let next = await gen.next()
           while (!next.done) {
+            if (next.value.type === 'token') sentTokens = true
             yield next.value
             next = await gen.next()
           }
@@ -802,6 +807,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
         } catch (e) {
           console.error('[chat] streamChatWithTools failed, falling back:', e)
           streamFailed = true
+          streamError = e
         }
 
         if (streamFailed) {
@@ -816,7 +822,8 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
               if (result && result.tool_calls.length > 0 && round < maxRounds) {
                 toolCalls = result.tool_calls
                 recovered = true
-              } else if (result) {
+              } else if (result && !sentTokens) {
+                // 整包重发仅限「本轮还没发出任何 token」；已流过半截则落入下方错误收尾
                 yield* emitCompleteAnswer(result.content || '', result.reasoning)
                 break
               }
@@ -825,17 +832,28 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
             }
           }
           if (!recovered && toolCalls.length === 0) {
-            try {
-              for await (const ev of emitStreamChunks(
-                runtime.streamChat(workingMessages, {
-                  temperature: opts.temperature ?? 0.3,
-                  maxTokens: opts.maxTokens ?? 2000,
-                }),
-              )) {
-                yield ev
+            let answered = false
+            if (!sentTokens) {
+              // 未发出过 token：最后尝试纯流式重发完整答案
+              try {
+                for await (const ev of emitStreamChunks(
+                  runtime.streamChat(workingMessages, {
+                    temperature: opts.temperature ?? 0.3,
+                    maxTokens: opts.maxTokens ?? 2000,
+                  }),
+                )) {
+                  if (ev.type === 'token') sentTokens = true
+                  yield ev
+                }
+                answered = true
+              } catch (e2) {
+                streamError = e2
               }
-            } catch (e2) {
-              const msg = e2 instanceof Error ? e2.message : String(e2)
+            }
+            if (!answered) {
+              // 半截答案已发出（不再全量重发防拼接）或全部降级失败：错误收尾。
+              // done 不在此发送——统一由循环出口后的单次 done 收尾，避免双发
+              const msg = streamError instanceof Error ? streamError.message : String(streamError)
               yield {
                 type: 'error',
                 error: {
@@ -843,7 +861,6 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
                   message: `流式回答失败: ${msg}`,
                 },
               }
-              yield { type: 'done', citations: finalCitations, retrieval: finalRetrieval, toolTrace }
             }
             break
           }

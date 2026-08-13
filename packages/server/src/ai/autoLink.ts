@@ -17,7 +17,8 @@
  * 并发与配额保护：
  *   - 同 block 的 analyzeBlock 请求串行化（inflight Map）
  *   - 全局滑动窗口限速（rateLimitPerMinute，burst 时超出直接跳过）
- *   - block 内容更新时由 aiRuntime 先清掉旧的 ai_auto 引用再重评（见 services/aiRuntime）
+ *   - block 内容更新时重评（replaceExisting）：限速未命中后先清掉旧的 ai_auto 引用/提及再重建，
+ *     限速命中时保留旧链（见 doAnalyze 与 services/aiRuntime 的 afterUpdate hook）
  */
 
 import {
@@ -28,10 +29,11 @@ import {
 } from '@notefast/core'
 import { getDb } from '../db'
 import { getBlockById, getLiveBlockById, fetchDocBlocks } from '../store/blocks'
-import { findRefByPair, insertRef } from '../store/refs'
+import { findRefByPair, insertRef, deleteRefsFromSource } from '../store/refs'
 import { lexicalSearch } from '../lexicalSearch'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { registerMentions } from './entities'
+import { deleteMentionsFromSource } from '../store/entities'
 import { embeddingFingerprint, getVectorStore } from './vectorStore'
 import {
   isBlockAiExcluded,
@@ -89,6 +91,11 @@ export interface AnalyzeOptions {
   entitiesOnly?: boolean
   /** true = 绕过全局限速（用户显式触发的全量重建用；单次导入/保存仍限速） */
   skipRateLimit?: boolean
+  /**
+   * true = 内容更新重评：限速未命中后先清理该块旧的 ai_auto 引用与实体提及，再按新内容重建。
+   * 清理必须在限速判定之后——先清再抽时若命中限速直接返回，旧链被清且不重建（丢链）。
+   */
+  replaceExisting?: boolean
 }
 
 /** 一条已自动建立的链接 */
@@ -121,13 +128,19 @@ export interface AnalyzeResult {
 const inflight = new Map<string, Promise<AnalyzeResult>>()
 
 export async function analyzeBlock(opts: AnalyzeOptions): Promise<AnalyzeResult> {
-  // 同 block 的并发请求串行化：等待上一个结束才执行新的
+  // 同 block 严格串行（promise 链）：本次执行挂在上一个登记的 promise 之后。
+  // 旧实现「先 await prev 再登记」在 3+ 并发时会互相覆盖登记、并发执行 doAnalyze，
+  // 且先结束者的 finally 会误删后继的登记。
   const prev = inflight.get(opts.blockId)
-  if (prev) {
-    try { await prev } catch { /* ignore */ }
-  }
-  const p = doAnalyze(opts).finally(() => inflight.delete(opts.blockId))
+  const p = (prev ?? Promise.resolve())
+    .catch(() => { /* 前序失败不影响后续执行 */ })
+    .then(() => doAnalyze(opts))
   inflight.set(opts.blockId, p)
+  // 清理时只删自己登记的那条（引用比较）——后继可能已覆盖登记，误删会破坏串行链
+  const cleanup = () => {
+    if (inflight.get(opts.blockId) === p) inflight.delete(opts.blockId)
+  }
+  void p.then(cleanup, cleanup)
   return p
 }
 
@@ -269,6 +282,13 @@ async function doAnalyze(opts: AnalyzeOptions): Promise<AnalyzeResult> {
   // 限速会把它拖到「大部分块被跳过、实体为空」；单次导入/保存仍走限速。
   if (!opts.skipRateLimit && hitRateLimit(cfg.rateLimitPerMinute ?? DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE)) {
     return { ...empty(), rateLimited: true }
+  }
+
+  // 内容更新重评：清理该块发出的旧 ai_auto 引用与实体提及，随后按新内容重建。
+  // 位置必须在限速判定之后——限速命中时保留旧链，不清了不重建。
+  if (opts.replaceExisting) {
+    deleteRefsFromSource(getDb(), opts.blockId, 'ai_auto')
+    deleteMentionsFromSource(getDb(), opts.blockId)
   }
 
   let mentions: Mention[]

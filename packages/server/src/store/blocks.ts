@@ -554,11 +554,11 @@ export function softDeleteBlocks(db: Db, ids: string[]): void {
   ).run(...(ids as [string, ...string[]]))
 }
 
-/** 恢复软删除（含子树，由调用方收集 id） */
+/** 恢复软删除（含子树，由调用方收集 id）；同时清掉 delete_id tombstone */
 export function restoreBlocks(db: Db, ids: string[]): void {
   if (ids.length === 0) return
   const placeholders = ids.map(() => '?').join(',')
-  db.query(`UPDATE blocks SET is_deleted = 0, updated_at = ${SQL_NOW} WHERE id IN (${placeholders})`).run(
+  db.query(`UPDATE blocks SET is_deleted = 0, delete_id = NULL, updated_at = ${SQL_NOW} WHERE id IN (${placeholders})`).run(
     ...(ids as [string, ...string[]]),
   )
 }

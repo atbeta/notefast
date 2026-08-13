@@ -20,36 +20,46 @@ type Listener = (ev: DocChangeEvent) => void
 const listeners = new Set<Listener>()
 let running = false
 let retryDelay = 1000
+/** 当前连接/退避等待的取消句柄：最后一个订阅者退订时主动断开回收 */
+let currentAbort: AbortController | null = null
 const RETRY_MAX_MS = 30_000
 /** 连接看门狗：服务端心跳 25s，超过 45s 无任何帧判定连接僵死——
  *  macOS 睡眠/网络切换后 TCP 半开连接既不报错也不结束，fetch 会永远挂起，
  *  表象就是「左侧列表不再自动更新，手动导航后才刷新」 */
 const WATCHDOG_MS = 45_000
 
-/** 订阅 doc 级变更；返回取消订阅函数。首个订阅者触发连接，全部退订后连接随下次断开回收 */
+/** 订阅 doc 级变更；返回取消订阅函数。首个订阅者触发连接，全部退订即主动断开回收 */
 export function subscribeDocChanges(fn: Listener): () => void {
   listeners.add(fn)
   if (!running) void loop()
   return () => {
     listeners.delete(fn)
+    if (listeners.size === 0) currentAbort?.abort()
   }
 }
 
 async function loop(): Promise<void> {
   running = true
   while (listeners.size > 0) {
+    const ac = new AbortController()
+    currentAbort = ac
     try {
-      const res = await fetchWithAuth('/events')
+      const res = await fetchWithAuth('/events', { signal: ac.signal })
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
       retryDelay = 1000 // 连接成功即重置退避
       await readStream(res.body)
     } catch {
-      // 断线 / 服务重启 / 401（未登录）：退避后重连
+      // 断线 / 服务重启 / 401（未登录）/ 全部退订主动 abort：退避后重连（无订阅者则退出）
     }
     if (listeners.size === 0) break
-    await new Promise((r) => setTimeout(r, retryDelay))
+    // 退避等待同样可被 abort 打断，避免退订后 running 残留到退避结束才复位
+    await new Promise((r) => {
+      const t = setTimeout(r, retryDelay)
+      ac.signal.addEventListener('abort', () => { clearTimeout(t); r(undefined) }, { once: true })
+    })
     retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS)
   }
+  currentAbort = null
   running = false
 }
 

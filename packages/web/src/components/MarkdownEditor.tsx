@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Loader2,
@@ -370,31 +370,30 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
     return () => window.removeEventListener('beforeunload', handler)
   }, [unsavedToServer])
 
-  const previewTree: Block | null = mode === 'view' && content
-    ? (() => {
-        try {
-          const inputs = parseMarkdownToBlocks(content, '__preview__')
-          const children = inputsToBlockTree(inputs)
-          if (children.length === 0) return null
-          return {
-            id: '__preview__',
-            notebook_id: '__preview__',
-            parent_id: null,
-            root_id: '__preview__',
-            type: 'document',
-            content: '',
-            properties: {},
-            sort: 0,
-            level: 0,
-            created_at: '',
-            updated_at: '',
-            children,
-          } as Block
-        } catch {
-          return null
-        }
-      })()
-    : null
+  const previewTree: Block | null = useMemo(() => {
+    if (mode !== 'view' || !content) return null
+    try {
+      const inputs = parseMarkdownToBlocks(content, '__preview__')
+      const children = inputsToBlockTree(inputs)
+      if (children.length === 0) return null
+      return {
+        id: '__preview__',
+        notebook_id: '__preview__',
+        parent_id: null,
+        root_id: '__preview__',
+        type: 'document',
+        content: '',
+        properties: {},
+        sort: 0,
+        level: 0,
+        created_at: '',
+        updated_at: '',
+        children,
+      } as Block
+    } catch {
+      return null
+    }
+  }, [mode, content])
 
   // 预览态自定义右键菜单（与 routes/doc.tsx 同步：依靠 data-block-id 查回 Block）
   const ctxMenu = useDocContextMenu({ rootBlock: previewTree, disabled: mode !== 'view' })

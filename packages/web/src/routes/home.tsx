@@ -98,7 +98,7 @@ export default function HomePage() {
   useEffect(() => {
     if (localStorage.getItem('nf_first_run_done')) return
     api.get<{ first_run: boolean }>('/status').then((r) => {
-      if ((r as any).body?.first_run) setShowWelcome(true)
+      if (r.first_run) setShowWelcome(true)
     }).catch(() => {})
   }, [])
 

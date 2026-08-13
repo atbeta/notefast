@@ -138,7 +138,8 @@
     "unnamedDevice": "Unnamed device",
     "removeTitle": "Remove (display-only; rotate S3 credentials to truly block a device)",
     "remove": "Remove",
-    "deviceHint": "Device registrations live in the shared storage (one record per device); “Remove” only deletes the record — a device holding S3 credentials still needs its credentials rotated to be truly blocked."
+    "deviceHint": "Device registrations live in the shared storage (one record per device); “Remove” only deletes the record — a device holding S3 credentials still needs its credentials rotated to be truly blocked.",
+    "deviceLag": "{{n}} behind"
   },
   "mcp": {
     "title": "MCP Access",

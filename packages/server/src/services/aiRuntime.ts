@@ -25,8 +25,6 @@ import {
 import type { PluginSystem } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks, getDocById } from '../store/blocks'
-import { deleteRefsFromSource } from '../store/refs'
-import { deleteMentionsFromSource } from '../store/entities'
 import { indexBlock, deleteVector } from '../ai/indexer'
 import { getLatestIndexJobForDoc, scheduleDocIndex } from '../ai/indexJobs'
 import { analyzeBlock } from '../ai/autoLink'
@@ -253,14 +251,15 @@ function applyAutoLink(r: AiRuntime, pluginSystem: PluginSystem): void {
   pluginSystem.note.afterUpdate.tap(AUTOLINK_HOOK_NAME, async (block) => {
     if (isBlockAiExcluded(block.id)) return
     if (isDocInboxOrArchived(block)) return
-    // 内容变化 = 旧链/旧提及重评：双清理（该块发出的 ai_auto 引用 + 实体提及），再按新内容重建
-    deleteRefsFromSource(getDb(), block.id, 'ai_auto')
-    deleteMentionsFromSource(getDb(), block.id)
+    // 内容变化 = 旧链/旧提及重评：replaceExisting 让 doAnalyze 在限速未命中后
+    // 先清（该块发出的 ai_auto 引用 + 实体提及）再按新内容重建；
+    // 限速命中时保留旧链——先清再抽曾导致限速时旧链被清且不重建（丢链）
     await analyzeBlock({
       blockId: block.id,
       content: block.content,
       maxPerBlock: max,
       entitiesOnly: block.type === 'document',
+      replaceExisting: true,
     }).catch((e) => console.warn('[autoLink] afterUpdate:', e instanceof Error ? e.message : e))
   })
   // 块软删除的引用/提及级联由 store 层 deleteRefsTouchingBlocks + deleteMentionsTouchingBlocks 覆盖，无需 afterDelete hook

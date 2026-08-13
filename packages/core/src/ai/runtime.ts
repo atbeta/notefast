@@ -577,13 +577,13 @@ function createEmbeddingProvider(
     maxTokens,
     async embedBatch(texts: string[]): Promise<Array<Float64Array>> {
       const truncated = texts.map((t) => truncateText(t, maxTokens))
-      // embedding 请求历史上不带超时，保持现状
+      // embedding 请求同样受 provider timeoutMs 约束（历史上不带超时，挂起会拖死索引作业）
       const json = await postJson<EmbeddingResponse>(
         fetchImpl,
         url,
         headers,
         { model, input: truncated },
-        { errorLabel: 'Embedding API' },
+        { timeoutMs: p.timeoutMs, errorLabel: 'Embedding API' },
       )
       return parseEmbeddingResponse(json, truncated.length, model, url)
     },

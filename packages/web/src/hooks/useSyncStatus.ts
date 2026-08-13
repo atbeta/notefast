@@ -17,7 +17,7 @@ export interface SyncStatusData {
   running: boolean
   lastSuccessAt?: string
   lastError?: string
-  state?: { publishedSeq: number; consumedSeq: number }
+  state?: { publishedSeq: number; consumed: Record<string, number> }
   pendingChanges?: number
 }
 

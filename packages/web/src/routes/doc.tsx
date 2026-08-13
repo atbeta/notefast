@@ -31,7 +31,7 @@ import {
   ZoomIn,
 } from 'lucide-react'
 import i18next from '../i18n'
-import { api, request } from '../hooks/useAPI'
+import { api, request, ApiError } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
 import MarkdownEditor from '../components/MarkdownEditor'
 import TagEditor from '../components/TagEditor'
@@ -555,8 +555,13 @@ export default function DocPage() {
         await api.patch('/blocks/' + id, { content: res.title })
         setRefreshKey((k) => k + 1)
       }
-    } catch {
-      toast.error({ title: t('doc.generateTitleNeedChat') })
+    } catch (err) {
+      // 仅「未配置 Chat」给配置引导；网络/服务端等其他失败给通用文案
+      if (err instanceof ApiError && err.code === 'not_configured') {
+        toast.error({ title: t('doc.generateTitleNeedChat') })
+      } else {
+        toast.error({ title: t('doc.generateTitleFailed') })
+      }
     }
     finally { setGeneratingTitle(false) }
   }
@@ -644,7 +649,7 @@ export default function DocPage() {
     }
   }
 
-  const flatHeadings = flattenHeadings(headings)
+  const flatHeadings = useMemo(() => flattenHeadings(headings), [headings])
   // 滚动联动 outline 高亮：传入 heading id 列表，hook 返回当前可见的顶部 heading。
   const scrollActiveHeadingId = useActiveHeading(flatHeadings.map((h) => h.id))
   // 点击大纲项时立即高亮目标（不等平滑滚动结束）；滚动落定后交还 scroll 联动。
@@ -662,7 +667,7 @@ export default function DocPage() {
   const activeHeadingId = outlineJumpId ?? scrollActiveHeadingId
   const updatedAt = doc ? formatRelative(doc.updated_at, 'long') : ''
   const createdAt = doc ? formatRelative(doc.created_at, 'long') : ''
-  const wordCount = doc ? countWords(doc) : 0
+  const wordCount = useMemo(() => (doc ? countWords(doc) : 0), [doc])
   const isEmpty = wordCount === 0
   // 阅读态文档区自定义右键菜单；为空文档 / 编辑态不下文阔（空文档只出猜不打是，复用
   // BlockRenderer 下的 data-block-id 查回 Block 做 md 序列化）

@@ -24,7 +24,6 @@ import { createWebSessionToken, revokeWebSessionTokens } from './services/apiTok
 import { initDb, closeDb, getDb } from './db'
 import { authMiddleware, SESSION_COOKIE, sessionTokenValue } from './middleware/auth'
 import { createRateLimit } from './middleware/rateLimit'
-import { eventContextMiddleware } from './middleware/eventContext'
 import { emitAppEvent } from './events'
 import { handleMcpRequest } from './mcp/server'
 import { registerMcpTools } from './mcp/tools'
@@ -121,8 +120,6 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
 
   const rateLimit = createRateLimit()
   if (rateLimit) app.use('*', rateLimit)
-
-  app.use('/api/*', eventContextMiddleware)
 
   // 本地免鉴权通道：原生内嵌 / 仅本机回环时，跳过 token/密码校验（走 admin）。
   // 在 authMiddleware 之前注册（auth 内部也已对未配置鉴权全放行；此分支覆盖「配置了但本地信任」场景）
@@ -260,9 +257,8 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   app.route('/api/v1/sync/protocol', syncProtocolRouter)
   app.route('/api/v1/client-errors', clientErrors)
 
-  // 分享公开端点：挂在 /api/* 之外，无需鉴权
-  app.route('/share', sharePublic)
-
+  // 分享页防 iframe 嵌入/点击劫持：中间件必须先于 app.route 注册
+  // （Hono 按注册顺序执行，放路由后 = 死代码，响应拿不到安全头）
   const denyFraming: MiddlewareHandler = async (c, next) => {
     await next()
     c.header('X-Frame-Options', 'DENY')
@@ -270,6 +266,9 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   }
   app.use('/s/*', denyFraming)
   app.use('/share/*', denyFraming)
+
+  // 分享公开端点：挂在 /api/* 之外，无需鉴权
+  app.route('/share', sharePublic)
 
   const pluginSystem = createPluginSystem()
 

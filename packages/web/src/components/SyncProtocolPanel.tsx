@@ -13,7 +13,8 @@ import { formatIsoDateTime } from '../lib/time'
 
 interface SyncProtocolState {
   publishedSeq: number
-  consumedSeq: number
+  /** per-device 高水位（v2；各远端设备已消费到的 seq） */
+  consumed: Record<string, number>
   sinceSnapshot: number
 }
 
@@ -28,6 +29,10 @@ interface SyncProtocolStatus {
   state: SyncProtocolState
   pendingChanges: number
   running: boolean
+  /** 远端各设备增量终点 × 本端消费水位（最近一次同步读到的 manifest） */
+  details?: {
+    remoteDevices: Array<{ deviceId: string; lastSeq: number; consumedSeq: number }>
+  }
 }
 
 interface SyncDevice {
@@ -39,7 +44,7 @@ interface SyncDevice {
 const EMPTY_STATUS: SyncProtocolStatus = {
   configured: false,
   enabled: false,
-  state: { publishedSeq: 0, consumedSeq: 0, sinceSnapshot: 0 },
+  state: { publishedSeq: 0, consumed: {}, sinceSnapshot: 0 },
   pendingChanges: 0,
   running: false,
 }
@@ -121,6 +126,12 @@ export default function SyncProtocolPanel() {
   const lastRunText = status.lastSuccessAt
     ? formatIsoDateTime(status.lastSuccessAt)
     : t('syncProtocol.never')
+
+  /** 远端设备落后量（manifest 终点 - 本端已消费水位；未知/本端不显示） */
+  const deviceLag = (deviceId: string): number => {
+    const r = status.details?.remoteDevices.find((x) => x.deviceId === deviceId)
+    return r ? Math.max(0, r.lastSeq - r.consumedSeq) : 0
+  }
 
   return (
     <SettingsCard
@@ -228,6 +239,9 @@ export default function SyncProtocolPanel() {
                     </div>
                     <div className="text-muted-foreground text-[11px] mt-0.5 font-mono truncate">
                       {d.device_id.slice(0, 8)}…{d.last_seen ? ` · ${formatIsoDateTime(d.last_seen)}` : ''}
+                      {deviceLag(d.device_id) > 0 && (
+                        <span className="text-amber-600/90"> · {t('syncProtocol.deviceLag', { n: deviceLag(d.device_id) })}</span>
+                      )}
                     </div>
                   </div>
                   <Tooltip label={t('syncProtocol.removeTitle')}>

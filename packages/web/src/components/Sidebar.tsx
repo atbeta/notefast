@@ -247,7 +247,7 @@ export default function Sidebar({
    */
   const { data: docList, refetch: refetchRecent } = useApiQuery(
     () => (collapsed || !recentOpen ? new Promise<DocSummary[]>(() => {}) : api.get<DocSummary[]>('/docs/list?status=all')),
-    [collapsed, recentOpen, location.pathname],
+    [collapsed, recentOpen],
   )
 
   // 列表回来后清掉足迹里已不存在的 id（软删 / 换库残留）

@@ -25,10 +25,10 @@ const S3_CFG = { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's
 let locationId = ''
 
 /**
- * 同步协议 Manager 编排：
+ * 同步协议 Manager 编排（v2：多写端对等拓扑）：
  * - initProtocolManager 使用独立的多端同步配置（与备份解耦）
- * - syncNow = publish（本地→S3）→ consume（S3→本地）→ 持久化 state
- * - 自同步（同一库 publish+consume）LWW 幂等，无副作用
+ * - syncNow = 布局检测（v1 自动迁移）→ publish（本端 namespace）→ 持久化 state
+ * - 消费游标为 per-device 高水位；本端 namespace 不消费
  * - state 持久化到 data/sync-state.json；配置持久化到 data/sync-protocol.config.json
  */
 
@@ -119,6 +119,26 @@ function makeMockS3() {
   return { client, objects }
 }
 
+/** 手工构造一条其他设备的 v2 增量段（模拟第二写端发布） */
+function putOtherDeviceSegment(objects: Map<string, string>, deviceId: string, docId: string, content: string): void {
+  const now = nowTimestamp()
+  const line = JSON.stringify({
+    seq: 1,
+    entity: 'block',
+    entity_id: docId,
+    is_erased: 0,
+    actor: 'other',
+    changed_at: now,
+    device_id: deviceId,
+    block: {
+      id: docId, notebook_id: notebookId, parent_id: null, root_id: docId,
+      type: 'document', content, properties: '{}', tags: '[]', status: 'note',
+      ai_exclude: 0, sort: 0, level: 0, created_at: now, updated_at: now,
+    },
+  })
+  objects.set(`test/${SYNC_S3_DIR}/changes/${deviceId}/0000000001-0000000001.jsonl`, line)
+}
+
 describe('sync protocol manager', () => {
   test('未配置 backup S3 时未启用，syncNow 抛 not_configured', async () => {
     initProtocolManager(testDir)
@@ -126,7 +146,7 @@ describe('sync protocol manager', () => {
     await expect(syncNow()).rejects.toMatchObject({ code: 'not_configured' })
   })
 
-  test('syncNow 发布增量 → 持久化 state → S3 有 changes 对象', async () => {
+  test('syncNow 发布增量 → 持久化 state → S3 有本端 namespace 的 changes 对象', async () => {
     initProtocolManager(testDir)
     await configureProtocol()
     const { client, objects } = makeMockS3()
@@ -137,10 +157,12 @@ describe('sync protocol manager', () => {
     const result = await syncNow()
     expect(result.published).toBeGreaterThan(0)
     expect(result.state.publishedSeq).toBeGreaterThan(0)
-    // S3 有 changes 对象
-    expect([...objects.keys()].some((k) => k.includes(`${SYNC_S3_DIR}/changes/`))).toBe(true)
-    // state 落盘
+    // S3 有本端设备分桶的 changes 对象
+    expect([...objects.keys()].some((k) => k.includes(`${SYNC_S3_DIR}/changes/${getDeviceId()}/`))).toBe(true)
+    // state 落盘（v2：consumed 为 per-device 高水位表）
     expect(existsSync(join(testDir, 'sync-state.json'))).toBe(true)
+    const saved = JSON.parse(readFileSync(join(testDir, 'sync-state.json'), 'utf-8'))
+    expect(saved.consumed).toEqual({})
     // 状态反映运行
     expect(protocolStatus().lastSuccessAt).toBeTruthy()
     expect(protocolStatus().state.publishedSeq).toBe(result.state.publishedSeq)
@@ -187,38 +209,47 @@ describe('sync protocol manager', () => {
       if (r.snapshotCreated) sawSnapshot = true
     }
     expect(sawSnapshot).toBe(true)
-    // S3 有快照（snapshot.db + snapshot.seq）
+    // S3 有快照（snapshot.db + snapshot.meta.json）
     expect([...objects.keys()].some((k) => k.endsWith('snapshot.db'))).toBe(true)
-    expect([...objects.keys()].some((k) => k.endsWith('snapshot.seq'))).toBe(true)
-    // manifest 记录快照锚点（compaction 后 snapshot_seq > 0）
+    expect([...objects.keys()].some((k) => k.endsWith('snapshot.meta.json'))).toBe(true)
+    // manifest v2：本端 devices 条目 + per-device 快照锚点
     const manifestKey = [...objects.keys()].find((k) => k.endsWith('manifest.json'))
     expect(manifestKey).toBeTruthy()
     const manifest = JSON.parse(objects.get(manifestKey!)!)
     expect(manifest.kind).toBe('sync')
-    expect(manifest.snapshot_seq).toBeGreaterThan(0)
-    expect(manifest.last_seq).toBeGreaterThan(0)
+    expect(manifest.version).toBe(2)
+    expect(manifest.snapshot[getDeviceId()]).toBeGreaterThan(0)
+    expect(manifest.devices[getDeviceId()]).toBeGreaterThan(0)
   })
 
-  test('syncPull 增量消费：远端 manifest 有变更且本地未落后快照时，走增量合并', async () => {
+  test('syncPull 增量消费：其他设备的段按 per-device 水位合并（本端 namespace 不消费）', async () => {
     initProtocolManager(testDir)
     await configureProtocol()
-    const { client } = makeMockS3()
+    const { client, objects } = makeMockS3()
     _setProtocolStoreForTests(createS3ObjectStore(S3_CFG, client))
 
-    // 先在本地发布一些变更（生成 changes 段 + manifest）
+    // 本端发布（生成 changes/<self>/ 段 + v2 manifest）
     insertDoc(crypto.randomUUID(), '待拉取文档')
     await syncNow()
 
-    // 模拟消费端：已有部分数据、想从远端拉增量（consumedSeq=0，无快照落后）
-    _setProtocolStateForTests({ publishedSeq: 0, consumedSeq: 0 })
+    // 第二写端发布自己的段（本地 seq 从 1 开始，v1 会被本端高水位整段跳过）
+    const otherDoc = crypto.randomUUID()
+    putOtherDeviceSegment(objects, 'other-dev', otherDoc, '其他端文档')
+
+    // 模拟消费端视角：游标清零（本端段不消费，靠 guard/LWW 幂等）
+    _setProtocolStateForTests({ publishedSeq: 0, consumed: {} })
 
     const result = await syncPull()
     expect(result.mode).toBe('incremental')
-    // 消费端锚点前进（>= 远端 last_seq）
-    expect(result.state.consumedSeq).toBeGreaterThan(0)
+    expect(result.applied).toBeGreaterThan(0)
+    // per-device 水位推进（而非全局标量）
+    expect(result.state.consumed['other-dev']).toBe(1)
+    // 其他端内容合并进本地
+    expect(getDb().query('SELECT content FROM blocks WHERE id = ?').get(otherDoc))
+      .toEqual({ content: '其他端文档' })
     // 已持久化
     const saved = JSON.parse(readFileSync(join(testDir, 'sync-state.json'), 'utf-8'))
-    expect(saved.consumedSeq).toBe(result.state.consumedSeq)
+    expect(saved.consumed['other-dev']).toBe(1)
   })
 
   test('syncPull 无远端数据抛 no_remote', async () => {
@@ -228,12 +259,57 @@ describe('sync protocol manager', () => {
     await expect(syncPull()).rejects.toMatchObject({ code: 'no_remote' })
   })
 
+  test('检测到 v1 布局自动迁移：合并旧段内容、重建 v2 快照与 manifest', async () => {
+    initProtocolManager(testDir)
+    await configureProtocol()
+    const { client, objects } = makeMockS3()
+    _setProtocolStoreForTests(createS3ObjectStore(S3_CFG, client))
+
+    // 手工布置 v1 布局：根级段（行内带 device_id）+ v1 manifest
+    const legacyDoc = crypto.randomUUID()
+    const now = nowTimestamp()
+    objects.set(`test/${SYNC_S3_DIR}/changes/0000000001-0000000003.jsonl`, JSON.stringify({
+      seq: 3,
+      entity: 'block',
+      entity_id: legacyDoc,
+      is_erased: 0,
+      actor: 'old',
+      changed_at: now,
+      device_id: 'old-dev',
+      block: {
+        id: legacyDoc, notebook_id: notebookId, parent_id: null, root_id: legacyDoc,
+        type: 'document', content: 'v1遗留文档', properties: '{}', tags: '[]', status: 'note',
+        ai_exclude: 0, sort: 0, level: 0, created_at: now, updated_at: now,
+      },
+    }))
+    objects.set(`test/${SYNC_S3_DIR}/manifest.json`, JSON.stringify({
+      app: 'notefast', kind: 'sync', version: 1, last_seq: 3, snapshot_seq: 0, updated_at: now,
+    }))
+
+    // 本端也有内容
+    insertDoc(crypto.randomUUID(), '本端文档')
+    await syncNow()
+
+    // v1 旧段内容已合并进本端库
+    expect(getDb().query('SELECT content FROM blocks WHERE id = ?').get(legacyDoc))
+      .toEqual({ content: 'v1遗留文档' })
+    // 旧设备水位被推导并持久化
+    expect(protocolStatus().state.consumed['old-dev']).toBe(3)
+    // manifest 升级为 v2，v1 根级段被清理
+    const manifest = JSON.parse(objects.get(`test/${SYNC_S3_DIR}/manifest.json`)!)
+    expect(manifest.version).toBe(2)
+    expect(manifest.devices[getDeviceId()]).toBeGreaterThan(0)
+    expect([...objects.keys()].some((k) => /changes\/\d{10}-\d{10}\.jsonl$/.test(k))).toBe(false)
+    // 迁移触发了 v2 快照重建（含合并后的 v1 内容）
+    expect(objects.has(`test/${SYNC_S3_DIR}/snapshot.meta.json`)).toBe(true)
+  })
+
   test('scheduleSyncNow 去抖：写入后延迟触发一次 syncNow，publishedSeq 前进', async () => {
     initProtocolManager(testDir)
     await configureProtocol()
     const { client } = makeMockS3()
     _setProtocolStoreForTests(createS3ObjectStore(S3_CFG, client))
-    _setProtocolStateForTests({ publishedSeq: 0, consumedSeq: 0 })
+    _setProtocolStateForTests({ publishedSeq: 0, consumed: {} })
 
     // 模拟写入 → 去抖自动同步
     insertDoc(crypto.randomUUID(), '去抖同步文档')

@@ -207,7 +207,7 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
   const docItems: PaletteItem[] = useMemo(() => results.map((r) => ({
     id: 'doc-' + r.block.id,
     icon: FileText,
-    title: r.block.root_id === r.block.id ? r.snippet.split('\n')[0]! : r.snippet.split('\n')[0]!,
+    title: r.block.root_id === r.block.id ? r.block.content || r.snippet.split('\n')[0]! : r.snippet.split('\n')[0]!,
     hint: r.snippet,
     section: 'document' as const,
     keywords: [r.snippet.toLowerCase()],

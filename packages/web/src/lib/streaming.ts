@@ -1,9 +1,17 @@
 import { fetchWithAuth } from '../hooks/useAPI'
 
+/**
+ * 流式错误：HTTP 错误体的 error 字段（REST 稳定错误码，同 ApiError.code）或
+ * 流内 error 帧 payload 的 code 会挂到 Error.code 上，供调用方稳定判别（如 not_configured）。
+ */
+export type SSEError = Error & { code?: string }
+
 export interface SSECallbacks {
   onEvent: (eventName: string, data: unknown) => void
-  onError?: (err: Error) => void
+  onError?: (err: SSEError) => void
   onDone?: () => void
+  /** 外部 signal 或返回的 controller 触发中断时调用（此时 onError/onDone 均不再触发） */
+  onAbort?: () => void
 }
 
 export function streamSSE(
@@ -27,8 +35,10 @@ export function streamSSE(
       })
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: res.statusText }))
-        throw new Error(err.message || `HTTP ${res.status}`)
+        const body = (await res.json().catch(() => null)) as { message?: string; error?: string } | null
+        const err = new Error(body?.message || `HTTP ${res.status}`) as SSEError
+        if (typeof body?.error === 'string') err.code = body.error
+        throw err
       }
 
       const reader = res.body!.getReader()
@@ -56,7 +66,9 @@ export function streamSSE(
           try {
             const payload = JSON.parse(data)
             if (eventName === 'error') {
-              throw new Error(payload.message || 'SSE stream error')
+              const err = new Error(payload.message || 'SSE stream error') as SSEError
+              if (typeof payload.code === 'string') err.code = payload.code
+              throw err
             }
             callbacks.onEvent(eventName, payload)
             if (eventName === 'done') {
@@ -75,8 +87,11 @@ export function streamSSE(
 
       callbacks.onDone?.()
     } catch (err) {
-      if ((err as { name?: string })?.name === 'AbortError') return
-      callbacks.onError?.(err instanceof Error ? err : new Error(String(err)))
+      if ((err as { name?: string })?.name === 'AbortError') {
+        callbacks.onAbort?.()
+        return
+      }
+      callbacks.onError?.(err instanceof Error ? (err as SSEError) : new Error(String(err)))
     }
   })()
 

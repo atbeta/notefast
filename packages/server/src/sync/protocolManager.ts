@@ -1,14 +1,15 @@
 /**
- * 同步协议 Manager（方案 A：客户端与 Web 共享同一份 S3）
+ * 同步协议 Manager（方案 A：客户端与 Web 共享同一份 S3，对等写入者）
  *
  * 与 sync/manager.ts（单向 Markdown 归档）独立：这里是双向增量同步。
  * - 配置复用 backup 的 S3 凭据（同一份库的身份 = 存储位置 + 凭据），
  *   同步用独立前缀 {prefix}sync/，不新增配置维度
- * - state 持久化到 data/sync-state.json（publishedSeq / consumedSeq）
- * - syncNow() = publish → consume → 持久化 state
+ * - state 持久化到 data/sync-state.json（publishedSeq + per-device consumed 高水位）
+ * - syncNow() = 布局检测（v1 自动迁移）→ publish → 定期 compaction → 更新 manifest
+ * - 消费游标为 per-device 高水位：远端各设备独立推进，本端 namespace 不消费
  *
- * 编排注意：publish 和 consume 在同一前缀，consume 会拉回自己刚发布的内容，
- * 但 LWW 裁决（updated_at 相等）会跳过，无副作用。
+ * 编排注意：publish 和 consume 在同一前缀，本端只发布自己的 namespace、
+ * 只消费他端的 namespace，天然无自回环。
  */
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -38,10 +39,15 @@ import {
   consumeChanges,
   consumeSnapshot,
   compactChanges,
+  detectLayout,
+  migrateV1Layout,
   readManifest,
   updateManifest,
 } from './protocol'
 import { getChangesAnchor } from '../store/changeFeed'
+import { fetchDocBlocks, getDocById } from '../store/blocks'
+import { scheduleDocIndex } from '../ai/indexJobs'
+import { reanalyzeDoc } from '../ai/autoLink'
 
 const STATE_FILE = 'sync-state.json'
 const DEVICE_ID_FILE = 'device.id'
@@ -49,10 +55,10 @@ const DEVICE_ID_FILE = 'device.id'
 const SNAPSHOT_EVERY_N = 10
 
 export interface SyncProtocolState {
-  /** 上次已发布到 S3 的 seq（不含；下一轮从此导出） */
+  /** 上次已发布到 S3 的本端 seq（不含；下一轮从此导出） */
   publishedSeq: number
-  /** 已消费的远端 seq（不含；下一轮从此拉取） */
-  consumedSeq: number
+  /** 各远端设备已消费的 seq 高水位（不含；per-device，v2 起替代单一 consumedSeq） */
+  consumed: Record<string, number>
   /** 自上次快照以来累计的同步轮数（触发 compaction） */
   sinceSnapshot: number
 }
@@ -69,6 +75,10 @@ export interface SyncProtocolStatus {
   /** 本地待发布变更条数（entity_changes 锚点 - publishedSeq；>0 说明还有未同步的本地改动） */
   pendingChanges: number
   running: boolean
+  /** per-device 远端视图（最近一次同步读到的 manifest.devices × 本端消费水位） */
+  details?: {
+    remoteDevices: Array<{ deviceId: string; lastSeq: number; consumedSeq: number }>
+  }
 }
 
 let dataDir = ''
@@ -81,7 +91,9 @@ let lastSuccessAt: string | null = null
 let lastError: string | null = null
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 let heartbeatBusy = false
-let state: SyncProtocolState = { publishedSeq: 0, consumedSeq: 0, sinceSnapshot: 0 }
+let state: SyncProtocolState = { publishedSeq: 0, consumed: {}, sinceSnapshot: 0 }
+/** 最近一次同步读到的远端 manifest.devices（状态面板 per-device 展示用） */
+let lastRemoteDevices: Record<string, number> | null = null
 /** 当前 seq 锚点所属的 S3 位置指纹（bucket/endpoint/region/prefix）；位置变化时重置游标 */
 let stateLocation = ''
 /** 编辑后去抖同步定时器（合并多次写入为一次同步） */
@@ -127,6 +139,15 @@ export function protocolStatus(): SyncProtocolStatus {
     state,
     pendingChanges: pendingChangeCount(),
     running,
+    details: lastRemoteDevices
+      ? {
+          remoteDevices: Object.entries(lastRemoteDevices).map(([deviceId, lastSeq]) => ({
+            deviceId,
+            lastSeq,
+            consumedSeq: state.consumed[deviceId] ?? 0,
+          })),
+        }
+      : undefined,
   }
 }
 
@@ -153,9 +174,37 @@ export async function disableProtocolManager(): Promise<SyncProtocolStatus> {
   return protocolStatus()
 }
 
+function ensureWorkRoot(): string {
+  const workRoot = join(dataDir, '.sync-tmp')
+  if (!existsSync(workRoot)) mkdirSync(workRoot, { recursive: true })
+  return workRoot
+}
+
 /**
- * 执行一轮同步（发布端语义）：发布本地增量 → 定期生成快照（compaction）→ 更新 manifest。
- * 消费端合并由客户端复用 consumeChanges/consumeSnapshot（服务端是权威之一，不被快照覆盖）。
+ * v1 → v2 自动迁移（对齐「换存储位置指纹重置游标」先例：宁可全量重建，不静默漏数据）：
+ * LWW 合并 v1 段/旧快照（幂等）→ 推导 per-device 水位 → 重建 v2 快照与 manifest。
+ * 旧端混用时它会把 manifest 写回 v1 并继续写根级段——本端下轮会再次迁移（幂等但
+ * 徒劳），且旧端消费 v2 段会按其全局水位错误跳过（v1 固有缺陷），应尽快升级所有端。
+ */
+async function migrateToV2(db: ReturnType<typeof getDb>, store: ObjectStore, prefix: string, workRoot: string): Promise<void> {
+  console.warn('[sync] 检测到 v1 同步布局（旧版单写端格式），自动迁移到 v2（per-device 段 + 高水位）；请尽快升级所有同步端')
+  const r = await migrateV1Layout(db, store, prefix, join(workRoot, `migrate-${Date.now()}`))
+  for (const [d, s] of Object.entries(r.watermarks)) {
+    state.consumed[d] = Math.max(state.consumed[d] ?? 0, s)
+  }
+  // 重建 v2 快照（含刚合并的 v1 内容）+ v2 manifest
+  const { anchor, anchors } = await compactChanges(db, store, prefix, workRoot, getDeviceId(), state.consumed)
+  state.publishedSeq = anchor
+  state.sinceSnapshot = 0
+  const manifest = await updateManifest(store, prefix, getDeviceId(), anchor, anchors)
+  lastRemoteDevices = manifest.devices
+  scheduleConsumeFollowUp(r.docIds)
+  saveState()
+  console.warn(`[sync] v1 → v2 迁移完成（合并 ${r.applied} 条，跳过 ${r.skipped} 条）`)
+}
+
+/**
+ * 执行一轮同步（发布端语义）：布局检测 → 发布本地增量 → 定期快照（compaction）→ 更新 manifest。
  */
 export async function syncNow(): Promise<{ published: number; snapshotCreated: boolean; state: SyncProtocolState }> {
   if (!store) {
@@ -171,10 +220,15 @@ export async function syncNow(): Promise<{ published: number; snapshotCreated: b
     const c = getProtocolConfig()
     resolvedS3() // 校验连接可用
     const prefix = syncPrefix(c.prefix)
-    const workRoot = join(dataDir, '.sync-tmp')
-    if (!existsSync(workRoot)) mkdirSync(workRoot, { recursive: true })
+    const workRoot = ensureWorkRoot()
 
-    // 1) 发布本地增量（本端 → 存储；每条变更带 device_id）
+    // 0) 布局检测：v1 先迁移（合并旧内容 + 重建 v2 快照/manifest），再正常发布
+    if ((await detectLayout(store, prefix)) === 'v1') {
+      await migrateToV2(db, store, prefix, workRoot)
+    }
+
+    // 1) 发布本地增量（本端 namespace：changes/<device_id>/；每条变更带 device_id）
+    const prevPublishedSeq = state.publishedSeq
     const newPublished = await publishChanges(db, store, prefix, state.publishedSeq, getDeviceId())
 
     // 2) media 上送：让同步位置自包含（内容寻址增量幂等；失败不阻断变更发布）
@@ -194,29 +248,25 @@ export async function syncNow(): Promise<{ published: number; snapshotCreated: b
       console.warn('[sync] 设备注册上报失败:', e instanceof Error ? e.message : e)
     }
 
-    // 3) compaction 触发：累计轮数达阈值 → 新快照 + 清理旧增量
+    // 4) compaction 触发：累计轮数达阈值 → 新快照 + 清理本端 namespace 旧增量
     let snapshotCreated = false
-    let snapAnchor = 0
+    let snapAnchors: Record<string, number> | undefined
     state.sinceSnapshot += 1
     if (state.sinceSnapshot >= SNAPSHOT_EVERY_N) {
-      snapAnchor = await compactChanges(db, store, prefix, workRoot)
-      // compact 后旧增量已删，publishedSeq 应重置为快照锚点（快照已涵盖，无需再导出）
-      state.publishedSeq = snapAnchor
+      const r = await compactChanges(db, store, prefix, workRoot, getDeviceId(), state.consumed)
+      snapAnchors = r.anchors
       state.sinceSnapshot = 0
       snapshotCreated = true
     }
 
-    // 4) 更新 manifest（compaction 后 snapshot_seq = 新快照锚点）
-    const manifest = await readManifest(store, prefix)
-    await updateManifest(
-      store,
-      prefix,
-      newPublished,
-      snapshotCreated ? snapAnchor : (manifest?.snapshot_seq ?? 0),
-    )
+    // 5) 更新 manifest（维护自己的 devices 条目；compaction 后同步快照锚点副本）
+    const manifest = await updateManifest(store, prefix, getDeviceId(), newPublished, snapAnchors)
+    lastRemoteDevices = manifest.devices
 
-    const published = newPublished - (snapshotCreated ? snapAnchor : state.publishedSeq)
-    state.publishedSeq = newPublished
+    const published = newPublished - prevPublishedSeq
+    // compact 后旧增量已删，publishedSeq 推到快照锚点（快照已涵盖，无需再导出）；
+    // 未 compact 时推到本次发布锚点
+    state.publishedSeq = snapshotCreated ? (snapAnchors?.[getDeviceId()] ?? newPublished) : newPublished
     saveState()
     lastSuccessAt = lastRunAt
     lastError = null
@@ -231,14 +281,16 @@ export async function syncNow(): Promise<{ published: number; snapshotCreated: b
 
 /**
  * 消费端拉取（客户端「从 S3 恢复到本地」的入口）：
- * 1. 读 manifest，判断全量 or 增量
- * 2. 全量：本地落后于最近快照（consumedSeq < snapshot_seq）或本地无库 → closeDb + consumeSnapshot
- *    重建库文件 → 重新 initDb → media 拉回 → consumedSeq = snapshot_seq
- * 3. 增量：consumeChanges 合并到 snapshot_seq 之后的变更 → media 拉回
+ * 1. 布局检测（v1 先迁移）→ 读 manifest，按快照锚点判断是否需要全量
+ * 2. 全量：任一设备快照锚点 > 本端对应水位 → closeDb + consumeSnapshot 重建库文件
+ *    → 重新 initDb → 水位 = 快照锚点；快照剥离 entity_changes，本地 seq 空间从 0
+ *    重启，故 publishedSeq 归零并更换 device_id（旧 namespace 的小 seq 已被各端
+ *    高水位越过，继续用旧 id 发布会被整段跳过）
+ * 3. 增量（全量后同样执行）：consumeChanges 追加快照之后的段 → media 拉回
  * 4. 持久化 state
  *
- * 语义：消费端在**独立进程/客户端**跑；server 内调用时，全量路径会 closeDb（库文件被替换），
- * 调用方需理解这是「恢复到本地」而非「服务端自合并」。
+ * 语义：消费端在**独立进程/客户端**跑；server 内调用时，全量路径会 closeDb（库文件被替换，
+ * 本地未发布改动随之丢失），调用方需理解这是「恢复到本地」而非「服务端自合并」。
  */
 export async function syncPull(): Promise<{ mode: 'full' | 'incremental'; applied: number; mediaRestored: number; state: SyncProtocolState }> {
   if (!store) {
@@ -253,31 +305,37 @@ export async function syncPull(): Promise<{ mode: 'full' | 'incremental'; applie
     const c = getProtocolConfig()
     resolvedS3()
     const prefix = syncPrefix(c.prefix)
+    const workRoot = ensureWorkRoot()
+
+    if ((await detectLayout(store, prefix)) === 'v1') {
+      await migrateToV2(getDb(), store, prefix, workRoot)
+    }
     const manifest = await readManifest(store, prefix)
     if (!manifest) {
       throw Object.assign(new Error('远端无同步数据（manifest 不存在）'), { code: 'no_remote' })
     }
-    const snapshotSeq = manifest.snapshot_seq ?? 0
-    const needFull = state.consumedSeq < snapshotSeq
+    lastRemoteDevices = manifest.devices
+    const anchors = manifest.snapshot ?? {}
+    // 任一设备快照锚点超过本端水位 = 增量可能已被 compaction 清理 → 全量重建
+    const needFull = Object.entries(anchors).some(([d, s]) => s > (state.consumed[d] ?? 0))
 
     let mode: 'full' | 'incremental' = 'incremental'
-    let applied = 0
     if (needFull) {
-      // 全量：重建本地库文件
       mode = 'full'
       const target = getDbPath()
       try { closeDb() } catch { /* 未打开也 OK */ }
-      const snapSeq = await consumeSnapshot(store, prefix, target)
+      const snapAnchors = await consumeSnapshot(store, prefix, target)
       // 重新打开库（读引用集合 / 后续使用）
       initDb(dataDir)
-      state.consumedSeq = snapSeq
-      applied = snapSeq
-    } else {
-      // 增量：合并 snapshot_seq 之后到 last_seq 的变更
-      const consumed = await consumeChanges(getDb(), store, prefix, state.consumedSeq, manifest.last_seq)
-      applied = consumed.applied
-      state.consumedSeq = consumed.nextSeq
+      state.consumed = { ...snapAnchors }
+      state.publishedSeq = 0
+      regenerateDeviceId()
     }
+
+    // 增量追加快照之后的段（全量模式同样需要：快照之后他端可能又发布了新段）
+    const consumed = await consumeChanges(getDb(), store, prefix, state.consumed, getDeviceId())
+    state.consumed = consumed.watermarks
+    scheduleConsumeFollowUp(consumed.docIds)
 
     // media 拉回（引用集合；内容寻址跳过已有，成本低）
     let mediaRestored = 0
@@ -293,7 +351,7 @@ export async function syncPull(): Promise<{ mode: 'full' | 'incremental'; applie
     saveState()
     lastSuccessAt = lastRunAt
     lastError = null
-    return { mode, applied, mediaRestored, state }
+    return { mode, applied: consumed.applied, mediaRestored, state }
   } catch (e) {
     lastError = e instanceof Error ? e.message : String(e)
     throw e
@@ -324,7 +382,7 @@ function stopHeartbeat(): void {
 
 /**
  * 固定心跳：推送本地变更 + 增量合并远端变更（不全量恢复自身）。
- * 多端收敛与兜底推送；无变更时 publish 早退、consume 按序跳过，成本可忽略。
+ * 多端收敛与兜底推送；无变更时 publish 早退、consume 按各设备水位跳过，成本可忽略。
  */
 async function syncHeartbeat(): Promise<void> {
   if (heartbeatBusy || running || !store) return
@@ -337,20 +395,45 @@ async function syncHeartbeat(): Promise<void> {
   }
 }
 
-/** 服务端安全合并远端变更：落后于快照时不恢复自身（保持权威，交给客户端全量拉取） */
+/**
+ * 增量消费后的 AI 补齐（对照回收站恢复路径先例 api/blocks.ts restore）：
+ * 远端同步来的内容在本端语义检索里是「哑」的——向量未建立、实体与链未抽取。
+ * 按文档根调度重索引 + AutoLink 重分析。无 provider / autoIndex / autoLink 关闭时
+ * scheduleDocIndex / reanalyzeDoc 安全 no-op。
+ * 无循环：二者只写 block_vectors / block_refs / entity_mentions，不触碰 blocks
+ * （不进 change feed），也不调 scheduleSyncNow。
+ */
+function scheduleConsumeFollowUp(docIds: string[]): void {
+  if (docIds.length === 0) return
+  const db = getDb()
+  for (const docId of docIds) {
+    const doc = getDocById(db, docId)
+    // inbox / archived / ai_exclude 文档不参与索引与建链（对齐 hooks 过滤语义）
+    if (!doc || doc.status !== 'note' || doc.ai_exclude) continue
+    scheduleDocIndex(docId, fetchDocBlocks(db, docId).map((r) => r.id))
+    reanalyzeDoc(docId)
+  }
+}
+
+/** 服务端安全合并远端变更：任一设备落后于快照锚点时不恢复自身（保持权威，交给客户端全量拉取） */
 async function safeMergeRemote(): Promise<void> {
   if (!store) return
   resolvedS3()
   const prefix = syncPrefix(getProtocolConfig().prefix)
   const manifest = await readManifest(store, prefix)
+  // null = 远端为空或仍是 v1 布局（v1 由 syncNow 路径迁移；心跳先 syncNow 后到这里）
   if (!manifest) return
-  const snapshotSeq = manifest.snapshot_seq ?? 0
-  if (state.consumedSeq < snapshotSeq) return
-  const consumed = await consumeChanges(getDb(), store, prefix, state.consumedSeq, manifest.last_seq)
-  if (consumed.nextSeq > state.consumedSeq) {
-    state.consumedSeq = consumed.nextSeq
+  lastRemoteDevices = manifest.devices
+  const anchors = manifest.snapshot ?? {}
+  const behind = Object.entries(anchors).some(([d, s]) => s > (state.consumed[d] ?? 0))
+  if (behind) return
+  const consumed = await consumeChanges(getDb(), store, prefix, state.consumed, getDeviceId())
+  const changed = Object.entries(consumed.watermarks).some(([d, s]) => s !== (state.consumed[d] ?? 0))
+  if (changed) {
+    state.consumed = consumed.watermarks
     saveState()
   }
+  scheduleConsumeFollowUp(consumed.docIds)
 }
 
 /**
@@ -423,6 +506,16 @@ export function getDeviceId(): string {
     writeFileSync(path, cachedDeviceId, 'utf-8')
   }
   return cachedDeviceId
+}
+
+/**
+ * 更换本端设备 id（全量恢复快照后调用）：快照剥离 entity_changes，本地 seq 空间
+ * 从 0 重启，而各端对旧 device_id 的高水位已越过这些小 seq——继续用旧 id 发布会被
+ * 整段跳过（静默丢数据），必须以新 namespace 重新发布。
+ */
+function regenerateDeviceId(): void {
+  cachedDeviceId = crypto.randomUUID()
+  writeFileSync(join(dataDir, DEVICE_ID_FILE), cachedDeviceId, 'utf-8')
 }
 
 function getDeviceName(): string {
@@ -518,11 +611,13 @@ function loadState(): SyncProtocolState {
   try {
     const raw = JSON.parse(readFileSync(statePath(), 'utf-8')) as SyncProtocolState & {
       location?: string
+      /** v1 存量字段（单一全局游标）：无法归因到设备，丢弃后全量重消（LWW 幂等） */
+      consumedSeq?: number
     }
     stateLocation = typeof raw?.location === 'string' ? raw.location : ''
     return {
       publishedSeq: Number.isFinite(raw?.publishedSeq) ? raw.publishedSeq : 0,
-      consumedSeq: Number.isFinite(raw?.consumedSeq) ? raw.consumedSeq : 0,
+      consumed: raw?.consumed && typeof raw.consumed === 'object' ? raw.consumed : {},
       sinceSnapshot: Number.isFinite(raw?.sinceSnapshot) ? raw.sinceSnapshot : 0,
     }
   } catch {
@@ -532,7 +627,7 @@ function loadState(): SyncProtocolState {
 }
 
 function emptyState(): SyncProtocolState {
-  return { publishedSeq: 0, consumedSeq: 0, sinceSnapshot: 0 }
+  return { publishedSeq: 0, consumed: {}, sinceSnapshot: 0 }
 }
 
 function saveState(): void {
@@ -557,6 +652,7 @@ export function _resetProtocolManagerForTests(): void {
   lastRunAt = null
   lastSuccessAt = null
   lastError = null
+  lastRemoteDevices = null
   state = emptyState()
   stateLocation = ''
   _resetProtocolConfigForTests()

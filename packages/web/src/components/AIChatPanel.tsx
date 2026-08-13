@@ -23,7 +23,8 @@ import {
   User,
   Sparkles,
 } from 'lucide-react'
-import { request, fetchWithAuth, ApiError } from '../hooks/useAPI'
+import { request } from '../hooks/useAPI'
+import { streamSSE, type SSEError } from '../lib/streaming'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { isTauriShell } from '../hooks/useShell'
 import { ASK_AI_EVENT, type AskAiDetail } from '../lib/askAi'
@@ -184,10 +185,14 @@ export default function AIChatPanel({
   // 卸载时停止识别
   useEffect(() => () => recognitionRef.current?.abort(), [])
 
+  // 自动跟随到底：仅当滚动容器本就近底部时才滚动（用户上翻阅读历史时不强制拉回）；
+  // 用 auto 而非 smooth —— 流式期间每 token 触发一次，smooth 会反复重启动画造成抖动
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
-    }
+    const container = messagesFadeRef.current
+    const end = messagesEndRef.current
+    if (!container || !end) return
+    const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+    if (distanceToBottom < 80) end.scrollIntoView({ behavior: 'auto' })
   }, [messages, toolStatus])
 
   // 拉取能力；chat 关闭时直接提示
@@ -337,52 +342,29 @@ export default function AIChatPanel({
       return { role: m.role, content: m.content }
     })
 
-    const ac = new AbortController()
-    abortRef.current = ac
+    let assistantText = ''
+    let reasoningText = ''
 
-    try {
-      const res = await fetchWithAuth('/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+    // 流式消费统一走 lib/streaming 的 streamSSE（与 useAiWriting 同一实现）：
+    // error 帧在流内抛错并透传服务端 code 到 onError；用户停止走 onAbort 静默收尾
+    let streamErr: SSEError | null = null
+    let aborted = false
+    await new Promise<void>((resolve) => {
+      abortRef.current = streamSSE(
+        '/ai/chat',
+        {
           messages: outgoing,
           context_doc_id: contextDocId,
           top_k: 5,
-        }),
-        signal: ac.signal,
-      })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: res.statusText }))
-        throw new Error(err.message || `HTTP ${res.status}`)
-      }
-
-      // SSE 解析
-      const reader = res.body!.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let assistantText = ''
-      let reasoningText = ''
-
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        let idx: number
-        while ((idx = buffer.indexOf('\n\n')) !== -1) {
-          const chunk = buffer.slice(0, idx)
-          buffer = buffer.slice(idx + 2)
-
-          let eventName = 'message'
-          let data = ''
-          for (const line of chunk.split('\n')) {
-            if (line.startsWith('event:')) eventName = line.slice(6).trim()
-            else if (line.startsWith('data:')) data += line.slice(5).trim()
-          }
-          if (!data) continue
-
-          try {
-            const payload = JSON.parse(data)
+        },
+        {
+          onEvent: (eventName, data) => {
+            const payload = data as {
+              retrieval?: RetrievalInfo
+              citations?: Citation[]
+              tool?: string
+              content?: string
+            }
             if (eventName === 'retrieval') {
               setRetrieval({
                 fts_hits: payload.retrieval?.fts_hits ?? 0,
@@ -413,43 +395,40 @@ export default function AIChatPanel({
                   timing: payload.retrieval.timing,
                 })
               }
-            } else if (eventName === 'error') {
-              throw new Error(payload.message || t('chat.llmError'))
             }
-          } catch (parseErr) {
-            if (parseErr instanceof Error && parseErr.message !== t('chat.llmError')) {
-              // 单帧解析失败：SSE keep-alive 注释行或 provider 心跳多见，warn 即可
-              console.warn('[chat-sse] drop unparseable frame:', parseErr.message)
-            } else if (parseErr instanceof Error) {
-              throw parseErr
-            }
-          }
-        }
-      }
+          },
+          onError: (err) => {
+            streamErr = err
+            resolve()
+          },
+          onDone: () => resolve(),
+          onAbort: () => {
+            aborted = true
+            resolve()
+          },
+        },
+      )
+    })
 
+    if (aborted) {
+      // 用户停止：保留已生成内容，不显示错误
+    } else if (streamErr) {
+      const err: SSEError = streamErr
+      setMessages((prev) => [...prev, { role: 'assistant', content: t('chat.requestFailed', { msg: err.message }) }])
+      // 未配置：code 是稳定判据（HTTP 错误体与流内 error 帧均由 streamSSE 透传）
+      if (err.code === 'not_configured') {
+        setConfigMissing(true)
+      }
+    } else if (assistantText || reasoningText) {
       // 确保最后一条 assistant 始终存在
-      if (assistantText || reasoningText) {
-        upsertAssistant({
-          content: assistantText,
-          reasoning: reasoningText || undefined,
-        })
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      if ((err as { name?: string })?.name === 'AbortError') {
-        // 用户停止：保留已生成内容
-      } else {
-        setMessages((prev) => [...prev, { role: 'assistant', content: t('chat.requestFailed', { msg }) }])
-        // 未配置：err.code 是稳定判据（不再依赖中文/英文 message 子串）
-        if (err instanceof ApiError && err.code === 'not_configured') {
-          setConfigMissing(true)
-        }
-      }
-    } finally {
-      setLoading(false)
-      setToolStatus(null)
-      abortRef.current = null
+      upsertAssistant({
+        content: assistantText,
+        reasoning: reasoningText || undefined,
+      })
     }
+    setLoading(false)
+    setToolStatus(null)
+    abortRef.current = null
   }
 
   const handleStop = () => {
