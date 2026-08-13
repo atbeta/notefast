@@ -37,20 +37,35 @@ def sd_segment(px, py, ax, ay, bx, by):
     return math.hypot(pax - bax * h, pay - bay * h)
 
 
-def render_icon(size):
-    """按 size 渲染 RGBA 像素（超采样平均，straight alpha）。"""
+def render_icon(size, bold=False):
+    """按 size 渲染 RGBA 像素（超采样平均，straight alpha）。
+
+    bold=True 用于任务栏等小尺寸帧（<=64px）：favicon 线宽 2.5/32 落到
+    16px 只剩约 1px 且被超采样平均成淡蓝（视觉糊），加粗版把线宽提到
+    3.5 并延长右端，保证小帧里白条是实心纯白、占图更饱满；大尺寸帧
+    仍用原几何，与 favicon 逐像素一致。
+    """
     W = size * SS
     R = W * 0.25          # rx=8/32 → 25%
     cx = cy = W / 2.0
     hw = hh = W / 2.0
     # 三线（favicon 32 坐标系 → W）
     def lx(v): return v / 32.0 * W
-    bars = [
-        (lx(8), lx(24), lx(10)),   # x0, x1, yc
-        (lx(8), lx(20), lx(16)),
-        (lx(8), lx(18), lx(22)),
-    ]
-    half = lx(2.5) / 2.0
+    if bold:
+        bars = [
+            (lx(8), lx(26), lx(10)),   # x0, x1, yc
+            (lx(8), lx(22), lx(16)),
+            (lx(8), lx(20), lx(22)),
+        ]
+        line_w = 3.5
+    else:
+        bars = [
+            (lx(8), lx(24), lx(10)),   # x0, x1, yc
+            (lx(8), lx(20), lx(16)),
+            (lx(8), lx(18), lx(22)),
+        ]
+        line_w = 2.5
+    half = lx(line_w) / 2.0
 
     out = bytearray(size * size * 4)
     for y in range(size):
@@ -161,7 +176,8 @@ def main():
         print(f'{name}: {size}x{size} ({len(png)}B)')
 
     # 3) icon.ico（16/24/32/48/64/256 帧）
-    ico_frames = [(s, s, encode_png(s, s, render_icon(s))) for s in (16, 24, 32, 48, 64, 256)]
+    #    任务栏/资源管理器常用 <=64px 帧 → 加粗版保证小尺寸清晰；256 大帧保持与 favicon 一致
+    ico_frames = [(s, s, encode_png(s, s, render_icon(s, bold=s <= 64))) for s in (16, 24, 32, 48, 64, 256)]
     ico = encode_ico(ico_frames)
     with open(os.path.join(root, 'icon.ico'), 'wb') as f:
         f.write(ico)
