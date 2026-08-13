@@ -5,7 +5,7 @@
  * - 过滤约定只保留一份：列表/树读取默认排除软删除（is_deleted = 0），
  *   需要含已删除行的调用方必须显式选择（getBlockById / includeDeleted）。
  * - 写入约定只保留一份：任何 UPDATE 都带 updated_at = 当前时间（毫秒精度）；
- *   content 变更自动同步 content_hash；软删除统一 is_deleted + delete_id tombstone。
+ *   软删除统一 is_deleted + delete_id tombstone（content_hash 已停用，见 016）。
  * - 函数级模块而非 interface：只有一个后端（SQLite）时不冻结接口形状，
  *   未来换远程存储时再以这里为边界提取 interface。
  *
@@ -306,11 +306,15 @@ export interface NewBlockRow {
   now: string
 }
 
-/** 统一 INSERT：列清单只此一份；content_hash 由 content 推导，不允许调用方传错 */
+/**
+ * 统一 INSERT：列清单只此一份。
+ * content_hash 已停用（016）：历史上只写不读（向量/修订 hash 存各自表），
+ * 同步 consume 也从没写过它；列保留供未来零迁移复用，写入路径不再维护。
+ */
 export function insertBlock(db: Db, row: NewBlockRow): void {
   db.query(
-    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, content_hash, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, properties, tags, status, ai_exclude, sort, level, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     row.id,
     row.notebook_id,
@@ -318,7 +322,6 @@ export function insertBlock(db: Db, row: NewBlockRow): void {
     row.root_id,
     row.type,
     row.content,
-    computeContentHash(row.content),
     row.properties ?? '{}',
     row.tags ?? '[]',
     row.status ?? 'note',
@@ -330,7 +333,7 @@ export function insertBlock(db: Db, row: NewBlockRow): void {
   )
 }
 
-/** 可更新字段（properties/tags 为 JSON 文本）。content 变更自动同步 content_hash */
+/** 可更新字段（properties/tags 为 JSON 文本） */
 export interface BlockPatch {
   content?: string
   properties?: string
@@ -382,7 +385,8 @@ function recordRevision(db: Db, id: string, oldContent: string, actor: string): 
 }
 
 /** 统一 UPDATE：自动带 updated_at（毫秒精度当前时间）；空 patch 不执行 SQL。
- * content 变更时自动同步 content_hash，并把旧内容写入 block_revisions（历史/回退）。 */
+ * content 变更时把旧内容写入 block_revisions（历史/回退）；content_hash 列
+ * 已停用（016）不再同步。 */
 export function updateBlock(db: Db, id: string, patch: BlockPatch): void {
   const updates: string[] = []
   const params: (string | number)[] = []
@@ -395,8 +399,8 @@ export function updateBlock(db: Db, id: string, patch: BlockPatch): void {
     if (!patch.noRevision && current && current.content !== patch.content) {
       recordRevision(db, id, current.content, actor)
     }
-    updates.push('content = ?', 'content_hash = ?')
-    params.push(patch.content, computeContentHash(patch.content))
+    updates.push('content = ?')
+    params.push(patch.content)
   }
   if (patch.properties !== undefined) {
     updates.push('properties = ?')

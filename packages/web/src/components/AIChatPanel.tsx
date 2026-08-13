@@ -24,6 +24,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { request } from '../hooks/useAPI'
+import { useAiCapabilities, refreshAiCapabilities } from '../hooks/useAiCapabilities'
 import { streamSSE, type SSEError } from '../lib/streaming'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { isTauriShell } from '../hooks/useShell'
@@ -131,11 +132,11 @@ export default function AIChatPanel({
   const [toolStatus, setToolStatus] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [capabilities, setCapabilities] = useState<{ chat: boolean; reranker: boolean; embedding: boolean; vision?: boolean } | null>(null)
   const [configMissing, setConfigMissing] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [skills, setSkills] = useState<AiSkill[]>([])
+  const capabilities = useAiCapabilities()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesFadeRef = useScrollFade<HTMLDivElement>()
   const abortRef = useRef<AbortController | null>(null)
@@ -195,24 +196,15 @@ export default function AIChatPanel({
     if (distanceToBottom < 80) end.scrollIntoView({ behavior: 'auto' })
   }, [messages, toolStatus])
 
-  // 拉取能力；chat 关闭时直接提示
+  // 拉取能力：订阅单例（useAiCapabilities），打开面板时强制重探测一次
+  // （设置页改配置后重新打开能拿到新值；探测失败按全 false = 未配置处理）
   useEffect(() => {
     if (!isOpen) return
-    let cancelled = false
-    request<{ chat: boolean; reranker: boolean; embedding: boolean; vision?: boolean }>('/ai/capabilities')
-      .then((cap) => {
-        if (cancelled) return
-        setCapabilities(cap)
-        setConfigMissing(!cap.chat)
-      })
-      .catch(() => {
-        if (cancelled) return
-        setConfigMissing(true)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [isOpen])
+    refreshAiCapabilities()
+    if (capabilities.ready && !capabilities.chat) setConfigMissing(true)
+    if (capabilities.ready && capabilities.chat) setConfigMissing(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, capabilities.ready, capabilities.chat])
 
   // 内置技能（整理收集箱 / 归档建议 / 周期回顾）：点击填入输入框，用户可改再发
   useEffect(() => {
@@ -485,24 +477,22 @@ export default function AIChatPanel({
               {contextDocId ? t('chat.contextDoc') : t('chat.contextAll')}
             </span>
           </Tooltip>
-          {capabilities && (
-            <span className="flex items-center gap-1 text-muted-foreground shrink-0">
-              {capabilities.embedding && (
-                <Tooltip label={t('chat.embeddingConfigured')}>
-                  <span>
-                    <Binary className="w-3 h-3" strokeWidth={1.75} aria-label={t('chat.embeddingConfigured')} />
-                  </span>
-                </Tooltip>
-              )}
-              {capabilities.reranker && (
-                <Tooltip label={t('chat.rerankConfigured')}>
-                  <span>
-                    <ArrowUpDown className="w-3 h-3" strokeWidth={1.75} aria-label={t('chat.rerankConfigured')} />
-                  </span>
-                </Tooltip>
-              )}
-            </span>
-          )}
+          <span className="flex items-center gap-1 text-muted-foreground shrink-0">
+            {capabilities.embedding && (
+              <Tooltip label={t('chat.embeddingConfigured')}>
+                <span>
+                  <Binary className="w-3 h-3" strokeWidth={1.75} aria-label={t('chat.embeddingConfigured')} />
+                </span>
+              </Tooltip>
+            )}
+            {capabilities.reranker && (
+              <Tooltip label={t('chat.rerankConfigured')}>
+                <span>
+                  <ArrowUpDown className="w-3 h-3" strokeWidth={1.75} aria-label={t('chat.rerankConfigured')} />
+                </span>
+              </Tooltip>
+            )}
+          </span>
           {messages.length > 0 && (
             <>
               <span className="text-border shrink-0">|</span>

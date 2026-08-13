@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'bun:test'
 import {
   AiRuntime,
+  parseLlmJson,
   type AiRuntimeOptions,
 } from '../ai/runtime'
 import { makeProviderLike } from './helpers'
@@ -535,5 +536,22 @@ describe('stripThinkTags（推理模型 content 内联 <think>）', () => {
     )
     const out = await r.chat([{ role: 'user', content: 'x' }])
     expect(out).toBe('正常回答')
+  })
+})
+
+describe('parseLlmJson（LLM JSON 容错解析共享路径）', () => {
+  test('think 包裹 + 代码围栏 + 纯 JSON 均解析成功', () => {
+    expect(parseLlmJson('<think>……</think>\n```json\n{"a": 1}\n```')).toEqual({ a: 1 })
+    expect(parseLlmJson('```json\n{"a": 1}\n```')).toEqual({ a: 1 })
+    expect(parseLlmJson('{"a": 1}')).toEqual({ a: 1 })
+  })
+
+  test('围栏外夹杂文字时提取首尾 {...} 段', () => {
+    expect(parseLlmJson('好的，结果是：\n{"a": 1}\n请确认。')).toEqual({ a: 1 })
+  })
+
+  test('完全无法解析返回 null', () => {
+    expect(parseLlmJson('这不是 JSON')).toBeNull()
+    expect(parseLlmJson('')).toBeNull()
   })
 })

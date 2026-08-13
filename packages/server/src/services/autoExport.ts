@@ -15,6 +15,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isSyncConfigured, syncPush } from '../sync/manager'
+import { sanitizeFilename } from '../sync/archive'
 import { getDb } from '../db'
 import { listDocRows } from '../store/blocks'
 import { portableDocMarkdown } from './portableMarkdown'
@@ -62,7 +63,7 @@ export function legacyExportMarkdown(dir: string): LegacyExportResult {
   for (const doc of docs) {
     try {
       const markdown = portableDocMarkdown(doc)
-      const slug = sanitizeFilename(doc.content || 'untitled')
+      const slug = sanitizeFilename(doc.content || 'untitled', 120)
       const filename = `${slug}.md`
       writeFileSync(join(dir, filename), markdown, 'utf-8')
       results.push({ id: doc.id, title: doc.content, file: filename })
@@ -71,17 +72,6 @@ export function legacyExportMarkdown(dir: string): LegacyExportResult {
     }
   }
   return { exported: results.length, files: results, dir }
-}
-
-function sanitizeFilename(name: string): string {
-  return name
-    // oxlint-disable-next-line no-control-regex -- 有意匹配控制字符以清洗文件名
-    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/\.+/g, '.')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 120) || 'untitled'
 }
 
 /** 兜底循环：如果 sync adapter 没配，跑原导出逻辑 */

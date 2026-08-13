@@ -21,12 +21,14 @@ export interface AiCapabilities {
   chat: boolean
   embedding: boolean
   reranker: boolean
+  /** 图片理解（chat 已配置且设置开启）：聊天图片输入 / 索引 caption 的显示依据 */
+  vision: boolean
 }
 
 /** 含探测完成标志，便于空态区分「还在探测」与「确认未配置」 */
 export type AiCapabilitiesSnapshot = AiCapabilities & { ready: boolean }
 
-const EMPTY: AiCapabilities = { chat: false, embedding: false, reranker: false }
+const EMPTY: AiCapabilities = { chat: false, embedding: false, reranker: false, vision: false }
 const SERVER_SNAPSHOT: AiCapabilitiesSnapshot = { ...EMPTY, ready: false }
 
 let snapshot: AiCapabilities = EMPTY
@@ -51,6 +53,7 @@ async function fetchCapabilities(): Promise<void> {
       chat: !!cap.chat,
       embedding: !!cap.embedding,
       reranker: !!cap.reranker,
+      vision: !!cap.vision,
     }
   } catch {
     snapshot = EMPTY

@@ -25,6 +25,7 @@ import {
   DEFAULT_AUTO_LINK_EXCLUDE_KINDS,
   DEFAULT_AUTO_LINK_EXCLUDE_SELF_DOC,
   DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE,
+  parseLlmJson,
   type ChatMessage,
 } from '@notefast/core'
 import { getDb } from '../db'
@@ -450,21 +451,8 @@ async function extractMentions(
 }
 
 function safeParseMentions(raw: string, sourceContent: string): Mention[] {
-  const cleaned = raw
-    // 防御：runtime 非流式 chat 已统一剥离 <think>，这里再兜一层（直调/provider 异常时）
-    .replace(/<think>[\s\S]*?(<\/think>|$)/g, '')
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```\s*$/i, '')
-    .trim()
-  let json: unknown = null
-  try {
-    json = JSON.parse(cleaned)
-  } catch {
-    const m = cleaned.match(/\{[\s\S]*\}/)
-    if (m) {
-      try { json = JSON.parse(m[0]) } catch { /* fallthrough */ }
-    }
-  }
+  // 容错解析走 core 的 parseLlmJson（think 剥离 + 围栏剥离 + 首尾 {} 提取）
+  const json = parseLlmJson(raw)
   if (!json || typeof json !== 'object') return []
   const arr = (json as { mentions?: unknown }).mentions
   if (!Array.isArray(arr)) return []
@@ -501,20 +489,7 @@ async function extractMentionsBatch(
 
 /** 解析批量抽取结果：{blocks:[{block_id, mentions}]} → Map<blockId, Mention[]> */
 function safeParseMentionsBatch(raw: string, entries: Array<{ blockId: string; content: string }>): Map<string, Mention[]> {
-  const cleaned = raw
-    .replace(/<think>[\s\S]*?(<\/think>|$)/g, '')
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```\s*$/i, '')
-    .trim()
-  let json: unknown = null
-  try {
-    json = JSON.parse(cleaned)
-  } catch {
-    const m = cleaned.match(/\{[\s\S]*\}/)
-    if (m) {
-      try { json = JSON.parse(m[0]) } catch { /* fallthrough */ }
-    }
-  }
+  const json = parseLlmJson(raw)
   const out = new Map<string, Mention[]>()
   const contentByBlock = new Map(entries.map((e) => [e.blockId, e.content]))
   if (!json || typeof json !== 'object') return out

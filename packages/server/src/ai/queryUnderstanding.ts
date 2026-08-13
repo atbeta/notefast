@@ -12,7 +12,7 @@
  */
 
 import { z } from 'zod'
-import { fullToHalfWidth, type ChatMessage } from '@notefast/core'
+import { fullToHalfWidth, parseLlmJson, type ChatMessage } from '@notefast/core'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import type { LexicalTermGroup } from '../lexicalSearch'
 
@@ -137,22 +137,9 @@ export async function understandQuery(
   }
 }
 
-/** 纯函数：清洗 LLM raw → schema 对象（可单测） */
+/** 纯函数：清洗 LLM raw → schema 对象（可单测）；容错解析走 core 的 parseLlmJson */
 export function parseUnderstandingJson(raw: string): z.infer<typeof understandingSchema> | null {
-  const cleaned = raw
-    .replace(/<think>[\s\S]*?(<\/think>|$)/g, '')
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```\s*$/i, '')
-    .trim()
-  let json: unknown = null
-  try {
-    json = JSON.parse(cleaned)
-  } catch {
-    const m = cleaned.match(/\{[\s\S]*\}/)
-    if (m) {
-      try { json = JSON.parse(m[0]) } catch { /* fallthrough */ }
-    }
-  }
+  const json = parseLlmJson(raw)
   const result = understandingSchema.safeParse(json)
   return result.success ? result.data : null
 }

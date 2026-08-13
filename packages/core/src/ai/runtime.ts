@@ -671,6 +671,28 @@ export function stripThinkTags(s: string): string {
   return s.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim()
 }
 
+/**
+ * LLM JSON 容错解析：stripThinkTags → 剥代码围栏 → JSON.parse，
+ * 失败再尝试提取首尾 `{...}` 段解析一次。均失败返回 null。
+ * autoLink 抽取 / queryUnderstanding / entityDescribe 等共享此路径
+ * （此前各文件手写同一清洗链，逐份漂移）。
+ */
+export function parseLlmJson(raw: string): unknown {
+  const cleaned = stripThinkTags(raw)
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/i, '')
+    .trim()
+  try {
+    return JSON.parse(cleaned)
+  } catch {
+    const m = cleaned.match(/\{[\s\S]*\}/)
+    if (m) {
+      try { return JSON.parse(m[0]) } catch { /* fallthrough */ }
+    }
+    return null
+  }
+}
+
 function createChatProvider(p: ProviderDefinition, fetchImpl: typeof fetch): LLMProvider {
   const url = joinUrl(p.baseUrl, '/chat/completions')
   const headers = buildHeaders(p.apiKey, p.extraHeaders)

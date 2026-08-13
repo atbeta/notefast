@@ -6,6 +6,7 @@
  */
 
 import type { ChatMessage, LLMProvider } from '../llm'
+import { parseLlmJson } from './runtime'
 
 export interface TitleSuggestion {
   title: string
@@ -75,32 +76,12 @@ export async function suggestTitle(
 }
 
 function parseJson(raw: string): TitleSuggestion | null {
-  // 模型有时会把 JSON 包在 ```json ... ``` 里
-  const stripped = raw
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```\s*$/i, '')
-    .trim()
-
-  // 尝试整段解析
-  try {
-    const obj = JSON.parse(stripped)
-    if (typeof obj.title === 'string') {
-      return { title: obj.title.trim(), summary: String(obj.summary || '').trim() }
-    }
-  } catch {
-    /* fall through */
-  }
-
-  // 尝试从文本中抽取第一个 { ... } 子串
-  const match = stripped.match(/\{[\s\S]*\}/)
-  if (match) {
-    try {
-      const obj = JSON.parse(match[0])
-      if (typeof obj.title === 'string') {
-        return { title: obj.title.trim(), summary: String(obj.summary || '').trim() }
-      }
-    } catch {
-      /* ignore */
+  // 容错解析走 parseLlmJson（think 剥离 + 围栏剥离 + 首尾 {} 提取）
+  const obj = parseLlmJson(raw)
+  if (obj && typeof obj === 'object') {
+    const o = obj as { title?: unknown; summary?: unknown }
+    if (typeof o.title === 'string') {
+      return { title: o.title.trim(), summary: String(o.summary || '').trim() }
     }
   }
   return null

@@ -21,7 +21,7 @@ export interface ArchiveManifest {
   media?: string[]
 }
 
-export function sanitizeFilename(name: string): string {
+export function sanitizeFilename(name: string, maxLen = 80): string {
   return name
     // oxlint-disable-next-line no-control-regex -- 有意匹配控制字符以清洗文件名
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
@@ -29,7 +29,7 @@ export function sanitizeFilename(name: string): string {
     .replace(/\.+/g, '.')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
-    .slice(0, 80) || 'untitled'
+    .slice(0, maxLen) || 'untitled'
 }
 
 /** 稳定唯一文件名：标题 slug + docId，避免同名覆盖 */

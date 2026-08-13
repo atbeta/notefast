@@ -444,6 +444,7 @@ ai.get('/capabilities', (c) => {
       embedding: false,
       chat: false,
       reranker: false,
+      vision: false,
       hybrid_search: true,
       external_sources: [],
     })

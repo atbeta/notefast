@@ -94,14 +94,16 @@ export class SyncWaterfallHook<T> {
 
 // ─────────────────────────── 生命周期组 ───────────────────────────
 
-import type { Block, CreateBlockInput, UpdateBlockInput, SearchResult, HeadingNode } from './types'
+import type { Block } from './types'
 
+/**
+ * 块级生命周期（第三方扩展挂点）。before* 面已移除——仓库内无消费者，
+ * 且「before 拦截改写」与块模型的最小写入路径相悖；需要预写校验的扩展
+ * 走 MCP 工具层自行把关。
+ */
 export interface NoteLifecycle {
-  beforeCreate: SyncBailHook<[CreateBlockInput], CreateBlockInput>
   afterCreate: AsyncParallelHook<[Block]>
-  beforeUpdate: SyncBailHook<[blockId: string, input: UpdateBlockInput], UpdateBlockInput>
   afterUpdate: AsyncParallelHook<[Block]>
-  beforeDelete: SyncBailHook<[blockId: string], boolean>
   afterDelete: AsyncParallelHook<[blockId: string]>
 }
 
@@ -135,28 +137,6 @@ export interface DocumentLifecycle {
   afterDelete: AsyncParallelHook<[DocumentEventPayload]>
 }
 
-export interface RenderLifecycle {
-  beforeRenderBlock: SyncWaterfallHook<Block>
-  afterRenderBlock: SyncHook<[Block]>
-  headingTreeBuild: SyncWaterfallHook<HeadingNode[]>
-}
-
-export interface SearchLifecycle {
-  beforeSearch: SyncWaterfallHook<{ query: string; limit: number }>
-  afterSearch: SyncWaterfallHook<SearchResult[]>
-}
-
-export interface UILifecycle {
-  sidebarItems: SyncHook<[Array<{ id: string; label: string; icon?: string; action: () => void }>]>
-  commands: SyncHook<[Array<{ id: string; label: string; shortcut?: string; action: () => void }>]>
-}
-
-export interface IOLifecycle {
-  beforeImport: SyncWaterfallHook<{ markdown: string; title?: string }>
-  afterImport: AsyncParallelHook<[docId: string]>
-  beforeExport: SyncWaterfallHook<Block>
-}
-
 // ─────────────────────────── 插件系统入口 ───────────────────────────
 
 export interface PluginContext {
@@ -168,13 +148,14 @@ export interface Plugin {
   apply(ctx: PluginContext): void | Promise<void>
 }
 
+/**
+ * 插件系统仅保留 note / doc 生命周期（block 与文档粒度的观察钩子）。
+ * render / search / ui / io 四个面从未有消费者——UI 扩展与检索干预的
+ * 真实出口是 MCP / 连接器 / 内部生命周期钩子，不在进程内插件运行时。
+ */
 export interface PluginSystem {
   note: NoteLifecycle
   doc: DocumentLifecycle
-  render: RenderLifecycle
-  search: SearchLifecycle
-  ui: UILifecycle
-  io: IOLifecycle
   register(plugin: Plugin): Promise<void>
 }
 
@@ -183,11 +164,8 @@ export function createPluginSystem(): PluginSystem {
 
   const system: PluginSystem = {
     note: {
-      beforeCreate: new SyncBailHook(),
       afterCreate: new AsyncParallelHook(),
-      beforeUpdate: new SyncBailHook(),
       afterUpdate: new AsyncParallelHook(),
-      beforeDelete: new SyncBailHook(),
       afterDelete: new AsyncParallelHook(),
     },
     doc: {
@@ -197,24 +175,6 @@ export function createPluginSystem(): PluginSystem {
       afterShare: new AsyncParallelHook(),
       afterShareRevoked: new AsyncParallelHook(),
       afterDelete: new AsyncParallelHook(),
-    },
-    render: {
-      beforeRenderBlock: new SyncWaterfallHook(),
-      afterRenderBlock: new SyncHook(),
-      headingTreeBuild: new SyncWaterfallHook<HeadingNode[]>(),
-    },
-    search: {
-      beforeSearch: new SyncWaterfallHook(),
-      afterSearch: new SyncWaterfallHook<SearchResult[]>(),
-    },
-    ui: {
-      sidebarItems: new SyncHook(),
-      commands: new SyncHook(),
-    },
-    io: {
-      beforeImport: new SyncWaterfallHook(),
-      afterImport: new AsyncParallelHook(),
-      beforeExport: new SyncWaterfallHook<Block>(),
     },
 
     async register(plugin: Plugin): Promise<void> {

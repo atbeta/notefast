@@ -14,6 +14,7 @@ import * as m012 from './012_fts_update_of_content'
 import * as m013 from './013_block_refs_unique_pair'
 import * as m014 from './014_sync_consume_guard'
 import * as m015 from './015_doc_created_index'
+import * as m016 from './016_content_hash_deprecated'
 
 interface Migration {
   id: string
@@ -23,7 +24,7 @@ interface Migration {
 }
 
 /** 唯一基线迁移。历史 002-010 已合并到此。 */
-const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012, m013, m014, m015]
+const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012, m013, m014, m015, m016]
 
 export function runMigrations(db: Database): { applied: string[]; skipped: string[] } {
   db.exec(`
