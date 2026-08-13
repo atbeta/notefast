@@ -65,3 +65,40 @@ export function pruneChanges(db: Db, upToSeq: number): number {
   if (upToSeq <= 0) return 0
   return db.query('DELETE FROM entity_changes WHERE seq <= ?').run(upToSeq).changes
 }
+
+/**
+ * 变更馈送抑制临界区（同步 consume / v1 迁移 / 维护 purge 共用）：
+ * 单事务内插入 sync_consume_guard 行，blocks 表三个 trigger 的 WHEN 子句据此
+ * 静默（见 migrations/014）；fn 结束（无论成败）删除 guard 行。
+ * 临界区内必须无 await——单线程下本地正常写入不可能落入该窗口被误挡。
+ */
+export function runFeedSuppressed<T>(db: Db, fn: () => T): T {
+  return db.transaction(() => {
+    db.query('INSERT OR REPLACE INTO sync_consume_guard (id) VALUES (1)').run()
+    try {
+      return fn()
+    } finally {
+      db.query('DELETE FROM sync_consume_guard').run()
+    }
+  })()
+}
+
+/**
+ * 时间裁剪历史变更行（维护任务专用：未配置同步时抑制 entity_changes 单调膨胀）。
+ * 返回删除行数。
+ *
+ * 安全规则（publishedSeq 由调用方从同步状态读取）：
+ * - publishedSeq > 0（曾向远端发布过）：只裁 seq <= publishedSeq 的行——已发布
+ *   的行远端各设备已消费/可由快照兜底；未发布的行绝不动（重启用同步时必须还能发布）。
+ * - publishedSeq === 0（从未向该远端发布过）：无任何远端依赖此馈送，可全量时间裁剪。
+ *   调用方必须通过 noteFeedPruned() 标记——下次启用同步且远端为空时，
+ *   syncNow 会立即生成快照让新端走全量，而不是从残缺增量补齐（否则静默漏块）。
+ */
+export function pruneStaleChanges(db: Db, cutoffIso: string, publishedSeq: number): number {
+  if (publishedSeq > 0) {
+    return db.query(
+      'DELETE FROM entity_changes WHERE changed_at < ? AND seq <= ?',
+    ).run(cutoffIso, publishedSeq).changes
+  }
+  return db.query('DELETE FROM entity_changes WHERE changed_at < ?').run(cutoffIso).changes
+}

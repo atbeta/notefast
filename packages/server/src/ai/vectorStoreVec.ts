@@ -286,7 +286,11 @@ export class SqliteVecVectorStore implements VectorStore {
     const db = getDb()
     const target = generationRow(generation)
     if (!target) throw new Error(`向量 generation 不存在: ${generation}`)
+    let retired: string[] = []
     db.transaction(() => {
+      retired = (db.query(
+        "SELECT id FROM vector_generations WHERE status = 'active'",
+      ).all() as Array<{ id: string }>).map((r) => r.id)
       db.query("UPDATE vector_generations SET status = 'retired' WHERE status = 'active'").run()
       db.query(
         "UPDATE vector_generations SET status = 'active', updated_at = datetime('now') WHERE id = ?",
@@ -305,6 +309,9 @@ export class SqliteVecVectorStore implements VectorStore {
         target.indexed_count,
       )
     })()
+    // 旧 generation 的虚拟表/触发器/向量条目彻底清掉（此前只标 retired，
+    // 表随备份恢复传播、占据磁盘）；事务外 DROP（虚拟表 DDL 不进主事务）
+    for (const id of retired) dropGeneration(id)
   }
 
   async status(): Promise<VectorStoreStatus> {
@@ -333,4 +340,53 @@ export class SqliteVecVectorStore implements VectorStore {
       error: row.error,
     }
   }
+}
+
+/**
+ * 彻底删除一个（retired / failed / 废弃 staging）向量 generation：
+ * DROP 虚拟表 + 块删除触发器 + vector_entries + generations 行。
+ * 调用前提：generation 不再被 active_generation / staging_generation 引用
+ * （activateGeneration 切换后调旧 active；rebuild 失败路径调自己的 staging；
+ * 维护任务只扫 retired/failed）。
+ *
+ * vec0 未加载时 DROP 虚拟表会因找不到 module 失败——先尝试加载；仍失败则保留
+ * 表与 generation 行（下次维护重试），不产生无主残留。
+ */
+export function dropGeneration(generation: string): boolean {
+  const db = getDb()
+  const row = generationRow(generation)
+  if (!row) return true
+  try {
+    db.query('SELECT vec_version()').get()
+  } catch {
+    try {
+      loadSqliteVec(db)
+    } catch {
+      return false
+    }
+  }
+  db.exec(`DROP TRIGGER IF EXISTS ${row.table_name}_block_delete`)
+  try {
+    db.exec(`DROP TABLE ${row.table_name}`)
+  } catch (e) {
+    console.warn('[vec] drop generation 表失败:', e instanceof Error ? e.message : e)
+    return false
+  }
+  db.query('DELETE FROM vector_entries WHERE generation = ?').run(generation)
+  db.query('DELETE FROM vector_generations WHERE id = ?').run(generation)
+  return true
+}
+
+/** 维护任务入口：清掉全部 retired / failed generation（重建中断残留的 staging 由
+ *  rebuild 失败路径自行清理；此处不碰 staging，防误删进行中的重建） */
+export function dropStaleVectorGenerations(): number {
+  const db = getDb()
+  const rows = db.query(
+    "SELECT id FROM vector_generations WHERE status IN ('retired', 'failed')",
+  ).all() as Array<{ id: string }>
+  let dropped = 0
+  for (const r of rows) {
+    if (dropGeneration(r.id)) dropped++
+  }
+  return dropped
 }

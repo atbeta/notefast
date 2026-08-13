@@ -61,6 +61,9 @@ export interface SyncProtocolState {
   consumed: Record<string, number>
   /** 自上次快照以来累计的同步轮数（触发 compaction） */
   sinceSnapshot: number
+  /** 本地 change feed 曾被时间裁剪过（未配置同步期间的维护任务）：下次启用同步
+   *  且远端为空时，首轮必须立即生成快照让新端走全量，防「从残缺增量补齐」漏块 */
+  feedPruned: boolean
 }
 
 export interface SyncProtocolStatus {
@@ -91,7 +94,7 @@ let lastSuccessAt: string | null = null
 let lastError: string | null = null
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 let heartbeatBusy = false
-let state: SyncProtocolState = { publishedSeq: 0, consumed: {}, sinceSnapshot: 0 }
+let state: SyncProtocolState = { publishedSeq: 0, consumed: {}, sinceSnapshot: 0, feedPruned: false }
 /** 最近一次同步读到的远端 manifest.devices（状态面板 per-device 展示用） */
 let lastRemoteDevices: Record<string, number> | null = null
 /** 当前 seq 锚点所属的 S3 位置指纹（bucket/endpoint/region/prefix）；位置变化时重置游标 */
@@ -222,9 +225,19 @@ export async function syncNow(): Promise<{ published: number; snapshotCreated: b
     const prefix = syncPrefix(c.prefix)
     const workRoot = ensureWorkRoot()
 
-    // 0) 布局检测：v1 先迁移（合并旧内容 + 重建 v2 快照/manifest），再正常发布
-    if ((await detectLayout(store, prefix)) === 'v1') {
+    // 0) 布局检测：v1 先迁移（合并旧内容 + 重建 v2 快照/manifest），再正常发布。
+    //    远端为空且本端 feed 曾被时间裁剪（从未发布）：立即生成快照并推进
+    //    publishedSeq 到锚点——否则新端从残缺增量补齐会静默漏掉被裁掉的行
+    let forceSnapshot: { anchor: number; anchors: Record<string, number> } | null = null
+    const layout = await detectLayout(store, prefix)
+    if (layout === 'v1') {
       await migrateToV2(db, store, prefix, workRoot)
+    } else if (layout === 'empty' && state.feedPruned && state.publishedSeq === 0) {
+      forceSnapshot = await compactChanges(db, store, prefix, workRoot, getDeviceId(), state.consumed)
+      state.publishedSeq = forceSnapshot.anchor
+      state.sinceSnapshot = 0
+      state.feedPruned = false
+      console.warn('[sync] 本地变更日志曾被时间裁剪：首次启用已立即生成全量快照（新端走全量同步）')
     }
 
     // 1) 发布本地增量（本端 namespace：changes/<device_id>/；每条变更带 device_id）
@@ -248,15 +261,19 @@ export async function syncNow(): Promise<{ published: number; snapshotCreated: b
       console.warn('[sync] 设备注册上报失败:', e instanceof Error ? e.message : e)
     }
 
-    // 4) compaction 触发：累计轮数达阈值 → 新快照 + 清理本端 namespace 旧增量
+    // 4) compaction 触发：累计轮数达阈值（或首轮强制快照）→ 新快照 + 清理本端 namespace 旧增量
     let snapshotCreated = false
-    let snapAnchors: Record<string, number> | undefined
-    state.sinceSnapshot += 1
-    if (state.sinceSnapshot >= SNAPSHOT_EVERY_N) {
-      const r = await compactChanges(db, store, prefix, workRoot, getDeviceId(), state.consumed)
-      snapAnchors = r.anchors
-      state.sinceSnapshot = 0
+    let snapAnchors: Record<string, number> | undefined = forceSnapshot?.anchors
+    if (forceSnapshot) {
       snapshotCreated = true
+    } else {
+      state.sinceSnapshot += 1
+      if (state.sinceSnapshot >= SNAPSHOT_EVERY_N) {
+        const r = await compactChanges(db, store, prefix, workRoot, getDeviceId(), state.consumed)
+        snapAnchors = r.anchors
+        state.sinceSnapshot = 0
+        snapshotCreated = true
+      }
     }
 
     // 5) 更新 manifest（维护自己的 devices 条目；compaction 后同步快照锚点副本）
@@ -463,6 +480,17 @@ function stopDebounceTimer(): void {
   }
 }
 
+/**
+ * 标记本地 change feed 已被时间裁剪（维护任务在未配置同步期间的清理）。
+ * syncNow 首轮据此在「远端为空且从未发布」时立即生成快照——远端新设备
+ * 走全量同步而非残缺增量（时间裁剪丢掉的早期行会让增量消费漏块）。
+ */
+export function noteFeedPruned(): void {
+  if (state.feedPruned) return
+  state.feedPruned = true
+  saveState()
+}
+
 // ───────────────────── 内部 ─────────────────────
 
 /** S3 连接指纹：连接 id + bucket/endpoint/region/凭据/前缀任一变化 → 指纹变 → 重建 store */
@@ -619,6 +647,7 @@ function loadState(): SyncProtocolState {
       publishedSeq: Number.isFinite(raw?.publishedSeq) ? raw.publishedSeq : 0,
       consumed: raw?.consumed && typeof raw.consumed === 'object' ? raw.consumed : {},
       sinceSnapshot: Number.isFinite(raw?.sinceSnapshot) ? raw.sinceSnapshot : 0,
+      feedPruned: raw?.feedPruned === true,
     }
   } catch {
     stateLocation = ''
@@ -627,7 +656,7 @@ function loadState(): SyncProtocolState {
 }
 
 function emptyState(): SyncProtocolState {
-  return { publishedSeq: 0, consumed: {}, sinceSnapshot: 0 }
+  return { publishedSeq: 0, consumed: {}, sinceSnapshot: 0, feedPruned: false }
 }
 
 function saveState(): void {

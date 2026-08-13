@@ -13,7 +13,7 @@ import {
   type VectorStore,
   type VectorStoreStatus,
 } from './vectorStore'
-import { SqliteVecVectorStore } from './vectorStoreVec'
+import { SqliteVecVectorStore, dropGeneration } from './vectorStoreVec'
 import {
   beginRebuildProgress,
   bumpRebuildProgress,
@@ -184,6 +184,9 @@ export async function runVectorRebuild(
        WHERE id = 'default'`,
     ).run(message)
     setVectorStore(previousStore)
+    // 失败 staging 的虚拟表/触发器/向量条目彻底清掉（只标 failed 会随备份恢复
+    // 传播且占磁盘；dropGeneration 失败（vec0 未加载）时保留行供维护任务重试）
+    if (generationExists) dropGeneration(generation)
     throw error
   } finally {
     endRebuildProgress()

@@ -29,6 +29,7 @@ import { handleMcpRequest } from './mcp/server'
 import { registerMcpTools } from './mcp/tools'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { startAutoExport } from './services/autoExport'
+import { startMaintenance } from './services/maintenance'
 import { initAiRuntime } from './services/aiRuntime'
 import { initSyncManager } from './sync/manager'
 import { initProtocolManager } from './sync/protocolManager'
@@ -295,6 +296,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     initAiRuntime(pluginSystem, dataDir)
     initTermDict(dataDir)
     startEntityDescribe()
+    startMaintenance()
 
     // MCP 工具注册表预填充：真实 SDK 注册在首次 MCP 会话时（createSession 懒加载），
     // 但设置页 /api/v1/mcp/tools 需要启动即有数据；重复注册幂等（reset + 重推）

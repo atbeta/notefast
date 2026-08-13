@@ -37,7 +37,7 @@ import {
   type SyncSnapshotMeta,
 } from '@notefast/core'
 import type { getDb } from '../db'
-import { listChanges, getChangesAnchor, pruneChanges } from '../store/changeFeed'
+import { listChanges, getChangesAnchor, pruneChanges, runFeedSuppressed } from '../store/changeFeed'
 import { nowTimestamp } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
@@ -434,19 +434,13 @@ function applyChangeLine(
 
 /**
  * consume 临界区：guard 行 + 单事务应用（一段一次 auto-commit 会 fsync 数百次，
- * 单事务同时解决性能与回波抑制窗口问题）。事务内插入 sync_consume_guard 行，
- * blocks 表 trigger 的 WHEN 子句据此静默；单线程下本地写入不可能落入该同步
- * 临界区被误挡（protocolManager 另有 running 互斥防并发同步轮次）。
+ * 单事务同时解决性能与回波抑制窗口问题）。实现见 store/changeFeed 的
+ * runFeedSuppressed——事务内插入 sync_consume_guard 行，blocks 表 trigger 的
+ * WHEN 子句据此静默；单线程下本地写入不可能落入该同步临界区被误挡
+ * （protocolManager 另有 running 互斥防并发同步轮次）。
  */
 function runInConsumeGuard<T>(db: Db, fn: () => T): T {
-  return db.transaction(() => {
-    db.query('INSERT OR REPLACE INTO sync_consume_guard (id) VALUES (1)').run()
-    try {
-      return fn()
-    } finally {
-      db.query('DELETE FROM sync_consume_guard').run()
-    }
-  })()
+  return runFeedSuppressed(db, fn)
 }
 
 interface FetchedSegment {

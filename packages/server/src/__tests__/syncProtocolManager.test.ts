@@ -369,4 +369,31 @@ describe('sync protocol manager', () => {
     await applyProtocolManagerConfig({ enabled: true, locationId: locB2, prefix: 'test' })
     expect(protocolStatus().state.publishedSeq).toBe(anchor)
   })
+
+  test('feed 曾被时间裁剪且远端为空：首轮立即生成快照（新端走全量不残缺补齐）', async () => {
+    initProtocolManager(testDir)
+    await configureProtocol()
+    const { client, objects } = makeMockS3()
+    _setProtocolStoreForTests(createS3ObjectStore(S3_CFG, client))
+    // 模拟维护任务在「未配置同步期间」裁剪过 change feed：publishedSeq=0 + feedPruned
+    _setProtocolStateForTests({ publishedSeq: 0, consumed: {}, feedPruned: true })
+
+    insertDoc(crypto.randomUUID(), '裁剪后的文档')
+    const result = await syncNow()
+
+    // 首轮即 compaction：快照 + 元数据存在，manifest.snapshot 有本端锚点
+    expect(result.snapshotCreated).toBe(true)
+    expect([...objects.keys()].some((k) => k.endsWith('snapshot.db'))).toBe(true)
+    const manifestKey = [...objects.keys()].find((k) => k.endsWith('manifest.json'))
+    expect(manifestKey).toBeTruthy()
+    const manifest = JSON.parse(objects.get(manifestKey!)!)
+    expect(Object.keys(manifest.snapshot)).toContain(getDeviceId())
+    // feedPruned 复位（快照已兜底，不再强制）
+    expect(protocolStatus().state.feedPruned).toBe(false)
+    // 后续轮次回归正常：不再每轮 compact
+    insertDoc(crypto.randomUUID(), '第二篇')
+    const r2 = await syncNow()
+    expect(r2.snapshotCreated).toBe(false)
+    expect(r2.published).toBeGreaterThan(0)
+  })
 })
