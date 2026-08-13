@@ -504,9 +504,9 @@ export function readLocalImageCandidate(mdPath: string): (relPath: string) => Bu
 }
 
 /**
- * web 上传场景（multipart）的 readCandidate：从「相对路径 → 文件字节」映射构建。
- * 前端 File 带 webkitRelativePath（拖文件夹）或 name（多选），统一做 key。
- * 匹配时先精确相对路径，再退回到 basename（`images/foo.png` 与 `foo.png` 同源）。
+ * web 上传场景（multipart /import/markdown-files）的 readCandidate：
+ * 从「相对路径 → 文件字节」映射构建。Web 导入 tab 已不再走多选/拖文件夹；
+ * 此函数仍服务该 API 与测试。匹配时先精确相对路径，再退回 basename。
  */
 export function readUploadedImageCandidate(files: Array<{ path: string; data: Buffer }>): (relPath: string) => Buffer | null {
   const byPath = new Map<string, Buffer>()

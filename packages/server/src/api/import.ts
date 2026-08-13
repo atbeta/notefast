@@ -8,7 +8,7 @@ import { findDocIdBySource, getBlockById, getBlocksByIds, updateBlock } from '..
 import { fireAfterCreate, fireAfterCreateMany, fireDocAfterCreate } from '../services/hooks'
 import { emitAppEvent } from '../events'
 import { scheduleSyncNow } from '../sync/protocolManager'
-import { extractAssetRefs, findMissingAssets, ingestLocalImageRefs, readLocalImageCandidate, readUploadedImageCandidate, saveAsset } from '../assets/store'
+import { extractAssetRefs, findMissingAssets, ingestLocalImageRefs, readLocalImageCandidate, readUploadedImageCandidate } from '../assets/store'
 import { EmptyMarkdownError, insertDocFromMarkdown, normalizeDocTags, type DocSourceRef, type InsertDocFromMarkdownResult } from '../services/docImport'
 import {
   createDocFromMarkdownFile,
@@ -18,6 +18,7 @@ import {
 } from '../services/docFileImport'
 import { MAX_MARKDOWN_IMPORT_BYTES } from '../services/markdownStage'
 import { MAX_ARCHIVE_IMPORT_BYTES, importArchiveZip } from '../services/zipImport'
+import { saveImportedImage } from '../services/importedImage'
 import { scheduleDocIndex } from '../ai/indexJobs'
 
 const importRouter = new Hono()
@@ -126,9 +127,9 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
 })
 
 /**
- * Web 端「从 Markdown 文件导入」（multipart）：markdown 文本 + 可选图片文件列表。
- * 图片按相对路径（webkitRelativePath / name）收编为 asset:<sha>，引用重写。
- * 解决浏览器 FileReader 只读文本、同目录图片无法上传的缺口。
+ * multipart：markdown 文本 + 可选图片文件列表，按相对路径收编为 asset:<sha>。
+ * Web 导入 tab 已改为单文件；含本地图请打 zip 走 /import/zip。
+ * 本端点保留给 API / 旧客户端（契约只加不改）。
  */
 importRouter.post('/markdown-files', async (c) => {
   const body = await c.req.parseBody({ all: true })
@@ -394,12 +395,8 @@ importRouter.post('/docx', async (c) => {
   const assetSrcs = new Map<string, string>()
   const converter = mammoth.images.imgElement(async (image: { contentType: string; readAsBuffer: () => Promise<Buffer> }) => {
     const data = await image.readAsBuffer()
-    const contentType = image.contentType || 'image/png'
-    if (data.length === 0) {
-      return { src: '' }
-    }
-    const { meta } = saveAsset(data, contentType)
-    const src = `asset:${meta.id}`
+    const src = saveImportedImage(data, image.contentType || '')
+    if (!src) return { src: '' }
     assetSrcs.set(src, src)
     return { src }
   })
@@ -416,7 +413,8 @@ importRouter.post('/docx', async (c) => {
     )
     markdown = result.value
   } catch (e) {
-    return c.json({ error: 'bad_request', message: `docx 解析失败：${e instanceof Error ? e.message : String(e)}` }, 400)
+    console.warn('[import/docx] 解析失败:', e instanceof Error ? e.message : e)
+    return c.json({ error: 'bad_request', message: 'docx 解析失败' }, 400)
   }
 
   const content = normalizeMarkdownFileContent(markdown)

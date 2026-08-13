@@ -194,5 +194,7 @@ describe('POST /import/docx', () => {
       body: form,
     }))
     expect(res.status).toBe(400)
+    const body = await res.json() as { message?: string }
+    expect(body.message).toBe('docx 解析失败')
   })
 })

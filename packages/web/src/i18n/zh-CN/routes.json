@@ -28,7 +28,7 @@
     "welcomeSkip": "先看看",
     "emptyAllTitle": "这里还没有文档",
     "emptyFilteredTitle": "「{{title}}」暂无文档",
-    "emptyAllDesc": "点一下下方按钮，新建你的第一篇 Markdown 文档。也可以把现有 .md 文件拖进编辑器直接导入。",
+    "emptyAllDesc": "点一下下方按钮，新建你的第一篇 Markdown 文档。已有文件请到「导入」页拖入单个 .md / .txt / .zip / .docx；含本地图片请打成 zip。",
     "emptyFilteredDesc": "试试切换其他智能视图，或新建一篇文档。"
   },
   "inbox": {
@@ -88,9 +88,11 @@
     "createFailed": "创建失败",
     "creating": "创建中…",
     "createAndOpen": "创建并打开",
-    "dropHint": "拖入或点击选择 .md / .txt / .zip / .docx 文件",
-    "dropHintSub": "支持多选。.md 引用本地图片时，请将图片一并选中或拖入整个文件夹，或将图片与文档一起打包为 .zip 导入",
-    "missingLocalImages": "文档引用了 {{n}} 张本地图片（{{names}}…）但未选择图片文件。请将图片与 .md 一起选中、拖入整个文件夹，或将图片与文档一起打包为 .zip 后再导入。",
+    "dropHint": "拖入或点击选择单个 .md / .txt / .zip / .docx 文件",
+    "dropHintSub": "每次一个文件。文档含本地图片时，请将图片与文档打成 .zip 再导入",
+    "missingLocalImages": "文档引用了 {{n}} 张本地图片（{{names}}）。请将图片与文档打成 .zip 后再从导入页上传。",
+    "importMultipleFiles": "一次只能导入一个文件。若文档含图片，请打成 zip 后再导入。",
+    "importUnsupportedFile": "不支持该文件类型。请选择 .md / .txt / .zip / .docx；图片请随文档打成 zip。",
     "zipImporting": "正在导入 zip…",
     "docxImporting": "正在导入 Word 文档…",
     "zipImported": "已导入 {{n}} 篇文档",

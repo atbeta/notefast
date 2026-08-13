@@ -10,29 +10,7 @@ import SubNavTabs from '../components/SubNavTabs'
 import TagPickerPopover from '../components/TagPickerPopover'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
 import { Tooltip, useToast } from '../components/ui'
-
-/** 提取 md 中「相对路径」的本地图片引用（排除 asset:/http(s):/data:/绝对路径）。
- * 提交时若检测到这些引用但未选图片文件，提示用户补选/打包 zip，避免导入后图片空白。 */
-function findLocalImageRefs(markdown: string): string[] {
-  const refs = new Set<string>()
-  const re = /!\[([^\]]*)\]\(([^)\s]+)\)/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(markdown)) !== null) {
-    const src = m[2]!
-    if (
-      src.startsWith('asset:') ||
-      src.startsWith('http:') ||
-      src.startsWith('https:') ||
-      src.startsWith('data:') ||
-      src.startsWith('/')
-    ) {
-      continue
-    }
-    const clean = src.split(/[?#]/)[0]!.trim()
-    if (clean) refs.add(clean)
-  }
-  return [...refs]
-}
+import { classifyImportDrop, missingLocalImagesForImport } from '../lib/importDrop'
 
 export default function NewDocPage() {
   const { t } = useTranslation()
@@ -42,8 +20,8 @@ export default function NewDocPage() {
   const [notebookId, setNotebookId] = useState('')
   const [title, setTitle] = useState('')
   const [markdown, setMarkdown] = useState('')
-  /** 随 md 导入的图片文件（webkitRelativePath 或 name 保留相对路径，收编用） */
-  const [imageFiles, setImageFiles] = useState<File[]>([])
+  /** 当前 markdown 是否来自导入文件（手写新建不跑相对路径图拦截） */
+  const [importedFromFile, setImportedFromFile] = useState(false)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'create' | 'import'>('create')
@@ -77,11 +55,10 @@ export default function NewDocPage() {
     setCreating(true)
     setError('')
 
-    // 提交前拦截：md 引用了相对路径本地图片、但没带任何图片文件时，
-    // 直接提交会得到「图片空白」（浏览器拿不到 md 同目录的文件）。
-    // 提示用户补选图片 / 拖整个文件夹 / 打包 zip，而不是静默导入。
-    const missingImgs = findLocalImageRefs(markdown)
-    if (imageFiles.length === 0 && missingImgs.length > 0) {
+    // 仅从文件载入的 md 拦截相对路径图：浏览器拿不到同目录文件，散图也不再随拖接收编。
+    // 手写新建不跑，避免示例语法 / 占位图挡住创建。
+    const missingImgs = missingLocalImagesForImport(markdown, importedFromFile)
+    if (missingImgs.length > 0) {
       setError(t('newDoc.missingLocalImages', { n: missingImgs.length, names: missingImgs.slice(0, 3).join('、') }))
       setCreating(false)
       return
@@ -93,31 +70,12 @@ export default function NewDocPage() {
       let docId: string
       let indexJobId: string | undefined
       if (markdown.trim()) {
-        if (imageFiles.length > 0) {
-          // 带图片：multipart 上传，服务端按相对路径收编为 asset:<sha> 并重写引用
-          const fd = new FormData()
-          fd.append('markdown', markdown)
-          fd.append('notebook_id', notebookId)
-          fd.append('title', finalTitle)
-          if (tags.length > 0) fd.append('tags', JSON.stringify(tags))
-          for (const f of imageFiles) {
-            // 相对路径优先 webkitRelativePath（拖文件夹），否则 name（多选文件）
-            const rel = f.webkitRelativePath || f.name
-            fd.append('images', f, rel)
-          }
-          const res = await fetchWithAuth('/import/markdown-files', { method: 'POST', body: fd })
-          const body = await res.json() as { doc: { id: string }; index_job?: { id: string } }
-          if (!res.ok) throw new ApiError((body as { message?: string } | null)?.message || `HTTP ${res.status}`, res.status, body)
-          docId = body.doc.id
-          indexJobId = body.index_job?.id
-        } else {
-          const res = await request<{ doc: { id: string }; index_job?: { id: string } }>('/import/markdown', {
-            method: 'POST',
-            body: JSON.stringify({ notebook_id: notebookId, markdown, title: finalTitle, tags }),
-          })
-          docId = res.doc.id
-          indexJobId = res.index_job?.id
-        }
+        const res = await request<{ doc: { id: string }; index_job?: { id: string } }>('/import/markdown', {
+          method: 'POST',
+          body: JSON.stringify({ notebook_id: notebookId, markdown, title: finalTitle, tags }),
+        })
+        docId = res.doc.id
+        indexJobId = res.index_job?.id
       } else {
         const res = await request<{ id: string; index_job?: { id: string } }>('/docs', {
           method: 'POST',
@@ -166,31 +124,36 @@ export default function NewDocPage() {
 
   const handleFiles = (files: FileList | File[]) => {
     const list = Array.from(files)
-    // zip：直接上传批量导入（后端 /import/zip：每个 .md 建一篇文档，自家导出档按 manifest 还原）
-    const zip = list.find((f) => f.name.toLowerCase().endsWith('.zip') || f.type === 'application/zip')
-    if (zip) {
-      void handleZipFile(zip)
+    const classified = classifyImportDrop(list)
+    if (classified.status === 'multiple') {
+      setError(t('newDoc.importMultipleFiles'))
+      setZipResult(null)
       return
     }
-    // docx：服务端 mammoth 转 markdown 入库（同导入界面共享逻辑，客户端内嵌同样生效）
-    const docx = list.find((f) => /\.docx$/i.test(f.name))
-    if (docx) {
-      void handleDocxFile(docx)
+    if (classified.status === 'unsupported') {
+      setError(t('newDoc.importUnsupportedFile'))
+      setZipResult(null)
       return
     }
-    // 取第一个 md / txt（或非图片非 zip 文本）作为文档内容；其余图片文件收集供收编
-    const mdFile = list.find((f) => /\.(md|markdown|mdown|mkd|txt)$/i.test(f.name)) ?? list[0]
-    if (!mdFile) return
-    const images = list.filter((f) => f !== mdFile && f.type.startsWith('image/'))
+    const file = list[0]!
+    if (classified.status === 'zip') {
+      void handleZipFile(file)
+      return
+    }
+    if (classified.status === 'docx') {
+      void handleDocxFile(file)
+      return
+    }
     const reader = new FileReader()
     reader.onload = () => {
       const text = String(reader.result || '')
       setMarkdown(text)
-      setImageFiles(images)
-      if (!title.trim()) setTitle(mdFile.name.replace(/\.(md|markdown|mdown|mkd|txt)$/i, ''))
+      setImportedFromFile(true)
+      setError('')
+      if (!title.trim()) setTitle(file.name.replace(/\.(md|markdown|mdown|mkd|txt)$/i, ''))
       setActiveTab('create')
     }
-    reader.readAsText(mdFile)
+    reader.readAsText(file)
   }
 
   /** 上传 docx 直接导入：服务端 mammoth 转 markdown 并入库（含内嵌图片收编） */
@@ -247,7 +210,6 @@ export default function NewDocPage() {
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
-    // 支持拖入文件夹/多选：webkitRelativePath 保留相对路径供图片收编
     if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files)
   }
 
@@ -412,8 +374,7 @@ export default function NewDocPage() {
               <p className="text-xs text-muted-foreground">{t('newDoc.dropHintSub')}</p>
               <input
                 type="file"
-                accept=".md,.markdown,text/markdown,.txt,text/plain,.zip,application/zip,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
-                multiple
+                accept=".md,.markdown,text/markdown,.txt,text/plain,.zip,application/zip,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 className="hidden"
                 onChange={(e) => {
                   if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files)

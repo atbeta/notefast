@@ -28,7 +28,7 @@
     "welcomeSkip": "Not now",
     "emptyAllTitle": "No documents here yet",
     "emptyFilteredTitle": "No documents for “{{title}}”",
-    "emptyAllDesc": "Click the button below to create your first Markdown document. You can also drag an existing .md file into the editor to import it.",
+    "emptyAllDesc": "Click the button below to create your first Markdown document. To import an existing file, use the Import tab — one .md / .txt / .zip / .docx at a time. Zip local images with the document.",
     "emptyFilteredDesc": "Try a different smart view, or create a new document."
   },
   "inbox": {
@@ -88,9 +88,11 @@
     "createFailed": "Failed to create",
     "creating": "Creating…",
     "createAndOpen": "Create and open",
-    "dropHint": "Drop or click to select .md / .txt / .zip / .docx files",
-    "dropHintSub": "Multiple files supported. If a .md references local images, select them together (or drop the whole folder), or package them into a .zip with the document",
-    "missingLocalImages": "This document references {{n}} local images ({{names}}…) but no image files were selected. Select the images together with the .md, drop the whole folder, or package the images with the document into a .zip before importing.",
+    "dropHint": "Drop or click to select a single .md / .txt / .zip / .docx file",
+    "dropHintSub": "One file at a time. If the document references local images, zip the images with the document and import the archive",
+    "missingLocalImages": "This document references {{n}} local images ({{names}}). Zip the images with the document, then import the archive.",
+    "importMultipleFiles": "Import one file at a time. If the document includes images, zip them together first.",
+    "importUnsupportedFile": "Unsupported file type. Choose .md / .txt / .zip / .docx; put images in a zip with the document.",
     "zipImporting": "Importing zip…",
     "docxImporting": "Importing Word document…",
     "zipImported": "Imported {{n}} documents",
