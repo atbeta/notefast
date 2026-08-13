@@ -223,7 +223,10 @@ export function up(db: Database): void {
       INSERT INTO blocks_fts (id, content) VALUES (NEW.id, NEW.content);
     END;
 
-    CREATE TRIGGER IF NOT EXISTS blocks_fts_update AFTER UPDATE ON blocks
+    -- 仅 content 实际被 SET 时才重建 FTS 条目：软删除/恢复等不动 content 的
+    -- UPDATE 若也触发，会对每个块重建倒排索引（O(n²)，5000 块 ~2.5s），
+    -- 是「删大文档卡死」的根因。检索侧靠 is_deleted 过滤，软删行留在 FTS 无害。
+    CREATE TRIGGER IF NOT EXISTS blocks_fts_update AFTER UPDATE OF content ON blocks
     BEGIN
       UPDATE blocks_fts SET content = NEW.content WHERE id = OLD.id;
     END;

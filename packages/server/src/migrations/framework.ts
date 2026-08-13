@@ -10,6 +10,7 @@ import * as m008 from './008_asset_remote_url'
 import * as m009 from './009_asset_upload_error'
 import * as m010 from './010_asset_upload_attempted_at'
 import * as m011 from './011_client_errors'
+import * as m012 from './012_fts_update_of_content'
 
 interface Migration {
   id: string
@@ -19,7 +20,7 @@ interface Migration {
 }
 
 /** 唯一基线迁移。历史 002-010 已合并到此。 */
-const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011]
+const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012]
 
 export function runMigrations(db: Database): { applied: string[]; skipped: string[] } {
   db.exec(`
