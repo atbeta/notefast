@@ -282,19 +282,73 @@ function duplicateReason(a: string, b: string): { reason: string; signal: Duplic
   return null
 }
 
-/** 高频实体的近义重复候选（供 /entities 页提示；typo 自动合并，substring 词典建议） */
+/** 近义检测的候选池：按 mention_count 取 top-N（两两比较只在池内做，不再全表 O(n²)） */
+const DUPLICATE_TOP_N = 200
+/** 从池中取多少个最高频实体名去做长尾子串展开（单个 LIKE 反查，防 N+1） */
+const DUPLICATE_EXPAND_N = 20
+/** 长尾子串伙伴上限（防极端库单次返回爆炸） */
+const DUPLICATE_PARTNER_MAX = 100
+
+/**
+ * 高频实体的近义重复候选（供 /entities 页提示；typo 自动合并，substring 词典建议）。
+ *
+ * 复杂度控制：候选 = top-N（mention_count 倒序）+ 长尾子串伙伴（单条 SQL 用
+ * instr 双向展开 top 名的包含关系）。typo（Levenshtein）只在 top-N 池内两两比较；
+ * substring 对 top×top 与 top×长尾都覆盖——长尾伙伴不再靠全表两两 O(n²) 捞。
+ */
 export function findPotentialDuplicates(db: Db, limit = 8): DuplicateGroup[] {
-  const rows = db
-    .query('SELECT * FROM entities ORDER BY mention_count DESC')
-    .all() as EntityRow[]
+  const topRows = db
+    .query(
+      `SELECT * FROM entities ORDER BY mention_count DESC, rowid ASC LIMIT ?`,
+    )
+    .all(DUPLICATE_TOP_N) as EntityRow[]
+
+  // 长尾子串伙伴：单条 SQL，对展开名双向 instr（伙伴包含展开名 / 展开名包含伙伴）
+  const expandNames = topRows.slice(0, DUPLICATE_EXPAND_N).map((r) => r.name)
+  const ors: string[] = []
+  const params: string[] = []
+  for (const name of expandNames) {
+    ors.push('instr(e.name, ?) > 0')
+    params.push(name)
+    ors.push('instr(?, e.name) > 0')
+    params.push(name)
+  }
+  const partnerRows = expandNames.length === 0
+    ? []
+    : db.query(
+        `SELECT e.* FROM entities e
+         WHERE length(e.name) >= 3 AND (${ors.join(' OR ')})
+         ORDER BY e.mention_count DESC LIMIT ?`,
+      ).all(...params, DUPLICATE_PARTNER_MAX) as EntityRow[]
+
+  const seen = new Set<string>()
   const out: DuplicateGroup[] = []
-  for (let i = 0; i < rows.length && out.length < limit; i++) {
-    for (let j = i + 1; j < rows.length && out.length < limit; j++) {
-      const hit = duplicateReason(rows[i]!.name, rows[j]!.name)
-      if (hit) out.push({ ...hit, a: rows[i]!, b: rows[j]! })
+  const push = (signal: DuplicateGroup['signal'], reason: string, a: EntityRow, b: EntityRow) => {
+    if (a.id === b.id) return
+    const key = [a.id, b.id].sort().join('|')
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push({ reason, signal, a, b })
+  }
+
+  // top×top：两种信号都检
+  for (let i = 0; i < topRows.length; i++) {
+    for (let j = i + 1; j < topRows.length; j++) {
+      const hit = duplicateReason(topRows[i]!.name, topRows[j]!.name)
+      if (hit) push(hit.signal, hit.reason, topRows[i]!, topRows[j]!)
     }
   }
-  return out
+  // top×长尾：只检子串（长尾名不参与 Levenshtein——拼写变体几乎总在高频区）
+  for (const top of topRows.slice(0, DUPLICATE_EXPAND_N)) {
+    for (const partner of partnerRows) {
+      const hit = duplicateReason(top.name, partner.name)
+      if (hit && hit.signal === 'substring') push(hit.signal, hit.reason, top, partner)
+    }
+  }
+
+  // 高频对优先（池内已按 mention_count 降序比较，天然近似；精确排序代价低也补一个）
+  out.sort((x, y) => Math.max(y.a.mention_count, y.b.mention_count) - Math.max(x.a.mention_count, x.b.mention_count))
+  return out.slice(0, limit)
 }
 
 /** 需要生成描述的实体（mention_count ≥ 阈值且尚无描述），按提及数倒序 */

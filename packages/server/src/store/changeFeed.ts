@@ -71,9 +71,14 @@ export function pruneChanges(db: Db, upToSeq: number): number {
  * 单事务内插入 sync_consume_guard 行，blocks 表三个 trigger 的 WHEN 子句据此
  * 静默（见 migrations/014）；fn 结束（无论成败）删除 guard 行。
  * 临界区内必须无 await——单线程下本地正常写入不可能落入该窗口被误挡。
+ *
+ * 退出时递增内容修订计数（contentRevisionToken）：被抑制的写路径不产生
+ * entity_changes 行，但可能改变了 blocks 内容——依赖 MAX(seq) 锚点做失效
+ * 令牌的引用集合缓存（assets 资源库 / 分享页）必须把该计数并进缓存 key，
+ * 否则同步消费进来的新引用不会被重扫。
  */
 export function runFeedSuppressed<T>(db: Db, fn: () => T): T {
-  return db.transaction(() => {
+  const result = db.transaction(() => {
     db.query('INSERT OR REPLACE INTO sync_consume_guard (id) VALUES (1)').run()
     try {
       return fn()
@@ -81,6 +86,15 @@ export function runFeedSuppressed<T>(db: Db, fn: () => T): T {
       db.query('DELETE FROM sync_consume_guard').run()
     }
   })()
+  contentRevision++
+  return result
+}
+
+let contentRevision = 0
+
+/** 内容修订计数（进程内单调；runFeedSuppressed 每次执行 +1） */
+export function contentRevisionToken(): number {
+  return contentRevision
 }
 
 /**

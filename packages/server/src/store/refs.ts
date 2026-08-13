@@ -66,11 +66,16 @@ export interface BacklinkRow {
   source_doc_title: string | null
 }
 
+/** 文档根反链默认上限：根块展开为「引用文档内任意子块」的并集，块量大时无上限会全量拉取 */
+const DOC_ROOT_BACKLINKS_DEFAULT_LIMIT = 500
+
 /**
- * 指向 targetId 的反链（新→旧）；limit 不传则全量
+ * 指向 targetId 的反链（新→旧）；limit 不传则全量。
  *
  * targetId 为文档根块（type='document'）时按文档维度展开——引用该文档内
- * 任意子块的引用都算反链（AI 自动建链目标多为正文段落块，只查根块会漏）。
+ * 任意子块的引用都算反链（AI 自动建链目标多为正文段落块，只查根块会漏）；
+ * 该分支未显式传 limit 时按 DOC_ROOT_BACKLINKS_DEFAULT_LIMIT 截断（块级
+ * 目标不截断，保持既有语义）。
  */
 export function listBacklinks(db: Db, targetId: string, opts: { limit?: number } = {}): BacklinkRow[] {
   const isDocRoot =
@@ -88,6 +93,9 @@ export function listBacklinks(db: Db, targetId: string, opts: { limit?: number }
   if (opts.limit !== undefined) {
     sql += ' LIMIT ?'
     params.push(opts.limit)
+  } else if (isDocRoot) {
+    sql += ' LIMIT ?'
+    params.push(DOC_ROOT_BACKLINKS_DEFAULT_LIMIT)
   }
   return db.query(sql).all(...(params as [string, ...string[]])) as BacklinkRow[]
 }

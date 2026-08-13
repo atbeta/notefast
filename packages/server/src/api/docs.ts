@@ -6,6 +6,7 @@ import type { DocSummary } from '@notefast/core'
 import { getDb } from '../db'
 import {
   fetchDocBlocks,
+  fetchDocBlockIds,
   fetchSubtreeBlocks,
   fetchDeletedSubtreeIds,
   getBlockById,
@@ -340,8 +341,9 @@ docs.patch('/:id/tags', async (c) => {
   updateBlock(db, id, { tags: updated.tags, touchUpdatedAt: false })
 
   // 标签进入索引文本上下文：保存后整篇重索引（hasFreshVector 跳过未变块；
-  // autoIndex 关闭或 embedding 未配时 scheduleDocIndex 返回 null，无需特判）
-  scheduleDocIndex(id, fetchDocBlocks(db, id).map((r) => r.id))
+  // autoIndex 关闭或 embedding 未配时 scheduleDocIndex 返回 null，无需特判）；
+  // 调度只需 id 列表，不再为拿 id 拉全文档字段
+  scheduleDocIndex(id, fetchDocBlockIds(db, id))
 
   const finalTags = provider.getDocTags(updated)
   const updatedRow = getBlockById(db, id)!

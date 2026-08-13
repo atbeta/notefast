@@ -25,6 +25,11 @@ export interface RebuildEmbeddingProvider {
   embedBatch(texts: string[]): Promise<Float64Array[]>
 }
 
+/** 重建批大小（对齐增量索引的 20） */
+const REBUILD_BATCH = 20
+/** 批与批之间最小间隔（对齐 indexJobs 的 BATCH_GAP_MS，避免打爆 embedding API） */
+const REBUILD_BATCH_GAP_MS = 50
+
 export interface VectorRebuildOptions {
   notebookId?: string
   provider?: RebuildEmbeddingProvider
@@ -55,6 +60,11 @@ class ShadowVectorStore implements VectorStore {
   async delete(blockId: string): Promise<void> {
     await this.active.delete(blockId)
     this.staging.deleteFromGeneration(this.generation, blockId)
+  }
+
+  async deleteMany(blockIds: string[]): Promise<void> {
+    await this.active.deleteMany(blockIds)
+    this.staging.deleteManyFromGeneration(this.generation, blockIds)
   }
 
   search(query: Float64Array, options: VectorSearchOptions) {
@@ -120,7 +130,7 @@ export async function runVectorRebuild(
       return texts
     }
 
-    const firstBatch = rows.slice(0, 20)
+    const firstBatch = rows.slice(0, REBUILD_BATCH)
     const firstTexts = await buildTexts(firstBatch)
     const firstVectors = await provider.embedBatch(firstTexts)
     const dimension = firstVectors[0]?.length
@@ -130,7 +140,7 @@ export async function runVectorRebuild(
     db.query(
       `UPDATE vector_store_state
        SET status = 'rebuilding', staging_generation = ?, error = NULL,
-           updated_at = datetime('now')
+            updated_at = datetime('now')
        WHERE id = 'default'`,
     ).run(generation)
     const shadow = new ShadowVectorStore(previousStore, staging, generation)
@@ -155,13 +165,17 @@ export async function runVectorRebuild(
       }
     }
     await writeBatch(firstBatch, firstTexts, firstVectors)
-    bumpRebuildProgress(Math.min(20, rows.length))
-    for (let offset = 20; offset < rows.length; offset += 20) {
-      const batch = rows.slice(offset, offset + 20)
+    bumpRebuildProgress(Math.min(REBUILD_BATCH, rows.length))
+    for (let offset = REBUILD_BATCH; offset < rows.length; offset += REBUILD_BATCH) {
+      const batch = rows.slice(offset, offset + REBUILD_BATCH)
       const texts = await buildTexts(batch)
       const vectors = await provider.embedBatch(texts)
       await writeBatch(batch, texts, vectors)
       bumpRebuildProgress(Math.min(offset + batch.length, rows.length))
+      // 批间让出事件循环 + 防打爆 embedding API（对齐 indexJobs 的 BATCH_GAP_MS）
+      if (offset + REBUILD_BATCH < rows.length && REBUILD_BATCH_GAP_MS > 0) {
+        await new Promise((r) => setTimeout(r, REBUILD_BATCH_GAP_MS))
+      }
     }
 
     await staging.activateGeneration(generation)

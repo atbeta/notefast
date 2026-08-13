@@ -610,6 +610,9 @@ describe('实体 REST API', () => {
     const merged = await api('POST', '/api/v1/entities/duplicates/auto-merge')
     expect(merged.status).toBe(200)
     expect((merged.body as { merged: number }).merged).toBe(1)
+    // 响应携带 suggest_groups（合并端点合一，实体页一次请求拿建议）
+    const mergedSuggest = (merged.body as { suggest_groups: Array<{ entities: Array<{ display: string }> }> }).suggest_groups
+    expect(mergedSuggest.some((g) => g.entities.some((e) => e.display === '混合检索'))).toBe(true)
     // qdrnt 合进 qdrant：实体删除、mention 迁移、旧名登记别名
     expect(findEntityByName(db, 'qdrnt')).toBeNull()
     expect(findEntityByName(db, 'qdrant')!.mention_count).toBe(2)

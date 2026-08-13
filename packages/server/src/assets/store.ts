@@ -16,6 +16,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSyn
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { getDb } from '../db'
+import { getChangesAnchor, contentRevisionToken } from '../store/changeFeed'
 import type { ImageUploadConfig } from '@notefast/core'
 import { extForMime, mimeForExt } from '../sync/archiveMedia'
 
@@ -315,14 +316,22 @@ export function extractAssetRefs(text: string): string[] {
   return [...out]
 }
 
-/** 全库扫描：返回当前被任意 block 引用的 asset id 集合（引用关系唯一真值） */
+/** 全库扫描：返回当前被任意 block 引用的 asset id 集合（引用关系唯一真值）。
+ *  带缓存：key = 变更流全局锚点 + 内容修订计数（runFeedSuppressed 的消费/清理
+ *  写路径也推进计数）——正常写操作推进 seq 锚点失效，同步消费推进计数失效，
+ *  无写时零成本复用（与 sharePublic 的文档级缓存同方案） */
+let referencedAssetCache: { key: string; refs: Set<string> } | null = null
+
 export function collectReferencedAssetIds(): Set<string> {
   const db = getDb()
+  const key = `${getChangesAnchor(db)}:${contentRevisionToken()}`
+  if (referencedAssetCache?.key === key) return referencedAssetCache.refs
   const rows = db.query("SELECT content FROM blocks WHERE content LIKE '%asset:%'").all() as Array<{ content: string }>
   const refs = new Set<string>()
   for (const r of rows) {
     for (const id of extractAssetRefs(r.content)) refs.add(id)
   }
+  referencedAssetCache = { key, refs }
   return refs
 }
 

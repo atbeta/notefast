@@ -141,14 +141,30 @@ export function listTokens(): ApiTokenRecord[] {
     .all('web-session') as ApiTokenRecord[]
 }
 
+/** last_used_at 节流窗口：窗口内同一 token 的请求不再逐次写库（进程重启丢最后一段，可接受） */
+const LAST_USED_THROTTLE_MS = 60_000
+/** token_id → 最近一次写库时间戳（内存级节流；Map 有界——token 总量极小，无淘汰必要） */
+const lastUsedWrittenAt = new Map<string, number>()
+
 export function updateLastUsed(tokenId: string): void {
   try {
+    const now = Date.now()
+    const prev = lastUsedWrittenAt.get(tokenId) ?? 0
+    if (now - prev < LAST_USED_THROTTLE_MS) return
+    lastUsedWrittenAt.set(tokenId, now)
     getDb()
       .query("UPDATE api_tokens SET last_used_at = datetime('now') WHERE token_id = ?")
       .run(tokenId)
   } catch {
     /* fire-and-forget */
   }
+}
+
+/** 测试钩子：清空节流表（并返回删除项数） */
+export function _resetLastUsedThrottleForTests(): number {
+  const n = lastUsedWrittenAt.size
+  lastUsedWrittenAt.clear()
+  return n
 }
 
 /** 软删除已过期的 token */

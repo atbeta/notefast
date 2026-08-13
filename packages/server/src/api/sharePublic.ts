@@ -20,7 +20,7 @@ import { buildBlockTree, blocksToMarkdown } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks } from '../store/blocks'
 import { getShareByToken } from '../store/shares'
-import { getChangesAnchor } from '../store/changeFeed'
+import { getChangesAnchor, contentRevisionToken } from '../store/changeFeed'
 import { extractAssetRefs, getAssetRemoteUrl, readAsset } from '../assets/store'
 
 const sharePublic = new Hono()
@@ -34,25 +34,27 @@ function resolveShare(token: string) {
 
 /**
  * 文档 → 其引用的 asset sha 集合缓存。
- * 失效令牌用 entity_changes 的全局 MAX(seq)：任何写操作（不限于本文档）都会
- * 使其前进，从而触发重扫；无写时一次 MAX 查询（主键索引）即可复用缓存。
+ * 失效令牌 = entity_changes 的全局 MAX(seq) + 内容修订计数：任何写操作（不限
+ * 于本文档）都会推进 seq 锚点；同步消费/维护清理的写路径不产 feed 行，由
+ * runFeedSuppressed 递增 contentRevisionToken 兜底失效。无写时一次 MAX 查询
+ * （主键索引）即可复用缓存。
  * 同步 compaction 裁剪（pruneChanges）会让锚点回退（清空后归 0）：AUTOINCREMENT
  * 不复用 seq，旧缓存条目不会被错误命中，仅裁剪后缓存于 seq=0 的条目在「再次裁剪」
  * 的极窄窗口内可能短暂沿用旧引用集合，锚点离开 0 后的首次访问即重扫自愈。
  * 不能用 doc 根的 updated_at 做失效令牌——子 block 编辑不碰根行。
  * 规模：key 仅出现在有公开分享的文档上，天然有界，无需 LRU。
  */
-const docAssetRefsCache = new Map<string, { seq: number; refs: string[] }>()
+const docAssetRefsCache = new Map<string, { key: string; refs: string[] }>()
 
 function getDocAssetRefs(docId: string): string[] {
   const db = getDb()
-  const seq = getChangesAnchor(db)
+  const key = `${getChangesAnchor(db)}:${contentRevisionToken()}`
   const cached = docAssetRefsCache.get(docId)
-  if (cached && cached.seq === seq) return cached.refs
+  if (cached && cached.key === key) return cached.refs
   // 单次扫描：拼一次内容跑一遍正则，不逐块重复编译匹配
   const allContent = fetchDocBlocks(db, docId).map((r) => r.content).join('\n')
   const refs = extractAssetRefs(allContent)
-  docAssetRefsCache.set(docId, { seq, refs })
+  docAssetRefsCache.set(docId, { key, refs })
   return refs
 }
 

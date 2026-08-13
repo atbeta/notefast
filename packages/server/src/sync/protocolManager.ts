@@ -45,7 +45,7 @@ import {
   updateManifest,
 } from './protocol'
 import { getChangesAnchor } from '../store/changeFeed'
-import { fetchDocBlocks, getDocById } from '../store/blocks'
+import { fetchDocBlockIds, getDocById } from '../store/blocks'
 import { scheduleDocIndex } from '../ai/indexJobs'
 import { reanalyzeDoc } from '../ai/autoLink'
 
@@ -427,7 +427,7 @@ function scheduleConsumeFollowUp(docIds: string[]): void {
     const doc = getDocById(db, docId)
     // inbox / archived / ai_exclude 文档不参与索引与建链（对齐 hooks 过滤语义）
     if (!doc || doc.status !== 'note' || doc.ai_exclude) continue
-    scheduleDocIndex(docId, fetchDocBlocks(db, docId).map((r) => r.id))
+    scheduleDocIndex(docId, fetchDocBlockIds(db, docId))
     reanalyzeDoc(docId)
   }
 }

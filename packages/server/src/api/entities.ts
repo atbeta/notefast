@@ -23,6 +23,7 @@ import {
   listEntities,
   listEntityMentions,
   mergeEntities,
+  type DuplicateGroup,
   type EntityRow,
 } from '../store/entities'
 
@@ -88,6 +89,9 @@ entities.get('/duplicates', (c) => {
  *
  * 合并方向：mention_count 大者存活；同 count 取名称长者（拼写变体通常更短，
  * qdrnt → qdrant）；再同取先创建者（rowid 小）。
+ *
+ * 响应同时携带 suggest_groups（合并后的子串候选）：实体页加载一次请求即拿到
+ * 建议，不再额外 GET /duplicates 重复全表计算（/duplicates 端点保留兼容）。
  */
 entities.post('/duplicates/auto-merge', (c) => {
   const db = getDb()
@@ -110,7 +114,19 @@ entities.post('/duplicates/auto-merge', (c) => {
     mergeEntities(db, from.id, target.id)
     pairs.push({ from: from.display, into: target.display })
   }
-  return c.json({ merged: pairs.length, pairs })
+  const pick = (g: DuplicateGroup) => ({
+    reason: g.reason,
+    signal: g.signal,
+    entities: [
+      { id: g.a.id, display: g.a.display, kind: g.a.kind, mention_count: g.a.mention_count },
+      { id: g.b.id, display: g.b.display, kind: g.b.kind, mention_count: g.b.mention_count },
+    ],
+  })
+  return c.json({
+    merged: pairs.length,
+    pairs,
+    suggest_groups: groups.filter((g) => g.signal === 'substring').map(pick),
+  })
 })
 
 /** 把 :id 合并进 target_id（target 存活；提及/别名迁移，from 删除） */

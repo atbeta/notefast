@@ -15,7 +15,7 @@ import { type BlockRow } from '@notefast/core'
 import { getDb } from '../db'
 import { getBlockById, getDocById, updateBlock } from '../store/blocks'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
-import { deleteVector } from './indexer'
+import { getVectorStore } from './vectorStore'
 import { scheduleDocIndex, type IndexJob } from './indexJobs'
 import { loadDocBlockIds } from './aiExcludeQuery'
 import { reanalyzeDoc } from './autoLink'
@@ -58,14 +58,14 @@ export function writeDocAiExclude(docId: string, aiExclude: boolean): BlockRow |
 export async function purgeAiArtifactsForDoc(docId: string): Promise<{ vectors: number; mentions: number }> {
   const blockIds = loadDocBlockIds(docId)
 
+  // 批量删除：deleteMany 一次维护 indexed_count（逐块 delete 每块重算
+  // count(*)，块量大的文档是 O(n²)）
   let vectors = 0
-  for (const id of blockIds) {
-    try {
-      await deleteVector(id)
-      vectors++
-    } catch {
-      // 向量存储未初始化时忽略
-    }
+  try {
+    await getVectorStore().deleteMany(blockIds)
+    vectors = blockIds.length
+  } catch {
+    // 向量存储未初始化时忽略
   }
 
   const mentionsBefore = countMentionsOfBlocks(getDb(), blockIds)

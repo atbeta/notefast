@@ -47,6 +47,9 @@ export interface VectorStore {
   init(): Promise<void>
   upsert(record: VectorRecord): Promise<void>
   delete(blockId: string): Promise<void>
+  /** 批量删除（块删除级联 / ai_exclude purge 用）：计数维护一次完成，
+   *  替代逐块 delete 的「每块一次 count(*)」O(n²) 退化 */
+  deleteMany(blockIds: string[]): Promise<void>
   search(query: Float64Array, options: VectorSearchOptions): Promise<SemanticHit[]>
   scoreCandidates(
     query: Float64Array,
@@ -182,6 +185,18 @@ export class JsonVectorStore implements VectorStore {
   async delete(blockId: string): Promise<void> {
     const db = getDb()
     db.query('DELETE FROM block_vectors WHERE block_id = ?').run(blockId)
+    db.query(
+      `UPDATE vector_store_state
+       SET indexed_count = (SELECT count(*) FROM block_vectors), updated_at = datetime('now')
+       WHERE id = 'default'`,
+    ).run()
+  }
+
+  async deleteMany(blockIds: string[]): Promise<void> {
+    if (blockIds.length === 0) return
+    const db = getDb()
+    const ph = blockIds.map(() => '?').join(',')
+    db.query(`DELETE FROM block_vectors WHERE block_id IN (${ph})`).run(...(blockIds as [string, ...string[]]))
     db.query(
       `UPDATE vector_store_state
        SET indexed_count = (SELECT count(*) FROM block_vectors), updated_at = datetime('now')

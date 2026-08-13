@@ -80,23 +80,51 @@ export interface DocNeighbors {
 }
 
 /**
- * 文档顺序导航邻居：按 created_at ASC（rowid 决胜）排序的未删除文档中，
- * 当前文档的前一篇 / 后一篇（Obsidian 式「上一篇/下一篇」）。
+ * 文档顺序导航邻居：按 created_at ASC（rowid 决胜 = 真实入库序）排序的未删除
+ * 文档中，当前文档的前一篇 / 后一篇（Obsidian 式「上一篇/下一篇」）。
+ *
+ * 每侧两段查询（先同毫秒 rowid 决胜组内找，再严格更早/更晚的 created_at 范围），
+ * 全部走 idx_blocks_doc_created 索引（原实现全表扫描排序，块量大时线性退化；
+ * rowid 不可建索引，决胜仅在同毫秒的极小碰撞组内微排序）。
  * 文档不存在或仅此一篇 → 两侧 null。
  */
 export function getDocNeighbors(db: Db, id: string): DocNeighbors {
-  const rows = db
+  const cur = db
     .query(
-      `SELECT id, content, created_at, rowid FROM blocks
-       WHERE type = 'document' AND is_deleted = 0
-       ORDER BY created_at ASC, rowid ASC`,
+      `SELECT created_at, rowid FROM blocks
+       WHERE id = ? AND type = 'document' AND is_deleted = 0`,
     )
-    .all() as Array<{ id: string; content: string; created_at: string; rowid: number }>
-  const idx = rows.findIndex((r) => r.id === id)
-  if (idx === -1) return { prev: null, next: null }
-  const prev = idx > 0 ? { id: rows[idx - 1]!.id, title: rows[idx - 1]!.content } : null
-  const next = idx < rows.length - 1 ? { id: rows[idx + 1]!.id, title: rows[idx + 1]!.content } : null
-  return { prev, next }
+    .get(id) as { created_at: string; rowid: number } | undefined
+  if (!cur) return { prev: null, next: null }
+
+  const docCond = `type = 'document' AND is_deleted = 0`
+  const prev =
+    (db.query(
+      `SELECT id, content FROM blocks
+       WHERE ${docCond} AND created_at = ? AND rowid < ?
+       ORDER BY rowid DESC LIMIT 1`,
+    ).get(cur.created_at, cur.rowid) as { id: string; content: string } | undefined)
+    ?? (db.query(
+      `SELECT id, content FROM blocks
+       WHERE ${docCond} AND created_at < ?
+       ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+    ).get(cur.created_at) as { id: string; content: string } | undefined)
+  const next =
+    (db.query(
+      `SELECT id, content FROM blocks
+       WHERE ${docCond} AND created_at = ? AND rowid > ?
+       ORDER BY rowid ASC LIMIT 1`,
+    ).get(cur.created_at, cur.rowid) as { id: string; content: string } | undefined)
+    ?? (db.query(
+      `SELECT id, content FROM blocks
+       WHERE ${docCond} AND created_at > ?
+       ORDER BY created_at ASC, rowid ASC LIMIT 1`,
+    ).get(cur.created_at) as { id: string; content: string } | undefined)
+
+  return {
+    prev: prev ? { id: prev.id, title: prev.content } : null,
+    next: next ? { id: next.id, title: next.content } : null,
+  }
 }
 
 /** create / move 需要的父块锚点信息 */
@@ -169,6 +197,14 @@ export function fetchDocBlocks(db: Db, rootId: string): BlockRow[] {
   return db
     .query('SELECT * FROM blocks WHERE root_id = ? AND is_deleted = 0 ORDER BY level, sort')
     .all(rootId) as BlockRow[]
+}
+
+/** 文档级 id 列表（只需 id 的场景——重索引调度等，避免拉全字段） */
+export function fetchDocBlockIds(db: Db, rootId: string): string[] {
+  const rows = db
+    .query('SELECT id FROM blocks WHERE root_id = ? AND is_deleted = 0')
+    .all(rootId) as Array<{ id: string }>
+  return rows.map((r) => r.id)
 }
 
 /** 任意子树后代（不含起点本身，仅未删除），按 level, sort 排序 */

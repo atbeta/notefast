@@ -72,23 +72,20 @@ export default function EntitiesPage() {
   const entities = error ? [] : (data?.entities ?? [])
   const searching = query.trim() !== debouncedQuery
 
-  // 词典建议候选（仅总览、无搜索词时显示）
-  const { data: dupData, refetch: refetchDuplicates } = useApiQuery(
-    () => api.get<{ suggest_groups: SuggestGroup[] }>('/entities/duplicates'),
-    [debouncedQuery],
-  )
-  const suggests = !debouncedQuery ? (dupData?.suggest_groups ?? []) : []
+  // 词典建议候选：由加载时的一次 POST auto-merge 响应携带（合并端点合一，
+  // 服务端不再为此重复全表近义计算；GET /duplicates 仅保留 API 兼容）
+  const [suggests, setSuggests] = useState<SuggestGroup[]>([])
 
   // 拼写变体自动合并（一次性，页面加载时执行；有副作用故为 POST 而非 GET）
   useEffect(() => {
     if (debouncedQuery) return
     api
-      .post<{ merged: number }>('/entities/duplicates/auto-merge', {})
+      .post<{ merged: number; suggest_groups: SuggestGroup[] }>('/entities/duplicates/auto-merge', {})
       .then((r) => {
+        setSuggests(r.suggest_groups ?? [])
         if (r.merged > 0) {
           setAutoMerged(r.merged)
           refetch()
-          refetchDuplicates()
         }
       })
       .catch(() => undefined)
@@ -116,7 +113,12 @@ export default function EntitiesPage() {
     if (merged > 0) {
       toast.success({ title: t('entities.merged', { n: merged }) })
       refetch()
-      refetchDuplicates()
+      // 建议由加载时 POST auto-merge 响应携带（无 GET 可重拉）：本地移除已并掉的组
+      const done = new Set<string>()
+      for (const g of groups) {
+        for (const e of g.entities) done.add(e.id)
+      }
+      setSuggests((prev) => prev.filter((g) => !g.entities.some((e) => done.has(e.id))))
     } else {
       toast.error({ title: t('entities.mergeFailed') })
     }
@@ -258,7 +260,7 @@ export default function EntitiesPage() {
               </div>
             )}
 
-            {suggests.length > 0 && (
+            {suggests.length > 0 && !debouncedQuery && (
               <div className="rounded-xl border border-warn/25 bg-warn/5 px-3.5 py-3">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-1.5 text-[12px] font-medium text-foreground">

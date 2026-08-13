@@ -179,6 +179,40 @@ export class SqliteVecVectorStore implements VectorStore {
     this.deleteFromGeneration(generation.id, blockId)
   }
 
+  async deleteMany(blockIds: string[]): Promise<void> {
+    const generation = activeGeneration()
+    if (!generation) return
+    this.deleteManyFromGeneration(generation.id, blockIds)
+  }
+
+  /** 批量删除：单事务 + 一次 indexed_count 重算（替代逐块 delete 的每块 count(*)） */
+  deleteManyFromGeneration(generation: string, blockIds: string[]): void {
+    if (blockIds.length === 0) return
+    const db = getDb()
+    const target = generationRow(generation)
+    if (!target) return
+    const ph = blockIds.map(() => '?').join(',')
+    db.transaction(() => {
+      const entries = db
+        .query(`SELECT id FROM vector_entries WHERE generation = ? AND block_id IN (${ph})`)
+        .all(generation, ...(blockIds as [string, ...string[]])) as Array<{ id: number }>
+      if (entries.length === 0) return
+      const entryIds = entries.map((e) => e.id)
+      const eph = entryIds.map(() => '?').join(',')
+      db.query(`DELETE FROM ${target.table_name} WHERE rowid IN (${eph})`).run(
+        ...(entryIds as [number, ...number[]]),
+      )
+      db.query(`DELETE FROM vector_entries WHERE id IN (${eph})`).run(
+        ...(entryIds as [number, ...number[]]),
+      )
+      db.query(
+        `UPDATE vector_generations SET indexed_count = (
+           SELECT count(*) FROM vector_entries WHERE generation = ?
+         ) WHERE id = ?`,
+      ).run(generation, generation)
+    })()
+  }
+
   deleteFromGeneration(generation: string, blockId: string): void {
     const db = getDb()
     const target = generationRow(generation)

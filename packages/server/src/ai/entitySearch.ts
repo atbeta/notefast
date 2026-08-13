@@ -122,37 +122,49 @@ export function entitySearch(query: string, limit = DEFAULT_ENTITY_LIMIT): Entit
   const matched = matchEntities(query)
   if (matched.length === 0) return []
 
-  const hits: EntitySearchHit[] = []
-  const seen = new Set<string>()
-  for (const entity of matched) {
-    if (hits.length >= limit) break
-    const rows = db
-      .query(
-        `SELECT b.id, b.content, b.root_id, b.type, d.content AS doc_title
+  // 单条 SQL 反查全部命中实体的提及（原实现逐实体一查 = N+1）：
+  // 按块分区 ROW_NUMBER 去重（同块可能提及多个命中实体），排序语义对齐原版——
+  // 精确实体的块在前（实体 mention_count 倒序），块内按 updated_at 倒序
+  const ids = matched.map((e) => e.id)
+  const exactIds = matched.filter((e) => e.exact).map((e) => e.id)
+  const idPh = ids.map(() => '?').join(',')
+  const exactRank = exactIds.length > 0
+    ? `CASE WHEN m.entity_id IN (${exactIds.map(() => '?').join(',')}) THEN 0 ELSE 1 END`
+    : '1'
+  const params: Array<string | number> = [...exactIds, ...exactIds, ...ids, limit]
+  const rows = db
+    .query(
+      `SELECT id, content, root_id, type, doc_title FROM (
+         SELECT b.id, b.content, b.root_id, b.type, d.content AS doc_title,
+                ${exactRank} AS exact_rank, e.mention_count, b.updated_at,
+                ROW_NUMBER() OVER (
+                  PARTITION BY b.id
+                  ORDER BY ${exactRank}, e.mention_count DESC, b.updated_at DESC
+                ) AS rn
          FROM entity_mentions m
+         JOIN entities e ON e.id = m.entity_id
          JOIN blocks b ON b.id = m.block_id AND b.is_deleted = 0
          LEFT JOIN blocks d ON d.id = b.root_id
-         WHERE m.entity_id = ?
-         ORDER BY b.updated_at DESC`,
-      )
-      .all(entity.id) as Array<{
-      id: string
-      content: string
-      root_id: string
-      type: string
-      doc_title: string | null
-    }>
-    for (const r of rows) {
-      if (hits.length >= limit || seen.has(r.id)) continue
-      seen.add(r.id)
-      hits.push({
-        block_id: r.id,
-        doc_id: r.root_id,
-        doc_title: r.doc_title ?? '',
-        type: r.type,
-        content: r.content,
-      })
-    }
-  }
-  return hits.map((h, i) => ({ ...h, rrf_rank: i + 1 }))
+         WHERE m.entity_id IN (${idPh})
+       )
+       WHERE rn = 1
+       ORDER BY exact_rank, mention_count DESC, updated_at DESC
+       LIMIT ?`,
+    )
+    .all(...params) as Array<{
+    id: string
+    content: string
+    root_id: string
+    type: string
+    doc_title: string | null
+  }>
+
+  return rows.map((r, i) => ({
+    block_id: r.id,
+    doc_id: r.root_id,
+    doc_title: r.doc_title ?? '',
+    type: r.type,
+    content: r.content,
+    rrf_rank: i + 1,
+  }))
 }
