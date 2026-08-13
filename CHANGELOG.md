@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.65.0](https://github.com/atbeta/notefast/compare/v0.64.3...v0.65.0) (2026-08-13)
+
+
+### Features
+
+* **import:** support .docx conversion via mammoth in shared import UI ([62aa8ff](https://github.com/atbeta/notefast/commit/62aa8ff37444fd01da2df7e64aef1da17d5786f4))
+* support importing .txt documents across web and native clients ([ec66d7e](https://github.com/atbeta/notefast/commit/ec66d7eb4879ed8f8408831ada8c0596fccad042))
+
+
+### Bug Fixes
+
+* **import:** accept one file at a time and keep images on the zip path ([ef07d18](https://github.com/atbeta/notefast/commit/ef07d182423ca4a55a82991e0e93ffb00b7df928))
+* **sync:** apply each changes segment in one transaction ([e268e8f](https://github.com/atbeta/notefast/commit/e268e8f09c4bd11d74f344b7080362c0683c0a24))
+* **web:** warn when importing md that references local images without files ([268da2b](https://github.com/atbeta/notefast/commit/268da2b318965b7e390ebc8966845e0526b443b3))
+
 ## [0.64.3](https://github.com/atbeta/notefast/compare/v0.64.2...v0.64.3) (2026-08-13)
 
 
