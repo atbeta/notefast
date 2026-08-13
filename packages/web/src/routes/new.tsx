@@ -11,6 +11,29 @@ import TagPickerPopover from '../components/TagPickerPopover'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
 import { Tooltip, useToast } from '../components/ui'
 
+/** 提取 md 中「相对路径」的本地图片引用（排除 asset:/http(s):/data:/绝对路径）。
+ * 提交时若检测到这些引用但未选图片文件，提示用户补选/打包 zip，避免导入后图片空白。 */
+function findLocalImageRefs(markdown: string): string[] {
+  const refs = new Set<string>()
+  const re = /!\[([^\]]*)\]\(([^)\s]+)\)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(markdown)) !== null) {
+    const src = m[2]!
+    if (
+      src.startsWith('asset:') ||
+      src.startsWith('http:') ||
+      src.startsWith('https:') ||
+      src.startsWith('data:') ||
+      src.startsWith('/')
+    ) {
+      continue
+    }
+    const clean = src.split(/[?#]/)[0]!.trim()
+    if (clean) refs.add(clean)
+  }
+  return [...refs]
+}
+
 export default function NewDocPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -52,6 +75,16 @@ export default function NewDocPage() {
     e.preventDefault()
     setCreating(true)
     setError('')
+
+    // 提交前拦截：md 引用了相对路径本地图片、但没带任何图片文件时，
+    // 直接提交会得到「图片空白」（浏览器拿不到 md 同目录的文件）。
+    // 提示用户补选图片 / 拖整个文件夹 / 打包 zip，而不是静默导入。
+    const missingImgs = findLocalImageRefs(markdown)
+    if (imageFiles.length === 0 && missingImgs.length > 0) {
+      setError(t('newDoc.missingLocalImages', { n: missingImgs.length, names: missingImgs.slice(0, 3).join('、') }))
+      setCreating(false)
+      return
+    }
 
     const finalTitle = title.trim() || new Date().toLocaleDateString(currentLocale(), { month: 'short', day: 'numeric' })
 
