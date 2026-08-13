@@ -36,8 +36,10 @@ pub fn is_markdown_path(p: &Path) -> bool {
     )
 }
 
-/// 入口：过滤出实际存在的 md 文件，后台任务执行导入（不阻塞 UI / 单实例回调线程）
-pub fn handle_open_files(app: &AppHandle, paths: Vec<PathBuf>) {
+/// 入口：过滤出实际存在的 md 文件，后台任务执行导入（不阻塞 UI / 单实例回调线程）。
+/// `is_initial`：冷启动（setup 里 argv 带入）为 true，用于区分「splash 停留等导入」
+/// 与「应用已运行、导入后直接跳转」两种场景。
+pub fn handle_open_files(app: &AppHandle, paths: Vec<PathBuf>, is_initial: bool) {
     let files: Vec<PathBuf> = paths
         .into_iter()
         .filter(|p| is_markdown_path(p) && p.is_file())
@@ -47,19 +49,25 @@ pub fn handle_open_files(app: &AppHandle, paths: Vec<PathBuf>) {
     }
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        let r = tauri::async_runtime::spawn_blocking(move || import_and_open(&app, files)).await;
+        let r = tauri::async_runtime::spawn_blocking(move || import_and_open(&app, files, is_initial)).await;
         if let Err(e) = r {
             eprintln!("[notefast] 导入任务失败: {e}");
         }
     });}
 
-fn import_and_open(app: &AppHandle, files: Vec<PathBuf>) {
+fn import_and_open(app: &AppHandle, files: Vec<PathBuf>, is_initial: bool) {
     let Some(info) = wait_engine(app) else {
         eprintln!("[notefast] 等 engine 就绪超时，放弃导入");
+        if is_initial {
+            bail_to_home(app, None);
+        }
         return;
     };
     let Some(notebook_id) = info.notebook_id.clone() else {
         eprintln!("[notefast] engine 握手缺少 notebookId，放弃导入");
+        if is_initial {
+            bail_to_home(app, Some(&info.entry_url()));
+        }
         return;
     };
 
@@ -89,6 +97,11 @@ fn import_and_open(app: &AppHandle, files: Vec<PathBuf>) {
         }
     }
     if imported == 0 {
+        // 冷启动打开失败：跳回首页兜底，否则 splash 会一直停在「正在打开文档…」；
+        // 应用已运行时（is_initial=false）导入失败不打扰当前页面。
+        if is_initial {
+            bail_to_home(app, Some(&info.entry_url()));
+        }
         return;
     }
 
@@ -99,8 +112,26 @@ fn import_and_open(app: &AppHandle, files: Vec<PathBuf>) {
         Some(format!("http://127.0.0.1:{}/inbox?native=tauri", info.port))
     };
     if let (Some(win), Some(url)) = (app.get_webview_window("main"), target) {
-        std::thread::sleep(NAV_DELAY);
+        // 冷启动带文件时 splash 停留等这次跳转（无启动 replace 竞态），不必再等 NAV_DELAY；
+        // 应用已运行（第二实例导入）才需要延时，让 app.js 的启动跳转先落地。
+        if !is_initial {
+            std::thread::sleep(NAV_DELAY);
+        }
         if let Ok(js) = serde_json::to_string(&url) {
+            let _ = win.eval(&format!("location.href = {js}"));
+        }
+    }
+}
+
+/// 冷启动导入失败时把 splash 放行到首页（避免停在「正在打开文档…」）。
+/// `url`：引擎入口地址（wait_engine 拿到 info 时用它）；引擎端口未知时传 None，
+/// 用相对跳转落在当前 origin（splash 与引擎同 origin 或经启动页跳转后的同源）。
+fn bail_to_home(app: &AppHandle, url: Option<&str>) {
+    if let Some(win) = app.get_webview_window("main") {
+        let target = url
+            .map(|u| u.to_string())
+            .unwrap_or_else(|| "/?native=tauri".to_string());
+        if let Ok(js) = serde_json::to_string(&target) {
             let _ = win.eval(&format!("location.href = {js}"));
         }
     }

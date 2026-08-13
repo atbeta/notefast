@@ -14,6 +14,16 @@ use tauri::{AppHandle, Manager, State};
 /// 全局 engine 句柄（同一时刻只有一个内嵌实例）
 struct EngineState(Mutex<Option<EngineHandle>>);
 
+/// 冷启动是否带入 .md 待打开文件：splash 据此决定停留等导入（而非先跳文档列表）。
+/// 用独立标志而非直接查 argv——setup 后 argv 不再可得，且 single_instance 回调的
+/// 第二实例 argv 不应影响已运行实例的启动页行为。
+struct PendingOpenFiles(Mutex<bool>);
+
+#[tauri::command]
+fn has_pending_open_files(state: State<'_, PendingOpenFiles>) -> bool {
+    state.0.lock().map(|g| *g).unwrap_or(false)
+}
+
 /// 启动内嵌 engine 并返回入口信息；已运行则直接返回既有实例（幂等）。
 /// 阻塞握手放线程池执行，避免卡住主线程/UI。
 #[tauri::command]
@@ -132,18 +142,21 @@ pub fn run() {
                 let _ = win.set_focus();
             }
             // 已运行时双击 .md：第二实例 argv 带文件路径 → 打开即导入
+            // （is_initial=false：应用已运行，导入完成后延时跳转即可，不改变启动页行为）
             let files: Vec<PathBuf> = args
                 .into_iter()
                 .map(PathBuf::from)
                 .filter(|p| import::is_markdown_path(p) && p.is_file())
                 .collect();
-            import::handle_open_files(app, files);
+            import::handle_open_files(app, files, false);
         }))
         // 保存对话框 + 文件写入：前端导出 markdown/zip 时让用户选位置（而非静默下载到 Downloads）
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(EngineState(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![engine_start])
+        // 冷启动带入文件才置位；single_instance 第二实例导入不影响
+        .manage(PendingOpenFiles(Mutex::new(!initial_files.is_empty())))
+        .invoke_handler(tauri::generate_handler![engine_start, has_pending_open_files])
         .setup(move |app| {
             // 启动闪屏：conf 里 visible=false，先按系统主题设 webview 底色再 show。
             // 色值对齐 ui/index.html 的 --bg（#f4f5f9 / #15161a），避免先闪 conf 默认深色。
@@ -155,9 +168,10 @@ pub fn run() {
                 let _ = win.set_background_color(Some(tauri::webview::Color::from((r, g, b, 255))));
                 let _ = win.show();
             }
-            // 冷启动带入的 .md：engine 由前端启动页拉起，import 内部会等它就绪
+            // 冷启动带入的 .md：engine 由前端启动页拉起，import 内部会等它就绪。
+            // is_initial=true：splash 会停留等导入完成，避免先闪现文档列表
             if !initial_files.is_empty() {
-                import::handle_open_files(&app.handle(), initial_files.clone());
+                import::handle_open_files(&app.handle(), initial_files.clone(), true);
             }
             Ok(())
         })
