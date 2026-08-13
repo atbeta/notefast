@@ -92,6 +92,7 @@
     "dropHintSub": "md 引用本地图片时：请把图片与 md 一起选中（或拖入整个文件夹），或打包为 .zip 后导入",
     "missingLocalImages": "文档引用了 {{n}} 张本地图片（{{names}}…）但未选择图片文件。请把图片与 .md 一起选中、拖入整个文件夹，或打包为 .zip 后导入，否则图片会缺失。",
     "zipImporting": "正在导入 zip…",
+    "docxImporting": "正在导入 Word 文档…",
     "zipImported": "已导入 {{n}} 篇文档",
     "zipMediaImported": "（含 {{n}} 个媒体文件）",
     "zipSkipped": "跳过 {{n}} 篇",

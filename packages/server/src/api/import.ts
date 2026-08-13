@@ -1,18 +1,20 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { createHash } from 'node:crypto'
+import mammoth from 'mammoth'
 import { importMarkdownSchema, rowToBlock, readDocStatus, readTags } from '@notefast/core'
 import { getDb } from '../db'
 import { findDocIdBySource, getBlockById, getBlocksByIds, updateBlock } from '../store/blocks'
 import { fireAfterCreate, fireAfterCreateMany, fireDocAfterCreate } from '../services/hooks'
 import { emitAppEvent } from '../events'
 import { scheduleSyncNow } from '../sync/protocolManager'
-import { extractAssetRefs, findMissingAssets, ingestLocalImageRefs, readLocalImageCandidate, readUploadedImageCandidate } from '../assets/store'
+import { extractAssetRefs, findMissingAssets, ingestLocalImageRefs, readLocalImageCandidate, readUploadedImageCandidate, saveAsset } from '../assets/store'
 import { EmptyMarkdownError, insertDocFromMarkdown, normalizeDocTags, type DocSourceRef, type InsertDocFromMarkdownResult } from '../services/docImport'
 import {
   createDocFromMarkdownFile,
   DocFileImportError,
   extractTitleFromMarkdown,
+  normalizeMarkdownFileContent,
 } from '../services/docFileImport'
 import { MAX_MARKDOWN_IMPORT_BYTES } from '../services/markdownStage'
 import { MAX_ARCHIVE_IMPORT_BYTES, importArchiveZip } from '../services/zipImport'
@@ -357,6 +359,99 @@ importRouter.post('/zip', async (c) => {
     media_imported: result.mediaImported,
     errors: result.errors.slice(0, 20),
   }, 200)
+})
+
+/**
+ * Web /new 导入 tab 的 .docx 支持：mammoth 转 Markdown 后复用
+ * createDocFromMarkdownFile 入库（标题/正文/列表/表格还原；内嵌图片提取为
+ * asset:<sha>）。仅共享导入界面（浏览器 + 客户端内嵌 Web）使用，原生壳层
+ * 双击打开不支持 docx（shell 文件关联只注册 md/txt）。
+ */
+importRouter.post('/docx', async (c) => {
+  const body = await c.req.parseBody({ all: true })
+  const fileField = body['file']
+  if (!fileField || typeof fileField === 'string') {
+    return c.json({ error: 'bad_request', message: '缺少 file 字段（multipart docx 文件）' }, 400)
+  }
+  const file = fileField as File
+  const buf = Buffer.from(await file.arrayBuffer())
+  if (buf.byteLength === 0) {
+    return c.json({ error: 'bad_request', message: '文件内容为空' }, 400)
+  }
+  if (buf.byteLength > MAX_MARKDOWN_IMPORT_BYTES) {
+    return c.json({
+      error: 'bad_request',
+      message: `文件不得超过 ${MAX_MARKDOWN_IMPORT_BYTES} 字节`,
+    }, 400)
+  }
+
+  const notebookId = resolveNotebookId(body['notebook_id'])
+  if (!notebookId) {
+    return c.json({ error: 'bad_request', message: '未找到可用的笔记本' }, 400)
+  }
+
+  // 提取 docx 内嵌图片：mammoth 的 imgElement 回调拿 buffer，转成 asset:<sha>
+  const assetSrcs = new Map<string, string>()
+  const converter = mammoth.images.imgElement(async (image: { contentType: string; readAsBuffer: () => Promise<Buffer> }) => {
+    const data = await image.readAsBuffer()
+    const contentType = image.contentType || 'image/png'
+    if (data.length === 0) {
+      return { src: '' }
+    }
+    const { meta } = saveAsset(data, contentType)
+    const src = `asset:${meta.id}`
+    assetSrcs.set(src, src)
+    return { src }
+  })
+
+  let markdown: string
+  try {
+    // convertToMarkdown 运行时存在但上游 .d.ts 漏声明，经 any 访问（声明合并对 export= 模块无效）
+    const mammothAny = mammoth as unknown as {
+      convertToMarkdown: (input: { buffer: Buffer }, options: { convertImage: unknown }) => Promise<{ value: string }>
+    }
+    const result = await mammothAny.convertToMarkdown(
+      { buffer: buf },
+      { convertImage: converter },
+    )
+    markdown = result.value
+  } catch (e) {
+    return c.json({ error: 'bad_request', message: `docx 解析失败：${e instanceof Error ? e.message : String(e)}` }, 400)
+  }
+
+  const content = normalizeMarkdownFileContent(markdown)
+  if (!content.trim()) {
+    return c.json({ error: 'bad_request', message: 'docx 未提取到文本内容' }, 400)
+  }
+
+  const title = typeof body['title'] === 'string' && body['title'].trim()
+    ? body['title'].trim()
+    : file.name.replace(/\.docx$/i, '')
+  const statusRaw = typeof body['status'] === 'string' ? body['status'] : undefined
+  const status = statusRaw === 'inbox' || statusRaw === 'note' ? statusRaw : undefined
+  const parsedTags = parseTagsField(body['tags'])
+  const tags = parsedTags ? normalizeDocTags(parsedTags) : undefined
+
+  const db = getDb()
+  try {
+    const result = createDocFromMarkdownFile(db, {
+      notebookId,
+      content,
+      title,
+      filename: file.name || undefined,
+      status,
+      tags,
+    })
+    return c.json({
+      ...respondCreated(result, content),
+      ...(assetSrcs.size > 0 ? { media_imported: assetSrcs.size } : {}),
+    }, 201)
+  } catch (e) {
+    if (e instanceof DocFileImportError) {
+      return c.json({ error: 'bad_request', message: e.message }, 400)
+    }
+    throw e
+  }
 })
 
 export default importRouter

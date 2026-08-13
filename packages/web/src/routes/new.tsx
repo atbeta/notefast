@@ -49,6 +49,7 @@ export default function NewDocPage() {
   const [activeTab, setActiveTab] = useState<'create' | 'import'>('create')
   const [generating, setGenerating] = useState(false)
   const [zipImporting, setZipImporting] = useState(false)
+  const [docxImporting, setDocxImporting] = useState(false)
   const [zipResult, setZipResult] = useState<{
     imported: number
     skipped: number
@@ -171,6 +172,12 @@ export default function NewDocPage() {
       void handleZipFile(zip)
       return
     }
+    // docx：服务端 mammoth 转 markdown 入库（同导入界面共享逻辑，客户端内嵌同样生效）
+    const docx = list.find((f) => /\.docx$/i.test(f.name))
+    if (docx) {
+      void handleDocxFile(docx)
+      return
+    }
     // 取第一个 md / txt（或非图片非 zip 文本）作为文档内容；其余图片文件收集供收编
     const mdFile = list.find((f) => /\.(md|markdown|mdown|mkd|txt)$/i.test(f.name)) ?? list[0]
     if (!mdFile) return
@@ -184,6 +191,35 @@ export default function NewDocPage() {
       setActiveTab('create')
     }
     reader.readAsText(mdFile)
+  }
+
+  /** 上传 docx 直接导入：服务端 mammoth 转 markdown 并入库（含内嵌图片收编） */
+  const handleDocxFile = async (file: File) => {
+    setDocxImporting(true)
+    setError('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      if (notebookId) fd.append('notebook_id', notebookId)
+      const res = await fetchWithAuth('/import/docx', { method: 'POST', body: fd })
+      const body: unknown = await res.json().catch(() => null)
+      if (!res.ok) {
+        const message = (body as { message?: string } | null)?.message || `HTTP ${res.status}`
+        throw new ApiError(message, res.status, body)
+      }
+      const b = body as { doc?: { id: string }; index_job?: { id: string } }
+      const docId = b.doc?.id
+      if (!docId) throw new ApiError('docx 导入失败', res.status, body)
+      const q = new URLSearchParams()
+      const indexJobId = b.index_job?.id
+      if (indexJobId) q.set('index_job', indexJobId)
+      const qs = q.toString()
+      navigate('/doc/' + docId + (qs ? '?' + qs : ''))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDocxImporting(false)
+    }
   }
 
   /** 上传 zip 批量导入；结果原地展示（成功/跳过/失败明细），可继续导入或返回文档库 */
@@ -376,7 +412,7 @@ export default function NewDocPage() {
               <p className="text-xs text-muted-foreground">{t('newDoc.dropHintSub')}</p>
               <input
                 type="file"
-                accept=".md,.markdown,text/markdown,.txt,text/plain,.zip,application/zip,image/*"
+                accept=".md,.markdown,text/markdown,.txt,text/plain,.zip,application/zip,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
                 multiple
                 className="hidden"
                 onChange={(e) => {
@@ -394,7 +430,14 @@ export default function NewDocPage() {
             </div>
           )}
 
-          {error && !zipResult && !zipImporting && (
+          {docxImporting && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              {t('newDoc.docxImporting')}
+            </div>
+          )}
+
+          {error && !zipResult && !zipImporting && !docxImporting && (
             <p className="text-xs text-destructive bg-destructive/8 px-3 py-2 rounded-md">
               {error}
             </p>
