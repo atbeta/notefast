@@ -183,6 +183,18 @@ describe('importArchiveZip', () => {
     expect(titles.map((t) => t.content)).toContain('笔记二')
   })
 
+  test('通用 zip 的 .txt 也按文档导入（无 manifest）', async () => {
+    const zip = buildZipStore([
+      { name: 'notes/说明.txt', data: new TextEncoder().encode('这是纯文本内容\n\n第二段') },
+      { name: 'notes/其他.md', data: new TextEncoder().encode('# 其他\n\n正文') },
+    ])
+    const result = importArchiveZip(getDb(), { notebookId, bytes: zip })
+    expect(result.imported).toBe(2)
+    expect(result.failed).toBe(0)
+    const txtTitle = getDb().query("SELECT content FROM blocks WHERE type = 'document' AND content = '说明'").get() as { content: string } | undefined
+    expect(txtTitle).toBeDefined()
+  })
+
   test('通用 md zip 的相对路径图片（images/foo.png）收编为 asset: 并重写引用', async () => {
     const zip = buildZipStore([
       {

@@ -76,7 +76,7 @@ export function importArchiveZip(
       importedShas.has(sha.toLowerCase()) ? `asset:${sha.toLowerCase()}` : full,
     )
 
-  const mdEntries = entries.filter((e) => /\.md$/i.test(e.name) && e.name !== ARCHIVE_MANIFEST_NAME)
+  const mdEntries = entries.filter((e) => /\.(md|markdown|mdown|mkd|txt)$/i.test(e.name) && e.name !== ARCHIVE_MANIFEST_NAME)
 
   /** zip 内相对路径图片的读取器：先按 md 所在目录解析，再退回 zip 根（Obsidian 习惯根目录放附件） */
   const zipReader = (mdName: string) => (relPath: string): Buffer | null => {

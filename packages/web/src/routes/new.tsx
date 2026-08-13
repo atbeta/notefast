@@ -171,8 +171,8 @@ export default function NewDocPage() {
       void handleZipFile(zip)
       return
     }
-    // 取第一个 md（或非图片非 zip 文本）作为文档内容；其余图片文件收集供收编
-    const mdFile = list.find((f) => /\.(md|markdown|mdown|mkd)$/i.test(f.name)) ?? list[0]
+    // 取第一个 md / txt（或非图片非 zip 文本）作为文档内容；其余图片文件收集供收编
+    const mdFile = list.find((f) => /\.(md|markdown|mdown|mkd|txt)$/i.test(f.name)) ?? list[0]
     if (!mdFile) return
     const images = list.filter((f) => f !== mdFile && f.type.startsWith('image/'))
     const reader = new FileReader()
@@ -180,7 +180,7 @@ export default function NewDocPage() {
       const text = String(reader.result || '')
       setMarkdown(text)
       setImageFiles(images)
-      if (!title.trim()) setTitle(mdFile.name.replace(/\.(md|markdown|mdown|mkd)$/i, ''))
+      if (!title.trim()) setTitle(mdFile.name.replace(/\.(md|markdown|mdown|mkd|txt)$/i, ''))
       setActiveTab('create')
     }
     reader.readAsText(mdFile)
@@ -376,7 +376,7 @@ export default function NewDocPage() {
               <p className="text-xs text-muted-foreground">{t('newDoc.dropHintSub')}</p>
               <input
                 type="file"
-                accept=".md,.markdown,text/markdown,.zip,application/zip,image/*"
+                accept=".md,.markdown,text/markdown,.txt,text/plain,.zip,application/zip,image/*"
                 multiple
                 className="hidden"
                 onChange={(e) => {

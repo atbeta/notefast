@@ -48,7 +48,8 @@
           "md",
           "markdown",
           "mdown",
-          "mkd"
+          "mkd",
+          "txt"
         ],
         "name": "Markdown Document",
         "description": "Markdown 文档",

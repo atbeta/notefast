@@ -32,7 +32,7 @@ pub fn is_markdown_path(p: &Path) -> bool {
             .and_then(|e| e.to_str())
             .map(|e| e.to_ascii_lowercase())
             .as_deref(),
-        Some("md" | "markdown" | "mdown" | "mkd")
+        Some("md" | "markdown" | "mdown" | "mkd" | "txt")
     )
 }
 

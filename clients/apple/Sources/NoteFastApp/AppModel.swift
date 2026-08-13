@@ -255,7 +255,7 @@ final class AppModel: ObservableObject {
 
     /// AppDelegate 的 openFile(s) 入口：非 .md 后缀不接收（plist 已过滤，双保险）
     func importMarkdownFile(at url: URL) {
-        let exts: Set<String> = ["md", "markdown", "mdown", "mkd"]
+        let exts: Set<String> = ["md", "markdown", "mdown", "mkd", "txt"]
         guard exts.contains(url.pathExtension.lowercased()) else { return }
         guard isRunning else {
             pendingImportFiles.append(url)

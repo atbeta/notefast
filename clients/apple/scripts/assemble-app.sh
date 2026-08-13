@@ -106,6 +106,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
       <array>
         <string>net.daringfireball.markdown</string>
         <string>public.markdown</string>
+        <string>public.plain-text</string>
       </array>
       <key>CFBundleTypeExtensions</key>
       <array>
@@ -113,6 +114,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
         <string>markdown</string>
         <string>mdown</string>
         <string>mkd</string>
+        <string>txt</string>
       </array>
     </dict>
   </array>
