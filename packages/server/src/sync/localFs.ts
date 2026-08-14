@@ -1,8 +1,13 @@
 /**
  * LocalFS Sync Adapter — Markdown 单向归档
+ *
+ * 存储操作经 ObjectStore 抽象层（createLocalFsObjectStore），推送流程与
+ * S3 / WebDAV 共用 sync/archivePush 的 pushArchiveViaStore——
+ * media（asset: → media/<sha> 相对路径）与 manifest 清理与远端适配器
+ * 同语义，补上了此前 LocalFS 导出自包含性破缺（图片不落地）。
  */
 
-import { mkdirSync, writeFileSync, existsSync, readdirSync, statSync, readFileSync, unlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   type SyncAdapter,
@@ -12,16 +17,9 @@ import {
   type LocalFsAdapterConfig,
 } from '@notefast/core'
 import { getDb } from '../db'
-import { countDocRows, listDocRows } from '../store/blocks'
-import { portableDocMarkdown } from '../services/portableMarkdown'
-import {
-  ARCHIVE_MANIFEST_NAME,
-  archiveFilename,
-  buildArchiveManifest,
-  isArchiveManifest,
-  staleArchiveKeys,
-  type ArchiveManifest,
-} from './archive'
+import { countDocRows } from '../store/blocks'
+import { createLocalFsObjectStore } from '../storage/webdavStore'
+import { pushArchiveViaStore } from './archivePush'
 
 function countMdFiles(dir: string): number {
   if (!existsSync(dir)) return 0
@@ -43,17 +41,6 @@ function countDocs(db: ReturnType<typeof getDb>): number {
   return countDocRows(db)
 }
 
-function loadPreviousManifest(dir: string): ArchiveManifest | null {
-  const path = join(dir, ARCHIVE_MANIFEST_NAME)
-  if (!existsSync(path)) return null
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown
-    return isArchiveManifest(parsed) ? parsed : null
-  } catch {
-    return null
-  }
-}
-
 export function createLocalFsAdapter(cfg: LocalFsAdapterConfig): SyncAdapter {
   if (!cfg.enabled) {
     throw new Error('LocalFs adapter not enabled')
@@ -62,12 +49,14 @@ export function createLocalFsAdapter(cfg: LocalFsAdapterConfig): SyncAdapter {
     throw new Error('LocalFs dir 不能为空')
   }
 
+  const dir = cfg.dir
+  const store = createLocalFsObjectStore(dir)
+
   return {
     name: 'localfs',
 
     async info(): Promise<SyncInfo> {
       const db = getDb()
-      const dir = cfg.dir
       const exists = existsSync(dir)
       return {
         lastSyncAt: undefined,
@@ -82,54 +71,13 @@ export function createLocalFsAdapter(cfg: LocalFsAdapterConfig): SyncAdapter {
     },
 
     async push(options?: PushOptions): Promise<SyncResult> {
-      const dir = cfg.dir
       const prefix = (options?.prefix ?? cfg.prefix ?? '').trim()
       try {
         if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
       } catch (e) {
         return { pushed: 0, pulled: 0, errors: [`mkdir 失败: ${e instanceof Error ? e.message : e}`] }
       }
-
-      const db = getDb()
-      // 归档镜像活库：软删除文档不导出（下次全量同步时经 manifest 清理远端陈旧文件）
-      const docs = listDocRows(db, { docIds: options?.docIds, order: 'updated_asc' })
-      const result: SyncResult = { pushed: 0, pulled: 0, errors: [] }
-      const files: ArchiveManifest['files'] = []
-      const previous =
-        !options?.docIds || options.docIds.length === 0 ? loadPreviousManifest(dir) : null
-
-      for (const doc of docs) {
-        try {
-          const markdown = portableDocMarkdown(doc)
-          const filename = archiveFilename(doc.content || 'untitled', doc.id)
-          const outName = prefix ? `${prefix}${filename}` : filename
-          writeFileSync(join(dir, outName), markdown, 'utf-8')
-          files.push({
-            docId: doc.id,
-            title: doc.content || 'untitled',
-            filename: outName,
-            key: outName,
-          })
-          result.pushed++
-        } catch (e) {
-          result.errors.push(`${doc.id}: ${e instanceof Error ? e.message : String(e)}`)
-        }
-      }
-
-      if (!options?.docIds || options.docIds.length === 0) {
-        const manifest = buildArchiveManifest({ adapter: 'localfs', files })
-        const stale = staleArchiveKeys(previous, manifest)
-        for (const key of stale) {
-          try {
-            unlinkSync(join(dir, key))
-          } catch {
-            /* ignore missing */
-          }
-        }
-        writeFileSync(join(dir, ARCHIVE_MANIFEST_NAME), JSON.stringify(manifest, null, 2) + '\n', 'utf-8')
-      }
-
-      return result
+      return pushArchiveViaStore(store, 'localfs', prefix, options)
     },
   }
 }

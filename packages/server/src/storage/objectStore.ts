@@ -27,8 +27,8 @@ export type ObjectBody = string | Uint8Array
 export interface ObjectStore {
   /** 校验后端可用（鉴权 / 连通性） */
   testConnection(): Promise<{ ok: boolean; error?: string }>
-  /** 写入对象；覆盖已有 */
-  putObject(key: string, body: ObjectBody): Promise<void>
+  /** 写入对象；覆盖已有。contentType 可选（S3/WebDAV 透传；LocalFS 忽略） */
+  putObject(key: string, body: ObjectBody, contentType?: string): Promise<void>
   /** 读取对象；不存在返回 undefined */
   getObject(key: string): Promise<Uint8Array | undefined>
   /** 列举指定前缀下的全部对象键（含子前缀，自动翻页） */
@@ -83,8 +83,13 @@ export function createS3ObjectStore(cfg: S3ObjectStoreConfig, injected?: S3Clien
       }
     },
 
-    async putObject(key, body) {
-      await s3.send(new PutObjectCommand({ Bucket: cfg.bucket, Key: key, Body: body }))
+    async putObject(key, body, contentType) {
+      await s3.send(new PutObjectCommand({
+        Bucket: cfg.bucket,
+        Key: key,
+        Body: body,
+        ...(contentType ? { ContentType: contentType } : {}),
+      }))
     },
 
     async getObject(key) {

@@ -425,6 +425,7 @@ export class AiRuntime {
       maxTokens: options?.maxTokens,
       model: options?.model,
       responseFormat: options?.responseFormat,
+      signal: options?.signal,
     })
   }
 
@@ -446,6 +447,7 @@ export class AiRuntime {
       model: options?.model,
       responseFormat: options?.responseFormat,
       tools: options?.tools,
+      signal: options?.signal,
     })
   }
 
@@ -458,6 +460,7 @@ export class AiRuntime {
       model?: string
       responseFormat?: ResponseFormat
       tools?: ToolDefinition[]
+      signal?: AbortSignal
     },
   ): AsyncGenerator<StreamChatChunk> {
     // chatProvider 存在 ⟺ cfg.chat 已配置（reload 时同步重建），此处为防御性取值
@@ -476,7 +479,7 @@ export class AiRuntime {
         url,
         headers,
         buildStreamBody(model, messages, options),
-        { timeoutMs: p.timeoutMs, errorLabel: 'LLM stream' },
+        { timeoutMs: p.timeoutMs, signal: options.signal, errorLabel: 'LLM stream' },
       )
       for await (const payload of sse) {
         const delta = parseSseDelta(payload)
@@ -492,8 +495,11 @@ export class AiRuntime {
       const tool_calls = buildFinalToolCalls(toolAcc)
       yield { content: '', done: true, ...(tool_calls.length > 0 ? { tool_calls } : {}) }
     } catch (e) {
-      this.usage.chatErrors++
-      this.setError('chat', e instanceof Error ? e.message : String(e))
+      // 调用方主动中断不算 provider 错误（客户端断连等，不污染失败计数）
+      if ((e as { name?: string }).name !== 'AbortError') {
+        this.usage.chatErrors++
+        this.setError('chat', e instanceof Error ? e.message : String(e))
+      }
       throw e
     }
   }
@@ -719,7 +725,7 @@ function createChatProvider(p: ProviderDefinition, fetchImpl: typeof fetch): LLM
         ...(options?.responseFormat ? { response_format: options.responseFormat } : {}),
         ...(options?.tools && options.tools.length > 0 ? { tools: options.tools } : {}),
       },
-      { timeoutMs: p.timeoutMs, errorLabel: 'LLM API' },
+      { timeoutMs: p.timeoutMs, signal: options?.signal, errorLabel: 'LLM API' },
     )
     const msg = json.choices?.[0]?.message
     const content = stripThinkTags(msg?.content ?? '')

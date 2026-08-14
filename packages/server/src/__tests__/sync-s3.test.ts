@@ -58,6 +58,7 @@ function createStubClient(opts: { failKeys?: Set<string> } = {}): {
         return {
           Body: {
             transformToString: async () => body,
+            transformToByteArray: async () => new TextEncoder().encode(body),
           },
         }
       }

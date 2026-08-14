@@ -555,3 +555,38 @@ describe('parseLlmJson（LLM JSON 容错解析共享路径）', () => {
     expect(parseLlmJson('')).toBeNull()
   })
 })
+
+describe('signal 贯穿（客户端断连取消上游请求）', () => {
+  test('chat options.signal 传到 fetch；abort 中止进行中的请求（AbortError 不污染失败计数）', async () => {
+    let receivedSignal: AbortSignal | null = null
+    const fetchImpl = ((_url: string | URL | Request, init?: RequestInit) => {
+      receivedSignal = init?.signal ?? null
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'))
+        })
+      })
+    }) as unknown as typeof fetch
+    const r = makeRuntime(makeFullConfig(), fetchImpl)
+    const ac = new AbortController()
+    const p = r.chat([{ role: 'user', content: 'x' }], { signal: ac.signal })
+    ac.abort()
+    await expect(p).rejects.toThrow()
+    expect(receivedSignal).not.toBeNull()
+  })
+
+  test('不传 signal 且未配超时：不附带 AbortSignal（保持既有请求形态）', async () => {
+    let receivedSignal: AbortSignal | null | undefined = null
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      receivedSignal = init?.signal
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as unknown as typeof fetch
+    const r = makeRuntime(makeFullConfig({ timeoutMs: undefined }), fetchImpl)
+    const out = await r.chat([{ role: 'user', content: 'x' }])
+    expect(out).toBe('ok')
+    expect(receivedSignal).toBeUndefined()
+  })
+})

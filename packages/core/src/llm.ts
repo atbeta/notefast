@@ -51,6 +51,8 @@ export interface ChatCompletionOptions {
   maxTokens?: number
   /** 让模型强制返回 JSON（仅 OpenAI 兼容服务支持） */
   responseFormat?: ResponseFormat
+  /** 调用方中断信号（客户端断连等）；与 provider 超时任一触发即中止请求 */
+  signal?: AbortSignal
 }
 
 /** OpenAI 兼容的 function/tool 定义 */

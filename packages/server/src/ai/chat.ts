@@ -89,6 +89,8 @@ export interface RunChatOptions {
   maxToolRounds?: number
   /** 助手语言：zh / en（默认 zh） */
   lang?: AiLang
+  /** 客户端断连信号：贯穿到上游 LLM 请求，断连即取消（省 token） */
+  signal?: AbortSignal
 }
 
 function fixHint(lang: AiLang): string {
@@ -439,6 +441,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
               temperature: opts.temperature ?? 0.3,
               maxTokens: opts.maxTokens ?? 2000,
               tools: getAllToolDefinitions(lang),
+              signal: opts.signal,
             }),
           )
           let next = await gen.next()
@@ -469,6 +472,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
                 temperature: opts.temperature ?? 0.3,
                 maxTokens: opts.maxTokens ?? 2000,
                 tools: getAllToolDefinitions(lang),
+                signal: opts.signal,
               })
               if (result && result.tool_calls.length > 0 && round < maxRounds) {
                 toolCalls = result.tool_calls
@@ -491,6 +495,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
                   runtime.streamChat(workingMessages, {
                     temperature: opts.temperature ?? 0.3,
                     maxTokens: opts.maxTokens ?? 2000,
+                    signal: opts.signal,
                   }),
                 )) {
                   if (ev.type === 'token') sentTokens = true
@@ -579,6 +584,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
           runtime.streamChat(workingMessages, {
             temperature: opts.temperature ?? 0.3,
             maxTokens: opts.maxTokens ?? 2000,
+            signal: opts.signal,
           }),
         )) {
           yield ev

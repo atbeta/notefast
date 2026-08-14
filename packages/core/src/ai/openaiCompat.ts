@@ -29,10 +29,22 @@ export function buildHeaders(apiKey: string, extraHeaders?: Record<string, strin
 }
 
 export interface PostOptions {
-  /** 超时毫秒；不传则不设超时（请求也不附带 AbortSignal） */
+  /** 超时毫秒；不传则不设超时 */
   timeoutMs?: number
+  /** 调用方中断信号（如 HTTP 客户端断连）；与超时共用——任一触发即中止请求 */
+  signal?: AbortSignal
   /** 错误前缀，如 'LLM API' → `LLM API 500: <body 前 300 字符>` */
   errorLabel: string
+}
+
+/** 组合两个中断信号（任一 abort 即触发） */
+function combineSignals(a: AbortSignal, b: AbortSignal): AbortSignal {
+  if (a.aborted || b.aborted) return AbortSignal.abort()
+  const ac = new AbortController()
+  const onAbort = () => ac.abort()
+  a.addEventListener('abort', onAbort, { once: true })
+  b.addEventListener('abort', onAbort, { once: true })
+  return ac.signal
 }
 
 /**
@@ -51,12 +63,18 @@ async function postRaw(
   const clear = (): void => {
     if (timer !== undefined) clearTimeout(timer)
   }
+  const signal =
+    timer !== undefined || opts.signal
+      ? opts.signal
+        ? combineSignals(opts.signal, ac.signal)
+        : ac.signal
+      : undefined
   try {
     const res = await fetchImpl(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
-      ...(timer !== undefined ? { signal: ac.signal } : {}),
+      ...(signal ? { signal } : {}),
     })
     if (!res.ok || (opts.requireBody && !res.body)) {
       const err = await res.text().catch(() => '')

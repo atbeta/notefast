@@ -26,6 +26,8 @@ export interface WriteOptions {
   targetLang?: string
   temperature?: number
   maxTokens?: number
+  /** 客户端断连信号：贯穿到上游 LLM 请求 */
+  signal?: AbortSignal
 }
 
 const MODE_LABELS: Record<WriteMode, string> = {
@@ -74,6 +76,7 @@ export async function* streamWrite(opts: WriteOptions): AsyncGenerator<WriteEven
     for await (const chunk of runtime.streamChat(messages, {
       temperature: opts.temperature ?? 0.4,
       maxTokens: opts.maxTokens ?? 1024,
+      signal: opts.signal,
     })) {
       if (chunk.content) {
         const out = takeContent(thinkParser.push(chunk.content).content)

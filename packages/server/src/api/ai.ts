@@ -581,6 +581,8 @@ ai.post('/chat', zValidator('json', chatSchema), async (c) => {
           temperature: body.temperature,
           maxTokens: body.max_tokens,
           lang: resolveAiLang(c.req.header('accept-language')),
+          // 客户端断连 → 上游 LLM 请求随之取消（省 token；AbortError 静默）
+          signal: c.req.raw.signal,
         })) {
           if (ev.type === 'retrieval') {
             await sse.writeSSE({ event: 'retrieval', data: JSON.stringify(ev.report) })
@@ -623,6 +625,7 @@ ai.post('/chat', zValidator('json', chatSchema), async (c) => {
       rerankWindow: body.rerank_window,
       temperature: body.temperature,
       maxTokens: body.max_tokens,
+      signal: c.req.raw.signal,
     })
     return c.json(result)
   } catch (e) {
@@ -712,6 +715,7 @@ ai.post('/write', zValidator('json', writeSchema), async (c) => {
       targetLang: body.target_lang,
       temperature: body.temperature,
       maxTokens: body.max_tokens,
+      signal: c.req.raw.signal,
     })) {
       if (ev.type === 'token') {
         await sse.writeSSE({ event: 'token', data: JSON.stringify({ content: ev.content }) })

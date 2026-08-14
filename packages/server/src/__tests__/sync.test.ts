@@ -147,6 +147,29 @@ describe('LocalFS Adapter — 单元', () => {
     const files = readdirSync(exportDir)
     expect(files.length).toBe(1)
   })
+
+  test('push 带图片引用：media 落地 + asset: 重写为相对路径（导出自包含）', async () => {
+    initSyncManager(testDir)
+    const { initAssetStore, saveAsset } = await import('../assets/store')
+    initAssetStore(testDir)
+    const { meta } = saveAsset(Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]), 'image/png')
+    const adapter = createLocalFsAdapter({ kind: 'localfs', dir: exportDir, enabled: true })
+    seedDocWithBlocks({
+      docTitle: '带图文档',
+      blocks: [{ content: `看图 ![](asset:${meta.id}) 结束` }],
+    })
+    const r = await adapter.push()
+    expect(r.pushed).toBe(1)
+
+    const md = readdirSync(exportDir).find((f) => f.endsWith('.md'))
+    const content = readFileSync(join(exportDir, md!), 'utf-8')
+    // asset: 内部引用被重写为 media/ 相对路径
+    expect(content).not.toContain(`asset:${meta.id}`)
+    expect(content).toContain('media/')
+    // media 文件落地
+    const mediaFiles = readdirSync(join(exportDir, 'media'))
+    expect(mediaFiles.length).toBe(1)
+  })
 })
 
 describe('Sync Manager — 配置持久化与热重载', () => {
