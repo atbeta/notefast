@@ -1,5 +1,7 @@
 import type { Block, DocumentEventPayload } from '@notefast/core'
 import { getPluginSystem } from './aiRuntime'
+import { emitAppEvent } from '../events'
+import { scheduleSyncNow } from '../sync/protocolManager'
 
 /**
  * Hook 触发器
@@ -103,4 +105,24 @@ export function fireDocAfterShareRevoked(payload: DocumentEventPayload): void {
 /** 文档软删除完成 */
 export function fireDocAfterDelete(payload: DocumentEventPayload): void {
   fireDoc('afterDelete', payload)
+}
+
+// ───────────────────── 文档级操作审计 ─────────────────────
+
+/** 文档级操作审计（写路径统一出口）：记录谁在何时对哪个文档做了什么 */
+export function auditDocAction(
+  action: string,
+  docId: string,
+  fields?: Record<string, unknown>,
+): void {
+  emitAppEvent({
+    source: 'web',
+    actor: 'admin',
+    action,
+    target: { type: 'doc', id: docId },
+    outcome: 'success',
+    fields,
+  })
+  // 文档写入后去抖自动同步（fire-and-forget，未配置同步时静默跳过）
+  scheduleSyncNow()
 }

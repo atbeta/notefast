@@ -8,59 +8,36 @@ import {
   fetchDocBlocks,
   fetchDocBlockIds,
   fetchSubtreeBlocks,
-  fetchDeletedSubtreeIds,
   getBlockById,
   getDocById,
   getLiveDocById,
   getDocNeighbors,
-  getDeletedBlockById,
   getBlocksByIds,
   listDocRows,
   updateBlock,
   softDeleteBlocks,
-  hardDeleteBlocks,
-  deleteBlockRevisions,
   listDocRevisions,
   recordDocSnapshot,
   getDocSnapshot,
   nowTimestamp,
-  listDeletedDocRows,
 } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
-import { getShareByDocId, createShare, deleteShare, setShareExpiry, deleteSharesByDocIds, listSharedDocIds } from '../store/shares'
+import { deleteShare, deleteSharesByDocIds, listSharedDocIds } from '../store/shares'
 import { insertDocFromMarkdown, insertChildBlocks, normalizeDocTags } from '../services/docImport'
-import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany, fireDocAfterCreate, fireDocAfterStatusChange, fireDocAfterTagChange, fireDocAfterShare, fireDocAfterShareRevoked, fireDocAfterDelete } from '../services/hooks'
+import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany, fireDocAfterCreate, fireDocAfterStatusChange, fireDocAfterTagChange, fireDocAfterDelete, auditDocAction } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { writeDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
 import { readDocAiExclude } from '../ai/aiExcludeQuery'
 import { reanalyzeDoc } from '../ai/autoLink'
-import { deleteVector } from '../ai/indexer'
 import { scheduleDocIndex } from '../ai/indexJobs'
 import { buildDocExportFile, contentDispositionAttachment } from '../services/docExport'
+import { registerShareRoutes } from './docShare'
+import { registerTrashRoutes } from './docTrash'
 import { listRelatedDocs } from '../services/docRelated'
-import { emitAppEvent } from '../events'
 import { scheduleSyncNow } from '../sync/protocolManager'
 
 const docs = new Hono()
-
-/** 文档级操作审计（写路径统一出口）：记录谁在何时对哪个文档做了什么 */
-function auditDocAction(
-  action: string,
-  docId: string,
-  fields?: Record<string, unknown>,
-): void {
-  emitAppEvent({
-    source: 'web',
-    actor: 'admin',
-    action,
-    target: { type: 'doc', id: docId },
-    outcome: 'success',
-    fields,
-  })
-  // 文档写入后去抖自动同步（fire-and-forget，未配置同步时静默跳过）
-  scheduleSyncNow()
-}
 
 docs.get('/list', (c) => {
   const db = getDb()
@@ -165,16 +142,9 @@ docs.get('/tree', (c) => {
 
 // 回收站：软删除文档列表（恢复走 POST /blocks/:id/restore，整子树恢复）。
 // 必须注册在 /:id 之前，否则 'trash' 被当作文档 id。
-docs.get('/trash', (c) => {
-  const db = getDb()
-  return c.json(
-    listDeletedDocRows(db).map((r) => ({
-      id: r.id,
-      title: r.content,
-      deleted_at: r.updated_at,
-    })),
-  )
-})
+// 回收站路由（GET/DELETE /trash、DELETE /:id/permanent）：
+// 必须先于 /:id 注册（'trash' 会被 :id 吞掉），整体提前到这里
+registerTrashRoutes(docs)
 
 /** 侧栏徽章计数：一次请求返回各集合文档数（与 /list 同谓词，Node 端统计） */
 docs.get('/counts', (c) => {
@@ -372,115 +342,8 @@ const aiExcludeSchema = z.object({
   ai_exclude: z.boolean(),
 })
 
-// ───────────────────── 分享（公开只读链接）─────────────────────
-// 独立 shares 表：开关不触发 updated_at / hooks / 索引 / change feed。
-// 允许分享 inbox / archived 文档（显式用户行为覆盖默认过滤）；
-// ai_exclude 文档也可分享，但首次开启需 confirm_ai_exclude 显式确认（见下）。
-// 有效期：默认永不过期（Notion 同款），可选 1/7/30 天；过期 = 未分享（惰性清理）。
-
-const sharePutSchema = z.object({
-  expires_in_days: z.union([z.literal(1), z.literal(7), z.literal(30)]).nullish(),
-  /** 对 ai_exclude 文档首次开启分享时的显式确认（防误触外泄） */
-  confirm_ai_exclude: z.boolean().optional(),
-})
-
-docs.get('/:id/share', (c) => {
-  const db = getDb()
-  const id = c.req.param('id')
-
-  if (!getLiveDocById(db, id)) {
-    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
-  }
-
-  const share = getShareByDocId(db, id)
-  return c.json(share
-    ? {
-        shared: true,
-        token: share.token,
-        path: `/s/${share.token}`,
-        created_at: share.created_at,
-        expires_at: share.expires_at,
-      }
-    : { shared: false })
-})
-
-docs.put('/:id/share', async (c) => {
-  const db = getDb()
-  const id = c.req.param('id')
-
-  if (!getLiveDocById(db, id)) {
-    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
-  }
-
-  // body 可选（空 body = {}）；仅 expires_in_days 一个字段，手工校验
-  const rawBody = await c.req.json().catch(() => ({}))
-  const parsed = sharePutSchema.safeParse(rawBody)
-  if (!parsed.success) {
-    return c.json({ error: 'bad_request', message: 'expires_in_days 只接受 1 / 7 / 30 / null' }, 400)
-  }
-
-  const expiryDays = parsed.data.expires_in_days
-
-  // Guardrail：对 ai_exclude 文档首次开启公开分享需要显式确认。
-  // 「对 AI 隐藏」不等于「不能分享」（显式用户行为仍可覆盖），但公开链接
-  // 对任何持有者裸读全文、默认永不过期，误触代价高，所以服务端强制二次确认。
-  // 已开启的 PUT（仅调整有效期，无新增暴露面）不重复要求确认。
-  if (
-    parsed.data.confirm_ai_exclude !== true &&
-    !getShareByDocId(db, id) &&
-    readDocAiExclude(id) === true
-  ) {
-    return c.json({
-      error: 'ai_exclude_share_needs_confirm',
-      message: '该文档已标记「对 AI 隐藏」。开启公开分享后，任何拿到链接的人无需登录即可阅读全文；确认仍要分享请带 confirm_ai_exclude: true 重试',
-    }, 409)
-  }
-
-  // 幂等：已开启返回现有 token；带 expires_in_days 时以现在为起点调整有效期。
-  // 事务包裹：开启 + 调有效期两步写入对并发 PUT 原子（createShare 内部 ON CONFLICT 兜底）
-  const share = db.transaction(() => {
-    const created = createShare(db, id)
-    return expiryDays !== undefined ? setShareExpiry(db, id, expiryDays)! : created
-  })()
-  const docRow2 = getLiveDocById(db, id)
-  if (docRow2) {
-    fireDocAfterShare({
-      doc: rowToBlock(docRow2),
-      meta: { token: share.token, path: `/s/${share.token}`, expires_at: share.expires_at },
-    })
-  }
-  auditDocAction('doc.shared', id, { token: share.token, expires_at: share.expires_at })
-  return c.json({
-    token: share.token,
-    path: `/s/${share.token}`,
-    created_at: share.created_at,
-    expires_at: share.expires_at,
-  })
-})
-
-docs.delete('/:id/share', (c) => {
-  const db = getDb()
-  const id = c.req.param('id')
-
-  if (!getLiveDocById(db, id)) {
-    return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
-  }
-
-  // 幂等：本就没开启也返回成功；关闭后旧链接立即 404，重开生成全新 token
-  const existing = getShareByDocId(db, id)
-  deleteShare(db, id)
-  const docRow3 = getLiveDocById(db, id)
-  if (docRow3 && existing) {
-    fireDocAfterShareRevoked({
-      doc: rowToBlock(docRow3),
-      meta: { token: existing.token },
-    })
-  }
-  if (existing) {
-    auditDocAction('doc.share_revoked', id, { token: existing.token })
-  }
-  return c.json({ deleted: true })
-})
+// 分享（公开只读链接）路由：从 api/docShare.ts 注册
+registerShareRoutes(docs)
 
 docs.patch('/:id/ai-exclude', async (c) => {
   const id = c.req.param('id')
@@ -508,68 +371,6 @@ docs.patch('/:id/ai-exclude', async (c) => {
     updated_at: updated.updated_at,
     ...(effect ? { effect } : {}),
   })
-})
-
-/**
- * 永久删除一棵已软删除的文档子树（不可恢复）：
- * 事务内物理清理 blocks 行 + 引用/提及/分享/修订/快照；向量异步清除
- * （vec 后端有 BEFORE DELETE 触发器兜底，JSON 后端靠 deleteVector 显式删）。
- * 仅允许删除回收站中的文档（is_deleted = 1），活文档须先走软删除。
- */
-async function purgeDeletedDoc(
-  db: ReturnType<typeof getDb>,
-  id: string,
-): Promise<{ ok: true; count: number } | { ok: false; error: 'not_found' }> {
-  const existing = getDeletedBlockById(db, id)
-  if (!existing) return { ok: false, error: 'not_found' }
-
-  const allIds = [id, ...fetchDeletedSubtreeIds(db, id)]
-
-  db.transaction(() => {
-    deleteRefsTouchingBlocks(db, allIds)
-    deleteMentionsTouchingBlocks(db, allIds)
-    if (existing.type === 'document') {
-      // 分享记录随文档根删除（恢复不复活旧 token，与软删除语义一致）
-      deleteSharesByDocIds(db, [id])
-      db.query('DELETE FROM doc_snapshots WHERE doc_id = ?').run(id)
-    }
-    deleteBlockRevisions(db, allIds)
-    hardDeleteBlocks(db, allIds)
-  })()
-
-  // 向量清理：显式删除（JSON 后端必须；vec 后端触发器为冗余兜底）
-  await Promise.all(allIds.map((bid) => deleteVector(bid).catch(() => {})))
-
-  return { ok: true, count: allIds.length }
-}
-
-/** 永久删除回收站中的单个文档（不可恢复；活文档须先软删除再进回收站） */
-docs.delete('/:id/permanent', async (c) => {
-  const db = getDb()
-  const id = c.req.param('id')
-
-  const res = await purgeDeletedDoc(db, id)
-  if (!res.ok) {
-    return c.json({ error: 'not_found', message: `回收站中没有文档 ${id}` }, 404)
-  }
-  auditDocAction('doc.permanently_deleted', id, { block_count: res.count })
-  return c.json({ deleted: true, count: res.count })
-})
-
-/** 清空回收站：永久删除全部软删除文档（逐篇调用同一清理路径） */
-docs.delete('/trash', async (c) => {
-  const db = getDb()
-  const rows = listDeletedDocRows(db)
-
-  let total = 0
-  for (const r of rows) {
-    const res = await purgeDeletedDoc(db, r.id)
-    if (res.ok) {
-      total += res.count
-      auditDocAction('doc.permanently_deleted', r.id, { block_count: res.count })
-    }
-  }
-  return c.json({ deleted: true, count: total, docs: rows.length })
 })
 
 docs.delete('/:id', (c) => {
