@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next'
 import i18next from '../i18n'
 import { Check, Globe, Loader2, Link2, Trash2 } from 'lucide-react'
 import { api, ApiError } from '../hooks/useAPI'
+import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
 import { Tooltip, useToast } from './ui'
 import { currentLocale } from '../lib/time'
 
@@ -100,23 +101,8 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
     }
   }, [place])
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node
-      if (panelRef.current?.contains(t)) return
-      if (anchorRef?.current?.contains(t)) return
-      onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    document.addEventListener('mousedown', onDown)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.removeEventListener('mousedown', onDown)
-    }
-  }, [onClose, anchorRef])
+  // Esc / 外部 mousedown 关闭（scroll/resize 由上方重定位处理，不关闭）
+  usePopoverDismiss(true, { onClose }, panelRef, anchorRef)
 
   useEffect(() => {
     let cancelled = false

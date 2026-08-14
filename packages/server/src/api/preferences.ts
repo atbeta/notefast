@@ -1,8 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { createJsonConfigStore } from '../services/jsonConfig'
 
 /**
  * UI 偏好（主题 / 语言等设备本地设置）
@@ -15,10 +14,16 @@ import { join } from 'node:path'
  */
 
 const PREFERENCES_FILE = 'ui-preferences.json'
-let prefsDir = ''
+
+const prefsStore = createJsonConfigStore<Record<string, unknown>>({
+  fileName: PREFERENCES_FILE,
+  empty: () => ({}),
+  parse: (raw) => (raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null),
+  uninitializedSet: 'ignore',
+})
 
 export function initPreferences(dataDir: string): void {
-  prefsDir = dataDir
+  prefsStore.init(dataDir)
 }
 
 const prefsSchema = z
@@ -31,18 +36,11 @@ const prefsSchema = z
 const preferences = new Hono()
 
 function load(): Record<string, unknown> {
-  if (!prefsDir) return {}
-  try {
-    const raw = readFileSync(join(prefsDir, PREFERENCES_FILE), 'utf-8')
-    return JSON.parse(raw) as Record<string, unknown>
-  } catch {
-    return {}
-  }
+  return prefsStore.get()
 }
 
 function save(data: Record<string, unknown>): void {
-  if (!prefsDir) return
-  writeFileSync(join(prefsDir, PREFERENCES_FILE), JSON.stringify(data, null, 2) + '\n', 'utf-8')
+  prefsStore.set(data)
 }
 
 preferences.get('/', (c) => {

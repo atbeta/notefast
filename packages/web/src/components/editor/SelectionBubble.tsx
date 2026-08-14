@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next'
 import { Loader2, Sparkles, Wand2 } from 'lucide-react'
 import { dispatchAskAi } from '../../lib/askAi'
 import { useAiCapabilities } from '../../hooks/useAiCapabilities'
+import { usePopoverDismiss } from '../../hooks/usePopoverDismiss'
 import type { SelectionAnchor, SelectionRect } from './cm/selectionReport'
 
 /** 预填引用的长度上限（与 BlockSurface 一致），避免整段长文塞进输入框 */
@@ -85,34 +86,18 @@ export default function SelectionBubble({
     setPos({ top, left })
   }, [desktop, active, rect, refining])
 
-  // 关闭通道：Esc（流式期间 = 停止）/ 外部 mousedown / scroll / resize
-  useEffect(() => {
-    if (!active) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+  // 关闭通道：Esc（流式期间 = 停止）/ 外部 mousedown / scroll / resize；
+  // 流式期间全部忽略（停止按钮保持可达；外部编辑会经 onChange 中断流）
+  usePopoverDismiss(active, {
+    onClose: onDismiss,
+    onEscape: () => {
       if (refining) onStopRefine()
       else onDismiss()
-    }
-    const onDown = (e: MouseEvent) => {
-      // 流式期间不收起（停止按钮保持可达；外部编辑会经 onChange 中断流）
-      if (refining) return
-      if (panelRef.current?.contains(e.target as Node)) return
-      onDismiss()
-    }
-    const onScrollOrResize = () => {
-      if (!refining) onDismiss()
-    }
-    document.addEventListener('keydown', onKey)
-    document.addEventListener('mousedown', onDown)
-    window.addEventListener('resize', onScrollOrResize)
-    window.addEventListener('scroll', onScrollOrResize, true)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.removeEventListener('mousedown', onDown)
-      window.removeEventListener('resize', onScrollOrResize)
-      window.removeEventListener('scroll', onScrollOrResize, true)
-    }
-  }, [active, refining, onDismiss, onStopRefine])
+    },
+    ignoreOutsideClick: refining,
+    closeOnScroll: true,
+    closeOnResize: true,
+  }, panelRef)
 
   if (!desktop || !active || !rect || chatOk !== true) return null
 

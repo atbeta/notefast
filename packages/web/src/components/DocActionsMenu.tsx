@@ -24,6 +24,7 @@ import {
 import type { DocSummary } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import { useApiMutation } from '../hooks/useApiMutation'
+import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
 import { deliverExport, fetchDocExportFile } from '../lib/download'
 import ConfirmDialog from './ConfirmDialog'
 import ShareDialog from './ShareDialog'
@@ -110,29 +111,12 @@ export default function DocActionsMenu({
     placeMenu()
   }, [open, placeMenu])
 
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close()
-    }
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node
-      if (triggerRef.current?.contains(t) || panelRef.current?.contains(t)) return
-      close()
-    }
-    const onScroll = () => close()
-    document.addEventListener('keydown', onKey)
-    document.addEventListener('mousedown', onDown)
-    window.addEventListener('resize', close)
-    // 捕获滚动：列表/侧栏滚动时收起，避免错位
-    window.addEventListener('scroll', onScroll, true)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.removeEventListener('mousedown', onDown)
-      window.removeEventListener('resize', close)
-      window.removeEventListener('scroll', onScroll, true)
-    }
-  }, [open, close])
+  usePopoverDismiss(
+    open,
+    { onClose: close, closeOnScroll: true, closeOnResize: true },
+    triggerRef,
+    panelRef,
+  )
 
   useEffect(() => {
     if (showRename) {

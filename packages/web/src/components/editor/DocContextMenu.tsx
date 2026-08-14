@@ -34,7 +34,6 @@
 
 import {
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -49,6 +48,7 @@ import { blocksToMarkdown, type Block } from '@notefast/core'
 import { dispatchAskAi } from '../../lib/askAi'
 import { useToast } from '../ui'
 import { useAiCapabilities } from '../../hooks/useAiCapabilities'
+import { usePopoverDismiss } from '../../hooks/usePopoverDismiss'
 
 /** 与 BlockSurface.QUOTE_MAX 对齐，避免长选区塞爆聊天草稿 */
 const QUOTE_MAX = 600
@@ -258,28 +258,7 @@ export function useDocContextMenu({
   )
 
   // Esc / 外部 mousedown / window scroll+resize 关闭
-  useEffect(() => {
-    if (!open) return
-    const onKey = (ev: KeyboardEvent) => {
-      if (ev.key === 'Escape') close()
-    }
-    const onDown = (ev: MouseEvent) => {
-      const target = ev.target as Node
-      if (triggerRef.current?.contains(target) || panelRef.current?.contains(target)) return
-      close()
-    }
-    const onScroll = () => close()
-    document.addEventListener('keydown', onKey)
-    document.addEventListener('mousedown', onDown)
-    window.addEventListener('resize', close)
-    window.addEventListener('scroll', onScroll, true)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.removeEventListener('mousedown', onDown)
-      window.removeEventListener('resize', close)
-      window.removeEventListener('scroll', onScroll, true)
-    }
-  }, [open, close])
+  usePopoverDismiss(open, { onClose: close, closeOnScroll: true, closeOnResize: true }, triggerRef, panelRef)
 
   // 面板 JSX —— hook 内部统一 manage panelRef，避免 caller 还要 wire ref
   const menu: ReactNode = open && snap.pos

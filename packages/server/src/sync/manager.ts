@@ -13,8 +13,6 @@
  * - 失败不影响下一次；lastError / lastSuccessAt 暴露
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from 'node:fs'
-import { join } from 'node:path'
 import {
   emptySyncConfig,
   mergeSyncConfig,
@@ -30,8 +28,18 @@ import { createS3Adapter } from './s3'
 import { createWebDavAdapter } from './webdav'
 import { getStorageLocation } from '../storage/locations'
 import type { StorageLocation } from '@notefast/core'
+import { createJsonConfigStore } from '../services/jsonConfig'
 
 const CONFIG_FILE = 'sync.config.json'
+
+const configStore = createJsonConfigStore<SyncPersistedConfig>({
+  fileName: CONFIG_FILE,
+  empty: emptySyncConfig,
+  parse: (raw) => {
+    const c = raw as SyncPersistedConfig
+    return c && c.version === 1 ? c : null
+  },
+})
 
 export interface SyncRuntimeStatus {
   configured: boolean
@@ -132,23 +140,6 @@ export async function syncPush(opts?: PushOptions): Promise<SyncResult> {
 
 // ───────────────────── 持久化 ─────────────────────
 
-function loadOrSeed(env: Record<string, string | undefined>): SyncPersistedConfig {
-  if (!dataDir) return seedFromEnv(env) ?? emptySyncConfig()
-  const path = join(dataDir, CONFIG_FILE)
-  if (existsSync(path)) {
-    try {
-      const raw = readFileSync(path, 'utf-8')
-      const parsed = JSON.parse(raw) as SyncPersistedConfig
-      if (parsed && parsed.version === 1) return parsed
-    } catch {
-      /* ignore */
-    }
-  }
-  const fromEnv = seedFromEnv(env)
-  if (fromEnv) saveConfigToDisk(fromEnv)
-  return fromEnv ?? emptySyncConfig()
-}
-
 function seedFromEnv(env: Record<string, string | undefined>): SyncPersistedConfig | null {
   const dir = (env.SYNC_LOCAL_DIR || env.AUTO_EXPORT_DIR || '').trim()
   if (dir) {
@@ -160,21 +151,28 @@ function seedFromEnv(env: Record<string, string | undefined>): SyncPersistedConf
   return null
 }
 
-export function loadConfigFromDisk(): SyncPersistedConfig {
-  if (!dataDir) return emptySyncConfig()
-  try {
-    const raw = readFileSync(join(dataDir, CONFIG_FILE), 'utf-8')
-    return JSON.parse(raw) as SyncPersistedConfig
-  } catch {
-    return emptySyncConfig()
+function loadOrSeed(env: Record<string, string | undefined>): SyncPersistedConfig {
+  if (!dataDir) return seedFromEnv(env) ?? emptySyncConfig()
+  const loaded = configStore.init(dataDir)
+  if (configStore.exists()) return loaded
+  const fromEnv = seedFromEnv(env)
+  if (fromEnv) {
+    configStore.set(fromEnv)
+    return fromEnv
   }
+  return loaded
 }
 
+/** 兼容导出：读磁盘配置（loadOrSeed 已把数据载入内存 store） */
+export function loadConfigFromDisk(): SyncPersistedConfig {
+  if (!dataDir) return emptySyncConfig()
+  configStore.init(dataDir)
+  return configStore.get()
+}
+
+/** 兼容导出：写磁盘配置 */
 export function saveConfigToDisk(c: SyncPersistedConfig): void {
-  if (!dataDir) throw new Error('dataDir 未初始化')
-  if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true })
-  writeFileSync(join(dataDir, CONFIG_FILE), JSON.stringify(c, null, 2) + '\n', 'utf-8')
-  try { chmodSync(join(dataDir, CONFIG_FILE), 0o600) } catch { /* Windows 不支持 */ }
+  configStore.set(c)
 }
 
 // ───────────────────── 适配器工厂 ─────────────────────

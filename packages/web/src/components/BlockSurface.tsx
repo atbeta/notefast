@@ -14,7 +14,7 @@
  * `.reading-prose > * + *` 与子块外边距折叠，wrapper 有 padding 会破坏折叠。
  */
 
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Copy, Link2, MoreVertical, Sparkles } from 'lucide-react'
@@ -22,6 +22,7 @@ import { blocksToMarkdown, type Block } from '@notefast/core'
 import { dispatchAskAi } from '../lib/askAi'
 import { useToast } from './ui'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
+import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
 
 /** 预填引用的长度上限，避免整篇长文塞进输入框 */
 const QUOTE_MAX = 600
@@ -69,28 +70,12 @@ export function BlockHandle({ block, className }: BlockHandleProps) {
     placeMenu()
   }, [open, placeMenu])
 
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close()
-    }
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as Node
-      if (triggerRef.current?.contains(target) || panelRef.current?.contains(target)) return
-      close()
-    }
-    const onScroll = () => close()
-    document.addEventListener('keydown', onKey)
-    document.addEventListener('mousedown', onDown)
-    window.addEventListener('resize', close)
-    window.addEventListener('scroll', onScroll, true)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.removeEventListener('mousedown', onDown)
-      window.removeEventListener('resize', close)
-      window.removeEventListener('scroll', onScroll, true)
-    }
-  }, [open, close])
+  usePopoverDismiss(
+    open,
+    { onClose: close, closeOnScroll: true, closeOnResize: true },
+    triggerRef,
+    panelRef,
+  )
 
   const copyText = async (text: string, doneTitle: string) => {
     close()

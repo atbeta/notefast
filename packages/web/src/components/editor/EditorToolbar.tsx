@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { Tooltip, ShortcutKeys, shortcutLabel } from '../ui'
 import { useAiCapabilities } from '../../hooks/useAiCapabilities'
+import { usePopoverDismiss } from '../../hooks/usePopoverDismiss'
 import type { CodeMirrorEditorHandle } from './CodeMirrorEditor'
 import AssetPickerDialog from './AssetPickerDialog'
 
@@ -106,24 +107,7 @@ export default function EditorToolbar({
     setImageMenuPos({ top: r.bottom + 6, left })
   }, [imageMenuOpen])
 
-  useEffect(() => {
-    if (!imageMenuOpen) return
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as Node
-      if (imageMenuRef.current?.contains(target)) return
-      if (imageBtnRef.current?.contains(target)) return
-      setImageMenuOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setImageMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [imageMenuOpen])
+  usePopoverDismiss(imageMenuOpen, { onClose: () => setImageMenuOpen(false) }, imageMenuRef, imageBtnRef)
 
   return (
     <div className="sticky top-14 z-10 -mx-4 sm:-mx-8 px-4 sm:px-8 mb-2 bg-background/85 backdrop-blur-md">

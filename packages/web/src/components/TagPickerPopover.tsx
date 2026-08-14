@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Search, Plus, Hash, Loader2 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
+import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
 
 const PANEL_W = 280
 const MAX_SUGGESTIONS = 8
@@ -113,17 +114,8 @@ export default function TagPickerPopover({ anchorRef, existing, onPick, onClose,
     if (el) el.scrollIntoView({ block: 'nearest' })
   }, [clampedActive])
 
-  // 点击外部关闭
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as Node
-      if (panelRef.current?.contains(target)) return
-      if (anchorRef.current?.contains(target)) return
-      onClose()
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [anchorRef, onClose])
+  // 点击外部关闭（Esc 由输入框 keydown 处理；组件 pos 为空即不渲染 → 天然卸载解绑）
+  usePopoverDismiss(true, { onClose }, anchorRef, panelRef)
 
   if (!pos) return null
 

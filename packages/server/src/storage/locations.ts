@@ -5,23 +5,29 @@
  * 各能力引用 connectionId + 自己的前缀。密钥脱敏沿用旧值（mergeStorageLocation）。
  */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import {
   mergeStorageLocation,
   publicStorageLocation,
   type StorageLocation,
   type StorageLocationInput,
 } from '@notefast/core'
+import { createJsonConfigStore } from '../services/jsonConfig'
 
 const CONFIG_FILE = 'storage-locations.json'
 
-let dataDir = ''
+const store = createJsonConfigStore<StorageLocation[]>({
+  fileName: CONFIG_FILE,
+  empty: () => [],
+  parse: (raw) => {
+    const arr = raw as StorageLocation[]
+    return Array.isArray(arr) ? arr.filter((l) => l?.id && l?.kind) : null
+  },
+})
+
 let locations: StorageLocation[] = []
 
 export function initStorageLocations(dir: string): void {
-  dataDir = dir
-  locations = loadFromDisk()
+  locations = store.init(dir)
 }
 
 export function getStorageLocations(): StorageLocation[] {
@@ -68,30 +74,12 @@ export function deleteStorageLocation(id: string): boolean {
   return true
 }
 
-function loadFromDisk(): StorageLocation[] {
-  if (!dataDir) return []
-  const path = join(dataDir, CONFIG_FILE)
-  if (!existsSync(path)) return []
-  try {
-    const raw = JSON.parse(readFileSync(path, 'utf-8')) as StorageLocation[]
-    return Array.isArray(raw) ? raw.filter((l) => l?.id && l?.kind) : []
-  } catch {
-    return []
-  }
-}
-
 function saveToDisk(): void {
-  if (!dataDir) throw new Error('storage locations dataDir 未初始化')
-  if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true })
-  const path = join(dataDir, CONFIG_FILE)
-  writeFileSync(path, JSON.stringify(locations, null, 2) + '\n', 'utf-8')
-  try {
-    chmodSync(path, 0o600)
-  } catch { /* Windows 等环境可能不支持 chmod */ }
+  store.set(locations)
 }
 
 /** 测试钩子 */
 export function _resetStorageLocationsForTests(): void {
-  dataDir = ''
+  store._resetForTests()
   locations = []
 }

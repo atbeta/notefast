@@ -46,6 +46,7 @@ import { readDocRailWidth, writeDocRailWidth, type DocRailWidth } from '../hooks
 
 import { scrollToElement, findScrollableAncestor } from '../lib/scroll'
 import { useActiveHeading } from '../hooks/useActiveHeading'
+import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
 import { useDemoMode, DEMO_ZOOMS, setDemoZoomIndex, toggleDemoMode } from '../hooks/useDemoMode'
 import { useDocReadingWidth, writeDocReadingWidth, DOC_READING_WIDTH_REM } from '../hooks/useDocReadingWidth'
 import { formatRelative, relativeTime, formatSqliteDateTime, currentLocale } from '../lib/time'
@@ -1584,28 +1585,15 @@ function DemoModeButton() {
     setZoomMenuPos({ top: r.bottom + 6, left })
   }, [zoomMenuOpen])
 
-  useEffect(() => {
-    if (!zoomMenuOpen) return
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as Node
-      if (zoomMenuRef.current?.contains(target)) return
-      if (zoomBtnRef.current?.contains(target)) return
-      setZoomMenuOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+  usePopoverDismiss(zoomMenuOpen, {
+    onClose: () => setZoomMenuOpen(false),
+    onEscape: (e) => {
       // 先关菜单，阻止冒泡到全局 Esc→退出演示
       e.preventDefault()
       e.stopPropagation()
       setZoomMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [zoomMenuOpen])
+    },
+  }, zoomMenuRef, zoomBtnRef)
 
   return (
     <div

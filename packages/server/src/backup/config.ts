@@ -2,8 +2,6 @@
  * 备份配置持久化（data/backup.config.json）
  */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import {
   emptyBackupConfig,
   mergeBackupConfig,
@@ -11,65 +9,40 @@ import {
   type BackupConfigInput,
   type BackupPersistedConfig,
 } from '@notefast/core'
+import { createJsonConfigStore } from '../services/jsonConfig'
 
-const CONFIG_FILE = 'backup.config.json'
-
-let dataDir = ''
-let cfg: BackupPersistedConfig = emptyBackupConfig()
+const store = createJsonConfigStore<BackupPersistedConfig>({
+  fileName: 'backup.config.json',
+  empty: emptyBackupConfig,
+  parse: (raw) => {
+    const c = raw as BackupPersistedConfig
+    return c && c.version === 1 ? c : null
+  },
+})
 
 export function initBackupConfig(dir: string): BackupPersistedConfig {
-  dataDir = dir
-  cfg = loadFromDisk()
-  return cfg
+  return store.init(dir)
 }
 
 export function getBackupConfig(): BackupPersistedConfig {
-  return cfg
+  return store.get()
 }
 
 export function getBackupPublicConfig(): BackupPersistedConfig {
-  return publicBackupView(cfg)
+  return publicBackupView(store.get())
 }
 
 export function applyBackupConfig(incoming: BackupConfigInput): BackupPersistedConfig {
-  cfg = mergeBackupConfig(incoming, cfg)
-  saveToDisk(cfg)
-  return cfg
+  store.set(mergeBackupConfig(incoming, store.get()))
+  return store.get()
 }
 
 export function disableBackupConfig(): BackupPersistedConfig {
-  cfg = emptyBackupConfig()
-  saveToDisk(cfg)
-  return cfg
-}
-
-export function loadFromDisk(): BackupPersistedConfig {
-  if (!dataDir) return emptyBackupConfig()
-  const path = join(dataDir, CONFIG_FILE)
-  if (!existsSync(path)) return emptyBackupConfig()
-  try {
-    const raw = JSON.parse(readFileSync(path, 'utf-8')) as BackupPersistedConfig
-    if (raw && raw.version === 1) return raw
-  } catch {
-    /* ignore */
-  }
-  return emptyBackupConfig()
-}
-
-export function saveToDisk(c: BackupPersistedConfig): void {
-  if (!dataDir) throw new Error('backup dataDir 未初始化')
-  if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true })
-  const path = join(dataDir, CONFIG_FILE)
-  writeFileSync(path, JSON.stringify(c, null, 2) + '\n', 'utf-8')
-  try {
-    chmodSync(path, 0o600)
-  } catch {
-    /* Windows 等环境可能不支持 chmod */
-  }
+  store.set(emptyBackupConfig())
+  return store.get()
 }
 
 /** 测试钩子 */
 export function _resetBackupConfigForTests(): void {
-  dataDir = ''
-  cfg = emptyBackupConfig()
+  store._resetForTests()
 }

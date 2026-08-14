@@ -6,8 +6,6 @@
  * 命令在 server 所在机器上执行，凭据由命令自己持有（picgo / picfast CLI 等）。
  */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import {
   emptyImageUploadConfig,
   mergeImageUploadConfig,
@@ -15,57 +13,48 @@ import {
   type ImageUploadConfig,
   type ImageUploadConfigInput,
 } from '@notefast/core'
+import { createJsonConfigStore } from './jsonConfig'
 
 const CONFIG_FILE = 'image-upload.config.json'
 
-let dataDir = ''
-let cfg: ImageUploadConfig = emptyImageUploadConfig()
-
-export function initImageUploadConfig(dir: string): ImageUploadConfig {
-  dataDir = dir
-  cfg = loadFromDisk()
-  return cfg
-}
-
-export function getImageUploadConfig(): ImageUploadConfig {
-  return cfg
-}
-
-export function getImageUploadPublicConfig(): ImageUploadConfig {
-  return publicImageUploadView(cfg)
-}
-
-export function applyImageUploadConfig(incoming: ImageUploadConfigInput): ImageUploadConfig {
-  cfg = mergeImageUploadConfig(incoming, cfg)
-  saveToDisk(cfg)
-  return cfg
-}
-
-function loadFromDisk(): ImageUploadConfig {
-  if (!dataDir) return emptyImageUploadConfig()
-  const path = join(dataDir, CONFIG_FILE)
-  if (!existsSync(path)) return emptyImageUploadConfig()
-  try {
-    const raw = JSON.parse(readFileSync(path, 'utf-8')) as Partial<ImageUploadConfig>
-    if (raw.mode !== 'auto' && raw.mode !== 'off') return emptyImageUploadConfig()
+const store = createJsonConfigStore<ImageUploadConfig>({
+  fileName: CONFIG_FILE,
+  empty: emptyImageUploadConfig,
+  parse: (raw) => {
+    const r = raw as Partial<ImageUploadConfig>
+    if (r.mode !== 'auto' && r.mode !== 'off') return null
     return mergeImageUploadConfig(
       {
-        mode: raw.mode,
-        command: typeof raw.command === 'string' ? raw.command : '',
-        args: Array.isArray(raw.args) ? raw.args.filter((a): a is string => typeof a === 'string') : [],
-        timeoutMs: typeof raw.timeoutMs === 'number' ? raw.timeoutMs : undefined,
+        mode: r.mode,
+        command: typeof r.command === 'string' ? r.command : '',
+        args: Array.isArray(r.args) ? r.args.filter((a): a is string => typeof a === 'string') : [],
+        timeoutMs: typeof r.timeoutMs === 'number' ? r.timeoutMs : undefined,
       },
       emptyImageUploadConfig(),
     )
-  } catch {
-    return emptyImageUploadConfig()
-  }
+  },
+  // 历史行为：未初始化时静默跳过写盘（启动顺序早于 initAssetStore 的场景）
+  uninitializedSet: 'ignore',
+})
+
+export function initImageUploadConfig(dir: string): ImageUploadConfig {
+  return store.init(dir)
 }
 
-function saveToDisk(next: ImageUploadConfig): void {
-  if (!dataDir) return
-  if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true })
-  const path = join(dataDir, CONFIG_FILE)
-  writeFileSync(path, JSON.stringify(next, null, 2) + '\n', 'utf-8')
-  try { chmodSync(path, 0o600) } catch { /* Windows 不支持 */ }
+export function getImageUploadConfig(): ImageUploadConfig {
+  return store.get()
+}
+
+export function getImageUploadPublicConfig(): ImageUploadConfig {
+  return publicImageUploadView(store.get())
+}
+
+export function applyImageUploadConfig(incoming: ImageUploadConfigInput): ImageUploadConfig {
+  store.set(mergeImageUploadConfig(incoming, store.get()))
+  return store.get()
+}
+
+/** 测试钩子 */
+export function _resetImageUploadConfigForTests(): void {
+  store._resetForTests()
 }
