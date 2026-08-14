@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.66.0](https://github.com/atbeta/notefast/compare/v0.65.0...v0.66.0) (2026-08-14)
+
+
+### Features
+
+* **maintenance:** periodic purge of tombstones, change feed, vec generations ([86936cd](https://github.com/atbeta/notefast/commit/86936cd257b5f090bf16e56e4e025a790a810c7a))
+
+
+### Bug Fixes
+
+* harden routing & streaming; multi-writer sync protocol v2 ([76b80ec](https://github.com/atbeta/notefast/commit/76b80ec3e67c69175187b5a306a69f16a26d0a2d))
+
+
+### Performance Improvements
+
+* reduce hot-path scans and quadratic writes ([50c7f24](https://github.com/atbeta/notefast/commit/50c7f2469b7b085d532d348def3979b23778ae57))
+
 ## [0.65.0](https://github.com/atbeta/notefast/compare/v0.64.3...v0.65.0) (2026-08-13)
 
 
