@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useBlocker } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Loader2,
@@ -30,6 +31,7 @@ import {
 import { api } from '../../hooks/useAPI'
 import { currentLocale } from '../../lib/time'
 import { ActionButton, useToast, Toggle } from '../ui'
+import ConfirmDialog from '../ConfirmDialog'
 import { ProviderForm } from './ProviderForm'
 import { DiagnosePanel } from './DiagnosePanel'
 import { SettingsCard, InlineField, StatusBadge } from '../settings/ui'
@@ -144,6 +146,36 @@ export default function AISettingsPanel() {
   const [rebuilding, setRebuilding] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [entityRebuild, setEntityRebuild] = useState<EntityRebuildStatus | null>(null)
+  // 「未保存修改」检测：savedSnapshot 记录最近一次保存/刷新时的表单状态，
+  // dirty = 当前表单与其不一致（任何配置项被改过）。保存成功后更新快照。
+  const [savedSnapshot, setSavedSnapshot] = useState<string>('')
+  const dirty = useMemo(() => {
+    const cur = JSON.stringify({ chat, embedding, reranker, autoLink, autoIndex, webSearchEnabled, webSearchApiKey, visionEnabled })
+    return savedSnapshot !== '' && cur !== savedSnapshot
+  }, [chat, embedding, reranker, autoLink, autoIndex, webSearchEnabled, webSearchApiKey, visionEnabled, savedSnapshot])
+
+  // 有未保存修改时：关窗/刷新弹原生确认（对齐 MarkdownEditor 模式）
+  useEffect(() => {
+    if (!dirty) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [dirty])
+
+  // 站内导航拦截（切换设置 tab / 离开设置页会卸载组件丢表单）：dirty 时弹确认
+  const blocker = useBlocker(dirty)
+  const leaveBlocked = blocker.state === 'blocked'
+  const confirmLeave = () => {
+    if (blocker.state !== 'blocked') return
+    blocker.proceed()
+  }
+  const cancelLeave = () => {
+    if (blocker.state !== 'blocked') return
+    blocker.reset()
+  }
   const toast = useToast()
   // 字段级错误（红色内嵌到表单）+ 保存成功的最近一次描述（持久化显示在按钮旁）
   const [formErrors, setFormErrors] = useState<FormErrors>({})
@@ -164,6 +196,18 @@ export default function AISettingsPanel() {
       setWebSearchEnabled(s.config.webSearch?.enabled ?? false)
       setWebSearchApiKey(s.config.webSearch?.apiKey ?? '')
       setVisionEnabled(s.config.vision?.enabled ?? false)
+      setSavedSnapshot(
+        JSON.stringify({
+          chat: s.config.chat ?? null,
+          embedding: s.config.embedding ?? null,
+          reranker: s.config.reranker ?? null,
+          autoLink: s.config.autoLink ?? defaultAutoLink(),
+          autoIndex: s.config.autoIndex ?? true,
+          webSearchEnabled: s.config.webSearch?.enabled ?? false,
+          webSearchApiKey: s.config.webSearch?.apiKey ?? '',
+          visionEnabled: s.config.vision?.enabled ?? false,
+        }),
+      )
     } catch (e) {
       toast.error({ title: t('aiSettings.loadStatusFailed'), description: e instanceof Error ? e.message : String(e) })
     }
@@ -309,6 +353,19 @@ export default function AISettingsPanel() {
       })
       setStatus(r.status)
       // 成功提示由调用方（ActionButton successToast）统一弹，这里不重复
+      // 保存成功：本地立即更新快照（dirty 归 false），不等 refresh 回读
+      setSavedSnapshot(
+        JSON.stringify({
+          chat,
+          embedding,
+          reranker,
+          autoLink,
+          autoIndex,
+          webSearchEnabled,
+          webSearchApiKey,
+          visionEnabled,
+        }),
+      )
       refresh()
     } catch (e: unknown) {
       // 服务端 400：ApiError.body 带 { error, message, errors[] }，拆成字段级红字
@@ -841,32 +898,54 @@ export default function AISettingsPanel() {
         )}
       </SettingsCard>
 
-      <div className="flex items-center gap-2 pt-2 flex-wrap">
-        <ActionButton
-          onAction={async () => {
-            if (!chat && !embedding) return
-            await handleSave()
-          }}
-          successToast={{ title: t('aiSettings.configSaved') }}
-          errorToast={(e) => ({
-            title: t('aiSettings.saveFailed'),
-            description: e instanceof Error ? e.message : String(e),
-            durationMs: 6000,
-          })}
-          disabled={!chat && !embedding}
-        >
-          {t('aiSettings.saveConfig')}
-        </ActionButton>
-        <button
-          type="button"
-          onClick={() => void handleManualRefresh()}
-          disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border bg-background hover:bg-accent disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-          {t('aiSettings.refreshStatus')}
-        </button>
+      {/* Sticky 保存栏：始终悬浮在视口底部，避免「改完顶部配置找不到保存按钮」；
+          有未保存修改时高亮 + 提示（dirty 检测见上方 useMemo） */}
+      <div className={`sticky bottom-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 mt-4 border-t bg-background/85 backdrop-blur-md ${dirty ? 'border-amber-500/40' : 'border-border/60'}`}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <ActionButton
+            onAction={async () => {
+              if (!chat && !embedding) return
+              await handleSave()
+            }}
+            successToast={{ title: t('aiSettings.configSaved') }}
+            errorToast={(e) => ({
+              title: t('aiSettings.saveFailed'),
+              description: e instanceof Error ? e.message : String(e),
+              durationMs: 6000,
+            })}
+            disabled={!chat && !embedding}
+            className={dirty ? 'ring-2 ring-amber-500/50' : undefined}
+          >
+            {t('aiSettings.saveConfig')}
+          </ActionButton>
+          <button
+            type="button"
+            onClick={() => void handleManualRefresh()}
+            disabled={refreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-border bg-background hover:bg-accent disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            {t('aiSettings.refreshStatus')}
+          </button>
+          {dirty && (
+            <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-amber-700 dark:text-amber-400">
+              <TriangleAlert className="w-4 h-4" />
+              {t('aiSettings.unsavedChanges')}
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* 站内导航拦截确认（有未保存修改时） */}
+      <ConfirmDialog
+        open={leaveBlocked}
+        title={t('aiSettings.unsavedConfirmTitle')}
+        message={t('aiSettings.unsavedConfirmMessage')}
+        confirmLabel={t('aiSettings.unsavedLeave')}
+        tone="info"
+        onCancel={cancelLeave}
+        onConfirm={confirmLeave}
+      />
     </div>
   )
 }
