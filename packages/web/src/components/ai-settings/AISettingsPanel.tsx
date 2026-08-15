@@ -587,7 +587,7 @@ export default function AISettingsPanel() {
             disabled={!capabilities?.chat}
             label={
               capabilities?.chat
-                ? visionEnabled ? t('aiSettings.visionEnabled') : t('aiSettings.visionDisabled')
+                ? t('aiSettings.visionTitle')
                 : t('aiSettings.visionRequiresChat')
             }
           />

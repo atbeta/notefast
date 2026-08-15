@@ -100,6 +100,7 @@
     "on": "开启",
     "off": "关闭",
     "requiresEmbedding": "需先配 Embedding",
+    "visionTitle": "图片理解",
     "visionEnabled": "图片理解 · 开启",
     "visionDisabled": "图片理解 · 关闭",
     "visionRequiresChat": "图片理解 · 需先配 Chat",
