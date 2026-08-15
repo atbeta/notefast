@@ -83,4 +83,44 @@ describe('维护 API', () => {
     expect(body.ok).toBe(true)
     expect(typeof body.result.tombstones.blocks).toBe('number')
   })
+
+  test('purgeExpiredTombstonesBatched 清超期 tombstone 且 guard 不残留', async () => {
+    const { purgeExpiredTombstonesBatched } = await import('../services/maintenance')
+    const db = getDb()
+    const now = new Date().toISOString()
+    const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString() // 40 天前
+
+    const nb = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    // 超期软删文档（40 天前删除）→ 应被清
+    const docId = crypto.randomUUID()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, is_deleted, updated_at, created_at)
+       VALUES (?, ?, NULL, ?, 'document', '旧文档', 0, 0, 1, ?, ?)`,
+    ).run(docId, nb, docId, old, old)
+    // 超期软删子块
+    const childId = crypto.randomUUID()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, is_deleted, updated_at, created_at)
+       VALUES (?, ?, ?, ?, 'paragraph', '旧内容', 0, 1, 1, ?, ?)`,
+    ).run(childId, nb, docId, docId, old, old)
+    // 近期软删（未超期）→ 不应被清
+    const freshId = crypto.randomUUID()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, is_deleted, updated_at, created_at)
+       VALUES (?, ?, NULL, ?, 'document', '新删文档', 0, 0, 1, ?, ?)`,
+    ).run(freshId, nb, freshId, now, now)
+
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const r = purgeExpiredTombstonesBatched(db, cutoff)
+    expect(r.blocks).toBe(2) // 文档根 + 子块
+
+    const oldLeft = db.query('SELECT count(*) AS c FROM blocks WHERE id = ? OR id = ?').get(docId, childId) as { c: number }
+    expect(oldLeft.c).toBe(0)
+    const freshLeft = db.query('SELECT count(*) AS c FROM blocks WHERE id = ?').get(freshId) as { c: number }
+    expect(freshLeft.c).toBe(1)
+    // guard 不残留
+    const guard = db.query('SELECT count(*) AS c FROM sync_consume_guard').get() as { c: number }
+    expect(guard.c).toBe(0)
+  })
 })

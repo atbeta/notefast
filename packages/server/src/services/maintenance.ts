@@ -10,15 +10,16 @@
  *    即时清理，此处兜底历史残留）。
  *
  * 安全边界：
- * - purge 在 runFeedSuppressed 临界区内执行——物理删除不产生新的 change feed
- *   行（tombstone 早已发布，无新增信息；且避免清理任务自我膨胀）。
+ * - 清理在 sync_consume_guard 临界区内执行（batched 内部管理 guard 行）——
+ *   物理删除不产生新的 change feed 行（tombstone 早已发布，无新增信息；
+ *   且避免清理任务自我膨胀）。每 500 批独立提交，批间释放写锁（用户写操作可插入）。
  * - tombstone 的 LWW 语义不受影响：远端对已 purged 块的重放会 INSERT 重建
  *   （块行已不在），软删重放则幂等跳过。
  * - 同步已启用时跳过 feed 时间裁剪：publishedSeq 保护由 pruneStaleChanges
  *   实现，但已发布区间的裁剪权归 compaction（快照锚点是更严的下界）。
  */
 import { getDb } from '../db'
-import { runFeedSuppressed, pruneStaleChanges } from '../store/changeFeed'
+import { pruneStaleChanges } from '../store/changeFeed'
 import { dropStaleVectorGenerations } from '../ai/vectorStoreVec'
 import { isProtocolConfigured, protocolStatus, noteFeedPruned } from '../sync/protocolManager'
 import { logAppEvent } from './appLogs'
@@ -118,6 +119,70 @@ export function purgeExpiredTombstones(db: ReturnType<typeof getDb>, cutoffIso: 
   return { blocks, revisions, docSnapshots }
 }
 
+/**
+ * 维护专用：批间提交的 tombstone 物理清理。
+ *
+ * 与 purgeExpiredTombstones 的差异：每一批（500 块）独立提交事务，批间释放
+ * SQLite 写锁——用户突然活跃时的写操作（保存/删除）可以插进来，不会等到
+ * 整个清理跑完。guard 行独立管理（feed 抑制靠 guard 存在，不依赖全程事务）。
+ *
+ * 代价：批间崩溃会留下「前批已删、后批未删」的部分完成状态——tombstone 清理
+ * 是幂等且可重跑的（下次维护会再清），可接受。
+ */
+export function purgeExpiredTombstonesBatched(db: ReturnType<typeof getDb>, cutoffIso: string): TombstonePurgeResult {
+  const rows = db.query(`
+    WITH RECURSIVE dead(id, root_id, type) AS (
+      SELECT b.id, b.root_id, b.type FROM blocks b
+      WHERE b.is_deleted = 1 AND b.updated_at < ?
+        AND NOT EXISTS (SELECT 1 FROM blocks p WHERE p.id = b.parent_id AND p.is_deleted = 1)
+        AND NOT EXISTS (SELECT 1 FROM blocks c WHERE c.parent_id = b.id AND c.is_deleted = 0)
+      UNION ALL
+      SELECT b2.id, b2.root_id, b2.type FROM blocks b2 JOIN dead ON b2.parent_id = dead.id
+      WHERE b2.is_deleted = 1
+    )
+    SELECT id, root_id, type FROM dead
+  `).all(cutoffIso) as Array<{ id: string; root_id: string; type: string }>
+
+  if (rows.length === 0) return { blocks: 0, revisions: 0, docSnapshots: 0 }
+  const ids = rows.map((r) => r.id)
+  const docRootIds = rows.filter((r) => r.type === 'document').map((r) => r.id)
+
+  // feed 抑制：guard 行存在即可（trigger 的 WHEN 子句据此静默），批间不删除
+  db.query('INSERT OR REPLACE INTO sync_consume_guard (id) VALUES (1)').run()
+  try {
+    let revisions = 0
+    let docSnapshots = 0
+    // 修订历史：每批独立事务
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500)
+      const ph = chunk.map(() => '?').join(',')
+      revisions += db.transaction(() =>
+        db.query(`DELETE FROM block_revisions WHERE block_id IN (${ph})`).run(...(chunk as [string, ...string[]])),
+      )().changes
+    }
+    for (let i = 0; i < docRootIds.length; i += 500) {
+      const chunk = docRootIds.slice(i, i + 500)
+      const ph = chunk.map(() => '?').join(',')
+      docSnapshots += db.transaction(() =>
+        db.query(`DELETE FROM doc_snapshots WHERE doc_id IN (${ph})`).run(...(chunk as [string, ...string[]])),
+      )().changes
+    }
+    // 物理删除：每批独立事务（批间释放写锁）
+    let blocks = 0
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500)
+      const ph = chunk.map(() => '?').join(',')
+      db.transaction(() => {
+        db.query(`DELETE FROM blocks WHERE id IN (${ph})`).run(...(chunk as [string, ...string[]]))
+      })()
+      blocks += chunk.length
+    }
+    return { blocks, revisions, docSnapshots }
+  } finally {
+    db.query('DELETE FROM sync_consume_guard').run()
+  }
+}
+
 /** 单圈维护：可重复调用；异常上抛由调用方兜底（循环不终止） */
 export function runMaintenancePass(): MaintenanceResult {
   const db = getDb()
@@ -125,9 +190,9 @@ export function runMaintenancePass(): MaintenanceResult {
   let feedRows = 0
   let vecGenerations = 0
 
-  runFeedSuppressed(db, () => {
-    tombstones = purgeExpiredTombstones(db, sqlCutoff(TOMBSTONE_RETENTION_MS))
-  })
+  // 批间提交清理（guard 由 batched 内部管理）：大库清理时每 500 批释放写锁，
+  // 用户突然活跃的写操作可以插进来，不会堵到整个清理结束
+  tombstones = purgeExpiredTombstonesBatched(db, sqlCutoff(TOMBSTONE_RETENTION_MS))
 
   // 同步已配置时 feed 归 compaction 管；未配置时时间裁剪防单调膨胀
   if (!isProtocolConfigured()) {
