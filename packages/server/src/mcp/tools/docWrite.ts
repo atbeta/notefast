@@ -47,7 +47,8 @@ import {
 import { deleteRefsTouchingBlocks } from '../../store/refs'
 import { deleteMentionsTouchingBlocks } from '../../store/entities'
 import { deleteSharesByDocIds } from '../../store/shares'
-import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate, fireAfterDelete, fireDocAfterDelete } from '../../services/hooks'
+import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate, fireAfterDeleteMany, fireDocAfterDelete } from '../../services/hooks'
+import { deleteVectorMany } from '../../ai/indexer'
 import { scheduleDocIndex } from '../../ai/indexJobs'
 import { reanalyzeDoc } from '../../ai/autoLink'
 import { emitAppEvent } from '../../events'
@@ -410,7 +411,9 @@ export function registerDocWriteTools(ctx: ToolContext): void {
         deleteSharesByDocIds(db, [doc_id])
       })()
 
-      fireAfterDelete(doc_id)
+      // 整篇删除：向量批量清 + 逐块 afterDelete（docEvents 等非向量消费方）
+      void deleteVectorMany(allIds)
+      fireAfterDeleteMany(allIds)
       fireDocAfterDelete({ doc: rowToBlock(docRow) })
       emitAppEvent({
         source: 'mcp',

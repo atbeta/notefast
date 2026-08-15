@@ -33,6 +33,7 @@ import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
 import { deleteSharesByDocIds } from '../store/shares'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete } from '../services/hooks'
+import { deleteVector, deleteVectorMany } from '../ai/indexer'
 import { applyAiExcludeChange } from '../ai/aiExclude'
 import { reanalyzeDoc } from '../ai/autoLink'
 import { scheduleDocIndex } from '../ai/indexJobs'
@@ -270,6 +271,12 @@ blocks.delete('/:id', (c) => {
     }
   })()
 
+  // 删除文档根：整篇子块向量批量清（单块则单条）；afterDelete hook 不再负责向量
+  if (existing.type === 'document') {
+    void deleteVectorMany(allIds)
+  } else {
+    void deleteVector(id)
+  }
   fireAfterDelete(id)
   scheduleSyncNow()
   return c.json({ deleted: true, count: allIds.length })

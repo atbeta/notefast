@@ -25,7 +25,7 @@ import {
 import type { PluginSystem } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks, getDocById } from '../store/blocks'
-import { indexBlock, deleteVector } from '../ai/indexer'
+import { indexBlock } from '../ai/indexer'
 import { getLatestIndexJobForDoc, scheduleDocIndex } from '../ai/indexJobs'
 import { analyzeBlock } from '../ai/autoLink'
 import {
@@ -221,9 +221,9 @@ function applyAutoIndex(r: AiRuntime, pluginSystem: PluginSystem): void {
     }
     await indexBlock(block.id)
   })
-  pluginSystem.note.afterDelete.tap(HOOK_NAME, async (blockId) => {
-    await deleteVector(blockId)
-  })
+  // 注意：块删除的向量清理不再放 afterDelete hook —— 逐块 deleteVector 对整篇删除
+  // 是 O(n) 次 count(*)。删除路径改为显式批量：docs 整篇用 deleteVectorMany(allIds)，
+  // blocks 单块用 deleteVector(id)；afterDelete hook 只保留 docEvents 等非向量消费方。
   console.log('🧠 AI auto-index hooks attached')
 }
 

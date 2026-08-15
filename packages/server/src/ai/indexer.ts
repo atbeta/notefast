@@ -243,6 +243,15 @@ export async function deleteVector(blockId: string): Promise<void> {
 }
 
 /**
+ * 批量删除向量（删除整篇文档用）：一次 IN 删除 + 一次 count，避免逐块 delete 的
+ * 「每块一次 count(*)」O(n²) 退化（见 VectorStore.deleteMany 注释）。
+ */
+export async function deleteVectorMany(blockIds: string[]): Promise<void> {
+  if (blockIds.length === 0) return
+  await getVectorStore().deleteMany(blockIds)
+}
+
+/**
  * 语义搜索：委托当前 active VectorStore，过滤 ai_exclude 与 inbox 文档。
  */
 export async function semanticSearch(

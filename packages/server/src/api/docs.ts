@@ -28,6 +28,7 @@ import { insertDocFromMarkdown, insertChildBlocks, normalizeDocTags } from '../s
 import { fireAfterCreate, fireAfterUpdate, fireAfterCreateMany, fireAfterDeleteMany, fireDocAfterCreate, fireDocAfterStatusChange, fireDocAfterTagChange, fireDocAfterDelete, auditDocAction } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { writeDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
+import { deleteVectorMany } from '../ai/indexer'
 import { readDocAiExclude } from '../ai/aiExcludeQuery'
 import { reanalyzeDoc } from '../ai/autoLink'
 import { scheduleDocIndex } from '../ai/indexJobs'
@@ -393,9 +394,10 @@ docs.delete('/:id', (c) => {
     deleteSharesByDocIds(db, [id])
   })()
 
-  // 逐块触发 afterDelete（含文档根 + 全部子块）：向量/级联清理依赖它。
-  // 只 fire 文档根会漏掉子块 —— block_vectors 里残留孤儿向量（查询被 is_deleted 隔离
-  // 但存储与计数不清零）。
+  // 逐块触发 afterDelete（含文档根 + 全部子块）：docEvents/autoLink 等非向量消费方。
+  // 向量清理不走逐块 hook（O(n) 次 count(*)，见 aiRuntime afterDelete 注释）——
+  // 这里显式批量删除，一次 IN + 一次 count。
+  void deleteVectorMany(allIds)
   fireAfterDeleteMany(allIds)
   fireDocAfterDelete({ doc: rowToBlock(docRow) })
   auditDocAction('doc.deleted', id, { block_count: allIds.length })
