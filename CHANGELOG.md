@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.67.1](https://github.com/atbeta/notefast/compare/v0.67.0...v0.67.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* **server:** maintenance page slow/blocking + auto-maintenance disturbs users ([2493e91](https://github.com/atbeta/notefast/commit/2493e91a780c69d6417d9856c1b3d2a7356f7ece))
+* **server:** tombstone purge commits per batch - writes interleave during maintenance ([3e1960e](https://github.com/atbeta/notefast/commit/3e1960e817cf4c245453fbd7486e5a4c90d9430c))
+* **web:** AI settings crashed - useBlocker needs a data router ([2f7aa06](https://github.com/atbeta/notefast/commit/2f7aa069023d6cc47ff5150ab477c8453c72a813))
+
 ## [0.67.0](https://github.com/atbeta/notefast/compare/v0.66.0...v0.67.0) (2026-08-15)
 
 
