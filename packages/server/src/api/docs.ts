@@ -25,7 +25,7 @@ import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
 import { deleteShare, deleteSharesByDocIds, listSharedDocIds } from '../store/shares'
 import { insertDocFromMarkdown, insertChildBlocks, normalizeDocTags } from '../services/docImport'
-import { fireAfterCreate, fireAfterUpdate, fireAfterDelete, fireAfterCreateMany, fireAfterDeleteMany, fireDocAfterCreate, fireDocAfterStatusChange, fireDocAfterTagChange, fireDocAfterDelete, auditDocAction } from '../services/hooks'
+import { fireAfterCreate, fireAfterUpdate, fireAfterCreateMany, fireAfterDeleteMany, fireDocAfterCreate, fireDocAfterStatusChange, fireDocAfterTagChange, fireDocAfterDelete, auditDocAction } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { writeDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
 import { readDocAiExclude } from '../ai/aiExcludeQuery'
@@ -393,7 +393,10 @@ docs.delete('/:id', (c) => {
     deleteSharesByDocIds(db, [id])
   })()
 
-  fireAfterDelete(id)
+  // 逐块触发 afterDelete（含文档根 + 全部子块）：向量/级联清理依赖它。
+  // 只 fire 文档根会漏掉子块 —— block_vectors 里残留孤儿向量（查询被 is_deleted 隔离
+  // 但存储与计数不清零）。
+  fireAfterDeleteMany(allIds)
   fireDocAfterDelete({ doc: rowToBlock(docRow) })
   auditDocAction('doc.deleted', id, { block_count: allIds.length })
   return c.json({ deleted: true, count: allIds.length })

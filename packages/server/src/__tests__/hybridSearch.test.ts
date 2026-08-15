@@ -10,7 +10,10 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
+import docs from '../api/docs'
+import blocks from '../api/blocks'
 import { createPluginSystem } from '@notefast/core'
 import {
   initAiRuntime,
@@ -498,5 +501,87 @@ describe('hybridSearch — Citation 携带 rrf_score', () => {
       expect(typeof c.rrf_score).toBe('number')
       expect(c.score).toBe(c.rrf_score)
     }
+  })
+})
+
+describe('删除文档 — 子块向量清理（回归：只 fire 文档根漏掉子块）', () => {
+  // 手搭 Hono 只挂 docs/blocks 路由（避开 createApp 全量路由的 mammoth 等可选依赖）
+  function makeApp() {
+    const a = new Hono()
+    a.route('/api/v1/docs', docs)
+    a.route('/api/v1/blocks', blocks)
+    return a
+  }
+
+  // upsertVector 需要 embedding fingerprint 非空；afterDelete hook 由 applyAutoIndex
+  // 挂载，要求 hasEmbedding() 且 autoIndex=true（false 时 hook 不挂，向量不会清）
+  beforeEach(() => {
+    _setRuntimeForTests(null)
+    initAiRuntime(pluginSystem, testDir)
+    applyNewConfig(
+      {
+        version: 1,
+        chat: null,
+        embedding: {
+          id: 'x-emb',
+          label: 'x',
+          preset: 'custom',
+          baseUrl: 'http://mock-emb',
+          apiKey: '',
+          embeddingModel: 'fake-emb',
+          chatModel: '',
+          timeoutMs: 5000,
+          extraHeaders: {},
+        },
+        autoIndex: true,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+  })
+
+  test('DELETE /docs/:id 后所有子块向量被清空', async () => {
+    const app = makeApp()
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const { docId, blockIds } = seedDoc({
+      notebookId: nb,
+      title: '待删除文档',
+      contents: ['KMP 是高效的字符串匹配算法', '后缀数组用于字符串处理', 'Trie 树结构'],
+      idPrefix: 'del-a',
+    })
+
+    // 给文档根 + 所有子块写入向量
+    await initVectorStore()
+    for (const bid of [docId, ...blockIds]) {
+      await upsertVector(bid, new Float64Array([0.1, 0.2, 0.3]), `索引文本 ${bid}`)
+    }
+    const countBefore = (getDb().query('SELECT COUNT(*) AS n FROM block_vectors').get() as { n: number }).n
+    expect(countBefore).toBe(4) // 1 根 + 3 子块
+
+    const res = await app.fetch(new Request(`http://localhost/api/v1/docs/${docId}`, { method: 'DELETE' }))
+    expect(res.status).toBe(200)
+
+    const countAfter = (getDb().query('SELECT COUNT(*) AS n FROM block_vectors').get() as { n: number }).n
+    expect(countAfter).toBe(0) // 全部子块向量被清，无残留
+  })
+
+  test('删除单 block 仍清该块向量（单块路径不受影响）', async () => {
+    const app = makeApp()
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const { id, docId } = seedBlock({ notebookId: nb, content: '单块删除测试' })
+    await initVectorStore()
+    await upsertVector(id, new Float64Array([0.5, 0.5, 0.5]), `索引文本 ${id}`)
+    await upsertVector(docId, new Float64Array([0.9, 0.9, 0.9]), `索引文本 ${docId}`)
+
+    const res = await app.fetch(new Request(`http://localhost/api/v1/blocks/${id}`, { method: 'DELETE' }))
+    expect(res.status).toBe(200)
+
+    const after = (getDb().query('SELECT COUNT(*) AS n FROM block_vectors WHERE block_id = ?').get(id) as { n: number }).n
+    expect(after).toBe(0)
+    // 文档根向量保留
+    const docVec = (getDb().query('SELECT COUNT(*) AS n FROM block_vectors WHERE block_id = ?').get(docId) as { n: number }).n
+    expect(docVec).toBe(1)
   })
 })
