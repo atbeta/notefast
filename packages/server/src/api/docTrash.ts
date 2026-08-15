@@ -12,12 +12,12 @@ import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
 import { deleteSharesByDocIds } from '../store/shares'
 import { auditDocAction } from '../services/hooks'
-import { deleteVector } from '../ai/indexer'
+import { deleteVectorMany } from '../ai/indexer'
 
 /**
  * 永久删除一棵已软删除的文档子树（不可恢复）：
  * 事务内物理清理 blocks 行 + 引用/提及/分享/修订/快照；向量异步清除
- * （vec 后端有 BEFORE DELETE 触发器兜底，JSON 后端靠 deleteVector 显式删）。
+ * （vec 后端有 BEFORE DELETE 触发器兜底，JSON 后端靠 deleteVectorMany 显式删）。
  * 仅允许删除回收站中的文档（is_deleted = 1），活文档须先走软删除。
  */
 async function purgeDeletedDoc(
@@ -41,8 +41,10 @@ async function purgeDeletedDoc(
     hardDeleteBlocks(db, allIds)
   })()
 
-  // 向量清理：显式删除（JSON 后端必须；vec 后端触发器为冗余兜底）
-  await Promise.all(allIds.map((bid) => deleteVector(bid).catch(() => {})))
+  // 向量清理：显式批量删除（一次 IN + 一次 count；JSON 后端必须，vec 后端触发器冗余兜底）。
+  // 注意：软删除时向量已清，这里大多是 no-op，但绝不能用逐块 deleteVector ——
+  // 每块一次全表 count(*) 会让清空回收站退化成 O(总块数 × 总向量数)。
+  await deleteVectorMany(allIds)
 
   return { ok: true, count: allIds.length }
 }
@@ -77,14 +79,34 @@ export function registerTrashRoutes(docs: Hono): void {
     const db = getDb()
     const rows = listDeletedDocRows(db)
 
-    let total = 0
+    // 批量清空：一次性收集所有文档的全部块，单个大事务 + 一次批量向量删除，
+    // 避免「每篇一个事务 + 一次 count(*)」的 N 倍开销。
+    const allIds: string[] = []
+    const perDoc: Array<{ id: string; count: number }> = []
     for (const r of rows) {
-      const res = await purgeDeletedDoc(db, r.id)
-      if (res.ok) {
-        total += res.count
-        auditDocAction('doc.permanently_deleted', r.id, { block_count: res.count })
-      }
+      const subtree = [r.id, ...fetchDeletedSubtreeIds(db, r.id)]
+      perDoc.push({ id: r.id, count: subtree.length })
+      allIds.push(...subtree)
     }
-    return c.json({ deleted: true, count: total, docs: rows.length })
+
+    if (allIds.length > 0) {
+      db.transaction(() => {
+        deleteRefsTouchingBlocks(db, allIds)
+        deleteMentionsTouchingBlocks(db, allIds)
+        // 分享 + 快照按文档根清理
+        for (const id of perDoc) {
+          deleteSharesByDocIds(db, [id.id])
+          db.query('DELETE FROM doc_snapshots WHERE doc_id = ?').run(id.id)
+        }
+        deleteBlockRevisions(db, allIds)
+        hardDeleteBlocks(db, allIds)
+      })()
+      await deleteVectorMany(allIds)
+    }
+
+    for (const d of perDoc) {
+      auditDocAction('doc.permanently_deleted', d.id, { block_count: d.count })
+    }
+    return c.json({ deleted: true, count: allIds.length, docs: rows.length })
   })
 }

@@ -392,4 +392,31 @@ describe('更新时间语义（元数据变更不 bump updated_at）', () => {
     })
     expect(readU()).not.toBe(t0)
   })
+
+  test('清空回收站：批量物理删除全部软删文档', async () => {
+    const d1 = await createDoc('清空测试一')
+    const d2 = await createDoc('清空测试二')
+    const d3 = await createDoc('清空测试三')
+    for (const id of [d1, d2, d3]) {
+      await app.request(`/docs/${id}`, { method: 'DELETE' })
+    }
+
+    const trashBefore = await app.request('/docs/trash')
+    expect(((await trashBefore.json()) as Array<{ id: string }>).length).toBeGreaterThanOrEqual(3)
+
+    const res = await app.request('/docs/trash', { method: 'DELETE' })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { deleted: boolean; count: number; docs: number }
+    expect(body.deleted).toBe(true)
+    expect(body.docs).toBeGreaterThanOrEqual(3)
+
+    // 物理删除：三个文档（含子树）全部消失
+    for (const id of [d1, d2, d3]) {
+      const row = getDb().query('SELECT count(*) as c FROM blocks WHERE id = ?').get(id) as { c: number }
+      expect(row.c).toBe(0)
+    }
+    // 回收站清空
+    const trashAfter = await app.request('/docs/trash')
+    expect(((await trashAfter.json()) as Array<{ id: string }>).some((d) => d.id === d1 || d.id === d2 || d.id === d3)).toBe(false)
+  })
 })
