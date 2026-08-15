@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useBlocker } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Loader2,
@@ -31,7 +30,6 @@ import {
 import { api } from '../../hooks/useAPI'
 import { currentLocale } from '../../lib/time'
 import { ActionButton, useToast, Toggle } from '../ui'
-import ConfirmDialog from '../ConfirmDialog'
 import { ProviderForm } from './ProviderForm'
 import { DiagnosePanel } from './DiagnosePanel'
 import { SettingsCard, InlineField, StatusBadge } from '../settings/ui'
@@ -165,17 +163,8 @@ export default function AISettingsPanel() {
     return () => window.removeEventListener('beforeunload', handler)
   }, [dirty])
 
-  // 站内导航拦截（切换设置 tab / 离开设置页会卸载组件丢表单）：dirty 时弹确认
-  const blocker = useBlocker(dirty)
-  const leaveBlocked = blocker.state === 'blocked'
-  const confirmLeave = () => {
-    if (blocker.state !== 'blocked') return
-    blocker.proceed()
-  }
-  const cancelLeave = () => {
-    if (blocker.state !== 'blocked') return
-    blocker.reset()
-  }
+  // 站内导航不拦截（兜底哲学：提示为主，不打断操作流）。
+  // 关窗/刷新由上方 beforeunload 兜底；dirty 时保存栏高亮 + 提示已足够。
   const toast = useToast()
   // 字段级错误（红色内嵌到表单）+ 保存成功的最近一次描述（持久化显示在按钮旁）
   const [formErrors, setFormErrors] = useState<FormErrors>({})
@@ -935,17 +924,6 @@ export default function AISettingsPanel() {
           )}
         </div>
       </div>
-
-      {/* 站内导航拦截确认（有未保存修改时） */}
-      <ConfirmDialog
-        open={leaveBlocked}
-        title={t('aiSettings.unsavedConfirmTitle')}
-        message={t('aiSettings.unsavedConfirmMessage')}
-        confirmLabel={t('aiSettings.unsavedLeave')}
-        tone="info"
-        onCancel={cancelLeave}
-        onConfirm={confirmLeave}
-      />
     </div>
   )
 }
