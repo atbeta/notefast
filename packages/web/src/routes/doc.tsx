@@ -282,9 +282,11 @@ export default function DocPage() {
     return () => { cancelled = true }
   }, [id])
 
-  // 相关笔记预取（打开文档即拉；轻量检索，点 Tab 尽量无等待）
+  // 相关笔记：仅「相关」Tab 打开时拉取（对齐 history 的按需模式）。
+  // 不做打开文档即预取——每次切换文档都跑一次 hybridSearch(FTS×2+实体匹配+RRF)
+  // 在 CPU 高（AI 流/索引）时叠加排队，是切文档卡顿的来源之一。
   useEffect(() => {
-    if (!id) {
+    if (!id || railTab !== 'related') {
       setRelatedItems(null)
       setRelatedError(null)
       setRelatedLoading(false)
@@ -309,7 +311,7 @@ export default function DocPage() {
         if (!cancelled) setRelatedLoading(false)
       })
     return () => { cancelled = true }
-  }, [id])
+  }, [id, railTab])
 
   // 创建/导入后的向量化进度（?index_job=）
   useEffect(() => {
