@@ -29,6 +29,8 @@ import { registerMentions } from '../ai/entities'
 import {
   startEntityRebuild,
   getEntityRebuildProgress,
+  getEntityIndexState,
+  cancelEntityRebuild,
   _resetEntityRebuildForTests,
 } from '../ai/entityRebuild'
 import { entitySearch } from '../ai/entitySearch'
@@ -810,5 +812,51 @@ describe('全库实体重建', () => {
     expect(startEntityRebuild()).toBe(true)
     const ok = await waitFor(() => !getEntityRebuildProgress().running)
     expect(ok).toBe(true)
+  })
+
+  test('重建完成后实体完整性状态为 ready 且含覆盖数', async () => {
+    _resetEntityRebuildForTests()
+    mockChat(() => JSON.stringify({
+      blocks: [
+        { block_id: 'st-a1', mentions: [{ anchor: 'KMP', kind: 'concept' }] },
+        { block_id: 'st-a2', mentions: [{ anchor: '后缀数组', kind: 'concept' }] },
+      ],
+    }))
+    seedDocWithBlocks({
+      docTitle: '状态测试',
+      blocks: [
+        { id: 'st-a1', content: 'KMP 是高效的字符串匹配算法' },
+        { id: 'st-a2', content: '后缀数组用于字符串处理' },
+      ],
+    })
+
+    // 重建前：empty
+    expect(getEntityIndexState().status).toBe('empty')
+
+    expect(startEntityRebuild()).toBe(true)
+    const ok = await waitFor(() => !getEntityRebuildProgress().running)
+    expect(ok).toBe(true)
+
+    const state = getEntityIndexState()
+    expect(state.status).toBe('ready')
+    expect(state.entityCount).toBeGreaterThan(0)
+    expect(state.analyzedBlocks).toBeGreaterThan(0)
+  })
+
+  test('cancelEntityRebuild 在重建中生效，未运行时拒绝', async () => {
+    _resetEntityRebuildForTests()
+    mockChat(() => JSON.stringify({ blocks: [] }))
+    seedDocWithBlocks({
+      docTitle: '取消测试',
+      blocks: [{ id: 'cl-a1', content: '这是一段足够长的内容用于实体抽取测试' }],
+    })
+
+    expect(cancelEntityRebuild()).toBe(false) // 未运行
+    expect(startEntityRebuild()).toBe(true)
+    expect(cancelEntityRebuild()).toBe(true) // 运行中
+    const ok = await waitFor(() => !getEntityRebuildProgress().running)
+    expect(ok).toBe(true)
+    // 取消后 running 复位；再次取消拒绝
+    expect(cancelEntityRebuild()).toBe(false)
   })
 })

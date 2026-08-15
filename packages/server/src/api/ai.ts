@@ -43,9 +43,9 @@ import {
 } from '../services/aiRuntime'
 import { indexBlock, indexAllBlocks, semanticSearch } from '../ai/indexer'
 import { getVectorStore } from '../ai/vectorStore'
-import { startVectorRebuild } from '../ai/vectorRebuild'
+import { startVectorRebuild, cancelVectorRebuild } from '../ai/vectorRebuild'
 import { getRebuildProgress } from '../ai/rebuildProgress'
-import { startEntityRebuild, getEntityRebuildProgress } from '../ai/entityRebuild'
+import { startEntityRebuild, getEntityRebuildProgress, getEntityIndexState, cancelEntityRebuild } from '../ai/entityRebuild'
 import { resolveAiLang } from '../ai/locale'
 import { getIndexJob, getIndexJobSummary, getLatestIndexJobForDoc } from '../ai/indexJobs'
 import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
@@ -498,6 +498,12 @@ ai.post('/index/rebuild', async (c) => {
   return c.json({ started: true }, 202)
 })
 
+ai.post('/index/rebuild/cancel', (c) => {
+  const cancelled = cancelVectorRebuild()
+  if (!cancelled) return c.json({ error: 'not_running', message: '向量索引不在重建中' }, 409)
+  return c.json({ cancelled: true })
+})
+
 ai.post('/entities/rebuild', async (c) => {
   if (!runtimeSafe() || !getRuntime().hasChat()) {
     return c.json({ error: 'not_configured', message: 'Chat 未配置', fix_hint: FIX_HINT }, 400)
@@ -507,7 +513,18 @@ ai.post('/entities/rebuild', async (c) => {
   return c.json({ started: true }, 202)
 })
 
-ai.get('/entities/rebuild/status', (c) => c.json(getEntityRebuildProgress()))
+ai.get('/entities/rebuild/status', (c) =>
+  c.json({
+    ...getEntityRebuildProgress(),
+    indexState: getEntityIndexState(),
+  }),
+)
+
+ai.post('/entities/rebuild/cancel', (c) => {
+  const cancelled = cancelEntityRebuild()
+  if (!cancelled) return c.json({ error: 'not_running', message: '实体图谱不在重建中' }, 409)
+  return c.json({ cancelled: true })
+})
 
 ai.post('/index/:blockId', async (c) => {
   const blockId = c.req.param('blockId')

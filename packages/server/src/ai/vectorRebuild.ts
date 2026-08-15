@@ -36,6 +36,14 @@ export interface VectorRebuildOptions {
 }
 
 let rebuilding = false
+let cancelRequested = false
+
+/** 请求取消向量重建：下一批开始前生效；staging 保留（下次重建可续） */
+export function cancelVectorRebuild(): boolean {
+  if (!rebuilding) return false
+  cancelRequested = true
+  return true
+}
 
 class ShadowVectorStore implements VectorStore {
   readonly backend = 'shadow'
@@ -101,6 +109,7 @@ export async function runVectorRebuild(
 ): Promise<VectorStoreStatus> {
   if (rebuilding) throw new Error('向量索引正在重建')
   rebuilding = true
+  cancelRequested = false
   const db = getDb()
   const provider = options.provider ?? runtimeProvider()
   const previousStore = getVectorStore()
@@ -167,6 +176,8 @@ export async function runVectorRebuild(
     await writeBatch(firstBatch, firstTexts, firstVectors)
     bumpRebuildProgress(Math.min(REBUILD_BATCH, rows.length))
     for (let offset = REBUILD_BATCH; offset < rows.length; offset += REBUILD_BATCH) {
+      // 取消支持：批间检查，staging 保留（下次重建从 staging 已有块续跑）
+      if (cancelRequested) break
       const batch = rows.slice(offset, offset + REBUILD_BATCH)
       const texts = await buildTexts(batch)
       const vectors = await provider.embedBatch(texts)
@@ -176,6 +187,16 @@ export async function runVectorRebuild(
       if (offset + REBUILD_BATCH < rows.length && REBUILD_BATCH_GAP_MS > 0) {
         await new Promise((r) => setTimeout(r, REBUILD_BATCH_GAP_MS))
       }
+    }
+
+    if (cancelRequested) {
+      // 取消：不 activate；staging 保留供续跑。状态标记 stale（旧索引仍可用）
+      db.query(
+        `UPDATE vector_store_state
+         SET status = 'stale', error = 'cancelled', updated_at = datetime('now')
+         WHERE id = 'default'`,
+      ).run()
+      return (previousStore ?? staging).status()
     }
 
     await staging.activateGeneration(generation)

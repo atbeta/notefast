@@ -10,6 +10,8 @@ import {
   FileSearch,
   Copy,
   Globe,
+  TriangleAlert,
+  X,
 } from 'lucide-react'
 import {
   KNOWN_EMBEDDING_MODELS,
@@ -106,6 +108,12 @@ type EntityRebuildStatus = {
   started_at: string | null
   eta_ms: number | null
   last_error: string | null
+  indexState?: {
+    status: 'empty' | 'ready' | 'rebuilding' | 'failed'
+    analyzedBlocks: number
+    entityCount: number
+    error: string | null
+  }
 }
 
 function defaultAutoLink(): AutoLinkConfig {
@@ -243,6 +251,32 @@ export default function AISettingsPanel() {
       })
     } finally {
       setRebuilding(false)
+    }
+  }
+
+  const handleCancelRebuild = async () => {
+    try {
+      await api.post('/ai/index/rebuild/cancel', {})
+      toast.info({ title: t('aiSettings.cancelRebuildSent') })
+      await refresh()
+    } catch (e) {
+      toast.error({
+        title: t('aiSettings.cancelRebuildFailed'),
+        description: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  const handleCancelEntityRebuild = async () => {
+    try {
+      await api.post('/ai/entities/rebuild/cancel', {})
+      toast.info({ title: t('aiSettings.cancelRebuildSent') })
+      await refresh()
+    } catch (e) {
+      toast.error({
+        title: t('aiSettings.cancelRebuildFailed'),
+        description: e instanceof Error ? e.message : String(e),
+      })
     }
   }
 
@@ -645,6 +679,16 @@ export default function AISettingsPanel() {
                 )}
                 {t('aiSettings.rebuildIndex')}
               </button>
+              {status.vectorStore.status === 'rebuilding' && (
+                <button
+                  type="button"
+                  onClick={() => void handleCancelRebuild()}
+                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-destructive/40 text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                >
+                  <X className="w-3 h-3" />
+                  {t('aiSettings.cancelRebuild')}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void handleRebuildEntities()}
@@ -654,7 +698,40 @@ export default function AISettingsPanel() {
                 {entityRebuild?.running && <Loader2 className="w-3 h-3 animate-spin" />}
                 {t('aiSettings.rebuildEntities')}
               </button>
+              {entityRebuild?.running && (
+                <button
+                  type="button"
+                  onClick={() => void handleCancelEntityRebuild()}
+                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-destructive/40 text-destructive hover:bg-destructive/10"
+                >
+                  <X className="w-3 h-3" />
+                  {t('aiSettings.cancelRebuild')}
+                </button>
+              )}
             </div>
+            {entityRebuild?.indexState && !entityRebuild.running && (
+              <p className="text-xs text-muted-foreground">
+                {entityRebuild.indexState.status === 'empty' && (
+                  <span className="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                    <TriangleAlert className="w-3.5 h-3.5" />
+                    {t('aiSettings.entityIndexEmpty')}
+                  </span>
+                )}
+                {entityRebuild.indexState.status === 'ready' && (
+                  t('aiSettings.entityIndexReady', {
+                    entities: entityRebuild.indexState.entityCount,
+                    blocks: entityRebuild.indexState.analyzedBlocks,
+                  })
+                )}
+                {entityRebuild.indexState.status === 'failed' && (
+                  <span className="text-destructive">
+                    {t('aiSettings.entityIndexFailed')}
+                    {entityRebuild.indexState.error ? ` · ${entityRebuild.indexState.error}` : ''}
+                  </span>
+                )}
+                {entityRebuild.indexState.status === 'rebuilding' && t('aiSettings.entityIndexRebuilding')}
+              </p>
+            )}
             {entityRebuild && entityRebuild.total > 0 && (
               <p className="tabular-nums text-muted-foreground">
                 {t('aiSettings.entityRebuildProgress', {

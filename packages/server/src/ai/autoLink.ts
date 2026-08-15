@@ -152,6 +152,8 @@ export interface BatchAnalyzeOptions {
   skipRateLimit?: boolean
   /** 每片处理完后回调（done=已处理块数, total=总块数, errors=累计错误数）——供进度展示 */
   onProgress?: (done: number, total: number, errors: number) => void
+  /** 取消信号：每片开始前检查；返回 true 时停止后续片（已处理的保留） */
+  isCancelled?: () => boolean
 }
 
 export interface BatchAnalyzeResult {
@@ -206,6 +208,8 @@ export async function analyzeBlockBatch(opts: BatchAnalyzeOptions): Promise<Batc
 
   let sliceDone = 0
   for (const slice of slices) {
+    // 取消支持：每片开始前检查，已处理的保留（实体/链不回收）
+    if (opts.isCancelled?.()) break
     let mentionsByBlock: Map<string, Mention[]>
     try {
       mentionsByBlock = await extractMentionsBatch(runtime, slice.map((b) => ({ blockId: b.blockId, content: b.content })))
