@@ -20,6 +20,7 @@ const SettingsImages = lazy(() => import('./routes/settings/Images'))
 const SettingsBackup = lazy(() => import('./routes/settings/Backup'))
 const SettingsTokens = lazy(() => import('./routes/settings/Tokens'))
 const SettingsSecurity = lazy(() => import('./routes/settings/Security'))
+const SettingsMaintenance = lazy(() => import('./routes/settings/Maintenance'))
 const SettingsAbout = lazy(() => import('./routes/settings/About'))
 const SharePage = lazy(() => import('./routes/share'))
 import Layout from './components/Layout'
@@ -186,6 +187,14 @@ export default function App() {
                 element={
                   <Suspense fallback={<RouteLoadingShell />}>
                     <SettingsSecurity />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="maintenance"
+                element={
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <SettingsMaintenance />
                   </Suspense>
                 }
               />

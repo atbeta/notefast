@@ -21,6 +21,7 @@ import { getDb } from '../db'
 import { runFeedSuppressed, pruneStaleChanges } from '../store/changeFeed'
 import { dropStaleVectorGenerations } from '../ai/vectorStoreVec'
 import { isProtocolConfigured, protocolStatus, noteFeedPruned } from '../sync/protocolManager'
+import { logAppEvent } from './appLogs'
 
 /** 孤儿 tombstone 保留期（对齐回收站 30d 窗口） */
 export const TOMBSTONE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
@@ -148,17 +149,33 @@ export function runMaintenancePass(): MaintenanceResult {
  */
 export function startMaintenance(): void {
   const tick = async () => {
+    const startedAt = Date.now()
     try {
       const r = runMaintenancePass()
       const { blocks, revisions, docSnapshots } = r.tombstones
+      const durationMs = Date.now() - startedAt
       if (blocks > 0 || r.feedRows > 0 || r.vecGenerations > 0) {
         console.log(
           `🧹 [maintenance] tombstone=${blocks}(rev=${revisions}, snap=${docSnapshots}) `
           + `feed=${r.feedRows} vecGen=${r.vecGenerations}`,
         )
       }
+      // 维护结果落库：用户侧「设置 → 维护」可见（不再黑盒）
+      logAppEvent({
+        level: 'info',
+        source: 'maintenance',
+        message: 'maintenance_pass',
+        fields: { durationMs, tombstoneBlocks: blocks, revisions, docSnapshots, feedRows: r.feedRows, vecGenerations: r.vecGenerations },
+      })
     } catch (e) {
-      console.warn('[maintenance] pass failed:', e instanceof Error ? e.message : e)
+      const msg = e instanceof Error ? e.message : String(e)
+      console.warn('[maintenance] pass failed:', msg)
+      logAppEvent({
+        level: 'error',
+        source: 'maintenance',
+        message: 'maintenance_pass_failed',
+        fields: { durationMs: Date.now() - startedAt, error: msg },
+      })
     }
     setTimeout(() => { void tick() }, RUN_INTERVAL_MS)
   }

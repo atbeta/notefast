@@ -8,6 +8,7 @@ import {
   HardDriveDownload,
   Plug,
   ShieldCheck,
+  Wrench,
   Info,
 } from 'lucide-react'
 import AiChatTrigger from '../../components/AiChatTrigger'
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { to: 'backup', tabKey: 'backup', Icon: HardDriveDownload },
   { to: 'tokens', tabKey: 'tokens', Icon: Plug },
   { to: 'security', tabKey: 'security', Icon: ShieldCheck },
+  { to: 'maintenance', tabKey: 'maintenance', Icon: Wrench },
   { to: 'about', tabKey: 'about', Icon: Info },
 ] as const
 

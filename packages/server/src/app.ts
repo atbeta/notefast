@@ -66,6 +66,8 @@ import eventsRouter from './api/events'
 import syncProtocolRouter from './api/syncProtocol'
 import clientErrors from './api/clientErrors'
 import { initClientErrors } from './api/clientErrors'
+import maintenance from './api/maintenance'
+import { initAppLogs } from './services/appLogs'
 import storageLocations from './api/storageLocations'
 import sharePublic from './api/sharePublic'
 import { initDocEvents } from './services/docEvents'
@@ -257,6 +259,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   app.route('/api/v1/events', eventsRouter)
   app.route('/api/v1/sync/protocol', syncProtocolRouter)
   app.route('/api/v1/client-errors', clientErrors)
+  app.route('/api/v1/db', maintenance)
 
   // 分享页防 iframe 嵌入/点击劫持：中间件必须先于 app.route 注册
   // （Hono 按注册顺序执行，放路由后 = 死代码，响应拿不到安全头）
@@ -290,6 +293,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     initStorageLocations(dataDir)
     initPreferences(dataDir)
     initClientErrors()
+    initAppLogs()
     initSyncManager(dataDir)
     initBackupManager(dataDir)
     initProtocolManager(dataDir)
