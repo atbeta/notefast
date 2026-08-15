@@ -18,6 +18,30 @@ import { logAppEvent } from '../services/appLogs'
 
 const maintenance = new Hono()
 
+// ── health 缓存：/db/health 的 count(*)×10 + 递归 CTE 每次全量重算又慢又阻塞
+// ──（SQLite 单线程，查询期间其他请求排队，用户切 Tab 也卡）。缓存 30s，
+// ── 维护/整理等写操作后主动失效（invalidateHealthCache），前端 refetch 立刻拿新值。
+const HEALTH_CACHE_TTL_MS = 30_000
+let healthCache: { ts: number; payload: ReturnType<typeof buildHealthPayload> } | null = null
+
+function invalidateHealthCache(): void {
+  healthCache = null
+}
+
+function buildHealthPayload() {
+  const sizes = dbFileSizes()
+  const lastLog = listAppLogs(1)[0] ?? null
+  return {
+    dbBytes: sizes.dbBytes,
+    walBytes: sizes.walBytes,
+    dbPath: sizes.path,
+    tables: tableRowCounts(),
+    pendingTombstones: pendingTombstoneCount(),
+    lastMaintenance: lastLog && lastLog.source === 'maintenance' ? lastLog : null,
+    ts: new Date().toISOString(),
+  }
+}
+
 /** SQLite 文件大小（DB + WAL，字节）；找不到返回 null */
 function dbFileSizes(): { dbBytes: number | null; walBytes: number | null; path: string | null } {
   try {
@@ -72,17 +96,13 @@ function pendingTombstoneCount(): number {
 }
 
 maintenance.get('/health', (c) => {
-  const sizes = dbFileSizes()
-  const lastLog = listAppLogs(1)[0] ?? null
-  return c.json({
-    dbBytes: sizes.dbBytes,
-    walBytes: sizes.walBytes,
-    dbPath: sizes.path,
-    tables: tableRowCounts(),
-    pendingTombstones: pendingTombstoneCount(),
-    lastMaintenance: lastLog && lastLog.source === 'maintenance' ? lastLog : null,
-    ts: new Date().toISOString(),
-  })
+  const now = Date.now()
+  if (healthCache && now - healthCache.ts < HEALTH_CACHE_TTL_MS) {
+    return c.json(healthCache.payload)
+  }
+  const payload = buildHealthPayload()
+  healthCache = { ts: now, payload }
+  return c.json(payload)
 })
 
 maintenance.get('/logs', (c) => {
@@ -103,6 +123,7 @@ maintenance.post('/maintenance', async (c) => {
     // WAL checkpoint（TRUNCATE 模式：checkpoint 后截断 WAL 文件）
     getDb().exec('PRAGMA wal_checkpoint(TRUNCATE)')
     const durationMs = Date.now() - startedAt
+    invalidateHealthCache() // 表行数/文件大小都变了，失效缓存让前端立刻拿新值
     logAppEvent({
       level: 'info',
       source: 'maintenance',
@@ -126,6 +147,7 @@ maintenance.post('/vacuum', async (c) => {
     db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
     db.exec('VACUUM')
     const durationMs = Date.now() - startedAt
+    invalidateHealthCache() // DB 文件大小变了，失效缓存让前端立刻拿新值
     const sizes = dbFileSizes()
     logAppEvent({
       level: 'info',

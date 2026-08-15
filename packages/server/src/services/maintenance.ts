@@ -22,6 +22,7 @@ import { runFeedSuppressed, pruneStaleChanges } from '../store/changeFeed'
 import { dropStaleVectorGenerations } from '../ai/vectorStoreVec'
 import { isProtocolConfigured, protocolStatus, noteFeedPruned } from '../sync/protocolManager'
 import { logAppEvent } from './appLogs'
+import { isIdleEnoughForMaintenance } from './activity'
 
 /** 孤儿 tombstone 保留期（对齐回收站 30d 窗口） */
 export const TOMBSTONE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
@@ -31,6 +32,8 @@ export const FEED_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 const FIRST_RUN_DELAY_MS = 5 * 60 * 1000
 /** 之后每圈间隔 */
 const RUN_INTERVAL_MS = 6 * 60 * 60 * 1000
+/** 距上次请求至少这么久才算空闲，才跑维护（大事务避免撞用户活跃时段） */
+const IDLE_REQUIRED_MS = 10 * 60 * 1000
 
 export interface TombstonePurgeResult {
   blocks: number
@@ -150,6 +153,18 @@ export function runMaintenancePass(): MaintenanceResult {
 export function startMaintenance(): void {
   const tick = async () => {
     const startedAt = Date.now()
+    // 空闲感知：用户活跃（最近 10 分钟内有过请求）时跳过本轮，避免大事务卡住读写。
+    // 跳过也记一次 info 日志（用户可在维护页看到「已跳过」而非黑盒）。
+    if (!isIdleEnoughForMaintenance(IDLE_REQUIRED_MS)) {
+      logAppEvent({
+        level: 'info',
+        source: 'maintenance',
+        message: 'maintenance_skipped_active',
+        fields: { idleMs: 0, reason: 'recent_api_activity' },
+      })
+      setTimeout(() => { void tick() }, RUN_INTERVAL_MS)
+      return
+    }
     try {
       const r = runMaintenancePass()
       const { blocks, revisions, docSnapshots } = r.tombstones

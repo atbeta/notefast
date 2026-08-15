@@ -30,6 +30,7 @@ import { registerMcpTools } from './mcp/tools'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { startAutoExport } from './services/autoExport'
 import { startMaintenance } from './services/maintenance'
+import { noteRequestActivity } from './services/activity'
 import { initAiRuntime } from './services/aiRuntime'
 import { initSyncManager } from './sync/manager'
 import { initProtocolManager } from './sync/protocolManager'
@@ -123,6 +124,12 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
 
   const rateLimit = createRateLimit()
   if (rateLimit) app.use('*', rateLimit)
+
+  // 活跃度信号：记录最近请求时间（维护循环避开用户活跃时段用）
+  app.use('*', async (_c, next) => {
+    noteRequestActivity()
+    await next()
+  })
 
   // 本地免鉴权通道：原生内嵌 / 仅本机回环时，跳过 token/密码校验（走 admin）。
   // 在 authMiddleware 之前注册（auth 内部也已对未配置鉴权全放行；此分支覆盖「配置了但本地信任」场景）
