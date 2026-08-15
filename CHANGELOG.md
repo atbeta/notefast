@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.67.0](https://github.com/atbeta/notefast/compare/v0.66.0...v0.67.0) (2026-08-15)
+
+
+### Features
+
+* **server,web:** entity index completeness + cancel for rebuilds ([0ad8129](https://github.com/atbeta/notefast/commit/0ad8129d3063acb16d435e7713b9eac8b040db0d))
+* **server,web:** maintenance center - db health + app logs + manual ops ([e2e67b2](https://github.com/atbeta/notefast/commit/e2e67b222e52fa3df21bade0c9c35a647132b8fd))
+* **web:** sticky save bar + unsaved-changes detection in AI settings ([68ab443](https://github.com/atbeta/notefast/commit/68ab4431558e6dec418740144b6ed5cf853ca0e1))
+
+
+### Bug Fixes
+
+* **server:** delete doc now clears vectors for all child blocks ([8b6c055](https://github.com/atbeta/notefast/commit/8b6c055c2e4c510fc454e695ab5ec1b340b007d0))
+* **server:** set SQLite busy_timeout to stop read latency jitter ([9caed3d](https://github.com/atbeta/notefast/commit/9caed3d24b239ca3e573c0c4cd0c49a6da62116b))
+* **web:** image understanding is a sub-option of auto-index, not a peer ([d55017f](https://github.com/atbeta/notefast/commit/d55017f9f82cc66e59210f1e8af25e5d4c24db40))
+* **web:** image understanding toggle no longer repeats on/off text ([6a2f296](https://github.com/atbeta/notefast/commit/6a2f2968e7082c737530659f3373799565e81504))
+
+
+### Performance Improvements
+
+* **server:** batch vector deletion when deleting docs - avoid O(n) count(*) ([7ac120c](https://github.com/atbeta/notefast/commit/7ac120cd8dcca222e9eaecbfde635fc12c35488d))
+* **server:** empty trash was O(n blocks x m vectors) - batch it ([532d1b5](https://github.com/atbeta/notefast/commit/532d1b566889faf0f85d348fb5992de095166ec8))
+
 ## [0.66.0](https://github.com/atbeta/notefast/compare/v0.65.0...v0.66.0) (2026-08-14)
 
 
