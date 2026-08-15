@@ -104,6 +104,8 @@
     "visionEnabled": "Image understanding · On",
     "visionDisabled": "Image understanding · Off",
     "visionRequiresChat": "Image understanding · requires Chat",
+    "visionRequiresAutoIndex": "Image understanding · enable Auto-index first",
+    "additionalParams": "Additional options",
     "visionDescription": "When enabled, images in documents get a text description generated during indexing and are included in semantic search (each image costs one vision-model call; image content is sent to the configured AI provider).",
     "vectorReady": "Ready",
     "vectorStale": "Rebuild needed",

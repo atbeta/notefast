@@ -304,7 +304,8 @@ export default function AISettingsPanel() {
         reranker: reranker?.enabled ? reranker : null,
         autoLink,
         webSearch: webSearchEnabled ? { enabled: true, apiKey: webSearchApiKey } : undefined,
-        vision: visionEnabled ? { enabled: true } : undefined,
+        // 图片理解是自动索引的附加参数：自动索引关闭时忽略（避免孤立配置）
+        vision: autoIndex && visionEnabled ? { enabled: true } : undefined,
       })
       setStatus(r.status)
       // 成功提示由调用方（ActionButton successToast）统一弹，这里不重复
@@ -580,15 +581,21 @@ export default function AISettingsPanel() {
               : t('aiSettings.requiresEmbedding')
           }
         />
-        <div className="mt-3 pt-3 border-t border-border/50">
+        {/* 附加参数：自动索引的子选项（视觉次级化；自动索引关闭时禁用） */}
+        <div className={`mt-3 pt-3 border-t border-border/50 ${autoIndex ? '' : 'opacity-60'}`}>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70 mb-2">
+            {t('aiSettings.additionalParams')}
+          </p>
           <Toggle
             checked={visionEnabled}
             onChange={setVisionEnabled}
-            disabled={!capabilities?.chat}
+            disabled={!capabilities?.chat || !autoIndex}
             label={
-              capabilities?.chat
-                ? t('aiSettings.visionTitle')
-                : t('aiSettings.visionRequiresChat')
+              !autoIndex
+                ? t('aiSettings.visionRequiresAutoIndex')
+                : capabilities?.chat
+                  ? t('aiSettings.visionTitle')
+                  : t('aiSettings.visionRequiresChat')
             }
           />
           <p className="mt-1.5 text-[12px] text-muted-foreground/80 leading-relaxed">

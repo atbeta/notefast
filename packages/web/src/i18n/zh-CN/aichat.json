@@ -104,6 +104,8 @@
     "visionEnabled": "图片理解 · 开启",
     "visionDisabled": "图片理解 · 关闭",
     "visionRequiresChat": "图片理解 · 需先配 Chat",
+    "visionRequiresAutoIndex": "图片理解 · 需先开启自动索引",
+    "additionalParams": "附加参数",
     "visionDescription": "开启后，索引时会为文档中的图片生成文字描述并纳入语义检索（每张图片会调用一次视觉模型，图片内容会发送给所配置的 AI 服务商）",
     "vectorReady": "就绪",
     "vectorStale": "需重建",
