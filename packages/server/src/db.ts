@@ -26,6 +26,9 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
   db.exec('PRAGMA journal_mode=WAL')
   // WAL + synchronous=NORMAL：崩溃时最多丢失少量 WAL 帧，换取写入性能。
   // 完整灾备由应用内 VACUUM INTO 快照负责，不再依赖 Litestream。
+  // busy_timeout：后台写（AI 索引/实体重建/归档推送）持锁时，读请求等待而非
+  // 立即 SQLITE_BUSY——否则列表等读接口在写密集时段表现为「时快时慢」抖动。
+  db.exec('PRAGMA busy_timeout = 5000')
   db.exec('PRAGMA synchronous=NORMAL')
   db.exec('PRAGMA foreign_keys=ON')
 
