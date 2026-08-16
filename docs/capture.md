@@ -33,7 +33,7 @@ provider 命名约定（自取新名，勿复用）：
 
 | provider | 通道 |
 |---|---|
-| `file-open` | 原生客户端「打开即导入」（已占用，勿动） |
+| `file-open` | web `/preview` 预览页「导入到 NoteFast」（原生壳 OS 文件打开走预览、不入库；用户在预览页显式导入时由 web 携带，已占用勿动） |
 | `web-clipper` | 浏览器 bookmarklet |
 | `ios-shortcut` | iOS 快捷指令 |
 

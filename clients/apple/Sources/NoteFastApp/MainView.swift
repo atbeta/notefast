@@ -17,6 +17,9 @@ struct MainView: View {
             },
             onThemeChange: { dark in
                 model.applyWebTheme(dark: dark)
+            },
+            onWebReady: {
+                model.webReadyForPreview()
             }
         )
         .background(WindowAccessor { window in

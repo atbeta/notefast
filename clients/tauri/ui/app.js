@@ -13,13 +13,14 @@
   try {
     const info = await window.__TAURI__.core.invoke('engine_start')
 
-    // 冷启动双击 .md：Rust 后台导入完成后会直接跳文档/收集箱页，
-    // splash 停留等它，避免「先看到文档列表、再跳目标页」的闪烁。
+    // 冷启动双击 .md：直接跳 /preview，React 挂载后会通过 invoke('on_web_ready')
+    // 通知 Rust 派发预览事件，避免「splash → 文档列表 → 预览」的二次闪烁
     const pending = await window.__TAURI__.core.invoke('has_pending_open_files')
     if (pending) {
+      const origin = info.url.replace(/\/+$/, '')
       msg.textContent = '正在打开文档…'
       await alignWebviewToAppBg()
-      // 不 replace：跳转由 import 完成后的 win.eval 驱动；失败兜底也会跳首页
+      window.location.replace(`${origin}/preview?native=tauri`)
       return
     }
 

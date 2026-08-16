@@ -144,5 +144,22 @@
     "untitled": "无标题文档",
     "updatedAt": "更新于 {{time}}",
     "byNoteFast": "由 NoteFast 分享"
+  },
+  "preview": {
+    "title": "文件预览",
+    "untitled": "无标题",
+    "emptyTitle": "没有可预览的文件",
+    "emptyDesc": "从系统资源管理器或访达双击 .md 文件即可在此预览。",
+    "prev": "上一个",
+    "next": "下一个",
+    "close": "关闭预览",
+    "edit": "编辑",
+    "editing": "编辑中：{{title}}",
+    "import": "导入到 NoteFast",
+    "imported": "已导入收集箱",
+    "importFailed": "导入失败",
+    "saveCopy": "另存为副本",
+    "savedCopy": "已另存为副本",
+    "backToPreview": "返回预览"
   }
 }

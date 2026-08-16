@@ -55,13 +55,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 双击 .md / 拖到 Dock 图标（Info.plist 的 CFBundleDocumentTypes 注册后由 LaunchServices 派发；
     /// 注意 SwiftUI 形态下实际多走 onOpenURL 的 file:// 分支，这里只是兜底）
     func application(_ sender: NSApplication, openFile filename: String) -> Bool {
-        model?.importMarkdownFile(at: URL(fileURLWithPath: filename))
+        model?.previewMarkdownFile(at: URL(fileURLWithPath: filename))
         return true
     }
 
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         for f in filenames {
-            model?.importMarkdownFile(at: URL(fileURLWithPath: f))
+            model?.previewMarkdownFile(at: URL(fileURLWithPath: f))
         }
     }
 }

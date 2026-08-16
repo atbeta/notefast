@@ -144,5 +144,22 @@
     "untitled": "Untitled document",
     "updatedAt": "Updated {{time}}",
     "byNoteFast": "Shared via NoteFast"
+  },
+  "preview": {
+    "title": "File preview",
+    "untitled": "Untitled",
+    "emptyTitle": "No files to preview",
+    "emptyDesc": "Double-click a .md file in Finder or Explorer to preview it here.",
+    "prev": "Previous",
+    "next": "Next",
+    "close": "Close preview",
+    "edit": "Edit",
+    "editing": "Editing: {{title}}",
+    "import": "Import to NoteFast",
+    "imported": "Imported to inbox",
+    "importFailed": "Import failed",
+    "saveCopy": "Save a copy",
+    "savedCopy": "Copy saved",
+    "backToPreview": "Back to preview"
   }
 }

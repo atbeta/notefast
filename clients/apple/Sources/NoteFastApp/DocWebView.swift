@@ -14,6 +14,8 @@ struct DocWebView: NSViewRepresentable {
     var onTitleChange: ((String) -> Void)?
     /// web 主题（data-theme=light|dark）变化回调，壳层原生控件据此跟随 web 明暗
     var onThemeChange: ((Bool) -> Void)?
+    /// web 侧 `notefast:preview` 监听器就绪：壳层据此前置堆积的待预览文件 drain
+    var onWebReady: (() -> Void)?
 
     func makeNSView(context: Context) -> WKWebView {
         let coordinator = context.coordinator
@@ -27,6 +29,7 @@ struct DocWebView: NSViewRepresentable {
         webView.allowsBackForwardNavigationGestures = true
         coordinator.onTitleChange = onTitleChange
         coordinator.onThemeChange = onThemeChange
+        coordinator.onWebReady = onWebReady
         navigator?.attach(webView: webView)
         return webView
     }
@@ -35,6 +38,7 @@ struct DocWebView: NSViewRepresentable {
         // 无 url prop：导航一律走 navigator，这里不做任何加载
         context.coordinator.onTitleChange = onTitleChange
         context.coordinator.onThemeChange = onThemeChange
+        context.coordinator.onWebReady = onWebReady
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -42,6 +46,7 @@ struct DocWebView: NSViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate, WKDownloadDelegate, WKScriptMessageHandler {
         var onTitleChange: ((String) -> Void)?
         var onThemeChange: ((Bool) -> Void)?
+        var onWebReady: (() -> Void)?
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             webView.evaluateJavaScript("document.title") { result, _ in
@@ -93,6 +98,11 @@ struct DocWebView: NSViewRepresentable {
             case "windowZoom":
                 Task { @MainActor in
                     message.webView?.window?.zoom(nil)
+                }
+            case "webReady":
+                // web 侧 notefast:preview 监听器就绪：drain 启动前堆积的待预览文件
+                Task { @MainActor in
+                    self.onWebReady?()
                 }
             default:
                 break

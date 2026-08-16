@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import CommonCrypto
 import NoteFast
 
 /// 应用级状态：内嵌 engine 生命周期 + 同步状态 + 深链/导航命令。
@@ -136,7 +137,8 @@ final class AppModel: ObservableObject {
             engineVersion = hs.version
             verifyEngineVersion(hs.version)
             navigator.navigate(to: entryURL ?? URL(string: "http://127.0.0.1")!)
-            drainPendingImports()
+            // 待预览文件在 web 侧监听器就绪（webReady）后才 drain，
+            // 避免冷启动期 dispatch 的事件被丢——见 enqueuePreviewFile / drainPendingPreviews
         } catch {
             state = .failed(error)
         }
@@ -248,73 +250,84 @@ final class AppModel: ObservableObject {
         }
     }
 
-    // MARK: - 打开即导入（.md 文件关联：双击/拖到 Dock → 导入收集箱并打开）
+    // MARK: - 打开即预览（.md 文件关联：双击/拖到 Dock → 在 /preview 只读展示，不入库）
 
-    /// engine 未就绪时暂存的待导入文件（app 经文件打开冷启动的场景）
-    private var pendingImportFiles: [URL] = []
+    /// engine 启动前或 web 监听器尚未就绪时暂存的待预览文件
+    private var pendingPreviewFiles: [URL] = []
+    /// web 侧 useFileOpenEvents 监听器就绪标志（收到 {type:'webReady'} 后置位）
+    private var webIsReadyForPreview = false
 
     /// AppDelegate 的 openFile(s) 入口：非 .md 后缀不接收（plist 已过滤，双保险）
-    func importMarkdownFile(at url: URL) {
+    func previewMarkdownFile(at url: URL) {
         let exts: Set<String> = ["md", "markdown", "mdown", "mkd", "txt"]
         guard exts.contains(url.pathExtension.lowercased()) else { return }
-        guard isRunning else {
-            pendingImportFiles.append(url)
-            return
-        }
-        Task { await importMarkdownFiles([url]) }
+        pendingPreviewFiles.append(url)
+        drainPendingPreviews()
     }
 
-    private func drainPendingImports() {
-        let files = pendingImportFiles
-        pendingImportFiles = []
+    /// web 侧 notefast:preview 监听器就绪（DocWebView 转发）→ 排空堆积的待预览文件
+    func webReadyForPreview() {
+        webIsReadyForPreview = true
+        drainPendingPreviews()
+    }
+
+    private func drainPendingPreviews() {
+        // web 监听器没就绪就等下一轮 webReady；中途新到的文件同样等
+        guard webIsReadyForPreview else { return }
+        let files = pendingPreviewFiles
+        pendingPreviewFiles = []
         guard !files.isEmpty else { return }
-        Task { await importMarkdownFiles(files) }
+        Task { await dispatchPreviewFiles(files) }
     }
 
-    /// 导入为 inbox 文档：单篇直接打开（满足「双击为了看」的场景，页面带升格/丢弃入口）；
-    /// 多篇跳收集箱列表批量整理
-    private func importMarkdownFiles(_ files: [URL]) async {
-        guard case .running(let hs) = state, let base = baseURL else { return }
-        guard let notebookId = hs.notebookId else {
-            showTransientMessage("导入失败：engine 握手缺少 notebookId")
-            return
-        }
-        let client = NoteFastClient(baseURL: base)
-        var firstDocId: String?
-        var imported = 0
+    /// 把文件内容逐个通过 CustomEvent 推给 web 的 useFileOpenEvents；
+    /// 单文件直接导航 /preview，多文件也导航 /preview（web 端按队列展示）
+    private func dispatchPreviewFiles(_ files: [URL]) async {
+        var dispatched = 0
         for file in files {
             guard let markdown = try? String(contentsOf: file, encoding: .utf8), !markdown.isEmpty else {
                 showTransientMessage("无法读取：\(file.lastPathComponent)")
                 continue
             }
-            do {
-                // source 传文件绝对路径：服务端按「同路径+同内容 hash」去重——
-                // 重复打开同一文件直接返回既有文档，不再重复进收集箱
-                let res = try await client.post("/import/markdown", body: [
-                    "notebook_id": notebookId,
-                    "title": file.deletingPathExtension().lastPathComponent,
-                    "markdown": markdown,
-                    "status": "inbox",
-                    "source": [
-                        "provider": "file-open",
-                        "external_id": file.standardizedFileURL.path,
-                    ],
-                ], as: ImportMarkdownResult.self)
-                if firstDocId == nil { firstDocId = res.doc.id }
-                imported += 1
-            } catch {
-                let apiError = (error as? NotefastAPIError)
-                showTransientMessage("导入失败：\(file.lastPathComponent)（\(apiError?.message ?? "未知错误")）")
+            let title = file.deletingPathExtension().lastPathComponent
+            let path = file.standardizedFileURL.path
+            let contentHash = Self.sha256Hex(markdown)
+            // JSON 序列化 detail：避免 JS 字符串转义陷阱（content 含换行/引号/反斜杠）
+            guard let detailJSON = Self.previewEventJSON(title: title, content: markdown, path: path, contentHash: contentHash) else {
+                showTransientMessage("预览失败：\(file.lastPathComponent)")
+                continue
             }
+            let script = "window.dispatchEvent(new CustomEvent('notefast:preview',{detail:\(detailJSON)}))"
+            navigator.evaluate(script)
+            dispatched += 1
         }
-        guard imported > 0 else { return }
-        showTransientMessage(files.count > 1 ? "已导入 \(imported) 篇到收集箱" : "已导入到收集箱")
-        showMainWindow() // 拖到 Dock 触发导入时可能无窗口
-        if imported == 1, let docId = firstDocId, let url = docURL(docId) {
-            navigator.navigate(to: url)
-        } else if let url = pageURL("/inbox") {
+        guard dispatched > 0 else { return }
+        showMainWindow() // 拖到 Dock 触发预览时可能无窗口
+        if let url = pageURL("/preview") {
             navigator.navigate(to: url)
         }
+    }
+
+    /// 预览事件 detail 的 JSON 字面量（注入到 JS 字面量位置，必须是合法 JS 表达式）
+    private static func previewEventJSON(title: String, content: String, path: String, contentHash: String) -> String? {
+        let detail: [String: Any] = [
+            "title": title,
+            "content": content,
+            "path": path,
+            "contentHash": contentHash,
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: detail, options: [.fragmentsAllowed]),
+              let json = String(data: data, encoding: .utf8) else { return nil }
+        return json
+    }
+
+    private static func sha256Hex(_ s: String) -> String {
+        let bytes = Array(s.utf8)
+        // 用 CommonCrypto 算 sha256（CryptoKit 在 Swift 命令行工具链下需要额外 import，
+        // 而 CommonCrypto 在 Apple 平台是系统库，免依赖）
+        var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        CC_SHA256(bytes, CC_LONG(bytes.count), &hash)
+        return hash.map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - 深链（notefast://）与文件打开
@@ -323,7 +336,7 @@ final class AppModel: ObservableObject {
         // SwiftUI onOpenURL 在 macOS 上同时承接「打开文件」事件（file://）——
         // AppDelegate 的 openFile(s) 未必会触发，这里兜底打开即导入
         if url.isFileURL {
-            importMarkdownFile(at: url)
+            previewMarkdownFile(at: url)
             return
         }
         guard url.scheme == "notefast", isRunning else { return }
