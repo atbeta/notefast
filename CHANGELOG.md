@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.68.1](https://github.com/atbeta/notefast/compare/v0.68.0...v0.68.1) (2026-08-16)
+
+
+### Bug Fixes
+
+* **shared:** drop bundled i18n singleton that overrode web translations ([bbbb009](https://github.com/atbeta/notefast/commit/bbbb00919b989d5fdd418d1b7662b685a4ad1c86))
+
 ## [0.68.0](https://github.com/atbeta/notefast/compare/v0.67.1...v0.68.0) (2026-08-16)
 
 
