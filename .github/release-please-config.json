@@ -11,6 +11,7 @@
         { "type": "json", "path": "packages/core/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "packages/server/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "packages/web/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "packages/shared/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "clients/tauri/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "clients/tauri/src-tauri/tauri.conf.json", "jsonpath": "$.version" },
         { "type": "toml", "path": "clients/tauri/src-tauri/Cargo.toml", "jsonpath": "$.package.version" }
