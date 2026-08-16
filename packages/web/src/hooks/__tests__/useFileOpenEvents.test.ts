@@ -124,3 +124,35 @@ describe('discardAllPreviews', () => {
     expect(s.currentIndex).toBe(0)
   })
 })
+
+describe('sessionStorage 持久化（壳层 dispatch→整页跳 /preview 的恢复面）', () => {
+  test('serialize → parse 往返保真（含 currentIndex）', async () => {
+    const { serializePreviewQueue, parsePersistedQueue } = await import('../useFileOpenEvents')
+    const s = { items: [sampleItem('a'), sampleItem('b')], currentIndex: 1 }
+    const restored = parsePersistedQueue(serializePreviewQueue(s))
+    expect(restored).toEqual(s)
+  })
+
+  test('null / 非法 JSON / 非数组 items → null（按空队列处理）', async () => {
+    const { parsePersistedQueue } = await import('../useFileOpenEvents')
+    expect(parsePersistedQueue(null)).toBeNull()
+    expect(parsePersistedQueue('not json')).toBeNull()
+    expect(parsePersistedQueue('{"items":{}}')).toBeNull()
+    expect(parsePersistedQueue('{"items":[{"content":123}]}')).toBeNull()
+  })
+
+  test('超 MAX_CONTENT_CHARS 的持久化项拒收（与 push 口径一致）', async () => {
+    const { serializePreviewQueue, parsePersistedQueue } = await import('../useFileOpenEvents')
+    const huge = { title: 'h', content: 'x'.repeat(5_000_001), path: '', contentHash: '' }
+    expect(parsePersistedQueue(serializePreviewQueue({ items: [huge], currentIndex: 0 }))).toBeNull()
+  })
+
+  test('缺省字段补空串；currentIndex 越界回收到末项', async () => {
+    const { parsePersistedQueue } = await import('../useFileOpenEvents')
+    const raw = JSON.stringify({ items: [{ content: 'body' }], currentIndex: 7 })
+    expect(parsePersistedQueue(raw)).toEqual({
+      items: [{ title: '', content: 'body', path: '', contentHash: '' }],
+      currentIndex: 0,
+    })
+  })
+})

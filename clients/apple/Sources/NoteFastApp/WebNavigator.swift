@@ -23,6 +23,12 @@ final class WebNavigator {
         }
     }
 
+    /// WebView 是否已挂载（关窗不退出后为 false：evaluate 会落空）
+    var isAttached: Bool { webView != nil }
+
+    /// 当前页面 URL（未挂载/尚未加载为 nil）
+    var currentURL: URL? { webView?.url }
+
     func navigate(to url: URL) {
         lastURL = url
         pendingURL = url

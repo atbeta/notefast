@@ -8,6 +8,8 @@
  *
  * Web 累积成队列（FIFO），/preview 路由按当前索引展示一项；
  * 上一项 / 下一项 / 关闭一项 / 清空 由调用方决定。
+ * 队列持久化到 sessionStorage：壳层 dispatch 事件后整页跳 /preview
+ * 会销毁 JS 上下文，纯内存队列会丢（曾导致预览页永远空态）。
  *
  * Shell ↔ web 就绪信号：
  *   监听器挂载时通过既有 `notefast` 通道（macOS webkit messageHandlers
@@ -34,9 +36,70 @@ interface QueueState {
 
 const PREVIEW_EVENT = 'notefast:preview'
 const MAX_CONTENT_CHARS = 5_000_000
+const STORAGE_KEY = 'notefast.previewQueue'
 
 let state: QueueState = { items: [], currentIndex: 0 }
 const listeners = new Set<() => void>()
+
+// ─────────── sessionStorage 持久化 ───────────
+// 壳层流程是「dispatch 事件 → 整页跳 /preview」（WKWebView load / location.href），
+// 整页加载会销毁 JS 上下文，纯内存队列会被清空——队列落 sessionStorage
+// （同源、同 webview 会话内跨整页跳转存活），新页面模块加载时恢复。
+
+function queueStorage(): Storage | null {
+  try {
+    return typeof window !== 'undefined' ? window.sessionStorage : null
+  } catch {
+    return null
+  }
+}
+
+/** 序列化队列（纯函数，供测试） */
+export function serializePreviewQueue(s: QueueState): string {
+  return JSON.stringify(s)
+}
+
+/** 解析持久化的队列（纯函数，供测试）；非法/超限时返回 null 按空队列处理 */
+export function parsePersistedQueue(raw: string | null): QueueState | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Partial<QueueState> | null
+    if (!parsed || !Array.isArray(parsed.items)) return null
+    const items: PreviewItem[] = []
+    for (const it of parsed.items) {
+      if (!it || typeof it.content !== 'string' || it.content.length > MAX_CONTENT_CHARS) return null
+      items.push({
+        title: typeof it.title === 'string' ? it.title : '',
+        content: it.content,
+        path: typeof it.path === 'string' ? it.path : '',
+        contentHash: typeof it.contentHash === 'string' ? it.contentHash : '',
+      })
+    }
+    const currentIndex =
+      typeof parsed.currentIndex === 'number' && Number.isInteger(parsed.currentIndex)
+        ? Math.min(Math.max(0, parsed.currentIndex), Math.max(0, items.length - 1))
+        : 0
+    return { items, currentIndex }
+  } catch {
+    return null
+  }
+}
+
+function persistQueue(): void {
+  try {
+    const s = queueStorage()
+    if (!s) return
+    if (state.items.length === 0) s.removeItem(STORAGE_KEY)
+    else s.setItem(STORAGE_KEY, serializePreviewQueue(state))
+  } catch {
+    // quota 等异常：放弃持久化，内存队列仍可用
+  }
+}
+
+function restoreQueue(): void {
+  const restored = parsePersistedQueue(queueStorage()?.getItem(STORAGE_KEY) ?? null)
+  if (restored) state = restored
+}
 
 function emit(): void {
   for (const l of listeners) l()
@@ -44,6 +107,7 @@ function emit(): void {
 
 function setState(patch: Partial<QueueState>): void {
   state = { ...state, ...patch }
+  persistQueue()
   emit()
 }
 
@@ -86,6 +150,11 @@ export function discardAllPreviews(): void {
 /** 测试钩子：重置模块态到初始值（不要在产品代码里调用） */
 export function __resetPreviewQueueForTests(): void {
   state = { items: [], currentIndex: 0 }
+  try {
+    queueStorage()?.removeItem(STORAGE_KEY)
+  } catch {
+    // 忽略
+  }
   emit()
 }
 
@@ -96,6 +165,9 @@ export function getPreviewQueueSnapshot(): QueueState {
 // ─────────── 模块加载即挂监听（与 useTheme 同款） ───────────
 
 if (typeof window !== 'undefined') {
+  // 整页跳转（壳层 navigate /preview）后模块重建：先恢复跳转前已入队的预览项
+  restoreQueue()
+
   window.addEventListener(PREVIEW_EVENT, (e) => {
     const detail = (e as CustomEvent<PreviewItem | undefined>).detail
     if (!detail || typeof detail.content !== 'string') return

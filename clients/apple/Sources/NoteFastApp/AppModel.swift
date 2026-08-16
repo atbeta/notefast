@@ -274,6 +274,13 @@ final class AppModel: ObservableObject {
     private func drainPendingPreviews() {
         // web 监听器没就绪就等下一轮 webReady；中途新到的文件同样等
         guard webIsReadyForPreview else { return }
+        // 关窗不退出后拖到 Dock：WebView 已销毁，事件无处可去——先重建窗口并
+        // 导航 /preview，pending 保留，新页面的 webReady 会再次触发本函数真正派发
+        guard navigator.isAttached else {
+            showMainWindow()
+            if let url = pageURL("/preview") { navigator.navigate(to: url) }
+            return
+        }
         let files = pendingPreviewFiles
         pendingPreviewFiles = []
         guard !files.isEmpty else { return }
@@ -281,7 +288,8 @@ final class AppModel: ObservableObject {
     }
 
     /// 把文件内容逐个通过 CustomEvent 推给 web 的 useFileOpenEvents；
-    /// 单文件直接导航 /preview，多文件也导航 /preview（web 端按队列展示）
+    /// 不在 /preview 时导航过去（整页加载会销毁 JS 上下文，web 端队列
+    /// 靠 sessionStorage 跨跳转恢复）；已在 /preview 时事件被活页面直接接收，不跳转
     private func dispatchPreviewFiles(_ files: [URL]) async {
         var dispatched = 0
         for file in files {
@@ -303,7 +311,7 @@ final class AppModel: ObservableObject {
         }
         guard dispatched > 0 else { return }
         showMainWindow() // 拖到 Dock 触发预览时可能无窗口
-        if let url = pageURL("/preview") {
+        if navigator.currentURL?.path != "/preview", let url = pageURL("/preview") {
             navigator.navigate(to: url)
         }
     }

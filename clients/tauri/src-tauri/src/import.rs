@@ -82,16 +82,21 @@ pub fn try_drain(app: &AppHandle) {
             Err(e) => eprintln!("[notefast] 预览失败 {}: {e}", f.display()),
         }
     }
-    // 导航 /preview；web 监听器已就绪（try_drain 已校验），跳转不会被启动页 replace 抢占
+    // 导航 /preview；web 监听器已就绪（try_drain 已校验），跳转不会被启动页 replace 抢占。
+    // 已在 /preview（冷启动 splash 直跳）时跳过：整页加载会销毁 JS 上下文，
+    // 虽可经 sessionStorage 恢复，但白屏刷新没有必要
     if let Some(win) = app.get_webview_window("main") {
-        if let Some(info) = current_engine_info(app) {
-            let url = format!("http://127.0.0.1:{}/preview?native=tauri", info.port);
-            if let Ok(js) = serde_json::to_string(&url) {
-                let _ = win.eval(&format!("location.href = {js}"));
+        let already_on_preview = win.url().map(|u| u.path() == "/preview").unwrap_or(false);
+        if !already_on_preview {
+            if let Some(info) = current_engine_info(app) {
+                let url = format!("http://127.0.0.1:{}/preview?native=tauri", info.port);
+                if let Ok(js) = serde_json::to_string(&url) {
+                    let _ = win.eval(&format!("location.href = {js}"));
+                }
+            } else {
+                // engine 未就绪时只能跳相对路径（127.0.0.1:port 未知）
+                let _ = win.eval("location.href = '/preview?native=tauri'");
             }
-        } else {
-            // engine 未就绪时只能跳相对路径（127.0.0.1:port 未知）
-            let _ = win.eval("location.href = '/preview?native=tauri'");
         }
     }
 }
