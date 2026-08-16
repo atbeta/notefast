@@ -6,6 +6,7 @@ COPY package.json bunfig.toml bun.lock ./
 COPY packages/core/package.json packages/core/
 COPY packages/server/package.json packages/server/
 COPY packages/web/package.json packages/web/
+COPY packages/shared/package.json packages/shared/
 RUN bun install --frozen-lockfile
 
 FROM base AS builder

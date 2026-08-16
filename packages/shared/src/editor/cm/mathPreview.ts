@@ -2,7 +2,7 @@ import { StateField } from '@codemirror/state'
 import type { EditorState, Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType } from '@codemirror/view'
 import type { DecorationSet } from '@codemirror/view'
-import i18next from '../../i18n'
+import { getI18n } from 'react-i18next'
 import { renderMathToHtml } from '../../lib/katex'
 
 /**
@@ -35,7 +35,7 @@ class MathWidget extends WidgetType {
     wrap.className = 'cm-math-preview'
     const status = document.createElement('div')
     status.className = 'cm-math-preview-status'
-    status.textContent = i18next.t('math.loading')
+    status.textContent = getI18n().t('math.loading')
     wrap.appendChild(status)
 
     // 异步渲染 + cancelled 标志防竞态（widget 销毁后不再写 DOM），同 MathBlock 模式
