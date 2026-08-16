@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.68.2](https://github.com/atbeta/notefast/compare/v0.68.1...v0.68.2) (2026-08-16)
+
+
+### Bug Fixes
+
+* **shell:** keep file-open preview content across full-page navigation ([25ac7d3](https://github.com/atbeta/notefast/commit/25ac7d36132b32412bcbcc5f5298e3e28a1931c4))
+
 ## [0.68.1](https://github.com/atbeta/notefast/compare/v0.68.0...v0.68.1) (2026-08-16)
 
 
