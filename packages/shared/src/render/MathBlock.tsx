@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { renderMathToHtml } from '../lib/katex'
-import { CopyButton } from './ui'
+import { CopyButton } from '../ui'
 
 /**
  * 块级公式（```math 围栏）：懒渲染 KaTeX；失败时展示错误 + 源码回退。

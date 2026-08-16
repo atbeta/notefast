@@ -6,19 +6,25 @@ import { highlightCode } from '../lib/highlight'
 import { classifyChatMath } from '../lib/chatMath'
 import MermaidDiagram from './MermaidDiagram'
 import MathBlock, { MathInline } from './MathBlock'
-import { CopyButton } from './ui'
+import { CopyButton } from '../ui'
 import { useTranslation } from 'react-i18next'
 
 interface ChatMarkdownProps {
   content: string
   className?: string
+  /** 排版根 class：默认 chat 气泡；预览/文档场景传 'reading-prose' */
+  proseClass?: string
 }
 
 /** 聊天气泡内的 Markdown 渲染（GFM + 代码高亮 + Mermaid + KaTeX 公式） */
-export default function ChatMarkdown({ content, className = '' }: ChatMarkdownProps) {
+export default function ChatMarkdown({
+  content,
+  className = '',
+  proseClass = 'chat-prose',
+}: ChatMarkdownProps) {
   if (!content) return null
   return (
-    <div className={`chat-prose ${className}`}>
+    <div className={`${proseClass} ${className}`}>
       <Markdown
         remarkPlugins={[remarkGfm, remarkMath]}
         components={{

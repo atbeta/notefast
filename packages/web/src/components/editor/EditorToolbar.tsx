@@ -25,7 +25,7 @@ import {
 import { Tooltip, ShortcutKeys, shortcutLabel } from '../ui'
 import { useAiCapabilities } from '../../hooks/useAiCapabilities'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss'
-import type { CodeMirrorEditorHandle } from './CodeMirrorEditor'
+import type { CodeMirrorEditorHandle } from '@notefast/shared'
 import AssetPickerDialog from './AssetPickerDialog'
 
 type Mode = 'edit' | 'view'

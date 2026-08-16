@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { nextMermaidId, renderMermaidSvg } from '../lib/mermaid'
-import { CopyButton } from './ui'
+import { CopyButton } from '../ui'
 
 interface MermaidDiagramProps {
   code: string

@@ -5,11 +5,14 @@
   "workspaces": [
     "packages/core",
     "packages/server",
-    "packages/web"
+    "packages/web",
+    "packages/shared",
+    "packages/editor"
   ],
   "scripts": {
     "dev": "bun --filter @notefast/server dev",
     "dev:web": "bun --filter @notefast/web dev",
+    "dev:editor": "bun --filter @notefast/editor dev",
     "build": "bun --filter @notefast/server build && bun --filter @notefast/web build",
     "build:engine": "bun --filter @notefast/server build:engine",
     "lint": "bun --filter '*' lint",

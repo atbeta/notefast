@@ -1,0 +1,131 @@
+@import '@notefast/shared/styles/prose.css';
+@import '@notefast/shared/styles/editor.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ────────────────────────────────────────────────────────────────
+   NoteFastEditor Design Tokens（与 NoteFast web 同源的最小子集）
+   覆盖 shared 组件引用的全部 token；M2 起随编辑器壳层扩展。
+   ──────────────────────────────────────────────────────────────── */
+:root {
+  --font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei', Helvetica, 'Apple Color Emoji', Arial, sans-serif, 'Segoe UI Emoji', 'Segoe UI Symbol';
+  --font-serif: 'Source Serif 4 Variable', 'Source Serif Pro', 'Charter', 'Georgia', serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'Fira Code', 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', monospace;
+
+  --background: 255 255 255;
+  --card: 255 255 255;
+  --card-foreground: 55 53 47;
+  --popover: 255 255 255;
+  --popover-foreground: 55 53 47;
+
+  --foreground: 55 53 47;
+  --muted: 241 241 239;
+  --muted-foreground: 105 104 100;
+  --accent: 235 236 237;
+  --accent-foreground: 55 53 47;
+  --secondary: 241 241 239;
+  --secondary-foreground: 55 53 47;
+
+  --primary: 90 116 176;
+  --primary-foreground: 255 255 255;
+  --primary-hover: 78 100 152;
+  --primary-soft: rgb(var(--primary) / 0.08);
+  --primary-softer: rgb(var(--primary) / 0.04);
+  --selection: rgb(var(--primary) / 0.14);
+
+  --ink: 31 35 40;
+  --ink-foreground: 255 255 255;
+  --ink-hover: 58 63 70;
+
+  --destructive: 235 87 87;
+  --destructive-foreground: 255 255 255;
+  --warn: 217 115 13;
+
+  --border: 233 233 231;
+  --border-strong: 200 200 198;
+  --input: 233 233 231;
+  --ring: 90 116 176;
+
+  --editor-bg: 255 255 255;
+  --editor-gutter-bg: 247 247 245;
+
+  --radius: 6px;
+  --radius-card: 8px;
+  --radius-btn: 6px;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.02);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.03);
+  --shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  --code-keyword: 90 116 176;
+  --code-string: 21 128 61;
+  --code-comment: 146 147 144;
+  --code-number: 180 83 9;
+  --code-title: 55 53 47;
+}
+
+:root[data-theme='dark'] {
+  --background: 25 25 25;
+  --card: 32 32 32;
+  --card-foreground: 255 255 255;
+  --popover: 32 32 32;
+  --popover-foreground: 255 255 255;
+
+  --foreground: 255 255 255;
+  --muted: 47 47 47;
+  --muted-foreground: 168 168 168;
+  --accent: 47 47 47;
+  --accent-foreground: 255 255 255;
+  --secondary: 47 47 47;
+  --secondary-foreground: 255 255 255;
+
+  --primary: 149 164 198;
+  --primary-foreground: 25 25 25;
+  --primary-hover: 169 184 214;
+  --primary-soft: rgb(var(--primary) / 0.15);
+  --primary-softer: rgb(var(--primary) / 0.08);
+  --selection: rgb(var(--primary) / 0.38);
+
+  --ink: 235 237 240;
+  --ink-foreground: 25 25 25;
+  --ink-hover: 200 203 208;
+
+  --destructive: 235 87 87;
+  --destructive-foreground: 255 255 255;
+  --warn: 217 115 13;
+
+  --border: 60 60 60;
+  --border-strong: 80 80 80;
+  --input: 60 60 60;
+  --ring: 149 164 198;
+
+  --editor-bg: 25 25 25;
+  --editor-gutter-bg: 32 32 32;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+  --code-keyword: 149 164 198;
+  --code-string: 134 239 172;
+  --code-comment: 110 110 108;
+  --code-number: 252 211 77;
+  --code-title: 240 240 240;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: rgb(var(--foreground));
+  background: rgb(var(--background));
+}

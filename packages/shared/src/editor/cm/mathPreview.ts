@@ -2,8 +2,8 @@ import { StateField } from '@codemirror/state'
 import type { EditorState, Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType } from '@codemirror/view'
 import type { DecorationSet } from '@codemirror/view'
-import i18next from '../../../i18n'
-import { renderMathToHtml } from '../../../lib/katex'
+import i18next from '../../i18n'
+import { renderMathToHtml } from '../../lib/katex'
 
 /**
  * 块级公式内联预览：```math（别名 latex/katex/tex）围栏块在光标不在块内时

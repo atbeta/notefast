@@ -7,8 +7,7 @@
  * - ```math 围栏（普通 code 节点）→ `<code class="language-math">`，按块级处理
  *
  * 注意：micromark-extension-math 无 Pandoc 空白/数字守卫，`$5 - $10` 这类货币
- * 写法也会被解析为 inlineMath（实测见 __tests__/chatMath.test.ts）——已知接受项，
- * 靠服务端 prompt 约定模型少输出裸露货币区间 + MathInline 渲染失败回退原文兜底。
+ * 写法也会被解析为 inlineMath——已知接受项，靠 MathInline 渲染失败回退原文兜底。
  */
 
 /** 块级公式语言别名（与阅读态 BlockRenderer 的 ```math 围栏别名集一致） */

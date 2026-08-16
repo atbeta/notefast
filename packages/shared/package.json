@@ -1,16 +1,19 @@
 {
-  "name": "@notefast/web",
-  "version": "0.67.1",
+  "name": "@notefast/shared",
+  "version": "0.66.0",
   "private": true,
   "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles/prose.css": "./src/styles/prose.css",
+    "./styles/editor.css": "./src/styles/editor.css"
+  },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
     "lint": "oxlint src",
-    "test": "bun test src",
-    "typecheck": "tsc --noEmit",
-    "check:i18n": "bun scripts/check-i18n.ts"
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -21,16 +24,8 @@
     "@codemirror/search": "^6.7.1",
     "@codemirror/state": "^6.7.1",
     "@codemirror/view": "^6.43.7",
-    "@fontsource-variable/inter": "^5.3.0",
-    "@fontsource-variable/jetbrains-mono": "^5.3.0",
-    "@fontsource-variable/source-serif-4": "^5.3.0",
     "@lezer/highlight": "^1.2.3",
-    "@notefast/core": "workspace:*",
-    "@notefast/shared": "workspace:*",
-    "@tauri-apps/plugin-dialog": "2",
-    "@tauri-apps/plugin-fs": "2",
     "codemirror": "^6.0.2",
-    "d3-force": "^3.0.0",
     "highlight.js": "^11.11.1",
     "i18next": "^26.3.6",
     "katex": "^0.16.45",
@@ -40,22 +35,15 @@
     "react-dom": "^19.0.0",
     "react-i18next": "^17.0.11",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^7.3.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6"
   },
   "devDependencies": {
-    "@tailwindcss/typography": "^0.5.20",
     "@types/bun": "latest",
-    "@types/d3-force": "^3.0.10",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
-    "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.5.3",
     "remark-parse": "^11",
     "remark-rehype": "^11",
-    "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3",
     "unified": "^11",
     "vite": "^6.1.0"

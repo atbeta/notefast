@@ -17,7 +17,7 @@ import { Loader2, Sparkles, Wand2 } from 'lucide-react'
 import { dispatchAskAi } from '../../lib/askAi'
 import { useAiCapabilities } from '../../hooks/useAiCapabilities'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss'
-import type { SelectionAnchor, SelectionRect } from './cm/selectionReport'
+import type { SelectionAnchor, SelectionRect } from '@notefast/shared'
 
 /** 预填引用的长度上限（与 BlockSurface 一致），避免整段长文塞进输入框 */
 const QUOTE_MAX = 600
