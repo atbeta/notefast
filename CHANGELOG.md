@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.68.0](https://github.com/atbeta/notefast/compare/v0.67.1...v0.68.0) (2026-08-16)
+
+
+### Features
+
+* **editor:** add editor UI, preview, save and import-to-Notefast flow ([682dc09](https://github.com/atbeta/notefast/commit/682dc09e2f2d655efb0b803cff5e5f7e94a656b2))
+* **shell:** open .md as preview with edit and import, drop standalone editor ([0f6d149](https://github.com/atbeta/notefast/commit/0f6d1496a021ccffb89d37238a581d3340fd3599))
+
+
+### Performance Improvements
+
+* **web:** fetch related docs only when the related tab is open ([40ec3b0](https://github.com/atbeta/notefast/commit/40ec3b0aa9bec7213b67e4c480bf25ef04dfa3ed))
+
 ## [0.67.1](https://github.com/atbeta/notefast/compare/v0.67.0...v0.67.1) (2026-08-15)
 
 
