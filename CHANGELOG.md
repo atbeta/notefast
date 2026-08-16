@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.67.2](https://github.com/atbeta/notefast/compare/v0.67.1...v0.67.2) (2026-08-16)
+
+
+### Performance Improvements
+
+* **web:** fetch related docs only when the related tab is open ([40ec3b0](https://github.com/atbeta/notefast/commit/40ec3b0aa9bec7213b67e4c480bf25ef04dfa3ed))
+
 ## [0.67.1](https://github.com/atbeta/notefast/compare/v0.67.0...v0.67.1) (2026-08-15)
 
 
