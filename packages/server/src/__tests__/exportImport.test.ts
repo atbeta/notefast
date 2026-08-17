@@ -26,6 +26,39 @@ let notebookId: string
 
 const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4])
 
+function u16le(n: number): Uint8Array {
+  const b = new Uint8Array(2); b[0] = n & 0xff; b[1] = (n >>> 8) & 0xff; return b
+}
+function u32le(n: number): Uint8Array {
+  const b = new Uint8Array(4); b[0] = n & 0xff; b[1] = (n >>> 8) & 0xff; b[2] = (n >>> 16) & 0xff; b[3] = (n >>> 24) & 0xff; return b
+}
+function concatBytes(parts: Uint8Array[]): Uint8Array {
+  let len = 0
+  for (const p of parts) len += p.length
+  const out = new Uint8Array(len); let off = 0
+  for (const p of parts) { out.set(p, off); off += p.length }
+  return out
+}
+/** 构造单条目 STORE zip（文件名用原始字节，flag 可指定——模拟 Windows 中文工具
+ *  不带 UTF-8 bit 11 的 GBK 文件名 zip） */
+function buildRawNameZip(nameBytes: Uint8Array, content: Uint8Array, flag = 0): Uint8Array {
+  const local = concatBytes([
+    Uint8Array.from([0x50, 0x4b, 0x03, 0x04]), u16le(20), u16le(flag), u16le(0), u16le(0), u16le(0),
+    u32le(0), u32le(content.length), u32le(content.length), u16le(nameBytes.length), u16le(0), nameBytes,
+  ])
+  const central = concatBytes([
+    Uint8Array.from([0x50, 0x4b, 0x01, 0x02]), u16le(20), u16le(20), u16le(flag), u16le(0), u16le(0), u16le(0),
+    u32le(0), u32le(content.length), u32le(content.length), u16le(nameBytes.length), u16le(0), u16le(0), u16le(0),
+    u16le(0), u32le(0), u32le(0), nameBytes,
+  ])
+  const centralOffset = local.length + content.length
+  const eocd = concatBytes([
+    Uint8Array.from([0x50, 0x4b, 0x05, 0x06]), u16le(0), u16le(0), u16le(1), u16le(1),
+    u32le(central.length), u32le(centralOffset), u16le(0),
+  ])
+  return concatBytes([local, content, central, eocd])
+}
+
 beforeAll(() => {
   testDir = mkdtempSync(join('/tmp', 'notefast-export-import-'))
   const result = initDb(testDir)
@@ -82,6 +115,29 @@ describe('parseZip', () => {
     expect(entries.length).toBe(1)
     expect(entries[0]!.name).toBe('note.md')
     expect(new TextDecoder().decode(entries[0]!.data)).toBe(new TextDecoder().decode(data))
+  })
+
+  test('Windows 中文 zip：GBK 文件名（无 UTF-8 flag）正确解码，不再乱码', () => {
+    // 模拟 WinRAR/7-Zip/Windows 自带压缩：文件名是 GBK 字节且 general flag 无 bit 11。
+    // 旧实现统一 UTF-8 解码 → 「测试笔记」变「���Աʼ�」。修复后先严格 UTF-8（失败）
+    // 回退 GBK（Bun 原生支持），ASCII 子集不受影响。
+    const gbk = [0xb2, 0xe2, 0xca, 0xd4, 0xb1, 0xca, 0xbc, 0xc7, 0x2e, 0x6d, 0x64] // 测试笔记.md GBK
+    const content = new TextEncoder().encode('# 测试标题\n内容')
+    const zip = buildRawNameZip(Uint8Array.from(gbk), content, 0 /* 不置 UTF-8 bit */)
+
+    const entries = parseZip(zip)
+    expect(entries.length).toBe(1)
+    expect(entries[0]!.name).toBe('测试笔记.md')
+    expect(new TextDecoder().decode(entries[0]!.data)).toBe('# 测试标题\n内容')
+  })
+
+  test('未置 UTF-8 flag 但内容恰为合法 UTF-8 字节：仍按 UTF-8 解码（严格回退不误伤）', () => {
+    // 某些工具（macOS 压缩、部分在线工具）不置 bit 11 但存了 UTF-8 字节；
+    // decodeLegacyName 先严格 UTF-8 成功即用，不会错误地丢给 GBK。
+    const utf8 = new TextEncoder().encode('中文名.md')
+    const zip = buildRawNameZip(utf8, new TextEncoder().encode('正文'), 0)
+    const entries = parseZip(zip)
+    expect(entries[0]!.name).toBe('中文名.md')
   })
 
   test('空/非 zip 输入抛错', () => {
@@ -181,6 +237,18 @@ describe('importArchiveZip', () => {
     const titles = getDb().query("SELECT content FROM blocks WHERE type = 'document' ORDER BY created_at").all() as Array<{ content: string }>
     expect(titles.map((t) => t.content)).toContain('笔记一')
     expect(titles.map((t) => t.content)).toContain('笔记二')
+  })
+
+  test('GBK 文件名 zip（Windows 中文打包）：标题从文件名正确推断，不产生乱码', () => {
+    // 无 manifest + 内容无 H1 → 标题 fallback 到文件名；文件名是 GBK 字节。
+    // 修复前文件名乱码 → 标题「���Աʼ�」。
+    const gbk = [0xce, 0xd2, 0xb5, 0xc4, 0xb1, 0xca, 0xbc, 0xc7, 0x2e, 0x6d, 0x64] // 我的笔记.md GBK
+    const zip = buildRawNameZip(Uint8Array.from(gbk), new TextEncoder().encode('第一段内容'), 0)
+    const result = importArchiveZip(getDb(), { notebookId, bytes: zip })
+    expect(result.imported).toBe(1)
+    expect(result.failed).toBe(0)
+    const title = getDb().query("SELECT content FROM blocks WHERE type = 'document' AND content = '我的笔记'").get() as { content: string } | undefined
+    expect(title).toBeDefined()
   })
 
   test('通用 zip 的 .txt 也按文档导入（无 manifest）', async () => {

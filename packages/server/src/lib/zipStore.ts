@@ -1,6 +1,7 @@
 /**
  * 最小 ZIP（STORE，无压缩）—— 单文档导出打包用，避免引入依赖。
- * 仅支持 ASCII/UTF-8 文件名（UTF-8 通用标志 bit 11）。
+ * 文件名编码：bit 11（UTF-8）置位 → UTF-8；未置位 → legacy（Windows 中文工具
+ * 用 GBK/CP936；ASCII 子集在 GBK 下不变）。Bun 的 TextDecoder 原生支持 gbk。
  */
 
 const CRC_TABLE = (() => {
@@ -135,6 +136,17 @@ export function buildZipStore(entries: ZipEntry[]): Uint8Array {
  * - 目录项跳过；zip64 / 加密等罕见形态抛错
  * - 数据描述符（bit 3）不影响：大小与偏移一律以中央目录为准
  */
+
+/** legacy 文件名解码：先试严格 UTF-8（某些工具未置 flag 但实际存了 UTF-8 字节），
+ *  失败回退 GBK（Windows 中文工具实际编码）。ASCII 在两种编码下一致，不会误伤。 */
+function decodeLegacyName(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    return new TextDecoder('gbk').decode(bytes)
+  }
+}
+
 export function parseZip(bytes: Uint8Array): ZipEntry[] {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
 
@@ -155,6 +167,7 @@ export function parseZip(bytes: Uint8Array): ZipEntry[] {
   let p = cdOffset
   for (let n = 0; n < cdCount; n++) {
     if (view.getUint32(p, true) !== 0x02014b50) break
+    const flag = view.getUint16(p + 8, true)
     const method = view.getUint16(p + 10, true)
     const compSize = view.getUint32(p + 20, true)
     const nameLen = view.getUint16(p + 28, true)
@@ -164,7 +177,16 @@ export function parseZip(bytes: Uint8Array): ZipEntry[] {
     if (compSize === 0xffffffff) {
       throw new Error(`不支持 zip64 大文件条目: ${decoder.decode(bytes.subarray(p + 46, p + 46 + nameLen)) || '(无文件名)'}`)
     }
-    const name = decoder.decode(bytes.subarray(p + 46, p + 46 + nameLen))
+    // 文件名编码：bit 11（UTF-8）置位 → UTF-8；否则 legacy 编码。Windows 中文
+    // 工具（WinRAR/7-Zip/自带压缩）不置位且用 GBK，纯 UTF-8 解出乱码。GBK 对
+    // ASCII 子集与 UTF-8 一致，故对非 UTF-8 字节统一走 GBK（Bun 原生支持）。
+    const nameBytes = bytes.subarray(p + 46, p + 46 + nameLen)
+    let name: string
+    if (flag & 0x0800) {
+      name = decoder.decode(nameBytes)
+    } else {
+      name = decodeLegacyName(nameBytes)
+    }
     p += 46 + nameLen + extraLen + commentLen
 
     if (name.endsWith('/')) continue
