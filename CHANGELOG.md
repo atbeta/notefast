@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.68.0](https://github.com/atbeta/notefast/compare/v0.67.2...v0.68.0) (2026-08-17)
+
+
+### Features
+
+* **ai:** inbox/archived docs excluded from vector index ([f3bf1b6](https://github.com/atbeta/notefast/commit/f3bf1b6ecce45e56f3e947dba8866a635a233e5b))
+* **web:** resources pagination, reference sources, ref count ([c553806](https://github.com/atbeta/notefast/commit/c553806e0bd80fd4c7df807c9472cf0f5e84260c))
+
+
+### Bug Fixes
+
+* **web:** AI chat flickers between 'not configured' and normal states ([9d3b734](https://github.com/atbeta/notefast/commit/9d3b734eecebcc780bb56c99091b495e5cc38efe))
+* **web:** editor placeholder vertically aligns with caret ([cb3741e](https://github.com/atbeta/notefast/commit/cb3741efa2e770871b02bb057df8483c719e81c1))
+* **web:** graph zoom - slower step, edges stay clear when zoomed ([c0a996b](https://github.com/atbeta/notefast/commit/c0a996b2b32635159340795b0be2d0f77d943ebe))
+* **web:** reduce AI chat related UI stalls ([95f2a8c](https://github.com/atbeta/notefast/commit/95f2a8c6cfe38f358979816747d20a6bf66f7825))
+* **web:** tag match toggle selected state too subtle ([ba1bf5c](https://github.com/atbeta/notefast/commit/ba1bf5c0bc9bb9140d3dda7c8a138280d416f9c7))
+
 ## [0.67.2](https://github.com/atbeta/notefast/compare/v0.67.1...v0.67.2) (2026-08-16)
 
 
