@@ -6,18 +6,19 @@
  * 不做相册/批量修图/DAM；设置页仍管图床命令配置。
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Cloud, CloudUpload, ImageIcon, Link2Off, Loader2, Trash2, X } from 'lucide-react'
+import { Cloud, CloudUpload, FileText, ImageIcon, Link2Off, Loader2, Trash2, X } from 'lucide-react'
 import { api, ApiError } from '../hooks/useAPI'
-import { useApiQuery } from '../hooks/useApiQuery'
 import { useImageUploadEnabled } from '../hooks/useImageUploadEnabled'
 import { formatRelative } from '../lib/time'
 import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { ListRowsSkeleton, Tooltip, useToast } from '../components/ui'
+
+const PAGE_SIZE = 60
 
 interface AssetListItem {
   id: string
@@ -27,6 +28,13 @@ interface AssetListItem {
   remote: boolean
   remote_url: string | null
   referenced: boolean
+  /** 引用该图片的文档数（>1 说明多篇复用同一张图） */
+  ref_count: number
+}
+
+interface AssetRefDoc {
+  doc_id: string
+  title: string
 }
 
 interface UploadBatchStatus {
@@ -48,14 +56,44 @@ export default function ResourcesPage() {
   const { t } = useTranslation()
   const toast = useToast()
   const imageUpload = useImageUploadEnabled()
-  const { data, loading, error, refetch } = useApiQuery(
-    () => api.get<{ items: AssetListItem[]; total: number }>('/assets?limit=200'),
-    [],
-  )
-  const items = error ? [] : (data?.items ?? [])
-  const total = data?.total ?? 0
+  const [items, setItems] = useState<AssetListItem[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const offsetRef = useRef(0)
+
+  const load = async (offset: number, append: boolean) => {
+    if (append) setLoadingMore(true)
+    try {
+      const res = await api.get<{ items: AssetListItem[]; total: number }>(
+        `/assets?limit=${PAGE_SIZE}&offset=${offset}`,
+      )
+      offsetRef.current = offset + res.items.length
+      setItems((prev) => (append ? [...prev, ...res.items] : res.items))
+      setTotal(res.total)
+      setError(null)
+    } catch (e) {
+      if (!append) setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
+    }
+  }
+
+  const refetch = () => void load(0, false)
+  const loadMore = () => {
+    if (loadingMore || loading) return
+    void load(offsetRef.current, true)
+  }
+
+  useEffect(() => { void load(0, false) }, [])
+
+  const hasMore = items.length < total
 
   const [previewId, setPreviewId] = useState<string | null>(null)
+  const [previewRefs, setPreviewRefs] = useState<AssetRefDoc[] | null>(null)
+  const [previewRefsError, setPreviewRefsError] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<AssetListItem | null>(null)
   const [deleting, setDeleting] = useState(false)
   /** 单图上传中 id 集合（仅本地图片可点上传） */
@@ -65,6 +103,23 @@ export default function ResourcesPage() {
   const [batchStarting, setBatchStarting] = useState(false)
 
   const preview = previewId ? items.find((i) => i.id === previewId) ?? null : null
+
+  // lightbox 打开：拉引用来源列表
+  useEffect(() => {
+    if (!previewId) {
+      setPreviewRefs(null)
+      setPreviewRefsError(false)
+      return
+    }
+    let cancelled = false
+    setPreviewRefs(null)
+    setPreviewRefsError(false)
+    void api
+      .get<{ docs: AssetRefDoc[] }>(`/assets/${previewId}/refs`)
+      .then((r) => { if (!cancelled) setPreviewRefs(r.docs ?? []) })
+      .catch(() => { if (!cancelled) setPreviewRefsError(true) })
+    return () => { cancelled = true }
+  }, [previewId])
 
   /** 单图触发上传：成功刷新列表，失败 toast 显示原因（含未启用自动上传） */
   async function handleUpload(item: AssetListItem) {
@@ -241,8 +296,25 @@ export default function ResourcesPage() {
           </div>
         )}
 
-        {loading && !data ? (
+        {loading && items.length === 0 ? (
           <ListRowsSkeleton rows={6} />
+        ) : error && items.length === 0 ? (
+          <div className="px-3 py-14 flex flex-col items-center text-center">
+            <div className="empty-icon-tile">
+              <ImageIcon className="w-5 h-5" />
+            </div>
+            <h3 className="text-[15px] font-medium text-foreground mb-1.5">{t('common.error')}</h3>
+            <p className="text-[13px] text-muted-foreground max-w-sm leading-relaxed break-all">
+              {error}
+            </p>
+            <button
+              type="button"
+              onClick={refetch}
+              className="inline-block mt-3 text-[13px] text-primary hover:underline"
+            >
+              {t('common.retry')}
+            </button>
+          </div>
         ) : items.length === 0 ? (
           <div className="px-3 py-14 flex flex-col items-center text-center">
             <div className="empty-icon-tile">
@@ -315,7 +387,12 @@ export default function ResourcesPage() {
                     )}
                     <span className="text-muted-foreground/40">·</span>
                     {item.referenced ? (
-                      <span>{t('resources.inUse')}</span>
+                      <span className="inline-flex items-center gap-0.5">
+                        <FileText className="w-3 h-3" strokeWidth={1.75} />
+                        {item.ref_count > 1
+                          ? t('resources.refCount', { n: item.ref_count })
+                          : t('resources.inUse')}
+                      </span>
                     ) : (
                       <span className="inline-flex items-center gap-0.5 text-muted-foreground/70">
                         <Link2Off className="w-3 h-3" strokeWidth={1.75} />
@@ -349,6 +426,26 @@ export default function ResourcesPage() {
             ))}
           </ul>
         )}
+        {/* 分页：还有更多时显示加载更多（data 大时避免一次拉全） */}
+        {hasMore && (
+          <div className="flex justify-center pt-4">
+            <button
+              type="button"
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md text-[12.5px] text-muted-foreground border border-border/70 hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50"
+            >
+              {loadingMore ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
+                  {t('common.loading')}
+                </>
+              ) : (
+                t('resources.loadMore')
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {preview &&
@@ -369,7 +466,9 @@ export default function ResourcesPage() {
                 <div className="min-w-0 text-[12.5px] text-white/70 tabular-nums truncate">
                   {formatBytes(preview.size)}
                   <span className="mx-1.5 text-white/30">·</span>
-                  {preview.referenced ? t('resources.inUse') : t('resources.unused')}
+                  {preview.ref_count > 1
+                    ? t('resources.refCount', { n: preview.ref_count })
+                    : preview.referenced ? t('resources.inUse') : t('resources.unused')}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {!preview.referenced && (
@@ -401,6 +500,34 @@ export default function ResourcesPage() {
                   alt=""
                   className="max-w-full max-h-full object-contain rounded-md shadow-2xl pointer-events-none"
                 />
+              </div>
+              {/* 引用来源：点击跳转到对应文档 */}
+              <div className="shrink-0 px-4 pb-4 max-h-40 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-1.5 text-[11.5px] text-white/60 mb-1.5">
+                  <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  {t('resources.refsIn')}
+                </div>
+                {previewRefsError ? (
+                  <p className="text-[12px] text-white/40">{t('resources.refsLoadError')}</p>
+                ) : previewRefs === null ? (
+                  <p className="text-[12px] text-white/30">{t('common.loading')}</p>
+                ) : previewRefs.length === 0 ? (
+                  <p className="text-[12px] text-white/40">{t('resources.refsNone')}</p>
+                ) : (
+                  <ul className="space-y-0.5">
+                    {previewRefs.map((d) => (
+                      <li key={d.doc_id}>
+                        <Link
+                          to={`/doc/${d.doc_id}`}
+                          onClick={() => setPreviewId(null)}
+                          className="text-[12.5px] text-white/80 hover:text-white hover:underline underline-offset-2 transition-colors break-all line-clamp-1"
+                        >
+                          {d.title || t('common.untitled')}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           </div>,

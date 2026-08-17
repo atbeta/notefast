@@ -135,7 +135,13 @@
     "uploaded": "已上传至图床",
     "uploadFailed": "上传失败",
     "uploadLocal": "上传到图床",
-    "uploadShort": "上传"
+    "uploadShort": "上传",
+    "loadMore": "加载更多",
+    "loadedAll": "已加载全部",
+    "refCount": "被 {{n}} 篇文档引用",
+    "refsIn": "引用来源",
+    "refsNone": "未被引用",
+    "refsLoadError": "引用来源加载失败"
   },
   "share": {
     "notFoundTitle": "链接不存在或已关闭",

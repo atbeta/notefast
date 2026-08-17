@@ -335,6 +335,52 @@ export function collectReferencedAssetIds(): Set<string> {
   return refs
 }
 
+/** assetId → 引用它的文档（doc_id + title）映射；同 key 缓存复用扫描结果 */
+let refMapCache: { key: string; map: Map<string, Array<{ doc_id: string; title: string }>> } | null = null
+
+function assetRefMapKey(db: ReturnType<typeof getDb>): string {
+  return `${getChangesAnchor(db)}:${contentRevisionToken()}`
+}
+
+/**
+ * 全库扫描：返回 asset id → 引用它的文档列表（排除软删除文档）。
+ * 一次 SQL 拉含 asset: 的块，按 root_id 聚合到文档根取 title。
+ * 与 collectReferencedAssetIds 共用变更流锚点缓存，无写时零成本复用。
+ */
+function collectAssetRefMap(): Map<string, Array<{ doc_id: string; title: string }>> {
+  const db = getDb()
+  const key = assetRefMapKey(db)
+  if (refMapCache?.key === key) return refMapCache.map
+  const rows = db
+    .query(
+      `SELECT b.root_id, b.content, d.content AS doc_title
+       FROM blocks b
+       JOIN blocks d ON d.id = b.root_id AND d.type = 'document' AND d.is_deleted = 0
+       WHERE b.content LIKE '%asset:%' AND b.is_deleted = 0`,
+    )
+    .all() as Array<{ root_id: string; content: string; doc_title: string }>
+  const map = new Map<string, Array<{ doc_id: string; title: string }>>()
+  for (const r of rows) {
+    for (const id of extractAssetRefs(r.content)) {
+      let arr = map.get(id)
+      if (!arr) {
+        arr = []
+        map.set(id, arr)
+      }
+      if (!arr.some((x) => x.doc_id === r.root_id)) {
+        arr.push({ doc_id: r.root_id, title: r.doc_title })
+      }
+    }
+  }
+  refMapCache = { key, map }
+  return map
+}
+
+/** 引用某 asset 的文档列表（按创建序稳定）；未引用返回空数组 */
+export function findReferencingDocs(assetId: string): Array<{ doc_id: string; title: string }> {
+  return collectAssetRefMap().get(assetId) ?? []
+}
+
 export interface AssetListItem {
   id: string
   mime: string
@@ -346,11 +392,13 @@ export interface AssetListItem {
   remote_url: string | null
   /** 是否被任意未删除文档引用 */
   referenced: boolean
+  /** 引用该图片的文档数（>1 说明多篇复用同一张图） */
+  ref_count: number
 }
 
 /**
  * 资源库列表（按创建时间倒序）。
- * referenced 来自内容扫描，不建关联表。
+ * referenced / ref_count 来自内容扫描，不建关联表。
  */
 export function listAssets(opts: { limit?: number; offset?: number } = {}): {
   items: AssetListItem[]
@@ -375,18 +423,22 @@ export function listAssets(opts: { limit?: number; offset?: number } = {}): {
     created_at: string
     remote_url: string | null
   }>
-  const referenced = rows.length > 0 ? collectReferencedAssetIds() : new Set<string>()
+  const refMap = rows.length > 0 ? collectAssetRefMap() : null
   return {
     total,
-    items: rows.map((r) => ({
-      id: r.id,
-      mime: r.mime,
-      size: r.size,
-      created_at: r.created_at,
-      remote: Boolean(r.remote_url),
-      remote_url: r.remote_url,
-      referenced: referenced.has(r.id),
-    })),
+    items: rows.map((r) => {
+      const refs = refMap?.get(r.id)
+      return {
+        id: r.id,
+        mime: r.mime,
+        size: r.size,
+        created_at: r.created_at,
+        remote: Boolean(r.remote_url),
+        remote_url: r.remote_url,
+        referenced: Boolean(refs && refs.length > 0),
+        ref_count: refs?.length ?? 0,
+      }
+    }),
   }
 }
 

@@ -3,6 +3,7 @@
  *
  * - POST   /api/v1/assets            上传图片（body = 原始字节，Content-Type = 图片 mime）→ { id, url, dedup }
  * - GET    /api/v1/assets            资源库列表（?limit&offset）→ { items, total }
+ * - GET    /api/v1/assets/:id/refs   引用该图片的文档列表（资源库 lightbox 来源）
  * - GET    /api/v1/assets/:id        读取图片（Bearer/Basic 或会话 cookie；内容寻址，强缓存）
  * - DELETE /api/v1/assets/:id        删除未引用资源（仍被引用 → 409 in_use）
  * - POST   /api/v1/assets/gc         孤儿回收（无引用且超过宽限期的 asset 删除）
@@ -29,6 +30,7 @@ import {
   setImageUploadConfig,
   uploadMissingAssets,
   uploadSingleAsset,
+  findReferencingDocs,
 } from '../assets/store'
 import { imageUploadConfigSchema, type ImageUploadConfigInput } from '@notefast/core'
 import {
@@ -153,6 +155,18 @@ assets.get('/status', (c) => {
   const raw = (c.req.query('ids') || '').trim()
   const ids = raw ? raw.split(',').filter((x) => /^[0-9a-f]{64}$/.test(x)).slice(0, 200) : []
   return c.json(getAssetUploadStatus(ids))
+})
+
+/** 引用某 asset 的文档列表（资源库 lightbox 显示来源）——必须在 /:id 之前注册 */
+assets.get('/:id/refs', (c) => {
+  const id = c.req.param('id')
+  if (!/^[0-9a-f]{64}$/.test(id)) {
+    return c.json({ error: 'bad_request', message: '非法 asset id' }, 400)
+  }
+  if (!readAsset(id)) {
+    return c.json({ error: 'not_found', message: '图片不存在' }, 404)
+  }
+  return c.json({ docs: findReferencingDocs(id) })
 })
 
 /** 单图触发上传（同步等待结果）：POST /assets/:id/upload */

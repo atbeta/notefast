@@ -128,6 +128,69 @@ describe('AssetStore — 上传与去重', () => {
   })
 })
 
+describe('AssetStore — 引用来源（refs）', () => {
+  test('listAssets 返回 ref_count；多篇文档引用同一图时 ref_count>1', async () => {
+    const { body } = await upload()
+    const id = body.id as string
+    const db = getDb()
+    const now = new Date().toISOString()
+    const nb = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    for (const [docId, title] of [['d-ref-a', '文档甲'], ['d-ref-b', '文档乙']] as const) {
+      db.query(
+        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+         VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
+      ).run(docId, nb, docId, title, now, now)
+      db.query(
+        `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'paragraph', ?, 0, 1, ?, ?)`,
+      ).run(crypto.randomUUID(), nb, docId, docId, `见 ![](asset:${id})`, now, now)
+    }
+
+    const listed = await app.fetch(new Request('http://localhost/api/v1/assets'))
+    const body2 = await listed.json() as { items: Array<{ referenced: boolean; ref_count: number }> }
+    expect(body2.items[0]!.referenced).toBe(true)
+    expect(body2.items[0]!.ref_count).toBe(2)
+  })
+
+  test('GET /assets/:id/refs 返回引用文档列表（doc_id + title）；未引用返回空', async () => {
+    const { body: used } = await upload()
+    const usedId = used.id as string
+    const { body: free } = await upload(Buffer.from([4, 4, 4, 4]), 'image/png')
+    const freeId = free.id as string
+
+    const db = getDb()
+    const now = new Date().toISOString()
+    const nb = crypto.randomUUID()
+    const docId = 'd-ref-c'
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
+    ).run(docId, nb, docId, '来源文档', now, now)
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'paragraph', ?, 0, 1, ?, ?)`,
+    ).run(crypto.randomUUID(), nb, docId, docId, `![x](asset:${usedId})`, now, now)
+
+    const usedRes = await app.fetch(new Request(`http://localhost/api/v1/assets/${usedId}/refs`))
+    expect(usedRes.status).toBe(200)
+    const usedBody = await usedRes.json() as { docs: Array<{ doc_id: string; title: string }> }
+    expect(usedBody.docs).toEqual([{ doc_id: docId, title: '来源文档' }])
+
+    const freeRes = await app.fetch(new Request(`http://localhost/api/v1/assets/${freeId}/refs`))
+    expect(freeRes.status).toBe(200)
+    const freeBody = await freeRes.json() as { docs: unknown[] }
+    expect(freeBody.docs).toEqual([])
+
+    // 非法 / 不存在 id
+    const bad = await app.fetch(new Request('http://localhost/api/v1/assets/xyz/refs'))
+    expect(bad.status).toBe(400)
+    const missing = await app.fetch(new Request(`http://localhost/api/v1/assets/${'f'.repeat(64)}/refs`))
+    expect(missing.status).toBe(404)
+  })
+})
+
 describe('AssetStore — 引用对账', () => {
   test('/check 报告缺失的 asset id', async () => {
     const { body } = await upload()

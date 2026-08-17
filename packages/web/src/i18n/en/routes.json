@@ -135,7 +135,13 @@
     "uploaded": "Uploaded to image host",
     "uploadFailed": "Upload failed",
     "uploadLocal": "Upload to image host",
-    "uploadShort": "Upload"
+    "uploadShort": "Upload",
+    "loadMore": "Load more",
+    "loadedAll": "All loaded",
+    "refCount": "Referenced by {{n}} doc(s)",
+    "refsIn": "Referenced in",
+    "refsNone": "Not referenced",
+    "refsLoadError": "Failed to load references"
   },
   "share": {
     "notFoundTitle": "This link doesn't exist or has been closed",
