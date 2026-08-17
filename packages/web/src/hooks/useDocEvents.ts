@@ -23,19 +23,38 @@ let retryDelay = 1000
 /** 当前连接/退避等待的取消句柄：最后一个订阅者退订时主动断开回收 */
 let currentAbort: AbortController | null = null
 const RETRY_MAX_MS = 30_000
-/** 连接看门狗：服务端心跳 25s，超过 45s 无任何帧判定连接僵死——
+/** 连接看门狗：服务端心跳 25s，超过 30s 无任何帧判定连接僵死——
  *  macOS 睡眠/网络切换后 TCP 半开连接既不报错也不结束，fetch 会永远挂起，
- *  表象就是「左侧列表不再自动更新，手动导航后才刷新」 */
-const WATCHDOG_MS = 45_000
+ *  表象就是「左侧列表不再自动更新，手动导航后才刷新」。
+ *  另配 visibilitychange 主动重连（睡眠恢复/切回标签立即重连，不等看门狗） */
+const WATCHDOG_MS = 30_000
+/** 页面从后台回到前台时主动重连：睡眠/切标签后 TCP 半开连接最可能发生，
+ *  不等看门狗（30s）立即踢断当前连接，让 loop 马上重建 SSE */
+function kickStaleConnection(): void {
+  if (!running || !currentAbort) return
+  // 重置退避到初始值：用户切回前台说明网络可能已恢复，直接以最快节奏重连
+  retryDelay = 1000
+  currentAbort.abort()
+}
 
 /** 订阅 doc 级变更；返回取消订阅函数。首个订阅者触发连接，全部退订即主动断开回收 */
 export function subscribeDocChanges(fn: Listener): () => void {
   listeners.add(fn)
-  if (!running) void loop()
+  if (!running) {
+    void loop()
+    window.addEventListener('visibilitychange', onVisibilityChange)
+  }
   return () => {
     listeners.delete(fn)
-    if (listeners.size === 0) currentAbort?.abort()
+    if (listeners.size === 0) {
+      currentAbort?.abort()
+      window.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }
+}
+
+function onVisibilityChange(): void {
+  if (document.visibilityState === 'visible') kickStaleConnection()
 }
 
 async function loop(): Promise<void> {

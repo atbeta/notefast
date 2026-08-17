@@ -112,6 +112,16 @@ export function getAiCapabilitiesLoaded(): boolean {
   return loaded
 }
 
+/**
+ * 同步读当前 capabilities 快照（不订阅）。
+ * 供高频挂载的组件（如 BlockHandle 每块一个）用——避免几百个订阅者在
+ * snapshot 引用变化时同时重渲染。这些组件只需在用户交互（打开菜单）
+ * 时读最新值，不需要实时响应配置变化。
+ */
+export function getAiCapabilitiesSnapshot(): AiCapabilitiesSnapshot {
+  return clientSnapshot
+}
+
 /** 强制重探测（例如用户在 settings 改完配置返回） */
 export function refreshAiCapabilities(): void {
   loaded = false

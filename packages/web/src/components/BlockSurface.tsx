@@ -21,7 +21,7 @@ import { Copy, Link2, MoreVertical, Sparkles } from 'lucide-react'
 import { blocksToMarkdown, type Block } from '@notefast/core'
 import { dispatchAskAi } from '../lib/askAi'
 import { useToast } from './ui'
-import { useAiCapabilities } from '../hooks/useAiCapabilities'
+import { getAiCapabilitiesSnapshot } from '../hooks/useAiCapabilities'
 import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
 
 /** 预填引用的长度上限，避免整篇长文塞进输入框 */
@@ -38,12 +38,15 @@ interface BlockHandleProps {
 export function BlockHandle({ block, className }: BlockHandleProps) {
   const { t } = useTranslation()
   const toast = useToast()
-  const ai = useAiCapabilities()
   const menuId = useId()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number; openUp: boolean } | null>(null)
+  // 打开菜单时读一次最新能力快照（不订阅：每块一个 BlockHandle，订阅会在
+  // snapshot 变化时触发几百个同时重渲染）。chat 配置只在设置页修改时变化，
+  // 用户打开菜单那一刻读到的值已足够新。
+  const [chatOk, setChatOk] = useState(() => getAiCapabilitiesSnapshot().chat)
 
   const close = useCallback(() => setOpen(false), [])
 
@@ -118,7 +121,7 @@ export function BlockHandle({ block, className }: BlockHandleProps) {
       onSelect: handleCopyContent,
     },
     // 未配置 Chat 时不展示：打开面板只会看到空态
-    ...(ai.chat
+    ...(chatOk
       ? [{
           id: 'ask-ai',
           label: t('block.askAi'),
@@ -149,6 +152,8 @@ export function BlockHandle({ block, className }: BlockHandleProps) {
         onClick={(e) => {
           e.preventDefault()
           e.stopPropagation()
+          // 打开前同步刷新 chat 能力：菜单项按最新配置渲染，不依赖订阅
+          setChatOk(getAiCapabilitiesSnapshot().chat)
           setOpen((v) => !v)
         }}
         onPointerDown={(e) => e.stopPropagation()}
