@@ -26,6 +26,7 @@ import type { PluginSystem } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks, getDocById } from '../store/blocks'
 import { indexBlock } from '../ai/indexer'
+import { deleteVectorMany } from '../ai/indexer'
 import { getLatestIndexJobForDoc, scheduleDocIndex } from '../ai/indexJobs'
 import { analyzeBlock } from '../ai/autoLink'
 import {
@@ -33,6 +34,7 @@ import {
   markVectorStoreStaleIfModelChanged,
 } from '../ai/vectorStore'
 import { isBlockAiExcluded } from '../ai/aiExcludeQuery'
+import { loadDocBlockIds } from '../ai/aiExcludeQuery'
 
 const CONFIG_FILE = 'ai.config.json'
 const HOOK_NAME = 'ai-indexer'
@@ -187,6 +189,7 @@ export function applyNewConfig(
   sys.note.afterCreate.untap(AUTOLINK_HOOK_NAME)
   sys.note.afterUpdate.untap(AUTOLINK_HOOK_NAME)
   sys.note.afterDelete.untap(AUTOLINK_HOOK_NAME)
+  sys.doc.afterStatusChange.untap(HOOK_NAME)
   applyAutoIndex(r, sys)
   applyAutoLink(r, sys)
   return { ok: result.ok, errors: result.errors, status: r.status() }
@@ -224,6 +227,31 @@ function applyAutoIndex(r: AiRuntime, pluginSystem: PluginSystem): void {
   // 注意：块删除的向量清理不再放 afterDelete hook —— 逐块 deleteVector 对整篇删除
   // 是 O(n) 次 count(*)。删除路径改为显式批量：docs 整篇用 deleteVectorMany(allIds)，
   // blocks 单块用 deleteVector(id)；afterDelete hook 只保留 docEvents 等非向量消费方。
+
+  // 文档状态变更（升格 / 降级）：与 hybridSearch 的 drop 集合保持一致
+  // - 升格到 note（inbox/archived → note）：整篇重索引（已 fresh 的子块由
+  //   hasFreshVector 跳过，成本可控；新文本走 embed）
+  // - 降级到 inbox/archived（note → inbox/archived）：整篇清向量（O(1) batch delete）
+  // - 保持（inbox → inbox 等）：no-op
+  pluginSystem.doc.afterStatusChange.tap(HOOK_NAME, async (payload) => {
+    const newStatus = payload.meta?.status
+    if (newStatus !== 'note' && newStatus !== 'inbox' && newStatus !== 'archived') return
+    const docId = payload.doc.id
+    const blockIds = loadDocBlockIds(docId)
+    if (blockIds.length === 0) return
+    if (newStatus === 'note') {
+      // 升格：后台异步重索引，不阻塞状态切换请求
+      scheduleDocIndex(docId, blockIds)
+    } else {
+      // 降级：清掉整篇向量。已在旧 status 时 by afterCreate 写入的向量是死锚
+      try {
+        await deleteVectorMany(blockIds)
+      } catch (e) {
+        console.warn('[ai-indexer] purge vectors on status degrade:', e instanceof Error ? e.message : e)
+      }
+    }
+  })
+
   console.log('🧠 AI auto-index hooks attached')
 }
 

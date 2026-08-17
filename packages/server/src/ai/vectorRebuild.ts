@@ -1,6 +1,6 @@
 import { getDb } from '../db'
 import { getRuntime } from '../services/aiRuntime'
-import { isBlockAiExcluded } from './aiExcludeQuery'
+import { isBlockAiExcluded, isBlockLifecycleExcluded } from './aiExcludeQuery'
 import { buildIndexedText } from './indexedText'
 import type { BlockRow } from '@notefast/core'
 import {
@@ -127,7 +127,7 @@ export async function runVectorRebuild(
     }
     sql += ' ORDER BY id'
     const rows = (db.query(sql).all(...params) as BlockRow[])
-      .filter((row) => !isBlockAiExcluded(row.id))
+      .filter((row) => !isBlockAiExcluded(row.id) && !isBlockLifecycleExcluded(row.id))
     if (rows.length === 0) throw new Error('没有可建立向量索引的 block')
 
     beginRebuildProgress(rows.length)

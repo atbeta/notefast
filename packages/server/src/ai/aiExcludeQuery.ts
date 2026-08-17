@@ -90,3 +90,34 @@ export function readDocAiExclude(docId: string): boolean | null {
   if (!row) return null
   return row.ai_exclude === 1
 }
+
+/**
+ * 按任意 blockId 判断其所属文档是否处于 lifecycle 排除状态（inbox / archived）。
+ * 与 hybridSearch 默认 drop 语义一致：收集箱与归档不进 RAG，也不进向量索引。
+ * document 根用自身 id；子块用 root_id 解析文档根。
+ */
+export function isBlockLifecycleExcluded(blockId: string): boolean {
+  const db = getDb()
+  const row = getBlockById(db, blockId)
+  if (!row) return false
+  if (row.type === 'document') {
+    return row.status === 'inbox' || row.status === 'archived'
+  }
+  const docId = row.root_id
+  if (!docId) return false
+  const docRow = getDocById(db, docId)
+  if (!docRow) return false
+  return docRow.status === 'inbox' || docRow.status === 'archived'
+}
+
+/**
+ * 批量：哪些 root_id 处于 lifecycle 排除状态（inbox ∪ archived）。
+ * 与 indexer / hybridSearch 的 drop 集合语义一致。
+ */
+export function loadLifecycleExcludedDocIds(docIds: Iterable<string>): Set<string> {
+  const inbox = loadInboxDocIds(docIds)
+  if (inbox.size === 0) return loadArchivedDocIds(docIds)
+  const out = new Set<string>(inbox)
+  for (const id of loadArchivedDocIds(docIds)) out.add(id)
+  return out
+}

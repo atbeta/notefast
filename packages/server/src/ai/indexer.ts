@@ -18,7 +18,13 @@ import {
   VECTOR_INDEX_VERSION,
 } from './vectorStore'
 import { SqliteVecVectorStore } from './vectorStoreVec'
-import { isBlockAiExcluded, loadAiExcludedDocIds, loadInboxDocIds, loadArchivedDocIds } from './aiExcludeQuery'
+import {
+  isBlockAiExcluded,
+  isBlockLifecycleExcluded,
+  loadAiExcludedDocIds,
+  loadInboxDocIds,
+  loadArchivedDocIds,
+} from './aiExcludeQuery'
 import { buildIndexedText } from './indexedText'
 
 export type IndexBlockResult = 'indexed' | 'skipped' | 'deleted' | 'error' | 'noop'
@@ -58,6 +64,14 @@ export async function indexBlock(blockId: string): Promise<IndexBlockResult> {
   if (!r.hasEmbedding()) return 'noop'
 
   if (isBlockAiExcluded(blockId)) {
+    await deleteVector(blockId)
+    return 'deleted'
+  }
+
+  // lifecycle 排除（inbox / archived）：与 hybridSearch 的 drop 集合对齐，
+  // 文档已被用户标记为「不参与 AI」，向量也不应留在索引里；
+  // 升格时由 doc.afterStatusChange hook 主动调 scheduleDocIndex 重新索引。
+  if (isBlockLifecycleExcluded(blockId)) {
     await deleteVector(blockId)
     return 'deleted'
   }
@@ -104,6 +118,15 @@ export async function indexBlockBatch(
 
   for (const id of blockIds) {
     if (isBlockAiExcluded(id)) {
+      try {
+        await deleteVector(id)
+      } catch {
+        errors++
+      }
+      continue
+    }
+    if (isBlockLifecycleExcluded(id)) {
+      // inbox / archived：与 ai_exclude 行为对称，清掉可能残留的旧向量
       try {
         await deleteVector(id)
       } catch {
@@ -171,7 +194,7 @@ export async function indexAllBlocks(notebookId?: string): Promise<{ indexed: nu
   }
 
   const rows = (db.query(sql).all(...params) as Array<{ id: string; content: string }>)
-    .filter((row) => !isBlockAiExcluded(row.id))
+    .filter((row) => !isBlockAiExcluded(row.id) && !isBlockLifecycleExcluded(row.id))
   if (rows.length === 0) return { indexed: 0, errors: 0 }
 
   let indexed = 0
