@@ -40,8 +40,8 @@ function TagMatchToggle({
   const btn = (active: boolean) =>
     `px-2 py-0.5 rounded-[5px] transition-colors ${
       active
-        ? 'bg-background text-foreground shadow-sm'
-        : 'text-muted-foreground hover:text-foreground'
+        ? 'bg-primary text-primary-foreground font-medium shadow-sm'
+        : 'text-muted-foreground/70 hover:text-foreground'
     }`
 
   return (
