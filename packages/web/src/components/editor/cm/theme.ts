@@ -50,6 +50,11 @@ export const editorTheme = EditorView.theme({
   },
   '.cm-placeholder': {
     color: 'rgb(var(--muted-foreground) / 0.4)',
+    // 与光标视觉对齐：placeholder 是 inline-block widget，若沿用正文 line-height
+    // 1.75 会被撑到 28px 高、文字沉到盒内中下，视觉上比 20px 高的光标低 4px
+    //（光标在上 placeholder 在下，肉眼可辨）。text-top + 1.25 = 20px 与光标同高同顶。
+    verticalAlign: 'text-top',
+    lineHeight: '1.25',
   },
   '.cm-selectionMatch': {
     backgroundColor: 'rgb(var(--primary) / 0.12)',
