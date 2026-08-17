@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.68.1](https://github.com/atbeta/notefast/compare/v0.68.0...v0.68.1) (2026-08-17)
+
+
+### Bug Fixes
+
+* **server:** zip import garbles Chinese filenames from Windows tools ([1473fe1](https://github.com/atbeta/notefast/commit/1473fe1364e9aa3958d1006ad89065b11ea91391))
+* **web:** outline jump lands low and highlight snaps back up ([e7e6d20](https://github.com/atbeta/notefast/commit/e7e6d207a0441c186ceebce0d79601ba152611a9))
+
 ## [0.68.0](https://github.com/atbeta/notefast/compare/v0.67.2...v0.68.0) (2026-08-17)
 
 
