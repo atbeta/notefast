@@ -24,7 +24,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { request } from '../hooks/useAPI'
-import { useAiCapabilities, refreshAiCapabilities } from '../hooks/useAiCapabilities'
+import { useAiCapabilities, refreshAiCapabilitiesSilent } from '../hooks/useAiCapabilities'
 import { streamSSE, type SSEError } from '../lib/streaming'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { isTauriShell } from '../hooks/useShell'
@@ -174,11 +174,11 @@ export default function AIChatPanel({
     if (distanceToBottom < 80) end.scrollIntoView({ behavior: 'auto' })
   }, [messages, toolStatus])
 
-  // 拉取能力：订阅单例（useAiCapabilities），打开面板时强制重探测一次
-  // （设置页改配置后重新打开能拿到新值；探测失败按全 false = 未配置处理）
+  // 拉取能力：订阅单例（useAiCapabilities），打开面板时静默重探测一次
+  // （不重置 loaded，避免「已配置」闪成「未配置」；设置页改配置后新值后台更新）
   useEffect(() => {
     if (!isOpen) return
-    refreshAiCapabilities()
+    refreshAiCapabilitiesSilent()
     if (capabilities.ready && !capabilities.chat) setConfigMissing(true)
     if (capabilities.ready && capabilities.chat) setConfigMissing(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps

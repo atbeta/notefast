@@ -39,7 +39,18 @@ let mounted = 0
 const listeners = new Set<() => void>()
 
 function rebuildClientSnapshot(): void {
-  clientSnapshot = { ...snapshot, ready: loaded }
+  const next: AiCapabilitiesSnapshot = { ...snapshot, ready: loaded }
+  // 快照未变化时保持原引用：useSyncExternalStore 用 Object.is 比较，
+  // 无谓的新引用会让订阅组件每次 fetch 都重渲染（输入时闪烁的来源之一）
+  if (
+    clientSnapshot.chat !== next.chat
+    || clientSnapshot.embedding !== next.embedding
+    || clientSnapshot.reranker !== next.reranker
+    || clientSnapshot.vision !== next.vision
+    || clientSnapshot.ready !== next.ready
+  ) {
+    clientSnapshot = next
+  }
 }
 
 function emit(): void {
@@ -55,10 +66,17 @@ async function fetchCapabilities(): Promise<void> {
       reranker: !!cap.reranker,
       vision: !!cap.vision,
     }
+    loaded = true
   } catch {
-    snapshot = EMPTY
+    // 探测失败：保留上次成功的 snapshot，不重置为 EMPTY。
+    // 否则已配置状态会因一次网络抖动闪成「未配置」（chat=false → 面板显示
+    // notConfigured），下次探测成功又恢复——远程部署下表现为输入时闪烁。
+    // 首次探测（从未成功过）才按未配置处理。
+    if (!loaded) {
+      snapshot = EMPTY
+      loaded = true
+    }
   }
-  loaded = true
   rebuildClientSnapshot()
   emit()
 }
@@ -100,5 +118,14 @@ export function refreshAiCapabilities(): void {
   snapshot = EMPTY
   rebuildClientSnapshot()
   emit()
+  void fetchCapabilities()
+}
+
+/**
+ * 静默重探测：不重置 loaded（ready 保持 true），后台 fetch 新值。
+ * 打开 AI 面板时用这个——避免「已配置」瞬间闪成「未配置」（重置 loaded 会让
+ * ready=false → 上游按未配置渲染），新值到了再平滑更新。
+ */
+export function refreshAiCapabilitiesSilent(): void {
   void fetchCapabilities()
 }
