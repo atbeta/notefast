@@ -67,6 +67,8 @@ interface EntityGraphProps {
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
 const LABEL_MAX = 14
+/** 边的屏幕空间最小宽度（px）：k 越小线被 scale 稀释越严重，保底保证可辨 */
+const MIN_EDGE_SCREEN_PX = 0.9
 
 function nodeRadius(mc: number, maxMc: number): number {
   return 5 + 13 * Math.min(1, Math.sqrt(mc) / Math.sqrt(Math.max(maxMc, 1)))
@@ -230,7 +232,7 @@ export default function EntityGraph({
       const mx = e.clientX - rect.left
       const my = e.clientY - rect.top
       setView((v) => {
-        const k2 = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.k * (e.deltaY < 0 ? 1.12 : 1 / 1.12)))
+        const k2 = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.k * (e.deltaY < 0 ? 1.07 : 1 / 1.07)))
         return { k: k2, x: mx - ((mx - v.x) * k2) / v.k, y: my - ((my - v.y) * k2) / v.k }
       })
     }
@@ -427,6 +429,19 @@ export default function EntityGraph({
             const dim = focusEdges !== null && !incident
             const highlighted = incident && focusColor !== null
             const w = e.weight / maxWeight
+            // 线条宽度两段补偿（核心：放大时优先清晰连接，而非整体等比吹大）：
+            // ① k<1（fitView 常落 0.3-0.5）：世界宽度 ×k 后高权重边也只剩
+            //    ~0.5px 细成发丝，保底到屏幕 MIN_EDGE_SCREEN_PX/k，拓扑可辨
+            // ② k≥1（放大）：宽度乘 1+(k-1)/3 的增益（k=4 时 2 倍封顶），
+            //    放大时边比节点/文字更快变粗 → 连接关系优先清晰
+            const edgeW = (base: number) =>
+              view.k >= 1
+                ? base * (1 + Math.min(view.k - 1, 3) / 3)
+                : Math.max(base, MIN_EDGE_SCREEN_PX / view.k)
+            // 放大时同步提升边的不透明度：宽度增益让线更粗，opacity 增益让线
+            // 更"实"——否则节点/文字随 k 等比放大而线仍偏淡，连接关系不突出
+            const opBoost = view.k >= 1 ? Math.min((view.k - 1) * 0.12, 0.3) : 0
+            const baseOpacity = 0.24 + 0.32 * w
             return (
               <line
                 key={i}
@@ -437,8 +452,8 @@ export default function EntityGraph({
                 y2={t.y}
                 strokeLinecap="round"
                 style={{ stroke: highlighted ? focusColor : 'rgb(var(--graph-edge))' }}
-                strokeWidth={highlighted ? 1 + 1.5 * w : 0.6 + 1.2 * w}
-                strokeOpacity={dim ? 0.05 : highlighted ? 0.55 : 0.24 + 0.32 * w}
+                strokeWidth={highlighted ? edgeW(1 + 1.5 * w) : edgeW(0.6 + 1.2 * w)}
+                strokeOpacity={dim ? 0.05 : highlighted ? 0.55 + opBoost : baseOpacity + opBoost}
               />
             )
           })}
