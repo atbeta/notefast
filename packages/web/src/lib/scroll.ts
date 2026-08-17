@@ -39,17 +39,17 @@ export function smoothScrollTo(container: HTMLElement, target: number, duration 
   requestAnimationFrame(step)
 }
 
-/** 滚动到指定元素（相对其滚动容器定位，顶部预留偏移） */
+/** 平滑滚动到指定元素（相对视口顶部预留偏移） */
 export function scrollToElement(el: HTMLElement, topOffset = 72, duration = 260) {
   const scroller = findScrollableAncestor(el)
   if (!scroller) {
     el.scrollIntoView({ block: 'start' })
     return
   }
-  const target =
-    el.getBoundingClientRect().top -
-    scroller.getBoundingClientRect().top +
-    scroller.scrollTop -
-    topOffset
+  // 目标 = 让 el 停在「视口 topOffset 处」：滚动 delta = el 当前视口 top - topOffset。
+  // 注意是视口基准而非 scroller 基准——doc 页滚动容器顶部下方常有 PageHeader（h-14=56px），
+  // 若按 scroller 内偏移算，heading 会停在视口 56+72=128px，既偏下又让 useActiveHeading
+  // 的激活线（视口 72px）判定「未滚过」→ 高亮跳回上方章节。
+  const target = el.getBoundingClientRect().top - topOffset + scroller.scrollTop
   smoothScrollTo(scroller, Math.max(0, target), duration)
 }

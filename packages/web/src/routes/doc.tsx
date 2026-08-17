@@ -42,7 +42,7 @@ import { useAiChatOpen } from '../components/Layout'
 import { readDocRailCollapsed, writeDocRailCollapsed } from '../hooks/useDocRailCollapsed'
 import { readDocRailWidth, writeDocRailWidth, type DocRailWidth } from '../hooks/useDocRailWidth'
 
-import { scrollToElement, findScrollableAncestor } from '../lib/scroll'
+import { scrollToElement } from '../lib/scroll'
 import { HistoryView, type DocRevision } from './docHistory'
 import { useActiveHeading } from '../hooks/useActiveHeading'
 import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
@@ -413,9 +413,8 @@ export default function DocPage() {
     const inPlace = () => {
       const el = findTarget()
       if (!el) return false
-      const scroller = findScrollableAncestor(el)
-      const base = scroller ? scroller.getBoundingClientRect().top : 0
-      return Math.abs(el.getBoundingClientRect().top - (base + 72)) < 24
+      // 视口基准（与 scrollToElement 一致：目标 heading 停在视口 topOffset 处）
+      return Math.abs(el.getBoundingClientRect().top - 72) < 24
     }
     const timers = [
       window.setTimeout(jump, 60),
