@@ -222,7 +222,7 @@ export function fetchSubtreeBlocks(db: Db, blockId: string): BlockRow[] {
     .all(blockId) as BlockRow[]
 }
 
-/** 已软删除子树的后代 id（不含起点本身），restore 用 */
+/** 已软删除子树的后代 id（不含起点本身）。永久删除用：含整篇保存留下的历史 tombstone。 */
 export function fetchDeletedSubtreeIds(db: Db, blockId: string): string[] {
   const rows = db
     .query(
@@ -232,6 +232,31 @@ export function fetchDeletedSubtreeIds(db: Db, blockId: string): string[] {
          SELECT b.id FROM blocks b JOIN subtree s ON b.parent_id = s.id WHERE b.is_deleted = 1
        )
        SELECT b.id FROM blocks b JOIN subtree s ON b.id = s.id`,
+    )
+    .all(blockId) as Array<{ id: string }>
+  return rows.map((r) => r.id)
+}
+
+/**
+ * 与起点同一批软删除的后代（不含起点）。restore 用。
+ * 整篇保存（applyMarkdownReplace）会把旧子块 tombstone 留在同一 parent 下；
+ * 那些行的 updated_at 停在被替换时，早于本次删除，不能一并救活。
+ */
+export function fetchRestorableSubtreeIds(db: Db, blockId: string): string[] {
+  const rows = db
+    .query(
+      `WITH RECURSIVE
+         root(id, deleted_at) AS (SELECT id, updated_at FROM blocks WHERE id = ?),
+         subtree(id) AS (
+           SELECT b.id FROM blocks b JOIN root r ON b.parent_id = r.id
+            WHERE b.is_deleted = 1 AND b.updated_at = r.deleted_at
+           UNION
+           SELECT b.id FROM blocks b
+             JOIN subtree s ON b.parent_id = s.id
+             JOIN root r
+            WHERE b.is_deleted = 1 AND b.updated_at = r.deleted_at
+         )
+       SELECT id FROM subtree`,
     )
     .all(blockId) as Array<{ id: string }>
   return rows.map((r) => r.id)

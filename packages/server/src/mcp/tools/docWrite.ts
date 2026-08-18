@@ -28,7 +28,7 @@ import {
   stageMarkdownChunk,
 } from '../../services/markdownStage'
 import {
-  fetchDeletedSubtreeIds,
+  fetchRestorableSubtreeIds,
   fetchSubtreeBlocks,
   getBlockAnchor,
   getBlockById,
@@ -444,7 +444,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
         return toolError('not_found', `未找到可恢复的已删除 block ${block_id}`, { block_id })
       }
 
-      const allIds = [block_id, ...fetchDeletedSubtreeIds(db, block_id)]
+      const allIds = [block_id, ...fetchRestorableSubtreeIds(db, block_id)]
       restoreBlocks(db, allIds)
       // 与 POST /blocks/:id/restore 对齐：文档根恢复补全 doc 重索引 + autoLink 重抽
       // （删除时向量被清、mentions 被物理 purge；无 provider 时安全 no-op）

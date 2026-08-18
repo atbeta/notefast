@@ -227,6 +227,38 @@ describe('回收站（GET /docs/trash + restore）', () => {
     expect(again.status).toBe(404)
   })
 
+  test('恢复不带回整篇保存留下的旧子块 tombstone', async () => {
+    const docId = await createDoc('多世代')
+    const put = (markdown: string) =>
+      app.request(`/docs/${docId}/markdown`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markdown }),
+      })
+    // 三次整篇替换：每次软删旧子块并插入新子块，tombstone 仍挂在同一 parent 下
+    expect((await put('## 章节\n\n只应出现一次')).status).toBe(200)
+    expect((await put('## 章节\n\n只应出现一次')).status).toBe(200)
+    expect((await put('## 章节\n\n只应出现一次')).status).toBe(200)
+    // SQL_NOW 毫秒精度：与删除时刻错开，避免旧 tombstone 与本次删除撞上同一 updated_at
+    await new Promise((r) => setTimeout(r, 10))
+
+    const del = await app.request(`/docs/${docId}`, { method: 'DELETE' })
+    expect(del.status).toBe(200)
+    const restore = await app.request(`/blocks/${docId}/restore`, { method: 'POST' })
+    expect(restore.status).toBe(200)
+
+    const live = getDb()
+      .query('SELECT count(*) AS c FROM blocks WHERE root_id = ? AND is_deleted = 0')
+      .get(docId) as { c: number }
+    // 文档根 + heading + paragraph，不应把前几代 tombstone 一并救活
+    expect(live.c).toBe(3)
+
+    const exported = await app.request(`/docs/${docId}/export/markdown`)
+    expect(exported.status).toBe(200)
+    const md = ((await exported.json()) as { markdown: string }).markdown
+    expect(md.split('只应出现一次').length - 1).toBe(1)
+  })
+
   test('永久删除：物理清库，回收站消失，恢复 404', async () => {
     const docId = await createDoc('永久删除测试')
 

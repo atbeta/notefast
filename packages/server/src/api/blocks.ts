@@ -12,7 +12,7 @@ import {
 import { getDb } from '../db'
 import {
   fetchSubtreeBlocks,
-  fetchDeletedSubtreeIds,
+  fetchRestorableSubtreeIds,
   getBlockById,
   getLiveBlockById,
   getDeletedBlockById,
@@ -291,8 +291,8 @@ blocks.post('/:id/restore', (c) => {
     return c.json({ error: 'not_found', message: '未找到可恢复的已删除 block' }, 404)
   }
 
-  // 恢复整个子树
-  const allIds = [id, ...fetchDeletedSubtreeIds(db, id)]
+  // 只恢复与本块同一批软删除的子树（不含整篇保存留下的旧世代 tombstone）
+  const allIds = [id, ...fetchRestorableSubtreeIds(db, id)]
   restoreBlocks(db, allIds)
 
   // 文档根恢复 = 重新进入流通：删除时向量被清、mentions 被物理 purge，
