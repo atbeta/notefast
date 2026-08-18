@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.69.0](https://github.com/atbeta/notefast/compare/v0.68.1...v0.69.0) (2026-08-18)
+
+
+### Features
+
+* **web:** add overlay grid editor for GFM tables ([84789a1](https://github.com/atbeta/notefast/commit/84789a19a043aac2842ea6acd57776c88d0034da))
+* **web:** keep graph chrome screen-sized while zooming ([7bc2206](https://github.com/atbeta/notefast/commit/7bc220612b3f4af7faaf671392c9e370690b6f93))
+
+
+### Bug Fixes
+
+* **ai:** show real entity-rebuild progress and apply faster ([bd78a3e](https://github.com/atbeta/notefast/commit/bd78a3ee1b953b31da2017d5b9ad3041fc9eae99))
+* **server:** restore trash docs without resurrecting old saves ([044e9e1](https://github.com/atbeta/notefast/commit/044e9e1c7c06ee5e8f88a01e54b649b85ef5f6b8))
+* **web:** make db maintenance numbers and vacuum WAL honest ([8b6149f](https://github.com/atbeta/notefast/commit/8b6149fd697fa6dd4525e8afd8b0c5c26e20bd72))
+* **web:** open command palette in a single fade ([9a010ed](https://github.com/atbeta/notefast/commit/9a010edbe16fba112f64aecd2d2fdbefcd786a43))
+
 ## [0.68.1](https://github.com/atbeta/notefast/compare/v0.68.0...v0.68.1) (2026-08-17)
 
 
