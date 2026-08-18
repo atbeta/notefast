@@ -5,8 +5,8 @@
  * 实体与 ai_auto 链按当前 prompt/配置重新生成；ai_auto 链不预清理
  * （findRefByPair 幂等，重抽只增不重评，与 reanalyzeDoc 语义一致）。
  *
- * 依赖 chat 模型（实体抽取），限速自然生效（rateLimitPerMinute 保护配额）；
- * 逐块串行 await，进度暴露供设置页轮询。
+ * 依赖 chat 模型（实体抽取）；全量重建跳过分钟限速，按字符预算分片批量调用。
+ * 进度按「可抽取块」计数（过短块不进 LLM），同片建链并发，供设置页轮询。
  */
 
 import { getDb } from '../db'
@@ -25,11 +25,13 @@ export interface EntityRebuildProgress {
   eta_ms: number | null
   /** 最近一次错误信息（供 UI 展示失败原因） */
   last_error: string | null
+  /** 过短 / 已排除、不送 LLM 的块数 */
+  skipped: number
 }
 
 let rebuilding = false
 let cancelRequested = false
-let progress: EntityRebuildProgress = { running: false, total: 0, done: 0, errors: 0, started_at: null, eta_ms: null, last_error: null }
+let progress: EntityRebuildProgress = { running: false, total: 0, done: 0, errors: 0, started_at: null, eta_ms: null, last_error: null, skipped: 0 }
 
 export function getEntityRebuildProgress(): EntityRebuildProgress {
   return { ...progress }
@@ -55,6 +57,7 @@ export function startEntityRebuild(): boolean {
     started_at: new Date().toISOString(),
     eta_ms: null,
     last_error: null,
+    skipped: 0,
   }
   // 实体完整性状态：重建中（analyzed_blocks 保留旧值，UI 显示进行中）
   setEntityIndexState({ status: 'rebuilding', analyzedBlocks: progress.total, entityCount: 0, error: null })
@@ -89,7 +92,7 @@ async function runEntityRebuild(): Promise<void> {
     if (excluded.has(doc.id)) continue
     targets.push(...fetchDocBlocks(db, doc.id))
   }
-  progress = { ...progress, total: targets.length }
+  progress = { ...progress, total: 0, skipped: 0 }
   if (targets.length === 0) return
 
   // 重建语义：先清空再按新结果重抽（mention_count 从 0 累加，无残留无孤儿）
@@ -110,7 +113,7 @@ async function runEntityRebuild(): Promise<void> {
     blocks,
     skipRateLimit: true,
     isCancelled: () => cancelRequested,
-    onProgress: (done, total, errors) => {
+    onProgress: (done, total, errors, meta) => {
       const elapsed = Math.max(0, Date.now() - startedAt)
       const remaining = Math.max(0, total - done)
       let eta: number | null = null
@@ -119,7 +122,15 @@ async function runEntityRebuild(): Promise<void> {
       } else if (remaining === 0) {
         eta = 0
       }
-      progress = { ...progress, done, total, errors, eta_ms: eta }
+      progress = {
+        ...progress,
+        done,
+        total,
+        errors,
+        eta_ms: eta,
+        skipped: meta?.skipped ?? progress.skipped,
+        last_error: meta?.lastError !== undefined && meta.lastError !== null ? meta.lastError : progress.last_error,
+      }
     },
   })
   progress = {
@@ -134,8 +145,10 @@ async function runEntityRebuild(): Promise<void> {
   if (cancelRequested) return
   // 实体完整性状态：写入 entity_index_state（ready / failed），供设置页显示覆盖率
   const entityCount = (db.query('SELECT count(*) AS c FROM entities').get() as { c: number }).c
+  // 有实体落库则标 ready：部分批次失败不应让设置页看起来像「什么都没建成」
+  const failed = res.errors.length > 0 && entityCount === 0
   setEntityIndexState({
-    status: res.errors.length > 0 ? 'failed' : 'ready',
+    status: failed ? 'failed' : 'ready',
     analyzedBlocks: progress.total,
     entityCount,
     error: res.errors.length > 0 ? (res.errors[res.errors.length - 1] ?? null) : null,
@@ -198,7 +211,7 @@ export function setEntityIndexState(s: {
 export function _resetEntityRebuildForTests(): void {
   rebuilding = false
   cancelRequested = false
-  progress = { running: false, total: 0, done: 0, errors: 0, started_at: null, eta_ms: null, last_error: null }
+  progress = { running: false, total: 0, done: 0, errors: 0, started_at: null, eta_ms: null, last_error: null, skipped: 0 }
   try {
     getDb()
       .query(

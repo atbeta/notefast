@@ -29,7 +29,7 @@ import {
 } from '@notefast/core'
 import { api } from '../../hooks/useAPI'
 import { currentLocale } from '../../lib/time'
-import { ActionButton, useToast, Toggle } from '../ui'
+import { ActionButton, useToast, Toggle, Tooltip } from '../ui'
 import { ProviderForm } from './ProviderForm'
 import { DiagnosePanel } from './DiagnosePanel'
 import { SettingsCard, InlineField, StatusBadge } from '../settings/ui'
@@ -108,6 +108,7 @@ type EntityRebuildStatus = {
   started_at: string | null
   eta_ms: number | null
   last_error: string | null
+  skipped?: number
   indexState?: {
     status: 'empty' | 'ready' | 'rebuilding' | 'failed'
     analyzedBlocks: number
@@ -742,15 +743,17 @@ export default function AISettingsPanel() {
                   {t('aiSettings.cancelRebuild')}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => void handleRebuildEntities()}
-                disabled={!capabilities?.chat || entityRebuild?.running === true}
-                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-border hover:bg-accent disabled:opacity-50"
-              >
-                {entityRebuild?.running && <Loader2 className="w-3 h-3 animate-spin" />}
-                {t('aiSettings.rebuildEntities')}
-              </button>
+              <Tooltip label={t('aiSettings.entityRebuildCostHint')}>
+                <button
+                  type="button"
+                  onClick={() => void handleRebuildEntities()}
+                  disabled={!capabilities?.chat || entityRebuild?.running === true}
+                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-border hover:bg-accent disabled:opacity-50"
+                >
+                  {entityRebuild?.running && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {t('aiSettings.rebuildEntities')}
+                </button>
+              </Tooltip>
               {entityRebuild?.running && (
                 <button
                   type="button"
@@ -785,19 +788,23 @@ export default function AISettingsPanel() {
                 {entityRebuild.indexState.status === 'rebuilding' && t('aiSettings.entityIndexRebuilding')}
               </p>
             )}
-            {entityRebuild && entityRebuild.total > 0 && (
-              <p className="tabular-nums text-muted-foreground">
-                {t('aiSettings.entityRebuildProgress', {
-                  done: entityRebuild.done,
-                  total: entityRebuild.total,
-                })}
+            {(entityRebuild?.running || (entityRebuild && (entityRebuild.total > 0 || entityRebuild.errors > 0))) && (
+              <p className="tabular-nums text-muted-foreground break-words">
+                {entityRebuild.running && entityRebuild.total === 0
+                  ? t('aiSettings.entityRebuildScanning')
+                  : t('aiSettings.entityRebuildProgress', {
+                      done: entityRebuild.done,
+                      total: entityRebuild.total,
+                    })}
+                {(entityRebuild.skipped ?? 0) > 0 &&
+                  t('aiSettings.entityRebuildSkipped', { n: entityRebuild.skipped })}
                 {entityRebuild.eta_ms != null && entityRebuild.eta_ms > 0 && entityRebuild.running && (
                   t('aiSettings.entityRebuildEta', { minutes: Math.max(1, Math.ceil(entityRebuild.eta_ms / 60000)) })
                 )}
                 {entityRebuild.errors > 0 && t('aiSettings.entityRebuildErrors', { n: entityRebuild.errors })}
                 {entityRebuild.last_error && (
                   <span className="text-destructive" title={entityRebuild.last_error}>
-                    {' '}· {t('aiSettings.entityRebuildFailed')}
+                    {' '}· {entityRebuild.last_error}
                   </span>
                 )}
               </p>

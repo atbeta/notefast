@@ -83,6 +83,8 @@ const EXTRACT_BATCH_SYSTEM_PROMPT = `你是 NoteFast 的实体抽取助手。用
 const BATCH_MAX_CHARS = 6000
 /** 硬上限：防单片输出 JSON 爆炸（每块最多 5 mentions） */
 const BATCH_MAX_BLOCKS = 32
+/** 同片内建链并发：embedding I/O 可重叠；SQLite 写入仍在同步段，单线程安全 */
+const APPLY_CONCURRENCY = 4
 
 export interface AnalyzeOptions {
   blockId: string
@@ -150,8 +152,13 @@ export interface BatchAnalyzeOptions {
   blocks: Array<Pick<AnalyzeOptions, 'blockId' | 'content' | 'entitiesOnly'>>
   /** 同 AnalyzeOptions.skipRateLimit：显式重建绕过限速 */
   skipRateLimit?: boolean
-  /** 每片处理完后回调（done=已处理块数, total=总块数, errors=累计错误数）——供进度展示 */
-  onProgress?: (done: number, total: number, errors: number) => void
+  /** 每片处理完后回调（done=已处理块数, total=可抽取块数, errors=累计错误数）——供进度展示 */
+  onProgress?: (
+    done: number,
+    total: number,
+    errors: number,
+    meta?: { lastError?: string | null; skipped?: number },
+  ) => void
   /** 取消信号：每片开始前检查；返回 true 时停止后续片（已处理的保留） */
   isCancelled?: () => boolean
 }
@@ -162,6 +169,18 @@ export interface BatchAnalyzeResult {
   applied: number
   errors: string[]
   rateLimited: boolean
+}
+
+async function runPool<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>): Promise<void> {
+  if (items.length === 0) return
+  let i = 0
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (i < items.length) {
+      const item = items[i++]!
+      await fn(item)
+    }
+  })
+  await Promise.all(workers)
 }
 
 /**
@@ -188,7 +207,10 @@ export async function analyzeBlockBatch(opts: BatchAnalyzeOptions): Promise<Batc
     if (trimmed.length < (b.entitiesOnly ? 3 : 10)) continue
     eligible.push({ blockId: b.blockId, content: trimmed, entitiesOnly: b.entitiesOnly })
   }
-  if (eligible.length === 0) return result
+  if (eligible.length === 0) {
+    opts.onProgress?.(0, 0, 0, { skipped: opts.blocks.length, lastError: null })
+    return result
+  }
 
   // 分片：贪心累积字符，超过 BATCH_MAX_CHARS 或 BATCH_MAX_BLOCKS 就开新片
   const slices: Array<Array<Pick<AnalyzeOptions, 'blockId' | 'content' | 'entitiesOnly'>>> = []
@@ -206,6 +228,9 @@ export async function analyzeBlockBatch(opts: BatchAnalyzeOptions): Promise<Batc
   }
   if (cur.length > 0) slices.push(cur)
 
+  const skipped = opts.blocks.length - eligible.length
+  opts.onProgress?.(0, eligible.length, 0, { skipped, lastError: null })
+
   let sliceDone = 0
   for (const slice of slices) {
     // 取消支持：每片开始前检查，已处理的保留（实体/链不回收）
@@ -218,20 +243,26 @@ export async function analyzeBlockBatch(opts: BatchAnalyzeOptions): Promise<Batc
       runtime.recordAutoLink(false, msg)
       result.errors.push(msg)
       sliceDone += slice.length
-      opts.onProgress?.(Math.min(sliceDone, eligible.length), eligible.length, result.errors.length)
+      opts.onProgress?.(Math.min(sliceDone, eligible.length), eligible.length, result.errors.length, {
+        skipped,
+        lastError: msg,
+      })
       // 抽取失败只丢这一片，继续后续片（与单块逐块 try/catch 语义一致）
       continue
     }
-    for (const b of slice) {
+    await runPool(slice, APPLY_CONCURRENCY, async (b) => {
       const mentions = mentionsByBlock.get(b.blockId) ?? []
       const r = await applyMentionsToBlock({ blockId: b.blockId, content: b.content, maxPerBlock: max, entitiesOnly: b.entitiesOnly }, mentions)
       result.analyzed += r.analyzed
       result.entities += r.entities
       result.applied += r.applied
       if (r.errors.length > 0) result.errors.push(...r.errors)
-    }
-    sliceDone += slice.length
-    opts.onProgress?.(Math.min(sliceDone, eligible.length), eligible.length, result.errors.length)
+      sliceDone += 1
+      opts.onProgress?.(Math.min(sliceDone, eligible.length), eligible.length, result.errors.length, {
+        skipped,
+        lastError: r.errors[r.errors.length - 1] ?? result.errors[result.errors.length - 1] ?? null,
+      })
+    })
   }
   return result
 }

@@ -931,6 +931,35 @@ describe('AutoLink — 配置文件字段真实生效（Bug 14 回归）', () =>
     expect(calls).toBe(1) // 30 短块 = 1 次调用
     expect(r.analyzed).toBe(30)
   })
+
+  test('analyzeBlockBatch：进度分母是可抽取块，开跑即回调，过短块计入 skipped', async () => {
+    const { analyzeBlockBatch } = await import('../ai/autoLink')
+    mockChatReturning(JSON.stringify({
+      blocks: [{ block_id: 'prog-a', mentions: [{ anchor: 'KMP', kind: 'concept' }] }],
+    }))
+    seedDocWithBlocks({
+      docTitle: '进度',
+      blocks: [
+        { id: 'prog-a', content: 'KMP 是高效的字符串匹配算法' },
+        { id: 'prog-short', content: '短' },
+      ],
+    })
+    const ticks: Array<{ done: number; total: number; errors: number; skipped?: number }> = []
+    const r = await analyzeBlockBatch({
+      blocks: [
+        { blockId: 'prog-a', content: 'KMP 是高效的字符串匹配算法' },
+        { blockId: 'prog-short', content: '短' },
+      ],
+      skipRateLimit: true,
+      onProgress: (done, total, errors, meta) => {
+        ticks.push({ done, total, errors, skipped: meta?.skipped })
+      },
+    })
+    expect(ticks[0]).toEqual({ done: 0, total: 1, errors: 0, skipped: 1 })
+    expect(ticks.at(-1)?.done).toBe(1)
+    expect(ticks.at(-1)?.total).toBe(1)
+    expect(r.analyzed).toBe(1)
+  })
 })
 
 describe('AutoLink — 并发串行化与唯一约束', () => {
