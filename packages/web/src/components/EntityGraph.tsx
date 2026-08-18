@@ -15,7 +15,10 @@
  *
  * 渲染：节点坐标由 d3-force 模拟维护（tick 经 rAF 节流触发重渲染）；
  * 图结构（graphKey）变化时重建模拟，但**复用旧节点坐标**实现连续过渡。
- * kind 颜色走 CSS 变量（跟随深浅主题，见 styles/tokens.css 的 --graph-*）。
+ * 缩放（semantic zoom）：
+ * - 世界：节点位置、相对大小（有屏幕半径封顶/保底）
+ * - 屏幕：标签字号、描边、光晕、命中区、边宽（non-scaling-stroke）
+ * - 点阵背景 / tooltip / 图例不进 scale 组
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -37,6 +40,27 @@ import {
   type GraphNode,
 } from '../lib/graph'
 import { entityKindLabel } from '../lib/entities'
+import {
+  MAX_ZOOM,
+  MIN_ZOOM,
+  HIT_PAD_PX,
+  HALO_PAD_PX,
+  LABEL_FONT_PX,
+  LABEL_GAP_PX,
+  LABEL_MIN_SCREEN_PX,
+  LABEL_STROKE_PX,
+  NODE_STROKE_PX,
+  SELECT_RING_PAD_PX,
+  SELECT_RING_PX,
+  SHADOW_BLUR_PX,
+  SHADOW_DY_PX,
+  docDrawWidth,
+  docWidth,
+  edgeScreenWidth,
+  nodeDrawRadius,
+  nodeRadius,
+  screenToWorld,
+} from '../lib/graphZoom'
 
 interface SimNode extends GraphNode {
   x: number
@@ -64,20 +88,7 @@ interface EntityGraphProps {
   onFocus: (id: string) => void
 }
 
-const MIN_ZOOM = 0.25
-const MAX_ZOOM = 3
 const LABEL_MAX = 14
-/** 边的屏幕空间最小宽度（px）：k 越小线被 scale 稀释越严重，保底保证可辨 */
-const MIN_EDGE_SCREEN_PX = 0.9
-
-function nodeRadius(mc: number, maxMc: number): number {
-  return 5 + 13 * Math.min(1, Math.sqrt(mc) / Math.sqrt(Math.max(maxMc, 1)))
-}
-
-/** 笔记节点尺寸（宽；高 ≈ 0.55×，迷你卡片） */
-function docWidth(mc: number, maxMc: number): number {
-  return 46 + 54 * Math.min(1, Math.sqrt(mc) / Math.sqrt(Math.max(maxMc, 1)))
-}
 
 export default function EntityGraph({
   nodes,
@@ -366,8 +377,7 @@ export default function EntityGraph({
         }
       : null
 
-  // 标签按缩放级别显隐：缩得太小时全部标签只会糊成噪点，
-  // 只保留悬停/选中节点的标签（tooltip 仍在）
+  // 标签：字号钉屏幕像素；缩太远全关（只留悬停/选中），放大后小节点也会出字
   const labelsOn = view.k >= 0.55
   const showLabel = (n: SimNode) =>
     hoverId === n.id ||
@@ -375,7 +385,7 @@ export default function EntityGraph({
     (labelsOn &&
       (mode === 'docs' ||
         n.distance === 0 ||
-        nodeRadius(n.mention_count, maxMc) >= 8))
+        nodeDrawRadius(n.mention_count, maxMc, view.k) * view.k >= LABEL_MIN_SCREEN_PX))
 
   if (size.w === 0) {
     return (
@@ -404,8 +414,14 @@ export default function EntityGraph({
       >
         <defs>
           {/* 节点柔和投影（共享，深浅主题通用——阴影本就是暗色） */}
-          <filter id="graphNodeShadow" x="-60%" y="-60%" width="220%" height="220%">
-            <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodColor="#141412" floodOpacity="0.14" />
+          <filter id="graphNodeShadow" x="-80%" y="-80%" width="260%" height="260%">
+            <feDropShadow
+              dx="0"
+              dy={screenToWorld(SHADOW_DY_PX, view.k)}
+              stdDeviation={screenToWorld(SHADOW_BLUR_PX, view.k)}
+              floodColor="#141412"
+              floodOpacity="0.14"
+            />
           </filter>
           {/* 节点顶部高光：白色径向渐隐，叠在 kind 底色上形成通透感 */}
           <radialGradient id="graphSheen" cx="35%" cy="28%" r="80%">
@@ -429,19 +445,6 @@ export default function EntityGraph({
             const dim = focusEdges !== null && !incident
             const highlighted = incident && focusColor !== null
             const w = e.weight / maxWeight
-            // 线条宽度两段补偿（核心：放大时优先清晰连接，而非整体等比吹大）：
-            // ① k<1（fitView 常落 0.3-0.5）：世界宽度 ×k 后高权重边也只剩
-            //    ~0.5px 细成发丝，保底到屏幕 MIN_EDGE_SCREEN_PX/k，拓扑可辨
-            // ② k≥1（放大）：宽度乘 1+(k-1)/3 的增益（k=4 时 2 倍封顶），
-            //    放大时边比节点/文字更快变粗 → 连接关系优先清晰
-            const edgeW = (base: number) =>
-              view.k >= 1
-                ? base * (1 + Math.min(view.k - 1, 3) / 3)
-                : Math.max(base, MIN_EDGE_SCREEN_PX / view.k)
-            // 放大时同步提升边的不透明度：宽度增益让线更粗，opacity 增益让线
-            // 更"实"——否则节点/文字随 k 等比放大而线仍偏淡，连接关系不突出
-            const opBoost = view.k >= 1 ? Math.min((view.k - 1) * 0.12, 0.3) : 0
-            const baseOpacity = 0.24 + 0.32 * w
             return (
               <line
                 key={i}
@@ -451,9 +454,10 @@ export default function EntityGraph({
                 x2={t.x}
                 y2={t.y}
                 strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
                 style={{ stroke: highlighted ? focusColor : 'rgb(var(--graph-edge))' }}
-                strokeWidth={highlighted ? edgeW(1 + 1.5 * w) : edgeW(0.6 + 1.2 * w)}
-                strokeOpacity={dim ? 0.05 : highlighted ? 0.55 + opBoost : baseOpacity + opBoost}
+                strokeWidth={edgeScreenWidth(w, highlighted)}
+                strokeOpacity={dim ? 0.05 : highlighted ? 0.55 : 0.24 + 0.32 * w}
               />
             )
           })}
@@ -477,9 +481,9 @@ export default function EntityGraph({
               >
                 <g className="graph-node-enter">
                   {isDoc ? (
-                    <DocNodeShape n={n} maxMc={maxMc} isAnchor={n.id === centerId} isHover={isHover} isSelected={isSelected} showLabel={showLabel(n)} />
+                    <DocNodeShape n={n} maxMc={maxMc} k={view.k} isAnchor={n.id === centerId} isHover={isHover} isSelected={isSelected} showLabel={showLabel(n)} />
                   ) : (
-                    <EntityNodeShape n={n} maxMc={maxMc} isAnchor={n.id === centerId} isHover={isHover} isSelected={isSelected} showLabel={showLabel(n)} />
+                    <EntityNodeShape n={n} maxMc={maxMc} k={view.k} isAnchor={n.id === centerId} isHover={isHover} isSelected={isSelected} showLabel={showLabel(n)} />
                   )}
                 </g>
               </g>
@@ -542,6 +546,7 @@ export default function EntityGraph({
 function EntityNodeShape({
   n,
   maxMc,
+  k,
   isAnchor,
   isHover,
   isSelected,
@@ -549,36 +554,54 @@ function EntityNodeShape({
 }: {
   n: SimNode
   maxMc: number
+  k: number
   isAnchor: boolean
   isHover: boolean
   isSelected: boolean
   showLabel: boolean
 }) {
-  const r = nodeRadius(n.mention_count, maxMc)
+  const r = nodeDrawRadius(n.mention_count, maxMc, k)
+  const hit = screenToWorld(HIT_PAD_PX, k)
+  const halo = screenToWorld(HALO_PAD_PX, k)
+  const ringPad = screenToWorld(SELECT_RING_PAD_PX, k)
   const color = graphKindColor(n.kind)
   return (
     <>
-      {/* 隐形放大命中区（点击更易命中） */}
-      <circle r={r + 8} fill="transparent" />
-      {/* 常驻柔光晕，让节点从点阵背景上浮起 */}
-      <circle r={r + 3} fill={color} opacity={0.14} />
+      <circle r={r + hit} fill="transparent" />
+      <circle r={r + halo} fill={color} opacity={0.14} />
       {(isHover || isAnchor) && !isSelected && (
-        <circle r={r + 6} fill={color} opacity={isHover ? 0.28 : 0.18} />
+        <circle r={r + halo * 2} fill={color} opacity={isHover ? 0.28 : 0.18} />
       )}
-      {isSelected && <circle r={r + 8} fill={color} opacity={0.26} />}
+      {isSelected && <circle r={r + halo * 2.5} fill={color} opacity={0.26} />}
       <circle
         r={r}
         fill={color}
         style={{ stroke: 'rgb(var(--card))' }}
-        strokeWidth={1.4}
+        strokeWidth={NODE_STROKE_PX}
+        vectorEffect="non-scaling-stroke"
         filter="url(#graphNodeShadow)"
       />
       <circle r={r} fill="url(#graphSheen)" pointerEvents="none" />
       {isSelected && (
-        <circle r={r + 3.5} fill="none" style={{ stroke: 'rgb(var(--primary))' }} strokeWidth={1.5} />
+        <circle
+          r={r + ringPad}
+          fill="none"
+          style={{ stroke: 'rgb(var(--primary))' }}
+          strokeWidth={SELECT_RING_PX}
+          vectorEffect="non-scaling-stroke"
+        />
       )}
       {showLabel && (
-        <text y={r + 13} textAnchor="middle" className="graph-node-label" style={{ fill: 'rgb(var(--foreground))' }}>
+        <text
+          y={r + screenToWorld(LABEL_GAP_PX, k)}
+          textAnchor="middle"
+          className="graph-node-label"
+          style={{
+            fill: 'rgb(var(--foreground))',
+            fontSize: screenToWorld(LABEL_FONT_PX, k),
+            strokeWidth: screenToWorld(LABEL_STROKE_PX, k),
+          }}
+        >
           {n.display.length > LABEL_MAX ? n.display.slice(0, LABEL_MAX) + '…' : n.display}
         </text>
       )}
@@ -590,6 +613,7 @@ function EntityNodeShape({
 function DocNodeShape({
   n,
   maxMc,
+  k,
   isAnchor,
   isHover,
   isSelected,
@@ -597,36 +621,42 @@ function DocNodeShape({
 }: {
   n: SimNode
   maxMc: number
+  k: number
   isAnchor: boolean
   isHover: boolean
   isSelected: boolean
   showLabel: boolean
 }) {
-  const w = docWidth(n.mention_count, maxMc)
-  const h = Math.max(26, w * 0.55)
-  const glyphX = -w / 2 + 10 // 竖条右侧起点
+  const w = docDrawWidth(n.mention_count, maxMc, k)
+  const h = w * 0.55
+  const pad = screenToWorld(HIT_PAD_PX, k)
+  const halo = screenToWorld(HALO_PAD_PX, k)
+  const rx = screenToWorld(8, k)
+  const inset = screenToWorld(4, k)
+  const barW = screenToWorld(3, k)
+  const glyphX = -w / 2 + inset + barW + screenToWorld(3, k)
+  const glyphW = w - inset * 2 - barW - screenToWorld(6, k)
   return (
     <>
-      {/* 隐形放大命中区 */}
-      <rect x={-w / 2 - 8} y={-h / 2 - 8} width={w + 16} height={h + 16} fill="transparent" />
+      <rect x={-w / 2 - pad} y={-h / 2 - pad} width={w + pad * 2} height={h + pad * 2} fill="transparent" />
       {(isHover || isAnchor) && !isSelected && (
         <rect
-          x={-w / 2 - 4}
-          y={-h / 2 - 4}
-          width={w + 8}
-          height={h + 8}
-          rx={11}
+          x={-w / 2 - halo}
+          y={-h / 2 - halo}
+          width={w + halo * 2}
+          height={h + halo * 2}
+          rx={rx + halo}
           fill="rgb(var(--primary))"
           opacity={isHover ? 0.2 : 0.12}
         />
       )}
       {isSelected && (
         <rect
-          x={-w / 2 - 6}
-          y={-h / 2 - 6}
-          width={w + 12}
-          height={h + 12}
-          rx={13}
+          x={-w / 2 - halo * 2}
+          y={-h / 2 - halo * 2}
+          width={w + halo * 4}
+          height={h + halo * 4}
+          rx={rx + halo * 2}
           fill="rgb(var(--primary))"
           opacity={0.2}
         />
@@ -636,37 +666,65 @@ function DocNodeShape({
         y={-h / 2}
         width={w}
         height={h}
-        rx={8}
+        rx={rx}
         style={{
           fill: 'rgb(var(--graph-note-fill))',
           stroke: isHover ? 'rgb(var(--border-strong))' : 'rgb(var(--border))',
         }}
-        strokeWidth={1}
+        strokeWidth={NODE_STROKE_PX}
+        vectorEffect="non-scaling-stroke"
         filter="url(#graphNodeShadow)"
       />
-      {/* 左侧 primary 竖条：笔记的标识色 */}
-      <rect x={-w / 2 + 4} y={-h / 2 + 5} width={3} height={h - 10} rx={1.5} fill="rgb(var(--primary))" opacity={0.7} />
-      {/* 文本行 glyph：标题行 + 正文行，暗示「这是一篇笔记」 */}
-      <rect x={glyphX} y={-h / 2 + 7} width={w - 24} height={3.5} rx={1.75} fill="rgb(var(--foreground))" opacity={0.4} />
-      <rect x={glyphX} y={-h / 2 + 13.5} width={(w - 24) * 0.62} height={2.5} rx={1.25} fill="rgb(var(--foreground))" opacity={0.2} />
+      <rect
+        x={-w / 2 + inset}
+        y={-h / 2 + screenToWorld(5, k)}
+        width={barW}
+        height={h - screenToWorld(10, k)}
+        rx={barW / 2}
+        fill="rgb(var(--primary))"
+        opacity={0.7}
+      />
+      <rect
+        x={glyphX}
+        y={-h / 2 + screenToWorld(7, k)}
+        width={glyphW}
+        height={screenToWorld(3.5, k)}
+        rx={screenToWorld(1.75, k)}
+        fill="rgb(var(--foreground))"
+        opacity={0.4}
+      />
+      <rect
+        x={glyphX}
+        y={-h / 2 + screenToWorld(13.5, k)}
+        width={glyphW * 0.62}
+        height={screenToWorld(2.5, k)}
+        rx={screenToWorld(1.25, k)}
+        fill="rgb(var(--foreground))"
+        opacity={0.2}
+      />
       {isSelected && (
         <rect
-          x={-w / 2 - 3}
-          y={-h / 2 - 3}
-          width={w + 6}
-          height={h + 6}
-          rx={11}
+          x={-w / 2 - screenToWorld(SELECT_RING_PAD_PX, k)}
+          y={-h / 2 - screenToWorld(SELECT_RING_PAD_PX, k)}
+          width={w + screenToWorld(SELECT_RING_PAD_PX, k) * 2}
+          height={h + screenToWorld(SELECT_RING_PAD_PX, k) * 2}
+          rx={rx + screenToWorld(3, k)}
           fill="none"
           style={{ stroke: 'rgb(var(--primary))' }}
-          strokeWidth={1.5}
+          strokeWidth={SELECT_RING_PX}
+          vectorEffect="non-scaling-stroke"
         />
       )}
       {showLabel && (
         <text
-          y={h / 2 + 13}
+          y={h / 2 + screenToWorld(LABEL_GAP_PX, k)}
           textAnchor="middle"
           className="graph-node-label"
-          style={{ fill: 'rgb(var(--foreground))' }}
+          style={{
+            fill: 'rgb(var(--foreground))',
+            fontSize: screenToWorld(LABEL_FONT_PX, k),
+            strokeWidth: screenToWorld(LABEL_STROKE_PX, k),
+          }}
         >
           {n.display.length > LABEL_MAX ? n.display.slice(0, LABEL_MAX) + '…' : n.display}
         </text>

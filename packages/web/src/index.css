@@ -192,15 +192,13 @@
   }
   .graph-node-label {
     font-family: var(--font-sans);
-    font-size: 10px;
     font-weight: 500;
     letter-spacing: -0.005em;
     user-select: none;
     pointer-events: none;
-    /* 卡片色 halo：压住处在线条/点阵背景上，保证标签可读 */
+    /* 卡片色 halo：压住处在线条/点阵背景上；字号/描边宽由缩放补偿写入 inline */
     paint-order: stroke;
     stroke: rgb(var(--card));
-    stroke-width: 3px;
     stroke-linejoin: round;
   }
   .graph-tooltip {
