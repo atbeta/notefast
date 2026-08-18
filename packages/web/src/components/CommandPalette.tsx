@@ -52,63 +52,15 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
   const dark = resolvedTheme === 'dark'
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  const maskRef = useRef<HTMLDivElement>(null)
-  const outerRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
   useEffect(() => {
     if (!open) return
-    const t = setTimeout(() => inputRef.current?.focus(), 30)
     setQuery(initialQuery ?? '')
     setResults([])
     setActive(0)
-    return () => clearTimeout(t)
+    inputRef.current?.focus()
   }, [open, initialQuery])
-
-  // 遮罩虚化：CSS transition 的 backdrop-filter 在 WKWebView/Safari 不按帧插值（跳变），
-  // 造成「先糊满、黑色才淡入」的二段式。改用 rAF 逐帧同时写 opacity 与 blur(0↔4px)，
-  // 走同一条 ease 曲线——任何引擎每帧同步生效，绝无 opacity/blur 不同步错位。
-  // 首帧 (initial mount) 不动画：直接设到终态，避免 open=false 初挂就闪一帧。
-  useEffect(() => {
-    const mask = maskRef.current
-    const outer = outerRef.current
-    if (!mask || !outer) return
-    const style = mask.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }
-
-    // 首帧检测：outer.style.opacity 为空字符串说明从未被本 hook 设过，
-    // 则是初次挂载——按 open 直接定终态，不进 rAF 动画。
-    if (outer.style.opacity === '') {
-      const o = open ? 1 : 0
-      const v = open ? 4 : 0
-      outer.style.opacity = String(o)
-      style.backdropFilter = `blur(${v.toFixed(2)}px)`
-      style.webkitBackdropFilter = `blur(${v.toFixed(2)}px)`
-      return
-    }
-
-    // [open] 状态变化：同一个 rAF 驱动 opacity 与 blur，同条 ease 曲线
-    let raf = 0
-    const start = performance.now()
-    const DUR = 150
-    const ease = (p: number) => 1 - Math.pow(1 - p, 3)
-    const step = (now: number) => {
-      const p = Math.min(1, (now - start) / DUR)
-      const eased = open ? ease(p) : 1 - ease(p)
-      const v = eased * 4
-      style.backdropFilter = `blur(${v.toFixed(2)}px)`
-      style.webkitBackdropFilter = `blur(${v.toFixed(2)}px)`
-      outer.style.opacity = String(eased)
-      if (p < 1) raf = requestAnimationFrame(step)
-    }
-    raf = requestAnimationFrame(step)
-    return () => {
-      cancelAnimationFrame(raf)
-      style.backdropFilter = ''
-      style.webkitBackdropFilter = ''
-      // 不清 outer.style.opacity：保留作为「本 hook 已掌管过该元素」的标志，
-      // 下一次 [open] 变化时跳过首帧分支、跑动画
-    }
-  }, [open])
 
   // macOS WKWebView 焦点恢复（原生壳）：ESC 关闭时 WebKit 在 NSEvent 层结束
   // 文本输入会话并使 webview 失去 first responder——之后的 ⌘K/⌘J/⌘\ 不再送达
@@ -257,21 +209,19 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
 
   return (
     <div
-      ref={outerRef}
       aria-hidden={!open}
       className={`fixed inset-0 z-[100] flex items-start justify-center pt-[12vh] px-4 ${open ? 'pointer-events-auto' : 'pointer-events-none'}`}
       role="dialog"
       aria-modal="true"
       aria-label={t('command.dialogLabel')}
     >
-      {/* 遮罩：opacity 与 backdrop-filter 同个 rAF、同条 ease 曲线逐帧驱动，
-          保证任何引擎每帧同步（不然黑与糊两条动画通道进争不同步，仍二段式） */}
+      {/* 不用 backdrop-filter：Safari/WKWebView 不插值 blur，且子元素模糊不吃父级 opacity，
+          会「先糊满、黑色才淡入」。半透明遮罩 + 面板同时长 fade/slide，一条动效。 */}
       <div
-        ref={maskRef}
         onClick={onClose}
-        className="absolute inset-0 bg-black/40"
+        className={`absolute inset-0 bg-black/40 transition-opacity duration-100 ease-[var(--ease)] ${open ? 'opacity-100' : 'opacity-0'}`}
       />
-      <div className={`relative w-full max-w-xl bg-popover rounded-2xl border border-border shadow-2xl overflow-hidden transition-transform duration-[var(--dur)] ease-[var(--ease)] ${open ? 'translate-y-0 scale-100' : 'translate-y-2 scale-[0.98]'}`}>
+      <div className={`relative w-full max-w-xl bg-popover rounded-2xl border border-border shadow-2xl overflow-hidden transition-[opacity,transform] duration-100 ease-[var(--ease)] ${open ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-1 scale-[0.99]'}`}>
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
           <Search className="w-4 h-4 text-muted-foreground shrink-0" />
           <input
