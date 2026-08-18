@@ -12,6 +12,8 @@ interface HealthData {
   dbPath: string | null
   tables: Record<string, number>
   pendingTombstones: number
+  purgeableTombstones?: number
+  retainedTombstones?: number
   lastMaintenance: {
     id: number
     ts: string
@@ -55,6 +57,7 @@ export default function SettingsMaintenance() {
   const [running, setRunning] = useState(false)
   const [vacuumOpen, setVacuumOpen] = useState(false)
   const [vacuuming, setVacuuming] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
 
   const onRunMaintenance = async () => {
@@ -62,8 +65,15 @@ export default function SettingsMaintenance() {
     setRunning(true)
     setActionMsg(null)
     try {
-      const r = await api.post<{ ok: boolean; durationMs: number }>('/db/maintenance', {})
-      setActionMsg(r.ok ? t('settings.maintenance.runDone', { ms: r.durationMs }) : t('settings.maintenance.runFailed'))
+      const r = await api.post<{ ok: boolean; durationMs: number; result?: { tombstones: { blocks: number } } }>(
+        '/db/maintenance',
+        {},
+      )
+      setActionMsg(
+        r.ok
+          ? t('settings.maintenance.runDone', { ms: r.durationMs, n: r.result?.tombstones.blocks ?? 0 })
+          : t('settings.maintenance.runFailed'),
+      )
     } catch {
       setActionMsg(t('settings.maintenance.runFailed'))
     } finally {
@@ -90,9 +100,16 @@ export default function SettingsMaintenance() {
     }
   }
 
-  const refreshAll = () => {
-    refetchHealth()
-    refetchLogs()
+  const refreshAll = async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await api.get('/db/health?fresh=1')
+      refetchHealth()
+      refetchLogs()
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   const warnCount = (logs?.logs ?? []).filter((l) => l.level === 'warn' || l.level === 'error').length
@@ -108,10 +125,11 @@ export default function SettingsMaintenance() {
           </div>
           <button
             type="button"
-            onClick={refreshAll}
-            className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-[12px] text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            onClick={() => void refreshAll()}
+            disabled={refreshing}
+            className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-[12px] text-muted-foreground cursor-pointer hover:bg-accent hover:text-foreground active:bg-accent/80 disabled:opacity-50"
           >
-            <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} strokeWidth={1.75} />
             {t('settings.maintenance.refresh')}
           </button>
         </div>
@@ -128,6 +146,12 @@ export default function SettingsMaintenance() {
           <div className="rounded-md bg-background/60 border border-border/50 p-3">
             <dt className="text-[11.5px] text-muted-foreground">{t('settings.maintenance.pendingTombstones')}</dt>
             <dd className="mt-1 font-medium tabular-nums text-foreground">{health?.pendingTombstones ?? 0}</dd>
+            <dd className="mt-0.5 text-[11px] text-muted-foreground leading-snug">
+              {t('settings.maintenance.pendingTombstonesHint', {
+                purgeable: health?.purgeableTombstones ?? 0,
+                retained: health?.retainedTombstones ?? 0,
+              })}
+            </dd>
           </div>
           <div className="rounded-md bg-background/60 border border-border/50 p-3">
             <dt className="text-[11.5px] text-muted-foreground">{t('settings.maintenance.blocks')}</dt>

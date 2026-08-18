@@ -211,6 +211,27 @@ export function runMaintenancePass(): MaintenanceResult {
   return { tombstones, feedRows, vecGenerations }
 }
 
+/** 顶层孤儿 tombstone：超期（维护会物理删）vs 保留期内（满 30 天才清） */
+export function countOrphanTombstones(db: ReturnType<typeof getDb>): {
+  total: number
+  purgeable: number
+  retained: number
+} {
+  const cutoff = sqlCutoff(TOMBSTONE_RETENTION_MS)
+  const row = db.query(`
+    SELECT
+      count(*) AS total,
+      coalesce(sum(CASE WHEN b.updated_at < ? THEN 1 ELSE 0 END), 0) AS purgeable
+    FROM blocks b
+    WHERE b.is_deleted = 1
+      AND NOT EXISTS (SELECT 1 FROM blocks p WHERE p.id = b.parent_id AND p.is_deleted = 1)
+      AND NOT EXISTS (SELECT 1 FROM blocks c WHERE c.parent_id = b.id AND c.is_deleted = 0)
+  `).get(cutoff) as { total: number; purgeable: number }
+  const total = Number(row.total) || 0
+  const purgeable = Number(row.purgeable) || 0
+  return { total, purgeable, retained: total - purgeable }
+}
+
 /**
  * 启动维护循环（进程级常驻）：自重排单循环，首跑延迟 5 分钟（避开启动期
  * 索引/同步作业），之后每 6 小时一圈；任何瞬时失败只记日志不终止循环。

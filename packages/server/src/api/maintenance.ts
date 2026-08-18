@@ -2,6 +2,7 @@
  * 维护 API（设置 → 维护）
  *
  * GET  /api/v1/db/health       数据库健康：文件/WAL 大小、各表行数、tombstone 待清理、上次维护
+ *                              ?fresh=1 绕过 30s 缓存（设置页「刷新」）
  * GET  /api/v1/db/logs         最近应用日志（环形表，默认 100 条）
  * POST /api/v1/db/maintenance  手动触发一轮维护（tombstone purge + feed 裁剪 + checkpoint）
  * POST /api/v1/db/vacuum       手动 VACUUM（整理物理文件；会短暂锁库，须用户确认后调用）
@@ -13,7 +14,7 @@ import { Hono } from 'hono'
 import { statSync } from 'node:fs'
 import { getDb } from '../db'
 import { listAppLogs, initAppLogs } from '../services/appLogs'
-import { runMaintenancePass } from '../services/maintenance'
+import { countOrphanTombstones, runMaintenancePass } from '../services/maintenance'
 import { logAppEvent } from '../services/appLogs'
 
 const maintenance = new Hono()
@@ -31,12 +32,20 @@ function invalidateHealthCache(): void {
 function buildHealthPayload() {
   const sizes = dbFileSizes()
   const lastLog = listAppLogs(1)[0] ?? null
+  let tombstones = { total: 0, purgeable: 0, retained: 0 }
+  try {
+    tombstones = countOrphanTombstones(getDb())
+  } catch {
+    // blocks 表异常时健康页仍返回其余指标
+  }
   return {
     dbBytes: sizes.dbBytes,
     walBytes: sizes.walBytes,
     dbPath: sizes.path,
     tables: tableRowCounts(),
-    pendingTombstones: pendingTombstoneCount(),
+    pendingTombstones: tombstones.total,
+    purgeableTombstones: tombstones.purgeable,
+    retainedTombstones: tombstones.retained,
     lastMaintenance: lastLog && lastLog.source === 'maintenance' ? lastLog : null,
     ts: new Date().toISOString(),
   }
@@ -79,25 +88,10 @@ function tableRowCounts(): Record<string, number> {
   return out
 }
 
-/** 待清理 tombstone 数（孤儿 tombstone，未到保留期也计入——健康视图展示当前积压） */
-function pendingTombstoneCount(): number {
-  try {
-    const db = getDb()
-    const row = db.query(`
-      SELECT count(*) AS c FROM blocks b
-      WHERE b.is_deleted = 1
-        AND NOT EXISTS (SELECT 1 FROM blocks p WHERE p.id = b.parent_id AND p.is_deleted = 1)
-        AND NOT EXISTS (SELECT 1 FROM blocks c WHERE c.parent_id = b.id AND c.is_deleted = 0)
-    `).get() as { c: number }
-    return row.c
-  } catch {
-    return 0
-  }
-}
-
 maintenance.get('/health', (c) => {
   const now = Date.now()
-  if (healthCache && now - healthCache.ts < HEALTH_CACHE_TTL_MS) {
+  const fresh = c.req.query('fresh') === '1'
+  if (!fresh && healthCache && now - healthCache.ts < HEALTH_CACHE_TTL_MS) {
     return c.json(healthCache.payload)
   }
   const payload = buildHealthPayload()
@@ -147,14 +141,17 @@ maintenance.post('/vacuum', async (c) => {
     db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
     db.exec('VACUUM')
     const durationMs = Date.now() - startedAt
-    invalidateHealthCache() // DB 文件大小变了，失效缓存让前端立刻拿新值
-    const sizes = dbFileSizes()
+    invalidateHealthCache()
     logAppEvent({
       level: 'info',
       source: 'maintenance',
       message: 'vacuum_done',
-      fields: { durationMs, dbBytesAfter: sizes.dbBytes, walBytesAfter: sizes.walBytes },
+      fields: { durationMs },
     })
+    // VACUUM 在 WAL 模式下会把整库重写进 WAL；记日志也会再脏一截。
+    // 必须在写完之后 TRUNCATE，否则整理完 WAL 会回涨到接近库文件大小。
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+    const sizes = dbFileSizes()
     return c.json({ ok: true, durationMs, dbBytesAfter: sizes.dbBytes, walBytesAfter: sizes.walBytes })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
