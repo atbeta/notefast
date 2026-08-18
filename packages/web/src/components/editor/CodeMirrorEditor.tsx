@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { EditorState } from '@codemirror/state'
 import {
   EditorView,
@@ -23,6 +23,9 @@ import { editorKeymap } from './cm/keymap'
 import { SelectionReporter } from './cm/selectionReport'
 import type { SelectionAnchor } from './cm/selectionReport'
 import { buildReplaceRangeUpdate } from './cm/refineReplace'
+import TableEditorDialog from './TableEditorDialog'
+import { parseTable, serializeTable, tablesEqual, blankTable, tableInsertAffixes, type ParsedTable } from './cm/tableModel'
+import { dispatchEditTable, EDIT_TABLE_EVENT, type EditTableDetail } from '../../lib/editTable'
 
 /** 暴露给工具栏 / 上传 hook / 父组件的命令式编辑 API（与旧 textarea 版签名保持一致） */
 export interface CodeMirrorEditorHandle {
@@ -32,6 +35,8 @@ export interface CodeMirrorEditorHandle {
   getSelectionText: () => string
   /** 改写流式原地替换：把 [from, to) 渐进替换为 text（选区气泡用） */
   replaceRange: (from: number, to: number, text: string) => void
+  /** 插入空 GFM 表并打开网格编辑 */
+  insertTable: () => void
 }
 
 interface CodeMirrorEditorProps {
@@ -83,6 +88,24 @@ function wrapSelectionCmd(view: EditorView, left: string, right = left): void {
   view.focus()
 }
 
+function insertTableCmd(view: EditorView): void {
+  const snippet = serializeTable(blankTable())
+  const { from, to } = view.state.selection.main
+  const atDocStart = from === 0
+  const beforeChar = from > 0 ? view.state.sliceDoc(from - 1, from) : null
+  const { prefix, suffix } = tableInsertAffixes(beforeChar, atDocStart)
+  const insert = prefix + snippet + suffix
+  const tableFrom = from + prefix.length
+  const tableTo = tableFrom + snippet.length
+  view.dispatch({
+    changes: { from, to, insert },
+    selection: { anchor: clampPos(view, tableTo + suffix.length) },
+    scrollIntoView: true,
+    userEvent: 'input',
+  })
+  dispatchEditTable({ from: tableFrom, to: tableTo, lines: snippet.split('\n') })
+}
+
 /**
  * CodeMirror 6 混合渲染编辑器：底层始终是 Markdown 源码（零转换），
  * 装饰层提供语法高亮 / 标题放大 / 图片预览 / AI ghost text。
@@ -95,6 +118,45 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
     // keymap / 事件回调全部经 propsRef 取最新 props，EditorView 只创建一次
     const propsRef = useRef(props)
     propsRef.current = props
+
+    const [tableSession, setTableSession] = useState<{
+      from: number
+      to: number
+      table: ParsedTable
+    } | null>(null)
+    const tableSessionRef = useRef(tableSession)
+    tableSessionRef.current = tableSession
+
+    const applyTable = useCallback((table: ParsedTable, thenSource: boolean) => {
+      const view = viewRef.current
+      const sess = tableSessionRef.current
+      if (!view || !sess) return
+      if (!tablesEqual(table, sess.table)) {
+        view.dispatch({
+          changes: { from: sess.from, to: sess.to, insert: serializeTable(table) },
+          userEvent: 'input',
+        })
+      }
+      setTableSession(null)
+      if (thenSource) {
+        requestAnimationFrame(() => {
+          const v = viewRef.current
+          if (!v) return
+          v.dispatch({ selection: { anchor: sess.from } })
+          v.focus()
+        })
+      }
+    }, [])
+
+    useEffect(() => {
+      const handler = (e: Event) => {
+        const d = (e as CustomEvent<EditTableDetail>).detail
+        if (!d?.lines?.length) return
+        setTableSession({ from: d.from, to: d.to, table: parseTable(d.lines) })
+      }
+      window.addEventListener(EDIT_TABLE_EVENT, handler)
+      return () => window.removeEventListener(EDIT_TABLE_EVENT, handler)
+    }, [])
 
     useImperativeHandle(
       ref,
@@ -122,6 +184,10 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
             scrollIntoView: true,
             userEvent: 'input',
           })
+        },
+        insertTable: () => {
+          const view = viewRef.current
+          if (view) insertTableCmd(view)
         },
       }),
       [],
@@ -299,7 +365,17 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
       })
     }, [props.ghostText])
 
-    return <div ref={hostRef} className="min-w-0 flex-1" />
+    return (
+      <>
+        <div ref={hostRef} className="min-w-0 flex-1" />
+        <TableEditorDialog
+          open={tableSession !== null}
+          table={tableSession?.table ?? null}
+          onDone={(table) => applyTable(table, false)}
+          onEditSource={(table) => applyTable(table, true)}
+        />
+      </>
+    )
   },
 )
 

@@ -44,6 +44,7 @@
     "orderedList": "Numbered list (1.)",
     "quote": "Blockquote (>)",
     "codeBlock": "Code block (```)",
+    "insertTable": "Insert table",
     "bold": "Bold ({{shortcut}})",
     "italic": "Italic ({{shortcut}})",
     "inlineCode": "Inline code ({{shortcut}})",
@@ -113,6 +114,19 @@
     "generating": "Generating…",
     "stop": "Stop",
     "refineFailed": "Rewrite failed, please try again"
+  },
+  "tableEditor": {
+    "title": "Edit table",
+    "done": "Done",
+    "editSource": "Edit source",
+    "addRow": "Add row",
+    "addCol": "Add column",
+    "deleteRow": "Delete row",
+    "deleteCol": "Delete column",
+    "headerCell": "Header column {{n}}",
+    "bodyCell": "Row {{row}}, column {{col}}",
+    "markdownHint": "Cells are edited as Markdown source (e.g. **bold**)",
+    "open": "Edit table"
   },
   "share": {
     "expiryText": "expires {{date}} ({{days}} days left)",

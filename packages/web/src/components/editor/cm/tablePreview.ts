@@ -2,44 +2,23 @@ import { StateField } from '@codemirror/state'
 import type { EditorState, Extension, Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType } from '@codemirror/view'
 import type { DecorationSet } from '@codemirror/view'
+import i18next from '../../../i18n'
+import { dispatchEditTable } from '../../../lib/editTable'
+import {
+  isTableDelimiter,
+  isTableRow,
+  parseTable,
+  type ParsedTable,
+} from './tableModel'
 
 /**
  * 表格块内联预览：连续的 GFM pipe table（表头 + 分隔行 + 数据行）在光标不在块内时
- * 渲染为 HTML 表格；光标进入块内回退源码。与 imagePreview 同一模式，文档仍是 Markdown。
+ * 渲染为 HTML 表格。点击打开外挂网格编辑（写回 GFM）；光标进入块内仍回退源码。
  * 判定逻辑对齐 core/markdown.ts 的 isTableRow / isTableDelimiter。
  */
 
-function isTableRow(text: string): boolean {
-  const t = text.trim()
-  return t.length > 0 && t.includes('|')
-}
-
-function isTableDelimiter(text: string): boolean {
-  const t = text.trim()
-  if (!t.includes('-')) return false
-  const cells = t.replace(/^\|/, '').replace(/\|$/, '').split('|')
-  if (cells.length === 0) return false
-  return cells.every((c) => /^:?-+:?$/.test(c.trim()))
-}
-
-type Align = 'left' | 'center' | 'right'
-
-interface ParsedTable {
-  header: string[]
-  aligns: Align[]
-  body: string[][]
-}
-
-function splitRow(line: string): string[] {
-  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim())
-}
-
-function parseTable(lines: string[]): ParsedTable {
-  const header = splitRow(lines[0])
-  const aligns = splitRow(lines[1]).map((c): Align =>
-    c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : 'left',
-  )
-  return { header, aligns, body: lines.slice(2).map(splitRow) }
+function cssAlign(align: ParsedTable['aligns'][number] | undefined): string {
+  return align === 'center' || align === 'right' ? align : 'left'
 }
 
 /** asset:<sha256> 稳定引用 → API 路径（与 BlockRenderer 一致） */
@@ -68,24 +47,32 @@ function inlineHtml(src: string): string {
 class TableWidget extends WidgetType {
   constructor(
     readonly table: ParsedTable,
-    readonly lineFrom: number,
+    readonly from: number,
+    readonly to: number,
+    readonly lines: string[],
   ) {
     super()
   }
 
   eq(other: TableWidget): boolean {
-    return other.lineFrom === this.lineFrom && JSON.stringify(other.table) === JSON.stringify(this.table)
+    return (
+      other.from === this.from &&
+      other.to === this.to &&
+      JSON.stringify(other.table) === JSON.stringify(this.table)
+    )
   }
 
-  toDOM(view: EditorView): HTMLElement {
+  toDOM(): HTMLElement {
     const wrap = document.createElement('div')
     wrap.className = 'cm-table-preview'
+    wrap.setAttribute('role', 'button')
+    wrap.setAttribute('aria-label', i18next.t('tableEditor.open'))
     const table = document.createElement('table')
     const thead = document.createElement('thead')
     const htr = document.createElement('tr')
     this.table.header.forEach((h, i) => {
       const th = document.createElement('th')
-      th.style.textAlign = this.table.aligns[i] ?? 'left'
+      th.style.textAlign = cssAlign(this.table.aligns[i])
       th.innerHTML = inlineHtml(h)
       htr.appendChild(th)
     })
@@ -96,7 +83,7 @@ class TableWidget extends WidgetType {
       const tr = document.createElement('tr')
       row.forEach((c, i) => {
         const td = document.createElement('td')
-        td.style.textAlign = this.table.aligns[i] ?? 'left'
+        td.style.textAlign = cssAlign(this.table.aligns[i])
         td.innerHTML = inlineHtml(c)
         tr.appendChild(td)
       })
@@ -104,14 +91,13 @@ class TableWidget extends WidgetType {
     }
     table.appendChild(tbody)
     wrap.appendChild(table)
-    // 点击表格把光标移入源码块，回退源码编辑
-    // stopPropagation：阻止 CM 自己的指针选区逻辑在 widget 销毁后把光标映射到块外（会导致立即弹回 widget）
+    // 点击打开外挂网格；链接仍可跟。preventDefault + stopPropagation 避免 CM
+    // 在 widget 销毁后把指针选区映射到块外（会导致立即弹回预览）。
     wrap.addEventListener('mousedown', (e) => {
       if ((e.target as HTMLElement).closest('a')) return
       e.preventDefault()
       e.stopPropagation()
-      view.dispatch({ selection: { anchor: this.lineFrom } })
-      view.focus()
+      dispatchEditTable({ from: this.from, to: this.to, lines: this.lines })
     })
     return wrap
   }
@@ -172,7 +158,7 @@ function buildDecorations(state: EditorState): DecorationSet {
     if (sel.from <= block.to && sel.to >= block.from) continue
     ranges.push(
       Decoration.replace({
-        widget: new TableWidget(parseTable(block.lines), block.from),
+        widget: new TableWidget(parseTable(block.lines), block.from, block.to, block.lines),
         block: true,
       }).range(block.from, block.to),
     )

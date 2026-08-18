@@ -16,6 +16,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Table,
   X,
   ImagePlus,
   Images,
@@ -133,6 +134,9 @@ export default function EditorToolbar({
         </IconBtn>
         <IconBtn title={t('editorToolbar.codeBlock')} onClick={() => insertAtCursor('\n```\n\n```\n', { cursorOffset: 5 })}>
           <Code className="w-[15px] h-[15px]" strokeWidth={1.75} />
+        </IconBtn>
+        <IconBtn title={t('editorToolbar.insertTable')} onClick={() => editorRef.current?.insertTable()}>
+          <Table className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
         <ToolbarDivider />
         <IconBtn title={t('editorToolbar.bold', { shortcut: shortcutLabel(['mod', 'B']) })} onClick={() => wrapSelection('**')}>

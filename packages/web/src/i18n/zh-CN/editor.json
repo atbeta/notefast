@@ -44,6 +44,7 @@
     "orderedList": "有序列表 (1.)",
     "quote": "引用 (>)",
     "codeBlock": "代码块 (```)",
+    "insertTable": "插入表格",
     "bold": "加粗 ({{shortcut}})",
     "italic": "斜体 ({{shortcut}})",
     "inlineCode": "行内代码 ({{shortcut}})",
@@ -113,6 +114,19 @@
     "generating": "生成中…",
     "stop": "停止",
     "refineFailed": "改写失败，请重试"
+  },
+  "tableEditor": {
+    "title": "编辑表格",
+    "done": "完成",
+    "editSource": "编辑源码",
+    "addRow": "添加行",
+    "addCol": "添加列",
+    "deleteRow": "删除此行",
+    "deleteCol": "删除此列",
+    "headerCell": "表头第 {{n}} 列",
+    "bodyCell": "第 {{row}} 行第 {{col}} 列",
+    "markdownHint": "单元格按 Markdown 原文编辑（如 **粗体**）",
+    "open": "编辑表格"
   },
   "share": {
     "expiryText": "{{date}} 失效（还剩 {{days}} 天）",

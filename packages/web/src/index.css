@@ -862,13 +862,17 @@ html.theme-fading *::after {
   color: rgb(var(--muted-foreground) / 0.6);
 }
 
-/* 表格块内联预览（光标在块内时回退源码） */
+/* 表格块内联预览（点击打开网格编辑；光标在块内时回退源码） */
 .cm-table-preview {
   margin: 6px 0;
   overflow-x: auto;
   border: 1px solid rgb(var(--border));
   border-radius: 8px;
-  cursor: text;
+  cursor: pointer;
+}
+.cm-table-preview:hover {
+  border-color: rgb(var(--border) / 0.9);
+  box-shadow: 0 0 0 1px rgb(var(--primary) / 0.18);
 }
 .cm-table-preview table {
   width: 100%;
@@ -908,6 +912,101 @@ html.theme-fading *::after {
   max-height: 40px;
   border-radius: 4px;
   vertical-align: middle;
+}
+
+/* 外挂表格编辑网格：视觉对齐阅读态 TableBlock，单元格无独立边框 */
+.nf-table-editor-grid {
+  overflow: auto;
+  border: 1px solid rgb(var(--border));
+  border-radius: 8px;
+}
+.nf-table-editor-grid table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.nf-table-editor-grid th,
+.nf-table-editor-grid td {
+  position: relative;
+  padding: 0;
+  vertical-align: top;
+  border-bottom: 1px solid rgb(var(--border) / 0.55);
+  border-right: 1px solid rgb(var(--border) / 0.4);
+}
+.nf-table-editor-grid thead th {
+  background: rgb(var(--muted) / 0.5);
+}
+.nf-table-editor-grid tbody tr:hover td:not(.nf-table-editor-gutter) {
+  background: rgb(var(--muted) / 0.28);
+}
+.nf-table-editor-grid tbody tr:last-child th,
+.nf-table-editor-grid tbody tr:last-child td {
+  border-bottom: none;
+}
+.nf-table-editor-grid .nf-table-editor-gutter {
+  width: 36px;
+  min-width: 36px;
+  border-right: none;
+  background: transparent;
+  vertical-align: middle;
+}
+.nf-table-editor-grid thead .nf-table-editor-gutter {
+  background: rgb(var(--muted) / 0.35);
+}
+.nf-table-editor-grid textarea {
+  display: block;
+  width: 100%;
+  min-height: 2.5rem;
+  resize: none;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: inherit;
+  font-family: inherit;
+  field-sizing: content;
+}
+.nf-table-editor-grid thead textarea {
+  font-weight: 600;
+  padding-right: 28px;
+}
+.nf-table-editor-grid textarea:focus {
+  outline: none;
+  background: rgb(var(--primary) / 0.07);
+  box-shadow: inset 0 0 0 1px rgb(var(--primary) / 0.4);
+}
+.nf-table-editor-grid .nf-table-editor-del {
+  opacity: 0;
+  pointer-events: none;
+}
+.nf-table-editor-grid th:hover .nf-table-editor-del,
+.nf-table-editor-grid th:focus-within .nf-table-editor-del,
+.nf-table-editor-grid tr:hover .nf-table-editor-del,
+.nf-table-editor-grid tr:focus-within .nf-table-editor-del,
+.nf-table-editor-grid .nf-table-editor-del:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.nf-table-editor-add {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  color: rgb(var(--muted-foreground));
+  font-size: 12.5px;
+  font-weight: 500;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.nf-table-editor-add:hover {
+  color: rgb(var(--foreground));
+  background: rgb(var(--muted) / 0.4);
 }
 
 /* 块级公式内联预览（```math 围栏；光标在块内时回退源码），居中/overflow-x 对齐阅读态 MathBlock */
