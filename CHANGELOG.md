@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.71.1](https://github.com/atbeta/notefast/compare/v0.71.0...v0.71.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* **web:** rework mermaid zoom to real layout sizing (scrollable canvas) ([5cdd905](https://github.com/atbeta/notefast/commit/5cdd905140c8dbef3db45baeb30ae1bcaeed1c7f))
+
 ## [0.71.0](https://github.com/atbeta/notefast/compare/v0.70.0...v0.71.0) (2026-08-19)
 
 
