@@ -24,7 +24,12 @@
   "tagFilter": {
     "tagMatchMode": "标签匹配方式",
     "matchAll": "同时包含",
-    "matchAny": "包含任一"
+    "matchAny": "包含任一",
+    "matchHint": "切换同时包含 / 包含任一",
+    "expandTags": "展开全部标签",
+    "collapseTags": "收起标签",
+    "chipHint": "单击只看此项 · ⌘/Ctrl 加选",
+    "chipHintSelected": "单击取消此项"
   },
   "docList": {
     "untitled": "未命名文档",

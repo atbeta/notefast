@@ -23,8 +23,13 @@
   },
   "tagFilter": {
     "tagMatchMode": "Tag matching mode",
-    "matchAll": "All",
-    "matchAny": "Any"
+    "matchAll": "Match all",
+    "matchAny": "Match any",
+    "matchHint": "Toggle match all / match any",
+    "expandTags": "Show all tags",
+    "collapseTags": "Show fewer tags",
+    "chipHint": "Click to filter this tag · ⌘/Ctrl to add",
+    "chipHintSelected": "Click to remove this tag"
   },
   "docList": {
     "untitled": "Untitled document",

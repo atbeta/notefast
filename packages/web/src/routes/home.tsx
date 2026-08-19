@@ -2,7 +2,6 @@ import { useEffect, useCallback, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, FileText, Clock, Tag, Star } from 'lucide-react'
-import { parseTagMatchMode } from '@notefast/core'
 import i18next from '../i18n'
 import { api } from '../hooks/useAPI'
 import { usePagedDocList } from '../hooks/usePagedDocList'
@@ -10,7 +9,7 @@ import { useDocChanges } from '../hooks/useDocEvents'
 import { usePinnedViews } from '../hooks/usePinnedViews'
 import DocList from '../components/DocList'
 import PageHeader from '../components/PageHeader'
-import TagFilter from '../components/TagFilter'
+import TagFilter, { TagMatchHint } from '../components/TagFilter'
 import { ListRowsSkeleton, Tooltip } from '../components/ui'
 
 function viewTitle(params: URLSearchParams): string {
@@ -38,9 +37,8 @@ function viewTitle(params: URLSearchParams): string {
   if (tags) {
     const parts = tags.split(',').filter(Boolean)
     if (parts.length >= 2) {
-      const mode = parseTagMatchMode(params.get('tag_match'))
-      const suffix = mode === 'any' ? i18next.t('home.tagMatchAnySuffix') : i18next.t('home.tagMatchAllSuffix')
-      return i18next.t('home.tagsTitle', { mode: suffix, tags })
+      // 交/并改由标题旁 TagMatchHint 表达，避免和 chip 行开关重复
+      return i18next.t('home.tagsTitle', { mode: '', tags })
     }
     return i18next.t('home.tagsTitleSimple', { tags })
   }
@@ -130,6 +128,7 @@ export default function HomePage() {
           <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
             {title}
           </h1>
+          <TagMatchHint />
           {hasFilter && (
             <Tooltip label={t('home.pinTitle')}>
               <button
