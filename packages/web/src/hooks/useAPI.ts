@@ -124,6 +124,21 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json()
 }
 
+/** GET JSON，并读取列表分页头 X-Next-Cursor（加法分页，响应体仍是数组） */
+export async function getJsonWithCursor<T>(path: string, options?: RequestInit): Promise<{ data: T; nextCursor: string | null }> {
+  const res = await fetchWithAuth(path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options?.headers ?? {}) },
+  })
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => null)
+    const message = (body as { message?: string } | null)?.message || res.statusText || i18next.t('common.httpError', { status: res.status })
+    throw new ApiError(message, res.status, body)
+  }
+  const data = (await res.json()) as T
+  return { data, nextCursor: res.headers.get('X-Next-Cursor') }
+}
+
 export const api = {
   get: <T>(path: string, options?: RequestInit) => request<T>(path, options),
   post: <T>(path: string, body: unknown, options?: RequestInit) =>

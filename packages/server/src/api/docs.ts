@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, updateDocStatusSchema, rowToBlock, readTags, readAiExclude, readDocStatus, isDocInbox, isDocArchived, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, parseDocStatusFilter, docMatchesTags, parseCreatedWithin, parseStaleWithin } from '@notefast/core'
+import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, updateDocStatusSchema, rowToBlock, readTags, readAiExclude, readDocStatus, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, parseDocStatusFilter, parseCreatedWithin, parseStaleWithin } from '@notefast/core'
 import type { DocSummary } from '@notefast/core'
 import { getDb } from '../db'
 import {
@@ -14,6 +14,9 @@ import {
   getDocNeighbors,
   getBlocksByIds,
   listDocRows,
+  decodeDocListCursor,
+  encodeDocListCursor,
+  msToSqliteTime,
   updateBlock,
   softDeleteBlocks,
   listDocRevisions,
@@ -48,58 +51,43 @@ docs.get('/list', (c) => {
   const untagged = c.req.query('untagged') === '1' || c.req.query('untagged') === 'true'
   const withinMs = parseUpdatedWithin(c.req.query('updated_within'))
   const statusFilter = parseDocStatusFilter(c.req.query('status'))
-
-  let rows = listDocRows(db, { notebookId: notebookId || undefined })
-
-  // 生命周期：默认只列正式笔记（排除收集箱与归档）；status=inbox/archived 只列对应集合；all 不过滤
-  if (statusFilter === 'inbox') {
-    rows = rows.filter((r) => isDocInbox(r))
-  } else if (statusFilter === 'archived') {
-    rows = rows.filter((r) => isDocArchived(r))
-  } else if (statusFilter === 'note') {
-    rows = rows.filter((r) => readDocStatus(r) === 'note')
-  }
-
-  // 标签 / 时间过滤在 Node 端做（文档量小，不值得加 SQL JSON 函数）
-  if (untagged) {
-    rows = rows.filter((r) => readTags(r).length === 0)
-  } else if (selectedTags.length > 0) {
-    rows = rows.filter((r) => docMatchesTags(readTags(r), selectedTags, tagMatch))
-  }
-
-  if (withinMs != null) {
-    const cutoff = Date.now() - withinMs
-    rows = rows.filter((r) => {
-      const ts = new Date(r.updated_at).getTime()
-      return Number.isFinite(ts) && ts >= cutoff
-    })
-  }
+  const idsRaw = (c.req.query('ids') || '').trim()
+  const docIds = idsRaw
+    ? idsRaw.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 100)
+    : undefined
+  const limitRaw = c.req.query('limit')
+  const limitParsed = limitRaw != null && limitRaw !== '' ? Number.parseInt(limitRaw, 10) : NaN
+  const pageSize = Number.isFinite(limitParsed) && limitParsed > 0 ? Math.min(limitParsed, 200) : undefined
+  const cursor = decodeDocListCursor(c.req.query('cursor') || '')
 
   const createdMs = parseCreatedWithin(c.req.query('created_within'))
-  if (createdMs != null) {
-    const cutoff = Date.now() - createdMs
-    rows = rows.filter((r) => {
-      const ts = new Date(r.created_at).getTime()
-      return Number.isFinite(ts) && ts >= cutoff
-    })
-  }
-
   const staleMs = parseStaleWithin(c.req.query('stale_within'))
-  if (staleMs != null) {
-    const cutoff = Date.now() - staleMs
-    rows = rows.filter((r) => {
-      const ts = new Date(r.updated_at).getTime()
-      return Number.isFinite(ts) && ts <= cutoff
-    })
-  }
 
-  if (c.req.query('ai_exclude') === '1') {
-    rows = rows.filter((r) => readAiExclude(r))
+  const rows = listDocRows(db, {
+    notebookId: notebookId || undefined,
+    docIds: docIds && docIds.length > 0 ? docIds : undefined,
+    status: statusFilter,
+    untagged: untagged || undefined,
+    tags: !untagged && selectedTags.length > 0 ? selectedTags : undefined,
+    tagMatch,
+    aiExcludeOnly: c.req.query('ai_exclude') === '1' || undefined,
+    updatedAfter: withinMs != null ? msToSqliteTime(Date.now() - withinMs) : undefined,
+    updatedBefore: staleMs != null ? msToSqliteTime(Date.now() - staleMs) : undefined,
+    createdAfter: createdMs != null ? msToSqliteTime(Date.now() - createdMs) : undefined,
+    cursor: cursor ?? undefined,
+    limit: pageSize != null ? pageSize + 1 : undefined,
+  })
+
+  let page = rows
+  if (pageSize != null && rows.length > pageSize) {
+    const last = rows[pageSize - 1]!
+    page = rows.slice(0, pageSize)
+    c.header('X-Next-Cursor', encodeDocListCursor({ updatedAt: last.updated_at, rowid: last._rowid }))
   }
 
   const sharedDocIds = listSharedDocIds(db)
 
-  const summaries: DocSummary[] = rows.map((r) => {
+  const summaries: DocSummary[] = page.map((r) => {
     const tags = readTags(r)
     const aiExclude = readAiExclude(r)
     const status = readDocStatus(r)

@@ -13,7 +13,7 @@
  * autolink / assets / api_tokens 等自有表的 store。
  */
 
-import type { BlockRow, BlockRevision, DocSnapshot, DocRevisionEntry } from '@notefast/core'
+import type { BlockRow, BlockRevision, DocSnapshot, DocRevisionEntry, DocStatus, TagMatchMode } from '@notefast/core'
 import { buildBlockTree, blocksToMarkdown } from '@notefast/core'
 import type { getDb } from '../db'
 import { computeContentHash } from '../services/contentHash'
@@ -145,18 +145,67 @@ export function blockExists(db: Db, id: string): boolean {
 
 export interface ListDocRowsOptions {
   notebookId?: string
-  /** 限定文档 id 集合（sync 归档的选择性导出） */
+  /** 限定文档 id 集合（sync 归档的选择性导出 / 侧栏最近访问） */
   docIds?: string[]
   order?: 'updated_desc' | 'updated_asc'
   /** 默认 false：只列未删除文档。软删除文档不应出现在任何列表/导出中 */
   includeDeleted?: boolean
   /** SQL LIMIT；不设则全量 */
   limit?: number
+  /** 生命周期：默认不过滤（调用方决定）；note 排除 inbox/archived */
+  status?: DocStatus | 'all'
+  untagged?: boolean
+  tags?: string[]
+  tagMatch?: TagMatchMode
+  /** 只列 ai_exclude=1（REST ?ai_exclude=1） */
+  aiExcludeOnly?: boolean
+  /** 排除 ai_exclude（MCP 默认） */
+  excludeAiExclude?: boolean
+  /** sqlite 时间串：updated_at >= */
+  updatedAfter?: string
+  /** sqlite 时间串：updated_at <= */
+  updatedBefore?: string
+  createdAfter?: string
+  createdBefore?: string
+  /** 上一页最后一行（与 order 配套的 keyset） */
+  cursor?: DocListCursor
+}
+
+export interface DocListCursor {
+  updatedAt: string
+  rowid: number
+}
+
+export interface ListedDocRow extends BlockRow {
+  _rowid: number
+}
+
+export function encodeDocListCursor(c: DocListCursor): string {
+  return Buffer.from(`${c.updatedAt}\t${c.rowid}`, 'utf8').toString('base64url')
+}
+
+export function decodeDocListCursor(raw: string): DocListCursor | null {
+  try {
+    const s = Buffer.from(raw, 'base64url').toString('utf8')
+    const tab = s.lastIndexOf('\t')
+    if (tab <= 0) return null
+    const updatedAt = s.slice(0, tab)
+    const rowid = Number(s.slice(tab + 1))
+    if (!updatedAt || !Number.isSafeInteger(rowid)) return null
+    return { updatedAt, rowid }
+  } catch {
+    return null
+  }
+}
+
+/** JS Date.now() 毫秒 → 与 nowTimestamp 同格式，供时间过滤 SQL 比较 */
+export function msToSqliteTime(ms: number): string {
+  return new Date(ms).toISOString().replace('T', ' ').replace('Z', '')
 }
 
 /** 文档根行列表（type='document'）；过滤约定（is_deleted / 排序）统一在此 */
-export function listDocRows(db: Db, opts: ListDocRowsOptions = {}): BlockRow[] {
-  let sql = "SELECT * FROM blocks WHERE type = 'document'"
+export function listDocRows(db: Db, opts: ListDocRowsOptions = {}): ListedDocRow[] {
+  let sql = "SELECT blocks.*, blocks.rowid AS _rowid FROM blocks WHERE type = 'document'"
   const params: (string | number)[] = []
   if (!opts.includeDeleted) sql += ' AND is_deleted = 0'
   if (opts.notebookId) {
@@ -167,6 +216,47 @@ export function listDocRows(db: Db, opts: ListDocRowsOptions = {}): BlockRow[] {
     sql += ` AND id IN (${opts.docIds.map(() => '?').join(',')})`
     params.push(...opts.docIds)
   }
+  if (opts.status === 'inbox') sql += " AND status = 'inbox'"
+  else if (opts.status === 'archived') sql += " AND status = 'archived'"
+  else if (opts.status === 'note') sql += " AND status NOT IN ('inbox', 'archived')"
+  if (opts.untagged) {
+    sql += ' AND COALESCE(json_array_length(tags), 0) = 0'
+  } else if (opts.tags && opts.tags.length > 0) {
+    const placeholders = opts.tags.map(() => '?').join(',')
+    if ((opts.tagMatch ?? 'all') === 'any') {
+      sql += ` AND EXISTS (SELECT 1 FROM json_each(blocks.tags) WHERE value IN (${placeholders}))`
+    } else {
+      sql += ` AND (SELECT count(DISTINCT value) FROM json_each(blocks.tags) WHERE value IN (${placeholders})) = ?`
+    }
+    params.push(...opts.tags)
+    if ((opts.tagMatch ?? 'all') !== 'any') params.push(opts.tags.length)
+  }
+  if (opts.aiExcludeOnly) sql += ' AND ai_exclude = 1'
+  if (opts.excludeAiExclude) sql += ' AND ai_exclude = 0'
+  if (opts.updatedAfter) {
+    sql += ' AND updated_at >= ?'
+    params.push(opts.updatedAfter)
+  }
+  if (opts.updatedBefore) {
+    sql += ' AND updated_at <= ?'
+    params.push(opts.updatedBefore)
+  }
+  if (opts.createdAfter) {
+    sql += ' AND created_at >= ?'
+    params.push(opts.createdAfter)
+  }
+  if (opts.createdBefore) {
+    sql += ' AND created_at <= ?'
+    params.push(opts.createdBefore)
+  }
+  if (opts.cursor) {
+    if (opts.order === 'updated_asc') {
+      sql += ' AND (updated_at > ? OR (updated_at = ? AND rowid > ?))'
+    } else {
+      sql += ' AND (updated_at < ? OR (updated_at = ? AND rowid < ?))'
+    }
+    params.push(opts.cursor.updatedAt, opts.cursor.updatedAt, opts.cursor.rowid)
+  }
   // updated_at 为毫秒精度，同毫秒碰撞概率极低；仍补 rowid 稳定决胜：
   // ASC = 按入库顺序（归档导出确定性），DESC = 后入库在前（列表「最近更新」语义）
   sql += opts.order === 'updated_asc'
@@ -176,7 +266,7 @@ export function listDocRows(db: Db, opts: ListDocRowsOptions = {}): BlockRow[] {
     sql += ' LIMIT ?'
     params.push(opts.limit)
   }
-  return db.query(sql).all(...(params as [string, ...Array<string | number>])) as BlockRow[]
+  return db.query(sql).all(...(params as [string, ...Array<string | number>])) as ListedDocRow[]
 }
 
 /** 未删除文档计数（sync 归档的概要信息用） */

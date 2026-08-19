@@ -34,6 +34,7 @@ import {
   orderDocsByVisits,
   pruneVisitsNotIn,
   subscribeRecentVisits,
+  RECENT_VISITS_MAX,
 } from '../lib/recentVisits'
 import { isWindowZoomDoubleClickTarget, nativeToggleWindowZoom } from '../lib/nativeWindow'
 import type { DocSummary } from '@notefast/core'
@@ -246,8 +247,13 @@ export default function Sidebar({
    * 你刚打开过的仍能找到），再按足迹序裁剪。失败静默保留旧数据。
    */
   const { data: docList, refetch: refetchRecent } = useApiQuery(
-    () => (collapsed || !recentOpen ? new Promise<DocSummary[]>(() => {}) : api.get<DocSummary[]>('/docs/list?status=all')),
-    [collapsed, recentOpen],
+    () => {
+      if (collapsed || !recentOpen) return new Promise<DocSummary[]>(() => {})
+      if (visitIds.length === 0) return Promise.resolve([])
+      const ids = visitIds.slice(0, RECENT_VISITS_MAX).join(',')
+      return api.get<DocSummary[]>(`/docs/list?status=all&ids=${encodeURIComponent(ids)}`)
+    },
+    [collapsed, recentOpen, visitIds],
   )
 
   // 列表回来后清掉足迹里已不存在的 id（软删 / 换库残留）

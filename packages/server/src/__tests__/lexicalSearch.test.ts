@@ -107,6 +107,18 @@ describe('lexicalSearch — 中文召回（LIKE 路）', () => {
     expect(hits.some((h) => h.id === id)).toBe(true)
   })
 
+  test('bigram 候选过宽时 LIKE 校验挡住非子串命中', () => {
+    // 「向量数据库」的 bigram 是 向量/量数/数据/据库；四词拆开放进同一块
+    // 会过 gram 交集，但不是连续子串
+    seedBlock({ content: '向量 量数 数据 据库' })
+    const none = lexicalSearch('向量数据库', { limit: 10, strictOnly: true })
+    expect(none.length).toBe(0)
+
+    const { id } = seedBlock({ content: '聊聊向量数据库怎么选' })
+    const hits = lexicalSearch('向量数据库', { limit: 10, strictOnly: true })
+    expect(hits.some((h) => h.id === id)).toBe(true)
+  })
+
   test('问句前缀剥离：「什么是XXX」命中正文为「XXX是什么」的块', () => {
     // 用户场景：问「什么是KMP算法」文档写「KMP算法是什么」——整句子串匹配不到
     const { id } = seedBlock({ content: 'KMP算法是什么？一种字符串匹配算法' })

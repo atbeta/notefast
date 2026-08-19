@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next'
 import { Archive, ArchiveRestore, Loader2, Search } from 'lucide-react'
 import type { DocSummary, SearchResult } from '@notefast/core'
 import { api } from '../hooks/useAPI'
-import { useApiQuery } from '../hooks/useApiQuery'
+import { usePagedDocList } from '../hooks/usePagedDocList'
 import { useDocChanges } from '../hooks/useDocEvents'
 import { formatRelative } from '../lib/time'
 import DocActionsMenu from '../components/DocActionsMenu'
@@ -26,14 +26,9 @@ export default function ArchivedPage() {
   const [hits, setHits] = useState<SearchResult[] | null>(null)
   const [searching, setSearching] = useState(false)
 
-  const { data, loading, error, refetch } = useApiQuery(
-    () => api.get<DocSummary[]>('/docs/list?status=archived'),
-    [],
-  )
+  const { docs, loading, refetch, hasMore, loadingMore, loadMore } = usePagedDocList('/docs/list?status=archived')
   // 外部通道（MCP / AI 聊天）归档或恢复时即时刷新
   useDocChanges(() => refetch())
-  // 原 .catch(() => setDocs([])) 语义：拉取失败按空列表渲染（空归档 UI）
-  const docs = error ? [] : (data ?? [])
 
   // 内容级搜索（FTS，限归档集合），300ms 防抖；清空关键词回到全量列表
   useEffect(() => {
@@ -187,6 +182,18 @@ export default function ArchivedPage() {
             ) : (
               <div className="grid gap-0.5">
                 {docs.map((doc) => renderDocRow(doc))}
+              </div>
+            )}
+            {!matchedDocs && hasMore && (
+              <div className="pt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="text-[13px] text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
+                >
+                  {loadingMore ? t('home.loadingMore') : t('home.loadMore')}
+                </button>
               </div>
             )}
           </>

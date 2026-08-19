@@ -19,6 +19,7 @@ import * as m017 from './017_app_logs'
 import * as m018 from './018_entity_index_state'
 import * as m019 from './019_assets_filename'
 import * as m020 from './020_fts_rowid_map'
+import * as m021 from './021_cjk_bigram_index'
 
 interface Migration {
   id: string
@@ -28,7 +29,7 @@ interface Migration {
 }
 
 /** 唯一基线迁移。历史 002-010 已合并到此。 */
-const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012, m013, m014, m015, m016, m017, m018, m019, m020]
+const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012, m013, m014, m015, m016, m017, m018, m019, m020, m021]
 
 export function runMigrations(db: Database): { applied: string[]; skipped: string[] } {
   db.exec(`

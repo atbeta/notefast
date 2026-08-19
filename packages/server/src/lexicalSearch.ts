@@ -8,7 +8,9 @@
  *
  *   - FTS 路：仅当查询含 ASCII term 时运行（加引号 AND），bm25 排序
  *   - LIKE 严格路：所有 term 子串 AND（SQLite LIKE 对 ASCII 不区分大小写），
- *     排序权重：整句命中(100) > 命中 term 数(10/个) > 标题命中(1)
+ *     排序权重：整句命中(100) > 命中 term 数(10/个) > 标题命中(1)。
+ *     含纯 CJK 组时先用 block_cjk_grams bigram 交集缩小候选，再 LIKE 校验
+ *     （bigram AND ≠ 子串，必须校验；trigram tokenizer 因 2 字死区不可用）。
  *   - LIKE 降级路：严格路零结果且 strictOnly=false 时，term OR + 命中数排序
  *   - 合并：LIKE 路在前（CJK 召回主力），FTS 路按 bm25 顺序补充未出现的 id
  *   - 实体词典（term-dict）：term 命中词典别名/标准名 → 组内 OR 展开
@@ -25,6 +27,7 @@ import { fullToHalfWidth, halfToFullPunct } from '@notefast/core'
 import { getDb } from './db'
 import { runFtsQuery } from './dbQueries'
 import { expandDictTerm } from './termDict'
+import { CJK_CHAR_RE as CJK_RE, cjkNgramPrefilter } from './cjkNgrams'
 
 export interface LexicalHit {
   id: string
@@ -70,9 +73,6 @@ export interface LexicalSearchOptions {
    */
   sentence?: string
 }
-
-/** CJK 统一表意文字基本区：含任一即视为 CJK term（FTS 帮不上忙，走 LIKE） */
-const CJK_RE = /[一-鿿]/
 
 /**
  * CJK 问句常见前缀（按长度降序，先剥长前缀）。
@@ -202,6 +202,12 @@ function runLikePath(
   const joiner = orMode ? ' OR ' : ' AND '
   sql += ` AND (${groups.map((g) => groupLikeCond('b.content', g)).join(joiner)})`
   for (const g of groups) params.push(...groupLikeParams(g))
+
+  const ngram = cjkNgramPrefilter(groups.map(groupForms), orMode)
+  if (ngram) {
+    sql += ` AND (${ngram.sql})`
+    params.push(...ngram.params)
+  }
 
   if (opts.notebookId) {
     sql += ' AND b.notebook_id = ?'

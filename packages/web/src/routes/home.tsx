@@ -2,11 +2,10 @@ import { useEffect, useCallback, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, FileText, Clock, Tag, Star } from 'lucide-react'
-import type { DocSummary } from '@notefast/core'
 import { parseTagMatchMode } from '@notefast/core'
 import i18next from '../i18n'
 import { api } from '../hooks/useAPI'
-import { useApiQuery } from '../hooks/useApiQuery'
+import { usePagedDocList } from '../hooks/usePagedDocList'
 import { useDocChanges } from '../hooks/useDocEvents'
 import { usePinnedViews } from '../hooks/usePinnedViews'
 import DocList from '../components/DocList'
@@ -113,11 +112,7 @@ export default function HomePage() {
   const viewKind: 'all' | 'tag' | 'other' =
     !hasFilter ? 'all' : searchParams.get('tags') || searchParams.get('tag') ? 'tag' : 'other'
 
-  const { data, loading, error, refetch } = useApiQuery(
-    () => api.get<DocSummary[]>(`/docs/list${listQuery}`),
-    [listQuery],
-  )
-  const docs = data ?? []
+  const { docs, loading, error, refetch, hasMore, loadingMore, loadMore } = usePagedDocList(`/docs/list${listQuery}`)
   // 原 .catch(console.error) 语义：失败只打日志，列表保留旧数据
   useEffect(() => {
     if (error) console.error(error)
@@ -148,7 +143,7 @@ export default function HomePage() {
           )}
           {!loading && docs.length > 0 && (
             <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
-              {docs.length}
+              {docs.length}{hasMore ? '+' : ''}
             </span>
           )}
         </div>
@@ -163,7 +158,21 @@ export default function HomePage() {
           ) : docs.length === 0 ? (
             <EmptyState onCreate={goNew} title={title} kind={viewKind} />
           ) : (
+            <>
             <DocList docs={docs} onRefresh={handleRefresh} />
+            {hasMore && (
+              <div className="pt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="text-[13px] text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
+                >
+                  {loadingMore ? t('home.loadingMore') : t('home.loadMore')}
+                </button>
+              </div>
+            )}
+            </>
           )}
         </section>
       </div>

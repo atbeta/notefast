@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { CURRENT_SCHEMA_VERSION } from '@notefast/core'
 import { initDb, closeDb, getDb, getSchemaVersion } from '../db'
 import { nowTimestamp, updateBlock, getBlockById } from '../store/blocks'
+import { extractCjkBigrams } from '../cjkNgrams'
 
 let testDir: string
 let notebookId: string
@@ -117,6 +118,32 @@ describe('FTS 触发器', () => {
     db.query('UPDATE blocks SET content = ? WHERE id = ?').run('mapped fts updated', id)
     const fts = db.query('SELECT content FROM blocks_fts WHERE id = ?').get(id) as { content: string }
     expect(fts.content).toBe('mapped fts updated')
+  })
+})
+
+describe('CJK bigram 触发器', () => {
+  test('INSERT / UPDATE / DELETE 同步 block_cjk_grams', () => {
+    const db = getDb()
+    const id = crypto.randomUUID()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level)
+       VALUES (?, ?, NULL, ?, 'paragraph', ?, 0, 0)`,
+    ).run(id, notebookId, id, '向量数据库怎么选')
+
+    const inserted = db
+      .query('SELECT gram FROM block_cjk_grams WHERE block_id = ?')
+      .all(id) as Array<{ gram: string }>
+    expect(new Set(inserted.map((r) => r.gram))).toEqual(new Set(extractCjkBigrams('向量数据库怎么选')))
+
+    db.query('UPDATE blocks SET content = ? WHERE id = ?').run('笔记软件', id)
+    const updated = db
+      .query('SELECT gram FROM block_cjk_grams WHERE block_id = ?')
+      .all(id) as Array<{ gram: string }>
+    expect(new Set(updated.map((r) => r.gram))).toEqual(new Set(extractCjkBigrams('笔记软件')))
+
+    db.query('DELETE FROM blocks WHERE id = ?').run(id)
+    const left = db.query('SELECT 1 FROM block_cjk_grams WHERE block_id = ?').get(id)
+    expect(left).toBeNull()
   })
 })
 

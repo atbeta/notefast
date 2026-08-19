@@ -292,6 +292,49 @@ describe('Documents API', () => {
     expect(row?.tags).toContain('work')
   })
 
+  test('GET /api/v1/docs/list?limit= 分页；无 limit 仍全量；ids 过滤', async () => {
+    const { body: a } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '分页甲' })
+    const { body: b } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '分页乙' })
+    const { body: c } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '分页丙' })
+
+    const full = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}&status=all`)
+    expect(full.status).toBe(200)
+    const fullIds = (full.body as Array<{ id: string }>).map((d) => d.id)
+    expect(fullIds).toContain(a.id)
+    expect(fullIds).toContain(b.id)
+    expect(fullIds).toContain(c.id)
+
+    const pageRes = await app.fetch(
+      new Request(`http://localhost/api/v1/docs/list?notebook_id=${notebookId}&status=all&limit=2`),
+    )
+    expect(pageRes.status).toBe(200)
+    const page = (await pageRes.json()) as Array<{ id: string }>
+    expect(page.length).toBe(2)
+    const cursor = pageRes.headers.get('X-Next-Cursor')
+    expect(cursor).toBeTruthy()
+
+    const page2Res = await app.fetch(
+      new Request(
+        `http://localhost/api/v1/docs/list?notebook_id=${notebookId}&status=all&limit=2&cursor=${encodeURIComponent(cursor!)}`,
+      ),
+    )
+    const page2 = (await page2Res.json()) as Array<{ id: string }>
+    expect(page2.length).toBeGreaterThan(0)
+    const overlap = page2.filter((d) => page.some((p) => p.id === d.id))
+    expect(overlap).toEqual([])
+
+    const byIds = await api(
+      'GET',
+      `/api/v1/docs/list?status=all&ids=${encodeURIComponent(`${a.id},${c.id},deadbeef`)}`,
+    )
+    expect(byIds.status).toBe(200)
+    const idSet = new Set((byIds.body as Array<{ id: string }>).map((d) => d.id))
+    expect(idSet.has(a.id)).toBe(true)
+    expect(idSet.has(c.id)).toBe(true)
+    expect(idSet.has(b.id)).toBe(false)
+    expect(idSet.size).toBe(2)
+  })
+
   test('GET /api/v1/docs/list 带 shared 标记（仅有效分享；关闭后消失）', async () => {
     const { body: d1 } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '待分享文档' })
     const { body: d2 } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '未分享文档' })

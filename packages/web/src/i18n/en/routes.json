@@ -29,7 +29,9 @@
     "emptyAllTitle": "No documents here yet",
     "emptyFilteredTitle": "No documents for “{{title}}”",
     "emptyAllDesc": "Click the button below to create your first Markdown document. To import an existing file, use the Import tab — one .md / .txt / .zip / .docx at a time. Zip local images with the document.",
-    "emptyFilteredDesc": "Try a different smart view, or create a new document."
+    "emptyFilteredDesc": "Try a different smart view, or create a new document.",
+    "loadMore": "Load more",
+    "loadingMore": "Loading…"
   },
   "inbox": {
     "title": "Inbox",

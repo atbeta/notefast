@@ -11,6 +11,7 @@ import { Inbox, Plus, ArrowUpRight, Loader2 } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
+import { usePagedDocList } from '../hooks/usePagedDocList'
 import { useDocChanges } from '../hooks/useDocEvents'
 import { formatRelative, currentLocale } from '../lib/time'
 import DocActionsMenu from '../components/DocActionsMenu'
@@ -27,12 +28,7 @@ export default function InboxPage() {
   const [showCapture, setShowCapture] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
 
-  const { data, loading, error, refetch } = useApiQuery(
-    () => api.get<DocSummary[]>('/docs/list?status=inbox'),
-    [],
-  )
-  // 原 .catch(() => setDocs([])) 语义：拉取失败按空列表渲染（空收集箱 UI）
-  const docs = error ? [] : (data ?? [])
+  const { docs, loading, error, refetch, hasMore, loadingMore, loadMore } = usePagedDocList('/docs/list?status=inbox')
 
   // 外部 MCP / AI 聊天等任何通道写入 → 即时刷新列表（对齐 archived 页）
   useDocChanges(() => refetch())
@@ -195,6 +191,18 @@ export default function InboxPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+        {hasMore && !error && docs.length > 0 && (
+          <div className="pt-2 flex justify-center">
+            <button
+              type="button"
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="text-[13px] text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
+            >
+              {loadingMore ? t('home.loadingMore') : t('home.loadMore')}
+            </button>
           </div>
         )}
       </div>

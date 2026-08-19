@@ -13,6 +13,7 @@ import {
   parseDocStatusFilter,
   parseTagMatchMode,
   parseTagsQueryParam,
+  parseUpdatedWithin,
   readDocStatus,
   readTags,
   rowToBlock,
@@ -39,6 +40,7 @@ import {
   insertBlock,
   listDocRows,
   listRecentlyDeletedBlocks,
+  msToSqliteTime,
   nowTimestamp,
   restoreBlocks,
   softDeleteBlocks,
@@ -58,7 +60,6 @@ import { isDocRowAiExcluded } from '../../ai/aiExcludeQuery'
 import {
   denyAiExcludedBlock,
   denyAiExcludedDoc,
-  filterDocRowsForMcp,
   toText,
   toolError,
   validateNotebook,
@@ -296,26 +297,32 @@ export function registerDocWriteTools(ctx: ToolContext): void {
         untagged: z.boolean().optional().describe('仅未打标文档'),
         updated_within: z.enum(['24h', '7d']).optional().describe('仅最近更新的文档'),
         status: z.enum(['note', 'inbox', 'archived', 'all']).optional().describe('note=正式笔记（默认）；inbox=收集箱；archived=归档；all=全部'),
+        limit: z.number().int().min(1).max(500).optional().describe('最多返回条数，默认 100'),
       },
     },
-    async ({ notebook_id, tags, tag_match, untagged, updated_within, status }) => {
+    async ({ notebook_id, tags, tag_match, untagged, updated_within, status, limit }) => {
       const nid = notebook_id || notebookId
+      const pageSize = limit ?? 100
 
-      const rows = listDocRows(db, { notebookId: nid })
-
-      const filtered = filterDocRowsForMcp(rows, {
-        tags: parseTagsQueryParam(tags),
-        tagMatch: parseTagMatchMode(tag_match),
-        untagged: untagged === true,
-        updatedWithin: updated_within ?? null,
+      const rows = listDocRows(db, {
+        notebookId: nid,
         status: parseDocStatusFilter(status),
+        untagged: untagged === true || undefined,
+        tags: untagged ? undefined : parseTagsQueryParam(tags),
+        tagMatch: parseTagMatchMode(tag_match),
+        excludeAiExclude: true,
+        updatedAfter: updated_within
+          ? msToSqliteTime(Date.now() - (parseUpdatedWithin(updated_within) ?? 0))
+          : undefined,
+        limit: pageSize,
       })
 
       return {
         content: [toText({
           notebook_id: nid,
-          doc_count: filtered.length,
-          docs: filtered.map((r) => ({
+          doc_count: rows.length,
+          truncated: rows.length >= pageSize,
+          docs: rows.map((r) => ({
             id: r.id,
             title: r.content,
             created_at: r.created_at,

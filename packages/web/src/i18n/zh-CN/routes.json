@@ -29,7 +29,9 @@
     "emptyAllTitle": "这里还没有文档",
     "emptyFilteredTitle": "「{{title}}」暂无文档",
     "emptyAllDesc": "点一下下方按钮，新建你的第一篇 Markdown 文档。已有文件请到「导入」页拖入单个 .md / .txt / .zip / .docx；含本地图片请打成 zip。",
-    "emptyFilteredDesc": "试试切换其他智能视图，或新建一篇文档。"
+    "emptyFilteredDesc": "试试切换其他智能视图，或新建一篇文档。",
+    "loadMore": "加载更多",
+    "loadingMore": "加载中…"
   },
   "inbox": {
     "title": "收集箱",
