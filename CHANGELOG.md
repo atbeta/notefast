@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.71.2](https://github.com/atbeta/notefast/compare/v0.71.1...v0.71.2) (2026-08-19)
+
+
+### Bug Fixes
+
+* **web:** mermaid lightbox — true centering, second-open fit, ctrl-wheel zoom, drag pan ([7a857ba](https://github.com/atbeta/notefast/commit/7a857badbdc72b8d85bba4b82761a4f8cb86d60e))
+* **web:** related tab — abort in-flight requests on doc switch, keep prior items visible ([5481598](https://github.com/atbeta/notefast/commit/54815987ab1041ed999f056d3088e0d66d0b9b09))
+
+
+### Performance Improvements
+
+* **server:** related docs endpoint — skip entity + graph_context channels ([9420ed9](https://github.com/atbeta/notefast/commit/9420ed961ef50cf9c2111fd1c477ae41c567e39d))
+
 ## [0.71.1](https://github.com/atbeta/notefast/compare/v0.71.0...v0.71.1) (2026-08-19)
 
 
