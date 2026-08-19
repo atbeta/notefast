@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.73.0](https://github.com/atbeta/notefast/compare/v0.72.0...v0.73.0) (2026-08-19)
+
+
+### Features
+
+* **web:** split visit history from sequential doc paging ([c9c6cc5](https://github.com/atbeta/notefast/commit/c9c6cc5b4d8a7da37f9c484c71ef397e3b9b2200))
+
+
+### Bug Fixes
+
+* **ai:** make inbox/archive/weekly skills call list+read tools ([8554184](https://github.com/atbeta/notefast/commit/85541840fcf51d9951a446b7f09913142cc0e5db))
+* **web:** show chat citations after the answer, as small marks ([780dbaa](https://github.com/atbeta/notefast/commit/780dbaa29ce20a7b64812790d8acc026c6ed7e9e))
+* **web:** show one command-palette hit per document ([ad24996](https://github.com/atbeta/notefast/commit/ad24996742949fc5d091c749160799484fbbe3a8))
+
 ## [0.72.0](https://github.com/atbeta/notefast/compare/v0.71.2...v0.72.0) (2026-08-19)
 
 
