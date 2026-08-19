@@ -16,40 +16,23 @@
  */
 
 import { Hono } from 'hono'
-import {
-  type TagInfo,
-  getTagProvider,
-  readTags,
-  readDocStatus,
-  isDocArchived,
-} from '@notefast/core'
+import type { TagInfo } from '@notefast/core'
+import { getTagProvider } from '@notefast/core'
 import { getDb } from '../db'
-import { listDocRows } from '../store/blocks'
+import { listDocTagCounts } from '../store/blocks'
 
 const tags = new Hono()
 
 /** GET /api/v1/tags —— 列 notebook 下所有 tag + count（默认仅正式笔记：不含收集箱与归档） */
 tags.get('/', (c) => {
-  const db = getDb()
   const notebookId = c.req.query('notebook_id') || ''
   const includeInbox = c.req.query('include_inbox') === '1' || c.req.query('include_inbox') === 'true'
   const providerName = getTagProvider().name
-
-  let rows = listDocRows(db, { notebookId: notebookId || undefined })
-
-  // 归档一律不进 tags 聚合；include_inbox=1 仅放开收集箱
-  rows = rows.filter((r) => (includeInbox ? !isDocArchived(r) : readDocStatus(r) === 'note'))
-
-  const counts = new Map<string, number>()
-  for (const r of rows) {
-    const ts = readTags(r)
-    for (const t of ts) counts.set(t, (counts.get(t) ?? 0) + 1)
-  }
-
-  const result: TagInfo[] = Array.from(counts.entries())
-    .map(([tag, count]) => ({ tag, count }))
-    .sort((a, b) => (b.count - a.count) || a.tag.localeCompare(b.tag))
-
+  const rows = listDocTagCounts(getDb(), {
+    notebookId: notebookId || undefined,
+    includeInbox,
+  })
+  const result: TagInfo[] = rows.map(({ tag, count }) => ({ tag, count }))
   return c.json({ provider: providerName, tags: result })
 })
 

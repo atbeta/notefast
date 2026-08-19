@@ -45,12 +45,10 @@ export function getShareByDocId(db: Db, docId: string): ShareRow | null {
   return validOrCleanup(db, row)
 }
 
-/**
- * 批量列出当前有效分享的 doc_id 集合（供文档列表打「已分享」标记）。
- * 与单查路径同一语义：过期记录惰性清理后不返回。
- */
-export function listSharedDocIds(db: Db): Set<string> {
-  const rows = db.query('SELECT doc_id, expires_at FROM shares').all() as Array<{ doc_id: string; expires_at: string | null }>
+function collectValidShareIds(
+  db: Db,
+  rows: Array<{ doc_id: string; expires_at: string | null }>,
+): Set<string> {
   const now = nowTimestamp()
   const valid = new Set<string>()
   for (const r of rows) {
@@ -61,6 +59,28 @@ export function listSharedDocIds(db: Db): Set<string> {
     }
   }
   return valid
+}
+
+/**
+ * 批量列出当前有效分享的 doc_id 集合（供文档列表打「已分享」标记）。
+ * 与单查路径同一语义：过期记录惰性清理后不返回。
+ */
+export function listSharedDocIds(db: Db): Set<string> {
+  const rows = db.query('SELECT doc_id, expires_at FROM shares').all() as Array<{
+    doc_id: string
+    expires_at: string | null
+  }>
+  return collectValidShareIds(db, rows)
+}
+
+/** 只查本页文档的分享标记，避免列表接口扫全表 shares */
+export function listSharedDocIdsFor(db: Db, docIds: string[]): Set<string> {
+  if (docIds.length === 0) return new Set()
+  const placeholders = docIds.map(() => '?').join(',')
+  const rows = db
+    .query(`SELECT doc_id, expires_at FROM shares WHERE doc_id IN (${placeholders})`)
+    .all(...docIds) as Array<{ doc_id: string; expires_at: string | null }>
+  return collectValidShareIds(db, rows)
 }
 
 export function getShareByToken(db: Db, token: string): ShareRow | null {

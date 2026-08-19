@@ -14,6 +14,7 @@ import {
   getDocNeighbors,
   getBlocksByIds,
   listDocRows,
+  countLiveDocs,
   decodeDocListCursor,
   encodeDocListCursor,
   msToSqliteTime,
@@ -26,7 +27,7 @@ import {
 } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
-import { deleteShare, deleteSharesByDocIds, listSharedDocIds } from '../store/shares'
+import { deleteShare, deleteSharesByDocIds, listSharedDocIdsFor } from '../store/shares'
 import { insertDocFromMarkdown, insertChildBlocks, normalizeDocTags } from '../services/docImport'
 import { fireAfterCreate, fireAfterUpdate, fireAfterCreateMany, fireAfterDeleteMany, fireDocAfterCreate, fireDocAfterStatusChange, fireDocAfterTagChange, fireDocAfterDelete, auditDocAction } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
@@ -85,7 +86,7 @@ docs.get('/list', (c) => {
     c.header('X-Next-Cursor', encodeDocListCursor({ updatedAt: last.updated_at, rowid: last._rowid }))
   }
 
-  const sharedDocIds = listSharedDocIds(db)
+  const sharedDocIds = listSharedDocIdsFor(db, page.map((r) => r.id))
 
   const summaries: DocSummary[] = page.map((r) => {
     const tags = readTags(r)
@@ -135,25 +136,9 @@ docs.get('/tree', (c) => {
 // 必须先于 /:id 注册（'trash' 会被 :id 吞掉），整体提前到这里
 registerTrashRoutes(docs)
 
-/** 侧栏徽章计数：一次请求返回各集合文档数（与 /list 同谓词，Node 端统计） */
+/** 侧栏徽章计数：聚合 SQL，与 /list 同谓词 */
 docs.get('/counts', (c) => {
-  const db = getDb()
-  const rows = listDocRows(db, {})
-  let inbox = 0
-  let archived = 0
-  let untagged = 0
-  let aiExclude = 0
-  for (const r of rows) {
-    const status = readDocStatus(r)
-    if (status === 'inbox') inbox++
-    else if (status === 'archived') archived++
-    if (readTags(r).length === 0) untagged++
-    if (readAiExclude(r)) aiExclude++
-  }
-  const trashRow = db
-    .query("SELECT count(*) AS c FROM blocks WHERE type = 'document' AND is_deleted = 1")
-    .get() as { c: number }
-  return c.json({ inbox, archived, untagged, ai_exclude: aiExclude, trash: trashRow.c })
+  return c.json(countLiveDocs(getDb()))
 })
 
 /** 文档顺序导航：按 created_at 顺序的上一篇/下一篇（Obsidian 式箭头；单篇两侧 null） */

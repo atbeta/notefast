@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, unlinkSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
+import { listDocTagCounts } from '../store/blocks'
 import { createPluginSystem, type DocumentEventPayload } from '@notefast/core'
 import { initAiRuntime, _setRuntimeForTests } from '../services/aiRuntime'
 import docsRouter from '../api/docs'
@@ -388,6 +389,48 @@ describe('侧栏计数（GET /docs/counts）', () => {
     expect(after.trash - before.trash).toBe(1)            // C
     expect(after.ai_exclude - before.ai_exclude).toBe(1)  // D
     expect(after.untagged - before.untagged).toBe(2)      // B(inbox) + D(ai_exclude)；A 已打标签，C 在回收站
+  })
+})
+
+describe('标签聚合（listDocTagCounts）', () => {
+  test('默认不计收集箱/归档；includeInbox 只放开收集箱', async () => {
+    const note = await createDoc('标签聚合笔记')
+    const inbox = await createDoc('标签聚合收集')
+    const archived = await createDoc('标签聚合归档')
+    await app.request(`/docs/${note}/tags`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: ['work'] }),
+    })
+    await app.request(`/docs/${inbox}/tags`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: ['clip'] }),
+    })
+    await app.request(`/docs/${archived}/tags`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: ['old'] }),
+    })
+    await app.request(`/docs/${inbox}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'inbox' }),
+    })
+    await app.request(`/docs/${archived}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'archived' }),
+    })
+
+    const notesOnly = listDocTagCounts(getDb())
+    expect(notesOnly.find((t) => t.tag === 'work')?.count).toBeGreaterThanOrEqual(1)
+    expect(notesOnly.some((t) => t.tag === 'clip')).toBe(false)
+    expect(notesOnly.some((t) => t.tag === 'old')).toBe(false)
+
+    const withInbox = listDocTagCounts(getDb(), { includeInbox: true })
+    expect(withInbox.some((t) => t.tag === 'clip')).toBe(true)
+    expect(withInbox.some((t) => t.tag === 'old')).toBe(false)
   })
 })
 

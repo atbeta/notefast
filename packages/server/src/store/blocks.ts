@@ -277,6 +277,64 @@ export function countDocRows(db: Db): number {
   return row.c
 }
 
+export interface LiveDocCounts {
+  inbox: number
+  archived: number
+  untagged: number
+  ai_exclude: number
+  trash: number
+}
+
+/** 侧栏徽章：一条聚合 SQL，不再把全部文档根扫进 JS */
+export function countLiveDocs(db: Db): LiveDocCounts {
+  const live = db
+    .query(
+      `SELECT
+        COALESCE(SUM(CASE WHEN status = 'inbox' THEN 1 ELSE 0 END), 0) AS inbox,
+        COALESCE(SUM(CASE WHEN status = 'archived' THEN 1 ELSE 0 END), 0) AS archived,
+        COALESCE(SUM(CASE WHEN COALESCE(json_array_length(tags), 0) = 0 THEN 1 ELSE 0 END), 0) AS untagged,
+        COALESCE(SUM(CASE WHEN ai_exclude = 1 THEN 1 ELSE 0 END), 0) AS ai_exclude
+      FROM blocks
+      WHERE type = 'document' AND is_deleted = 0`,
+    )
+    .get() as LiveDocCounts
+  const trashRow = db
+    .query("SELECT count(*) AS c FROM blocks WHERE type = 'document' AND is_deleted = 1")
+    .get() as { c: number }
+  return {
+    inbox: live.inbox,
+    archived: live.archived,
+    untagged: live.untagged,
+    ai_exclude: live.ai_exclude,
+    trash: trashRow.c,
+  }
+}
+
+/** 首页标签云：json_each 聚合，不拉文档全文 */
+export function listDocTagCounts(
+  db: Db,
+  opts: { notebookId?: string; includeInbox?: boolean } = {},
+): Array<{ tag: string; count: number }> {
+  let sql = `
+    SELECT je.value AS tag, COUNT(*) AS count
+    FROM blocks
+    JOIN json_each(blocks.tags) AS je
+    WHERE blocks.type = 'document' AND blocks.is_deleted = 0
+      AND typeof(je.value) = 'text' AND length(je.value) > 0`
+  const params: string[] = []
+  if (opts.includeInbox) sql += " AND blocks.status != 'archived'"
+  else sql += " AND blocks.status NOT IN ('inbox', 'archived')"
+  if (opts.notebookId) {
+    sql += ' AND blocks.notebook_id = ?'
+    params.push(opts.notebookId)
+  }
+  sql += ' GROUP BY je.value'
+  const rows = (params.length > 0
+    ? db.query(sql).all(...params)
+    : db.query(sql).all()) as Array<{ tag: string; count: number }>
+  return rows.sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
+}
+
 /** 回收站：软删除文档根列表（updated_at = 删除时间，新删的在前） */
 export function listDeletedDocRows(db: Db): BlockRow[] {
   return db
