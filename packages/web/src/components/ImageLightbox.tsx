@@ -1,18 +1,25 @@
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 interface ImageLightboxProps {
   src: string
   alt?: string
   onClose: () => void
+  /**
+   * 可选：自定义内容替代 <img>（如 mermaid SVG 放大查看）。
+   * 传入时 src/alt 仅用于 aria-label，不渲染图片。
+   */
+  children?: ReactNode
 }
 
 /**
  * 图片放大查看（lightbox）：fixed 全屏遮罩 + 居中大图，点击遮罩/图片/关闭钮退出。
  * 与资源页预览同视觉语言（resources.tsx），供阅读页等任意图片场景复用。
+ * children 传入时渲染自定义内容（mermaid SVG 等），否则渲染 <img src>。
  */
-export default function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
+export default function ImageLightbox({ src, alt, onClose, children }: ImageLightboxProps) {
   const { t } = useTranslation()
   return createPortal(
     <div className="fixed inset-0 z-[90] flex flex-col">
@@ -41,11 +48,13 @@ export default function ImageLightbox({ src, alt, onClose }: ImageLightboxProps)
           className="flex-1 min-h-0 flex items-center justify-center px-4 pb-6 cursor-zoom-out"
           onClick={onClose}
         >
-          <img
-            src={src}
-            alt={alt ?? ''}
-            className="max-w-full max-h-full object-contain rounded-md shadow-2xl pointer-events-none"
-          />
+          {children ?? (
+            <img
+              src={src}
+              alt={alt ?? ''}
+              className="max-w-full max-h-full object-contain rounded-md shadow-2xl pointer-events-none"
+            />
+          )}
         </div>
       </div>
     </div>,

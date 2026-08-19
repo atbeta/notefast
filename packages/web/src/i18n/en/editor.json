@@ -28,7 +28,8 @@
     "emptyDiagram": "Empty diagram",
     "renderFailed": "Mermaid render failed",
     "renderFailedWith": "Mermaid render failed: {{error}}",
-    "loading": "Loading diagram…"
+    "loading": "Loading diagram…",
+    "zoom": "Zoom in"
   },
   "math": {
     "emptyMath": "Empty formula",
