@@ -371,6 +371,8 @@ describe('Search API', () => {
     expect(status).toBe(200)
     expect(Array.isArray(body)).toBe(true)
     expect(body.length).toBeGreaterThanOrEqual(1)
+    const first = body[0] as { doc_title?: string }
+    expect(typeof first.doc_title === 'string' || first.doc_title === undefined).toBe(true)
   })
 
   test('GET /api/v1/search/refs 反向链接', async () => {

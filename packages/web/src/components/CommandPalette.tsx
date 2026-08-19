@@ -20,6 +20,12 @@ import type { SearchResult } from '@notefast/core'
 import { request } from '../hooks/useAPI'
 import { useTheme } from '../hooks/useTheme'
 import { Kbd, ShortcutKeys } from './ui'
+import {
+  collapseSearchHitsByDoc,
+  paletteDocTitle,
+  PALETTE_DOC_LIMIT,
+  PALETTE_SEARCH_OVERFETCH,
+} from '../lib/searchHits'
 
 interface CommandPaletteProps {
   open: boolean
@@ -85,10 +91,10 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
     }
     setSearching(true)
     const timer = setTimeout(() => {
-      const params = new URLSearchParams({ q: query.trim(), limit: '8' })
+      const params = new URLSearchParams({ q: query.trim(), limit: String(PALETTE_SEARCH_OVERFETCH) })
       request<SearchResult[]>('/search?' + params.toString())
         .then((r) => {
-          setResults(r)
+          setResults(collapseSearchHitsByDoc(r, PALETTE_DOC_LIMIT))
           setActive(0)
         })
         .catch(() => setResults([]))
@@ -156,15 +162,21 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
     ]
   }, [aiChatOpen, dark, navigate, onClose, onToggleAiChat, t])
 
-  const docItems: PaletteItem[] = useMemo(() => results.map((r) => ({
-    id: 'doc-' + r.block.id,
-    icon: FileText,
-    title: r.block.root_id === r.block.id ? r.block.content || r.snippet.split('\n')[0]! : r.snippet.split('\n')[0]!,
-    hint: r.snippet,
-    section: 'document' as const,
-    keywords: [r.snippet.toLowerCase()],
-    action: () => { onClose(); navigate('/doc/' + r.block.root_id) },
-  })), [results, navigate, onClose])
+  const untitled = t('sidebar.untitled')
+  const docItems: PaletteItem[] = useMemo(() => results.map((r) => {
+    const docId = r.block.root_id || r.block.id
+    const title = paletteDocTitle(r, untitled)
+    const isTitleHit = r.block.id === docId
+    return {
+      id: 'doc-' + docId,
+      icon: FileText,
+      title,
+      hint: isTitleHit ? undefined : r.snippet,
+      section: 'document' as const,
+      keywords: [r.snippet.toLowerCase(), title.toLowerCase()],
+      action: () => { onClose(); navigate('/doc/' + docId) },
+    }
+  }), [results, navigate, onClose, untitled])
 
   const allItems: PaletteItem[] = useMemo(() => {
     const q = query.trim().toLowerCase()

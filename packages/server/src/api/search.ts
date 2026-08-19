@@ -54,6 +54,7 @@ search.get('/', (c) => {
       block: rowToBlock(row),
       rank: h.rank_score,
       snippet: highlightSnippet(row.content, q),
+      doc_title: h.doc_title || undefined,
     }]
   })
 

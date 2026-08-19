@@ -157,6 +157,8 @@ export interface SearchResult {
   block: Block
   rank: number
   snippet: string
+  /** 所属文档标题（子块命中时 block.content 不是标题；加法字段，旧客户端可忽略） */
+  doc_title?: string
 }
 
 /** 引用关系 */
