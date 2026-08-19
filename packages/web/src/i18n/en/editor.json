@@ -29,7 +29,10 @@
     "renderFailed": "Mermaid render failed",
     "renderFailedWith": "Mermaid render failed: {{error}}",
     "loading": "Loading diagram…",
-    "zoom": "Zoom in"
+    "zoom": "Zoom in",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomReset": "Reset"
   },
   "math": {
     "emptyMath": "Empty formula",
