@@ -1,37 +1,63 @@
+import { useEffect, useState, type ImgHTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
-import type { ReactNode } from 'react'
+import MediaZoomView from './MediaZoomView'
 
 interface ImageLightboxProps {
-  src: string
-  alt?: string
   onClose: () => void
-  /**
-   * 可选：自定义内容替代 <img>（如 mermaid SVG 放大查看）。
-   * 传入时 src/alt 仅用于 aria-label，不渲染图片。
-   */
+  /** 图片地址；与 children 二选一 */
+  src?: string
+  alt?: string
+  /** 自定义媒体（如 mermaid SVG），传入时不渲染 <img> */
   children?: ReactNode
-  /**
-   * 是否允许点击内容区关闭（默认 true）。
-   * 设为 false 时只允许点遮罩 / 关闭钮 / Esc 关闭，适合内容较大、点图内不应误触的场景（mermaid lightbox）。
-   */
-  closeOnInnerClick?: boolean
+  /** 顶栏左侧（资源库文件信息等） */
+  headerStart?: ReactNode
+  /** 关闭钮左侧的额外操作（删除等） */
+  headerActions?: ReactNode
+  /** 画布下方页脚（引用列表等） */
+  footer?: ReactNode
+  /** 媒体内容变化时重测自然尺寸（mermaid svg 源等） */
+  measureKey?: string
 }
 
 /**
- * 图片放大查看（lightbox）：fixed 全屏遮罩 + 居中大图，点击遮罩/图片/关闭钮退出。
- * 与资源页预览同视觉语言（resources.tsx），供阅读页等任意图片场景复用。
- * children 传入时渲染自定义内容（mermaid SVG 等），否则渲染 <img src>。
+ * 统一媒体灯箱：阅读页图片、Mermaid、资源库预览共用。
+ * 适配视口铺满后可缩放/平移；点遮罩 / 关闭钮 / Esc 退出（点内容不关，避免和拖动手势冲突）。
  */
 export default function ImageLightbox({
+  onClose,
   src,
   alt,
-  onClose,
   children,
-  closeOnInnerClick = true,
+  headerStart,
+  headerActions,
+  footer,
+  measureKey,
 }: ImageLightboxProps) {
   const { t } = useTranslation()
+  const label = alt || t('block.previewImage')
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [onClose])
+
+  const media = children ?? (
+    <img src={src} alt={alt ?? ''} draggable={false} />
+  )
+
   return createPortal(
     <div className="fixed inset-0 z-[90] flex flex-col">
       <div
@@ -42,33 +68,63 @@ export default function ImageLightbox({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={alt || t('block.previewImage')}
-        className="relative flex-1 flex flex-col min-h-0"
+        aria-label={label}
+        className="relative z-[1] flex-1 flex flex-col min-h-0"
       >
-        <div className="flex items-center justify-end px-4 py-3 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-            aria-label={t('common.close')}
-          >
-            <X className="w-4 h-4" strokeWidth={1.75} />
-          </button>
+        <div className="relative z-20 flex items-center justify-between gap-3 px-4 py-3 shrink-0 pointer-events-auto">
+          <div className="min-w-0 flex-1">{headerStart}</div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {headerActions}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onClose()
+              }}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+              aria-label={t('common.close')}
+            >
+              <X className="w-4 h-4" strokeWidth={1.75} />
+            </button>
+          </div>
         </div>
-        <div
-          className={`flex-1 min-h-0 flex items-center justify-center px-4 pb-6 ${closeOnInnerClick ? 'cursor-zoom-out' : ''}`}
-          onClick={closeOnInnerClick ? onClose : undefined}
-        >
-          {children ?? (
-            <img
-              src={src}
-              alt={alt ?? ''}
-              className="max-w-full max-h-full object-contain rounded-md shadow-2xl pointer-events-none"
-            />
-          )}
+        <div className="relative z-10 flex-1 min-h-0">
+          <MediaZoomView measureKey={measureKey ?? src ?? label} onBackgroundClick={onClose}>
+            {media}
+          </MediaZoomView>
         </div>
+        {footer ? (
+          <div className="relative z-20 shrink-0 px-4 pb-4" onClick={(e) => e.stopPropagation()}>
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>,
     document.body,
+  )
+}
+
+/** 点击图片打开统一灯箱（聊天 Markdown / 附件等入口） */
+export function LightboxImg({
+  className,
+  onClick,
+  alt,
+  ...props
+}: ImgHTMLAttributes<HTMLImageElement>) {
+  const [open, setOpen] = useState(false)
+  const src = typeof props.src === 'string' ? props.src : undefined
+  return (
+    <>
+      <img
+        {...props}
+        alt={alt ?? ''}
+        className={`${className ?? ''} cursor-zoom-in`}
+        onClick={(e) => {
+          onClick?.(e)
+          if (!e.defaultPrevented && src) setOpen(true)
+        }}
+      />
+      {open && src ? <ImageLightbox src={src} alt={alt} onClose={() => setOpen(false)} /> : null}
+    </>
   )
 }

@@ -6,6 +6,7 @@ import { highlightCode } from '../lib/highlight'
 import { classifyChatMath } from '../lib/chatMath'
 import MermaidDiagram from './MermaidDiagram'
 import MathBlock, { MathInline } from './MathBlock'
+import { LightboxImg } from './ImageLightbox'
 import { CopyButton } from './ui'
 import { useTranslation } from 'react-i18next'
 
@@ -65,6 +66,9 @@ function ChatMarkdown({ content, className = '' }: ChatMarkdownProps) {
                 <table>{children}</table>
               </div>
             )
+          },
+          img({ node: _node, ...props }) {
+            return <LightboxImg {...props} />
           },
         }}
       >

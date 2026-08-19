@@ -44,5 +44,9 @@
   "serverHealth": {
     "offlineBanner": "无法连接到本地服务。正在重试；检查服务进程是否仍在运行。",
     "retry": "立即重试"
+  },
+  "lightbox": {
+    "zoomReset": "重置",
+    "zoomHint": "Ctrl/⌘ + 滚轮缩放，拖动平移"
   }
 }

@@ -7,15 +7,15 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Cloud, CloudUpload, FileText, ImageIcon, Link2Off, Loader2, Trash2, X } from 'lucide-react'
+import { Cloud, CloudUpload, FileText, ImageIcon, Link2Off, Loader2, Trash2 } from 'lucide-react'
 import { api, ApiError } from '../hooks/useAPI'
 import { useImageUploadEnabled } from '../hooks/useImageUploadEnabled'
 import { formatRelative } from '../lib/time'
 import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
+import ImageLightbox from '../components/ImageLightbox'
 import { ListRowsSkeleton, Tooltip, useToast, CopyButton } from '../components/ui'
 
 const PAGE_SIZE = 60
@@ -464,91 +464,63 @@ export default function ResourcesPage() {
         )}
       </div>
 
-      {preview &&
-        createPortal(
-          <div className="fixed inset-0 z-[90] flex flex-col">
-            <div
-              className="absolute inset-0 bg-black/75 backdrop-blur-[2px]"
-              onClick={() => setPreviewId(null)}
-              aria-hidden="true"
-            />
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label={t('resources.preview')}
-              className="relative flex-1 flex flex-col min-h-0"
-            >
-              <div className="flex items-center justify-between gap-3 px-4 py-3 shrink-0">
-                <div className="min-w-0 text-[12.5px] text-white/70 tabular-nums truncate">
-                  {formatBytes(preview.size)}
-                  <span className="mx-1.5 text-white/30">·</span>
-                  {preview.ref_count > 1
-                    ? t('resources.refCount', { n: preview.ref_count })
-                    : preview.referenced ? t('resources.inUse') : t('resources.unused')}
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {!preview.referenced && (
-                    <button
-                      type="button"
-                      onClick={() => setPendingDelete(preview)}
-                      className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[12.5px] text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-                      {t('common.delete')}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setPreviewId(null)}
-                    className="inline-flex items-center justify-center w-8 h-8 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-                    aria-label={t('common.close')}
-                  >
-                    <X className="w-4 h-4" strokeWidth={1.75} />
-                  </button>
-                </div>
-              </div>
-              <div
-                className="flex-1 min-h-0 flex items-center justify-center px-4 pb-6 cursor-zoom-out"
-                onClick={() => setPreviewId(null)}
-              >
-                <img
-                  src={`/api/v1/assets/${preview.id}`}
-                  alt=""
-                  className="max-w-full max-h-full object-contain rounded-md shadow-2xl pointer-events-none"
-                />
-              </div>
-              {/* 引用来源：点击跳转到对应文档 */}
-              <div className="shrink-0 px-4 pb-4 max-h-40 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center gap-1.5 text-[11.5px] text-white/60 mb-1.5">
-                  <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
-                  {t('resources.refsIn')}
-                </div>
-                {previewRefsError ? (
-                  <p className="text-[12px] text-white/40">{t('resources.refsLoadError')}</p>
-                ) : previewRefs === null ? (
-                  <p className="text-[12px] text-white/30">{t('common.loading')}</p>
-                ) : previewRefs.length === 0 ? (
-                  <p className="text-[12px] text-white/40">{t('resources.refsNone')}</p>
-                ) : (
-                  <ul className="space-y-0.5">
-                    {previewRefs.map((d) => (
-                      <li key={d.doc_id}>
-                        <Link
-                          to={`/doc/${d.doc_id}`}
-                          onClick={() => setPreviewId(null)}
-                          className="text-[12.5px] text-white/80 hover:text-white hover:underline underline-offset-2 transition-colors break-all line-clamp-1"
-                        >
-                          {d.title || t('common.untitled')}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+      {preview && (
+        <ImageLightbox
+          src={`/api/v1/assets/${preview.id}`}
+          alt={preview.filename || t('resources.preview')}
+          onClose={() => setPreviewId(null)}
+          headerStart={
+            <div className="min-w-0 text-[12.5px] text-white/70 tabular-nums truncate">
+              {formatBytes(preview.size)}
+              <span className="mx-1.5 text-white/30">·</span>
+              {preview.ref_count > 1
+                ? t('resources.refCount', { n: preview.ref_count })
+                : preview.referenced ? t('resources.inUse') : t('resources.unused')}
             </div>
-          </div>,
-          document.body,
-        )}
+          }
+          headerActions={
+            !preview.referenced ? (
+              <button
+                type="button"
+                onClick={() => setPendingDelete(preview)}
+                className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[12.5px] text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                {t('common.delete')}
+              </button>
+            ) : null
+          }
+          footer={
+            <div className="max-h-40 overflow-y-auto">
+              <div className="flex items-center gap-1.5 text-[11.5px] text-white/60 mb-1.5">
+                <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
+                {t('resources.refsIn')}
+              </div>
+              {previewRefsError ? (
+                <p className="text-[12px] text-white/40">{t('resources.refsLoadError')}</p>
+              ) : previewRefs === null ? (
+                <p className="text-[12px] text-white/30">{t('common.loading')}</p>
+              ) : previewRefs.length === 0 ? (
+                <p className="text-[12px] text-white/40">{t('resources.refsNone')}</p>
+              ) : (
+                <ul className="space-y-0.5">
+                  {previewRefs.map((d) => (
+                    <li key={d.doc_id}>
+                      <Link
+                        to={`/doc/${d.doc_id}`}
+                        onClick={() => setPreviewId(null)}
+                        className="text-[12.5px] text-white/80 hover:text-white hover:underline underline-offset-2 transition-colors break-all line-clamp-1"
+                      >
+                        {d.title || t('common.untitled')}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          }
+        />
+      )}
 
       <ConfirmDialog
         open={Boolean(pendingDelete)}

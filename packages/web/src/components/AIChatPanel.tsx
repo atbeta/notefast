@@ -30,6 +30,7 @@ import { useScrollFade } from '../hooks/useScrollFade'
 import { isTauriShell } from '../hooks/useShell'
 import { ASK_AI_EVENT, type AskAiDetail } from '../lib/askAi'
 import ChatMarkdown from './ChatMarkdown'
+import { LightboxImg } from './ImageLightbox'
 import CitationSources, { type Citation, type CitationGroup, type RetrievalInfo } from './CitationSources'
 import ConfirmDialog from './ConfirmDialog'
 import { Tooltip } from './ui'
@@ -627,7 +628,7 @@ export default function AIChatPanel({
                             {msg.images && msg.images.length > 0 && (
                               <div className="flex flex-wrap gap-1.5 mb-1.5">
                                 {msg.images.map((src, i) => (
-                                  <img key={i} src={src} alt={t('chat.attachmentImageAlt')} className="max-h-32 max-w-full rounded-md border border-border/40 object-contain" />
+                                  <LightboxImg key={i} src={src} alt={t('chat.attachmentImageAlt')} className="max-h-32 max-w-full rounded-md border border-border/40 object-contain" />
                                 ))}
                               </div>
                             )}
@@ -718,7 +719,7 @@ export default function AIChatPanel({
           <div className="flex flex-wrap gap-2 mb-2">
             {attachments.map((a, i) => (
               <div key={i} className="relative group">
-                <img src={a.dataUrl} alt={a.name} className="h-14 w-14 rounded-md border border-border/60 object-cover" />
+                <LightboxImg src={a.dataUrl} alt={a.name} className="h-14 w-14 rounded-md border border-border/60 object-cover" />
                 <Tooltip label={t('chat.removeAttachment')}>
                   <button
                     type="button"

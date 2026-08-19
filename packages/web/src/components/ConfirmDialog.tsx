@@ -49,7 +49,12 @@ export default function ConfirmDialog({
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) onCancel()
+      if (e.key === 'Escape' && !busy) {
+        // capture + stop：叠在灯箱之上时先吃掉 Esc，避免底层灯箱一并关闭
+        e.stopImmediatePropagation()
+        onCancel()
+        return
+      }
       // Enter 二次触发防护：busy 时不响应全局 Enter 触发的 confirm
       if (e.key === 'Enter' && busy) {
         const active = document.activeElement as HTMLElement | null
@@ -58,8 +63,8 @@ export default function ConfirmDialog({
         e.preventDefault()
       }
     }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
+    document.addEventListener('keydown', handler, true)
+    return () => document.removeEventListener('keydown', handler, true)
   }, [open, onCancel, busy])
 
   if (!open) return null
@@ -69,7 +74,7 @@ export default function ConfirmDialog({
   // portal 到 body：避免被带 mask/overflow 的祖先（如侧栏 scroll-fade 最近文档区）
   // 裁剪，导致全屏弹窗不可见
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity" onClick={busy ? undefined : onCancel} aria-hidden="true" />
       <div
         ref={containerRef}

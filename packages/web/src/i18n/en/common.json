@@ -44,5 +44,9 @@
   "serverHealth": {
     "offlineBanner": "Cannot reach the local server. Retrying; check that the service process is still running.",
     "retry": "Retry now"
+  },
+  "lightbox": {
+    "zoomReset": "Reset",
+    "zoomHint": "Ctrl/⌘ + scroll to zoom, drag to pan"
   }
 }
