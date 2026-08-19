@@ -114,6 +114,7 @@
     "inUse": "In use",
     "unused": "Unused",
     "preview": "View full size",
+    "copyPath": "Copy local path",
     "deleteTitle": "Delete this image?",
     "deleteMessage": "Removes the local asset file. This cannot be undone. Images still used in notes cannot be deleted.",
     "deleting": "Deleting…",

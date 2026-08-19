@@ -36,6 +36,9 @@ export function useImageUploader({ insertAtCursor }: UseImageUploaderOpts) {
 
       const token = getStoredToken()
       const headers: Record<string, string> = { 'Content-Type': file.type }
+      // 原始文件名（URL 编码，防中文/特殊字符）：后端起出存 assets.filename，资源页可读
+      const encodedName = encodeURIComponent(file.name || '')
+      if (encodedName) headers['X-File-Name'] = encodedName
       if (token) headers.Authorization = `Bearer ${token}`
 
       try {

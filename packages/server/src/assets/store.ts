@@ -46,6 +46,8 @@ export interface AssetMeta {
   created_at: string
   /** 图床外链（自动上传模式成功后写入；无则本地读取） */
   remote_url?: string | null
+  /** 原始文件名（上传/导入时保存；存量可空，资源页回退显示哈希短前缀） */
+  filename?: string | null
 }
 
 /** 当前生效的图床上传配置（initImageUploadConfig 后由 app 注入） */
@@ -56,25 +58,30 @@ export function setImageUploadConfig(cfg: ImageUploadConfig | null): void {
 }
 
 /** 保存图片（幂等去重）；返回元数据。dedup=true 表示命中已有内容未重复写盘 */
-export function saveAsset(buf: Buffer, mime: string): { meta: AssetMeta; dedup: boolean } {
+export function saveAsset(buf: Buffer, mime: string, filename?: string | null): { meta: AssetMeta; dedup: boolean } {
   const id = createHash('sha256').update(buf).digest('hex')
   const db = getDb()
-  const existing = db.query('SELECT id, mime, size, created_at FROM assets WHERE id = ?').get(id) as AssetMeta | undefined
+  const existing = db.query('SELECT id, mime, size, created_at, filename FROM assets WHERE id = ?').get(id) as AssetMeta | undefined
   if (existing && existsSync(join(mediaDir, id))) {
     return { meta: existing, dedup: true }
   }
   writeFileSync(join(mediaDir, id), buf)
   const now = new Date().toISOString()
-  db.query('INSERT OR REPLACE INTO assets (id, mime, size, created_at) VALUES (?, ?, ?, ?)')
-    .run(id, mime, buf.length, now)
-  return { meta: { id, mime, size: buf.length, created_at: now }, dedup: false }
+  // 内容寻址去重：同图再次写入时补 filename（首次没带、这次带了）
+  if (existing && !existing.filename && filename) {
+    db.query('UPDATE assets SET filename = ? WHERE id = ?').run(filename, id)
+    return { meta: { ...existing, filename }, dedup: true }
+  }
+  db.query('INSERT OR REPLACE INTO assets (id, mime, size, created_at, filename) VALUES (?, ?, ?, ?, ?)')
+    .run(id, mime, buf.length, now, filename ?? null)
+  return { meta: { id, mime, size: buf.length, created_at: now, filename: filename ?? null }, dedup: false }
 }
 
 /** 读取元数据 + 磁盘路径；不存在返回 null（磁盘文件缺失视为不存在，并清掉元数据行） */
 export function readAsset(id: string): { meta: AssetMeta; path: string } | null {
   if (!/^[0-9a-f]{64}$/.test(id)) return null
   const db = getDb()
-  const meta = db.query('SELECT id, mime, size, created_at, remote_url FROM assets WHERE id = ?').get(id) as AssetMeta | undefined
+  const meta = db.query('SELECT id, mime, size, created_at, remote_url, filename FROM assets WHERE id = ?').get(id) as AssetMeta | undefined
   if (!meta) return null
   const path = join(mediaDir, id)
   if (!existsSync(path)) {
@@ -386,6 +393,10 @@ export interface AssetListItem {
   mime: string
   size: number
   created_at: string
+  /** 原始文件名（可空：存量/无法获取；前端回退显示哈希短前缀） */
+  filename: string | null
+  /** 本地文件路径（相对 data 目录，如 media/<id>；供「复制路径」/定位用） */
+  local_path: string
   /** 是否已挂图床外链 */
   remote: boolean
   /** 图床外链地址（remote 时非空；供资源页悬浮展示/复制） */
@@ -411,7 +422,7 @@ export function listAssets(opts: { limit?: number; offset?: number } = {}): {
   const total = totalRow?.n ?? 0
   const rows = db
     .query(
-      `SELECT id, mime, size, created_at, remote_url
+      `SELECT id, mime, size, created_at, remote_url, filename
        FROM assets
        ORDER BY created_at DESC, id DESC
        LIMIT ? OFFSET ?`,
@@ -422,6 +433,7 @@ export function listAssets(opts: { limit?: number; offset?: number } = {}): {
     size: number
     created_at: string
     remote_url: string | null
+    filename: string | null
   }>
   const refMap = rows.length > 0 ? collectAssetRefMap() : null
   return {
@@ -433,6 +445,8 @@ export function listAssets(opts: { limit?: number; offset?: number } = {}): {
         mime: r.mime,
         size: r.size,
         created_at: r.created_at,
+        filename: r.filename,
+        local_path: `media/${r.id}`,
         remote: Boolean(r.remote_url),
         remote_url: r.remote_url,
         referenced: Boolean(refs && refs.length > 0),
@@ -533,7 +547,7 @@ export function ingestLocalImageRefs(
       unresolved.add(decoded)
       return full
     }
-    const { meta } = saveAsset(buf, mime)
+    const { meta } = saveAsset(buf, mime, decoded)
     used.add(decoded)
     ingested++
     return full.replace(rawSrc, `asset:${meta.id}`)

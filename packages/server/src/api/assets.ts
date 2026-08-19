@@ -54,7 +54,14 @@ assets.post('/', async (c) => {
   if (buf.length > MAX_ASSET_BYTES) {
     return c.json({ error: 'too_large', message: `图片超过 ${MAX_ASSET_BYTES / 1024 / 1024}MB 上限` }, 413)
   }
-  const { meta, dedup } = saveAsset(buf, mime)
+  // 原始文件名（前端 X-File-Name，URL 编码；无则空）
+  let filename: string | null = null
+  const rawName = c.req.header('X-File-Name')
+  if (rawName) {
+    try { filename = decodeURIComponent(rawName) } catch { filename = rawName }
+    filename = filename.trim() || null
+  }
+  const { meta, dedup } = saveAsset(buf, mime, filename)
   // 自动上传模式：异步旁路传图床（不阻塞响应；失败静默降级本地）
   maybeUploadToRemote(meta.id)
   return c.json(

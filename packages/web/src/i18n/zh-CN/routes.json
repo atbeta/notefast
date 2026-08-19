@@ -114,6 +114,7 @@
     "inUse": "使用中",
     "unused": "未引用",
     "preview": "查看大图",
+    "copyPath": "复制本地路径",
     "deleteTitle": "删除这张图片？",
     "deleteMessage": "仅删除本地资源文件。确认后不可恢复；使用中的图片无法删除。",
     "deleting": "删除中…",

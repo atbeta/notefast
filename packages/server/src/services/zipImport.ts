@@ -64,7 +64,7 @@ export function importArchiveZip(
     const sha = m[1]!.toLowerCase()
     const hash = createHash('sha256').update(data).digest('hex')
     if (hash !== sha) continue
-    saveAsset(Buffer.from(data), mimeForExt(m[2]!))
+    saveAsset(Buffer.from(data), mimeForExt(m[2]!), m[0]!.split('/').pop()!)
     importedShas.add(sha)
     mediaImported++
   }

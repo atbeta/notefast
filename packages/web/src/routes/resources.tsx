@@ -16,7 +16,7 @@ import { useImageUploadEnabled } from '../hooks/useImageUploadEnabled'
 import { formatRelative } from '../lib/time'
 import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
-import { ListRowsSkeleton, Tooltip, useToast } from '../components/ui'
+import { ListRowsSkeleton, Tooltip, useToast, CopyButton } from '../components/ui'
 
 const PAGE_SIZE = 60
 
@@ -25,6 +25,10 @@ interface AssetListItem {
   mime: string
   size: number
   created_at: string
+  /** 原始文件名（可空：存量/无法获取；回退显示哈希短前缀） */
+  filename: string | null
+  /** 本地文件路径（相对 data 目录，如 media/<id>；供复制/定位） */
+  local_path: string
   remote: boolean
   remote_url: string | null
   referenced: boolean
@@ -420,6 +424,18 @@ export default function ResourcesPage() {
                   <div className="flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground/80 tabular-nums">
                     <span>{formatBytes(item.size)}</span>
                     <span className="truncate">{formatRelative(item.created_at)}</span>
+                  </div>
+                  {/* 文件名 + 复制本地路径：让用户知道这图是哪个文件、在哪能找到 */}
+                  <div className="flex items-center gap-1 min-w-0 pt-0.5">
+                    <span className="truncate text-[10.5px] text-muted-foreground/80" title={item.filename || item.local_path}>
+                      {item.filename || item.id.slice(0, 8)}
+                    </span>
+                    <CopyButton
+                      text={item.local_path}
+                      className="ml-auto shrink-0 p-0.5 rounded text-muted-foreground/60 hover:text-primary transition-colors disabled:opacity-50"
+                      ariaLabel={t('resources.copyPath')}
+                      title={t('resources.copyPath')}
+                    />
                   </div>
                 </div>
               </li>

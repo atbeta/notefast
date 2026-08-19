@@ -48,10 +48,12 @@ beforeEach(() => {
   getDb().exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
 })
 
-async function upload(buf: Buffer = PNG_BYTES, mime = 'image/png') {
+async function upload(buf: Buffer = PNG_BYTES, mime = 'image/png', filename?: string) {
+  const headers: Record<string, string> = { 'Content-Type': mime }
+  if (filename) headers['X-File-Name'] = encodeURIComponent(filename)
   const res = await app.fetch(new Request('http://localhost/api/v1/assets', {
     method: 'POST',
-    headers: { 'Content-Type': mime },
+    headers,
     body: new Uint8Array(buf),
   }))
   return { status: res.status, body: await res.json() as Record<string, unknown> }
@@ -73,6 +75,28 @@ describe('AssetStore — 上传与去重', () => {
     const { status, body } = await upload()
     expect(status).toBe(200)
     expect(body.dedup).toBe(true)
+  })
+
+  test('带 X-File-Name 上传 → filename 落库且资源列表返回 + local_path', async () => {
+    const { status } = await upload(PNG_BYTES, 'image/png', '示例图片.png')
+    expect(status).toBe(201)
+    const id = createHash('sha256').update(PNG_BYTES).digest('hex')
+    const meta = readAsset(id)?.meta
+    expect(meta?.filename).toBe('示例图片.png')
+
+    const res = await app.fetch(new Request('http://localhost/api/v1/assets', { method: 'GET' }))
+    const body = await res.json() as { items: Array<{ id: string; filename: string | null; local_path: string }> }
+    const item = body.items.find((x) => x.id === id)
+    expect(item?.filename).toBe('示例图片.png')
+    expect(item?.local_path).toBe(`media/${id}`)
+  })
+
+  test('不带文件名上传 → filename 为 null', async () => {
+    // 上一个测试已带 filename 写入（同内容去重会补名），这里用新内容验证 null 分支
+    await upload(Buffer.from('another-image'), 'image/jpeg')
+    const otherId = createHash('sha256').update(Buffer.from('another-image')).digest('hex')
+    const otherMeta = readAsset(otherId)?.meta
+    expect(otherMeta?.filename ?? null).toBeNull()
   })
 
   test('非图片类型 → 400', async () => {
