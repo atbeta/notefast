@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.71.0](https://github.com/atbeta/notefast/compare/v0.70.0...v0.71.0) (2026-08-19)
+
+
+### Features
+
+* **web:** rework mermaid lightbox zoom - fit-to-viewport + ctrl+wheel ([cb1f365](https://github.com/atbeta/notefast/commit/cb1f36547ab613072bfe13947d820f989aa60e8e))
+
 ## [0.70.0](https://github.com/atbeta/notefast/compare/v0.69.0...v0.70.0) (2026-08-19)
 
 
