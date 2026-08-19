@@ -1,6 +1,6 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Maximize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
+import { Maximize2, RotateCcw } from 'lucide-react'
 import { nextMermaidId, renderMermaidSvg } from '../lib/mermaid'
 import { CopyButton } from './ui'
 import ImageLightbox from './ImageLightbox'
@@ -49,8 +49,11 @@ export default function MermaidDiagram({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [zoomed, setZoomed] = useState(false)
-  // lightbox 内继续缩放倍数（1x 起；基于当前大小继续放大，密图 200% 不够时用）
-  const [lightboxZoom, setLightboxZoom] = useState(1)
+  // lightbox 视图状态
+  const [fitScale, setFitScale] = useState<number | null>(null) // 适配视口的基准缩放（SVG 自然尺寸 → 视口）
+  const [userZoom, setUserZoom] = useState(1) // 用户 Ctrl+滚轮额外缩放（1x 起）
+  const zoomWrapRef = useRef<HTMLDivElement>(null)
+  const fitMeasured = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -144,55 +147,121 @@ export default function MermaidDiagram({
           alt={label}
           onClose={() => {
             setZoomed(false)
-            setLightboxZoom(1)
+            setUserZoom(1)
+            setFitScale(null)
+            fitMeasured.current = false
           }}
         >
-          {/* 放大查看：SVG 全尺寸展示（不压缩）+ 可继续缩放，密图也能看清 */}
-          <div className="flex flex-col h-full min-h-0" onClick={(e) => e.stopPropagation()}>
-            {/* 缩放控制条：− / 档位 / + / 重置（基于当前大小继续放大） */}
-            <div className="flex items-center justify-center gap-3 px-4 py-2.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => setLightboxZoom((z) => Math.max(1, z - 0.5))}
-                disabled={lightboxZoom <= 1}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30"
-                aria-label={t('mermaid.zoomOut')}
-              >
-                <ZoomOut className="w-4 h-4" strokeWidth={1.75} />
-              </button>
-              <span className="text-[12.5px] tabular-nums text-white/90 min-w-[3.5rem] text-center">
-                {Math.round(lightboxZoom * 100)}%
-              </span>
-              <button
-                type="button"
-                onClick={() => setLightboxZoom((z) => Math.min(4, z + 0.5))}
-                disabled={lightboxZoom >= 4}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30"
-                aria-label={t('mermaid.zoomIn')}
-              >
-                <ZoomIn className="w-4 h-4" strokeWidth={1.75} />
-              </button>
-              {lightboxZoom !== 1 && (
-                <button
-                  type="button"
-                  onClick={() => setLightboxZoom(1)}
-                  className="inline-flex items-center gap-1 text-[12px] text-white/70 hover:text-white transition-colors px-2 py-1 rounded-md hover:bg-white/10"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" strokeWidth={1.75} />
-                  {t('mermaid.zoomReset')}
-                </button>
-              )}
-            </div>
-            <div className="mermaid-zoom overflow-auto flex-1 min-h-0 w-full flex justify-center p-6">
-              <div
-                className="[&_svg]:max-w-none [&_svg]:h-auto shadow-2xl rounded-md bg-white dark:bg-[#1e1e1e] p-4 self-start"
-                style={{ zoom: lightboxZoom }}
-                dangerouslySetInnerHTML={{ __html: svg }}
-              />
-            </div>
-          </div>
+          <MermaidZoomView
+            svg={svg}
+            fitScale={fitScale}
+            userZoom={userZoom}
+            wrapRef={zoomWrapRef}
+            fitMeasuredRef={fitMeasured}
+            onFit={(s) => setFitScale(s)}
+            onUserZoom={setUserZoom}
+            onClose={() => setZoomed(false)}
+          />
         </ImageLightbox>
       )}
+    </div>
+  )
+}
+
+/**
+ * Lightbox 内 mermaid 缩放视图：
+ * - 默认适配视口（SVG 自然尺寸缩放到 85% 视口，保证全屏大小一致）
+ * - Ctrl+滚轮缩放（围绕视口中心，1x–8x）
+ * - 点击遮罩关闭（与图片 lightbox 一致）
+ */
+function MermaidZoomView({
+  svg,
+  fitScale,
+  userZoom,
+  wrapRef,
+  fitMeasuredRef,
+  onFit,
+  onUserZoom,
+  onClose,
+}: {
+  svg: string
+  fitScale: number | null
+  userZoom: number
+  wrapRef: React.RefObject<HTMLDivElement | null>
+  fitMeasuredRef: React.MutableRefObject<boolean>
+  onFit: (s: number) => void
+  onUserZoom: (fn: (z: number) => number) => void
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+
+  // 打开/尺寸变化后测量 SVG 自然尺寸 → 算适配视口的 fitScale
+  useEffect(() => {
+    if (fitScale !== null || fitMeasuredRef.current) return
+    const root = wrapRef.current
+    if (!root) return
+    const svgEl = root.querySelector('svg')
+    const vp = root.parentElement?.parentElement
+    if (!svgEl || !vp) return
+    // SVG 自然尺寸：优先取 width/height 属性，缺则 getBBox
+    const natW = svgEl.getAttribute('width') ? parseFloat(svgEl.getAttribute('width')!) : svgEl.getBBox().width
+    const natH = svgEl.getAttribute('height') ? parseFloat(svgEl.getAttribute('height')!) : svgEl.getBBox().height
+    if (!natW || !natH) { fitMeasuredRef.current = true; return }
+    const vpW = vp.clientWidth || window.innerWidth
+    const vpH = vp.clientHeight || window.innerHeight
+    // 85% 视口内适配（宽高取小，保证整图可见）
+    const s = Math.min((vpW * 0.85) / natW, (vpH * 0.85) / natH)
+    onFit(Math.min(Math.max(s, 0.1), 5))
+    fitMeasuredRef.current = true
+  }, [fitScale, fitMeasuredRef, onFit, wrapRef])
+
+  // Ctrl+滚轮：围绕视口中心缩放
+  const onWheel = (e: React.WheelEvent) => {
+    if (!e.ctrlKey) return
+    e.preventDefault()
+    const delta = e.deltaY > 0 ? -1 : 1
+    onUserZoom((z) => Math.min(8, Math.max(1, z + delta * 0.25)))
+  }
+
+  const scale = fitScale == null ? 1 : fitScale * userZoom
+
+  return (
+    <div
+      className="relative flex-1 min-h-0 flex items-center justify-center overflow-hidden"
+      onClick={onClose}
+    >
+      {/* 缩放提示（右上角） */}
+      <div className="absolute top-3 right-4 z-10 flex items-center gap-2">
+        <span className="text-[12px] tabular-nums text-white/85 bg-black/30 rounded-md px-2 py-1">
+          {Math.round(scale * 100)}%
+        </span>
+      </div>
+      {scale !== (fitScale ?? 1) && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onUserZoom(() => 1) }}
+          className="absolute bottom-4 right-4 z-10 inline-flex items-center gap-1.5 text-[12px] text-white/80 hover:text-white bg-black/25 hover:bg-black/40 rounded-md px-2.5 py-1.5 transition-colors"
+        >
+          <RotateCcw className="w-3.5 h-3.5" strokeWidth={1.75} />
+          {t('mermaid.zoomReset')}
+        </button>
+      )}
+      <div
+        ref={wrapRef}
+        onWheel={onWheel}
+        onClick={(e) => e.stopPropagation()}
+        className="[&_svg]:max-w-none"
+        style={{
+          transform: `scale(${scale})`,
+          transformOrigin: 'center center',
+          transition: 'transform 0.08s ease-out',
+        }}
+      >
+        <div
+          className="rounded-md bg-white dark:bg-[#1e1e1e] shadow-2xl"
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
+      </div>
     </div>
   )
 }

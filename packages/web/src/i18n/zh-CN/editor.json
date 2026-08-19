@@ -30,8 +30,6 @@
     "renderFailedWith": "Mermaid 渲染失败：{{error}}",
     "loading": "图表加载中…",
     "zoom": "放大查看",
-    "zoomIn": "放大",
-    "zoomOut": "缩小",
     "zoomReset": "重置"
   },
   "math": {
