@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, FileText, Clock, Tag, Star } from 'lucide-react'
 import i18next from '../i18n'
-import { api } from '../hooks/useAPI'
 import { usePagedDocList } from '../hooks/usePagedDocList'
 import { useDocChanges } from '../hooks/useDocEvents'
 import { usePinnedViews } from '../hooks/usePinnedViews'
@@ -90,14 +89,6 @@ export default function HomePage() {
   const { pin, isPinned } = usePinnedViews()
   const [showPinModal, setShowPinModal] = useState(false)
   const [pinName, setPinName] = useState(title)
-  const [showWelcome, setShowWelcome] = useState(false)
-
-  useEffect(() => {
-    if (localStorage.getItem('nf_first_run_done')) return
-    api.get<{ first_run: boolean }>('/status').then((r) => {
-      if (r.first_run) setShowWelcome(true)
-    }).catch(() => {})
-  }, [])
 
   const hasFilter = searchParams.get('tags') || searchParams.get('tag') ||
     searchParams.get('status') || searchParams.get('updated_within') ||
@@ -198,48 +189,6 @@ export default function HomePage() {
             <div className="flex items-center justify-end gap-2">
               <button onClick={() => setShowPinModal(false)} className="px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors">{t('common.cancel')}</button>
               <button onClick={() => { pin(pinName || title, listQuery); setShowPinModal(false) }} className="px-3 py-1.5 text-[12px] font-medium bg-foreground text-background rounded-md hover:opacity-90 transition-opacity">{t('home.pin')}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showWelcome && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-card border border-border rounded-lg p-8 w-[420px] shadow-2xl space-y-5 text-center">
-            <h2 className="text-[22px] font-bold text-foreground tracking-[-0.02em]">{t('home.welcomeTitle')}</h2>
-            <p className="text-[14px] text-muted-foreground leading-relaxed">
-              {t('home.welcomeDesc')}
-            </p>
-            <div className="flex items-center justify-center gap-3">
-              <button
-                onClick={() => {
-                  localStorage.setItem('nf_first_run_done', '1')
-                  setShowWelcome(false)
-                  navigate('/settings/ai')
-                }}
-                className="px-4 py-2 text-[13px] font-medium bg-foreground text-background rounded-lg hover:opacity-90 transition-opacity"
-              >
-                {t('home.welcomeConfigureAi')}
-              </button>
-              <button
-                onClick={() => {
-                  localStorage.setItem('nf_first_run_done', '1')
-                  setShowWelcome(false)
-                  navigate('/settings/tokens')
-                }}
-                className="px-4 py-2 text-[13px] font-medium border border-border rounded-lg hover:bg-muted transition-colors"
-              >
-                {t('home.welcomeCreateToken')}
-              </button>
-              <button
-                onClick={() => {
-                  localStorage.setItem('nf_first_run_done', '1')
-                  setShowWelcome(false)
-                }}
-                className="px-4 py-2 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {t('home.welcomeSkip')}
-              </button>
             </div>
           </div>
         </div>

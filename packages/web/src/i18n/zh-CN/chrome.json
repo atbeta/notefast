@@ -68,6 +68,7 @@
     "aiHidden": "对 AI 隐藏",
     "untagged": "未加标签",
     "pinnedViews": "固定视图",
+    "pinnedViewsEmpty": "筛选后点标题旁星星，把视图固定到这里",
     "recentDocs": "最近文档",
     "recentVisited": "最近访问",
     "recentVisitedEmpty": "打开过的文档会出现在这里",

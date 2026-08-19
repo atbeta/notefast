@@ -17,7 +17,7 @@ import type { Context, MiddlewareHandler } from 'hono'
 import type { Server } from 'bun'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/bun'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createPluginSystem, safeLogWarn } from '@notefast/core'
 import { createWebSessionToken, revokeWebSessionTokens } from './services/apiTokens'
@@ -38,6 +38,7 @@ import { initBackupManager, stopBackupManager } from './backup/manager'
 import { initStorageLocations } from './storage/locations'
 import { initPreferences } from './api/preferences'
 import { initTermDict } from './termDict'
+import { seedWelcomeDocIfNeeded } from './services/welcomeSeed'
 import { initVectorStore } from './ai/indexer'
 import { initAssetStore, setImageUploadConfig } from './assets/store'
 import { initImageUploadConfig } from './services/imageUploadConfig'
@@ -288,8 +289,10 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     if (started) return handle
     started = true
 
+    const isNewDb = !existsSync(join(dataDir, 'notefast.db'))
     const { notebookId: nb } = initDb(dataDir)
     notebookId = nb
+    seedWelcomeDocIfNeeded(getDb(), notebookId, { isNewDb })
     process.on('exit', () => { stopBackupManager(); closeDb() })
 
     initDocEvents(pluginSystem)

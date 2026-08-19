@@ -507,21 +507,24 @@ export default function Sidebar({
           )}
         </div>
 
-        {pinnedViews.length > 0 && (
-          <div className="mt-5">
-            <SidebarSectionLabel label={t('sidebar.pinnedViews')} collapsible open={pinnedOpen} onToggle={togglePinned} />
-            {pinnedOpen && pinnedViews.map((v) => (
-              <PinnedViewItem
-                key={v.id}
-                view={v}
-                active={location.search === `?${canonicalViewQuery(v.query)}`}
-                onNavigate={closeAfterNav}
-                onRename={rename}
-                onUnpin={unpin}
-              />
-            ))}
-          </div>
-        )}
+        <div className="mt-5">
+          <SidebarSectionLabel label={t('sidebar.pinnedViews')} collapsible open={pinnedOpen} onToggle={togglePinned} />
+          {pinnedOpen && pinnedViews.length === 0 && (
+            <p className="px-2.5 py-1.5 text-[11.5px] text-sidebar-muted leading-relaxed">
+              {t('sidebar.pinnedViewsEmpty')}
+            </p>
+          )}
+          {pinnedOpen && pinnedViews.map((v) => (
+            <PinnedViewItem
+              key={v.id}
+              view={v}
+              active={location.search === `?${canonicalViewQuery(v.query)}`}
+              onNavigate={closeAfterNav}
+              onRename={rename}
+              onUnpin={unpin}
+            />
+          ))}
+        </div>
 
         <div className="mt-5">
             <SidebarSectionLabel

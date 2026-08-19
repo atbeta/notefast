@@ -68,6 +68,7 @@
     "aiHidden": "Hidden from AI",
     "untagged": "Untagged",
     "pinnedViews": "Pinned views",
+    "pinnedViewsEmpty": "Filter, then click the star by the title to pin the view here",
     "recentDocs": "Recent documents",
     "recentVisited": "Recently viewed",
     "recentVisitedEmpty": "Documents you open will show up here",
