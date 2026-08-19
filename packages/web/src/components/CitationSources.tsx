@@ -140,7 +140,7 @@ export default function CitationSources({
               </div>
               <ol className="space-y-0.5">
                 {visible.map((c) => (
-                  <li key={c.block_id}>
+                  <li key={c.block_id} id={`chat-cite-${c.ref}`} className="scroll-mt-3">
                     <Tooltip label={t('chat.jumpToBlock')}>
                       <Link
                         to={`/doc/${c.doc_id}#block-${c.block_id}`}

@@ -635,11 +635,11 @@ export default function AIChatPanel({
                             {msg.content}
                           </>
                         ) : (
-                          <ChatMarkdown content={msg.content} />
+                          <ChatMarkdown content={msg.content} maxCite={isLastAssistant ? citations.length : 0} />
                         )}
                       </div>
                     )}
-                    {isLastAssistant && groupedCitations.length > 0 && (
+                    {isLastAssistant && !loading && groupedCitations.length > 0 && (
                       <CitationSources groups={groupedCitations} retrieval={retrieval} />
                     )}
                   </div>

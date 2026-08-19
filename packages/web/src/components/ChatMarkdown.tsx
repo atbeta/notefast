@@ -1,9 +1,10 @@
-import { useState, useEffect, createElement, memo, type ReactNode } from 'react'
+import { useState, useEffect, createElement, memo, cloneElement, type ReactNode, Children, isValidElement } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import { highlightCode } from '../lib/highlight'
 import { classifyChatMath } from '../lib/chatMath'
+import { splitCiteParts } from '../lib/chatCites'
 import MermaidDiagram from './MermaidDiagram'
 import MathBlock, { MathInline } from './MathBlock'
 import { LightboxImg } from './ImageLightbox'
@@ -13,16 +14,58 @@ import { useTranslation } from 'react-i18next'
 interface ChatMarkdownProps {
   content: string
   className?: string
+  /** 正文 [n] 渲染为上标的上限（与当前回答 citations.length 对齐）；0 则不转换 */
+  maxCite?: number
+}
+
+function citeNodes(text: string, maxCite: number): ReactNode {
+  const parts = splitCiteParts(text, maxCite)
+  if (parts.length === 1 && parts[0]!.type === 'text') return text
+  return parts.map((p, i) =>
+    p.type === 'text'
+      ? p.value
+      : (
+        <a key={`c${i}`} className="chat-cite" href={`#chat-cite-${p.n}`}>
+          {p.n}
+        </a>
+      ),
+  )
+}
+
+function mapCited(node: ReactNode, maxCite: number): ReactNode {
+  if (maxCite < 1) return node
+  return Children.map(node, (child) => {
+    if (typeof child === 'string') return citeNodes(child, maxCite)
+    if (typeof child === 'number') return child
+    if (!isValidElement<{ children?: ReactNode }>(child)) return child
+    const t = child.type
+    if (t === 'code' || t === 'pre' || t === 'a') return child
+    if (child.props.children == null) return child
+    return cloneElement(child, undefined, mapCited(child.props.children, maxCite))
+  })
 }
 
 /** 聊天气泡内的 Markdown 渲染（GFM + 代码高亮 + Mermaid + KaTeX 公式） */
-function ChatMarkdown({ content, className = '' }: ChatMarkdownProps) {
+function ChatMarkdown({ content, className = '', maxCite = 0 }: ChatMarkdownProps) {
   if (!content) return null
+  const cited = (Tag: 'p' | 'li' | 'td' | 'th' | 'h1' | 'h2' | 'h3' | 'h4' | 'blockquote') =>
+    function CitedEl({ children, ...props }: { children?: ReactNode }) {
+      return createElement(Tag, props, mapCited(children, maxCite))
+    }
   return (
     <div className={`chat-prose ${className}`}>
       <Markdown
         remarkPlugins={[remarkGfm, remarkMath]}
         components={{
+          p: cited('p'),
+          li: cited('li'),
+          td: cited('td'),
+          th: cited('th'),
+          h1: cited('h1'),
+          h2: cited('h2'),
+          h3: cited('h3'),
+          h4: cited('h4'),
+          blockquote: cited('blockquote'),
           pre({ children }) {
             // 由 code 组件自行包一层 pre，避免双重嵌套
             return <>{children}</>

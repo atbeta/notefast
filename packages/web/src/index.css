@@ -706,6 +706,23 @@ html.theme-fading *::after {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+.chat-prose a.chat-cite {
+  font-size: 0.68em;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  vertical-align: super;
+  color: rgb(var(--primary));
+  text-decoration: none;
+  margin-left: 0.12em;
+  padding: 0.05em 0.28em;
+  border-radius: 4px;
+  background: rgb(var(--primary) / 0.12);
+}
+.chat-prose a.chat-cite:hover {
+  background: rgb(var(--primary) / 0.22);
+  text-decoration: none;
+}
 .chat-prose hr {
   border: 0;
   border-top: 1px solid rgb(var(--border));
