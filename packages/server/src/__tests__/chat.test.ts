@@ -49,6 +49,75 @@ beforeEach(() => {
   initAiRuntime(pluginSystem, testDir)
 })
 
+/** 技能审计用：让 LLM 先调一个工具，再捕获回填给第二轮的 body。 */
+async function captureToolResultBody(tool: string, args: Record<string, unknown>, user: string): Promise<string> {
+  applyNewConfig(
+    {
+      version: 1,
+      chat: {
+        id: 'x',
+        label: 'x',
+        preset: 'custom',
+        baseUrl: 'http://mock',
+        apiKey: '',
+        embeddingModel: '',
+        chatModel: 'fake-chat',
+        timeoutMs: 5000,
+        extraHeaders: {},
+      },
+      embedding: null,
+      autoIndex: false,
+      reranker: null,
+    },
+    pluginSystem,
+  )
+  let secondCallBody = ''
+  let callCount = 0
+  const encoder = new TextEncoder()
+  const sseResponse = (chunks: string[]) =>
+    new Response(
+      new ReadableStream({
+        start(c) {
+          for (const ch of chunks) c.enqueue(encoder.encode(ch))
+          c.close()
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+    )
+  const argsJson = JSON.stringify(JSON.stringify(args))
+  const fetcher: typeof fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    callCount++
+    if (callCount === 1) {
+      return sseResponse([
+        `data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"${tool}","arguments":""}}]}}]}\n\n`,
+        `data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":${argsJson}}}]}}]}\n\n`,
+        'data: [DONE]\n\n',
+      ]) as unknown as Response
+    }
+    secondCallBody = String(init?.body ?? '')
+    return sseResponse([
+      'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n',
+      'data: [DONE]\n\n',
+    ]) as unknown as Response
+  }) as unknown as typeof fetch
+  const { getRuntime } = await import('../services/aiRuntime')
+  getRuntime().setFetchImpl(withQueryUnderstandingStub(fetcher))
+  for await (const _ev of runChat({ messages: [{ role: 'user', content: user }] })) {
+    /* drain */
+  }
+  return secondCallBody
+}
+
+function seedListedDoc(id: string, title: string, status: string, updatedAt: string) {
+  const db = getDb()
+  const nb = crypto.randomUUID()
+  db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+  db.query(
+    `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, status, sort, level, created_at, updated_at)
+     VALUES (?, ?, NULL, ?, 'document', ?, ?, 0, 0, ?, ?)`,
+  ).run(id, nb, id, title, status, updatedAt, updatedAt)
+}
+
 /**
  * chat 首检索会先打一枪非流式 json_object（queryUnderstanding）。
  * 测试 mock 若一律回 SSE，会污染 callCount / 解析失败。此包装拦截理解请求，不计入 inner。
@@ -578,6 +647,56 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
     // 纠错提示回填给模型（含合法值与 inbox 指引），而不是空列表
     expect(secondCallBody).toContain('无效的 status')
     expect(secondCallBody).toContain('inbox')
+  })
+
+  test('agent loop: notefast_list_docs stale_within=30d 只返回过时文档', async () => {
+    const now = new Date().toISOString()
+    const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString()
+    seedListedDoc('stale-fresh', '新笔记STALE', 'note', now)
+    seedListedDoc('stale-old', '过时笔记STALE', 'note', old)
+
+    const body = await captureToolResultBody(
+      'notefast_list_docs',
+      { status: 'note', stale_within: '30d' },
+      '归档建议',
+    )
+    expect(body).toContain('过时笔记STALE')
+    expect(body).not.toContain('新笔记STALE')
+  })
+
+  test('agent loop: notefast_list_docs updated_within=7d 只返回最近更新', async () => {
+    const now = new Date().toISOString()
+    const older = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()
+    seedListedDoc('upd-recent', '本周笔记UPD', 'note', now)
+    seedListedDoc('upd-old', '更早笔记UPD', 'inbox', older)
+
+    const body = await captureToolResultBody(
+      'notefast_list_docs',
+      { status: 'all', updated_within: '7d' },
+      '周期回顾',
+    )
+    expect(body).toContain('本周笔记UPD')
+    expect(body).not.toContain('更早笔记UPD')
+  })
+
+  test('agent loop: notefast_list_docs 非法 stale_within 返回纠错提示', async () => {
+    const body = await captureToolResultBody(
+      'notefast_list_docs',
+      { stale_within: '一个月' },
+      '归档建议',
+    )
+    expect(body).toContain('无效的 stale_within')
+    expect(body).toContain('30d')
+  })
+
+  test('agent loop: notefast_search_more 非法 since 返回纠错提示', async () => {
+    const body = await captureToolResultBody(
+      'notefast_search_more',
+      { query: '笔记', since: '7d' },
+      '周期回顾',
+    )
+    expect(body).toContain('无效的 since')
+    expect(body).toContain('ISO')
   })
 
   /** 多模态消息：图片段原样透传给模型，文本段用于检索（不报 no_user_message） */

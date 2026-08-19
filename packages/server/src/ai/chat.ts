@@ -102,7 +102,7 @@ const DEFAULT_MAX_TOOL_ROUNDS = 3
 
 /**
  * 执行 LLM 请求的工具调用。
- * 当前只支持 notefast_search_more；其它工具返回空结果，避免 LLM 调用未实现的工具。
+ * 读工具：search_more / list_docs / read_doc / web_search；写工具走 executeWriteTool。
  */
 async function executeToolCall(
   name: string,
@@ -121,6 +121,27 @@ async function executeToolCall(
     const since = (typeof args.since === 'string' ? args.since : undefined) || ctx.since
     const until = (typeof args.until === 'string' ? args.until : undefined) || ctx.until
     const limit = typeof args.limit === 'number' ? Math.min(20, Math.max(1, args.limit)) : 5
+    // since/until 必须是 ISO；模型常把技能文案里的「7d」塞进来，SQLite 字符串比较会静默空结果
+    if (since && Number.isNaN(Date.parse(since))) {
+      return {
+        content: JSON.stringify({
+          error: ctx.lang === 'en'
+            ? `Invalid since "${since}". Pass an ISO date such as 2026-08-13 or 2026-08-13T00:00:00.000Z, not a duration like 7d.`
+            : `无效的 since "${since}"。请传 ISO 日期（如 2026-08-13 或 2026-08-13T00:00:00.000Z），不要传 7d 这类时长。`,
+        }),
+        resultCount: 0,
+      }
+    }
+    if (until && Number.isNaN(Date.parse(until))) {
+      return {
+        content: JSON.stringify({
+          error: ctx.lang === 'en'
+            ? `Invalid until "${until}". Pass an ISO date such as 2026-08-13 or 2026-08-13T00:00:00.000Z.`
+            : `无效的 until "${until}"。请传 ISO 日期（如 2026-08-13 或 2026-08-13T00:00:00.000Z）。`,
+        }),
+        resultCount: 0,
+      }
+    }
 
     const report = await hybridSearch({
       query: q,
@@ -166,8 +187,30 @@ async function executeToolCall(
       }
     }
     const limit = typeof args.limit === 'number' ? Math.min(50, Math.max(1, args.limit)) : 20
-    const staleMs = parseStaleWithin(typeof args.stale_within === 'string' ? args.stale_within : null)
-    const updatedMs = parseUpdatedWithin(typeof args.updated_within === 'string' ? args.updated_within : null)
+    const staleRaw = typeof args.stale_within === 'string' ? args.stale_within.trim() : ''
+    const updatedRaw = typeof args.updated_within === 'string' ? args.updated_within.trim() : ''
+    const staleMs = staleRaw ? parseStaleWithin(staleRaw) : null
+    const updatedMs = updatedRaw ? parseUpdatedWithin(updatedRaw) : null
+    if (staleRaw && staleMs == null) {
+      return {
+        content: JSON.stringify({
+          error: ctx.lang === 'en'
+            ? `Invalid stale_within "${staleRaw}". Valid values: 30d / 90d.`
+            : `无效的 stale_within "${staleRaw}"。合法值：30d / 90d。`,
+        }),
+        resultCount: 0,
+      }
+    }
+    if (updatedRaw && updatedMs == null) {
+      return {
+        content: JSON.stringify({
+          error: ctx.lang === 'en'
+            ? `Invalid updated_within "${updatedRaw}". Valid values: 24h / 7d.`
+            : `无效的 updated_within "${updatedRaw}"。合法值：24h / 7d。`,
+        }),
+        resultCount: 0,
+      }
+    }
 
     let rows = listDocRows(db)
     const excluded = loadAiExcludedDocIds(rows.map((r) => r.id))

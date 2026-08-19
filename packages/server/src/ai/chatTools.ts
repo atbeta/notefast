@@ -57,8 +57,8 @@ function getListDocsToolDefinition(lang: AiLang): ToolDefinition {
     function: {
       name: 'notefast_list_docs',
       description: en
-        ? 'List knowledge base documents (title/status/tags/updated time). Use for listing scenarios like "what notes do I have", "what is in the inbox", or "find documents not updated for a long time"; call notefast_search_more when you need actual content.'
-        : '列出知识库文档（标题/状态/标签/更新时间）。用于"我有哪些笔记""收集箱里有什么""找长期未更新的文档"等列表性场景；需要具体内容时再调用 notefast_search_more。',
+        ? 'List knowledge base documents (title/status/tags/updated time). Use for listing scenarios like "what notes do I have", "what is in the inbox", or "find documents not updated for a long time"; call notefast_read_doc for full text, or notefast_search_more for keyword snippets.'
+        : '列出知识库文档（标题/状态/标签/更新时间）。用于"我有哪些笔记""收集箱里有什么""找长期未更新的文档"等列表性场景；需要全文时调用 notefast_read_doc，关键词片段再用 notefast_search_more。',
       parameters: {
         type: 'object',
         properties: {
