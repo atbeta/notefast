@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.74.0](https://github.com/atbeta/notefast/compare/v0.73.0...v0.74.0) (2026-08-19)
+
+
+### Features
+
+* **web:** improve markdown reading for Typora-style docs ([4da0c57](https://github.com/atbeta/notefast/commit/4da0c5747cb6d29e489a10f0c21f5832cb2c969a))
+
+
+### Bug Fixes
+
+* **tauri:** satisfy clippy on windows-client CI ([3160a07](https://github.com/atbeta/notefast/commit/3160a0701b5f1f07aae67c5ffb81d37d503d3e20))
+
 ## [0.73.0](https://github.com/atbeta/notefast/compare/v0.72.0...v0.73.0) (2026-08-19)
 
 
