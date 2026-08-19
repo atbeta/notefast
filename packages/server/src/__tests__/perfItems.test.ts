@@ -193,4 +193,29 @@ describe('向量 deleteMany（JSON 后端）', () => {
     await store.deleteMany(['not-exist'])
     expect(await store.count()).toBe(0)
   })
+
+  test('upsert 新块增量 +1，覆盖写入不重算 count(*)', async () => {
+    const db = getDb()
+    const store = new JsonVectorStore()
+    await store.init()
+    db.query("UPDATE vector_store_state SET indexed_count = 0 WHERE id = 'default'").run()
+    insertBlock(db, {
+      id: 'vec-inc-1', notebook_id: notebookId, parent_id: null, root_id: 'vec-inc-1',
+      type: 'document', content: '增量一', sort: 0, level: 0, now: nowTimestamp(),
+    })
+    insertBlock(db, {
+      id: 'vec-inc-2', notebook_id: notebookId, parent_id: null, root_id: 'vec-inc-2',
+      type: 'document', content: '增量二', sort: 0, level: 0, now: nowTimestamp(),
+    })
+    const rec = (id: string, hash: string) => store.upsert({
+      blockId: id, vector: new Float64Array([1, 0]),
+      modelFingerprint: 'm', contentHash: hash, sourceContentHash: hash,
+    })
+    await rec('vec-inc-1', 'a')
+    expect((db.query("SELECT indexed_count AS c FROM vector_store_state WHERE id = 'default'").get() as { c: number }).c).toBe(1)
+    await rec('vec-inc-1', 'a2')
+    expect((db.query("SELECT indexed_count AS c FROM vector_store_state WHERE id = 'default'").get() as { c: number }).c).toBe(1)
+    await rec('vec-inc-2', 'b')
+    expect((db.query("SELECT indexed_count AS c FROM vector_store_state WHERE id = 'default'").get() as { c: number }).c).toBe(2)
+  })
 })

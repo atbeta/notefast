@@ -118,6 +118,7 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
     // keymap / 事件回调全部经 propsRef 取最新 props，EditorView 只创建一次
     const propsRef = useRef(props)
     propsRef.current = props
+    const lastEmittedRef = useRef(props.value)
 
     const [tableSession, setTableSession] = useState<{
       from: number
@@ -275,7 +276,9 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
             }),
             EditorView.updateListener.of((update) => {
               if (!update.docChanged) return
-              propsRef.current.onChange(update.state.doc.toString())
+              const next = update.state.doc.toString()
+              lastEmittedRef.current = next
+              propsRef.current.onChange(next)
               // 用户输入（含粘贴/拖拽）取消 AI 续写 ghost
               if (
                 propsRef.current.ghostText &&
@@ -341,12 +344,14 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
     useEffect(() => {
       const view = viewRef.current
       if (!view) return
+      if (props.value === lastEmittedRef.current) return
       const current = view.state.doc.toString()
       if (props.value !== current) {
         // CM 会把 \r\n 规范化为 \n（每个 CRLF 少 1 字符）：anchor 必须按规范化后的长度计算，
         // 否则含 CRLF 的文档（zip 导入的 Windows md 等）dispatch 时 selection 越界，
         // 抛 RangeError("Selection points outside of document") → 整页白屏
         const anchor = props.value.replace(/\r\n/g, '\n').length
+        lastEmittedRef.current = props.value
         view.dispatch({
           changes: { from: 0, to: current.length, insert: props.value },
           selection: { anchor },

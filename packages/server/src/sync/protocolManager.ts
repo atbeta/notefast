@@ -261,12 +261,14 @@ export async function syncNow(): Promise<{ published: number; snapshotCreated: b
       console.warn('[sync] 设备注册上报失败:', e instanceof Error ? e.message : e)
     }
 
-    // 4) compaction 触发：累计轮数达阈值（或首轮强制快照）→ 新快照 + 清理本端 namespace 旧增量
+    const published = Math.max(0, newPublished - prevPublishedSeq)
+    // 4) compaction 触发：仅当本轮实际发布了变更才累计轮次。
+    //    空转心跳不计 —— 否则每 ~10 分钟无条件 VACUUM INTO 全库快照。
     let snapshotCreated = false
     let snapAnchors: Record<string, number> | undefined = forceSnapshot?.anchors
     if (forceSnapshot) {
       snapshotCreated = true
-    } else {
+    } else if (published > 0) {
       state.sinceSnapshot += 1
       if (state.sinceSnapshot >= SNAPSHOT_EVERY_N) {
         const r = await compactChanges(db, store, prefix, workRoot, getDeviceId(), state.consumed)
@@ -280,14 +282,13 @@ export async function syncNow(): Promise<{ published: number; snapshotCreated: b
     const manifest = await updateManifest(store, prefix, getDeviceId(), newPublished, snapAnchors)
     lastRemoteDevices = manifest.devices
 
-    const published = newPublished - prevPublishedSeq
     // compact 后旧增量已删，publishedSeq 推到快照锚点（快照已涵盖，无需再导出）；
     // 未 compact 时推到本次发布锚点
     state.publishedSeq = snapshotCreated ? (snapAnchors?.[getDeviceId()] ?? newPublished) : newPublished
     saveState()
     lastSuccessAt = lastRunAt
     lastError = null
-    return { published: Math.max(0, published), snapshotCreated, state }
+    return { published, snapshotCreated, state }
   } catch (e) {
     lastError = e instanceof Error ? e.message : String(e)
     throw e

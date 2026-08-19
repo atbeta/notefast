@@ -17,7 +17,7 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { getDb } from '../db'
-import { createRegisterTool, resetMcpToolRegistry, type ToolContext } from './tools/helpers'
+import { createRegisterTool, mcpToolRegistry, type ToolContext } from './tools/helpers'
 import { registerDocReadTools } from './tools/docRead'
 import { registerDocWriteTools } from './tools/docWrite'
 import { registerAiChatTools } from './tools/aiChat'
@@ -26,13 +26,13 @@ import { registerEntityTools } from './tools/entityTools'
 import { registerShareTools } from './tools/share'
 
 export function registerMcpTools(server: McpServer, notebookId: string): void {
-  resetMcpToolRegistry()
+  // 清单只填一次：并发 session 不得 reset 全局数组，否则 GET /mcp/tools 会被清空
+  const collect = mcpToolRegistry.length === 0
   const ctx: ToolContext = {
     server,
     db: getDb(),
     notebookId,
-    // 统一在注册处包一层日志，避免逐个 handler 手动包裹
-    registerTool: createRegisterTool(server),
+    registerTool: createRegisterTool(server, collect),
   }
 
   registerDocReadTools(ctx)

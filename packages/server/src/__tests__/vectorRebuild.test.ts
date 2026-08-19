@@ -19,7 +19,7 @@ import {
   getRuntime,
 } from '../services/aiRuntime'
 import { initVectorStore, indexBlock } from '../ai/indexer'
-import { runVectorRebuild } from '../ai/vectorRebuild'
+import { cancelVectorRebuild, runVectorRebuild } from '../ai/vectorRebuild'
 import { contentHash, embeddingFingerprint } from '../ai/vectorStore'
 import { SqliteVecVectorStore } from '../ai/vectorStoreVec'
 import { getBlockById } from '../store/blocks'
@@ -196,5 +196,41 @@ describe('runVectorRebuild', () => {
     embedInputs = []
     expect(await indexBlock(blockId)).toBe('skipped')
     expect(embedInputs.length).toBe(0)
+  })
+
+  test('取消后再次重建跳过 staging 已有新鲜块，不重付 embedding', async () => {
+    configure(false)
+    const docId = crypto.randomUUID()
+    seed({
+      docId,
+      title: '续跑文档',
+      blocks: Array.from({ length: 45 }, (_, i) => ({
+        id: `resume-${i}`,
+        parentId: docId,
+        content: `续跑块 ${i} payload`,
+      })),
+    })
+
+    let embedCalls = 0
+    const provider = {
+      fingerprint: embeddingFingerprint(EMBEDDING_PROVIDER),
+      async embedBatch(texts: string[]) {
+        embedCalls++
+        if (embedCalls === 2) cancelVectorRebuild()
+        return texts.map(() => new Float64Array([0.1, 0.2, 0.3]))
+      },
+    }
+
+    const cancelled = await runVectorRebuild({ provider })
+    expect(cancelled.status).toBe('stale')
+    expect(cancelled.error).toBe('cancelled')
+    const firstCalls = embedCalls
+    expect(firstCalls).toBe(2)
+
+    embedCalls = 0
+    const resumed = await runVectorRebuild({ provider })
+    expect(resumed.status).toBe('ready')
+    expect(resumed.count).toBe(46)
+    expect(embedCalls).toBe(1)
   })
 })

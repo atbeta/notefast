@@ -1,6 +1,5 @@
 import { getDb } from '../db'
 import { getRuntime } from '../services/aiRuntime'
-import { isBlockAiExcluded, isBlockLifecycleExcluded } from './aiExcludeQuery'
 import { buildIndexedText } from './indexedText'
 import type { BlockRow } from '@notefast/core'
 import {
@@ -114,20 +113,40 @@ export async function runVectorRebuild(
   const provider = options.provider ?? runtimeProvider()
   const previousStore = getVectorStore()
   const staging = new SqliteVecVectorStore()
-  const generation = crypto.randomUUID()
+  const stateRow = db.query(
+    `SELECT staging_generation, error FROM vector_store_state WHERE id = 'default'`,
+  ).get() as { staging_generation: string | null; error: string | null } | null
+  const cancelledStaging = stateRow?.error === 'cancelled' ? stateRow.staging_generation : null
+  const cancelledRow = cancelledStaging
+    ? db.query(
+      `SELECT id, model_fingerprint, dimension FROM vector_generations WHERE id = ?`,
+    ).get(cancelledStaging) as {
+      id: string
+      model_fingerprint: string
+      dimension: number
+    } | null
+    : null
+  const resume = Boolean(
+    cancelledRow && cancelledRow.model_fingerprint === provider.fingerprint,
+  )
+  const generation = resume ? cancelledRow!.id : crypto.randomUUID()
+  if (cancelledStaging && !resume) dropGeneration(cancelledStaging)
 
   try {
     await staging.init()
     // 构建器需要完整行（parent_id/root_id/type/tags）；软删除块不进索引
-    let sql = "SELECT * FROM blocks WHERE trim(content) != '' AND is_deleted = 0"
+    let sql = `SELECT b.* FROM blocks b
+      JOIN blocks d ON d.id = b.root_id
+      WHERE trim(b.content) != '' AND b.is_deleted = 0
+        AND d.is_deleted = 0 AND d.ai_exclude = 0
+        AND d.status NOT IN ('inbox', 'archived')`
     const params: string[] = []
     if (options.notebookId) {
-      sql += ' AND notebook_id = ?'
+      sql += ' AND b.notebook_id = ?'
       params.push(options.notebookId)
     }
-    sql += ' ORDER BY id'
-    const rows = (db.query(sql).all(...params) as BlockRow[])
-      .filter((row) => !isBlockAiExcluded(row.id) && !isBlockLifecycleExcluded(row.id))
+    sql += ' ORDER BY b.id'
+    const rows = db.query(sql).all(...params) as BlockRow[]
     if (rows.length === 0) throw new Error('没有可建立向量索引的 block')
 
     beginRebuildProgress(rows.length)
@@ -139,51 +158,86 @@ export async function runVectorRebuild(
       return texts
     }
 
-    const firstBatch = rows.slice(0, REBUILD_BATCH)
-    const firstTexts = await buildTexts(firstBatch)
-    const firstVectors = await provider.embedBatch(firstTexts)
-    const dimension = firstVectors[0]?.length
-    if (!dimension) throw new Error('Embedding provider 返回空向量')
-
-    await staging.createGeneration(generation, provider.fingerprint, dimension)
-    db.query(
-      `UPDATE vector_store_state
-       SET status = 'rebuilding', staging_generation = ?, error = NULL,
-            updated_at = datetime('now')
-       WHERE id = 'default'`,
-    ).run(generation)
-    const shadow = new ShadowVectorStore(previousStore, staging, generation)
-    setVectorStore(shadow)
+    const existingHashes = resume
+      ? new Map(
+        (db.query(
+          'SELECT block_id, content_hash FROM vector_entries WHERE generation = ?',
+        ).all(generation) as Array<{ block_id: string; content_hash: string }>)
+          .map((row) => [row.block_id, row.content_hash] as const),
+      )
+      : new Map<string, string>()
 
     const writeBatch = async (
       batch: BlockRow[],
       texts: string[],
-      vectors: Float64Array[],
+      vectors: Array<Float64Array | undefined>,
     ) => {
+      const shadow = getVectorStore()
       for (let index = 0; index < batch.length; index++) {
         const vector = vectors[index]
         if (!vector) continue
-        await shadow.upsert({
+        await shadow!.upsert({
           blockId: batch[index]!.id,
           vector,
           modelFingerprint: provider.fingerprint,
-          // 双 hash：content_hash = 索引文本 hash；source_content_hash = 原文 hash
           contentHash: contentHash(texts[index]!),
           sourceContentHash: contentHash(batch[index]!.content),
         })
       }
     }
-    await writeBatch(firstBatch, firstTexts, firstVectors)
-    bumpRebuildProgress(Math.min(REBUILD_BATCH, rows.length))
-    for (let offset = REBUILD_BATCH; offset < rows.length; offset += REBUILD_BATCH) {
-      // 取消支持：批间检查，staging 保留（下次重建从 staging 已有块续跑）
+
+    const embedFresh = async (batch: BlockRow[]): Promise<{
+      texts: string[]
+      vectors: Array<Float64Array | undefined>
+      embedded: number
+    }> => {
+      const texts = await buildTexts(batch)
+      const needIdx: number[] = []
+      for (let i = 0; i < batch.length; i++) {
+        if (existingHashes.get(batch[i]!.id) !== contentHash(texts[i]!)) needIdx.push(i)
+      }
+      const vectors: Array<Float64Array | undefined> = new Array(batch.length)
+      if (needIdx.length === 0) return { texts, vectors, embedded: 0 }
+      const embeddedVecs = await provider.embedBatch(needIdx.map((i) => texts[i]!))
+      for (let j = 0; j < needIdx.length; j++) vectors[needIdx[j]!] = embeddedVecs[j]
+      return { texts, vectors, embedded: needIdx.length }
+    }
+
+    let dimension = cancelledRow?.dimension
+    if (!resume) {
+      const firstBatch = rows.slice(0, REBUILD_BATCH)
+      const first = await embedFresh(firstBatch)
+      dimension = first.vectors.find((v) => v)?.length
+      if (!dimension) throw new Error('Embedding provider 返回空向量')
+      await staging.createGeneration(generation, provider.fingerprint, dimension)
+      db.query(
+        `UPDATE vector_store_state
+         SET status = 'rebuilding', staging_generation = ?, error = NULL,
+              updated_at = datetime('now')
+         WHERE id = 'default'`,
+      ).run(generation)
+      setVectorStore(new ShadowVectorStore(previousStore, staging, generation))
+      await writeBatch(firstBatch, first.texts, first.vectors)
+      bumpRebuildProgress(Math.min(REBUILD_BATCH, rows.length))
+    } else {
+      await staging.createGeneration(generation, provider.fingerprint, dimension!)
+      db.query(
+        `UPDATE vector_store_state
+         SET status = 'rebuilding', staging_generation = ?, error = NULL,
+              updated_at = datetime('now')
+         WHERE id = 'default'`,
+      ).run(generation)
+      setVectorStore(new ShadowVectorStore(previousStore, staging, generation))
+    }
+
+    const startOffset = resume ? 0 : REBUILD_BATCH
+    for (let offset = startOffset; offset < rows.length; offset += REBUILD_BATCH) {
+      // 取消支持：批间检查，staging 保留（下次重建从已有 content_hash 续跑）
       if (cancelRequested) break
       const batch = rows.slice(offset, offset + REBUILD_BATCH)
-      const texts = await buildTexts(batch)
-      const vectors = await provider.embedBatch(texts)
+      const { texts, vectors } = await embedFresh(batch)
       await writeBatch(batch, texts, vectors)
       bumpRebuildProgress(Math.min(offset + batch.length, rows.length))
-      // 批间让出事件循环 + 防打爆 embedding API（对齐 indexJobs 的 BATCH_GAP_MS）
       if (offset + REBUILD_BATCH < rows.length && REBUILD_BATCH_GAP_MS > 0) {
         await new Promise((r) => setTimeout(r, REBUILD_BATCH_GAP_MS))
       }
@@ -196,8 +250,19 @@ export async function runVectorRebuild(
          SET status = 'stale', error = 'cancelled', updated_at = datetime('now')
          WHERE id = 'default'`,
       ).run()
+      setVectorStore(previousStore)
       return (previousStore ?? staging).status()
     }
+
+    const keepIds = new Set(rows.map((row) => row.id))
+    const staleIds = (
+      db.query(
+        'SELECT block_id FROM vector_entries WHERE generation = ?',
+      ).all(generation) as Array<{ block_id: string }>
+    )
+      .map((row) => row.block_id)
+      .filter((id) => !keepIds.has(id))
+    if (staleIds.length > 0) staging.deleteManyFromGeneration(generation, staleIds)
 
     await staging.activateGeneration(generation)
     setVectorStore(staging)

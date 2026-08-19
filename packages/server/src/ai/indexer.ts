@@ -7,7 +7,8 @@
  */
 
 import { getDb } from '../db'
-import { getBlockById } from '../store/blocks'
+import { getBlockById, getBlocksByIds } from '../store/blocks'
+import type { BlockRow } from '@notefast/core'
 import { getRuntime } from '../services/aiRuntime'
 import {
   JsonVectorStore,
@@ -24,6 +25,7 @@ import {
   loadAiExcludedDocIds,
   loadInboxDocIds,
   loadArchivedDocIds,
+  loadLifecycleExcludedDocIds,
 } from './aiExcludeQuery'
 import { buildIndexedText } from './indexedText'
 
@@ -31,32 +33,49 @@ export type IndexBlockResult = 'indexed' | 'skipped' | 'deleted' | 'error' | 'no
 
 /** 当前指纹下，块是否已有相同 content_hash 的向量（可跳过 embed） */
 export function hasFreshVector(blockId: string, content: string): boolean {
+  const hashes = loadExistingContentHashes([blockId])
+  return hashes.get(blockId)?.has(contentHash(content)) ?? false
+}
+
+function loadExistingContentHashes(blockIds: string[]): Map<string, Set<string>> {
+  const hashes = new Map<string, Set<string>>()
+  if (blockIds.length === 0) return hashes
   const fingerprint = currentEmbeddingFingerprint()
-  if (!fingerprint) return false
-  const hash = contentHash(content)
+  if (!fingerprint) return hashes
   const db = getDb()
-  // json 后端：block_vectors；sqlite-vec：meta 表按 active generation
-  const jsonRow = db
-    .query(
-      `SELECT 1 FROM block_vectors
-       WHERE block_id = ? AND embedding_model = ? AND content_hash = ? AND index_version = ?`,
-    )
-    .get(blockId, fingerprint, hash, VECTOR_INDEX_VERSION)
-  if (jsonRow) return true
+  const ph = blockIds.map(() => '?').join(',')
+  const add = (id: string, hash: string | null | undefined) => {
+    if (!hash) return
+    let set = hashes.get(id)
+    if (!set) {
+      set = new Set()
+      hashes.set(id, set)
+    }
+    set.add(hash)
+  }
+  const jsonRows = db.query(
+    `SELECT block_id, content_hash FROM block_vectors
+     WHERE embedding_model = ? AND index_version = ? AND block_id IN (${ph})`,
+  ).all(fingerprint, VECTOR_INDEX_VERSION, ...(blockIds as [string, ...string[]])) as Array<{
+    block_id: string
+    content_hash: string
+  }>
+  for (const row of jsonRows) add(row.block_id, row.content_hash)
 
   const state = db
     .query("SELECT active_backend, active_generation FROM vector_store_state WHERE id = 'default'")
     .get() as { active_backend: string; active_generation: string | null } | undefined
   if (state?.active_backend === 'sqlite-vec' && state.active_generation) {
-    const meta = db
-      .query(
-        `SELECT 1 FROM vector_entries
-         WHERE generation = ? AND block_id = ? AND content_hash = ?`,
-      )
-      .get(state.active_generation, blockId, hash)
-    if (meta) return true
+    const meta = db.query(
+      `SELECT block_id, content_hash FROM vector_entries
+       WHERE generation = ? AND block_id IN (${ph})`,
+    ).all(state.active_generation, ...(blockIds as [string, ...string[]])) as Array<{
+      block_id: string
+      content_hash: string
+    }>
+    for (const row of meta) add(row.block_id, row.content_hash)
   }
-  return false
+  return hashes
 }
 
 export async function indexBlock(blockId: string): Promise<IndexBlockResult> {
@@ -112,45 +131,58 @@ export async function indexBlockBatch(
   if (!r.hasEmbedding()) return { indexed: 0, skipped: 0, errors: 0 }
 
   const db = getDb()
+  const rows = getBlocksByIds(db, blockIds)
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  const rootIds = rows.map((row) => (row.type === 'document' ? row.id : row.root_id))
+  const aiExcluded = loadAiExcludedDocIds(rootIds)
+  const lifecycleExcluded = loadLifecycleExcludedDocIds(rootIds)
   const toEmbed: Array<{ id: string; content: string }> = []
   let skipped = 0
   let errors = 0
 
+  const purge: string[] = []
+  const candidates: BlockRow[] = []
   for (const id of blockIds) {
-    if (isBlockAiExcluded(id)) {
-      try {
-        await deleteVector(id)
-      } catch {
-        errors++
-      }
-      continue
-    }
-    if (isBlockLifecycleExcluded(id)) {
-      // inbox / archived：与 ai_exclude 行为对称，清掉可能残留的旧向量
-      try {
-        await deleteVector(id)
-      } catch {
-        errors++
-      }
-      continue
-    }
-    const row = getBlockById(db, id)
+    const row = byId.get(id)
     if (!row) continue
-    // 与 indexBlock 一致：索引文本含上下文与图片 caption（视觉启用时）
-    const text = await buildIndexedText(row)
-    if (!text) {
-      try {
-        await deleteVector(id)
-      } catch {
-        errors++
-      }
+    const rootId = row.type === 'document' ? row.id : row.root_id
+    if (aiExcluded.has(rootId) || lifecycleExcluded.has(rootId)) {
+      purge.push(id)
       continue
     }
-    if (hasFreshVector(id, text)) {
+    candidates.push(row)
+  }
+  if (purge.length > 0) {
+    try {
+      await deleteVectorMany(purge)
+    } catch {
+      errors += purge.length
+    }
+  }
+
+  const texts: string[] = []
+  for (const row of candidates) texts.push(await buildIndexedText(row))
+  const freshHashes = loadExistingContentHashes(candidates.map((row) => row.id))
+  const empty: string[] = []
+  for (let i = 0; i < candidates.length; i++) {
+    const row = candidates[i]!
+    const text = texts[i]!
+    if (!text) {
+      empty.push(row.id)
+      continue
+    }
+    if (freshHashes.get(row.id)?.has(contentHash(text))) {
       skipped++
       continue
     }
     toEmbed.push({ id: row.id, content: text })
+  }
+  if (empty.length > 0) {
+    try {
+      await deleteVectorMany(empty)
+    } catch {
+      errors += empty.length
+    }
   }
 
   if (toEmbed.length === 0) return { indexed: 0, skipped, errors }
@@ -186,15 +218,18 @@ export async function indexAllBlocks(notebookId?: string): Promise<{ indexed: nu
   }
 
   const db = getDb()
-  let sql = 'SELECT id, content FROM blocks WHERE content IS NOT NULL AND content != ? AND is_deleted = 0'
+  let sql = `SELECT b.id FROM blocks b
+    JOIN blocks d ON d.id = b.root_id
+    WHERE b.content IS NOT NULL AND b.content != ? AND b.is_deleted = 0
+      AND d.is_deleted = 0 AND d.ai_exclude = 0
+      AND d.status NOT IN ('inbox', 'archived')`
   const params: string[] = ['']
   if (notebookId) {
-    sql += ' AND notebook_id = ?'
+    sql += ' AND b.notebook_id = ?'
     params.push(notebookId)
   }
 
-  const rows = (db.query(sql).all(...params) as Array<{ id: string; content: string }>)
-    .filter((row) => !isBlockAiExcluded(row.id) && !isBlockLifecycleExcluded(row.id))
+  const rows = db.query(sql).all(...params) as Array<{ id: string }>
   if (rows.length === 0) return { indexed: 0, errors: 0 }
 
   let indexed = 0

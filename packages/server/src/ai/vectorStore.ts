@@ -151,6 +151,7 @@ export class JsonVectorStore implements VectorStore {
 
     const embedding = encodeEmbedding(record.vector)
     db.transaction(() => {
+      const existed = db.query('SELECT 1 FROM block_vectors WHERE block_id = ?').get(record.blockId)
       db.query(
         `INSERT INTO block_vectors
            (block_id, embedding, dim, embedding_model, content_hash, source_content_hash, index_version, updated_at)
@@ -172,13 +173,12 @@ export class JsonVectorStore implements VectorStore {
         record.sourceContentHash,
         VECTOR_INDEX_VERSION,
       )
-      const count = this.countSync(record.modelFingerprint, record.vector.length)
       db.query(
         `UPDATE vector_store_state
          SET active_backend = 'json', status = 'ready', model_fingerprint = ?,
-             dimension = ?, indexed_count = ?, error = NULL, updated_at = datetime('now')
+             dimension = ?, indexed_count = indexed_count + ?, error = NULL, updated_at = datetime('now')
          WHERE id = 'default'`,
-      ).run(record.modelFingerprint, record.vector.length, count)
+      ).run(record.modelFingerprint, record.vector.length, existed ? 0 : 1)
     })()
   }
 
@@ -216,7 +216,7 @@ export class JsonVectorStore implements VectorStore {
 
     const db = getDb()
     let sql = `
-      SELECT v.block_id, v.embedding, b.content, b.root_id
+      SELECT v.block_id, v.embedding, b.root_id
       FROM block_vectors v
       JOIN blocks b ON b.id = v.block_id
       WHERE v.embedding_model = ? AND v.dim = ? AND v.index_version = ?
@@ -242,16 +242,25 @@ export class JsonVectorStore implements VectorStore {
     const rows = db.query(sql).all(...params as [string, ...Array<string | number>]) as Array<{
       block_id: string
       embedding: string | Uint8Array
-      content: string
       root_id: string
     }>
     const scored = rows
       .map((row) => {
         const vector = decodeEmbedding(row.embedding)
-        return { ...row, score: vector.length > 0 ? cosine(vector, query) : 0 }
+        return { block_id: row.block_id, root_id: row.root_id, score: vector.length > 0 ? cosine(vector, query) : 0 }
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, options.limit)
+
+    const contentMap = new Map<string, string>()
+    if (scored.length > 0) {
+      const ids = scored.map((row) => row.block_id)
+      const ph = ids.map(() => '?').join(',')
+      const contents = db.query(
+        `SELECT id, content FROM blocks WHERE id IN (${ph})`,
+      ).all(...(ids as [string, ...string[]])) as Array<{ id: string; content: string }>
+      for (const row of contents) contentMap.set(row.id, row.content)
+    }
 
     const titleMap = new Map<string, string>()
     for (const docId of new Set(scored.map((row) => row.root_id))) {
@@ -261,7 +270,7 @@ export class JsonVectorStore implements VectorStore {
     return scored.map((row) => ({
       block_id: row.block_id,
       score: Math.round(row.score * 10000) / 10000,
-      content: row.content,
+      content: contentMap.get(row.block_id) || '',
       doc_id: row.root_id,
       doc_title: titleMap.get(row.root_id) || '未命名文档',
     }))

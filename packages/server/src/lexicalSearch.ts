@@ -291,7 +291,8 @@ export function lexicalSearch(query: string, opts: LexicalSearchOptions): Lexica
   // ── LIKE 路（所有 term，含 ASCII——SQLite LIKE 对 ASCII 不区分大小写）──
   let likeRows = runLikePath(groups, opts, false, sentence)
   let orFallback = false
-  if (likeRows.length === 0 && !opts.strictOnly) {
+  // 单组时 AND ≡ OR，再扫一遍纯浪费
+  if (likeRows.length === 0 && !opts.strictOnly && groups.length > 1) {
     likeRows = runLikePath(groups, opts, true, sentence)
     orFallback = likeRows.length > 0
   }

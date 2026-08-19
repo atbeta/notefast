@@ -87,6 +87,37 @@ describe('FTS 触发器', () => {
     expect(results.length).toBeGreaterThan(0)
     expect(results.some((r) => r.id === id)).toBe(true)
   })
+
+  test('FTS 更新/删除按 mapped rowid 定位', () => {
+    const db = getDb()
+    const id = crypto.randomUUID()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level)
+       VALUES (?, ?, NULL, ?, 'paragraph', ?, 0, 0)`,
+    ).run(id, notebookId, id, 'mapped fts')
+
+    const mapped = db.query(
+      'SELECT fts_rowid FROM blocks_fts_map WHERE block_id = ?',
+    ).get(id) as { fts_rowid: number } | undefined
+    expect(mapped).toBeDefined()
+
+    const triggerSql = (
+      db.query(
+        "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'blocks_fts_update'",
+      ).get() as { sql: string }
+    ).sql
+    expect(triggerSql).toContain('blocks_fts_map')
+    expect(triggerSql).toContain('rowid')
+
+    const byMap = db.query(
+      'EXPLAIN QUERY PLAN SELECT fts_rowid FROM blocks_fts_map WHERE block_id = ?',
+    ).all(id) as Array<{ detail: string }>
+    expect(byMap.map((row) => row.detail).join(' ')).toMatch(/SEARCH/i)
+
+    db.query('UPDATE blocks SET content = ? WHERE id = ?').run('mapped fts updated', id)
+    const fts = db.query('SELECT content FROM blocks_fts WHERE id = ?').get(id) as { content: string }
+    expect(fts.content).toBe('mapped fts updated')
+  })
 })
 
 describe('时间戳毫秒精度（P2-NEW-08）', () => {

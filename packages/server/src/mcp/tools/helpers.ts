@@ -28,7 +28,7 @@ import {
 export type Db = ReturnType<typeof getDb>
 
 export function toText(data: unknown): { type: 'text'; text: string } {
-  return { type: 'text' as const, text: JSON.stringify(data, null, 2) }
+  return { type: 'text' as const, text: JSON.stringify(data) }
 }
 
 // ───────────────────── 统一错误语义 ─────────────────────
@@ -160,12 +160,12 @@ export function withToolLogging<A, R>(name: string, handler: (args: A) => Promis
 export type RegisterToolFn = McpServer['registerTool']
 
 /** 统一在注册处包一层日志，避免逐个 handler 手动包裹 */
-export function createRegisterTool(server: McpServer): RegisterToolFn {
+export function createRegisterTool(server: McpServer, collect = true): RegisterToolFn {
   return ((name: string, config: unknown, handler: (args: never) => Promise<unknown>) => {
     const desc = typeof config === 'object' && config !== null && 'description' in config
       ? String((config as { description: unknown }).description)
       : ''
-    mcpToolRegistry.push({ name, description: desc })
+    if (collect) mcpToolRegistry.push({ name, description: desc })
     return server.registerTool(name, config as never, withToolLogging(name, handler) as never)
   }) as RegisterToolFn
 }

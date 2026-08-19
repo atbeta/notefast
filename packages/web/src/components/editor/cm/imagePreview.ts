@@ -53,37 +53,60 @@ class ImageWidget extends WidgetType {
   }
 }
 
-function buildDecorations(state: EditorState): DecorationSet {
-  const ranges: Range<Decoration>[] = []
-  const sel = state.selection.main
+interface ImageLine {
+  from: number
+  to: number
+  src: string
+  alt: string
+}
+
+function findImageLines(state: EditorState): ImageLine[] {
+  const lines: ImageLine[] = []
   for (let i = 1; i <= state.doc.lines; i++) {
     const line = state.doc.line(i)
     const m = IMAGE_LINE_RE.exec(line.text)
     if (!m) continue
-    // 光标 / 选区落在该行时显示源码，便于编辑
-    if (sel.from <= line.to && sel.to >= line.from) continue
     const src = resolveSrc(m[2])
-    // data URI 直接渲染太重，跳过
     if (src.startsWith('data:')) continue
+    lines.push({ from: line.from, to: line.to, src, alt: m[1] })
+  }
+  return lines
+}
+
+function buildDecorations(state: EditorState, images: ImageLine[]): DecorationSet {
+  const ranges: Range<Decoration>[] = []
+  const sel = state.selection.main
+  for (const img of images) {
+    if (sel.from <= img.to && sel.to >= img.from) continue
     ranges.push(
       Decoration.replace({
-        widget: new ImageWidget(src, m[1], line.from),
+        widget: new ImageWidget(img.src, img.alt, img.from),
         block: true,
-      }).range(line.from, line.to),
+      }).range(img.from, img.to),
     )
   }
   return Decoration.set(ranges)
 }
 
+interface ImagePreviewValue {
+  images: ImageLine[]
+  deco: DecorationSet
+}
+
 /**
  * 图片行内预览：非光标行的图片语法渲染为 <img>，本质是装饰层，文档仍是 Markdown 源码。
  * 注意：block 级 Decoration 必须由 StateField 提供（ViewPlugin 只支持行内装饰）。
+ * 选区变化只按缓存图片行重建装饰，避免每移光标全文扫一遍。
  */
-export const imagePreview: Extension = StateField.define<DecorationSet>({
-  create: (state) => buildDecorations(state),
-  update(_deco, tr) {
-    if (tr.docChanged || tr.selection) return buildDecorations(tr.state)
-    return _deco
+export const imagePreview: Extension = StateField.define<ImagePreviewValue>({
+  create(state) {
+    const images = findImageLines(state)
+    return { images, deco: buildDecorations(state, images) }
   },
-  provide: (f) => EditorView.decorations.from(f),
+  update(value, tr) {
+    if (!tr.docChanged && !tr.selection) return value
+    const images = tr.docChanged ? findImageLines(tr.state) : value.images
+    return { images, deco: buildDecorations(tr.state, images) }
+  },
+  provide: (f) => EditorView.decorations.from(f, (v) => v.deco),
 })

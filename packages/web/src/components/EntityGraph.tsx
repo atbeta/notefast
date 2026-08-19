@@ -161,14 +161,13 @@ export default function EntityGraph({
   // 模拟边：同样用 ref 持有（与节点同生命周期，见下方 effect）
   const simEdgesRef = useRef<SimEdge[]>([])
   // 数据快照（节点 id 集合），用于判断「图结构」是否真的变了，避免渲染导致重启
-  const graphKey = nodes
-    .map((n) => `${n.id}:${n.mention_count}:${n.kind}`)
-    .sort()
-    .join('|')
-    + '|' + edges
-    .map((e) => `${e.source}>${e.target}:${e.weight}`)
-    .sort()
-    .join('|')
+  const graphKey = useMemo(
+    () =>
+      nodes.map((n) => `${n.id}:${n.mention_count}:${n.kind}`).sort().join('|')
+      + '|'
+      + edges.map((e) => `${e.source}>${e.target}:${e.weight}`).sort().join('|'),
+    [nodes, edges],
+  )
 
   // d3-force 力导向模拟：
   // - 只在「图结构（graphKey）或容器尺寸」真正变化时重建，绝不因渲染/重绘重启。

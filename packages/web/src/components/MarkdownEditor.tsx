@@ -356,12 +356,20 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
     [endRefine, aiWriting],
   )
 
-  const lines = content === '' ? 1 : content.split('\n').length
-  const charCount = content.length
-  const cjkCount = (content.match(/[\u4e00-\u9fff]/g) || []).length
-  const enCount = content.length - cjkCount
-  const words = cjkCount + Math.floor(enCount / 5)
-  const readMin = words <= 0 ? 0 : Math.max(1, Math.round(words / CJK_WORDS_PER_MIN))
+  const { lines, charCount, readMin } = useMemo(() => {
+    let lines = 1
+    let cjkCount = 0
+    for (let i = 0; i < content.length; i++) {
+      const code = content.charCodeAt(i)
+      if (code === 10) lines++
+      if (code >= 0x4e00 && code <= 0x9fff) cjkCount++
+    }
+    const charCount = content.length
+    const enCount = charCount - cjkCount
+    const words = cjkCount + Math.floor(enCount / 5)
+    const readMin = words <= 0 ? 0 : Math.max(1, Math.round(words / CJK_WORDS_PER_MIN))
+    return { lines, charCount, words, readMin }
+  }, [content])
   const dirty = content !== initialContent
   const unsavedToServer = content !== lastSavedContentRef.current
 

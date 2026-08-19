@@ -123,6 +123,7 @@ export class SqliteVecVectorStore implements VectorStore {
       let entry = db.query(
         'SELECT id FROM vector_entries WHERE generation = ? AND block_id = ?',
       ).get(generation, record.blockId) as { id: number } | null
+      const inserted = !entry
       if (!entry) {
         const result = db.query(
           `INSERT INTO vector_entries
@@ -162,13 +163,13 @@ export class SqliteVecVectorStore implements VectorStore {
         block.notebook_id,
         block.updated_at,
       )
-      db.query(
-        `UPDATE vector_generations
-         SET indexed_count = (
-           SELECT count(*) FROM vector_entries WHERE generation = ?
-         ), updated_at = datetime('now')
-         WHERE id = ?`,
-      ).run(generation, generation)
+      if (inserted) {
+        db.query(
+          `UPDATE vector_generations
+           SET indexed_count = indexed_count + 1, updated_at = datetime('now')
+           WHERE id = ?`,
+        ).run(generation)
+      }
     })()
     return true
   }

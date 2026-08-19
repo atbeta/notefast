@@ -1,4 +1,4 @@
-import { useState, useEffect, createElement, type ReactNode } from 'react'
+import { useState, useEffect, createElement, memo, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -15,7 +15,7 @@ interface ChatMarkdownProps {
 }
 
 /** 聊天气泡内的 Markdown 渲染（GFM + 代码高亮 + Mermaid + KaTeX 公式） */
-export default function ChatMarkdown({ content, className = '' }: ChatMarkdownProps) {
+function ChatMarkdown({ content, className = '' }: ChatMarkdownProps) {
   if (!content) return null
   return (
     <div className={`chat-prose ${className}`}>
@@ -109,3 +109,5 @@ function ChatCodeBlock({ code, language }: { code: string; language: string }) {
     </div>
   )
 }
+
+export default memo(ChatMarkdown)

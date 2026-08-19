@@ -116,6 +116,29 @@ describe('SqliteVecVectorStore', () => {
     expect(hits[0]!.block_id).toBe('vec-b')
   })
 
+  test('upsert 新块 indexed_count +1，覆盖同一块不增加', async () => {
+    const db = getDb()
+    db.query("UPDATE blocks SET content = 'alpha' WHERE id = 'vec-a'").run()
+    db.query("UPDATE blocks SET content = 'beta' WHERE id = 'vec-b'").run()
+    const store = new SqliteVecVectorStore()
+    await store.init()
+    await store.createGeneration('count-generation', 'model-a', 2)
+    const rec = (id: string, text: string) => store.upsertToGeneration('count-generation', {
+      blockId: id,
+      vector: new Float64Array([1, 0]),
+      modelFingerprint: 'model-a',
+      contentHash: contentHash(text),
+      sourceContentHash: contentHash(text),
+    })
+    expect(await rec('vec-a', 'alpha')).toBe(true)
+    expect(await rec('vec-b', 'beta')).toBe(true)
+    expect(await rec('vec-a', 'alpha')).toBe(true)
+    const row = getDb().query(
+      "SELECT indexed_count AS c FROM vector_generations WHERE id = 'count-generation'",
+    ).get() as { c: number }
+    expect(row.c).toBe(2)
+  })
+
   test('直接删除 block 时同步清理 vec0 行', async () => {
     const db = getDb()
     db.query(

@@ -118,6 +118,8 @@ export default function AIChatPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesFadeRef = useScrollFade<HTMLDivElement>()
   const abortRef = useRef<AbortController | null>(null)
+  const pendingAssistantRef = useRef<{ content?: string; reasoning?: string } | null>(null)
+  const assistantRafRef = useRef<number | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   // 语音转文字：识别中的实例 + 开始识别时的输入框基底文本
@@ -218,6 +220,7 @@ export default function AIChatPanel({
   useEffect(() => {
     return () => {
       if (abortRef.current) abortRef.current.abort()
+      if (assistantRafRef.current != null) cancelAnimationFrame(assistantRafRef.current)
     }
   }, [])
 
@@ -238,7 +241,11 @@ export default function AIChatPanel({
     return Array.from(map.values())
   }, [citations])
 
-  const upsertAssistant = (patch: { content?: string; reasoning?: string }) => {
+  const flushAssistant = () => {
+    assistantRafRef.current = null
+    const patch = pendingAssistantRef.current
+    pendingAssistantRef.current = null
+    if (!patch) return
     setMessages((prev) => {
       const next = [...prev]
       const last = next[next.length - 1]
@@ -257,6 +264,16 @@ export default function AIChatPanel({
       }
       return next
     })
+  }
+
+  const upsertAssistant = (patch: { content?: string; reasoning?: string }) => {
+    const prev = pendingAssistantRef.current
+    pendingAssistantRef.current = {
+      content: patch.content !== undefined ? patch.content : prev?.content,
+      reasoning: patch.reasoning !== undefined ? patch.reasoning : prev?.reasoning,
+    }
+    if (assistantRafRef.current != null) return
+    assistantRafRef.current = requestAnimationFrame(flushAssistant)
   }
 
   const addAttachments = (files: Iterable<File>) => {
@@ -379,6 +396,12 @@ export default function AIChatPanel({
         },
       )
     })
+
+    if (assistantRafRef.current != null) {
+      cancelAnimationFrame(assistantRafRef.current)
+      assistantRafRef.current = null
+    }
+    flushAssistant()
 
     if (aborted) {
       // 用户停止：保留已生成内容，不显示错误

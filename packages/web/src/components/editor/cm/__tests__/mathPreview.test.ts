@@ -10,7 +10,7 @@ function scan(doc: string): Array<{ from: number; to: number; src: string }> {
 /** 生成状态并统计 mathPreview 的 replace 装饰数（光标/选区在块内时应为 0） */
 function decoCount(doc: string, anchor: number): number {
   const state = EditorState.create({ doc, selection: { anchor }, extensions: [mathPreview] })
-  const deco = state.field(mathPreview)
+  const deco = state.field(mathPreview).deco
   let count = 0
   const iter = deco.iter()
   while (iter.value) {
@@ -75,11 +75,16 @@ describe('mathPreview 装饰', () => {
   })
 
   test('光标在块内（含围栏行）不渲染，回退源码', () => {
-    // 内容行内部
     expect(decoCount(MATH_DOC, 8)).toBe(0)
-    // 开围栏行首
     expect(decoCount(MATH_DOC, 0)).toBe(0)
-    // 闭围栏行
     expect(decoCount(MATH_DOC, MATH_DOC.length)).toBe(0)
+  })
+
+  test('选区变化复用块扫描缓存', () => {
+    const doc = MATH_DOC + '\n\n后续文本'
+    const state = EditorState.create({ doc, selection: { anchor: doc.length }, extensions: [mathPreview] })
+    const next = state.update({ selection: { anchor: doc.length - 1 } }).state
+    expect(next.field(mathPreview).blocks).toBe(state.field(mathPreview).blocks)
+    expect(next.field(mathPreview).deco.size).toBe(1)
   })
 })

@@ -181,6 +181,25 @@ describe('sync protocol manager', () => {
     expect(r2.state.publishedSeq).toBe(r1.state.publishedSeq)
   })
 
+  test('空转心跳不累计 compaction：连续无变更同步不生成快照', async () => {
+    initProtocolManager(testDir)
+    await configureProtocol()
+    const { client, objects } = makeMockS3()
+    _setProtocolStoreForTests(createS3ObjectStore(S3_CFG, client))
+
+    insertDoc(crypto.randomUUID(), '仅一轮有变更')
+    const first = await syncNow()
+    expect(first.published).toBeGreaterThan(0)
+    expect(first.snapshotCreated).toBe(false)
+
+    for (let i = 0; i < 12; i++) {
+      const r = await syncNow()
+      expect(r.published).toBe(0)
+      expect(r.snapshotCreated).toBe(false)
+    }
+    expect([...objects.keys()].some((k) => k.endsWith('snapshot.db'))).toBe(false)
+  })
+
   test('并发同步返回 sync_in_progress', async () => {
     initProtocolManager(testDir)
     await configureProtocol()

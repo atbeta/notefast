@@ -150,10 +150,10 @@ export function findTableBlocks(state: EditorState): TableBlockRange[] {
   return blocks
 }
 
-function buildDecorations(state: EditorState): DecorationSet {
+function buildDecorations(state: EditorState, blocks: TableBlockRange[]): DecorationSet {
   const ranges: Range<Decoration>[] = []
   const sel = state.selection.main
-  for (const block of findTableBlocks(state)) {
+  for (const block of blocks) {
     // 光标 / 选区落在表格块内时显示源码，便于编辑
     if (sel.from <= block.to && sel.to >= block.from) continue
     ranges.push(
@@ -166,12 +166,22 @@ function buildDecorations(state: EditorState): DecorationSet {
   return Decoration.set(ranges, true)
 }
 
-/** block 级 Decoration 必须由 StateField 提供（ViewPlugin 只支持行内装饰） */
-export const tablePreview: Extension = StateField.define<DecorationSet>({
-  create: (state) => buildDecorations(state),
-  update(deco, tr) {
-    if (tr.docChanged || tr.selection) return buildDecorations(tr.state)
-    return deco
+interface TablePreviewValue {
+  blocks: TableBlockRange[]
+  deco: DecorationSet
+}
+
+/** block 级 Decoration 必须由 StateField 提供（ViewPlugin 只支持行内装饰）。
+ *  选区变化只按缓存块范围重建装饰，避免每移光标全文扫一遍。 */
+export const tablePreview: Extension = StateField.define<TablePreviewValue>({
+  create(state) {
+    const blocks = findTableBlocks(state)
+    return { blocks, deco: buildDecorations(state, blocks) }
   },
-  provide: (f) => EditorView.decorations.from(f),
+  update(value, tr) {
+    if (!tr.docChanged && !tr.selection) return value
+    const blocks = tr.docChanged ? findTableBlocks(tr.state) : value.blocks
+    return { blocks, deco: buildDecorations(tr.state, blocks) }
+  },
+  provide: (f) => EditorView.decorations.from(f, (v) => v.deco),
 })

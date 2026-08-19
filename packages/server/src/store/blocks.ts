@@ -150,12 +150,14 @@ export interface ListDocRowsOptions {
   order?: 'updated_desc' | 'updated_asc'
   /** 默认 false：只列未删除文档。软删除文档不应出现在任何列表/导出中 */
   includeDeleted?: boolean
+  /** SQL LIMIT；不设则全量 */
+  limit?: number
 }
 
 /** 文档根行列表（type='document'）；过滤约定（is_deleted / 排序）统一在此 */
 export function listDocRows(db: Db, opts: ListDocRowsOptions = {}): BlockRow[] {
   let sql = "SELECT * FROM blocks WHERE type = 'document'"
-  const params: string[] = []
+  const params: (string | number)[] = []
   if (!opts.includeDeleted) sql += ' AND is_deleted = 0'
   if (opts.notebookId) {
     sql += ' AND notebook_id = ?'
@@ -170,7 +172,11 @@ export function listDocRows(db: Db, opts: ListDocRowsOptions = {}): BlockRow[] {
   sql += opts.order === 'updated_asc'
     ? ' ORDER BY updated_at ASC, rowid ASC'
     : ' ORDER BY updated_at DESC, rowid DESC'
-  return db.query(sql).all(...(params as [string, ...string[]])) as BlockRow[]
+  if (opts.limit != null && opts.limit > 0) {
+    sql += ' LIMIT ?'
+    params.push(opts.limit)
+  }
+  return db.query(sql).all(...(params as [string, ...Array<string | number>])) as BlockRow[]
 }
 
 /** 未删除文档计数（sync 归档的概要信息用） */

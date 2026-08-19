@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { CURRENT_SCHEMA_VERSION } from '@notefast/core'
 import { configureSqliteForExtensions } from './sqliteVec'
 import { runMigrations } from './migrations/framework'
+import { rebuildBlocksFts } from './fts'
 import { safeLogInfo } from '@notefast/core'
 import { revokeWebSessionsIfPasswordChanged } from './services/apiTokens'
 import { auditSecretFilePermissions } from './services/secretAudit'
@@ -37,8 +38,9 @@ export function initDb(dataDir: string): { db: Database; notebookId: string } {
 
   const ftsCount = (db.query('SELECT count(*) as c FROM blocks_fts').get() as { c: number })?.c ?? 0
   const blocksCount = (db.query('SELECT count(*) as c FROM blocks').get() as { c: number })?.c ?? 0
-  if (ftsCount < blocksCount) {
-    db.exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
+  const mapCount = (db.query('SELECT count(*) as c FROM blocks_fts_map').get() as { c: number })?.c ?? 0
+  if (ftsCount < blocksCount || mapCount !== ftsCount) {
+    rebuildBlocksFts(db)
   }
 
   let notebookId = getDefaultNotebookId(db)

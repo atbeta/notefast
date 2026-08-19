@@ -236,8 +236,7 @@ export function registerDocReadTools(ctx: ToolContext): void {
     'notefast://docs',
     { title: '全部文档', description: '知识库中所有文档的索引列表（自动排除「对 AI 隐藏」的文档）' },
     async () => {
-      const rows = listDocRows(getDb())
-        .slice(0, 1000)
+      const rows = listDocRows(getDb(), { limit: 1000 })
         .map((r) => ({ id: r.id, content: r.content }))
       const excluded = loadAiExcludedDocIds(rows.map((r) => r.id))
       const visible = rows.filter((r) => !excluded.has(r.id))
