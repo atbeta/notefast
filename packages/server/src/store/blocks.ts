@@ -561,6 +561,9 @@ export function listDocRevisions(db: Db, docId: string, limit = 100): DocRevisio
     )
     .all(docId, docId, Math.max(1, limit - 1)) as DocRevisionEntry[]
   const current = blocksToMarkdown(buildBlockTree(fetchDocBlocks(db, docId)))
+  // 当前版本的「生成时间」= 文档根 last-modified：未改过 → created_at，改过 → updated_at。
+  // 不用 nowTimestamp()——那会每次打开历史都显示当前时刻，而非文档实际的最近修改时间。
+  const docRoot = getDocById(db, docId)
   return [
     {
       kind: 'snapshot',
@@ -569,7 +572,7 @@ export function listDocRevisions(db: Db, docId: string, limit = 100): DocRevisio
       rev: Number.MAX_SAFE_INTEGER,
       content: current,
       actor: 'current',
-      created_at: nowTimestamp(),
+      created_at: docRoot?.updated_at ?? docRoot?.created_at ?? nowTimestamp(),
       is_current: true,
     },
     ...rows,

@@ -10,6 +10,7 @@ import {
   getBlockRevision,
   listDocRevisions,
   recordDocSnapshot,
+  getDocById,
   MAX_REVISIONS_PER_BLOCK,
 } from '../store/blocks'
 import blocksRouter from '../api/blocks'
@@ -153,6 +154,9 @@ describe('block revisions (store)', () => {
     expect(revs[0]!.content).toContain('段落一改')
     expect(revs[0]!.content).toContain('段落二改')
     expect(revs.slice(1).every((r) => r.kind === 'block')).toBe(true)
+    // 当前版本时间 = 文档根 last-modified（改过 → updated_at），不是请求时刻
+    const root = getDocById(getDb(), docId)
+    expect(revs[0]!.created_at).toBe((root?.updated_at ?? root?.created_at) ?? revs[0]!.created_at)
     // 各块旧值都在
     const byBlock = new Map(revs.slice(1).map((r) => [r.block_id, r.content]))
     expect(byBlock.get(docId)).toBe('标题')
