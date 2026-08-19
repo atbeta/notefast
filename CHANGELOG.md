@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.70.0](https://github.com/atbeta/notefast/compare/v0.69.0...v0.70.0) (2026-08-19)
+
+
+### Features
+
+* **server,web:** separate version checkpoints from autosave in doc history ([e47b53c](https://github.com/atbeta/notefast/commit/e47b53ca0bf05e739f35d66c8b4251492a49c21e))
+* **server,web:** track asset original filename + copy local path in resources ([520ab40](https://github.com/atbeta/notefast/commit/520ab400c8481776e5fade61663ae30e8477e995))
+* **web:** mermaid lightbox supports further zoom (1x-4x) ([f1d33c5](https://github.com/atbeta/notefast/commit/f1d33c5d880fb0417917afeb57878fb5b74576c3))
+* **web:** zoom mermaid diagrams in a lightbox ([8f65846](https://github.com/atbeta/notefast/commit/8f6584626304abe7295c7367388a62f5f6d4c26d))
+
+
+### Bug Fixes
+
+* **server:** history 'current version' shows real last-modified time ([097e435](https://github.com/atbeta/notefast/commit/097e435b740c271fb2b61b8b010f768c3ee2ff5f))
+
 ## [0.69.0](https://github.com/atbeta/notefast/compare/v0.68.1...v0.69.0) (2026-08-18)
 
 
