@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.72.0](https://github.com/atbeta/notefast/compare/v0.71.2...v0.72.0) (2026-08-19)
+
+
+### Features
+
+* seed a welcome note instead of a first-run modal ([debf6f7](https://github.com/atbeta/notefast/commit/debf6f71fcfc8399322817f9facfa948d3e8febc))
+* **web:** click-to-filter tags with two-row expand ([4d94373](https://github.com/atbeta/notefast/commit/4d94373a8df88d287e13526fe834e8c221e848ef))
+* **web:** unify image and mermaid lightbox zoom ([eaa8cf3](https://github.com/atbeta/notefast/commit/eaa8cf3de8c2d9f0f589d0a24572c060bf103afa))
+
+
+### Bug Fixes
+
+* **web:** match doc overflow menus to lifecycle ([f894b88](https://github.com/atbeta/notefast/commit/f894b881a38be5bce103f3b84f1695631fefbff6))
+
+
+### Performance Improvements
+
+* cut hot-path SQLite scans and editor/chat re-renders ([3c92dac](https://github.com/atbeta/notefast/commit/3c92dac94ceccd948ef6eddda68fc59957a1f2e6))
+* index CJK substrings and paginate doc lists ([f4e4f91](https://github.com/atbeta/notefast/commit/f4e4f9122d779ba20fb1c2df397386810f7c0517))
+* speed up home list with cache and SQL aggregates ([bd7eb0d](https://github.com/atbeta/notefast/commit/bd7eb0db8ff45ba8b5a68b50c56895948217f4d1))
+
 ## [0.71.2](https://github.com/atbeta/notefast/compare/v0.71.1...v0.71.2) (2026-08-19)
 
 
