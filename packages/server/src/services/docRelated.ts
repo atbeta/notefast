@@ -63,7 +63,10 @@ export async function listRelatedDocs(
   const query = buildRelatedQuery(docRow, firstBodySnippet(docId))
   if (!query) return { items: [] }
 
-  // 轻量路径：跳过 embed + rerank，词法/标题/实体/图谱即可秒出右栏
+  // 轻量路径：跳过 embed + rerank + 实体 + 图谱上下文。
+  // 右栏「相关」的目标是「找到相关文档」，不要「与当前文档的关系网」——
+  // 实体通道（LIKE+子查询）和图谱上下文（自身/互链/共享实体三段 SQL + ROW_NUMBER）
+  // 对这个目标边际收益小、且 KB 大时显著拖慢，砍掉。只走 FTS 词法 + 标题两路。
   const report = await hybridSearch({
     query,
     contextDocId: docId,
@@ -73,6 +76,8 @@ export async function listRelatedDocs(
     understandQuery: false,
     skipSemantic: true,
     skipRerank: true,
+    skipEntity: true,
+    skipGraphContext: true,
   })
 
   const items: RelatedDocItem[] = []

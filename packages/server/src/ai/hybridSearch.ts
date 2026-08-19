@@ -86,6 +86,18 @@ export interface SearchOptions {
    * 跳过 reranker。相关面板默认开：精排一次远程调用会拖到数百 ms+。
    */
   skipRerank?: boolean
+  /**
+   * 跳过实体召回路（query → 实体名匹配 → 反查 entity_mentions → blocks）。
+   * 相关面板的「秒出」路径用：实体通道对「找同主题文档」边际收益小，
+   * 且 entity_mentions 大时 LIKE+子查询代价不可忽略。
+   */
+  skipEntity?: boolean
+  /**
+   * 跳过图谱上下文通道（自身/互链/共享实体 → RRF 第 5 路）。
+   * 相关面板等只要「找相关文档」、不要「与当前文档相关度」的路径用：
+   * 三段查询 + ROW  + UNION 体量大，但提供的语义已被 FTS/标题覆盖。
+   */
+  skipGraphContext?: boolean
 }
 
 export interface Citation {
