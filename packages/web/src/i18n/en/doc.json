@@ -110,6 +110,12 @@
     },
     "zoomReset": "Reset to 100%",
     "widenReading": "Widen content",
-    "narrowReading": "Restore optimal line width"
+    "narrowReading": "Restore optimal line width",
+    "findPlaceholder": "Find in document",
+    "findCount": "{{n}} / {{total}}",
+    "findNone": "No results",
+    "findPrev": "Previous",
+    "findNext": "Next",
+    "findClose": "Close find"
   }
 }

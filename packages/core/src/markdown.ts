@@ -19,6 +19,19 @@ const CONTAINER_TYPES = new Set<BlockType>([
   BlockType.Quote,
 ])
 
+const CJK_CHAR_RE = /[\u3400-\u9fff\u3000-\u303f\uff00-\uffef]/
+
+/** 硬换行合段：CJK 相邻不插空格；其余（含 Hello.\\nWorld）插空格 */
+export function joinSoftWrap(left: string, right: string): string {
+  if (!left) return right
+  if (!right) return left
+  const a = left.slice(-1)
+  const b = right[0]!
+  if (/\s/.test(a) || /\s/.test(b)) return `${left}${right}`
+  if (CJK_CHAR_RE.test(a) && CJK_CHAR_RE.test(b)) return `${left}${right}`
+  return `${left} ${right}`
+}
+
 export function parseMarkdownToBlocks(markdown: string, notebookId: string): CreateBlockInput[] {
   // 便携导出可能带 frontmatter；解析前剥离，避免 --- 块落入正文
   const { body: markdownBody } = stripDocFrontmatter(markdown)
@@ -36,6 +49,8 @@ export function parseMarkdownToBlocks(markdown: string, notebookId: string): Cre
   let inCodeBlock = false
   let codeContent = ''
   let codeLang = ''
+  // 空行作为段落/引用的分隔：无空行的连续同类型行合成一块（CommonMark 软换行）
+  let blankSeen = false
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
@@ -69,6 +84,7 @@ export function parseMarkdownToBlocks(markdown: string, notebookId: string): Cre
     }
 
     if (line.trim() === '') {
+      blankSeen = true
       continue
     }
 
@@ -105,6 +121,23 @@ export function parseMarkdownToBlocks(markdown: string, notebookId: string): Cre
     popStackToDepth(stack, root, parsedDepth)
 
     const parent = stack[stack.length - 1]
+    const last = parent.children[parent.children.length - 1]
+    // 软换行：空行才分段；连续 paragraph / quote 追加到上一块
+    if (
+      last &&
+      !blankSeen &&
+      last.type === parsed.type &&
+      (parsed.type === BlockType.Paragraph || parsed.type === BlockType.Quote)
+    ) {
+      if (parsed.type === BlockType.Paragraph) {
+        last.content = joinSoftWrap(last.content, parsed.content)
+      } else {
+        last.content = last.content.length > 0 ? `${last.content}\n${parsed.content}` : parsed.content
+      }
+      continue
+    }
+    blankSeen = false
+
     const expectedDepth = parent.depth + 1
 
     // 仅列表项允许用 wrapper 填补深度；段落等不再造空 paragraph 壳（否则导出会丢子内容）
@@ -176,7 +209,7 @@ function parseLine(line: string): Omit<ParsedBlock, 'depth' | 'children'> {
     }
   }
 
-  if (/^>\s/.test(line)) {
+  if (/^>/.test(line)) {
     return {
       type: BlockType.Quote,
       content: line.replace(/^>\s?/, ''),
@@ -224,7 +257,7 @@ function getLineDepth(line: string): number {
   if (/^#{1,6}\s/.test(line)) {
     return 0
   }
-  if (/^>\s/.test(line)) {
+  if (/^>/.test(line)) {
     return 0
   }
   // fenced code 开闭行：按可见缩进算 depth

@@ -1087,3 +1087,26 @@ html.native-shell[data-shell='macos'] {
   --shell-top-inset: 0px;
   --shell-traffic-top-collapsed: 28px;
 }
+
+/* 打印 / 存储为 PDF：只留阅读正文（macOS 菜单「打印…」走 WKWebView.printOperation） */
+@media print {
+  html, body, #root {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  .demo-zoom {
+    zoom: 1 !important;
+  }
+  ::highlight(nf-find),
+  ::highlight(nf-find-current) {
+    background: transparent;
+  }
+}
+
+::highlight(nf-find) {
+  background-color: rgb(250 204 21 / 0.45);
+}
+::highlight(nf-find-current) {
+  background-color: rgb(251 146 60 / 0.75);
+}

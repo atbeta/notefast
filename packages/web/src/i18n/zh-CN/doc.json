@@ -110,6 +110,12 @@
     },
     "zoomReset": "恢复 100%",
     "widenReading": "加宽正文",
-    "narrowReading": "恢复最佳行宽"
+    "narrowReading": "恢复最佳行宽",
+    "findPlaceholder": "在本文中查找",
+    "findCount": "{{n}} / {{total}}",
+    "findNone": "无结果",
+    "findPrev": "上一处",
+    "findNext": "下一处",
+    "findClose": "关闭查找"
   }
 }

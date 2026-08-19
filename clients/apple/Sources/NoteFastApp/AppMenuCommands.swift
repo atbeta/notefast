@@ -29,6 +29,24 @@ struct AppMenuCommands: Commands {
             .disabled(!model.isRunning)
         }
 
+        CommandGroup(after: .textEditing) {
+            Button("查找…") {
+                model.openFind()
+            }
+            .keyboardShortcut("f")
+            .disabled(!model.isRunning)
+            Button("查找下一个") {
+                model.findNext()
+            }
+            .keyboardShortcut("g")
+            .disabled(!model.isRunning)
+            Button("查找上一个") {
+                model.findPrev()
+            }
+            .keyboardShortcut("g", modifiers: [.command, .shift])
+            .disabled(!model.isRunning)
+        }
+
         CommandMenu("视图") {
             Button("后退") {
                 model.navigator.goBack()

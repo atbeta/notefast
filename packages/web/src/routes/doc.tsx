@@ -45,6 +45,8 @@ import { readDocRailCollapsed, writeDocRailCollapsed } from '../hooks/useDocRail
 import { readDocRailWidth, writeDocRailWidth, type DocRailWidth } from '../hooks/useDocRailWidth'
 
 import { scrollToElement } from '../lib/scroll'
+import { readDocScroll, writeDocScroll } from '../lib/docScroll'
+import DocFindBar from '../components/DocFindBar'
 import { HistoryView, type DocRevision } from './docHistory'
 import { useActiveHeading } from '../hooks/useActiveHeading'
 import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
@@ -131,6 +133,33 @@ export default function DocPage() {
   }, [id])
   const handleStartEdit = useCallback(() => setEditingDocId(id ?? null), [id])
 
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    const prev = prevScrollIdRef.current
+    if (el && prev && prev !== id) writeDocScroll(prev, el.scrollTop)
+    prevScrollIdRef.current = id
+  }, [id])
+
+  useLayoutEffect(() => {
+    if (!id || !doc || isEditing) return
+    const el = scrollRef.current
+    if (!el) return
+    const top = readDocScroll(id) ?? 0
+    el.scrollTop = top
+    const timer = window.setTimeout(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = top
+    }, 200)
+    return () => window.clearTimeout(timer)
+  }, [id, doc, isEditing])
+
+  useEffect(() => {
+    return () => {
+      const el = scrollRef.current
+      const savedId = prevScrollIdRef.current
+      if (el && savedId) writeDocScroll(savedId, el.scrollTop)
+    }
+  }, [])
+
   /** 右上角导出：与列表菜单共用 fetch + 交付逻辑，按壳形态下载或另存为 */
   const handleExport = async () => {
     if (!id || exporting) return
@@ -213,6 +242,9 @@ export default function DocPage() {
   useEffect(() => { setTocOpen(false) }, [id])
   // 恢复 AI 可见触发的索引轮询（切换文档/重复点击时中止上一轮）
   const indexJobAcRef = useRef<AbortController | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const articleRef = useRef<HTMLElement>(null)
+  const prevScrollIdRef = useRef<string | undefined>(undefined)
   useEffect(() => () => indexJobAcRef.current?.abort(), [])
 
 useEffect(() => {
@@ -664,11 +696,11 @@ useEffect(() => {
   if (!doc) return <ErrorState message={error || t('doc.docNotFound')} />
 
   return (
-    <div className="flex flex-col lg:flex-row h-full">
+    <div className="flex flex-col lg:flex-row h-full print:h-auto print:block">
       {/* Main Content Area */}
-      <div className="flex-1 min-w-0 flex flex-col h-full border-r border-border/50">
+      <div className="flex-1 min-w-0 flex flex-col h-full border-r border-border/50 print:h-auto print:border-0">
         {/* Global Sticky Header — 左：访问历史 ｜ 中：标题 ｜ 右：操作 */}
-        <PageHeader bare className="shrink-0 px-3 sm:px-6">
+        <PageHeader bare className="shrink-0 px-3 sm:px-6 print:hidden">
           <DocVisitNav />
           {/* 中：文档标题（flex-1 撑满中间，居中截断） */}
           <div className="flex-1 min-w-0 flex justify-center">
@@ -752,10 +784,17 @@ useEffect(() => {
         </PageHeader>
 
         {/* Scrollable Document Body — scrollbar-gutter 预留滚动条位，切换文档时内容不横移 */}
-        <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto [scrollbar-gutter:stable] print:overflow-visible print:h-auto"
+          onScroll={() => {
+            if (id && scrollRef.current) writeDocScroll(id, scrollRef.current.scrollTop)
+          }}
+        >
           {/* 切换文档时保留旧内容完整展示，新数据到了直接替换 */}
           <div>
             <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-8 pb-32 animate-fade-in">
+            <DocFindBar rootRef={articleRef} docId={id} />
             {indexJob && (indexJob.state === 'pending' || indexJob.state === 'running') && (
               <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
                 <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" strokeWidth={1.75} />
@@ -986,6 +1025,7 @@ useEffect(() => {
                 )}
 
                 <article
+                  ref={articleRef}
                   onContextMenu={ctxMenu.onContextMenu}
                   onKeyDown={ctxMenu.onKeyDown}
                 >
@@ -994,7 +1034,9 @@ useEffect(() => {
                 </article>
                </div>
              )}
+            <div className="print:hidden">
             <DocNeighborPager prev={neighbors.prev} next={neighbors.next} />
+            </div>
            </div>
            </div>
           </div>
@@ -1004,7 +1046,7 @@ useEffect(() => {
       {/* Right Sidebar (Desktop only) — AI 聊天打开时让位（替换右栏，不额外压正文） */}
       {!aiChatOpen && (
         <div
-          className={`hidden lg:flex flex-col shrink-0 bg-sidebar/30 h-full transition-[width] duration-200 ${
+          className={`hidden lg:flex flex-col shrink-0 bg-sidebar/30 h-full transition-[width] duration-200 print:hidden ${
             railActuallyCollapsed ? 'w-9' : railWidth === 'wide' ? 'w-[400px]' : 'w-[288px]'
           }`}
         >

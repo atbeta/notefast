@@ -157,7 +157,7 @@ export function BlockHandle({ block, className }: BlockHandleProps) {
           setOpen((v) => !v)
         }}
         onPointerDown={(e) => e.stopPropagation()}
-        className={`absolute z-10 hidden sm:inline-flex w-6 h-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-all ${visibility} ${className}`}
+        className={`absolute z-10 hidden sm:inline-flex w-6 h-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-all print:hidden ${visibility} ${className}`}
       >
         <MoreVertical className="w-4 h-4" strokeWidth={1.75} />
       </button>

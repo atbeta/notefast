@@ -407,3 +407,40 @@ describe('格式保真（marker / 块间空行）', () => {
     expect(blocksToMarkdown(blocks)).toBe(original)
   })
 })
+
+describe('CommonMark 软换行合段', () => {
+  test('连续非空行合成一个 paragraph（空行才分段）', () => {
+    const inputs = parseMarkdownToBlocks('第一行硬换行\n第二行继续。\n\n下一段。', 'nb')
+    const paras = inputs.filter((i) => i.type === BlockType.Paragraph)
+    expect(paras.length).toBe(2)
+    expect(paras[0]!.content).toBe('第一行硬换行第二行继续。')
+    expect(paras[1]!.content).toBe('下一段。')
+  })
+
+  test('英文硬换行在词间补空格', () => {
+    const inputs = parseMarkdownToBlocks('This is a\nlong line.\n\nNext.', 'nb')
+    const paras = inputs.filter((i) => i.type === BlockType.Paragraph)
+    expect(paras.length).toBe(2)
+    expect(paras[0]!.content).toBe('This is a long line.')
+  })
+
+  test('英文句号后硬换行仍补空格', () => {
+    const inputs = parseMarkdownToBlocks('Hello.\nWorld', 'nb')
+    expect(inputs.filter((i) => i.type === BlockType.Paragraph)[0]!.content).toBe('Hello. World')
+  })
+
+  test('连续引用行合成一块', () => {
+    const inputs = parseMarkdownToBlocks('> 第一行\n> 第二行\n\n> 另一块', 'nb')
+    const quotes = inputs.filter((i) => i.type === BlockType.Quote)
+    expect(quotes.length).toBe(2)
+    expect(quotes[0]!.content).toBe('第一行\n第二行')
+    expect(quotes[1]!.content).toBe('另一块')
+  })
+
+  test('标题后的硬换行段落仍是一段', () => {
+    const inputs = parseMarkdownToBlocks('# 标题\n\nfoo\nbar\n', 'nb')
+    const paras = inputs.filter((i) => i.type === BlockType.Paragraph)
+    expect(paras.length).toBe(1)
+    expect(paras[0]!.content).toBe('foo bar')
+  })
+})

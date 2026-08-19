@@ -480,6 +480,19 @@ final class AppModel: ObservableObject {
         dispatchKeyEvent("j")
     }
 
+    /// ⌘F：WKWebView 默认不启用系统查找；菜单拦截后派发自定义事件给阅读页查找条
+    func openFind() {
+        navigator.evaluate("window.dispatchEvent(new CustomEvent('nf:find'))")
+    }
+
+    func findNext() {
+        navigator.evaluate("window.dispatchEvent(new CustomEvent('nf:find-next'))")
+    }
+
+    func findPrev() {
+        navigator.evaluate("window.dispatchEvent(new CustomEvent('nf:find-prev'))")
+    }
+
     private func dispatchKeyEvent(_ key: String) {
         navigator.evaluate(
             "window.dispatchEvent(new KeyboardEvent('keydown',{key:'\(key)',code:'Key\(key.uppercased())',metaKey:true,bubbles:true,cancelable:true}))"

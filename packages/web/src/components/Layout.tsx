@@ -162,15 +162,17 @@ export default function Layout({ children, contentClassName }: { children: React
 
   return (
     // 根容器 pt/pb 用 env() 吸收刘海/Home 指示条安全区（非 standalone/无刘海环境恒为 0，不影响现有布局）
-    <div className="flex flex-col h-screen overflow-hidden bg-background relative w-full pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+    <div className="flex flex-col h-screen overflow-hidden bg-background relative w-full pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] print:h-auto print:overflow-visible">
       {/* 原生壳自绘标题栏（仅 Tauri 壳渲染；macOS 壳走系统标题栏，浏览器不渲染）。
           演示模式隐藏：避免用户把窗口关闭按钮误当「退出演示」 */}
-      {!demo.active && <TitleBar />}
+      {!demo.active && <div className="print:hidden"><TitleBar /></div>}
       <div className="flex flex-1 min-h-0 relative">
+        <div className="print:hidden">
         <GlobalSyncStatus />
+        </div>
         {/* 桌面侧边栏 — 演示模式隐藏（正文最大化，退出后恢复） */}
         {!demo.active && (
-        <div className={`hidden md:block transition-all duration-300 z-20 relative ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
+        <div className={`hidden md:block transition-all duration-300 z-20 relative print:hidden ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
           <Sidebar
             collapsed={sidebarCollapsed}
             onToggle={toggleSidebar}
@@ -196,7 +198,7 @@ export default function Layout({ children, contentClassName }: { children: React
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
           <div
-            className="md:hidden flex items-center h-12 px-4 border-b border-border bg-card gap-3 shrink-0"
+            className="md:hidden flex items-center h-12 px-4 border-b border-border bg-card gap-3 shrink-0 print:hidden"
             data-drag-region
             onDoubleClick={(e) => {
               if (!isWindowZoomDoubleClickTarget(e.target)) return
@@ -231,7 +233,7 @@ export default function Layout({ children, contentClassName }: { children: React
             {/* 服务不可达总览条：探测成功会自动消失，无需手动清除 */}
             <ServerOfflineBanner />
             {/* 统一滚动容器：文档页内部自管滚动（h-full 正好一屏），其余页面由此容器滚动 */}
-            <div className={`${contentClassName ?? 'w-full h-full'} flex flex-col overflow-y-auto`}>
+            <div className={`${contentClassName ?? 'w-full h-full'} flex flex-col overflow-y-auto print:overflow-visible print:h-auto`}>
               <AiChatCtlContext.Provider value={{ open: aiChatOpen, toggle: toggleAiChat }}>
                 {children}
               </AiChatCtlContext.Provider>
@@ -240,6 +242,7 @@ export default function Layout({ children, contentClassName }: { children: React
         </div>
 
         {/* AI Chat 面板 */}
+        <div className="print:hidden">
         <AIChatPanel
           isOpen={aiChatOpen}
           onClose={closeAiChat}
@@ -247,6 +250,7 @@ export default function Layout({ children, contentClassName }: { children: React
           expanded={aiChatExpanded}
           onToggleExpand={toggleAiChatExpand}
         />
+        </div>
 
         <CommandPalette
           open={paletteOpen}
