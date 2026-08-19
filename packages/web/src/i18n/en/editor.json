@@ -30,7 +30,8 @@
     "renderFailedWith": "Mermaid render failed: {{error}}",
     "loading": "Loading diagram…",
     "zoom": "Zoom in",
-    "zoomReset": "Reset"
+    "zoomReset": "Reset",
+    "zoomHint": "Ctrl/⌘ + scroll to zoom, drag to pan"
   },
   "math": {
     "emptyMath": "Empty formula",

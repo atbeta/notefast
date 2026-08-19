@@ -12,6 +12,11 @@ interface ImageLightboxProps {
    * 传入时 src/alt 仅用于 aria-label，不渲染图片。
    */
   children?: ReactNode
+  /**
+   * 是否允许点击内容区关闭（默认 true）。
+   * 设为 false 时只允许点遮罩 / 关闭钮 / Esc 关闭，适合内容较大、点图内不应误触的场景（mermaid lightbox）。
+   */
+  closeOnInnerClick?: boolean
 }
 
 /**
@@ -19,7 +24,13 @@ interface ImageLightboxProps {
  * 与资源页预览同视觉语言（resources.tsx），供阅读页等任意图片场景复用。
  * children 传入时渲染自定义内容（mermaid SVG 等），否则渲染 <img src>。
  */
-export default function ImageLightbox({ src, alt, onClose, children }: ImageLightboxProps) {
+export default function ImageLightbox({
+  src,
+  alt,
+  onClose,
+  children,
+  closeOnInnerClick = true,
+}: ImageLightboxProps) {
   const { t } = useTranslation()
   return createPortal(
     <div className="fixed inset-0 z-[90] flex flex-col">
@@ -45,8 +56,8 @@ export default function ImageLightbox({ src, alt, onClose, children }: ImageLigh
           </button>
         </div>
         <div
-          className="flex-1 min-h-0 flex items-center justify-center px-4 pb-6 cursor-zoom-out"
-          onClick={onClose}
+          className={`flex-1 min-h-0 flex items-center justify-center px-4 pb-6 ${closeOnInnerClick ? 'cursor-zoom-out' : ''}`}
+          onClick={closeOnInnerClick ? onClose : undefined}
         >
           {children ?? (
             <img

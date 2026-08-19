@@ -33,6 +33,15 @@ function useDataTheme(): 'light' | 'dark' {
   return theme
 }
 
+const MIN_ZOOM = 0.25
+const MAX_ZOOM = 8
+const VIEWPORT_FILL = 0.88 // 占视口比例
+const ZOOM_STEP = 0.25
+
+function clampZoom(z: number) {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
+}
+
 /**
  * Mermaid 代码块：懒渲染 SVG；失败时展示错误 + 源码回退。
  * 供文档 BlockRenderer 与聊天气泡复用。
@@ -49,12 +58,6 @@ export default function MermaidDiagram({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [zoomed, setZoomed] = useState(false)
-  // lightbox 视图状态：SVG 自然尺寸 + 适配倍数 + 用户额外缩放
-  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null)
-  const [fitScale, setFitScale] = useState<number | null>(null)
-  const [userZoom, setUserZoom] = useState(1)
-  const zoomWrapRef = useRef<HTMLDivElement>(null)
-  const fitMeasured = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -146,25 +149,10 @@ export default function MermaidDiagram({
         <ImageLightbox
           src=""
           alt={label}
-          onClose={() => {
-            setZoomed(false)
-            setUserZoom(1)
-            setFitScale(null)
-            fitMeasured.current = false
-          }}
+          onClose={() => setZoomed(false)}
+          closeOnInnerClick={false}
         >
-          <MermaidZoomView
-            svg={svg}
-            naturalSize={naturalSize}
-            fitScale={fitScale}
-            userZoom={userZoom}
-            wrapRef={zoomWrapRef}
-            fitMeasuredRef={fitMeasured}
-            onNaturalSize={setNaturalSize}
-            onFit={(s) => setFitScale(s)}
-            onUserZoom={setUserZoom}
-            onClose={() => setZoomed(false)}
-          />
+          <MermaidZoomView svg={svg} onClose={() => setZoomed(false)} />
         </ImageLightbox>
       )}
     </div>
@@ -172,121 +160,171 @@ export default function MermaidDiagram({
 }
 
 /**
- * Lightbox 内 mermaid 缩放视图（纯布局尺寸，无 transform/zoom 裁剪问题）：
- * - 默认适配视口：把 SVG 自然尺寸缩放到 85% 视口，保证全屏大小一致
- * - Ctrl+滚轮缩放：通过显式宽高让实际内容变大，配合可滚动容器看全图
- * - 点击遮罩关闭（与图片 lightbox 一致）
+ * Lightbox 内的 mermaid 缩放视图：
+ * - 打开后用 ResizeObserver 测量 SVG 自然尺寸，再算「适配视口 88%」的 baseZoom
+ * - ctrl+滚轮调 zoom（0.25 档，0.25×–8×）
+ * - 拖动平移（pointer events 接管 scroller）
+ * - 仅 X 按钮 / 遮罩 / Esc 关闭（点击图内不关）
  */
 function MermaidZoomView({
   svg,
-  naturalSize,
-  fitScale,
-  userZoom,
-  wrapRef,
-  fitMeasuredRef,
-  onNaturalSize,
-  onFit,
-  onUserZoom,
   onClose,
 }: {
   svg: string
-  naturalSize: { w: number; h: number } | null
-  fitScale: number | null
-  userZoom: number
-  wrapRef: React.RefObject<HTMLDivElement | null>
-  fitMeasuredRef: React.MutableRefObject<boolean>
-  onNaturalSize: (s: { w: number; h: number }) => void
-  onFit: (s: number) => void
-  onUserZoom: (fn: (z: number) => number) => void
   onClose: () => void
 }) {
   const { t } = useTranslation()
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const dragStateRef = useRef<{ startX: number; startY: number; sl: number; st: number } | null>(null)
 
-  // 打开后测量 SVG 自然尺寸 + 算适配视口的 fitScale
+  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null)
+  const [baseZoom, setBaseZoom] = useState(1) // 适配视口时的缩放比
+  const [zoom, setZoom] = useState(1) // 用户当前缩放 = baseZoom × zoom 实际比例
+  const [measured, setMeasured] = useState(false)
+
+  // 打开后测量自然尺寸 + 计算 baseZoom
   useEffect(() => {
-    if (naturalSize !== null || fitMeasuredRef.current) return
-    const root = wrapRef.current
-    if (!root) return
-    const svgEl = root.querySelector('svg')
-    const vp = root.parentElement?.parentElement
-    if (!svgEl || !vp) return
+    if (measured) return
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    const svgEl = scroller.querySelector('svg')
+    if (!svgEl) return
     const r = svgEl.getBoundingClientRect()
     if (!r.width || !r.height) {
-      const t = window.setTimeout(() => { fitMeasuredRef.current = false }, 60)
+      const t = window.setTimeout(() => { /* re-run via effect dep */ }, 60)
       return () => window.clearTimeout(t)
     }
-    const vpW = vp.clientWidth || window.innerWidth
-    const vpH = vp.clientHeight || window.innerHeight
-    const s = Math.min((vpW * 0.85) / r.width, (vpH * 0.85) / r.height)
-    onNaturalSize({ w: r.width, h: r.height })
-    onFit(Math.min(Math.max(s, 0.05), 8))
-    fitMeasuredRef.current = true
-  }, [naturalSize, fitMeasuredRef, onNaturalSize, onFit, wrapRef])
+    const cw = scroller.clientWidth
+    const ch = scroller.clientHeight
+    const base = Math.min((cw * VIEWPORT_FILL) / r.width, (ch * VIEWPORT_FILL) / r.height, 1)
+    setNaturalSize({ w: r.width, h: r.height })
+    setBaseZoom(Math.max(MIN_ZOOM, base))
+    setZoom(1)
+    setMeasured(true)
+  }, [measured, svg])
 
-  // Ctrl+滚轮：放大 / 缩小（0.25 档）
-  const onWheel = (e: React.WheelEvent) => {
-    if (!e.ctrlKey) return
-    e.preventDefault()
-    const delta = e.deltaY > 0 ? -1 : 1
-    onUserZoom((z) => Math.min(8, Math.max(1, z + delta * 0.25)))
+  // viewport resize 时重算 baseZoom（保持图始终适配）
+  useEffect(() => {
+    if (!measured || !naturalSize) return
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    const ro = new ResizeObserver(() => {
+      const cw = scroller.clientWidth
+      const ch = scroller.clientHeight
+      const base = Math.min((cw * VIEWPORT_FILL) / naturalSize.w, (ch * VIEWPORT_FILL) / naturalSize.h, 1)
+      setBaseZoom(Math.max(MIN_ZOOM, base))
+    })
+    ro.observe(scroller)
+    return () => ro.disconnect()
+  }, [measured, naturalSize])
+
+  // Ctrl+wheel：原生非 passive 监听，才能 preventDefault
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      const dir = e.deltaY > 0 ? -1 : 1
+      setZoom((z) => clampZoom(z + dir * ZOOM_STEP))
+    }
+    scroller.addEventListener('wheel', onWheel, { passive: false })
+    return () => scroller.removeEventListener('wheel', onWheel)
+  }, [])
+
+  // Esc 关闭
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  // 拖动平移：pointer events 接管（防止文本选中和原生 drag）
+  const onPointerDown = (e: React.PointerEvent) => {
+    // 按钮上的点击不触发拖动（比如重置按钮）
+    if ((e.target as HTMLElement).closest('button')) return
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    scroller.setPointerCapture(e.pointerId)
+    dragStateRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      sl: scroller.scrollLeft,
+      st: scroller.scrollTop,
+    }
+    scroller.style.cursor = 'grabbing'
+  }
+  const onPointerMove = (e: React.PointerEvent) => {
+    const ds = dragStateRef.current
+    if (!ds) return
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    scroller.scrollLeft = ds.sl - (e.clientX - ds.startX)
+    scroller.scrollTop = ds.st - (e.clientY - ds.startY)
+  }
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (!dragStateRef.current) return
+    const scroller = scrollerRef.current
+    scroller?.releasePointerCapture?.(e.pointerId)
+    if (scroller) scroller.style.cursor = 'grab'
+    dragStateRef.current = null
   }
 
-  // 实际展示尺寸 = 自然尺寸 × 适配 × 用户缩放
-  const totalScale = fitScale == null ? 1 : fitScale * userZoom
+  const totalScale = baseZoom * zoom
   const dispW = naturalSize ? Math.round(naturalSize.w * totalScale) : undefined
   const dispH = naturalSize ? Math.round(naturalSize.h * totalScale) : undefined
+  const isZoomed = Math.abs(zoom - 1) > 0.001
 
   return (
-    <div className="relative flex-1 min-h-0 flex flex-col" onClick={onClose}>
-      <div className="absolute top-3 left-4 z-10 flex items-center gap-2">
+    <div className="absolute inset-0 flex flex-col">
+      <div className="absolute top-3 left-4 z-10 flex items-center gap-2 pointer-events-none">
         <span className="text-[12px] tabular-nums text-white/85 bg-black/30 rounded-md px-2 py-1">
           {Math.round(totalScale * 100)}%
         </span>
+        <span className="text-[11px] text-white/55 hidden sm:inline">
+          {t('mermaid.zoomHint')}
+        </span>
       </div>
-      {userZoom > 1 && (
+      {isZoomed && (
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onUserZoom(() => 1) }}
+          onClick={() => setZoom(1)}
           className="absolute bottom-4 right-4 z-10 inline-flex items-center gap-1.5 text-[12px] text-white/80 hover:text-white bg-black/25 hover:bg-black/40 rounded-md px-2.5 py-1.5 transition-colors"
         >
           <RotateCcw className="w-3.5 h-3.5" strokeWidth={1.75} />
           {t('mermaid.zoomReset')}
         </button>
       )}
-      {/* 可滚动视口：内容尺寸变大时出现滚动条，可看放大后的全图 */}
       <div
-        ref={wrapRef}
-        onWheel={onWheel}
-        onClick={(e) => e.stopPropagation()}
-        className="flex-1 min-h-0 overflow-auto overscroll-contain"
+        ref={scrollerRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        className="flex-1 min-h-0 overflow-auto overscroll-auto select-none cursor-grab"
+        style={{ touchAction: 'none' }}
       >
-        <div className="min-w-full min-h-full w-max p-8">
-          {natSvg(svg, dispW, dispH)}
+        <div className="w-max min-w-full min-h-full p-8 mx-auto flex items-center justify-center">
+          {dispW && dispH ? (
+            <div
+              className="rounded-md bg-white dark:bg-[#1e1e1e] shadow-2xl shrink-0"
+              style={{ width: dispW, height: dispH }}
+            >
+              <div
+                className="[&_svg]:w-full [&_svg]:h-full [&_svg]:max-w-none pointer-events-none"
+                dangerouslySetInnerHTML={{ __html: svg }}
+              />
+            </div>
+          ) : (
+            <div
+              className="rounded-md bg-white dark:bg-[#1e1e1e] shadow-2xl shrink-0"
+              dangerouslySetInnerHTML={{ __html: svg }}
+            />
+          )}
         </div>
       </div>
-    </div>
-  )
-}
-
-// 渲染 SVG：有显式尺寸时用 width/height 撑大内容（让滚动条生效）；
-// 无尺寸（首次测量前）时保持 SVG 自然尺寸，供测量自然宽高。
-function natSvg(svg: string, width?: number, height?: number): React.ReactElement {
-  return (
-    <div
-      className="rounded-md bg-white dark:bg-[#1e1e1e] shadow-2xl"
-      style={width && height ? { width, height } : undefined}
-    >
-      {width && height ? (
-        <div
-          className="[&_svg]:w-full [&_svg]:h-full [&_svg]:max-w-none"
-          dangerouslySetInnerHTML={{ __html: svg }}
-        />
-      ) : (
-        <div
-          className="[&_svg]:max-w-none"
-          dangerouslySetInnerHTML={{ __html: svg }}
-        />
-      )}
     </div>
   )
 }
