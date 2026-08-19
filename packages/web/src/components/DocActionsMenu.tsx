@@ -1,8 +1,8 @@
 /**
  * 文档行溢出菜单（⋯）
  *
- * 主列表 / 侧栏最近 / 收集箱 / 归档共用；导出等后续能力挂同一菜单。
- * 触发：桌面 hover / 触控常显；打开后保持可见，避免移入菜单时消失。
+ * 主列表 / 侧栏最近 / 收集箱 / 归档共用。菜单项按文档生命周期拼装，
+ * 不因所在页面而混用（侧栏里的收集箱项也是「加入笔记」，不是「归档」）。
  */
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
@@ -29,12 +29,13 @@ import { deliverExport, fetchDocExportFile } from '../lib/download'
 import ConfirmDialog from './ConfirmDialog'
 import ShareDialog from './ShareDialog'
 import { Tooltip, useToast } from './ui'
+import { docActionIdsFor, resolveDocLifecycle, type DocActionId } from '../lib/docActions'
 
 export type DocActionsSurface = 'list' | 'sidebar' | 'inbox' | 'archived'
 
 export interface DocActionsMenuProps {
   doc: DocSummary
-  /** 控制菜单项显隐与文案；默认 list */
+  /** 页面入口兜底；菜单项优先按 doc.status 拼装 */
   surface?: DocActionsSurface
   /** 变更后刷新列表 */
   onDone?: () => void
@@ -83,7 +84,8 @@ export default function DocActionsMenu({
   const [showRename, setShowRename] = useState(false)
   const [renameDraft, setRenameDraft] = useState(doc.title)
 
-  const status = doc.status === 'inbox' || doc.status === 'archived' ? doc.status : 'note'
+  const status = resolveDocLifecycle(doc.status, surface)
+  const isInbox = status === 'inbox'
   const aiExclude = doc.ai_exclude === true
   const title = doc.title || t('docActions.untitled')
 
@@ -174,7 +176,7 @@ export default function DocActionsMenu({
       toast.success({
         title: next === 'archived'
           ? t('docActions.archived')
-          : status === 'inbox'
+          : isInbox
             ? t('docActions.addedToNotes')
             : t('docActions.restoredToNotes'),
         durationMs: 6000,
@@ -240,7 +242,7 @@ export default function DocActionsMenu({
       afterMutation()
       // 软删除 + restore 端点：Undo toast 是 Web 上唯一的恢复入口
       toast.success({
-        title: surface === 'inbox' ? t('docActions.discarded') : t('docActions.deleted'),
+        title: isInbox ? t('docActions.discarded') : t('docActions.deleted'),
         durationMs: 6000,
         action: {
           label: t('docActions.undo'),
@@ -264,93 +266,85 @@ export default function DocActionsMenu({
     }
   }
 
-  const items: MenuItem[] = []
-
-  items.push({
-    id: 'open-tab',
-    label: t('docActions.openInNewTab'),
-    icon: <ExternalLink className={iconCls} strokeWidth={iconStroke} />,
-    onSelect: () => {
-      close()
-      window.open(`/doc/${doc.id}`, '_blank', 'noopener,noreferrer')
+  const byId: Record<DocActionId, MenuItem> = {
+    'open-tab': {
+      id: 'open-tab',
+      label: t('docActions.openInNewTab'),
+      icon: <ExternalLink className={iconCls} strokeWidth={iconStroke} />,
+      onSelect: () => {
+        close()
+        window.open(`/doc/${doc.id}`, '_blank', 'noopener,noreferrer')
+      },
     },
-  })
-
-  items.push({
-    id: 'rename',
-    label: t('docActions.rename'),
-    icon: <Pencil className={iconCls} strokeWidth={iconStroke} />,
-    onSelect: () => {
-      close()
-      if (onRename) onRename()
-      else setShowRename(true)
+    rename: {
+      id: 'rename',
+      label: t('docActions.rename'),
+      icon: <Pencil className={iconCls} strokeWidth={iconStroke} />,
+      onSelect: () => {
+        close()
+        if (onRename) onRename()
+        else setShowRename(true)
+      },
     },
-  })
-
-  if (surface === 'inbox') {
-    items.push({
+    promote: {
       id: 'promote',
       label: t('docActions.addToNotes'),
       icon: <ArrowUpRight className={iconCls} strokeWidth={iconStroke} />,
       onSelect: () => { void patchStatus('note') },
       disabled: busy,
-    })
-  } else if (surface === 'archived' || status === 'archived') {
-    items.push({
+    },
+    restore: {
       id: 'restore',
       label: t('docActions.restoreToNotes'),
       icon: <ArchiveRestore className={iconCls} strokeWidth={iconStroke} />,
       onSelect: () => { void patchStatus('note') },
       disabled: busy,
-    })
-  } else if (status !== 'inbox') {
-    items.push({
+    },
+    archive: {
       id: 'archive',
       label: t('docActions.archive'),
       icon: <Archive className={iconCls} strokeWidth={iconStroke} />,
       onSelect: () => { void patchStatus('archived') },
       disabled: busy,
-    })
+    },
+    share: {
+      id: 'share',
+      label: t('docActions.share'),
+      icon: <Share2 className={iconCls} strokeWidth={iconStroke} />,
+      onSelect: () => {
+        close()
+        setShowShare(true)
+      },
+    },
+    export: {
+      id: 'export',
+      label: t('docActions.export'),
+      icon: <Download className={iconCls} strokeWidth={iconStroke} />,
+      onSelect: () => { void handleExport() },
+      disabled: busy,
+    },
+    'ai-exclude': {
+      id: 'ai-exclude',
+      label: aiExclude ? t('docActions.restoreAiVisibility') : t('docActions.hideFromAi'),
+      icon: aiExclude
+        ? <Eye className={iconCls} strokeWidth={iconStroke} />
+        : <EyeOff className={iconCls} strokeWidth={iconStroke} />,
+      onSelect: () => { void toggleAiExclude() },
+      disabled: busy,
+    },
+    delete: {
+      id: 'delete',
+      label: isInbox ? t('docActions.discard') : t('docActions.delete'),
+      icon: <Trash2 className={iconCls} strokeWidth={iconStroke} />,
+      onSelect: () => {
+        close()
+        setShowDelete(true)
+      },
+      danger: true,
+    },
   }
 
-  items.push({
-    id: 'share',
-    label: t('docActions.share'),
-    icon: <Share2 className={iconCls} strokeWidth={iconStroke} />,
-    onSelect: () => {
-      close()
-      setShowShare(true)
-    },
-  })
-
-  items.push({
-    id: 'export',
-    label: t('docActions.export'),
-    icon: <Download className={iconCls} strokeWidth={iconStroke} />,
-    onSelect: () => { void handleExport() },
-    disabled: busy,
-  })
-
-  items.push({
-    id: 'ai-exclude',
-    label: aiExclude ? t('docActions.restoreAiVisibility') : t('docActions.hideFromAi'),
-    icon: aiExclude
-      ? <Eye className={iconCls} strokeWidth={iconStroke} />
-      : <EyeOff className={iconCls} strokeWidth={iconStroke} />,
-    onSelect: () => { void toggleAiExclude() },
-    disabled: busy,
-  })
-
-  items.push({
-    id: 'delete',
-    label: surface === 'inbox' ? t('docActions.discard') : t('docActions.delete'),
-    icon: <Trash2 className={iconCls} strokeWidth={iconStroke} />,
-    onSelect: () => {
-      close()
-      setShowDelete(true)
-    },
-    danger: true,
-  })
+  const items: MenuItem[] = docActionIdsFor(status).map((id) => byId[id])
 
   // 危险项前加分隔：用 index 找 delete
   const deleteIdx = items.findIndex((i) => i.id === 'delete')
@@ -428,15 +422,15 @@ export default function DocActionsMenu({
 
       <ConfirmDialog
         open={showDelete}
-        title={surface === 'inbox' ? t('docActions.confirmDiscardTitle') : t('docActions.confirmDeleteTitle')}
+        title={isInbox ? t('docActions.confirmDiscardTitle') : t('docActions.confirmDeleteTitle')}
         message={
-          surface === 'inbox'
+          isInbox
             ? t('docActions.confirmDiscardMsg', { title })
             : t('docActions.confirmDeleteMsg', { title })
         }
-        confirmLabel={surface === 'inbox' ? t('docActions.discard') : t('docActions.delete')}
+        confirmLabel={isInbox ? t('docActions.discard') : t('docActions.delete')}
         busy={busy}
-        busyLabel={surface === 'inbox' ? t('docActions.discarding') : t('docActions.deleting')}
+        busyLabel={isInbox ? t('docActions.discarding') : t('docActions.deleting')}
         tone="destructive"
         onConfirm={() => { void handleDelete() }}
         onCancel={() => setShowDelete(false)}

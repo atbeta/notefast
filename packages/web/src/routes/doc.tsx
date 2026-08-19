@@ -901,11 +901,11 @@ useEffect(() => {
             )}
             {/* 演示模式控制已移至右上角（仅阅读态） */}
 
-            {/* Tags + 归档/对 AI 隐藏（默认可见，不展示锁图标；仅隐藏态强调） */}
+            {/* Tags；笔记才露出归档 / 对 AI 隐藏（收集箱、归档走各自横幅） */}
             <div className="flex flex-wrap items-center justify-between gap-3 mt-4 mb-6">
               {id && <TagEditor docId={id} tags={tags} onChange={setTags} />}
               <div className="flex items-center gap-3 shrink-0">
-                {docStatus !== 'archived' && (
+                {docStatus === 'note' && (
                   <Tooltip label={t('doc.archiveTooltip')}>
                     <button
                       type="button"
@@ -917,7 +917,7 @@ useEffect(() => {
                     </button>
                   </Tooltip>
                 )}
-                {!aiExclude && (
+                {docStatus === 'note' && !aiExclude && (
                   <Tooltip label={t('doc.aiExcludeTooltip')}>
                     <button
                       type="button"
