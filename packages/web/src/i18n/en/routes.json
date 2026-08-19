@@ -111,7 +111,7 @@
     "count": "{{n}} items",
     "local": "Local",
     "remote": "Remote",
-    "inUse": "In use",
+    "inUse": "1 ref",
     "unused": "Unused",
     "preview": "View full size",
     "copyPath": "Copy local path",
@@ -139,7 +139,7 @@
     "uploadShort": "Upload",
     "loadMore": "Load more",
     "loadedAll": "All loaded",
-    "refCount": "Referenced by {{n}} doc(s)",
+    "refCount": "{{n}} refs",
     "refsIn": "Referenced in",
     "refsNone": "Not referenced",
     "refsLoadError": "Failed to load references"

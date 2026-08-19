@@ -111,7 +111,7 @@
     "count": "共 {{n}} 项",
     "local": "本地",
     "remote": "已外链",
-    "inUse": "使用中",
+    "inUse": "1 引用",
     "unused": "未引用",
     "preview": "查看大图",
     "copyPath": "复制本地路径",
@@ -139,7 +139,7 @@
     "uploadShort": "上传",
     "loadMore": "加载更多",
     "loadedAll": "已加载全部",
-    "refCount": "被 {{n}} 篇文档引用",
+    "refCount": "{{n}} 引用",
     "refsIn": "引用来源",
     "refsNone": "未被引用",
     "refsLoadError": "引用来源加载失败"
