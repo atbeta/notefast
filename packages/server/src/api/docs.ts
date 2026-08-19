@@ -141,7 +141,7 @@ docs.get('/counts', (c) => {
   return c.json(countLiveDocs(getDb()))
 })
 
-/** 文档顺序导航：按 created_at 顺序的上一篇/下一篇（Obsidian 式箭头；单篇两侧 null） */
+/** 文档顺序导航：按 created_at 的上一篇/下一篇（正文末尾翻页） */
 docs.get('/:id/neighbors', (c) => {
   const db = getDb()
   const id = c.req.param('id')

@@ -3,6 +3,9 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Menu, Sparkles } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useRecordNavHistory } from '../hooks/useNavHistory'
+import { navHistorySnapshot } from '../lib/navHistory'
+import { isTauriShell } from '../hooks/useShell'
 import Sidebar from './Sidebar'
 import CommandPalette from './CommandPalette'
 import AIChatPanel from './AIChatPanel'
@@ -36,6 +39,7 @@ export default function Layout({ children, contentClassName }: { children: React
   
   const navigate = useNavigate()
   const location = useLocation()
+  useRecordNavHistory()
   
   // 提取当前文档ID作为 AI 上下文
   const docIdMatch = location.pathname.match(/\/doc\/([^/]+)/)
@@ -127,6 +131,21 @@ export default function Layout({ children, contentClassName }: { children: React
         return
       }
       if (isEditing(document.activeElement)) return
+      // Tauri 壳没有浏览器后退；macOS 壳走菜单 ⌘[，浏览器自带后退，都不在这里抢
+      if (isTauriShell() && mod && !e.shiftKey && e.key === '[') {
+        if (navHistorySnapshot().canBack) {
+          e.preventDefault()
+          navigate(-1)
+        }
+        return
+      }
+      if (isTauriShell() && mod && !e.shiftKey && e.key === ']') {
+        if (navHistorySnapshot().canForward) {
+          e.preventDefault()
+          navigate(1)
+        }
+        return
+      }
       if (mod && key === 'n' && !paletteOpen) {
         e.preventDefault()
         navigate('/new')

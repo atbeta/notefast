@@ -6,7 +6,6 @@ import type { Block, HeadingNode } from '@notefast/core'
 import { buildHeadingTree } from '@notefast/core'
 import {
   ArrowLeft,
-  ArrowRight,
   Trash2,
   Sparkles,
   Loader2,
@@ -37,8 +36,11 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import { useDocContextMenu } from '../components/editor/DocContextMenu'
 import EntityPanel from '../components/EntityPanel'
 import PageHeader from '../components/PageHeader'
+import DocVisitNav from '../components/DocVisitNav'
+import DocNeighborPager, { type DocNeighbor } from '../components/DocNeighborPager'
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
 import { useAiChatOpen } from '../components/Layout'
+import { useNavHistory } from '../hooks/useNavHistory'
 import { readDocRailCollapsed, writeDocRailCollapsed } from '../hooks/useDocRailCollapsed'
 import { readDocRailWidth, writeDocRailWidth, type DocRailWidth } from '../hooks/useDocRailWidth'
 
@@ -55,11 +57,6 @@ import { Kbd, Tooltip, useToast } from '../components/ui'
 import { deliverExport, fetchDocExportFile } from '../lib/download'
 import { recordVisit } from '../lib/recentVisits'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
-
-interface DocNeighbor {
-  id: string
-  title: string
-}
 
 interface Backlink {
   id: number
@@ -278,7 +275,13 @@ useEffect(() => {
     }
   }, [id])
 
-  // 上一篇/下一篇（Obsidian 式顺序导航，按创建顺序）——顶栏箭头用
+  const { setCurrentLabel } = useNavHistory()
+  useEffect(() => {
+    const title = doc?.content?.trim()
+    if (title) setCurrentLabel(title)
+  }, [doc?.content, setCurrentLabel])
+
+  // 上一篇/下一篇（按创建顺序）——正文末尾翻页用，不是顶栏返回
   const [neighbors, setNeighbors] = useState<{ prev: DocNeighbor | null; next: DocNeighbor | null }>({ prev: null, next: null })
   useEffect(() => {
     if (!id) {
@@ -664,33 +667,9 @@ useEffect(() => {
     <div className="flex flex-col lg:flex-row h-full">
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col h-full border-r border-border/50">
-        {/* Global Sticky Header — 左：上一篇/下一篇 ｜ 中：标题（居中） ｜ 右：操作 */}
+        {/* Global Sticky Header — 左：访问历史 ｜ 中：标题 ｜ 右：操作 */}
         <PageHeader bare className="shrink-0 px-3 sm:px-6">
-          {/* 左：顺序导航（Obsidian 式；按创建顺序，单篇两侧禁用） */}
-          <div className="flex items-center gap-1">
-            <Tooltip label={neighbors.prev ? t('doc.prevDoc', { title: neighbors.prev.title }) : t('doc.noPrevDoc')}>
-              <button
-                type="button"
-                onClick={() => neighbors.prev && navigate(`/doc/${neighbors.prev.id}`)}
-                disabled={!neighbors.prev}
-                className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:hover:bg-transparent"
-                aria-label={t('doc.prevDoc', { title: neighbors.prev?.title ?? '' })}
-              >
-                <ArrowLeft className="w-4 h-4" strokeWidth={1.75} />
-              </button>
-            </Tooltip>
-            <Tooltip label={neighbors.next ? t('doc.nextDoc', { title: neighbors.next.title }) : t('doc.noNextDoc')}>
-              <button
-                type="button"
-                onClick={() => neighbors.next && navigate(`/doc/${neighbors.next.id}`)}
-                disabled={!neighbors.next}
-                className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:hover:bg-transparent"
-                aria-label={t('doc.nextDoc', { title: neighbors.next?.title ?? '' })}
-              >
-                <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
-              </button>
-            </Tooltip>
-          </div>
+          <DocVisitNav />
           {/* 中：文档标题（flex-1 撑满中间，居中截断） */}
           <div className="flex-1 min-w-0 flex justify-center">
             <span className="font-medium text-foreground truncate text-sm max-w-full">
@@ -1015,6 +994,7 @@ useEffect(() => {
                 </article>
                </div>
              )}
+            <DocNeighborPager prev={neighbors.prev} next={neighbors.next} />
            </div>
            </div>
           </div>
