@@ -93,9 +93,11 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
   const [showRecoverDraft, setShowRecoverDraft] = useState(false)
   const recoverDraftContentRef = useRef<string | null>(null)
 
-  const doSave = useCallback(async (markdown: string): Promise<boolean> => {
+  const doSave = useCallback(async (markdown: string, checkpoint = false): Promise<boolean> => {
     try {
-      const r = await api.put<{ doc: unknown; updated_at?: string }>(`/docs/${docId}/markdown`, { markdown })
+      // checkpoint=false（自动保存）→ 不记整篇快照，避免历史刷屏；
+      // checkpoint=true（手动/切走/Ctrl+S）→ 记版本点，可回退
+      const r = await api.put<{ doc: unknown; updated_at?: string }>(`/docs/${docId}/markdown`, { markdown, checkpoint })
       lastSavedContentRef.current = markdown
       if (r.updated_at) serverUpdatedAtRef.current = r.updated_at
       draft.clearDraft()
@@ -109,10 +111,10 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
     }
   }, [docId, draft, onAutoSaved])
 
-  const triggerAutoSave = useCallback((markdown: string) => {
+  const triggerAutoSave = useCallback((markdown: string, checkpoint?: boolean) => {
     if (markdown === lastSavedContentRef.current) return
     setAutoSaveStatus('saving')
-    doSave(markdown)
+    doSave(markdown, checkpoint ?? false)
   }, [doSave])
 
   useEffect(() => {
@@ -212,7 +214,8 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
   const handleSave = useCallback(async () => {
     if (saving) return
     setSaving(true)
-    const ok = await doSave(content)
+    // 手动保存：记版本点（checkpoint=true）
+    const ok = await doSave(content, true)
     if (ok) {
       setInitialContent(content)
       onSaved()
@@ -229,7 +232,9 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
   const handleCancel = useCallback(() => {
     if (content !== lastSavedContentRef.current) {
       draft.saveDraft(content, serverUpdatedAtRef.current)
-      triggerAutoSave(content)
+      // 切走/退出：强制记版本点（checkpoint=true），覆盖「看到已保存就离开」的场景，
+      // 保证离开前这段编辑有可回退的历史
+      triggerAutoSave(content, true)
     }
     onClose()
   }, [content, draft, triggerAutoSave, onClose])

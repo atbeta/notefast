@@ -294,7 +294,7 @@ describe('revisions API', () => {
     expect(missing.status).toBe(404)
   })
 
-  test('PUT /docs/:id/markdown 保存后产生一条整篇快照 revision（标题不重复记录）', async () => {
+  test('PUT /docs/:id/markdown checkpoint=true 产生整篇快照；默认/自动保存不产生', async () => {
     const db = getDb()
     const docId = crypto.randomUUID()
     insertDocRoot(docId, '旧标题')
@@ -305,11 +305,11 @@ describe('revisions API', () => {
     const res = await app.request(`/docs/${docId}/markdown`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ markdown: '# 新标题\n\n新段落', title: '新标题' }),
+      body: JSON.stringify({ markdown: '# 新标题\n\n新段落', title: '新标题', checkpoint: true }),
     })
     expect(res.status).toBe(200)
 
-    // 只应产生一条「editor」整篇快照，标题不被 updateBlock 单独再记一条
+    // 版本点保存 → 只应产生一条「editor」整篇快照，标题不被 updateBlock 单独再记一条
     const revs = listDocRevisions(db, docId)
     const snapshots = revs.filter((r) => r.actor === 'editor')
     expect(snapshots.length).toBe(1)
@@ -319,6 +319,25 @@ describe('revisions API', () => {
     expect(revs.filter((r) => r.actor !== 'editor' && !r.is_current).length).toBe(0)
   })
 
+  test('PUT /docs/:id/markdown 默认（自动保存）不产生整篇快照', async () => {
+    const db = getDb()
+    const docId = crypto.randomUUID()
+    insertDocRoot(docId, '标题')
+    const p = crypto.randomUUID()
+    insertParagraph(p, docId, '段落')
+
+    // 自动保存：不传 checkpoint（falsy）→ 只整篇替换，不记快照，避免 3 秒一条刷屏
+    const res = await app.request(`/docs/${docId}/markdown`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markdown: '# 标题\n\n自动保存的新内容', title: '标题' }),
+    })
+    expect(res.status).toBe(200)
+    const revs = listDocRevisions(db, docId)
+    const snapshots = revs.filter((r) => r.actor === 'editor')
+    expect(snapshots.length).toBe(0)
+  })
+
   test('POST /docs/:id/snapshots/:rev/restore 回退整篇快照（actor=revert，且回退本身留一条新快照）', async () => {
     const db = getDb()
     const docId = crypto.randomUUID()
@@ -326,17 +345,17 @@ describe('revisions API', () => {
     const p = crypto.randomUUID()
     insertParagraph(p, docId, '段落')
 
-    // 第一次整篇替换：快照 rev1 = 初始状态（标题+段落），文档变为 标题+v2
+    // 第一次整篇替换（版本点）：快照 rev1 = 初始状态（标题+段落），文档变为 标题+v2
     await app.request(`/docs/${docId}/markdown`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ markdown: '# 标题\n\nv2', title: '标题' }),
+      body: JSON.stringify({ markdown: '# 标题\n\nv2', title: '标题', checkpoint: true }),
     })
-    // 第二次 → 快照 rev2 = "# 标题\n\nv2"，文档变为 标题+v3
+    // 第二次（版本点）→ 快照 rev2 = "# 标题\n\nv2"，文档变为 标题+v3
     await app.request(`/docs/${docId}/markdown`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ markdown: '# 标题\n\nv3', title: '标题' }),
+      body: JSON.stringify({ markdown: '# 标题\n\nv3', title: '标题', checkpoint: true }),
     })
     // 回退到 rev2（v2 内容）
     const res = await app.request(`/docs/${docId}/snapshots/2/restore`, {

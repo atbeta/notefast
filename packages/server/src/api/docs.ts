@@ -416,6 +416,7 @@ function applyMarkdownReplace(
   markdown: string,
   title: string | undefined,
   actor: string,
+  checkpoint = false,
 ): { ok: true; body: Record<string, unknown> } | { ok: false; error: string } {
   const docRow = getDocById(db, id)
   if (!docRow) {
@@ -427,9 +428,13 @@ function applyMarkdownReplace(
   const newTitle = title || docRow.content
   const inputs = stripTitleHeading(rawInputs, newTitle)
 
-  // 整篇替换会删旧子块 + 插新子块（绕过块级 updateBlock 的 revision），
-  // 先把旧整篇合并为一条「保存前快照」（在事务内写入 —— 后续任一失败自动回滚，不留脏快照）
-  const oldMarkdown = blocksToMarkdown(buildBlockTree(fetchDocBlocks(db, id)))
+  // 整篇替换会删旧子块 + 插新子块（绕过块级 updateBlock 的 revision）。
+  // 只有「版本点」保存（checkpoint=true，切走/手动）才记整篇快照；
+  // 自动保存（checkpoint=false）不记——避免每 3 秒一条 snapshot 刷屏历史。
+  const shouldSnapshot = checkpoint
+  const oldMarkdown = shouldSnapshot
+    ? blocksToMarkdown(buildBlockTree(fetchDocBlocks(db, id)))
+    : ''
 
   // 收集旧子块 ID（事务外保留引用，事务后触发 afterDelete）
   const oldChildRows = fetchSubtreeBlocks(db, id)
@@ -438,7 +443,7 @@ function applyMarkdownReplace(
   const insertedIds: string[] = []
 
   db.transaction(() => {
-    recordDocSnapshot(db, id, oldMarkdown, actor)
+    if (shouldSnapshot) recordDocSnapshot(db, id, oldMarkdown, actor)
     deleteRefsTouchingBlocks(db, oldChildIds)
     deleteMentionsTouchingBlocks(db, oldChildIds)
     softDeleteBlocks(db, oldChildIds)
@@ -483,8 +488,8 @@ function applyMarkdownReplace(
 }
 
 docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
-  const { markdown, title } = c.req.valid('json')
-  const result = applyMarkdownReplace(getDb(), c.req.param('id'), markdown, title, 'editor')
+  const { markdown, title, checkpoint } = c.req.valid('json')
+  const result = applyMarkdownReplace(getDb(), c.req.param('id'), markdown, title, 'editor', checkpoint)
   return result.ok ? c.json(result.body) : c.json({ error: 'not_found', message: result.error }, 404)
 })
 
@@ -538,8 +543,9 @@ docs.post('/:id/snapshots/:rev/restore', (c) => {
     return c.json({ error: 'not_found', message: `文档 ${id} 的快照 ${rev} 不存在` }, 404)
   }
 
-  // 快照内容本身就是完整 markdown（含标题），整篇替换会解析并重建块树
-  const result = applyMarkdownReplace(db, id, snapshot.content, undefined, 'revert')
+  // 快照内容本身就是完整 markdown（含标题），整篇替换会解析并重建块树。
+  // checkpoint=true：回退是明确操作，必须留一条 revert 快照（回退前的状态），供再次回退
+  const result = applyMarkdownReplace(db, id, snapshot.content, undefined, 'revert', true)
   return result.ok ? c.json(result.body) : c.json({ error: 'not_found', message: result.error }, 404)
 })
 

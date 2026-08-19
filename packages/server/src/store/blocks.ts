@@ -555,7 +555,7 @@ export function listDocRevisions(db: Db, docId: string, limit = 100): DocRevisio
        SELECT 'block' AS kind, r.block_id, r.rev, r.content, r.actor, r.created_at
        FROM block_revisions r
        JOIN blocks b ON b.id = r.block_id
-       WHERE b.root_id = ? AND b.is_deleted = 0
+       WHERE b.root_id = ?
        ORDER BY created_at DESC, rev DESC
        LIMIT ?`,
     )

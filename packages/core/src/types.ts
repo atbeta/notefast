@@ -304,4 +304,11 @@ export const updateDocStatusSchema = z.object({
 export const updateDocMarkdownSchema = z.object({
   markdown: z.string().min(1).max(5_000_000),
   title: z.string().min(1).max(500).optional(),
+  /**
+   * 是否为「版本点」保存（切走/手动保存/Ctrl+S）：
+   * true → 记录整篇快照（doc_snapshot，进历史面板，可回退）；
+   * false / 缺省（自动保存）→ 只做整篇内容替换，不记快照——
+   * 避免每 3 秒自动保存都写一条 snapshot 刷屏历史、挤掉旧版本。
+   */
+  checkpoint: z.boolean().optional().default(false),
 })
