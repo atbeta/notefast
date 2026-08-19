@@ -319,9 +319,9 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
 }
 
 /** 拉取文档当前是否已公开分享（顶栏图标态） */
-export async function fetchDocShared(docId: string): Promise<boolean> {
+export async function fetchDocShared(docId: string, options?: RequestInit): Promise<boolean> {
   try {
-    const r = await api.get<ShareInfo>(`/docs/${docId}/share`)
+    const r = await api.get<ShareInfo>(`/docs/${docId}/share`, options)
     return r.shared === true
   } catch {
     return false

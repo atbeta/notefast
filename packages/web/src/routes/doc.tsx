@@ -185,6 +185,8 @@ export default function DocPage() {
   const [relatedItems, setRelatedItems] = useState<RelatedDocItem[] | null>(null)
   const [relatedError, setRelatedError] = useState<string | null>(null)
   const [relatedLoading, setRelatedLoading] = useState(false)
+  /** 当前 related fetch 的 AbortController（ref，不参与渲染；effect 切换时立刻 abort 旧请求） */
+  const relatedAbortRef = useRef<AbortController | null>(null)
   /** 桌面右栏收起状态（localStorage 记忆；写路径广播给 GlobalSyncStatus 等避让方） */
   const [railCollapsed, setRailCollapsed] = useState(readDocRailCollapsed)
   useEffect(() => {
@@ -216,8 +218,9 @@ export default function DocPage() {
   const indexJobAcRef = useRef<AbortController | null>(null)
   useEffect(() => () => indexJobAcRef.current?.abort(), [])
 
-  useEffect(() => {
+useEffect(() => {
     if (!id) return
+    const ac = new AbortController()
     let cancelled = false
     setError(null)
     setShowSkeleton(false)
@@ -228,7 +231,7 @@ export default function DocPage() {
     }, 150)
 
     api
-      .get<Block>('/docs/' + id)
+      .get<Block>('/docs/' + id, { signal: ac.signal })
       .then((d) => {
         if (!cancelled) {
           setDoc(d)
@@ -236,8 +239,10 @@ export default function DocPage() {
           recordVisit(id)
         }
       })
-      .catch((e) => {
-        if (!cancelled) setError(e.message)
+      .catch((e: unknown) => {
+        // 主动取消（切文档/refreshKey）→ 静默
+        if (ac.signal.aborted) return
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
       })
       .finally(() => {
         if (!cancelled) {
@@ -248,6 +253,7 @@ export default function DocPage() {
       })
     return () => {
       cancelled = true
+      ac.abort()
       clearTimeout(skeletonTimer)
     }
   }, [id, refreshKey])
@@ -258,12 +264,18 @@ export default function DocPage() {
       setDocShared(false)
       return
     }
+    const ac = new AbortController()
     let cancelled = false
     setDocShared(false)
-    void fetchDocShared(id).then((shared) => {
-      if (!cancelled) setDocShared(shared)
-    })
-    return () => { cancelled = true }
+    void fetchDocShared(id, { signal: ac.signal })
+      .then((shared) => {
+        if (!cancelled) setDocShared(shared)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+      ac.abort()
+    }
   }, [id])
 
   // 上一篇/下一篇（Obsidian 式顺序导航，按创建顺序）——顶栏箭头用
@@ -273,44 +285,60 @@ export default function DocPage() {
       setNeighbors({ prev: null, next: null })
       return
     }
+    const ac = new AbortController()
     let cancelled = false
     setNeighbors({ prev: null, next: null })
     void api
-      .get<{ prev: DocNeighbor | null; next: DocNeighbor | null }>(`/docs/${id}/neighbors`)
+      .get<{ prev: DocNeighbor | null; next: DocNeighbor | null }>(`/docs/${id}/neighbors`, { signal: ac.signal })
       .then((n) => { if (!cancelled) setNeighbors(n) })
       .catch(() => {})
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      ac.abort()
+    }
   }, [id])
 
   // 相关笔记：仅「相关」Tab 打开时拉取（对齐 history 的按需模式）。
   // 不做打开文档即预取——每次切换文档都跑一次 hybridSearch(FTS×2+实体匹配+RRF)
   // 在 CPU 高（AI 流/索引）时叠加排队，是切文档卡顿的来源之一。
+  // AbortController 真正打断飞行中的请求；旧的 cancelled 标志只是拦 setState，请求
+  // 本身还在跑、占 Bun 单进程事件循环——切文档时旧请求应当立刻被取消。
+  // 切文档/切 Tab 时**不清**旧 items，避免右栏闪空白；只在 loading=true + items=null
+  // 双重条件时才显示加载态。
   useEffect(() => {
     if (!id || railTab !== 'related') {
-      setRelatedItems(null)
-      setRelatedError(null)
+      // 切走时立即停掉当前 fetch，但不擦除 items —— 用户切去其他 Tab 再切回时，
+      // 老结果还在；切文档时也保留上一次结果作为过渡，直到新结果回来。
+      relatedAbortRef.current?.abort()
       setRelatedLoading(false)
       return
     }
+    // 起新请求前先 abort 上一旧（理论上 cleanup 已经做了，但双保险）
+    relatedAbortRef.current?.abort()
+    const ac = new AbortController()
+    relatedAbortRef.current = ac
     let cancelled = false
-    setRelatedItems(null)
     setRelatedError(null)
     setRelatedLoading(true)
     api
-      .get<{ items: RelatedDocItem[] }>(`/docs/${id}/related?limit=8`)
+      .get<{ items: RelatedDocItem[] }>(`/docs/${id}/related?limit=8`, { signal: ac.signal })
       .then((res) => {
         if (!cancelled) setRelatedItems(Array.isArray(res?.items) ? res.items : [])
       })
       .catch((e: unknown) => {
+        if (ac.signal.aborted) return
         if (!cancelled) {
           setRelatedError(e instanceof Error ? e.message : String(e))
-          setRelatedItems([])
+          // 失败不擦旧数据，避免右栏跳空白；保留上一次成功结果作为降级
         }
       })
       .finally(() => {
         if (!cancelled) setRelatedLoading(false)
       })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      ac.abort()
+    }
   }, [id, railTab])
 
   // 创建/导入后的向量化进度（?index_job=）
@@ -355,11 +383,17 @@ export default function DocPage() {
 
   useEffect(() => {
     if (!id) return
+    const ac = new AbortController()
+    let cancelled = false
     setAuxLoading(true)
-    request<Backlink[]>(`/search/refs?target_id=${id}`)
-      .then(setBacklinks)
-      .catch(() => setBacklinks([]))
-      .finally(() => setAuxLoading(false))
+    request<Backlink[]>(`/search/refs?target_id=${id}`, { signal: ac.signal })
+      .then((b) => { if (!cancelled) setBacklinks(b) })
+      .catch(() => { if (!cancelled) setBacklinks([]) })
+      .finally(() => { if (!cancelled) setAuxLoading(false) })
+    return () => {
+      cancelled = true
+      ac.abort()
+    }
   }, [id, refreshKey])
 
   /** 文档历史 revision（跨块时间线）；历史面板打开时才拉取，避免每开文档都查 */
@@ -1220,7 +1254,30 @@ function RelatedView({
 }) {
   const { t } = useTranslation()
 
-  if (loading && items === null) {
+  // 已有数据：即使 loading（新 doc 的请求还在飞）也保留旧结果展示，避免右栏闪空白
+  if (items && items.length > 0) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        {items.map((item) => (
+          <Link
+            key={item.doc_id}
+            to={'/doc/' + item.doc_id}
+            className="group block px-2.5 py-2 -mx-1 rounded-lg hover:bg-accent transition-colors"
+          >
+            <div className="text-[11px] font-medium text-foreground/75 line-clamp-1 mb-0.5">
+              {item.title || t('doc.untitledDocument')}
+            </div>
+            {item.snippet && (
+              <p className="text-[12.5px] text-muted-foreground group-hover:text-foreground line-clamp-2 leading-relaxed transition-colors">
+                {item.snippet}
+              </p>
+            )}
+          </Link>
+        ))}
+      </div>
+    )
+  }
+  if (loading) {
     return <div className="px-1 text-[12px] text-muted-foreground/70">{t('common.loading')}</div>
   }
   if (error) {
@@ -1230,32 +1287,11 @@ function RelatedView({
       </div>
     )
   }
-  if (!items || items.length === 0) {
-    return (
-      <div className="px-1 space-y-1.5">
-        <p className="text-[12px] text-muted-foreground/60 leading-relaxed">{t('doc.noRelated')}</p>
-        <p className="text-[11.5px] text-muted-foreground/50 leading-relaxed">{t('doc.noRelatedHint')}</p>
-      </div>
-    )
-  }
+  // 没数据 + 不 loading + 不 error：首次打开或真的没相关
   return (
-    <div className="flex flex-col gap-1.5">
-      {items.map((item) => (
-        <Link
-          key={item.doc_id}
-          to={'/doc/' + item.doc_id}
-          className="group block px-2.5 py-2 -mx-1 rounded-lg hover:bg-accent transition-colors"
-        >
-          <div className="text-[11px] font-medium text-foreground/75 line-clamp-1 mb-0.5">
-            {item.title || t('doc.untitledDocument')}
-          </div>
-          {item.snippet && (
-            <p className="text-[12.5px] text-muted-foreground group-hover:text-foreground line-clamp-2 leading-relaxed transition-colors">
-              {item.snippet}
-            </p>
-          )}
-        </Link>
-      ))}
+<div className="px-1 space-y-1.5">
+      <p className="text-[12px] text-muted-foreground/60 leading-relaxed">{t('doc.noRelated')}</p>
+      <p className="text-[11.5px] text-muted-foreground/50 leading-relaxed">{t('doc.noRelatedHint')}</p>
     </div>
   )
 }

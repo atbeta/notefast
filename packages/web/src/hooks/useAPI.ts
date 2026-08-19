@@ -110,6 +110,8 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  // signal 通过 RequestInit 透传给 fetch：被 abort 时 fetch 抛 DOMException AbortError，
+  // 直接透传给调用方，由调用方在 .catch 里识别 name==='AbortError' 跳过状态更新。
   const res = await fetchWithAuth(path, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...(options?.headers ?? {}) },
@@ -123,11 +125,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
-  patch: <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
-  put: <T>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
-  del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  get: <T>(path: string, options?: RequestInit) => request<T>(path, options),
+  post: <T>(path: string, body: unknown, options?: RequestInit) =>
+    request<T>(path, { ...options, method: 'POST', body: JSON.stringify(body) }),
+  patch: <T>(path: string, body: unknown, options?: RequestInit) =>
+    request<T>(path, { ...options, method: 'PATCH', body: JSON.stringify(body) }),
+  put: <T>(path: string, body: unknown, options?: RequestInit) =>
+    request<T>(path, { ...options, method: 'PUT', body: JSON.stringify(body) }),
+  del: <T>(path: string, options?: RequestInit) => request<T>(path, { ...options, method: 'DELETE' }),
 }
 
 export { request }
