@@ -118,7 +118,7 @@ fn import_and_open(app: &AppHandle, files: Vec<PathBuf>, is_initial: bool) {
             std::thread::sleep(NAV_DELAY);
         }
         if let Ok(js) = serde_json::to_string(&url) {
-            let _ = win.eval(&format!("location.href = {js}"));
+            let _ = win.eval(format!("location.href = {js}"));
         }
     }
 }
@@ -132,7 +132,7 @@ fn bail_to_home(app: &AppHandle, url: Option<&str>) {
             .map(|u| u.to_string())
             .unwrap_or_else(|| "/?native=tauri".to_string());
         if let Ok(js) = serde_json::to_string(&target) {
-            let _ = win.eval(&format!("location.href = {js}"));
+            let _ = win.eval(format!("location.href = {js}"));
         }
     }
 }
@@ -184,7 +184,7 @@ fn post_import(port: u16, notebook_id: &str, title: &str, markdown: &str, path: 
          Content-Type: application/json\r\n\
          Content-Length: {}\r\n\
          Connection: close\r\n\r\n",
-        body.as_bytes().len()
+        body.len()
     );
     stream
         .write_all(req.as_bytes())
@@ -223,10 +223,7 @@ fn post_import(port: u16, notebook_id: &str, title: &str, markdown: &str, path: 
 /// 最小 chunked 解码（hex 长度行 + CRLF 帧）
 fn decode_chunked(mut data: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
-    loop {
-        let Some(pos) = data.windows(2).position(|w| w == b"\r\n") else {
-            break;
-        };
+    while let Some(pos) = data.windows(2).position(|w| w == b"\r\n") {
         let Ok(size) = usize::from_str_radix(String::from_utf8_lossy(&data[..pos]).trim(), 16)
         else {
             break;

@@ -171,7 +171,7 @@ pub fn run() {
             // 冷启动带入的 .md：engine 由前端启动页拉起，import 内部会等它就绪。
             // is_initial=true：splash 会停留等导入完成，避免先闪现文档列表
             if !initial_files.is_empty() {
-                import::handle_open_files(&app.handle(), initial_files.clone(), true);
+                import::handle_open_files(app.handle(), initial_files.clone(), true);
             }
             Ok(())
         })
