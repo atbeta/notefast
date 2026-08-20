@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.74.1](https://github.com/atbeta/notefast/compare/v0.74.0...v0.74.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* unblock settings health and speed note-graph open ([46e9431](https://github.com/atbeta/notefast/commit/46e94319768fb28ca9862fa30800da7b658e15f9))
+
 ## [0.74.0](https://github.com/atbeta/notefast/compare/v0.73.0...v0.74.0) (2026-08-19)
 
 
