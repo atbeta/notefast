@@ -460,17 +460,9 @@ export default function AISettingsPanel() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {status?.usage && (
-            <div className="text-[10px] text-muted-foreground hidden md:flex gap-3">
-              {status.usage.embeddingCalls > 0 && <span>emb: {status.usage.embeddingCalls}</span>}
-              {status.usage.chatCalls > 0 && <span>chat: {status.usage.chatCalls}</span>}
-              {status.usage.rerankCalls > 0 && <span>rerank: {status.usage.rerankCalls}</span>}
-              {status.usage.autoLinkAnalyses > 0 && <span>link: {status.usage.autoLinkAnalyses}</span>}
-              {status.usage.lastSuccessAt && (
-                <span className="opacity-60">
-                  {t('aiSettings.lastSuccess', { time: new Date(status.usage.lastSuccessAt).toLocaleTimeString(currentLocale()) })}
-                </span>
-              )}
+          {status?.usage?.lastSuccessAt && (
+            <div className="text-[10px] text-muted-foreground hidden md:block opacity-60">
+              {t('aiSettings.lastSuccess', { time: new Date(status.usage.lastSuccessAt).toLocaleTimeString(currentLocale()) })}
             </div>
           )}
           <button

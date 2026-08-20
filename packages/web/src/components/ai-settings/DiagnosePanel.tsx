@@ -1,4 +1,5 @@
-import { CheckCircle2, AlertCircle } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { AlertCircle, CheckCircle2, FileSearch, GitBranch, Link2, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import i18next from '../../i18n'
 import type { AiDiagnoseResult } from '@notefast/core'
@@ -49,11 +50,11 @@ export function DiagnosePanel({ result, onClose }: { result: AiDiagnoseResult; o
         </button>
       </div>
       <div className="divide-y divide-border/60">
-        <DiagRow icon="↻" label="Embedding" r={result.embedding} />
-        <DiagRow icon="✦" label="Chat" r={result.chat} />
-        <DiagRow icon="⊕" label="Reranker" r={result.reranker} />
+        <DiagRow icon={<FileSearch className="w-3.5 h-3.5" />} label="Embedding" r={result.embedding} />
+        <DiagRow icon={<Sparkles className="w-3.5 h-3.5" />} label="Chat" r={result.chat} />
+        <DiagRow icon={<GitBranch className="w-3.5 h-3.5" />} label="Reranker" r={result.reranker} />
         {result.autoLink?.configured && (
-          <DiagRow icon="⌘" label="AutoLink" r={result.autoLink} autoLink />
+          <DiagRow icon={<Link2 className="w-3.5 h-3.5" />} label="AutoLink" r={result.autoLink} autoLink />
         )}
       </div>
     </div>
@@ -80,7 +81,7 @@ function DiagRow({
   r,
   autoLink,
 }: {
-  icon: string
+  icon: ReactNode
   label: string
   r: DiagR
   autoLink?: boolean
@@ -89,7 +90,7 @@ function DiagRow({
   if (!r.configured) {
     return (
       <div className="flex items-center gap-3 px-3 py-2 text-muted-foreground/70">
-        <span className="w-5 text-center text-foreground/60 text-[13px]">{icon}</span>
+        <span className="w-5 flex justify-center text-foreground/60">{icon}</span>
         <span className="w-16 font-medium text-foreground/80">{label}</span>
         <span className="text-[11px] italic">{t('diagnose.notConfigured')}</span>
       </div>
@@ -108,7 +109,7 @@ function DiagRow({
 
   return (
     <div className="flex items-center gap-3 px-3 py-2">
-      <span className="w-5 text-center text-foreground/60 text-[13px]">{icon}</span>
+      <span className="w-5 flex justify-center text-foreground/60">{icon}</span>
       <span className="w-16 font-medium text-foreground">{label}</span>
       {ok ? (
         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />

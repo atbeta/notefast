@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
-import maintenance from '../api/maintenance'
+import maintenance, { _resetHealthCacheForTests } from '../api/maintenance'
 import { logAppEvent, listAppLogs, initAppLogs, APP_LOGS_MAX_ROWS } from '../services/appLogs'
 
 let testDir: string
@@ -30,6 +30,7 @@ afterAll(() => {
 
 beforeEach(() => {
   getDb().query('DELETE FROM app_logs').run()
+  _resetHealthCacheForTests()
 })
 
 describe('app_logs 环形日志', () => {
@@ -151,6 +152,14 @@ describe('维护 API', () => {
     expect(body.purgeableTombstones).toBeGreaterThanOrEqual(1)
     expect(body.retainedTombstones).toBeGreaterThanOrEqual(1)
     expect(body.pendingTombstones).toBe(body.purgeableTombstones + body.retainedTombstones)
+  })
+
+  test('GET /db/health 计算期间其它请求不被堵住', async () => {
+    const healthP = app.fetch(new Request('http://localhost/api/v1/db/health?fresh=1'))
+    const logsRes = await app.fetch(new Request('http://localhost/api/v1/db/logs?limit=1'))
+    expect(logsRes.status).toBe(200)
+    const healthRes = await healthP
+    expect(healthRes.status).toBe(200)
   })
 
   test('GET /db/health 默认走 30s 缓存，fresh=1 绕过', async () => {

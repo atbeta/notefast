@@ -19,36 +19,75 @@ import { logAppEvent } from '../services/appLogs'
 
 const maintenance = new Hono()
 
-// ── health 缓存：/db/health 的 count(*)×10 + 递归 CTE 每次全量重算又慢又阻塞
-// ──（SQLite 单线程，查询期间其他请求排队，用户切 Tab 也卡）。缓存 30s，
-// ── 维护/整理等写操作后主动失效（invalidateHealthCache），前端 refetch 立刻拿新值。
+// ── health 缓存：count(*)×N + 孤儿 tombstone 相关子查询会占住 bun:sqlite。
+// ── JS 单线程：查询不让出事件循环时，其它 HTTP（切设置 Tab）只能排队。
+// ── 对策：30s 缓存 + 过期仍先返回旧值后台刷新；计算过程中每步 setTimeout(0) 让出循环。
 const HEALTH_CACHE_TTL_MS = 30_000
-let healthCache: { ts: number; payload: ReturnType<typeof buildHealthPayload> } | null = null
+type HealthPayload = ReturnType<typeof assembleHealthPayload>
+let healthCache: { ts: number; payload: HealthPayload } | null = null
+let healthInflight: Promise<HealthPayload> | null = null
 
 function invalidateHealthCache(): void {
   healthCache = null
 }
 
-function buildHealthPayload() {
-  const sizes = dbFileSizes()
-  const lastLog = listAppLogs(1)[0] ?? null
-  let tombstones = { total: 0, purgeable: 0, retained: 0 }
-  try {
-    tombstones = countOrphanTombstones(getDb())
-  } catch {
-    // blocks 表异常时健康页仍返回其余指标
-  }
+/** 测试用：避免 bun 共享进程把 30s 缓存带到下一条用例 */
+export function _resetHealthCacheForTests(): void {
+  healthCache = null
+  healthInflight = null
+}
+
+function yieldEventLoop(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+function assembleHealthPayload(
+  sizes: ReturnType<typeof dbFileSizes>,
+  lastLog: ReturnType<typeof listAppLogs>[number] | null,
+  tables: Record<string, number>,
+  tombstones: { total: number; purgeable: number; retained: number },
+) {
   return {
     dbBytes: sizes.dbBytes,
     walBytes: sizes.walBytes,
     dbPath: sizes.path,
-    tables: tableRowCounts(),
+    tables,
     pendingTombstones: tombstones.total,
     purgeableTombstones: tombstones.purgeable,
     retainedTombstones: tombstones.retained,
     lastMaintenance: lastLog && lastLog.source === 'maintenance' ? lastLog : null,
     ts: new Date().toISOString(),
   }
+}
+
+async function buildHealthPayload(): Promise<HealthPayload> {
+  const sizes = dbFileSizes()
+  await yieldEventLoop()
+  const lastLog = listAppLogs(1)[0] ?? null
+  await yieldEventLoop()
+  let tombstones = { total: 0, purgeable: 0, retained: 0 }
+  try {
+    tombstones = countOrphanTombstones(getDb())
+  } catch {
+    // blocks 表异常时健康页仍返回其余指标
+  }
+  await yieldEventLoop()
+  const tables = await tableRowCounts()
+  return assembleHealthPayload(sizes, lastLog, tables, tombstones)
+}
+
+async function computeHealth(): Promise<HealthPayload> {
+  if (healthInflight) return healthInflight
+  healthInflight = (async () => {
+    try {
+      const payload = await buildHealthPayload()
+      healthCache = { ts: Date.now(), payload }
+      return payload
+    } finally {
+      healthInflight = null
+    }
+  })()
+  return healthInflight
 }
 
 /** SQLite 文件大小（DB + WAL，字节）；找不到返回 null */
@@ -72,8 +111,8 @@ function dbFileSizes(): { dbBytes: number | null; walBytes: number | null; path:
   }
 }
 
-/** 主要表行数（维护页健康视图） */
-function tableRowCounts(): Record<string, number> {
+/** 主要表行数（维护页健康视图）；每张表之间让出事件循环，避免连扫卡住切 Tab */
+async function tableRowCounts(): Promise<Record<string, number>> {
   const db = getDb()
   const tables = ['blocks', 'block_vectors', 'entities', 'entity_mentions', 'block_refs', 'block_revisions', 'doc_snapshots', 'assets', 'app_logs', 'client_errors']
   const out: Record<string, number> = {}
@@ -84,18 +123,23 @@ function tableRowCounts(): Record<string, number> {
     } catch {
       out[t] = 0
     }
+    await yieldEventLoop()
   }
   return out
 }
 
-maintenance.get('/health', (c) => {
+maintenance.get('/health', async (c) => {
   const now = Date.now()
   const fresh = c.req.query('fresh') === '1'
   if (!fresh && healthCache && now - healthCache.ts < HEALTH_CACHE_TTL_MS) {
     return c.json(healthCache.payload)
   }
-  const payload = buildHealthPayload()
-  healthCache = { ts: now, payload }
+  // 过期缓存：先把旧值返回，后台刷新。切走设置 Tab 的请求不必等这次重算。
+  if (!fresh && healthCache) {
+    void computeHealth()
+    return c.json(healthCache.payload)
+  }
+  const payload = await computeHealth()
   return c.json(payload)
 })
 

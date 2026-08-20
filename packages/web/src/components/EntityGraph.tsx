@@ -197,7 +197,7 @@ export default function EntityGraph({
     simEdgesRef.current = simEdges
     const radiusOf = (d: SimNode) =>
       (d.type === 'doc' ? docWidth(d.mention_count, maxMc) / 2 : nodeRadius(d.mention_count, maxMc)) + 10
-  const sim: Simulation<SimNode, undefined> = forceSimulation<SimNode>(simNodesRef.current)
+    const sim: Simulation<SimNode, undefined> = forceSimulation<SimNode>(simNodesRef.current)
       .force(
         'link',
         forceLink<SimNode, SimEdge>(simEdges)
@@ -212,10 +212,14 @@ export default function EntityGraph({
       .force('x', forceX(size.w / 2).strength(mode === 'docs' ? 0.06 : 0.03))
       .force('y', forceY(size.h / 2).strength(mode === 'docs' ? 0.06 : 0.03))
       .force('collide', forceCollide<SimNode>().radius(radiusOf))
+      // 默认 alphaDecay≈0.0228 要 ~300 帧（约 5s）才停；从文档工具栏点进来会像「还在生成」
+      .alphaDecay(0.05)
     // 图结构重建后自动缩放至全图可见（用户交互即停止，见 wheel/pointerdown）；
     // 仅图结构变化时触发——容器 resize（如详情面板开合）不重置用户视角
-    autoFitRef.current = graphKey !== prevGraphKeyRef.current
+    const structureChanged = graphKey !== prevGraphKeyRef.current
+    autoFitRef.current = structureChanged
     prevGraphKeyRef.current = graphKey
+    const firstLayout = prev.size === 0
     let raf = 0
     sim.on('tick', () => {
       if (raf) return
@@ -225,6 +229,17 @@ export default function EntityGraph({
         setTick((t) => t + 1)
       })
     })
+    // 构造时会自动 restart；先停掉。首屏（文档工具栏「查看关联图谱」）同步推进布局，
+    // 避免先看几秒粒子飞。同页聚焦仍走动画。
+    sim.stop()
+    if (firstLayout) {
+      sim.tick(90)
+      fitView()
+      autoFitRef.current = false
+      setTick((t) => t + 1)
+    } else {
+      sim.restart()
+    }
     return () => {
       cancelAnimationFrame(raf)
       sim.stop()
