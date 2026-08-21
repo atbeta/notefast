@@ -14,9 +14,29 @@ export interface WritePrompt {
   user: string
 }
 
-const SYSTEM_CONTINUE = `你是 NoteFast 写作助手。从用户给出的上文自然续写，保持相同的语气、风格、知识水平和语言。
-不要重复上文。不要问候语、不要"好的"之类的确认词。不要总结。不要另起话题。
-直接写出正文，就像你正在同一个人写同一篇文章。`
+/** 续写只送光标附近，避免整篇笔记把模型带跑 */
+export const CONTINUE_PREFIX_MAX = 6000
+export const CONTINUE_SUFFIX_MAX = 1500
+
+export function clipContinuePrefix(text: string): string {
+  if (text.length <= CONTINUE_PREFIX_MAX) return text
+  return text.slice(-CONTINUE_PREFIX_MAX)
+}
+
+export function clipContinueSuffix(text: string): string {
+  if (text.length <= CONTINUE_SUFFIX_MAX) return text
+  return text.slice(0, CONTINUE_SUFFIX_MAX)
+}
+
+const SYSTEM_CONTINUE = `你是 NoteFast 写作助手。在光标处插入续写，像同一作者接着写同一篇。
+
+规则：
+- 只输出应插入光标处的正文，不要重复光标前或光标后已有的文字
+- 若光标在句中，先把这句话写完，再最多续几句
+- 不要新开标题或章节，除非上文刚写完一个标题行
+- 不要问候、确认语、总结、解释你在做什么
+- 篇幅克制：通常几句到一小段，不要写成长文
+- 上文若未换行，输出也不要以空行开头`
 
 const SYSTEM_REFINE = `你是 NoteFast 写作助手。{instruction}原文，保持相同风格和核心意思。
 只输出改写后的文本。不要解释改了什么。不要加前缀或后缀。`
@@ -39,14 +59,21 @@ export function buildWritePrompt(
   opts?: {
     instruction?: string
     targetLang?: string
+    /** 光标后的正文；仅 continue 使用 */
+    suffix?: string
   },
 ): ChatMessage[] {
   switch (mode) {
-    case 'continue':
+    case 'continue': {
+      const suffix = opts?.suffix?.trim() ?? ''
+      const user = suffix
+        ? `光标前：\n${content}\n\n光标后：\n${suffix}\n\n只输出插入光标处的续写：`
+        : `光标前：\n${content}\n\n（已是文末）只输出接着往下写的正文：`
       return [
         { role: 'system', content: SYSTEM_CONTINUE },
-        { role: 'user', content: `上文：\n${content}\n\n请从当前位置自然续写：` },
+        { role: 'user', content: user },
       ]
+    }
 
     case 'refine':
       return [

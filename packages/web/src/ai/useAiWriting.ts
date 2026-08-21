@@ -7,10 +7,15 @@ interface StreamCallbacks {
   onToken: (text: string) => void
 }
 
+interface StreamContinueOpts {
+  /** 光标后正文，避免续写与后文重复 */
+  suffix?: string
+}
+
 interface UseAiWritingResult {
   isStreaming: boolean
   error: string | null
-  streamContinue: (content: string, cbs: StreamCallbacks) => Promise<string>
+  streamContinue: (content: string, cbs: StreamCallbacks, opts?: StreamContinueOpts) => Promise<string>
   streamRefine: (content: string, instruction: string, cbs: StreamCallbacks) => Promise<string>
   cancel: () => void
 }
@@ -25,11 +30,13 @@ export function useAiWriting(): UseAiWritingResult {
       mode: WriteMode,
       content: string,
       cbs: StreamCallbacks,
-      opts?: { instruction?: string },
+      opts?: { instruction?: string; suffix?: string; maxTokens?: number },
     ): Promise<string> => {
       abortRef.current?.abort()
       const controller = new AbortController()
       abortRef.current = controller
+      setIsStreaming(true)
+      setError(null)
 
       return new Promise<string>((resolve, reject) => {
         let result = ''
@@ -40,14 +47,14 @@ export function useAiWriting(): UseAiWritingResult {
             mode,
             content,
             ...(opts?.instruction ? { instruction: opts.instruction } : {}),
-            max_tokens: 1024,
+            ...(opts?.suffix ? { suffix: opts.suffix } : {}),
+            max_tokens: opts?.maxTokens ?? 1024,
           },
           {
             onEvent: (eventName, data) => {
               const payload = data as { content?: string }
               if (eventName === 'token' && payload.content) {
                 result += payload.content
-                setIsStreaming(true)
                 cbs.onToken(payload.content)
               } else if (eventName === 'done') {
                 setIsStreaming(false)
@@ -74,6 +81,11 @@ export function useAiWriting(): UseAiWritingResult {
               abortRef.current = null
               resolve(result)
             },
+            onAbort: () => {
+              setIsStreaming(false)
+              abortRef.current = null
+              resolve(result)
+            },
           },
           controller.signal,
         )
@@ -85,7 +97,8 @@ export function useAiWriting(): UseAiWritingResult {
   )
 
   const streamContinue = useCallback(
-    (content: string, cbs: StreamCallbacks) => stream('continue', content, cbs),
+    (content: string, cbs: StreamCallbacks, opts?: StreamContinueOpts) =>
+      stream('continue', content, cbs, { suffix: opts?.suffix, maxTokens: 384 }),
     [stream],
   )
 

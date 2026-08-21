@@ -5,7 +5,13 @@ import {
   Pencil,
   ImageDown,
 } from 'lucide-react'
-import { parseMarkdownToBlocks, inputsToBlockTree, stripTitleFromMarkdown } from '@notefast/core'
+import {
+  parseMarkdownToBlocks,
+  inputsToBlockTree,
+  stripTitleFromMarkdown,
+  clipContinuePrefix,
+  clipContinueSuffix,
+} from '@notefast/core'
 import type { Block } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import { useToast } from './ui'
@@ -85,6 +91,7 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
 
   const ai = useAiCapabilities()
   const aiWriting = useAiWriting()
+  const continueGenRef = useRef(0)
 
   const lastSavedContentRef = useRef('')
   const serverUpdatedAtRef = useRef('')
@@ -275,26 +282,42 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
       toast.info({ title: t('doc.aiContinueNeedChat') })
       return
     }
+    const split = editorRef.current?.getCursorSplit()
+    const prefix = clipContinuePrefix(split?.prefix ?? content)
+    const suffix = clipContinueSuffix(split?.suffix ?? '')
+    if (!prefix.trim()) {
+      toast.info({ title: t('editorToolbar.continueNeedPrefix') })
+      return
+    }
+    setGhostText('')
+    const gen = ++continueGenRef.current
     let accumulated = ''
-    void aiWriting.streamContinue(content, {
-      onToken: (token) => {
-        accumulated += token
-        setGhostText(accumulated)
-      },
-    }).catch(() => {
-      setGhostText('')
-      toast.error({ title: t('aiWrite.failed') })
-    })
+    void aiWriting
+      .streamContinue(prefix, {
+        onToken: (token) => {
+          if (continueGenRef.current !== gen) return
+          accumulated += token
+          setGhostText(accumulated)
+        },
+      }, { suffix })
+      .catch(() => {
+        if (continueGenRef.current !== gen) return
+        setGhostText('')
+        toast.error({ title: t('aiWrite.failed') })
+      })
   }, [ai.chat, content, aiWriting, toast, t])
 
   // AI 续写 ghost：Tab 接受（插入光标处），Esc / 任意输入取消（由 CM keymap 与 updateListener 触发）
   const handleGhostAccept = useCallback(() => {
     if (!ghostText) return
+    continueGenRef.current += 1
+    aiWriting.cancel()
     editorRef.current?.insertAtCursor(ghostText)
     setGhostText('')
-  }, [ghostText])
+  }, [ghostText, aiWriting])
 
   const handleGhostDismiss = useCallback(() => {
+    continueGenRef.current += 1
     aiWriting.cancel()
     setGhostText('')
   }, [aiWriting])
@@ -439,6 +462,17 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
         wrapSelection={wrapSelection}
         uploadImage={imageUploader.uploadImage}
         editorRef={editorRef}
+        aiContinue={{
+          available: ai.chat,
+          streaming: aiWriting.isStreaming && !refining,
+          hasDraft: !!ghostText,
+          onStart: handleAiContinue,
+          onAccept: handleGhostAccept,
+          onStop: () => {
+            aiWriting.cancel()
+          },
+          onDiscard: handleGhostDismiss,
+        }}
       />
 
       {loading ? (
@@ -524,6 +558,7 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
                 onAiContinue={handleAiContinue}
                 onImageFile={imageUploader.uploadImage}
                 ghostText={ghostText}
+                ghostHint={t('editorToolbar.continueGhostHint')}
                 onGhostAccept={handleGhostAccept}
                 onGhostDismiss={handleGhostDismiss}
                 onSelectionChange={handleSelectionChange}
@@ -582,6 +617,7 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
           <ShortcutsHelp keys={['mod', 'E']} desc={t('mdEditor.helpInlineCode')} />
           <ShortcutsHelp keys={['mod', '⇧K']} desc={t('mdEditor.helpInsertLink')} />
           <ShortcutsHelp keys={['mod', 'Enter']} desc={t('mdEditor.helpAiContinue')} />
+          <ShortcutsHelp keys={['Tab']} desc={t('mdEditor.helpAiAccept')} />
           <ShortcutsHelp keys={['-', 'Enter']} desc={t('mdEditor.helpListContinue')} />
           <ShortcutsHelp keys={['```', 'Enter']} desc={t('mdEditor.helpCodeBlock')} />
         </div>

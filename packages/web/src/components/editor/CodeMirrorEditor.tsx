@@ -33,6 +33,8 @@ export interface CodeMirrorEditorHandle {
   wrapSelection: (left: string, right?: string) => void
   focus: () => void
   getSelectionText: () => string
+  /** 光标前 / 后全文，供 AI 续写 infill */
+  getCursorSplit: () => { prefix: string; suffix: string }
   /** 改写流式原地替换：把 [from, to) 渐进替换为 text（选区气泡用） */
   replaceRange: (from: number, to: number, text: string) => void
   /** 插入空 GFM 表并打开网格编辑 */
@@ -47,6 +49,8 @@ interface CodeMirrorEditorProps {
   onAiContinue: () => void
   onImageFile: (file: File) => void
   ghostText: string
+  /** 幽灵字旁的操作提示，如「Tab 接受 · Esc 取消」 */
+  ghostHint?: string
   onGhostAccept: () => void
   onGhostDismiss: () => void
   /** 非空选区 debounce 上报锚点（含 rect/text/from/to）；清空、失焦、卸载报 null */
@@ -175,6 +179,15 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
           if (!view) return ''
           const { from, to } = view.state.selection.main
           return view.state.sliceDoc(from, to)
+        },
+        getCursorSplit: () => {
+          const view = viewRef.current
+          if (!view) return { prefix: '', suffix: '' }
+          const head = view.state.selection.main.head
+          return {
+            prefix: view.state.doc.sliceString(0, head),
+            suffix: view.state.doc.sliceString(head),
+          }
         },
         replaceRange: (from, to, text) => {
           const view = viewRef.current
@@ -361,12 +374,17 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
     useEffect(() => {
       const view = viewRef.current
       if (!view) return
+      const hint = props.ghostHint ?? ''
       const active = view.state.field(ghostTextState)
+      if (!props.ghostText) {
+        if (active) view.dispatch({ effects: clearGhostText.of(null) })
+        return
+      }
       if (props.ghostText === active) return
       view.dispatch({
-        effects: props.ghostText ? setGhostText.of(props.ghostText) : clearGhostText.of(null),
+        effects: setGhostText.of({ text: props.ghostText, hint }),
       })
-    }, [props.ghostText])
+    }, [props.ghostText, props.ghostHint])
 
     return (
       <>

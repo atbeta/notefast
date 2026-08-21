@@ -1051,10 +1051,21 @@ html.theme-fading *::after {
 }
 
 .cm-ai-ghost {
-  color: rgb(var(--muted-foreground) / 0.5);
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+.cm-ai-ghost-body {
+  color: rgb(var(--muted-foreground) / 0.55);
   white-space: pre-wrap;
   animation: cm-ai-ghost-pulse 1.2s ease-in-out infinite;
-  pointer-events: none;
+}
+.cm-ai-ghost-hint {
+  margin-left: 0.55em;
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  color: rgb(var(--muted-foreground) / 0.72);
+  white-space: nowrap;
+  user-select: none;
 }
 @keyframes cm-ai-ghost-pulse {
   0%, 100% { opacity: 1; }

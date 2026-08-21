@@ -20,6 +20,9 @@ import {
   Sparkles,
   Upload,
   BookOpen,
+  Check,
+  X,
+  Square,
 } from 'lucide-react'
 import { Tooltip, ShortcutKeys, shortcutLabel } from '../ui'
 import { useAiCapabilities } from '../../hooks/useAiCapabilities'
@@ -44,6 +47,16 @@ interface EditorToolbarProps {
   wrapSelection: (left: string, right?: string) => void
   uploadImage: (file: File) => void
   editorRef: React.RefObject<CodeMirrorEditorHandle | null>
+  /** Chat 已配置时的续写入口；进行中可停，幽灵字可接受/丢弃 */
+  aiContinue?: {
+    available: boolean
+    streaming: boolean
+    hasDraft: boolean
+    onStart: () => void
+    onAccept: () => void
+    onStop: () => void
+    onDiscard: () => void
+  }
 }
 
 export default function EditorToolbar({
@@ -60,6 +73,7 @@ export default function EditorToolbar({
   wrapSelection,
   uploadImage,
   editorRef,
+  aiContinue,
 }: EditorToolbarProps) {
   const { t } = useTranslation()
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -238,16 +252,27 @@ export default function EditorToolbar({
         </IconBtn>
 
         <div className="flex items-center gap-1 ml-auto">
-          {!aiConfigured && (
-            <Tooltip label={t('editorToolbar.aiNotConfiguredHint', { defaultValue: 'AI 未配置，点此去设置' })}>
-              <Link
-                to="/settings/ai"
-                className="inline-flex items-center gap-1 px-2 h-7 rounded-md text-[11.5px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              >
-                <Sparkles className="w-3.5 h-3.5 opacity-70" strokeWidth={1.75} />
-                {t('editorToolbar.aiSetup', { defaultValue: 'AI 未配置' })}
-              </Link>
-            </Tooltip>
+          {mode === 'edit' && aiContinue?.available ? (
+            <AiContinueControls
+              streaming={aiContinue.streaming}
+              hasDraft={aiContinue.hasDraft}
+              onStart={aiContinue.onStart}
+              onAccept={aiContinue.onAccept}
+              onStop={aiContinue.onStop}
+              onDiscard={aiContinue.onDiscard}
+            />
+          ) : (
+            !aiConfigured && (
+              <Tooltip label={t('editorToolbar.aiNotConfiguredHint', { defaultValue: 'AI 未配置，点此去设置' })}>
+                <Link
+                  to="/settings/ai"
+                  className="inline-flex items-center gap-1 px-2 h-7 rounded-md text-[11.5px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5 opacity-70" strokeWidth={1.75} />
+                  {t('editorToolbar.aiSetup', { defaultValue: 'AI 未配置' })}
+                </Link>
+              </Tooltip>
+            )
           )}
           <IconBtn title={t('editorToolbar.exitEdit')} onClick={onCancel}>
             <BookOpen className="w-[15px] h-[15px]" strokeWidth={1.75} />
@@ -266,6 +291,72 @@ export default function EditorToolbar({
         </div>
       </div>
     </div>
+  )
+}
+
+function AiContinueControls({
+  streaming,
+  hasDraft,
+  onStart,
+  onAccept,
+  onStop,
+  onDiscard,
+}: {
+  streaming: boolean
+  hasDraft: boolean
+  onStart: () => void
+  onAccept: () => void
+  onStop: () => void
+  onDiscard: () => void
+}) {
+  const { t } = useTranslation()
+
+  if (streaming) {
+    return (
+      <Tooltip label={t('editorToolbar.continueStopHint')}>
+        <button
+          type="button"
+          onClick={onStop}
+          className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent border border-border/80 transition-colors"
+        >
+          <Square className="w-3 h-3 fill-current" strokeWidth={0} />
+          {t('editorToolbar.continueStop')}
+        </button>
+      </Tooltip>
+    )
+  }
+
+  if (hasDraft) {
+    return (
+      <div className="flex items-center gap-1">
+        <Tooltip label={t('editorToolbar.continueAcceptHint')}>
+          <button
+            type="button"
+            onClick={onAccept}
+            className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-[12px] font-medium bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] hover:bg-[rgb(var(--primary-hover))] transition-colors"
+          >
+            <Check className="w-3.5 h-3.5" strokeWidth={2} />
+            {t('editorToolbar.continueAccept')}
+          </button>
+        </Tooltip>
+        <IconBtn title={t('editorToolbar.continueDiscard')} onClick={onDiscard}>
+          <X className="w-[15px] h-[15px]" strokeWidth={1.75} />
+        </IconBtn>
+      </div>
+    )
+  }
+
+  return (
+    <Tooltip label={t('editorToolbar.continueHint', { shortcut: shortcutLabel(['mod', 'Enter']) })}>
+      <button
+        type="button"
+        onClick={onStart}
+        className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+      >
+        <Sparkles className="w-3.5 h-3.5 opacity-70" strokeWidth={1.75} />
+        {t('editorToolbar.continue')}
+      </button>
+    </Tooltip>
   )
 }
 

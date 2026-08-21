@@ -69,7 +69,16 @@
     "save": "保存",
     "exitEdit": "返回阅读，保留草稿",
     "aiNotConfiguredHint": "AI 未配置，点此去设置",
-    "aiSetup": "AI 未配置"
+    "aiSetup": "AI 未配置",
+    "continue": "续写",
+    "continueHint": "从光标处续写 ({{shortcut}})",
+    "continueNeedPrefix": "把光标放到要接着写的位置，并先有一点上文",
+    "continueAccept": "接受",
+    "continueAcceptHint": "插入到光标处（Tab）",
+    "continueDiscard": "丢弃续写",
+    "continueStop": "停止",
+    "continueStopHint": "停止生成，可再决定是否插入",
+    "continueGhostHint": " Tab 接受 · Esc 取消"
   },
   "editorFooter": {
     "stats": "{{chars}} 字 · {{lines}} 行 · 约 {{minutes}} 分钟",
@@ -103,7 +112,8 @@
     "helpItalic": "斜体",
     "helpInlineCode": "行内代码",
     "helpInsertLink": "插入链接",
-    "helpAiContinue": "AI 续写（需配置 AI）",
+    "helpAiContinue": "AI 续写（需配置 Chat）",
+    "helpAiAccept": "接受 AI 续写",
     "helpListContinue": "列表/引用续行（空项回车退出）",
     "helpCodeBlock": "展开空代码块",
     "helpExit": "退出（保留草稿）"

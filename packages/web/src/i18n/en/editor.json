@@ -69,7 +69,16 @@
     "save": "Save",
     "exitEdit": "Back to reading, draft kept",
     "aiNotConfiguredHint": "AI is not configured — click to set up",
-    "aiSetup": "AI not set up"
+    "aiSetup": "AI not set up",
+    "continue": "Continue",
+    "continueHint": "Continue from the cursor ({{shortcut}})",
+    "continueNeedPrefix": "Place the cursor after some text to continue",
+    "continueAccept": "Accept",
+    "continueAcceptHint": "Insert at the cursor (Tab)",
+    "continueDiscard": "Discard continuation",
+    "continueStop": "Stop",
+    "continueStopHint": "Stop generating; you can still accept or discard",
+    "continueGhostHint": " Tab to accept · Esc to dismiss"
   },
   "editorFooter": {
     "stats": "{{chars}} chars · {{lines}} lines · ~{{minutes}} min read",
@@ -103,7 +112,8 @@
     "helpItalic": "Italic",
     "helpInlineCode": "Inline code",
     "helpInsertLink": "Insert link",
-    "helpAiContinue": "AI continue (requires AI config)",
+    "helpAiContinue": "AI continue (requires Chat)",
+    "helpAiAccept": "Accept AI continuation",
     "helpListContinue": "Continue list/quote (empty item + Enter to exit)",
     "helpCodeBlock": "Expand empty code block",
     "helpExit": "Exit (draft kept)"

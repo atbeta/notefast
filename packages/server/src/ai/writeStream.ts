@@ -10,7 +10,13 @@
  * - 输出直接回填编辑器，不需要引用
  */
 
-import { buildWritePrompt, ThinkStreamParser, type WriteMode } from '@notefast/core'
+import {
+  buildWritePrompt,
+  clipContinuePrefix,
+  clipContinueSuffix,
+  ThinkStreamParser,
+  type WriteMode,
+} from '@notefast/core'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 
 export interface WriteEvent {
@@ -24,6 +30,8 @@ export interface WriteOptions {
   content: string
   instruction?: string
   targetLang?: string
+  /** 光标后文本；仅 continue 使用，避免续写与后文撞车 */
+  suffix?: string
   temperature?: number
   maxTokens?: number
   /** 客户端断连信号：贯穿到上游 LLM 请求 */
@@ -50,9 +58,14 @@ export async function* streamWrite(opts: WriteOptions): AsyncGenerator<WriteEven
     return
   }
 
-  const messages = buildWritePrompt(opts.mode, opts.content, {
+  const content =
+    opts.mode === 'continue' ? clipContinuePrefix(opts.content) : opts.content
+  const suffix =
+    opts.mode === 'continue' && opts.suffix ? clipContinueSuffix(opts.suffix) : undefined
+  const messages = buildWritePrompt(opts.mode, content, {
     instruction: opts.instruction,
     targetLang: opts.targetLang,
+    suffix,
   })
 
   try {
@@ -75,7 +88,7 @@ export async function* streamWrite(opts: WriteOptions): AsyncGenerator<WriteEven
     }
     for await (const chunk of runtime.streamChat(messages, {
       temperature: opts.temperature ?? 0.4,
-      maxTokens: opts.maxTokens ?? 1024,
+      maxTokens: opts.maxTokens ?? (opts.mode === 'continue' ? 384 : 1024),
       signal: opts.signal,
     })) {
       if (chunk.content) {
