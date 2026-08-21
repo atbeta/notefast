@@ -13,6 +13,7 @@ import GlobalSyncStatus from './GlobalSyncStatus'
 import TitleBar from './TitleBar'
 import { ServerOfflineBanner } from './ServerHealthBar'
 import { useTheme } from '../hooks/useTheme'
+import { prefetchTagCatalog } from '../hooks/useTagCatalog'
 import { ASK_AI_EVENT } from '../lib/askAi'
 import { useDemoMode } from '../hooks/useDemoMode'
 import { isWindowZoomDoubleClickTarget, nativeToggleWindowZoom } from '../lib/nativeWindow'
@@ -69,6 +70,11 @@ export default function Layout({ children, contentClassName }: { children: React
   const closeMobile = useCallback(() => setMobileOpen(false), [])
 
   const { resolvedTheme, setTheme } = useTheme()
+
+  // 进壳即拉标签云：与文档列表并行，避免回到「所有文档」时 chip 行后到把列表顶下去
+  useEffect(() => {
+    prefetchTagCatalog()
+  }, [])
 
   // 阅读态块菜单「问 AI 关于这一段」→ 打开聊天面板；草稿预填由 AIChatPanel 自行监听
   useEffect(() => {

@@ -10,10 +10,9 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ChevronDown, ChevronUp, Tag as TagIcon } from 'lucide-react'
-import type { TagInfo, TagMatchMode } from '@notefast/core'
+import type { TagMatchMode } from '@notefast/core'
 import { parseTagMatchMode } from '@notefast/core'
-import { api } from '../hooks/useAPI'
-import { useApiQuery } from '../hooks/useApiQuery'
+import { useTagCatalog } from '../hooks/useTagCatalog'
 import { useTranslation } from 'react-i18next'
 import { Tooltip } from './ui'
 import {
@@ -76,15 +75,12 @@ export default function TagFilter({ onChange }: TagFilterProps) {
   const [collapsedCount, setCollapsedCount] = useState<number | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const measureRef = useRef<HTMLDivElement>(null)
-  const { data, loading, error } = useApiQuery(
-    () => api.get<{ provider: string; tags: TagInfo[] }>('/tags'),
-    [],
-  )
-  const tags = error ? [] : (data?.tags ?? [])
+  const { tags, loading, error } = useTagCatalog()
+  const catalogTags = error ? [] : tags
   const selected = useMemo(() => readSelectedTags(searchParams), [searchParams])
   const untagged =
     searchParams.get('untagged') === '1' || searchParams.get('view') === 'untagged'
-  const catalog = useMemo(() => catalogWithSelected(tags, selected), [tags, selected])
+  const catalog = useMemo(() => catalogWithSelected(catalogTags, selected), [catalogTags, selected])
 
   const patchParams = (fn: (prev: URLSearchParams) => void) => {
     setSearchParams(
@@ -142,10 +138,10 @@ export default function TagFilter({ onChange }: TagFilterProps) {
     if (collapsedCount !== null && collapsedCount >= catalog.length) setExpanded(false)
   }, [collapsedCount, catalog.length])
 
-  if (loading && tags.length === 0) return null
+  if (loading && catalogTags.length === 0) return null
   // 「未加标签」与标签筛选互斥：该视图下列出标签 chip 无意义（选中任一标签即会退出 untagged）
   if (untagged) return null
-  if (tags.length === 0 && catalog.length === 0) return null
+  if (catalogTags.length === 0 && catalog.length === 0) return null
 
   const limit = collapsedCount ?? catalog.length
   const overflow = limit < catalog.length

@@ -5,6 +5,7 @@ import { Plus, FileText, Clock, Tag, Star } from 'lucide-react'
 import i18next from '../i18n'
 import { usePagedDocList } from '../hooks/usePagedDocList'
 import { useDocChanges } from '../hooks/useDocEvents'
+import { useTagCatalog } from '../hooks/useTagCatalog'
 import { usePinnedViews } from '../hooks/usePinnedViews'
 import DocList from '../components/DocList'
 import PageHeader from '../components/PageHeader'
@@ -102,6 +103,10 @@ export default function HomePage() {
     !hasFilter ? 'all' : searchParams.get('tags') || searchParams.get('tag') ? 'tag' : 'other'
 
   const { docs, loading, error, refetch, hasMore, loadingMore, loadMore } = usePagedDocList(`/docs/list${listQuery}`)
+  const { loading: tagsLoading, tags: tagCatalog } = useTagCatalog()
+  // 无标签缓存时等 GET /tags 与列表一起出，避免 chip 行插入把列表顶下去
+  const waitingTags = tagsLoading && tagCatalog.length === 0
+  const showListSkeleton = (loading && docs.length === 0) || waitingTags
   // 原 .catch(console.error) 语义：失败只打日志，列表保留旧数据
   useEffect(() => {
     if (error) console.error(error)
@@ -131,7 +136,7 @@ export default function HomePage() {
               </button>
             </Tooltip>
           )}
-          {!loading && docs.length > 0 && (
+          {!showListSkeleton && docs.length > 0 && (
             <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
               {docs.length}{hasMore ? '+' : ''}
             </span>
@@ -143,7 +148,7 @@ export default function HomePage() {
         <TagFilter />
 
         <section className="space-y-3 animate-fade-in">
-          {loading ? (
+          {showListSkeleton ? (
             <ListRowsSkeleton rows={5} />
           ) : docs.length === 0 ? (
             <EmptyState onCreate={goNew} title={title} kind={viewKind} />
