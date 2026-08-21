@@ -46,7 +46,6 @@ interface CodeMirrorEditorProps {
   value: string
   onChange: (value: string) => void
   onSave: () => void
-  onToggleMode: () => void
   onAiContinue: () => void
   onImageFile: (file: File) => void
   ghostText: string
@@ -241,7 +240,6 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
               acceptGhost: () => propsRef.current.onGhostAccept(),
               dismissGhost: () => propsRef.current.onGhostDismiss(),
               onSave: () => propsRef.current.onSave(),
-              onToggleMode: () => propsRef.current.onToggleMode(),
               onAiContinue: () => propsRef.current.onAiContinue(),
               wrapSelection: (left, right) => {
                 const v = viewRef.current

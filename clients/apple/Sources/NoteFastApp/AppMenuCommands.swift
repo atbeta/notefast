@@ -21,11 +21,12 @@ struct AppMenuCommands: Commands {
             .keyboardShortcut(",")
         }
 
+        // ⌘P 给编辑器「预览/编辑」；打印改走 ⌘⇧P，避免菜单先把按键吃掉
         CommandGroup(replacing: .printItem) {
             Button("打印…") {
                 model.navigator.printPage()
             }
-            .keyboardShortcut("p")
+            .keyboardShortcut("p", modifiers: [.command, .shift])
             .disabled(!model.isRunning)
         }
 

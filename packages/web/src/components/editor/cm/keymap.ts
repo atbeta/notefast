@@ -8,7 +8,6 @@ export interface EditorKeymapCallbacks {
   acceptGhost: () => void
   dismissGhost: () => void
   onSave: () => void
-  onToggleMode: () => void
   onAiContinue: () => void
   wrapSelection: (left: string, right?: string) => void
   insertLink: () => void
@@ -59,14 +58,6 @@ export function editorKeymap(cb: EditorKeymapCallbacks): Extension {
         preventDefault: true,
         run: () => {
           cb.onSave()
-          return true
-        },
-      },
-      {
-        key: 'Mod-p',
-        preventDefault: true,
-        run: () => {
-          cb.onToggleMode()
           return true
         },
       },

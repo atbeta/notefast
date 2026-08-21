@@ -265,17 +265,20 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
 
   const imageUploader = useImageUploader({ insertAtCursor })
 
-  // 预览态卸掉编辑器，⌘P 快捷键需挂在 window，才能切回编辑
+  // ⌘P 必须在 window capture 拦下：浏览器/系统打印会抢 bubble 阶段；
+  // 预览态会卸掉 CM，编辑态焦点也可能在工具栏，不能只绑编辑器 keymap。
   useEffect(() => {
-    if (mode !== 'view') return
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'p') return
+      if (e.isComposing || e.keyCode === 229) return
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return
+      if (e.key.toLowerCase() !== 'p') return
       e.preventDefault()
-      setMode('edit')
+      e.stopImmediatePropagation()
+      setMode((m) => (m === 'edit' ? 'view' : 'edit'))
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [mode])
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [])
 
   const handleAiContinue = useCallback(() => {
     if (aiWriting.isStreaming) return
@@ -580,7 +583,6 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
                 value={content}
                 onChange={handleEditorChange}
                 onSave={handleSave}
-                onToggleMode={() => setMode((m) => (m === 'edit' ? 'view' : 'edit'))}
                 onAiContinue={handleAiContinue}
                 onImageFile={imageUploader.uploadImage}
                 ghostText={ghostText}
@@ -647,8 +649,9 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
           <ShortcutsHelp keys={['mod', '⇧K']} desc={t('mdEditor.helpInsertLink')} />
           <ShortcutsHelp keys={['mod', 'Enter']} desc={t('mdEditor.helpAiContinue')} />
           <ShortcutsHelp keys={['Tab']} desc={t('mdEditor.helpAiAccept')} />
-          <ShortcutsHelp keys={['-', 'Enter']} desc={t('mdEditor.helpListContinue')} />
-          <ShortcutsHelp keys={['```', 'Enter']} desc={t('mdEditor.helpCodeBlock')} />
+          <p className="col-span-2 mt-1 text-[11px] leading-relaxed text-muted-foreground/80">
+            {t('mdEditor.helpEditingTips')}
+          </p>
         </div>
       )}
     </div>

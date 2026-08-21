@@ -115,8 +115,7 @@
     "helpInsertLink": "插入链接",
     "helpAiContinue": "AI 续写（需配置 Chat）",
     "helpAiAccept": "接受 AI 续写",
-    "helpListContinue": "列表/引用续行（空项回车退出）",
-    "helpCodeBlock": "展开空代码块",
+    "helpEditingTips": "列表（- / 1.）或引用（>）里按回车会自动续行，空项再回车就退出。行首输入 ``` 再回车会展开代码块。",
     "helpExit": "退出（保留草稿）"
   },
   "selectionBubble": {

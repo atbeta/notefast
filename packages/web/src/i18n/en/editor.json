@@ -115,8 +115,7 @@
     "helpInsertLink": "Insert link",
     "helpAiContinue": "AI continue (requires Chat)",
     "helpAiAccept": "Accept AI continuation",
-    "helpListContinue": "Continue list/quote (empty item + Enter to exit)",
-    "helpCodeBlock": "Expand empty code block",
+    "helpEditingTips": "In a list (- / 1.) or quote (>), Enter continues the item; Enter on an empty item exits. Type ``` then Enter to expand a code fence.",
     "helpExit": "Exit (draft kept)"
   },
   "selectionBubble": {
