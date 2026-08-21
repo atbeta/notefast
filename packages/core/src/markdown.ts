@@ -19,6 +19,19 @@ const CONTAINER_TYPES = new Set<BlockType>([
   BlockType.Quote,
 ])
 
+const CJK_CHAR_RE = /[\u3400-\u9fff\u3000-\u303f\uff00-\uffef]/
+
+/** 硬换行合段：CJK 相邻不插空格；其余（含 Hello.\\nWorld）插空格 */
+export function joinSoftWrap(left: string, right: string): string {
+  if (!left) return right
+  if (!right) return left
+  const a = left.slice(-1)
+  const b = right[0]!
+  if (/\s/.test(a) || /\s/.test(b)) return `${left}${right}`
+  if (CJK_CHAR_RE.test(a) && CJK_CHAR_RE.test(b)) return `${left}${right}`
+  return `${left} ${right}`
+}
+
 export function parseMarkdownToBlocks(markdown: string, notebookId: string): CreateBlockInput[] {
   // 便携导出可能带 frontmatter；解析前剥离，避免 --- 块落入正文
   const { body: markdownBody } = stripDocFrontmatter(markdown)
@@ -108,17 +121,20 @@ export function parseMarkdownToBlocks(markdown: string, notebookId: string): Cre
 
     const parent = stack[stack.length - 1]
     const last = parent.children[parent.children.length - 1]
-    // 引用合并段：连续无空行的 `>` 行合成一块（引用是多行块，合段无损）。
-    // 注意：段落（Paragraph）不做软换行合段——NoteFast 是块级编辑器，
-    // 一行一块是原子语义，用户在编辑器里按回车分行的两行必须保留为两块，
-    // 不能按 CommonMark「无空行=同一段」合并（否则输入两行保存后变一行）。
+    // 软换行：空行才分段；连续 paragraph / quote 追加到上一块。
+    // 编辑器是整篇 Markdown 源码，一次回车是段内换行（CommonMark），两次回车才是新段。
+    // 导入 Typora 式硬换行与保存走同一解析器；一行一块会把段间距撑开，round-trip 还会凭空插入空行。
     if (
       last &&
       !blankSeen &&
       last.type === parsed.type &&
-      parsed.type === BlockType.Quote
+      (parsed.type === BlockType.Paragraph || parsed.type === BlockType.Quote)
     ) {
-      last.content = last.content.length > 0 ? `${last.content}\n${parsed.content}` : parsed.content
+      if (parsed.type === BlockType.Paragraph) {
+        last.content = joinSoftWrap(last.content, parsed.content)
+      } else {
+        last.content = last.content.length > 0 ? `${last.content}\n${parsed.content}` : parsed.content
+      }
       continue
     }
     blankSeen = false
