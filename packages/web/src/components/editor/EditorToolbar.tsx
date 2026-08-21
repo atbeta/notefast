@@ -29,6 +29,7 @@ import { useAiCapabilities } from '../../hooks/useAiCapabilities'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss'
 import type { CodeMirrorEditorHandle } from './CodeMirrorEditor'
 import AssetPickerDialog from './AssetPickerDialog'
+import { MD_LINK_HREF_PLACEHOLDER } from '../../lib/markdownHref'
 
 type Mode = 'edit' | 'view'
 
@@ -91,9 +92,9 @@ export default function EditorToolbar({
     const sel = editorRef.current?.getSelectionText() ?? ''
     const hasSel = sel.length > 0
     const linkText = hasSel ? sel : 'text'
-    const ins = `[${linkText}](url)`
+    const ins = `[${linkText}](${MD_LINK_HREF_PLACEHOLDER})`
     if (hasSel) {
-      wrapSelection('[', '](url)')
+      wrapSelection('[', `](${MD_LINK_HREF_PLACEHOLDER})`)
     } else {
       insertAtCursor(ins, { cursorOffset: linkText.length + 3 })
     }

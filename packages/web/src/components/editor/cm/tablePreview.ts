@@ -3,6 +3,7 @@ import type { EditorState, Extension, Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType } from '@codemirror/view'
 import type { DecorationSet } from '@codemirror/view'
 import i18next from '../../../i18n'
+import { resolveMarkdownHref } from '../../../lib/markdownHref'
 import { dispatchEditTable } from '../../../lib/editTable'
 import {
   isTableDelimiter,
@@ -39,8 +40,14 @@ function inlineHtml(src: string): string {
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
   s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>')
   s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>')
-  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,
-    '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, text: string, href: string) => {
+    const resolved = resolveMarkdownHref(href)
+    if (resolved.kind === 'invalid') {
+      return `<span class="underline decoration-dotted" title="${escapeHtml(i18next.t('block.invalidLink'))}">${text}</span>`
+    }
+    const blank = resolved.kind === 'hash' ? '' : ' target="_blank" rel="noreferrer"'
+    return `<a href="${escapeHtml(resolved.href)}"${blank}>${text}</a>`
+  })
   return s
 }
 

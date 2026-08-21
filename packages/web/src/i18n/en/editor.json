@@ -15,7 +15,8 @@
     "assetLocal": "Local only — click to upload",
     "assetUploading": "Uploading…",
     "assetFailed": "Upload failed — click to retry",
-    "assetUploaded": "Uploaded to image host"
+    "assetUploaded": "Uploaded to image host",
+    "invalidLink": "Invalid link, won’t navigate"
   },
   "contextMenu": {
     "menuLabel": "Document actions",

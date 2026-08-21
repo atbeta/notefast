@@ -12,6 +12,8 @@ import { CopyButton, Tooltip } from './ui'
 import { api } from '../hooks/useAPI'
 import { useImageUploadEnabled } from '../hooks/useImageUploadEnabled'
 import ImageLightbox from './ImageLightbox'
+import { resolveMarkdownHref } from '../lib/markdownHref'
+import i18next from '../i18n'
 
 interface BlockNodeProps {
   block: Block
@@ -236,17 +238,17 @@ function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
     } else if (m[7]) {
       const lm = m[7].match(/\[([^\]]+)\]\(([^)\s]+)\)/)!
       nodes.push(
-        <a key={`${keyPrefix}-${k++}`} href={lm[2]} target="_blank" rel="noreferrer">
+        <MarkdownHref key={`${keyPrefix}-${k++}`} href={lm[2]}>
           {lm[1]}
-        </a>,
+        </MarkdownHref>,
       )
     } else if (m[8]) {
       const url = trimUrlTail(m[8])
       const tail = m[8].slice(url.length)
       nodes.push(
-        <a key={`${keyPrefix}-${k++}`} href={url} target="_blank" rel="noreferrer">
+        <MarkdownHref key={`${keyPrefix}-${k++}`} href={url}>
           {url}
-        </a>,
+        </MarkdownHref>,
       )
       if (tail) nodes.push(tail)
     }
@@ -254,6 +256,28 @@ function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
   }
   if (last < text.length) nodes.push(text.slice(last))
   return nodes
+}
+
+function MarkdownHref({ href, children }: { href: string; children: ReactNode }) {
+  const resolved = resolveMarkdownHref(href)
+  if (resolved.kind === 'invalid') {
+    return (
+      <span
+        className="underline decoration-dotted decoration-muted-foreground/70 text-muted-foreground"
+        title={i18next.t('block.invalidLink')}
+      >
+        {children}
+      </span>
+    )
+  }
+  if (resolved.kind === 'hash') {
+    return <a href={resolved.href}>{children}</a>
+  }
+  return (
+    <a href={resolved.href} target="_blank" rel="noreferrer">
+      {children}
+    </a>
+  )
 }
 
 // ───────────────────────── Heading ─────────────────────────

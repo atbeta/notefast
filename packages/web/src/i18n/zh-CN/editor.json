@@ -15,7 +15,8 @@
     "assetLocal": "仅本地存储，点击上传",
     "assetUploading": "上传中…",
     "assetFailed": "上传失败，点击重试",
-    "assetUploaded": "已上传至图床"
+    "assetUploaded": "已上传至图床",
+    "invalidLink": "链接无效，不会跳转"
   },
   "contextMenu": {
     "menuLabel": "文档操作",

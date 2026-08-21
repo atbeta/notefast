@@ -19,6 +19,7 @@ import { imagePreview } from './cm/imagePreview'
 import { tablePreview } from './cm/tablePreview'
 import { mathPreview } from './cm/mathPreview'
 import { ghostTextExtension, ghostTextState, setGhostText, clearGhostText } from './cm/ghostText'
+import { MD_LINK_HREF_PLACEHOLDER } from '../../lib/markdownHref'
 import { editorKeymap } from './cm/keymap'
 import { SelectionReporter } from './cm/selectionReport'
 import type { SelectionAnchor } from './cm/selectionReport'
@@ -252,10 +253,12 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
                 const { from, to } = v.state.selection.main
                 const sel = v.state.sliceDoc(from, to)
                 if (sel.length > 0) {
-                  wrapSelectionCmd(v, '[', '](url)')
+                  wrapSelectionCmd(v, '[', `](${MD_LINK_HREF_PLACEHOLDER})`)
                 } else {
                   const linkText = 'text'
-                  insertAtCursorCmd(v, `[${linkText}](url)`, { cursorOffset: linkText.length + 3 })
+                  insertAtCursorCmd(v, `[${linkText}](${MD_LINK_HREF_PLACEHOLDER})`, {
+                    cursorOffset: linkText.length + 3,
+                  })
                 }
               },
             }),

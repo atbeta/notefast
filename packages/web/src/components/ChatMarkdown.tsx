@@ -10,6 +10,8 @@ import MathBlock, { MathInline } from './MathBlock'
 import { LightboxImg } from './ImageLightbox'
 import { CopyButton } from './ui'
 import { useTranslation } from 'react-i18next'
+import i18next from '../i18n'
+import { resolveMarkdownHref } from '../lib/markdownHref'
 
 interface ChatMarkdownProps {
   content: string
@@ -97,8 +99,22 @@ function ChatMarkdown({ content, className = '', maxCite = 0 }: ChatMarkdownProp
             return <ChatCodeBlock code={text} language={language} />
           },
           a({ href, children }) {
+            const resolved = resolveMarkdownHref(href ?? '')
+            if (resolved.kind === 'invalid') {
+              return (
+                <span
+                  className="underline decoration-dotted decoration-muted-foreground/70 text-muted-foreground"
+                  title={i18next.t('block.invalidLink')}
+                >
+                  {children}
+                </span>
+              )
+            }
+            if (resolved.kind === 'hash') {
+              return <a href={resolved.href}>{children}</a>
+            }
             return (
-              <a href={href} target="_blank" rel="noreferrer">
+              <a href={resolved.href} target="_blank" rel="noreferrer">
                 {children}
               </a>
             )
