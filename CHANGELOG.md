@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.75.0](https://github.com/atbeta/notefast/compare/v0.74.2...v0.75.0) (2026-08-21)
+
+
+### Features
+
+* **web:** make AI continue usable at the cursor ([68179cb](https://github.com/atbeta/notefast/commit/68179cb444408e6a6a800f83fd685c08029d1b47))
+* **web:** preview AI rewrite before replacing the selection ([112b6d1](https://github.com/atbeta/notefast/commit/112b6d1a291b957e00ecab4f81e9016ccc80264b))
+* **web:** tuck rare doc actions into overflow and isolate AI ([38f7703](https://github.com/atbeta/notefast/commit/38f7703211afa89e18d329dedfb8baaaf550f5ea))
+
+
+### Bug Fixes
+
+* **markdown:** restore CommonMark soft-wrap paragraph merge ([43a233b](https://github.com/atbeta/notefast/commit/43a233b17d3ceeebc51dc603edf26c037c13ddf6))
+* **web:** closed command palette must not swallow Esc demo exit ([293af78](https://github.com/atbeta/notefast/commit/293af7859b942c357a74379e867ea34fed2f985d))
+* **web:** do not treat placeholder markdown hrefs as in-app routes ([8f8c1e3](https://github.com/atbeta/notefast/commit/8f8c1e3549aef368cb4c1a40d31576d8ceab6437))
+* **web:** keep tag chips from jumping the all-docs list ([9de7479](https://github.com/atbeta/notefast/commit/9de7479386acfc56b81238cfe05373fa9cdf5740))
+* **web:** leave the doc page when deleting it from a list menu ([cf05759](https://github.com/atbeta/notefast/commit/cf05759b735a854b5cb4c767884c413f9c2c5ebc))
+* **web:** stop Cmd-P from opening print while editing ([0f4827b](https://github.com/atbeta/notefast/commit/0f4827b1b8f96a6bebf989a05c8d3e9608723db9))
+* **web:** stop docs from sliding in after the skeleton ([5c554f2](https://github.com/atbeta/notefast/commit/5c554f2147eb1da95d8c95c2e99b2f62b633262e))
+* **web:** stop Esc from leaving the editor; simplify edit chrome ([8d79ff7](https://github.com/atbeta/notefast/commit/8d79ff70867cdc979a623b94c5a332d39eac5749))
+
 ## [0.74.2](https://github.com/atbeta/notefast/compare/v0.74.1...v0.74.2) (2026-08-21)
 
 
