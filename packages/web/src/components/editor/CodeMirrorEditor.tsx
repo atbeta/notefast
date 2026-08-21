@@ -51,6 +51,8 @@ interface CodeMirrorEditorProps {
   ghostText: string
   /** 幽灵字旁的操作提示，如「Tab 接受 · Esc 取消」 */
   ghostHint?: string
+  /** 改写：幽灵字盖在该区间上；缺省则插在光标处 */
+  ghostRange?: { from: number; to: number }
   onGhostAccept: () => void
   onGhostDismiss: () => void
   /** 非空选区 debounce 上报锚点（含 rect/text/from/to）；清空、失焦、卸载报 null */
@@ -382,9 +384,14 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
       }
       if (props.ghostText === active) return
       view.dispatch({
-        effects: setGhostText.of({ text: props.ghostText, hint }),
+        effects: setGhostText.of({
+          text: props.ghostText,
+          hint,
+          from: props.ghostRange?.from,
+          to: props.ghostRange?.to,
+        }),
       })
-    }, [props.ghostText, props.ghostHint])
+    }, [props.ghostText, props.ghostHint, props.ghostRange])
 
     return (
       <>

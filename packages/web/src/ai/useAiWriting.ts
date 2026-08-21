@@ -12,11 +12,17 @@ interface StreamContinueOpts {
   suffix?: string
 }
 
+interface StreamRefineOpts {
+  /** 选区前 / 后，避免改写与前后文脱节 */
+  prefix?: string
+  suffix?: string
+}
+
 interface UseAiWritingResult {
   isStreaming: boolean
   error: string | null
   streamContinue: (content: string, cbs: StreamCallbacks, opts?: StreamContinueOpts) => Promise<string>
-  streamRefine: (content: string, instruction: string, cbs: StreamCallbacks) => Promise<string>
+  streamRefine: (content: string, instruction: string, cbs: StreamCallbacks, opts?: StreamRefineOpts) => Promise<string>
   cancel: () => void
 }
 
@@ -30,7 +36,7 @@ export function useAiWriting(): UseAiWritingResult {
       mode: WriteMode,
       content: string,
       cbs: StreamCallbacks,
-      opts?: { instruction?: string; suffix?: string; maxTokens?: number },
+      opts?: { instruction?: string; prefix?: string; suffix?: string; maxTokens?: number },
     ): Promise<string> => {
       abortRef.current?.abort()
       const controller = new AbortController()
@@ -47,6 +53,7 @@ export function useAiWriting(): UseAiWritingResult {
             mode,
             content,
             ...(opts?.instruction ? { instruction: opts.instruction } : {}),
+            ...(opts?.prefix ? { prefix: opts.prefix } : {}),
             ...(opts?.suffix ? { suffix: opts.suffix } : {}),
             max_tokens: opts?.maxTokens ?? 1024,
           },
@@ -103,8 +110,12 @@ export function useAiWriting(): UseAiWritingResult {
   )
 
   const streamRefine = useCallback(
-    (content: string, instruction: string, cbs: StreamCallbacks) =>
-      stream('refine', content, cbs, { instruction }),
+    (content: string, instruction: string, cbs: StreamCallbacks, opts?: StreamRefineOpts) =>
+      stream('refine', content, cbs, {
+        instruction,
+        prefix: opts?.prefix,
+        suffix: opts?.suffix,
+      }),
     [stream],
   )
 

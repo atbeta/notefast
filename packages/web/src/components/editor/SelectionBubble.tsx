@@ -6,14 +6,14 @@
  *   blur 上报 null 会让气泡在 click 前卸载
  * - 未配置 chat 模型时整个气泡不出（问 AI / 改写都必然失败，能力探测与 AIChatPanel 同款）
  * - 桌面限定（<sm 不渲染，matchMedia gate，与 BlockSurface 的 sm: 决策一致；iOS 选区坑不做）
- * - 「续写」已有 Mod+Enter 入口，不进气泡
- * - 改写流式期间钉在原选区位置显示「生成中…/停止」，done/error/停止后由父组件收起
+ * - 「续写」已有工具栏 / Mod+Enter 入口，不进气泡
+ * - 改写：流式期间钉在原选区显示「生成中…/停止」；预览就绪后「接受/丢弃」，原文未改
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Sparkles, Wand2 } from 'lucide-react'
+import { Loader2, Sparkles, Wand2, Check, X } from 'lucide-react'
 import { dispatchAskAi } from '../../lib/askAi'
 import { useAiCapabilities } from '../../hooks/useAiCapabilities'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss'
@@ -35,7 +35,10 @@ interface SelectionBubbleProps {
   refining: boolean
   /** 流式期间的钉住位置（原选区矩形） */
   refineRect: SelectionRect | null
+  /** 改写预览已出、尚未写入文档 */
+  hasDraft: boolean
   onRefine: (anchor: SelectionAnchor) => void
+  onAccept: () => void
   onStopRefine: () => void
   onDismiss: () => void
 }
@@ -44,7 +47,9 @@ export default function SelectionBubble({
   anchor,
   refining,
   refineRect,
+  hasDraft,
   onRefine,
+  onAccept,
   onStopRefine,
   onDismiss,
 }: SelectionBubbleProps) {
@@ -58,8 +63,8 @@ export default function SelectionBubble({
   const ai = useAiCapabilities()
   const chatOk = ai.chat
 
-  const active = refining || anchor !== null
-  const rect = refining ? refineRect : (anchor?.rect ?? null)
+  const active = refining || hasDraft || anchor !== null
+  const rect = refining || hasDraft ? refineRect : (anchor?.rect ?? null)
 
   useEffect(() => {
     const mq = window.matchMedia(DESKTOP_MQ)
@@ -84,19 +89,15 @@ export default function SelectionBubble({
     let top = rect.top - h - gap
     if (top < pad) top = Math.min(rect.bottom + gap, window.innerHeight - h - pad)
     setPos({ top, left })
-  }, [desktop, active, rect, refining])
+  }, [desktop, active, rect, refining, hasDraft])
 
-  // 关闭通道：Esc（流式期间 = 停止）/ 外部 mousedown / scroll / resize；
-  // 流式期间全部忽略（停止按钮保持可达；外部编辑会经 onChange 中断流）
+  // 关闭通道：Esc 丢弃预览；生成中 / 预览时忽略外部点击和滚动，避免误关
   usePopoverDismiss(active, {
     onClose: onDismiss,
-    onEscape: () => {
-      if (refining) onStopRefine()
-      else onDismiss()
-    },
-    ignoreOutsideClick: refining,
-    closeOnScroll: true,
-    closeOnResize: true,
+    onEscape: () => onDismiss(),
+    ignoreOutsideClick: refining || hasDraft,
+    closeOnScroll: !(refining || hasDraft),
+    closeOnResize: !(refining || hasDraft),
   }, panelRef)
 
   if (!desktop || !active || !rect || chatOk !== true) return null
@@ -126,6 +127,17 @@ export default function SelectionBubble({
           </span>
           <button type="button" onClick={onStopRefine} className={btnCls}>
             {t('selectionBubble.stop')}
+          </button>
+        </>
+      ) : hasDraft ? (
+        <>
+          <button type="button" onClick={onAccept} className={btnCls}>
+            <Check className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+            {t('selectionBubble.accept')}
+          </button>
+          <button type="button" onClick={onDismiss} className={btnCls}>
+            <X className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
+            {t('selectionBubble.discard')}
           </button>
         </>
       ) : (

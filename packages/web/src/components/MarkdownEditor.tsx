@@ -26,7 +26,6 @@ import CodeMirrorEditor from './editor/CodeMirrorEditor'
 import type { CodeMirrorEditorHandle } from './editor/CodeMirrorEditor'
 import SelectionBubble from './editor/SelectionBubble'
 import type { SelectionAnchor } from './editor/cm/selectionReport'
-import { RefineSession } from './editor/refineSession'
 import { useAiWriting } from '../ai/useAiWriting'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
 
@@ -82,12 +81,14 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
   const imageDragCounter = useRef(0)
   const [showHelp, setShowHelp] = useState(false)
   const [ghostText, setGhostText] = useState('')
+  const ghostTextRef = useRef('')
   const editorRef = useRef<CodeMirrorEditorHandle>(null)
-  // 选区气泡（桌面端）：非空选区锚点 + 改写流式会话
+  // 选区气泡（桌面端）：非空选区锚点 + 改写预览（原文不动，接受后才替换）
   const [selAnchor, setSelAnchor] = useState<SelectionAnchor | null>(null)
   const [refining, setRefining] = useState(false)
   const [refineRect, setRefineRect] = useState<SelectionAnchor['rect'] | null>(null)
-  const refineSessionRef = useRef<RefineSession | null>(null)
+  const [refineRange, setRefineRange] = useState<{ from: number; to: number } | null>(null)
+  const refineRangeRef = useRef<{ from: number; to: number } | null>(null)
 
   const ai = useAiCapabilities()
   const aiWriting = useAiWriting()
@@ -277,7 +278,7 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
   }, [mode])
 
   const handleAiContinue = useCallback(() => {
-    if (aiWriting.isStreaming || refineSessionRef.current) return
+    if (aiWriting.isStreaming) return
     if (!ai.chat) {
       toast.info({ title: t('doc.aiContinueNeedChat') })
       return
@@ -289,6 +290,11 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
       toast.info({ title: t('editorToolbar.continueNeedPrefix') })
       return
     }
+    refineRangeRef.current = null
+    setRefineRange(null)
+    setRefineRect(null)
+    setRefining(false)
+    ghostTextRef.current = ''
     setGhostText('')
     const gen = ++continueGenRef.current
     let accumulated = ''
@@ -297,99 +303,119 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
         onToken: (token) => {
           if (continueGenRef.current !== gen) return
           accumulated += token
+          ghostTextRef.current = accumulated
           setGhostText(accumulated)
         },
       }, { suffix })
       .catch(() => {
         if (continueGenRef.current !== gen) return
+        ghostTextRef.current = ''
         setGhostText('')
         toast.error({ title: t('aiWrite.failed') })
       })
   }, [ai.chat, content, aiWriting, toast, t])
 
-  // AI 续写 ghost：Tab 接受（插入光标处），Esc / 任意输入取消（由 CM keymap 与 updateListener 触发）
+  // AI ghost：续写插在光标；改写替换选区。Tab 接受，Esc / 输入取消。
   const handleGhostAccept = useCallback(() => {
-    if (!ghostText) return
+    const text = ghostTextRef.current
+    if (!text) return
+    const range = refineRangeRef.current
     continueGenRef.current += 1
     aiWriting.cancel()
-    editorRef.current?.insertAtCursor(ghostText)
+    ghostTextRef.current = ''
     setGhostText('')
-  }, [ghostText, aiWriting])
+    refineRangeRef.current = null
+    setRefineRange(null)
+    setRefineRect(null)
+    setRefining(false)
+    if (range) editorRef.current?.replaceRange(range.from, range.to, text)
+    else editorRef.current?.insertAtCursor(text)
+  }, [aiWriting])
 
   const handleGhostDismiss = useCallback(() => {
     continueGenRef.current += 1
     aiWriting.cancel()
+    ghostTextRef.current = ''
     setGhostText('')
+    refineRangeRef.current = null
+    setRefineRange(null)
+    setRefineRect(null)
+    setRefining(false)
   }, [aiWriting])
 
-  // ── 选区气泡：问 AI / 改写流式原地替换 ──
+  // ── 选区气泡：问 AI / 改写预览（原文不动） ──
 
   const handleSelectionChange = useCallback((anchor: SelectionAnchor | null) => {
     setSelAnchor(anchor)
   }, [])
 
-  const endRefine = useCallback(() => {
-    refineSessionRef.current = null
-    setRefining(false)
-    setRefineRect(null)
-  }, [])
-
   const handleRefineStop = useCallback(() => {
-    endRefine()
     aiWriting.cancel()
-  }, [endRefine, aiWriting])
+    setRefining(false)
+    if (!ghostTextRef.current) {
+      refineRangeRef.current = null
+      setRefineRange(null)
+      setRefineRect(null)
+    }
+  }, [aiWriting])
 
   const handleBubbleDismiss = useCallback(() => {
+    if (refineRangeRef.current || ghostTextRef.current) {
+      handleGhostDismiss()
+      return
+    }
     setSelAnchor(null)
-  }, [])
+  }, [handleGhostDismiss])
 
   const handleBubbleRefine = useCallback(
     (anchor: SelectionAnchor) => {
-      if (refineSessionRef.current) return
-      // 改写接管续写：取消进行中的 ghost 续写流
+      if (!anchor.text.trim()) return
       handleGhostDismiss()
-      const session = new RefineSession(anchor.from, anchor.to, (from, to, text) => {
-        editorRef.current?.replaceRange(from, to, text)
-      })
-      refineSessionRef.current = session
+      const range = { from: anchor.from, to: anchor.to }
+      refineRangeRef.current = range
+      setRefineRange(range)
       setRefineRect(anchor.rect)
       setRefining(true)
       setSelAnchor(null)
+      const gen = ++continueGenRef.current
+      const prefix = clipContinuePrefix(content.slice(0, anchor.from))
+      const suffix = clipContinueSuffix(content.slice(anchor.to))
       let accumulated = ''
-      // instruction 传空串 = 通用润色（useAiWriting 对空串不下发该字段；服务端跟随内容语言）
       void aiWriting
         .streamRefine(anchor.text, '', {
           onToken: (token) => {
-            if (refineSessionRef.current !== session) return
+            if (continueGenRef.current !== gen) return
             accumulated += token
-            session.apply(accumulated)
+            ghostTextRef.current = accumulated
+            setGhostText(accumulated)
           },
-        })
+        }, { prefix, suffix })
         .then(() => {
-          if (refineSessionRef.current === session) endRefine()
+          if (continueGenRef.current !== gen) return
+          setRefining(false)
+          if (!accumulated) {
+            refineRangeRef.current = null
+            setRefineRange(null)
+            setRefineRect(null)
+          }
         })
         .catch(() => {
-          // 主动取消 / 外部编辑中断：会话已不在，静默（保留已替换内容）
-          if (refineSessionRef.current !== session) return
-          endRefine()
+          if (continueGenRef.current !== gen) return
+          ghostTextRef.current = ''
+          setGhostText('')
+          refineRangeRef.current = null
+          setRefineRange(null)
+          setRefineRect(null)
+          setRefining(false)
           toast.error({ title: t('selectionBubble.refineFailed') })
         })
     },
-    [aiWriting, endRefine, handleGhostDismiss, toast, t],
+    [aiWriting, handleGhostDismiss, content, toast, t],
   )
 
-  // 改写流式期间的外部编辑（非 session.apply 自身的 dispatch）：取消流，保留已替换内容
-  const handleEditorChange = useCallback(
-    (value: string) => {
-      setContent(value)
-      const session = refineSessionRef.current
-      if (session && session.isExternalEdit()) {
-        endRefine()
-        aiWriting.cancel()
-      }
-    },
-    [endRefine, aiWriting],
-  )
+  const handleEditorChange = useCallback((value: string) => {
+    setContent(value)
+  }, [])
 
   const { lines, charCount, readMin } = useMemo(() => {
     let lines = 1
@@ -464,8 +490,8 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
         editorRef={editorRef}
         aiContinue={{
           available: ai.chat,
-          streaming: aiWriting.isStreaming && !refining,
-          hasDraft: !!ghostText,
+          streaming: aiWriting.isStreaming && !refineRange,
+          hasDraft: !!ghostText && !refineRange,
           onStart: handleAiContinue,
           onAccept: handleGhostAccept,
           onStop: () => {
@@ -559,6 +585,7 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
                 onImageFile={imageUploader.uploadImage}
                 ghostText={ghostText}
                 ghostHint={t('editorToolbar.continueGhostHint')}
+                ghostRange={refineRange ?? undefined}
                 onGhostAccept={handleGhostAccept}
                 onGhostDismiss={handleGhostDismiss}
                 onSelectionChange={handleSelectionChange}
@@ -586,7 +613,9 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
                 anchor={selAnchor}
                 refining={refining}
                 refineRect={refineRect}
+                hasDraft={!!ghostText && !!refineRange}
                 onRefine={handleBubbleRefine}
+                onAccept={handleGhostAccept}
                 onStopRefine={handleRefineStop}
                 onDismiss={handleBubbleDismiss}
               />

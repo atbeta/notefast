@@ -124,6 +124,8 @@
     "refine": "Rewrite",
     "generating": "Generating…",
     "stop": "Stop",
+    "accept": "Accept",
+    "discard": "Discard",
     "refineFailed": "Rewrite failed, please try again"
   },
   "tableEditor": {

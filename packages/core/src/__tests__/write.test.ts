@@ -55,3 +55,25 @@ describe('buildWritePrompt continue', () => {
     expect(system).toMatch(/几句|一小段|一两/)
   })
 })
+
+describe('buildWritePrompt refine', () => {
+  test('带选区前后文，只改选中片段', () => {
+    const msgs = buildWritePrompt('refine', '待改的句子', {
+      prefix: '前面的段落',
+      suffix: '后面的段落',
+    })
+    const user = msgs.find((m) => m.role === 'user')?.content ?? ''
+    expect(user).toContain('待改的句子')
+    expect(user).toContain('前面的段落')
+    expect(user).toContain('后面的段落')
+    expect(user).toMatch(/选区前|上下文/)
+  })
+
+  test('无上下文时仍只输出改写正文', () => {
+    const msgs = buildWritePrompt('refine', '原句')
+    const user = msgs.find((m) => m.role === 'user')?.content ?? ''
+    expect(user).toContain('原句')
+    const system = msgs.find((m) => m.role === 'system')?.content ?? ''
+    expect(system).toContain('只输出')
+  })
+})

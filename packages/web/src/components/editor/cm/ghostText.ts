@@ -6,12 +6,15 @@ import type { DecorationSet } from '@codemirror/view'
 export interface GhostTextValue {
   text: string
   hint: string
+  /** 改写：钉在选区 [from, to)；缺省则插在光标处（续写） */
+  from?: number
+  to?: number
 }
 
 export const setGhostText = StateEffect.define<GhostTextValue>()
 export const clearGhostText = StateEffect.define<null>()
 
-/** 当前 ghost 文本（供 keymap 判断是否有待接受的续写） */
+/** 当前 ghost 文本（供 keymap 判断是否有待接受的续写/改写） */
 export const ghostTextState = StateField.define<string>({
   create: () => '',
   update(value, tr) {
@@ -57,19 +60,43 @@ class GhostWidget extends WidgetType {
   }
 }
 
-const ghostDecorations = StateField.define<DecorationSet>({
+function buildGhostDeco(stateLen: number, value: GhostTextValue): DecorationSet {
+  const widget = new GhostWidget(value.text, value.hint)
+  const from = value.from
+  const to = value.to
+  if (from != null && to != null && from < to) {
+    const f = Math.max(0, Math.min(from, stateLen))
+    const t = Math.max(f, Math.min(to, stateLen))
+    if (f < t) {
+      return Decoration.set([
+        Decoration.mark({ class: 'cm-ai-refine-orig' }).range(f, t),
+        Decoration.widget({ widget, side: 1 }).range(t),
+      ])
+    }
+  }
+  const pos = Math.max(0, Math.min(from ?? to ?? 0, stateLen))
+  return Decoration.set([
+    Decoration.widget({ widget, side: 1 }).range(pos),
+  ])
+}
+
+export const ghostDecorations = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update(deco, tr) {
     deco = deco.map(tr.changes)
     for (const e of tr.effects) {
       if (e.is(setGhostText)) {
-        const pos = tr.state.selection.main.head
-        deco = Decoration.set([
-          Decoration.widget({
-            widget: new GhostWidget(e.value.text, e.value.hint),
-            side: 1,
-          }).range(pos),
-        ])
+        const value = e.value
+        // 续写未带 from/to 时钉在当前光标
+        if (value.from == null || value.to == null) {
+          deco = buildGhostDeco(tr.state.doc.length, {
+            ...value,
+            from: tr.state.selection.main.head,
+            to: tr.state.selection.main.head,
+          })
+        } else {
+          deco = buildGhostDeco(tr.state.doc.length, value)
+        }
       } else if (e.is(clearGhostText)) {
         deco = Decoration.none
       }

@@ -124,6 +124,8 @@
     "refine": "改写",
     "generating": "生成中…",
     "stop": "停止",
+    "accept": "接受",
+    "discard": "丢弃",
     "refineFailed": "改写失败，请重试"
   },
   "tableEditor": {

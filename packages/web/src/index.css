@@ -1067,6 +1067,11 @@ html.theme-fading *::after {
   white-space: nowrap;
   user-select: none;
 }
+.cm-ai-refine-orig {
+  opacity: 0.45;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
 @keyframes cm-ai-ghost-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }

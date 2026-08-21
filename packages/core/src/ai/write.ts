@@ -38,8 +38,10 @@ const SYSTEM_CONTINUE = `你是 NoteFast 写作助手。在光标处插入续写
 - 篇幅克制：通常几句到一小段，不要写成长文
 - 上文若未换行，输出也不要以空行开头`
 
-const SYSTEM_REFINE = `你是 NoteFast 写作助手。{instruction}原文，保持相同风格和核心意思。
-只输出改写后的文本。不要解释改了什么。不要加前缀或后缀。`
+const SYSTEM_REFINE = `你是 NoteFast 写作助手。{instruction}选中的片段，保持相同风格和核心意思。
+只输出改写后的正文，不要解释，不要加前缀或后缀。
+若给了选区前后文，改写必须能接上，不要重复前后文已有的文字。
+篇幅贴近原文，不要无故扩写成另一段。`
 
 const SYSTEM_TRANSLATE = `你是 NoteFast 翻译助手。把原文翻译成{target}。
 只输出译文。不要解释。不要保留原文。不要加前缀或后缀。`
@@ -59,8 +61,10 @@ export function buildWritePrompt(
   opts?: {
     instruction?: string
     targetLang?: string
-    /** 光标后的正文；仅 continue 使用 */
+    /** 光标后 / 选区后的正文 */
     suffix?: string
+    /** 选区前的正文；仅 refine 使用 */
+    prefix?: string
   },
 ): ChatMessage[] {
   switch (mode) {
@@ -75,11 +79,26 @@ export function buildWritePrompt(
       ]
     }
 
-    case 'refine':
+    case 'refine': {
+      const prefix = opts?.prefix?.trim() ?? ''
+      const suffix = opts?.suffix?.trim() ?? ''
+      const instruction = opts?.instruction || '润色'
+      let user = `待改写：\n${content}\n\n只输出改写后的正文：`
+      if (prefix || suffix) {
+        user = [
+          prefix ? `选区前：\n${prefix}` : '',
+          `待改写：\n${content}`,
+          suffix ? `选区后：\n${suffix}` : '',
+          '只输出替换「待改写」的正文：',
+        ]
+          .filter(Boolean)
+          .join('\n\n')
+      }
       return [
-        { role: 'system', content: SYSTEM_REFINE.replace('{instruction}', opts?.instruction || '润色') },
-        { role: 'user', content: `原文：\n${content}\n\n改写：` },
+        { role: 'system', content: SYSTEM_REFINE.replace('{instruction}', instruction) },
+        { role: 'user', content: user },
       ]
+    }
 
     case 'translate':
       return [

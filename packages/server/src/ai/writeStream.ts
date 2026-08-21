@@ -30,7 +30,9 @@ export interface WriteOptions {
   content: string
   instruction?: string
   targetLang?: string
-  /** 光标后文本；仅 continue 使用，避免续写与后文撞车 */
+  /** 选区前 / 光标前的附加上下文；refine 使用 */
+  prefix?: string
+  /** 光标后文本；continue 与 refine 均可使用 */
   suffix?: string
   temperature?: number
   maxTokens?: number
@@ -60,11 +62,13 @@ export async function* streamWrite(opts: WriteOptions): AsyncGenerator<WriteEven
 
   const content =
     opts.mode === 'continue' ? clipContinuePrefix(opts.content) : opts.content
-  const suffix =
-    opts.mode === 'continue' && opts.suffix ? clipContinueSuffix(opts.suffix) : undefined
+  const suffix = opts.suffix ? clipContinueSuffix(opts.suffix) : undefined
+  const prefix =
+    opts.mode === 'refine' && opts.prefix ? clipContinuePrefix(opts.prefix) : undefined
   const messages = buildWritePrompt(opts.mode, content, {
     instruction: opts.instruction,
     targetLang: opts.targetLang,
+    prefix,
     suffix,
   })
 

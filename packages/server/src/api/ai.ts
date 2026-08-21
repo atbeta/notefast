@@ -710,8 +710,10 @@ ai.post('/suggest-title', zValidator('json', suggestSchema), async (c) => {
 const writeSchema = z.object({
   mode: z.enum(['continue', 'refine', 'translate', 'summarize', 'expand', 'shorten']),
   content: z.string().min(1).max(100_000),
-  /** 光标后正文；仅 continue 使用（加法字段，旧客户端可省略） */
+  /** 光标后正文；continue / refine 使用（加法字段，旧客户端可省略） */
   suffix: z.string().max(20_000).optional(),
+  /** 选区前正文；仅 refine 使用 */
+  prefix: z.string().max(20_000).optional(),
   instruction: z.string().max(200).optional(),
   target_lang: z.string().max(30).optional(),
   temperature: z.number().min(0).max(2).optional(),
@@ -731,6 +733,7 @@ ai.post('/write', zValidator('json', writeSchema), async (c) => {
       mode: body.mode,
       content: body.content,
       suffix: body.suffix,
+      prefix: body.prefix,
       instruction: body.instruction,
       targetLang: body.target_lang,
       temperature: body.temperature,
