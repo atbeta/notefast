@@ -25,6 +25,11 @@ export function resolveDocLifecycle(
   return 'note'
 }
 
+/** 当前是否正在阅读这篇（列表 ⋯ 删除后应离开该页，与文档页工具栏删除一致） */
+export function isReadingDoc(pathname: string, docId: string): boolean {
+  return pathname === `/doc/${docId}`
+}
+
 /** 收集箱：整理/丢弃；归档：恢复/导出；笔记：归档/分享/AI 可见性。 */
 export function docActionIdsFor(kind: DocLifecycle): DocActionId[] {
   switch (kind) {

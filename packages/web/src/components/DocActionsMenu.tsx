@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Archive,
@@ -29,7 +30,8 @@ import { deliverExport, fetchDocExportFile } from '../lib/download'
 import ConfirmDialog from './ConfirmDialog'
 import ShareDialog from './ShareDialog'
 import { Tooltip, useToast } from './ui'
-import { docActionIdsFor, resolveDocLifecycle, type DocActionId } from '../lib/docActions'
+import { docActionIdsFor, isReadingDoc, resolveDocLifecycle, type DocActionId } from '../lib/docActions'
+import { removeVisit } from '../lib/recentVisits'
 
 export type DocActionsSurface = 'list' | 'sidebar' | 'inbox' | 'archived'
 
@@ -71,6 +73,8 @@ export default function DocActionsMenu({
 }: DocActionsMenuProps) {
   const { t } = useTranslation()
   const toast = useToast()
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
   const menuId = useId()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -239,6 +243,8 @@ export default function DocActionsMenu({
     try {
       await api.del(`/docs/${doc.id}`)
       setShowDelete(false)
+      removeVisit(doc.id)
+      if (isReadingDoc(pathname, doc.id)) navigate('/')
       afterMutation()
       // 软删除 + restore 端点：Undo toast 是 Web 上唯一的恢复入口
       toast.success({
