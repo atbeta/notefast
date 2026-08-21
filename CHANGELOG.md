@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.74.2](https://github.com/atbeta/notefast/compare/v0.74.1...v0.74.2) (2026-08-21)
+
+
+### Bug Fixes
+
+* **markdown:** keep one-block-per-line for paragraphs (drop aggressive soft-wrap merge) ([d7f148e](https://github.com/atbeta/notefast/commit/d7f148e596c625cf5a6cff8d5dff929ca9a7bda2))
+* **web:** Esc no longer exits demo mode when any dialog/menu is in the DOM ([681dfb4](https://github.com/atbeta/notefast/commit/681dfb4e0f9f9d1b0f4aadc8d04f6ba895192aeb))
+
 ## [0.74.1](https://github.com/atbeta/notefast/compare/v0.74.0...v0.74.1) (2026-08-20)
 
 
