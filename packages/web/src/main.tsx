@@ -11,7 +11,7 @@ import './index.css'
 import { initNativeShell } from './lib/nativeShell'
 import { initNoAutofill } from './lib/noAutofill'
 import { install as installErrorReporter } from './lib/errorReporter'
-import { cycleDemoZoom, resetDemoZoom, tryExitDemoOnEscape } from './hooks/useDemoMode'
+import { handleGlobalKeyDown, collectVisibleOverlays } from './lib/globalShortcuts'
 import ErrorBoundary from './components/ErrorBoundary'
 
 // 原生壳适配（右键菜单屏蔽等）：浏览器形态内部自动跳过
@@ -22,35 +22,16 @@ initNoAutofill()
 installErrorReporter()
 
 // 缩放 / 演示快捷键（临时场景不持久化）
-// - Ctrl+=/-/0：阅读态随时能调缩放（输入区不抢）
-// - Esc：演示中退出（输入区不抢，留给标题/对话框；已 preventDefault 的 Esc 也不抢）
 if (typeof window !== 'undefined') {
   window.addEventListener('keydown', (e) => {
     const inEditable =
       e.target instanceof HTMLElement &&
       (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)
-
-    if (e.key === 'Escape') {
-      if (inEditable || e.defaultPrevented) return
-      // 对话框 / 菜单优先吃掉 Esc，勿连带退出演示
-      if (document.querySelector('[aria-modal="true"], [role="dialog"], [role="alertdialog"], [role="menu"]')) return
-      if (tryExitDemoOnEscape()) e.preventDefault()
-      return
-    }
-
-    const mod = e.metaKey || e.ctrlKey
-    if (!mod) return
-    if (inEditable) return
-    if (e.key === '=' || e.key === '+') {
-      e.preventDefault()
-      cycleDemoZoom(1)
-    } else if (e.key === '-' || e.key === '_') {
-      e.preventDefault()
-      cycleDemoZoom(-1)
-    } else if (e.key === '0') {
-      e.preventDefault()
-      resetDemoZoom()
-    }
+    const handled = handleGlobalKeyDown(e, {
+      inEditable,
+      visibleOverlays: collectVisibleOverlays(document),
+    })
+    if (handled) e.preventDefault()
   })
 }
 
