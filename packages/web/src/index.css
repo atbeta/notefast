@@ -399,6 +399,8 @@
 .animate-fade-in {
   animation: fade-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+/* 不要把 animate-fade-in（含 transform）套在 .demo-zoom 祖先上：Chromium 里
+   zoom + 祖先 transform 会从左上角抹开，慢加载下像「正文从左往右长出来」。 */
 
 /* Tab 内容切换淡入：纯 opacity（不带位移，避免右栏内容跳动感） */
 @keyframes fade-in-soft {

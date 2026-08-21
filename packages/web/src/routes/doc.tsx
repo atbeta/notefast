@@ -663,33 +663,40 @@ useEffect(() => {
   // BlockRenderer 下的 data-block-id 查回 Block 做 md 序列化）
   const ctxMenu = useDocContextMenu({ rootBlock: doc, disabled: isEditing || isEmpty })
 
-  // 首屏骨架：结构与正式布局一致（header + 内容列 + 右栏），加载完成后布局零跳动
-  if (!doc && loading && showSkeleton) {
+  // 右栏宽度与正式布局同一套 class，避免骨架 → 正文时阅读列横移
+  const railWidthClass = railActuallyCollapsed ? 'w-9' : railWidth === 'wide' ? 'w-[400px]' : 'w-[288px]'
+
+  // 首屏骨架：header + 内容列 + 右栏与正式布局同宽；150ms 内只出壳，避免快请求闪骨架
+  if (!doc && loading) {
     return (
-      <div className="flex flex-col lg:flex-row h-full animate-pulse">
+      <div className="flex flex-col lg:flex-row h-full">
         <div className="flex-1 min-w-0 flex flex-col h-full border-r border-border/50">
           <div className="h-14 shrink-0 border-b border-border/50" />
-          <div className="flex-1 overflow-hidden">
-            <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-10 space-y-3">
-              <div className="mx-auto max-w-[var(--reading-max-w)] space-y-3">
-                <div className="h-9 bg-secondary rounded w-1/2" />
-                <div className="h-3.5 bg-secondary rounded w-28" />
-                <div className="h-4 bg-secondary rounded w-full mt-8" />
-                <div className="h-4 bg-secondary rounded w-5/6" />
-                <div className="h-4 bg-secondary rounded w-4/6" />
+          <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+            {showSkeleton && (
+              <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-8 space-y-3 animate-pulse">
+                <div
+                  className="mx-auto max-w-[var(--reading-max-w)] demo-zoom space-y-3"
+                  style={{ '--reading-max-w': `${readingMaxW}rem` } as CSSProperties}
+                >
+                  <div className="h-9 bg-secondary rounded w-1/2" />
+                  <div className="h-3.5 bg-secondary rounded w-28" />
+                  <div className="h-4 bg-secondary rounded w-full mt-8" />
+                  <div className="h-4 bg-secondary rounded w-5/6" />
+                  <div className="h-4 bg-secondary rounded w-4/6" />
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
-        <div className="hidden lg:flex lg:flex-col w-[288px] shrink-0 bg-sidebar/30">
-          <div className="h-14 shrink-0 border-b border-border/50" />
-        </div>
+        {!aiChatOpen && (
+          <div className={`hidden lg:flex lg:flex-col shrink-0 bg-sidebar/30 h-full ${railWidthClass}`}>
+            <div className="h-14 shrink-0 border-b border-border/50" />
+          </div>
+        )}
       </div>
     )
   }
-
-  // 加载中但还没到骨架延迟：空 div 撑住布局，避免 Error 态闪现
-  if (!doc && loading) return <div className="flex-1" />
 
   if (!doc) return <ErrorState message={error || t('doc.docNotFound')} />
 
@@ -773,7 +780,7 @@ useEffect(() => {
         >
           {/* 切换文档时保留旧内容完整展示，新数据到了直接替换 */}
           <div>
-            <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-8 pb-32 animate-fade-in">
+            <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-8 pb-32">
             <DocFindBar rootRef={articleRef} docId={id} />
             {indexJob && (indexJob.state === 'pending' || indexJob.state === 'running') && (
               <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
@@ -1026,9 +1033,7 @@ useEffect(() => {
       {/* Right Sidebar (Desktop only) — AI 聊天打开时让位（替换右栏，不额外压正文） */}
       {!aiChatOpen && (
         <div
-          className={`hidden lg:flex flex-col shrink-0 bg-sidebar/30 h-full transition-[width] duration-200 print:hidden ${
-            railActuallyCollapsed ? 'w-9' : railWidth === 'wide' ? 'w-[400px]' : 'w-[288px]'
-          }`}
+          className={`hidden lg:flex flex-col shrink-0 bg-sidebar/30 h-full transition-[width] duration-200 print:hidden ${railWidthClass}`}
         >
           {/* 顶栏：五 Tab 均分居中（中/英都不横滚）；折叠钮单独占位 */}
           <div className="h-14 shrink-0 border-b border-border/50 flex items-stretch px-1 gap-0.5">
