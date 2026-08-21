@@ -257,6 +257,18 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
 
   const imageUploader = useImageUploader({ insertAtCursor })
 
+  // 预览态卸掉编辑器，⌘P 快捷键需挂在 window，才能切回编辑
+  useEffect(() => {
+    if (mode !== 'view') return
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'p') return
+      e.preventDefault()
+      setMode('edit')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mode])
+
   const handleAiContinue = useCallback(() => {
     if (aiWriting.isStreaming || refineSessionRef.current) return
     if (!ai.chat) {
@@ -415,7 +427,6 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
     <div className="animate-fade-in">
       <EditorToolbar
         mode={mode}
-        onModeToggle={() => setMode((m) => (m === 'edit' ? 'view' : 'edit'))}
         saving={saving}
         loading={loading}
         uploadingImage={imageUploader.uploading}
@@ -511,7 +522,6 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
                 onSave={handleSave}
                 onToggleMode={() => setMode((m) => (m === 'edit' ? 'view' : 'edit'))}
                 onAiContinue={handleAiContinue}
-                onCancel={handleCancel}
                 onImageFile={imageUploader.uploadImage}
                 ghostText={ghostText}
                 onGhostAccept={handleGhostAccept}
@@ -574,7 +584,6 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
           <ShortcutsHelp keys={['mod', 'Enter']} desc={t('mdEditor.helpAiContinue')} />
           <ShortcutsHelp keys={['-', 'Enter']} desc={t('mdEditor.helpListContinue')} />
           <ShortcutsHelp keys={['```', 'Enter']} desc={t('mdEditor.helpCodeBlock')} />
-          <ShortcutsHelp keys={['Esc']} desc={t('mdEditor.helpExit')} />
         </div>
       )}
     </div>

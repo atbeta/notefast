@@ -10,7 +10,6 @@ export interface EditorKeymapCallbacks {
   onSave: () => void
   onToggleMode: () => void
   onAiContinue: () => void
-  onCancel: () => void
   wrapSelection: (left: string, right?: string) => void
   insertLink: () => void
 }
@@ -118,10 +117,9 @@ export function editorKeymap(cb: EditorKeymapCallbacks): Extension {
             cb.dismissGhost()
             return true
           }
-          // 搜索面板打开时 Esc 先关面板，不退出编辑
+          // 搜索面板打开时 Esc 先关面板。不要退出编辑：正文不是对话框，Esc 只收层。
           if (closeSearchPanel(view)) return true
-          cb.onCancel()
-          return true
+          return false
         },
       },
       { key: 'Enter', run: expandEmptyFence },

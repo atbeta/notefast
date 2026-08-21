@@ -67,7 +67,7 @@
     "saveAndReturn": "Save and return to reading ({{shortcut}})",
     "savingShort": "Saving",
     "save": "Save",
-    "exitEdit": "Exit edit (Esc)",
+    "exitEdit": "Back to reading, draft kept",
     "aiNotConfiguredHint": "AI is not configured — click to set up",
     "aiSetup": "AI not set up"
   },

@@ -3,9 +3,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import {
-  Edit3,
   Loader2,
-  Eye,
   Bold,
   Italic,
   Link2,
@@ -17,11 +15,11 @@ import {
   Heading2,
   Heading3,
   Table,
-  X,
   ImagePlus,
   Images,
   Sparkles,
   Upload,
+  BookOpen,
 } from 'lucide-react'
 import { Tooltip, ShortcutKeys, shortcutLabel } from '../ui'
 import { useAiCapabilities } from '../../hooks/useAiCapabilities'
@@ -33,7 +31,6 @@ type Mode = 'edit' | 'view'
 
 interface EditorToolbarProps {
   mode: Mode
-  onModeToggle: (mode: Mode) => void
   saving: boolean
   loading: boolean
   uploadingImage: boolean
@@ -51,7 +48,6 @@ interface EditorToolbarProps {
 
 export default function EditorToolbar({
   mode,
-  onModeToggle,
   saving,
   loading,
   uploadingImage,
@@ -113,6 +109,8 @@ export default function EditorToolbar({
   return (
     <div className="sticky top-14 z-10 -mx-4 sm:-mx-8 px-4 sm:px-8 mb-2 bg-background/85 backdrop-blur-md">
       <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1 py-1.5 border-b border-border/60">
+        {mode === 'edit' && (
+          <>
         <IconBtn title={t('editorToolbar.h1')} onClick={() => insertAtCursor('\n# ')}>
           <Heading1 className="w-[15px] h-[15px]" strokeWidth={1.75} />
         </IconBtn>
@@ -233,6 +231,11 @@ export default function EditorToolbar({
           onClose={() => setPickerOpen(false)}
           onPick={insertAssetRef}
         />
+          </>
+        )}
+        <IconBtn title={t('editorToolbar.shortcuts')} onClick={() => onToggleHelp(!showHelp)} active={showHelp}>
+          <span className="text-[12px] font-medium leading-none">?</span>
+        </IconBtn>
 
         <div className="flex items-center gap-1 ml-auto">
           {!aiConfigured && (
@@ -246,17 +249,9 @@ export default function EditorToolbar({
               </Link>
             </Tooltip>
           )}
-          <IconBtn
-            title={mode === 'view' ? t('editorToolbar.backToEdit', { shortcut: shortcutLabel(['mod', 'P']) }) : t('editorToolbar.preview', { shortcut: shortcutLabel(['mod', 'P']) })}
-            onClick={() => onModeToggle(mode === 'edit' ? 'view' : 'edit')}
-            active={mode === 'view'}
-          >
-            {mode === 'view' ? <Edit3 className="w-[15px] h-[15px]" strokeWidth={1.75} /> : <Eye className="w-[15px] h-[15px]" strokeWidth={1.75} />}
+          <IconBtn title={t('editorToolbar.exitEdit')} onClick={onCancel}>
+            <BookOpen className="w-[15px] h-[15px]" strokeWidth={1.75} />
           </IconBtn>
-          <IconBtn title={t('editorToolbar.shortcuts')} onClick={() => onToggleHelp(!showHelp)} active={showHelp}>
-            <span className="text-[12px] font-medium leading-none">?</span>
-          </IconBtn>
-          <ToolbarDivider />
           <Tooltip label={saving ? t('editorToolbar.saving') : t('editorToolbar.saveAndReturn', { shortcut: shortcutLabel(['mod', 'S']) })}>
             <button
               type="button"
@@ -268,9 +263,6 @@ export default function EditorToolbar({
               {saving ? t('editorToolbar.savingShort') : t('editorToolbar.save')}
             </button>
           </Tooltip>
-          <IconBtn title={t('editorToolbar.exitEdit')} onClick={onCancel}>
-            <X className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          </IconBtn>
         </div>
       </div>
     </div>
