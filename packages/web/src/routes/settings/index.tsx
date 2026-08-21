@@ -11,7 +11,7 @@ import {
   Wrench,
   Info,
 } from 'lucide-react'
-import AiChatTrigger from '../../components/AiChatTrigger'
+import { AiChatHeaderSlot } from '../../components/PageHeader'
 
 const NAV_ITEMS = [
   { to: 'general', tabKey: 'general', Icon: Sliders },
@@ -35,7 +35,7 @@ export default function SettingsLayout() {
           <h1 className="text-[28px] font-bold tracking-[-0.02em] text-foreground">
             {t('settings.title')}
           </h1>
-          <AiChatTrigger className="mt-1.5" />
+          <AiChatHeaderSlot triggerClassName="mt-1.5" />
         </div>
         <p className="text-[13px] text-muted-foreground leading-relaxed">
           {t('settings.description')}

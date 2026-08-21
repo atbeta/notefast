@@ -6,7 +6,6 @@ import type { Block, HeadingNode } from '@notefast/core'
 import { buildHeadingTree } from '@notefast/core'
 import {
   ArrowLeft,
-  Trash2,
   Sparkles,
   Loader2,
   Pencil,
@@ -19,8 +18,6 @@ import {
   ChevronDown,
   SquarePen,
   PencilLine,
-  Network,
-  Download,
   PanelRightClose,
   PanelLeftOpen,
   Minimize2,
@@ -39,6 +36,7 @@ import PageHeader from '../components/PageHeader'
 import DocVisitNav from '../components/DocVisitNav'
 import DocNeighborPager, { type DocNeighbor } from '../components/DocNeighborPager'
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
+import DocHeaderMore from '../components/DocHeaderMore'
 import { useAiChatOpen } from '../components/Layout'
 import { useNavHistory } from '../hooks/useNavHistory'
 import { readDocRailCollapsed, writeDocRailCollapsed } from '../hooks/useDocRailCollapsed'
@@ -732,24 +730,6 @@ useEffect(() => {
             )}
             {!isEditing && <DemoModeButton />}
             <div className="w-px h-4 bg-border/60 mx-1" />
-            <Tooltip label={t('doc.exportDoc')}>
-              <button
-                type="button"
-                onClick={() => void handleExport()}
-                disabled={exporting || loading}
-                className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50"
-              >
-                {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} /> : <Download className="w-3.5 h-3.5" strokeWidth={1.75} />}
-              </button>
-            </Tooltip>
-            <Tooltip label={t('doc.viewGraph')}>
-              <Link
-                to={`/graph?mode=docs&center=${encodeURIComponent(id ?? '')}&center_type=doc`}
-                className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent"
-              >
-                <Network className="w-3.5 h-3.5" strokeWidth={1.75} />
-              </Link>
-            </Tooltip>
             <Tooltip label={docShared ? t('doc.alreadyShared') : t('doc.shareDoc')}>
               <button
                 ref={shareBtnRef}
@@ -771,15 +751,15 @@ useEffect(() => {
                 )}
               </button>
             </Tooltip>
-            <Tooltip label={t('doc.deleteDoc')}>
-              <button
-                type="button"
-                onClick={() => setShowDelete(true)}
-                className="btn-icon-ghost text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </Tooltip>
+            {id && (
+              <DocHeaderMore
+                docId={id}
+                exporting={exporting}
+                disabled={loading}
+                onExport={() => void handleExport()}
+                onDelete={() => setShowDelete(true)}
+              />
+            )}
           </div>
         </PageHeader>
 

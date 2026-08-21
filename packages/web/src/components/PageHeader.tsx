@@ -2,14 +2,19 @@ import type { ReactNode, MouseEvent } from 'react'
 import AiChatTrigger from './AiChatTrigger'
 import { isWindowZoomDoubleClickTarget, nativeToggleWindowZoom } from '../lib/nativeWindow'
 
+/** 顶栏最右 AI 入口：竖线与本页按钮分开 */
+export function AiChatHeaderSlot({ triggerClassName = '' }: { triggerClassName?: string }) {
+  return (
+    <div className="shrink-0 flex items-center self-center pl-2 ml-0.5 border-l border-border/60">
+      <AiChatTrigger className={triggerClassName} />
+    </div>
+  )
+}
+
 /**
  * 页面顶栏壳：sticky h-14 + 底边框，内层 max-w-4xl 居中容器。
  * - 默认（home / inbox / new）：innerClassName 追加到内层容器（如 flex 布局）
- * - bare（doc 页变体）：不渲染内层容器，className 直接拼到 header，
- *   header 自身即 flex 工具栏（shrink-0 + px-6）
- * 桌面端右侧常挂 AI 入口（AiChatTrigger）；移动端由 Layout 顶栏承担。
- * 双击空白拖拽区 → 原生壳最大化/恢复（见 nativeWindow）。
- * macOS 不在此加顶 inset（与 web 同高；红绿灯只挤侧栏左侧）。
+ * - bare（doc 页变体）：不渲染内层容器，className 直接拼到 header
  */
 export default function PageHeader({
   children,
@@ -40,7 +45,7 @@ export default function PageHeader({
         <div className="flex-1 min-w-0 h-full flex items-center justify-between gap-2 min-h-0">
           {children}
         </div>
-        <AiChatTrigger />
+        <AiChatHeaderSlot />
       </header>
     )
   }
@@ -54,7 +59,7 @@ export default function PageHeader({
         <div className={`min-w-0 flex-1 h-full ${innerClassName}`.trim()}>
           {children}
         </div>
-        <AiChatTrigger />
+        <AiChatHeaderSlot />
       </div>
     </header>
   )
