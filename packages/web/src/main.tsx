@@ -11,7 +11,7 @@ import './index.css'
 import { initNativeShell } from './lib/nativeShell'
 import { initNoAutofill } from './lib/noAutofill'
 import { install as installErrorReporter } from './lib/errorReporter'
-import { handleGlobalKeyDown, collectVisibleOverlays } from './lib/globalShortcuts'
+import { handleGlobalKeyDown, collectBlockingOverlays } from './lib/globalShortcuts'
 import ErrorBoundary from './components/ErrorBoundary'
 
 // 原生壳适配（右键菜单屏蔽等）：浏览器形态内部自动跳过
@@ -29,7 +29,7 @@ if (typeof window !== 'undefined') {
       (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)
     const handled = handleGlobalKeyDown(e, {
       inEditable,
-      visibleOverlays: collectVisibleOverlays(document),
+      hasBlockingOverlay: collectBlockingOverlays(document).length > 0,
     })
     if (handled) e.preventDefault()
   })

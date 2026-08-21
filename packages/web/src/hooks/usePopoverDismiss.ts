@@ -30,10 +30,6 @@ export function usePopoverDismiss(
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      // stopPropagation：菜单开着按 Esc 只关菜单，不让事件冒泡到 window 全局
-      // handler（否则全局会 querySelector 命中「正在卸载的菜单 DOM」直接 return，
-      // 连带把「Esc 退出演示」吞掉——菜单关不掉、演示也退不出）
-      e.stopPropagation()
       if (onEscape) onEscape(e)
       else onClose()
     }

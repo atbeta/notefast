@@ -1,8 +1,10 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import {
   handleGlobalKeyDown,
-  collectVisibleOverlays,
+  overlayBlocksEscape,
+  collectBlockingOverlays,
   type GlobalKeyEvent,
+  type OverlayLike,
 } from '../globalShortcuts'
 import {
   enterDemoMode,
@@ -24,6 +26,16 @@ function ev(partial: Partial<GlobalKeyEvent> & { key: string }): GlobalKeyEvent 
   return e
 }
 
+function overlay(partial: OverlayLike = {}): OverlayLike {
+  return {
+    hidden: false,
+    getAttribute: () => null,
+    hasAttribute: () => false,
+    closest: () => null,
+    ...partial,
+  }
+}
+
 beforeEach(() => {
   resetDemoZoom()
 })
@@ -33,7 +45,7 @@ afterEach(() => {
 })
 
 describe('handleGlobalKeyDown · Escape', () => {
-  test('演示中按 Esc → 退出演示（preventDefault 由调用方负责）', () => {
+  test('演示中按 Esc → 退出演示', () => {
     enterDemoMode()
     expect(getDemoState().active).toBe(true)
     const e = ev({ key: 'Escape' })
@@ -49,18 +61,18 @@ describe('handleGlobalKeyDown · Escape', () => {
     expect(e.defaultPrevented).toBe(false)
   })
 
-  test('有可见 dialog/menu 时按 Esc → 不退出演示（对话框优先）', () => {
+  test('有打开的 dialog/menu 时按 Esc → 不退出演示（对话框优先）', () => {
     enterDemoMode()
     const e = ev({ key: 'Escape' })
-    const handled = handleGlobalKeyDown(e, { visibleOverlays: [{ id: 'open-menu' }] })
+    const handled = handleGlobalKeyDown(e, { hasBlockingOverlay: true })
     expect(handled).toBe(false)
     expect(getDemoState().active).toBe(true)
   })
 
-  test('有「隐藏」dialog/menu 时按 Esc → 仍退出演示（只拦截可见元素）', () => {
+  test('常驻但 aria-hidden 的 overlay 不拦截（CommandPalette 关闭态）', () => {
     enterDemoMode()
     const e = ev({ key: 'Escape' })
-    const handled = handleGlobalKeyDown(e, { visibleOverlays: [] })
+    const handled = handleGlobalKeyDown(e, { hasBlockingOverlay: false })
     expect(handled).toBe(true)
     expect(getDemoState().active).toBe(false)
   })
@@ -83,12 +95,10 @@ describe('handleGlobalKeyDown · Ctrl 缩放', () => {
 
     const minus = ev({ key: '-', ctrlKey: true })
     handleGlobalKeyDown(minus, {})
-    const before0 = getDemoState().zoomIndex
     const zero = ev({ key: '0', ctrlKey: true })
     expect(handleGlobalKeyDown(zero, {})).toBe(true)
     expect(getDemoState().zoomIndex).toBe(0)
     expect(getDemoState().active).toBe(false)
-    void before0
   })
 
   test('输入框内 Ctrl+= 不抢（留给文本操作）', () => {
@@ -98,19 +108,44 @@ describe('handleGlobalKeyDown · Ctrl 缩放', () => {
   })
 })
 
-describe('collectVisibleOverlays', () => {
-  test('排除隐藏元素（getClientRects 为空）', () => {
-    const visible = { getClientRects: () => [{ width: 1, height: 1 }] }
-    const hidden = { getClientRects: () => [] }
+describe('overlayBlocksEscape', () => {
+  test('打开的 dialog 拦截', () => {
+    expect(overlayBlocksEscape(overlay())).toBe(true)
+  })
+
+  test('aria-hidden=true 不拦截（关着的全屏 CommandPalette：盒子仍在）', () => {
+    expect(
+      overlayBlocksEscape(
+        overlay({ getAttribute: (n) => (n === 'aria-hidden' ? 'true' : null) }),
+      ),
+    ).toBe(false)
+  })
+
+  test('祖先 aria-hidden 不拦截', () => {
+    expect(
+      overlayBlocksEscape(overlay({ closest: (sel) => (sel === '[aria-hidden="true"]' ? {} : null) })),
+    ).toBe(false)
+  })
+
+  test('hidden 属性不拦截', () => {
+    expect(overlayBlocksEscape(overlay({ hidden: true, hasAttribute: (n) => n === 'hidden' }))).toBe(false)
+  })
+})
+
+describe('collectBlockingOverlays', () => {
+  test('过滤 aria-hidden，只留下打开的 overlay', () => {
+    const openDialog = overlay()
+    const closedPalette = overlay({ getAttribute: (n) => (n === 'aria-hidden' ? 'true' : null) })
     const doc = {
-      querySelectorAll: () => [visible, hidden],
+      querySelectorAll: () => [openDialog, closedPalette],
     } as unknown as Document
-    const overlays = collectVisibleOverlays(doc)
+    const overlays = collectBlockingOverlays(doc)
     expect(overlays).toHaveLength(1)
+    expect(overlays[0]).toBe(openDialog as unknown as Element)
   })
 
   test('空 DOM 返回空数组', () => {
     const doc = { querySelectorAll: () => [] } as unknown as Document
-    expect(collectVisibleOverlays(doc)).toHaveLength(0)
+    expect(collectBlockingOverlays(doc)).toHaveLength(0)
   })
 })

@@ -223,9 +223,9 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
     <div
       aria-hidden={!open}
       className={`fixed inset-0 z-[100] flex items-start justify-center pt-[12vh] px-4 ${open ? 'pointer-events-auto' : 'pointer-events-none'}`}
-      role="dialog"
-      aria-modal="true"
-      aria-label={t('command.dialogLabel')}
+      role={open ? 'dialog' : undefined}
+      aria-modal={open ? true : undefined}
+      aria-label={open ? t('command.dialogLabel') : undefined}
     >
       {/* 不用 backdrop-filter：Safari/WKWebView 不插值 blur，且子元素模糊不吃父级 opacity，
           会「先糊满、黑色才淡入」。半透明遮罩 + 面板同时长 fade/slide，一条动效。 */}
