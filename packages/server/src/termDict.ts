@@ -28,7 +28,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fullToHalfWidth } from '@notefast/core'
 import { getDb } from './db'
-import { normalizeEntityName, upsertEntity, findEntityByName, mergeEntities } from './store/entities'
+import { addAlias, findEntityByName, mergeEntities, normalizeEntityName, upsertEntity } from './store/entities'
 
 const CONFIG_FILE = 'term-dict.json'
 
@@ -190,6 +190,25 @@ export function expandDictTerm(term: string): string[] | null {
   return [...new Set([term, entry.name, ...entry.aliases])]
 }
 
+/**
+ * 实体列表检索用：查询词命中词典标准名/别名（精确或子串）→ 标准名（entities.name）。
+ * 供 listEntities / GET /entities / MCP 把「wafer」解析到「晶圆」。
+ */
+export function dictCanonicalNamesMatching(q: string): string[] {
+  const raw = q.trim()
+  if (!raw) return []
+  const names: string[] = []
+  const resolved = resolveDictTerm(raw)
+  if (resolved) names.push(resolved.name)
+  const nq = raw.toLowerCase()
+  for (const e of getTermDict().entries) {
+    if (e.name.toLowerCase().includes(nq) || e.aliases.some((a) => a.toLowerCase().includes(nq))) {
+      names.push(normalizeEntityName(e.name))
+    }
+  }
+  return [...new Set(names)]
+}
+
 // ───────────────────── 保存与存量归并 ─────────────────────
 
 /** 校验并落盘（调用方已做 zod 结构校验）；返回规范化后的词典。失败抛 Error（中文消息）。 */
@@ -239,12 +258,12 @@ export function rebuildDictEntities(): DictRebuildResult {
   const dict = getTermDict()
   const result: DictRebuildResult = { merged: 0, created: 0, kindUpdated: 0 }
 
-  // 第一遍：确保标准实体存在 + kind 覆盖
+  // 第一遍：确保标准实体存在 + kind 覆盖 + 别名写入 entity_aliases（实体页/MCP 可按别名检索）
   for (const entry of dict.entries) {
     const name = normalizeEntityName(entry.name)
-    const existing = findEntityByName(db, name)
+    let existing = findEntityByName(db, name)
     if (!existing) {
-      upsertEntity(db, { name, display: entry.name, kind: entry.kind ?? 'concept' })
+      existing = upsertEntity(db, { name, display: entry.name, kind: entry.kind ?? 'concept' })
       result.created++
     } else if (entry.kind && existing.kind !== entry.kind) {
       db.query(`UPDATE entities SET kind = ?, updated_at = datetime('now') WHERE id = ?`).run(
@@ -252,6 +271,10 @@ export function rebuildDictEntities(): DictRebuildResult {
         existing.id,
       )
       result.kindUpdated++
+    }
+    for (const alias of entry.aliases) {
+      const an = normalizeEntityName(alias)
+      if (an.length >= 2 && an !== name) addAlias(db, an, existing.id)
     }
   }
 

@@ -32,10 +32,10 @@ const termDictSchema = z.object({
 
 const termDict = new Hono()
 
-termDict.get('/', (c) => {
+function dictPayload(saved?: number) {
   const d = getTermDict()
   const stats = dictStats()
-  return c.json({
+  return {
     enabled: d.entries.length > 0,
     count: stats.entries,
     alias_count: stats.aliases,
@@ -45,7 +45,12 @@ termDict.get('/', (c) => {
       ...(e.kind ? { kind: e.kind } : {}),
       ...(e.description ? { description: e.description } : {}),
     })),
-  })
+    ...(saved !== undefined ? { saved } : {}),
+  }
+}
+
+termDict.get('/', (c) => {
+  return c.json(dictPayload())
 })
 
 termDict.put('/', zValidator('json', termDictSchema), (c) => {
@@ -64,13 +69,7 @@ termDict.put('/', zValidator('json', termDictSchema), (c) => {
   } catch (e) {
     console.error('[term-dict] auto rebuild failed:', e)
   }
-  const stats = dictStats()
-  return c.json({
-    enabled: true,
-    count: stats.entries,
-    alias_count: stats.aliases,
-    saved: saved.entries.length,
-  })
+  return c.json(dictPayload(saved.entries.length))
 })
 
 termDict.post('/rebuild', (c) => {

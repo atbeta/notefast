@@ -15,7 +15,7 @@ import { z } from 'zod'
 import { getDb } from '../db'
 import { getLiveDocById } from '../store/blocks'
 import { describeEntity } from '../ai/entityDescribe'
-import { dictDescriptionFor } from '../termDict'
+import { dictCanonicalNamesMatching, dictDescriptionFor } from '../termDict'
 import {
   findPotentialDuplicates,
   getEntityById,
@@ -51,7 +51,7 @@ entities.get('/', (c) => {
   const q = c.req.query('q') ?? ''
   const limitRaw = parseInt(c.req.query('limit') ?? '', 10)
   const limit = Number.isFinite(limitRaw) ? limitRaw : 50
-  const rows = listEntities(db, { q, limit })
+  const rows = listEntities(db, { q, limit, extraNames: q ? dictCanonicalNamesMatching(q) : [] })
   return c.json({
     entities: rows.map((e) => ({
       id: e.id,

@@ -2,8 +2,8 @@
  * 实体词典面板（结构化编辑器）
  *
  * 替代原始 JSON 文本框：长词典可搜索、条目级增删改、导入合并（外挂行业词典）、导出。
- * 所有编辑都在本地状态，显式「保存」PUT 全量落盘 + 自动存量归并——JSON 格式错误在
- * 结构上不可能发生；导入在预览阶段校验。
+ * 条目增删改 / 导入 / 清空立即 PUT 落盘 + 自动存量归并；底部「保存」会顺带提交未关的表单。
+ * JSON 格式错误在结构上不可能发生；导入在预览阶段校验。
  * 描述（description）只在这里写：用户声明层，优先级高于 AI 生成。
  */
 
@@ -122,42 +122,70 @@ export default function TermDictPanel() {
     setForm((f) => ({ ...f, aliases: f.aliases.filter((a) => a !== alias) }))
   }
 
-  const submitEntry = () => {
+  const persistTerms = async (next: TermDictEntry[]) => {
+    const d = await api.put<TermDictPayload>('/term-dict', { terms: next })
+    setTerms(d.terms)
+    setStats({ enabled: d.enabled, count: d.count, aliasCount: d.alias_count })
+  }
+
+  const persistWithToast = async (next: TermDictEntry[], success?: string): Promise<boolean> => {
+    try {
+      await toast.promise(() => persistTerms(next), {
+        loading: t('settings.termDict.saving'),
+        success: success ?? t('settings.termDict.saved'),
+        error: (e) => ({
+          title: t('settings.termDict.saveFailed'),
+          description: e instanceof Error ? e.message : String(e),
+        }),
+      })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const buildEntryFromForm = (): TermDictEntry | null => {
     const name = form.name.trim()
     if (!name) {
-      toast.error({ title: t('settings.termDict.nameLabel') })
-      return
+      toast.error({ title: t('settings.termDict.nameRequired') })
+      return null
     }
-    // 本地去重：标准名重复则拒绝（服务端保存时同样校验）
     const dupIndex = terms.findIndex((e) => normName(e.name) === normName(name))
     if (editing?.mode === 'edit' && dupIndex !== editing.index && dupIndex >= 0) {
-      toast.error({ title: t('settings.termDict.nameLabel') })
-      return
+      toast.error({ title: t('settings.termDict.nameDuplicate') })
+      return null
     }
     if (editing?.mode !== 'edit' && dupIndex >= 0) {
-      toast.error({ title: t('settings.termDict.nameLabel') })
-      return
+      toast.error({ title: t('settings.termDict.nameDuplicate') })
+      return null
     }
-    const entry: TermDictEntry = {
+    return {
       name,
       aliases: form.aliases,
       ...(form.kind ? { kind: form.kind } : {}),
       ...(form.description.trim() ? { description: form.description.trim() } : {}),
     }
-    setTerms((prev) => {
-      if (editing?.mode === 'edit') {
-        const next = [...prev]
-        next[editing.index] = entry
-        return next
-      }
-      return [...prev, entry]
-    })
-    cancelEdit()
   }
 
-  const deleteEntry = (index: number) => {
-    setTerms((prev) => prev.filter((_, i) => i !== index))
-    if (editing?.mode === 'edit' && editing.index === index) cancelEdit()
+  const applyEntry = (entry: TermDictEntry): TermDictEntry[] => {
+    if (editing?.mode === 'edit') {
+      const next = [...terms]
+      next[editing.index] = entry
+      return next
+    }
+    return [...terms, entry]
+  }
+
+  const submitEntry = async () => {
+    const entry = buildEntryFromForm()
+    if (!entry) return
+    if (await persistWithToast(applyEntry(entry))) cancelEdit()
+  }
+
+  const deleteEntry = async (index: number) => {
+    if (await persistWithToast(terms.filter((_, i) => i !== index))) {
+      if (editing?.mode === 'edit' && editing.index === index) cancelEdit()
+    }
   }
 
   // ───────────────────── 导入合并 ─────────────────────
@@ -198,12 +226,13 @@ export default function TermDictPanel() {
         add++
       }
     }
-    setTerms(merged)
-    setImportOpen(false)
-    setImportText('')
-    toast.success({
-      title: t('settings.termDict.importTitle'),
-      description: t('settings.termDict.importPreview', { add, update, skip: incoming.length - add - update }),
+    void persistWithToast(
+      merged,
+      t('settings.termDict.importPreview', { add, update, skip: incoming.length - add - update }),
+    ).then((ok) => {
+      if (!ok) return
+      setImportOpen(false)
+      setImportText('')
     })
   }
 
@@ -226,17 +255,13 @@ export default function TermDictPanel() {
   }
 
   const handleSave = async () => {
-    await toast.promise(
-      async () => {
-        const d = await api.put<TermDictPayload & { saved?: number }>('/term-dict', { terms })
-        setStats({ enabled: d.enabled, count: d.count, aliasCount: d.alias_count })
-      },
-      {
-        loading: t('settings.termDict.saving'),
-        success: t('settings.termDict.saved'),
-        error: (e) => ({ title: t('settings.termDict.saveFailed'), description: e instanceof Error ? e.message : String(e) }),
-      },
-    ).catch(() => undefined)
+    let next = terms
+    if (editing) {
+      const entry = buildEntryFromForm()
+      if (!entry) return
+      next = applyEntry(entry)
+    }
+    if (await persistWithToast(next)) cancelEdit()
   }
 
   const handleRebuild = async () => {
@@ -255,9 +280,9 @@ export default function TermDictPanel() {
     }
   }
 
-  const handleClear = () => {
-    setTerms([])
+  const handleClear = async () => {
     cancelEdit()
+    await persistWithToast([])
   }
 
   const formDup = terms.some(
@@ -323,7 +348,7 @@ export default function TermDictPanel() {
                   autoFocus
                   className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[13px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
                 />
-                {formDup && <p className="text-[10.5px] text-destructive">{t('settings.termDict.nameLabel')}</p>}
+                {formDup && <p className="text-[10.5px] text-destructive">{t('settings.termDict.nameDuplicate')}</p>}
               </div>
               <div className="space-y-1">
                 <label className="text-[11px] font-medium text-muted-foreground">{t('settings.termDict.kindLabel')}</label>

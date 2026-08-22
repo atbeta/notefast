@@ -94,14 +94,17 @@ export function addMention(db: Db, entityId: string, blockId: string, surface: s
   return false
 }
 
-/** 递减计数并清理归零实体（空实体只污染列表，重抽即可重建） */
+/** 递减计数并清理本次归零的实体（只扫本次触及的 id，避免误删词典新建的 0 提及实体） */
 function decrementAndSweep(db: Db, counts: Map<string, number>): void {
+  if (counts.size === 0) return
   for (const [entityId, n] of counts) {
     db.query(
       `UPDATE entities SET mention_count = mention_count - ?, updated_at = datetime('now') WHERE id = ?`,
     ).run(n, entityId)
   }
-  db.query('DELETE FROM entities WHERE mention_count <= 0').run()
+  const ids = [...counts.keys()]
+  const ph = ids.map(() => '?').join(',')
+  db.query(`DELETE FROM entities WHERE mention_count <= 0 AND id IN (${ph})`).run(...ids)
 }
 
 /**
@@ -136,23 +139,40 @@ export function deleteMentionsTouchingBlocks(db: Db, ids: string[]): void {
 
 // ───────────────────── 查询（REST / 召回路用）─────────────────────
 
-/** 实体列表：mention_count 倒序；q 匹配 name / display 子串（不区分大小写） */
-export function listEntities(db: Db, opts: { q?: string; limit?: number } = {}): EntityRow[] {
+/** 实体列表：mention_count 倒序；q 匹配 name / display / 别名（entity_aliases）子串 */
+export function listEntities(
+  db: Db,
+  opts: { q?: string; limit?: number; extraNames?: string[] } = {},
+): EntityRow[] {
   const limit = Math.max(1, Math.min(500, opts.limit ?? 50))
   const q = (opts.q ?? '').trim()
-  if (!q) {
+  const extraNames = [...new Set((opts.extraNames ?? []).map((n) => n.trim()).filter((n) => n.length >= 2))]
+  if (!q && extraNames.length === 0) {
     return db
       .query('SELECT * FROM entities ORDER BY mention_count DESC, updated_at DESC LIMIT ?')
       .all(limit) as EntityRow[]
   }
-  const pattern = `%${q.toLowerCase()}%`
+
+  const conds: string[] = []
+  const params: Array<string | number> = []
+  if (q) {
+    const pattern = `%${q.toLowerCase()}%`
+    conds.push(`lower(e.name) LIKE ? OR lower(e.display) LIKE ? OR lower(IFNULL(a.alias, '')) LIKE ?`)
+    params.push(pattern, pattern, pattern)
+  }
+  if (extraNames.length > 0) {
+    conds.push(`e.name IN (${extraNames.map(() => '?').join(',')})`)
+    params.push(...extraNames)
+  }
   return db
     .query(
-      `SELECT * FROM entities
-       WHERE lower(name) LIKE ? OR lower(display) LIKE ?
-       ORDER BY mention_count DESC, updated_at DESC LIMIT ?`,
+      `SELECT DISTINCT e.* FROM entities e
+       LEFT JOIN entity_aliases a ON a.entity_id = e.id
+       WHERE ${conds.join(' OR ')}
+       ORDER BY e.mention_count DESC, e.updated_at DESC
+       LIMIT ?`,
     )
-    .all(pattern, pattern, limit) as EntityRow[]
+    .all(...params, limit) as EntityRow[]
 }
 
 /** 实体描述（E2）：达到该提及数才值得生成一句话描述 */

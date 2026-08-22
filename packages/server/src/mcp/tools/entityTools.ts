@@ -17,7 +17,7 @@ import {
   listEntityMentions,
 } from '../../store/entities'
 import { toText, toolError, type ToolContext } from './helpers'
-import { dictDescriptionFor } from '../../termDict'
+import { dictCanonicalNamesMatching, dictDescriptionFor } from '../../termDict'
 
 const SNIPPET_LEN = 200
 
@@ -34,7 +34,11 @@ export function registerEntityTools(ctx: ToolContext): void {
       },
     },
     async ({ query, limit }) => {
-      const rows = listEntities(getDb(), { q: query, limit: limit as number })
+      const rows = listEntities(getDb(), {
+        q: query,
+        limit: limit as number,
+        extraNames: dictCanonicalNamesMatching(query),
+      })
       return {
         content: [
           toText({

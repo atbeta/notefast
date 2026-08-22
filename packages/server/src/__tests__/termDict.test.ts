@@ -29,7 +29,7 @@ import {
 import { registerMentions } from '../ai/entities'
 import { lexicalSearch } from '../lexicalSearch'
 import { entitySearch } from '../ai/entitySearch'
-import { findEntityByName, listEntities } from '../store/entities'
+import { deleteMentionsFromSource, findEntityByName, listEntities } from '../store/entities'
 import termDictRouter from '../api/termDict'
 import entitiesRouter from '../api/entities'
 
@@ -372,7 +372,7 @@ describe('REST 契约', () => {
       body: JSON.stringify({ terms: [{ name: '晶圆', aliases: ['wafer'] }] }),
     })
     expect(putRes.status).toBe(200)
-    const putBody = (await putRes.json()) as { count: number }
+    const putBody = (await putRes.json()) as { count: number; terms: Array<{ name: string; aliases: string[] }> }
     expect(putBody.count).toBe(1)
     // 自动归并已把 wafer 合并进晶圆
     expect(listEntities(getDb()).length).toBe(1)
@@ -386,6 +386,40 @@ describe('REST 契约', () => {
     const getRes2 = await termDictRouter.request('/')
     const body2 = (await getRes2.json()) as { terms: Array<{ name: string; aliases: string[] }> }
     expect(body2.terms).toEqual([{ name: '晶圆', aliases: ['wafer'] }])
+    // PUT 回写条目，UI 才能用服务端规范化结果刷新，不必再 GET
+    expect((putBody as { terms?: unknown }).terms).toEqual([{ name: '晶圆', aliases: ['wafer'] }])
+  })
+
+  test('实体页 / MCP 按词典别名能搜到标准实体（含 0 提及）', async () => {
+    writeDict([{ name: '晶圆', aliases: ['wafer', '晶圆片'] }])
+    const result = rebuildDictEntities()
+    expect(result.created).toBe(1)
+    expect(findEntityByName(getDb(), '晶圆')!.mention_count).toBe(0)
+
+    // store：别名 / 标准名都能列出
+    expect(listEntities(getDb(), { q: 'wafer' }).map((e) => e.name)).toEqual(['晶圆'])
+    expect(listEntities(getDb(), { q: '晶圆片' }).map((e) => e.name)).toEqual(['晶圆'])
+    expect(listEntities(getDb(), { q: '晶圆' }).map((e) => e.name)).toEqual(['晶圆'])
+
+    const res = await entitiesRouter.request('/?q=wafer')
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { entities: Array<{ name: string }> }
+    expect(body.entities.map((e) => e.name)).toEqual(['晶圆'])
+  })
+
+  test('无关提及归零清扫不误删词典新建的 0 提及实体', () => {
+    writeDict([{ name: '晶圆', aliases: ['wafer'] }])
+    rebuildDictEntities()
+    expect(findEntityByName(getDb(), '晶圆')).not.toBeNull()
+
+    const other = seedBlock('无关提及')
+    registerMentions(other, [{ anchor: '无关提及', kind: 'concept' }])
+    expect(findEntityByName(getDb(), '无关提及')).not.toBeNull()
+    deleteMentionsFromSource(getDb(), other)
+
+    expect(findEntityByName(getDb(), '无关提及')).toBeNull()
+    expect(findEntityByName(getDb(), '晶圆')).not.toBeNull()
+    expect(findEntityByName(getDb(), '晶圆')!.mention_count).toBe(0)
   })
 
   test('PUT 后词典立即生效（缓存失效）', async () => {
