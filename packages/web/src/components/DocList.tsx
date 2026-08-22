@@ -48,8 +48,8 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
     <div className="card-interactive px-3 py-2 group flex items-center gap-3">
       <div className="w-7 h-7 rounded-md bg-muted/70 text-foreground/55 grid place-items-center shrink-0 group-hover:bg-muted group-hover:text-foreground/80 transition-colors">
         {aiExclude
-          ? <EyeOff className="w-3.5 h-3.5" strokeWidth={1.5} />
-          : <FileText className="w-3.5 h-3.5" strokeWidth={1.5} />}
+          ? <EyeOff className="w-3.5 h-3.5" strokeWidth={1.75} />
+          : <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />}
       </div>
       <div className="min-w-0 flex-1">
         {editing ? (

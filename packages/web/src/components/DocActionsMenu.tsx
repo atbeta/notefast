@@ -27,6 +27,7 @@ import { api } from '../hooks/useAPI'
 import { useApiMutation } from '../hooks/useApiMutation'
 import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
 import { deliverExport, fetchDocExportFile } from '../lib/download'
+import { Input } from './ui'
 import ConfirmDialog from './ConfirmDialog'
 import ShareDialog from './ShareDialog'
 import { Tooltip, useToast } from './ui'
@@ -451,7 +452,7 @@ export default function DocActionsMenu({
           <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowRename(false)} />
           <div className="relative bg-card rounded-lg shadow-floating shadow-black/40 max-w-sm w-full mx-4 p-6 animate-fade-in">
             <h3 className="text-md font-medium text-foreground tracking-tight mb-3">{t('docActions.renameTitle')}</h3>
-            <input
+            <Input
               ref={renameInputRef}
               value={renameDraft}
               onChange={(e) => setRenameDraft(e.target.value)}
@@ -459,7 +460,7 @@ export default function DocActionsMenu({
                 if (e.key === 'Enter') { e.preventDefault(); void handleRenameSubmit() }
                 if (e.key === 'Escape') setShowRename(false)
               }}
-              className="w-full px-3 py-2 text-md rounded-md border border-border bg-background text-foreground focus:border-foreground/30"
+              className="py-2"
               placeholder={t('docActions.titlePlaceholder')}
               disabled={busy}
             />

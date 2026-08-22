@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Menu, Sparkles } from 'lucide-react'
+import { Menu, Search, Sparkles } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useRecordNavHistory } from '../hooks/useNavHistory'
 import { navHistorySnapshot } from '../lib/navHistory'
@@ -229,7 +229,7 @@ export default function Layout({ children, contentClassName }: { children: React
                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
                 aria-label={t('layout.search')}
               >
-                <SearchIcon />
+                <Search className="w-4 h-4" strokeWidth={1.75} />
               </button>
             </div>
           </div>
@@ -267,14 +267,5 @@ export default function Layout({ children, contentClassName }: { children: React
         />
       </div>
     </div>
-  )
-}
-
-function SearchIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
   )
 }

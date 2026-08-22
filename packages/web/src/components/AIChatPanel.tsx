@@ -547,7 +547,7 @@ export default function AIChatPanel({
           <div className="flex flex-col min-h-full p-4 pt-6 pb-5">
             <div className="text-center space-y-1.5 mb-5 shrink-0">
               <div className="w-9 h-9 mx-auto rounded-lg bg-primary-soft text-primary grid place-items-center mb-2">
-                <Sparkles className="w-4 h-4" strokeWidth={1.5} />
+                <Sparkles className="w-4 h-4" strokeWidth={1.75} />
               </div>
               <p className="text-md font-medium text-foreground">{t('chat.askKb')}</p>
               <p className="text-sm text-muted-foreground leading-relaxed px-2">
@@ -652,7 +652,7 @@ export default function AIChatPanel({
                   <>
                     {showSpinner && (
                       <div className="w-8 h-8 rounded-full bg-accent text-foreground flex items-center justify-center shrink-0">
-                        <MessageSquareText className="w-4 h-4" strokeWidth={1.5} />
+                        <MessageSquareText className="w-4 h-4" strokeWidth={1.75} />
                       </div>
                     )}
                     <div

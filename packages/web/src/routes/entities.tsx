@@ -19,7 +19,7 @@ import { useApiQuery } from '../hooks/useApiQuery'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
 import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
-import { EmptyState, ListRowsSkeleton, useToast } from '../components/ui'
+import { EmptyState, Input, ListRowsSkeleton, useToast } from '../components/ui'
 import { graphKindColor } from '../lib/graph'
 import { EntityMentions } from '../components/EntityPanel'
 import { entityKindLabel, type EntitySummary } from '../lib/entities'
@@ -209,12 +209,12 @@ export default function EntitiesPage() {
           <>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" strokeWidth={1.75} />
-              <input
+              <Input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t('entities.searchPlaceholder')}
-                className="w-full rounded-lg border border-border bg-card pl-9 pr-8 py-2 text-base text-foreground placeholder:text-muted-foreground/60 focus:border-primary/40"
+                className="rounded-lg bg-card pl-9 pr-8 py-2"
               />
               {searching && (
                 <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted-foreground/60" strokeWidth={1.75} />

@@ -352,7 +352,7 @@ export default function NewDocPage() {
               disabled={creating}
               className="btn-primary-custom"
             >
-              <Check className="w-3.5 h-3.5" strokeWidth={2.25} />
+              <Check className="w-3.5 h-3.5" strokeWidth={1.75} />
               {creating ? t('newDoc.creating') : t('newDoc.createAndOpen')}
             </button>
           </div>
@@ -407,7 +407,7 @@ export default function NewDocPage() {
           {zipResult && !zipImporting && (
             <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
               <p className="text-sm font-medium text-foreground flex items-center gap-2">
-                <Check className="w-4 h-4 text-success" strokeWidth={2.25} />
+                <Check className="w-4 h-4 text-success" strokeWidth={1.75} />
                 {t('newDoc.zipImported', { n: zipResult.imported })}
                 {zipResult.media_imported > 0 && (
                   <span className="text-xs font-normal text-muted-foreground">

@@ -70,7 +70,7 @@ export default function SharePage() {
   if (state.kind === 'notfound') {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center text-center px-6">
-        <FileWarning className="w-8 h-8 text-muted-foreground/60 mb-4" strokeWidth={1.5} />
+        <FileWarning className="w-8 h-8 text-muted-foreground/60 mb-4" strokeWidth={1.75} />
         <h1 className="text-lg font-medium text-foreground mb-1.5">{t('share.notFoundTitle')}</h1>
         <p className="text-base text-muted-foreground">{t('share.notFoundDesc')}</p>
       </div>

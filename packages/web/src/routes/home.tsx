@@ -10,7 +10,7 @@ import { usePinnedViews } from '../hooks/usePinnedViews'
 import DocList from '../components/DocList'
 import PageHeader from '../components/PageHeader'
 import TagFilter, { TagMatchHint } from '../components/TagFilter'
-import { Button, EmptyState, InlineError, ListRowsSkeleton, Tooltip } from '../components/ui'
+import { Button, EmptyState, InlineError, Input, ListRowsSkeleton, Tooltip } from '../components/ui'
 
 function viewTitle(params: URLSearchParams): string {
   if (params.get('untagged') === '1' || params.get('view') === 'untagged') return i18next.t('home.viewUntagged')
@@ -180,11 +180,11 @@ export default function HomePage() {
         <div className="fixed inset-0 z-sheet flex items-center justify-center bg-black/30" onClick={() => setShowPinModal(false)}>
           <div className="bg-card border border-border rounded-lg p-5 w-80 shadow-floating space-y-3" onClick={(e) => e.stopPropagation()}>
             <div className="text-md font-medium text-foreground">{t('home.pinViewTitle')}</div>
-            <input
+            <Input
               type="text"
               value={pinName}
               onChange={(e) => setPinName(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground/60 "
+              className="rounded-lg py-2"
               placeholder={t('home.pinViewPlaceholder')}
               autoFocus
               onKeyDown={(e) => {

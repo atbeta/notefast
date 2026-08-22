@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Key, Plus, Trash2, Copy, Check, X } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { currentLocale } from '../lib/time'
-import { ActionButton, EmptyState, PanelSkeleton, Tooltip, useToast } from './ui'
+import { ActionButton, EmptyState, Input, PanelSkeleton, Tooltip, useToast } from './ui'
 import { SettingsCard, StatusBadge } from './settings/ui'
 
 interface ApiTokenView {
@@ -111,12 +111,12 @@ export default function ApiTokensPanel() {
 
         {showForm && (
           <div className="rounded-lg border border-border p-4 space-y-4 bg-accent/20">
-            <input
+            <Input
               type="text"
               placeholder={t('apiTokens.namePlaceholder')}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground/40 "
+              className="py-2"
               autoFocus
             />
             <div className="flex items-center gap-6">

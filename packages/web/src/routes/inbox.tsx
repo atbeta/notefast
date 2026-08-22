@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Inbox, Plus, ArrowUpRight, Loader2 } from 'lucide-react'
+import { Inbox, Plus, ArrowUpRight } from 'lucide-react'
 import type { DocSummary } from '@notefast/core'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
@@ -16,7 +16,7 @@ import { useDocChanges } from '../hooks/useDocEvents'
 import { formatRelative, currentLocale } from '../lib/time'
 import DocActionsMenu from '../components/DocActionsMenu'
 import PageHeader from '../components/PageHeader'
-import { EmptyState, ListRowsSkeleton, Tooltip } from '../components/ui'
+import { Button, EmptyState, ListRowsSkeleton, Textarea, Tooltip } from '../components/ui'
 
 export default function InboxPage() {
   const { t } = useTranslation()
@@ -85,14 +85,9 @@ export default function InboxPage() {
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setShowCapture((v) => !v)}
-          className="btn-primary-custom shrink-0"
-        >
-          <Plus className="w-3.5 h-3.5" strokeWidth={2.25} />
+        <Button type="button" size="sm" className="shrink-0" onClick={() => setShowCapture((v) => !v)} icon={<Plus className="w-3.5 h-3.5" strokeWidth={1.75} />}>
           {t('inbox.capture')}
-        </button>
+        </Button>
       </PageHeader>
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
@@ -110,29 +105,20 @@ export default function InboxPage() {
               className="w-full text-md bg-transparent border-b border-border outline-none py-1.5 text-foreground placeholder:text-muted-foreground/50"
               autoFocus
             />
-            <textarea
+            <Textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder={t('inbox.bodyPlaceholder')}
               rows={5}
-              className="w-full text-base bg-muted/30 rounded-md border border-border/60 px-3 py-2 resize-y text-foreground placeholder:text-muted-foreground/50"
+              className="bg-muted/30 border-border/60 py-2"
             />
             <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowCapture(false)}
-                className="text-base px-3 py-1.5 text-muted-foreground hover:text-foreground"
-              >
+              <Button type="button" variant="ghost" size="sm" onClick={() => setShowCapture(false)}>
                 {t('common.cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={capturing || !notebookId}
-                className="btn-primary-custom"
-              >
-                {capturing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              </Button>
+              <Button type="submit" size="sm" loading={capturing} disabled={capturing || !notebookId}>
                 {t('inbox.save')}
-              </button>
+              </Button>
             </div>
           </form>
         )}
@@ -153,7 +139,7 @@ export default function InboxPage() {
                 className="card-interactive px-3 py-2 group flex items-center gap-3"
               >
                 <div className="w-7 h-7 rounded-md bg-muted/70 text-foreground/55 grid place-items-center shrink-0">
-                  <Inbox className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  <Inbox className="w-3.5 h-3.5" strokeWidth={1.75} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <Link to={`/doc/${doc.id}`} className="block">

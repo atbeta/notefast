@@ -20,7 +20,7 @@ import { useAiCapabilities } from '../hooks/useAiCapabilities'
 import PageHeader from '../components/PageHeader'
 import EntityGraph from '../components/EntityGraph'
 import { EntityMentions } from '../components/EntityPanel'
-import { EmptyState, InlineError, Tooltip } from '../components/ui'
+import { EmptyState, InlineError, Input, Tooltip } from '../components/ui'
 import { entityKindLabel, type EntitySummary } from '../lib/entities'
 import {
   GRAPH_NOTE_COLOR,
@@ -353,12 +353,12 @@ export default function GraphPage() {
           {/* 搜索聚焦 */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/60" strokeWidth={1.75} />
-            <input
+            <Input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={mode === 'docs' ? t('graph.searchPlaceholderDocs') : t('graph.searchPlaceholderEntities')}
-              className="w-48 rounded-lg border border-border bg-card pl-8 pr-7 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/40"
+              className="w-48 rounded-lg bg-card pl-8 pr-7 text-sm"
             />
             {searching && (
               <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 animate-spin text-muted-foreground/60" strokeWidth={1.75} />

@@ -644,7 +644,7 @@ function EditorInline({
                   className="pointer-events-none absolute inset-0 z-sticky flex items-center justify-center bg-primary/8 border-2 border-dashed border-primary/40 rounded-md animate-fade-in"
                 >
                   <div className="flex flex-col items-center gap-2 text-primary">
-                    <ImageDown className="w-7 h-7" strokeWidth={1.5} />
+                    <ImageDown className="w-7 h-7" strokeWidth={1.75} />
                     <span className="text-base font-medium">
                       {t('mdEditor.dropImageHint', { defaultValue: '松开上传图片' })}
                     </span>

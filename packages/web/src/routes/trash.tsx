@@ -130,7 +130,7 @@ export default function TrashPage() {
             {docs.map((doc) => (
               <div key={doc.id} className="card-interactive px-3 py-2 group flex items-center gap-3">
                 <div className="w-7 h-7 rounded-md bg-muted/70 text-foreground/55 grid place-items-center shrink-0">
-                  <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="font-medium text-md text-foreground tracking-[-0.005em] truncate leading-snug">

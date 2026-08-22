@@ -8,8 +8,9 @@
 
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Lock, Loader2, Check } from 'lucide-react'
+import { Lock, Check } from 'lucide-react'
 import { saveSessionToken } from '../hooks/useAPI'
+import { Button, Input } from './ui'
 
 export default function AuthPrompt() {
   const { t } = useTranslation()
@@ -65,7 +66,7 @@ export default function AuthPrompt() {
 
         <div>
           <label className="field-label" htmlFor="auth-pw">{t('auth.password')}</label>
-          <input
+          <Input
             id="auth-pw"
             type="password"
             autoFocus
@@ -74,7 +75,7 @@ export default function AuthPrompt() {
             onChange={(e) => { setPassword(e.target.value); setError('') }}
             placeholder="••••••••"
             disabled={submitting}
-            className="input-mono"
+            mono
           />
           {error && (
             <p className="mt-1.5 text-xs text-destructive">{error}</p>
@@ -104,20 +105,9 @@ export default function AuthPrompt() {
           </p>
         </div>
 
-        <button
-          type="submit"
-          disabled={!password.trim() || submitting}
-          className="btn-primary-custom w-full justify-center"
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              {t('auth.loggingIn')}
-            </>
-          ) : (
-            t('auth.login')
-          )}
-        </button>
+        <Button type="submit" fullWidth loading={submitting} disabled={!password.trim() || submitting}>
+          {t('auth.login')}
+        </Button>
       </form>
     </div>
   )

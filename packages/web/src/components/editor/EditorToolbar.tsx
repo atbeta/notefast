@@ -126,42 +126,42 @@ export default function EditorToolbar({
         {mode === 'edit' && (
           <>
         <IconBtn title={t('editorToolbar.h1')} onClick={() => insertAtCursor('\n# ')}>
-          <Heading1 className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <Heading1 className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
         <IconBtn title={t('editorToolbar.h2')} onClick={() => insertAtCursor('\n## ')}>
-          <Heading2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <Heading2 className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
         <IconBtn title={t('editorToolbar.h3')} onClick={() => insertAtCursor('\n### ')}>
-          <Heading3 className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <Heading3 className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
         <ToolbarDivider />
         <IconBtn title={t('editorToolbar.bulletList')} onClick={() => insertAtCursor('\n- ')}>
-          <List className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <List className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
         <IconBtn title={t('editorToolbar.orderedList')} onClick={() => insertAtCursor('\n1. ')}>
-          <ListOrdered className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <ListOrdered className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
         <IconBtn title={t('editorToolbar.quote')} onClick={() => insertAtCursor('\n> ')}>
-          <Quote className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <Quote className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
         <IconBtn title={t('editorToolbar.codeBlock')} onClick={() => insertAtCursor('\n```\n\n```\n', { cursorOffset: 5 })}>
-          <Code className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <Code className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
         <IconBtn title={t('editorToolbar.insertTable')} onClick={() => editorRef.current?.insertTable()}>
-          <Table className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <Table className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
         <ToolbarDivider />
         <IconBtn title={t('editorToolbar.bold', { shortcut: shortcutLabel(['mod', 'B']) })} onClick={() => wrapSelection('**')}>
-          <Bold className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <Bold className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
         <IconBtn title={t('editorToolbar.italic', { shortcut: shortcutLabel(['mod', 'I']) })} onClick={() => wrapSelection('*')}>
-          <Italic className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <Italic className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
         <IconBtn title={t('editorToolbar.inlineCode', { shortcut: shortcutLabel(['mod', 'E']) })} onClick={() => wrapSelection('`')}>
-          <Code className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <Code className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
         <IconBtn title={t('editorToolbar.link', { shortcut: shortcutLabel(['mod', '⇧K']) })} onClick={handleInsertLink}>
-          <Link2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <Link2 className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
         <Tooltip
           label={
@@ -190,7 +190,7 @@ export default function EditorToolbar({
             {uploadingImage ? (
               <UploadProgressRing progress={uploadProgress} />
             ) : (
-              <ImagePlus className="w-[15px] h-[15px]" strokeWidth={1.75} />
+              <ImagePlus className="w-4 h-4" strokeWidth={1.75} />
             )}
           </button>
         </Tooltip>
@@ -344,7 +344,7 @@ function AiContinueControls({
           </button>
         </Tooltip>
         <IconBtn title={t('editorToolbar.continueDiscard')} onClick={onDiscard}>
-          <X className="w-[15px] h-[15px]" strokeWidth={1.75} />
+          <X className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
       </div>
     )

@@ -16,7 +16,7 @@ import { useDocChanges } from '../hooks/useDocEvents'
 import { formatRelative } from '../lib/time'
 import DocActionsMenu from '../components/DocActionsMenu'
 import PageHeader from '../components/PageHeader'
-import { EmptyState, ListRowsSkeleton, Tooltip } from '../components/ui'
+import { EmptyState, Input, ListRowsSkeleton, Tooltip } from '../components/ui'
 
 export default function ArchivedPage() {
   const { t } = useTranslation()
@@ -79,7 +79,7 @@ export default function ArchivedPage() {
       className="card-interactive px-3 py-2 group flex items-center gap-3"
     >
       <div className="w-7 h-7 rounded-md bg-muted/70 text-foreground/55 grid place-items-center shrink-0">
-        <Archive className="w-3.5 h-3.5" strokeWidth={1.5} />
+        <Archive className="w-3.5 h-3.5" strokeWidth={1.75} />
       </div>
       <div className="min-w-0 flex-1">
         <Link to={`/doc/${doc.id}`} className="block">
@@ -153,12 +153,12 @@ export default function ArchivedPage() {
           <>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" strokeWidth={1.75} />
-              <input
+              <Input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t('archived.searchPlaceholder')}
-                className="w-full rounded-lg border border-border bg-card pl-9 pr-8 py-2 text-base text-foreground placeholder:text-muted-foreground/60 "
+                className="rounded-lg bg-card pl-9 pr-8 py-2"
               />
               {searching && (
                 <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted-foreground/60" strokeWidth={1.75} />

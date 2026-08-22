@@ -1,7 +1,7 @@
 import { useState, useEffect, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle2, AlertCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
-import { HelpTip } from '../ui'
+import { HelpTip, Input } from '../ui'
 
 export function SettingsSection({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
@@ -147,14 +147,15 @@ export function InlineField({
       </div>
 
       <div className="space-y-2">
-        <input
+        <Input
           type={type}
           value={value}
           onChange={(e) => onChange?.(e.target.value)}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={`w-full px-3 py-1.5 rounded-md border ${localStatus === 'error' ? 'border-destructive/50' : 'border-border focus:border-primary/50'} bg-background transition-colors placeholder:text-muted-foreground/40 ${mono ? 'font-mono text-base' : 'text-md'}`}
+          invalid={localStatus === 'error'}
+          mono={mono}
         />
         {localStatus === 'error' && statusMessage && (
           <div className="text-xs text-destructive flex items-center gap-1 mt-1">
