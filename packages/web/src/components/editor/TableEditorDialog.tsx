@@ -250,13 +250,9 @@ export default function TableEditorDialog({
             <HelpTip label={t('tableEditor.markdownHint')} />
           </div>
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => finish(true)}
-              className="btn-ghost-custom h-7 px-2.5 text-sm"
-            >
+            <Button type="button" variant="ghost" size="sm" className="min-w-0" onClick={() => finish(true)}>
               {t('tableEditor.editSource')}
-            </button>
+            </Button>
             <Button type="button" variant="primary" size="sm" className="min-w-0" onClick={() => finish(false)}>
               {t('tableEditor.done')}
             </Button>

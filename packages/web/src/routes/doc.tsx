@@ -790,7 +790,7 @@ useEffect(() => {
                   ? <Globe className="w-3.5 h-3.5" strokeWidth={1.75} />
                   : <Share2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
                 {docShared && (
-                  <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform ${showShare ? 'rotate-180' : ''}`} strokeWidth={2} />
+                  <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform ${showShare ? 'rotate-180' : ''}`} strokeWidth={1.75} />
                 )}
               </button>
             </Tooltip>
@@ -1035,7 +1035,7 @@ useEffect(() => {
                     >
                       <ChevronDown
                         className={`w-3.5 h-3.5 transition-transform ${tocOpen ? '' : '-rotate-90'}`}
-                        strokeWidth={2}
+                        strokeWidth={1.75}
                       />
                       {t('doc.tableOfContents')}
                       <span className="text-xs text-muted-foreground/60 tabular-nums ml-0.5">
@@ -1445,7 +1445,7 @@ function DemoModeButton() {
               >
                 <Check
                   className={`w-3.5 h-3.5 shrink-0 ${active ? 'opacity-100' : 'opacity-0'}`}
-                  strokeWidth={2}
+                  strokeWidth={1.75}
                   aria-hidden
                 />
                 <span className="font-mono tabular-nums">{pct}%</span>

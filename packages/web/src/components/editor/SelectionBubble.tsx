@@ -132,7 +132,7 @@ export default function SelectionBubble({
       ) : hasDraft ? (
         <>
           <button type="button" onClick={onAccept} className={btnCls}>
-            <Check className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+            <Check className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
             {t('selectionBubble.accept')}
           </button>
           <button type="button" onClick={onDismiss} className={btnCls}>

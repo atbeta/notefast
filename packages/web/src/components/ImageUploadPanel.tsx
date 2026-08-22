@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ImageIcon, X } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { refreshImageUploadEnabled } from '../hooks/useImageUploadEnabled'
-import { useToast } from './ui'
+import { Button, Input, useToast } from './ui'
 
 interface ImageUploadConfig {
   version: 1
@@ -137,12 +137,12 @@ export default function ImageUploadPanel() {
             <label htmlFor="iu-command" className="text-sm font-medium text-muted-foreground block mb-1">
               {t('settings.imageUpload.command')}
             </label>
-            <input
+            <Input
               id="iu-command"
               value={command}
               onChange={(e) => setCommand(e.target.value)}
               placeholder="picgo upload / picfast upload / /path/to/script"
-              className="input-mono w-full"
+              mono
               spellCheck={false}
             />
             <p className="text-xs text-muted-foreground/70 mt-1">{t('settings.imageUpload.commandHint')}</p>
@@ -152,12 +152,12 @@ export default function ImageUploadPanel() {
               <label htmlFor="iu-args" className="text-sm font-medium text-muted-foreground block mb-1">
                 {t('settings.imageUpload.args')}
               </label>
-              <input
+              <Input
                 id="iu-args"
                 value={argsText}
                 onChange={(e) => setArgsText(e.target.value)}
                 placeholder="-c /path/to/config"
-                className="input-mono w-full"
+                mono
                 spellCheck={false}
               />
             </div>
@@ -165,14 +165,14 @@ export default function ImageUploadPanel() {
               <label htmlFor="iu-timeout" className="text-sm font-medium text-muted-foreground block mb-1">
                 {t('settings.imageUpload.timeout')}
               </label>
-              <input
+              <Input
                 id="iu-timeout"
                 type="number"
                 min={1}
                 max={300}
                 value={timeoutSec}
                 onChange={(e) => setTimeoutSec(Number(e.target.value) || 30)}
-                className="input-mono w-full"
+                mono
               />
             </div>
           </div>
@@ -190,7 +190,7 @@ export default function ImageUploadPanel() {
                   className="text-muted-foreground/60 hover:text-foreground transition-colors shrink-0"
                   aria-label={t('common.close')}
                 >
-                  <X className="w-3.5 h-3.5" strokeWidth={2} />
+                  <X className="w-3.5 h-3.5" strokeWidth={1.75} />
                 </button>
               </div>
               <p className="text-xs text-destructive/90 break-all leading-relaxed">{lastError.message}</p>
@@ -220,19 +220,23 @@ export default function ImageUploadPanel() {
 
       <div className="flex items-center justify-end gap-2">
         {mode === 'auto' && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={() => void handleTest()}
             disabled={testing || !command.trim()}
-            className="btn-ghost-custom"
           >
             {testing ? t('common.loading') : t('settings.imageUpload.test')}
-          </button>
+          </Button>
         )}
-        <button type="button" onClick={() => void handleSave()} disabled={saving} className="btn-primary-custom">
-          <ImageIcon className="w-3.5 h-3.5" strokeWidth={2} />
+        <Button
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={saving}
+          icon={<ImageIcon className="w-3.5 h-3.5" strokeWidth={1.75} />}
+        >
           {saving ? t('common.saving') : t('common.save')}
-        </button>
+        </Button>
       </div>
     </div>
   )

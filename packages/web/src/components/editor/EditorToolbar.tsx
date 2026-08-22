@@ -339,7 +339,7 @@ function AiContinueControls({
             onClick={onAccept}
             className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-sm font-medium bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] hover:bg-[rgb(var(--primary-hover))] transition-colors"
           >
-            <Check className="w-3.5 h-3.5" strokeWidth={2} />
+            <Check className="w-3.5 h-3.5" strokeWidth={1.75} />
             {t('editorToolbar.continueAccept')}
           </button>
         </Tooltip>

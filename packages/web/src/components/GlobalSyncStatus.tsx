@@ -28,19 +28,19 @@ export default function GlobalSyncStatus() {
   let tooltip: string
 
   if (status.running) {
-    icon = <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" strokeWidth={2} />
+    icon = <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" strokeWidth={1.75} />
     label = t('syncStatus.syncing')
     tooltip = t('syncStatus.syncingTooltip')
   } else if (status.lastError) {
-    icon = <AlertCircle className="w-3.5 h-3.5 text-destructive" strokeWidth={2} />
+    icon = <AlertCircle className="w-3.5 h-3.5 text-destructive" strokeWidth={1.75} />
     label = t('syncStatus.syncFailed')
     tooltip = t('syncStatus.syncFailedWithError', { error: status.lastError })
   } else if ((status.pendingChanges ?? 0) > 0) {
-    icon = <Cloud className="w-3.5 h-3.5 text-warning" strokeWidth={2} />
+    icon = <Cloud className="w-3.5 h-3.5 text-warning" strokeWidth={1.75} />
     label = t('syncStatus.pendingChanges', { n: status.pendingChanges })
     tooltip = t('syncStatus.hasPendingChanges')
   } else {
-    icon = <CheckCircle2 className="w-3.5 h-3.5 text-success" strokeWidth={2} />
+    icon = <CheckCircle2 className="w-3.5 h-3.5 text-success" strokeWidth={1.75} />
     label = status.lastSuccessAt ? t('syncStatus.synced') : t('syncStatus.pending')
     tooltip = status.lastSuccessAt
       ? t('syncStatus.syncedAt', { time: formatIsoDateTime(status.lastSuccessAt) })

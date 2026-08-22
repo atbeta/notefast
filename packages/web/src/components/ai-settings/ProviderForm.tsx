@@ -7,7 +7,7 @@ import {
   type ProviderDefinition,
   type ProviderPresetId,
 } from '@notefast/core'
-import { FieldRow, Tooltip } from '../ui'
+import { FieldRow, Input, Tooltip } from '../ui'
 import { InlineField } from '../settings/ui'
 import type { FieldErrors } from './validation'
 
@@ -33,9 +33,6 @@ export function ProviderForm({
   const errBaseUrl = fieldErrors?.baseUrl
   const errModel = mode === 'chat' ? fieldErrors?.chatModel : fieldErrors?.embeddingModel
   const errTimeout = fieldErrors?.timeoutMs
-  const inputErrClass = 'border-destructive'
-  const inputOkClass = 'border-border'
-
   const availablePresets = PROVIDER_PRESET_IDS.filter(id => PRESETS[id].supportedModes.includes(mode))
 
   const handlePresetChange = (newPreset: ProviderPresetId) => {
@@ -120,7 +117,7 @@ export function ProviderForm({
         </div>
         <div className="md:col-span-2">
           <FieldRow label={modelLabel} error={errModel}>
-            <input
+            <Input
               type="text"
               value={mode === 'chat' ? value.chatModel : value.embeddingModel}
               onChange={(e) =>
@@ -133,7 +130,9 @@ export function ProviderForm({
               list={`known-${mode}-models`}
               placeholder={mode === 'chat' ? 'deepseek-chat / gpt-4o-mini' : mode === 'embedding' ? 'jina-embeddings-v3 / voyage-3' : 'jina-reranker-v3 / voyage-rerank-2'}
               aria-invalid={!!errModel}
-              className={`w-full px-3 py-1.5 text-sm rounded-md border bg-background font-mono ${errModel ? inputErrClass : inputOkClass}`}
+              invalid={!!errModel}
+              mono
+              className="text-sm"
             />
             <datalist id={`known-${mode}-models`}>
               {knownModels.map((m) => <option key={m} value={m} />)}
@@ -189,19 +188,21 @@ function ExtraHeadersEditor({
     <div className="space-y-2">
       {entries.map(([k, v], idx) => (
         <div key={idx} className="flex items-center gap-2">
-          <input
+          <Input
             type="text"
             value={k}
             onChange={(e) => update(idx, [e.target.value, v])}
             placeholder="Header-Name"
-            className="flex-1 px-2 py-1 text-xs rounded-md border border-border bg-background font-mono"
+            mono
+            className="flex-1 text-xs"
           />
-          <input
+          <Input
             type="text"
             value={v}
             onChange={(e) => update(idx, [k, e.target.value])}
             placeholder="value"
-            className="flex-1 px-2 py-1 text-xs rounded-md border border-border bg-background font-mono"
+            mono
+            className="flex-1 text-xs"
           />
           <button type="button" onClick={() => remove(idx)} className="p-1 text-muted-foreground hover:text-destructive">
             <X className="w-3 h-3" />

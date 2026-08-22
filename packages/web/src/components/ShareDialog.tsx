@@ -13,7 +13,7 @@ import i18next from '../i18n'
 import { Check, Globe, Loader2, Link2, Trash2 } from 'lucide-react'
 import { api, ApiError } from '../hooks/useAPI'
 import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
-import { Tooltip, useToast } from './ui'
+import { Input, Tooltip, useToast } from './ui'
 import { currentLocale } from '../lib/time'
 
 type ExpiryChoice = 'never' | '1' | '7' | '30'
@@ -242,11 +242,12 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
             </div>
 
             <div className="flex items-center gap-1.5">
-              <input
+              <Input
                 readOnly
                 value={shareUrl}
                 onFocus={(e) => e.target.select()}
-                className="flex-1 min-w-0 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-mono text-foreground focus:border-foreground/25"
+                mono
+                className="flex-1 min-w-0 text-xs"
               />
               <Tooltip label={t('share.copyLink')}>
                 <button
@@ -255,7 +256,7 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
                   className="shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-border text-sm text-foreground hover:bg-muted transition-colors"
                 >
                   {copied
-                    ? <Check className="w-3.5 h-3.5 text-green-600" strokeWidth={2} />
+                    ? <Check className="w-3.5 h-3.5 text-success" strokeWidth={1.75} />
                     : <Link2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
                   {copied ? t('common.copied') : t('common.copy')}
                 </button>
@@ -307,7 +308,7 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
               disabled={busy}
               className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-base font-medium bg-foreground text-background rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2} />}
+              {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />}
               {t('share.enable')}
             </button>
           </>

@@ -87,11 +87,11 @@ export default function ConfirmDialog({
         <div className="flex items-start gap-3.5 mb-6">
           {effectiveTone === 'destructive' ? (
             <div className="w-8 h-8 rounded-md bg-destructive/10 flex items-center justify-center shrink-0 mt-0.5">
-              <AlertTriangle className="w-4 h-4 text-destructive/90" strokeWidth={2} />
+              <AlertTriangle className="w-4 h-4 text-destructive/90" strokeWidth={1.75} />
             </div>
           ) : (
             <div className="w-8 h-8 rounded-md bg-secondary flex items-center justify-center shrink-0 mt-0.5">
-              <Info className="w-4 h-4 text-muted-foreground" strokeWidth={2} />
+              <Info className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
             </div>
           )}
           <div className="min-w-0">

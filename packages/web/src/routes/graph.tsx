@@ -370,7 +370,7 @@ export default function GraphPage() {
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground transition-colors"
                 aria-label={t('graph.clear')}
               >
-                <X className="w-3 h-3" strokeWidth={2} />
+                <X className="w-3 h-3" strokeWidth={1.75} />
               </button>
             )}
             {(mode === 'docs' ? docSuggestions.length > 0 : suggestions.length > 0) && (

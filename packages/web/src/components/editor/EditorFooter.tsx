@@ -43,7 +43,7 @@ export default function EditorFooter({
         {autoSaveStatus === 'saving' ? (
           <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
         ) : autoSaveStatus === 'saved' ? (
-          <Check className="w-3 h-3 text-green-500" strokeWidth={2} />
+          <Check className="w-3 h-3 text-success" strokeWidth={1.75} />
         ) : autoSaveStatus === 'error' ? (
           <AlertTriangle className="w-3 h-3 text-warning" strokeWidth={1.75} />
         ) : (

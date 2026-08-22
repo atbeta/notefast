@@ -16,7 +16,7 @@ import { formatRelative } from '../lib/time'
 import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
 import ImageLightbox from '../components/ImageLightbox'
-import { EmptyState, InlineError, ListRowsSkeleton, Tooltip, useToast, CopyButton } from '../components/ui'
+import { Button, EmptyState, InlineError, ListRowsSkeleton, Tooltip, useToast, CopyButton } from '../components/ui'
 
 const PAGE_SIZE = 60
 
@@ -246,15 +246,17 @@ export default function ResourcesPage() {
           {/* 存量补传：仅图床已启用时显示（否则点了必 400） */}
           {imageUpload.enabled && (
             <Tooltip label={t('resources.uploadExistingHint')}>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
+                className="shrink-0 min-w-0"
                 onClick={() => void handleBatchUpload()}
                 disabled={batchStarting || batch?.running}
-                className="btn-ghost-custom shrink-0"
+                icon={<CloudUpload className="w-3.5 h-3.5" strokeWidth={1.75} />}
               >
-                <CloudUpload className="w-3.5 h-3.5" strokeWidth={2} />
                 {batchStarting ? t('common.loading') : t('resources.uploadExisting')}
-              </button>
+              </Button>
             </Tooltip>
           )}
           {/* 一键清理未引用（与回收站「清空」同 destructive 样式；宽限期 0 立即清） */}

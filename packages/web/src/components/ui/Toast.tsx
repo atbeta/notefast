@@ -294,13 +294,13 @@ function Icon({ variant }: { variant: ToastVariant }) {
   const cls = 'w-3 h-3'
   switch (variant) {
     case 'success':
-      return <CheckCircle2 className={cls} strokeWidth={2} />
+      return <CheckCircle2 className={cls} strokeWidth={1.75} />
     case 'error':
-      return <AlertCircle className={cls} strokeWidth={2} />
+      return <AlertCircle className={cls} strokeWidth={1.75} />
     case 'info':
-      return <Info className={cls} strokeWidth={2} />
+      return <Info className={cls} strokeWidth={1.75} />
     case 'warning':
-      return <AlertTriangle className={cls} strokeWidth={2} />
+      return <AlertTriangle className={cls} strokeWidth={1.75} />
     case 'loading':
       return null
   }

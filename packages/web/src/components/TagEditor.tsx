@@ -64,7 +64,7 @@ export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
             className="w-4 h-4 rounded-full grid place-items-center text-muted-foreground/50 hover:text-destructive hover:bg-background/60 transition-colors disabled:opacity-40"
             aria-label={t('tagEditor.removeTag', { tag })}
           >
-            <X className="w-3 h-3" strokeWidth={2} />
+            <X className="w-3 h-3" strokeWidth={1.75} />
           </button>
         </span>
       ))}
@@ -76,7 +76,7 @@ export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
         aria-label={t('tagEditor.pickTag')}
         className="inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full border border-dashed border-border/70 hover:border-foreground/30 text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-40"
       >
-        <Plus className="w-3 h-3" strokeWidth={2} />
+        <Plus className="w-3 h-3" strokeWidth={1.75} />
         <span className="text-xs">{t('tagEditor.addTag')}</span>
         {saving && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground/60" />}
       </button>

@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BookMarked, Plus, RefreshCw, Trash2, Search, Pencil, X, Download, Upload, FileUp } from 'lucide-react'
 import { api } from '../hooks/useAPI'
-import { ActionButton, Tooltip, useToast } from './ui'
+import { ActionButton, Input, Textarea, Tooltip, useToast } from './ui'
 import { SettingsCard } from './settings/ui'
 
 interface TermDictEntry {
@@ -312,13 +312,13 @@ export default function TermDictPanel() {
             )
           )}
           <div className="flex-1 min-w-[140px]" />
-          <div className="relative">
+          <div className="relative w-52">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60" strokeWidth={1.75} />
-            <input
+            <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('settings.termDict.searchPlaceholder')}
-              className="pl-8 pr-3 py-1.5 w-52 rounded-md border border-border/60 bg-background text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-foreground/40"
+              className="pl-8 text-sm"
             />
           </div>
           <ActionButton variant="secondary" size="sm" onAction={startNew}>
@@ -341,12 +341,12 @@ export default function TermDictPanel() {
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-3">
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">{t('settings.termDict.nameLabel')}</label>
-                <input
+                <Input
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder={t('settings.termDict.nameLabel')}
                   autoFocus
-                  className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-base text-foreground placeholder:text-muted-foreground/40 "
+                  invalid={formDup}
                 />
                 {formDup && <p className="text-2xs text-destructive">{t('settings.termDict.nameDuplicate')}</p>}
               </div>
@@ -373,7 +373,7 @@ export default function TermDictPanel() {
                   <span key={a} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-muted/70 text-xs font-mono text-foreground/85">
                     {a}
                     <button type="button" onClick={() => removeAlias(a)} className="w-3.5 h-3.5 rounded-full grid place-items-center text-muted-foreground/50 hover:text-destructive">
-                      <X className="w-2.5 h-2.5" strokeWidth={2} />
+                      <X className="w-2.5 h-2.5" strokeWidth={1.75} />
                     </button>
                   </span>
                 ))}
@@ -395,12 +395,12 @@ export default function TermDictPanel() {
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">{t('settings.termDict.descriptionLabel')}</label>
-              <textarea
+              <Textarea
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 placeholder={t('settings.termDict.descriptionPlaceholder')}
                 rows={2}
-                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/40  resize-y"
+                className="text-sm"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -414,13 +414,14 @@ export default function TermDictPanel() {
         {importOpen && (
           <div className="rounded-lg border border-border p-4 space-y-3 bg-accent/20">
             <div className="text-sm text-muted-foreground">{t('settings.termDict.importHint')}</div>
-            <textarea
+            <Textarea
               value={importText}
               onChange={(e) => setImportText(e.target.value)}
               rows={5}
               spellCheck={false}
               placeholder={t('settings.termDict.editorPlaceholder')}
-              className="w-full rounded-md border border-border bg-background p-2.5 font-mono text-sm text-foreground "
+              mono
+              className="p-2.5 text-sm"
             />
             {importError && <p className="text-xs text-destructive">{importError}</p>}
             <div className="flex items-center gap-2">

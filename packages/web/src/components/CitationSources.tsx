@@ -85,7 +85,7 @@ export default function CitationSources({
             aria-expanded={diagOpen}
           >
             {t('chat.retrievalDetail')}
-            <ChevronRight className={`w-3 h-3 transition-transform ${diagOpen ? 'rotate-90' : ''}`} strokeWidth={2} />
+            <ChevronRight className={`w-3 h-3 transition-transform ${diagOpen ? 'rotate-90' : ''}`} strokeWidth={1.75} />
           </button>
         )}
       </div>

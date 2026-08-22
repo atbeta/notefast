@@ -83,7 +83,7 @@ export function Button({
   const leading = loading ? (
     <Loader2 className="w-3.5 h-3.5 animate-spin" />
   ) : justSaved ? (
-    <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+    <Check className="w-3.5 h-3.5" strokeWidth={1.75} />
   ) : icon ? (
     icon
   ) : null

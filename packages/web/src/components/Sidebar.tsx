@@ -120,7 +120,7 @@ function SidebarSectionLabel({
         </span>
         <ChevronDown
           className={`w-3 h-3 text-sidebar-muted/50 transition-transform ${open ? '' : '-rotate-90'}`}
-          strokeWidth={2}
+          strokeWidth={1.75}
         />
       </button>
     )
@@ -192,7 +192,7 @@ function PinnedViewItem({
           />
         ) : (
           <span className="flex items-center gap-1.5">
-            <Star className="w-[11px] h-[11px] shrink-0" strokeWidth={2} />
+            <Star className="w-[11px] h-[11px] shrink-0" strokeWidth={1.75} />
             {view.name}
           </span>
         )}
@@ -207,7 +207,7 @@ function PinnedViewItem({
           className="p-0.5 rounded-md opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity shrink-0"
           aria-label={t('sidebar.unpin')}
         >
-          <X className="w-3 h-3" strokeWidth={2} />
+          <X className="w-3 h-3" strokeWidth={1.75} />
         </button>
       </Tooltip>
     </div>

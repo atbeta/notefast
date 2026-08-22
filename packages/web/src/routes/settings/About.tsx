@@ -67,7 +67,7 @@ export default function SettingsAbout() {
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[var(--radius-btn)] border border-border bg-background text-base font-medium text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               {checking ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2} />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
               ) : (
                 <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
               )}

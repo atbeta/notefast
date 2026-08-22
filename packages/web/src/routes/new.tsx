@@ -9,7 +9,7 @@ import PageHeader from '../components/PageHeader'
 import SubNavTabs from '../components/SubNavTabs'
 import TagPickerPopover from '../components/TagPickerPopover'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
-import { Tooltip, useToast } from '../components/ui'
+import { Button, Textarea, Tooltip, useToast } from '../components/ui'
 import { classifyImportDrop, missingLocalImagesForImport } from '../lib/importDrop'
 
 export default function NewDocPage() {
@@ -277,13 +277,14 @@ export default function NewDocPage() {
               <label htmlFor="doc-markdown" className="text-sm font-medium text-muted-foreground">{t('newDoc.markdownLabel')}</label>
               <span className="text-xs text-muted-foreground/60">{t('newDoc.optional')}</span>
             </div>
-            <textarea
+            <Textarea
               id="doc-markdown"
               value={markdown}
               onChange={(e) => setMarkdown(e.target.value)}
               placeholder={t('newDoc.markdownPlaceholder')}
               rows={9}
-              className="input-mono"
+              mono
+              className="min-h-[12rem] py-2.5 text-sm leading-relaxed"
             />
           </div>
 
@@ -305,7 +306,7 @@ export default function NewDocPage() {
                     onClick={() => handleRemoveTag(tag)}
                     className="w-4 h-4 rounded-full grid place-items-center text-muted-foreground/50 hover:text-destructive hover:bg-background/60 transition-colors"
                   >
-                    <X className="w-3 h-3" strokeWidth={2} />
+                    <X className="w-3 h-3" strokeWidth={1.75} />
                   </button>
                 </span>
               ))}
@@ -316,7 +317,7 @@ export default function NewDocPage() {
                 aria-label={t('tagEditor.pickTag')}
                 className="inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full border border-dashed border-border/70 hover:border-foreground/30 text-muted-foreground/70 hover:text-foreground transition-colors"
               >
-                <Plus className="w-3 h-3 text-muted-foreground/60" strokeWidth={2} />
+                <Plus className="w-3 h-3 text-muted-foreground/60" strokeWidth={1.75} />
                 <span className="text-xs">{t('tagEditor.addTag')}</span>
               </button>
               {pickerOpen && (
@@ -339,22 +340,16 @@ export default function NewDocPage() {
           )}
 
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-border/60">
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="btn-ghost-custom"
-            >
-              <X className="w-3.5 h-3.5" />
+            <Button type="button" variant="ghost" onClick={handleCancel} icon={<X className="w-3.5 h-3.5" strokeWidth={1.75} />}>
               {t('common.cancel')}
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={creating}
-              className="btn-primary-custom"
+              icon={<Check className="w-3.5 h-3.5" strokeWidth={1.75} />}
             >
-              <Check className="w-3.5 h-3.5" strokeWidth={1.75} />
               {creating ? t('newDoc.creating') : t('newDoc.createAndOpen')}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -433,22 +428,21 @@ export default function NewDocPage() {
                 <p className="text-xs text-destructive">{error}</p>
               )}
               <div className="flex items-center justify-end gap-2 pt-1">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => { setZipResult(null); setError('') }}
-                  className="btn-ghost-custom"
+                  icon={<Upload className="w-3.5 h-3.5" strokeWidth={1.75} />}
                 >
-                  <Upload className="w-3.5 h-3.5" />
                   {t('newDoc.importAnother')}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={() => navigate('/')}
-                  className="btn-primary-custom"
+                  icon={<ArrowLeft className="w-3.5 h-3.5" strokeWidth={1.75} />}
                 >
-                  <ArrowLeft className="w-3.5 h-3.5" />
                   {t('newDoc.backToLibrary')}
-                </button>
+                </Button>
               </div>
             </div>
           )}
