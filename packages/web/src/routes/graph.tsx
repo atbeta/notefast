@@ -374,7 +374,7 @@ export default function GraphPage() {
               </button>
             )}
             {(mode === 'docs' ? docSuggestions.length > 0 : suggestions.length > 0) && (
-              <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-lg border border-border bg-card shadow-floating overflow-hidden">
+              <div className="absolute left-0 right-0 top-full mt-1 z-header rounded-lg border border-border bg-card shadow-floating overflow-hidden">
                 {(mode === 'docs' ? docSuggestions : suggestions).map((s) => (
                   <button
                     key={s.id}

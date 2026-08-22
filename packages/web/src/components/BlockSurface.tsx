@@ -157,7 +157,7 @@ export function BlockHandle({ block, className }: BlockHandleProps) {
           setOpen((v) => !v)
         }}
         onPointerDown={(e) => e.stopPropagation()}
-        className={`absolute z-10 hidden sm:inline-flex w-6 h-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-all print:hidden ${visibility} ${className}`}
+        className={`absolute z-sticky hidden sm:inline-flex w-6 h-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-all print:hidden ${visibility} ${className}`}
       >
         <MoreVertical className="w-4 h-4" strokeWidth={1.75} />
       </button>
@@ -168,7 +168,7 @@ export function BlockHandle({ block, className }: BlockHandleProps) {
           id={menuId}
           role="menu"
           aria-label={t('block.menuLabel')}
-          className="fixed z-[80] min-w-[180px] max-w-[240px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
+          className="fixed z-popover min-w-[180px] max-w-[240px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
           style={{
             top: pos.openUp ? undefined : pos.top,
             bottom: pos.openUp ? window.innerHeight - pos.top : undefined,

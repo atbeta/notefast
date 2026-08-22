@@ -40,7 +40,7 @@ export default function PageHeader({
       <header
         data-drag-region
         onDoubleClick={onDragDoubleClick}
-        className={`sticky top-0 z-10 h-14 border-b border-border/50 bg-background/85 backdrop-blur-md flex items-center gap-1 ${className}`.trim()}
+        className={`sticky top-0 z-sticky h-14 border-b border-border/50 bg-background/85 backdrop-blur-md flex items-center gap-1 ${className}`.trim()}
       >
         <div className="flex-1 min-w-0 h-full flex items-center justify-between gap-2 min-h-0">
           {children}
@@ -53,7 +53,7 @@ export default function PageHeader({
     <header
       data-drag-region
       onDoubleClick={onDragDoubleClick}
-      className="sticky top-0 z-10 h-14 border-b border-border/50 bg-background/85 backdrop-blur-md"
+      className="sticky top-0 z-sticky h-14 border-b border-border/50 bg-background/85 backdrop-blur-md"
     >
       <div className="h-full w-full max-w-4xl mx-auto px-4 sm:px-8 flex items-center gap-3">
         <div className={`min-w-0 flex-1 h-full ${innerClassName}`.trim()}>

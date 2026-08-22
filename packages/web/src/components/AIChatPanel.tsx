@@ -450,7 +450,7 @@ export default function AIChatPanel({
       <div
         aria-hidden="true"
         onClick={() => onClose()}
-        className={`fixed inset-0 z-30 bg-black/30 backdrop-blur-[1px] md:hidden transition-opacity duration-[var(--dur)] ${
+        className={`fixed inset-0 z-dropdown bg-black/30 backdrop-blur-[1px] md:hidden transition-opacity duration-[var(--dur)] ${
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       />
@@ -463,7 +463,7 @@ export default function AIChatPanel({
           e.stopPropagation()
           onClose()
         }}
-        className={`fixed right-0 ${shellTop} bg-card border-l border-border shadow-[var(--shadow-floating)] z-40 flex flex-col
+        className={`fixed right-0 ${shellTop} bg-card border-l border-border shadow-[var(--shadow-floating)] z-panel flex flex-col
           w-full md:w-[400px] ${expanded ? 'md:w-[600px]' : ''}
           transition-[transform,width] duration-[var(--dur)] ease-[var(--ease)]
           ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'}

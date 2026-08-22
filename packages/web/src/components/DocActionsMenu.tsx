@@ -391,7 +391,7 @@ export default function DocActionsMenu({
           id={menuId}
           role="menu"
           aria-label={t('docActions.menuLabel')}
-          className="fixed z-[80] min-w-[180px] max-w-[240px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in "
+          className="fixed z-popover min-w-[180px] max-w-[240px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in "
           style={{
             top: pos.openUp ? undefined : pos.top,
             bottom: pos.openUp ? window.innerHeight - pos.top : undefined,
@@ -447,7 +447,7 @@ export default function DocActionsMenu({
       )}
 
       {showRename && createPortal(
-        <div className="fixed inset-0 z-[90] flex items-center justify-center">
+        <div className="fixed inset-0 z-dialog flex items-center justify-center">
           <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowRename(false)} />
           <div className="relative bg-card rounded-lg shadow-2xl shadow-black/40 max-w-sm w-full mx-4 p-6 animate-fade-in">
             <h3 className="text-[15px] font-medium text-foreground tracking-tight mb-3">{t('docActions.renameTitle')}</h3>

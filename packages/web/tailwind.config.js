@@ -92,6 +92,18 @@ export default {
         prose: '42rem',
         '4xl': '56rem',
       },
+      zIndex: {
+        sticky: 'var(--z-sticky)',
+        header: 'var(--z-header)',
+        dropdown: 'var(--z-dropdown)',
+        panel: 'var(--z-panel)',
+        sheet: 'var(--z-sheet)',
+        popover: 'var(--z-popover)',
+        dialog: 'var(--z-dialog)',
+        modal: 'var(--z-modal)',
+        auth: 'var(--z-auth)',
+        tooltip: 'var(--z-tooltip)',
+      },
       boxShadow: {
         'card':       'var(--shadow-card)',
         'card-hover': 'var(--shadow-card-hover)',

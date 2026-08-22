@@ -136,7 +136,7 @@ export default function TableEditorDialog({
   const canDeleteCol = cols > 1
 
   return createPortal(
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-dialog flex items-center justify-center p-4">
       <div
         className="fixed inset-0 bg-black/40 backdrop-blur-[2px]"
         onClick={() => finish(false)}

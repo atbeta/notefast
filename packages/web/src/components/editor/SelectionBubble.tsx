@@ -1,7 +1,7 @@
 /**
  * 编辑器选区气泡（桌面端 v1）：非空选区上方浮出「问 AI / 改写」。
  *
- * - 手写 popover 模式（portal → fixed z-[80] → Esc/外部 mousedown/scroll/resize 关闭）
+ * - 手写 popover 模式（portal → fixed z-popover → Esc/外部 mousedown/scroll/resize 关闭）
  * - 关键：容器 onMouseDown preventDefault——否则点击按钮瞬间编辑器失焦、选区塌陷，
  *   blur 上报 null 会让气泡在 click 前卸载
  * - 未配置 chat 模型时整个气泡不出（问 AI / 改写都必然失败，能力探测与 AIChatPanel 同款）
@@ -115,7 +115,7 @@ export default function SelectionBubble({
       ref={panelRef}
       role="toolbar"
       aria-label={t('selectionBubble.label')}
-      className="fixed z-[80] flex items-center gap-0.5 p-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
+      className="fixed z-popover flex items-center gap-0.5 p-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
       style={{ top: pos?.top ?? -10000, left: pos?.left ?? -10000 }}
       onMouseDown={(e) => e.preventDefault()}
     >

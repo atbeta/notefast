@@ -74,7 +74,7 @@ export default function ConfirmDialog({
   // portal 到 body：避免被带 mask/overflow 的祖先（如侧栏 scroll-fade 最近文档区）
   // 裁剪，导致全屏弹窗不可见
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+    <div className="fixed inset-0 z-modal flex items-center justify-center">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity" onClick={busy ? undefined : onCancel} aria-hidden="true" />
       <div
         ref={containerRef}

@@ -527,7 +527,7 @@ export default function EntityGraph({
       )}
 
       {/* 图例 */}
-      <div className="absolute bottom-2.5 left-2.5 z-10 pointer-events-none rounded-lg border border-border bg-card/90 backdrop-blur px-2.5 py-1.5 text-[10.5px] text-muted-foreground leading-relaxed">
+      <div className="absolute bottom-2.5 left-2.5 z-sticky pointer-events-none rounded-lg border border-border bg-card/90 backdrop-blur px-2.5 py-1.5 text-[10.5px] text-muted-foreground leading-relaxed">
         {isDoc ? (
           <>
             <div className="flex items-center gap-1.5">

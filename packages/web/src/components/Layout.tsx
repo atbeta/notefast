@@ -178,7 +178,7 @@ export default function Layout({ children, contentClassName }: { children: React
         </div>
         {/* 桌面侧边栏 — 演示模式隐藏（正文最大化，退出后恢复） */}
         {!demo.active && (
-        <div className={`hidden md:block transition-all duration-300 z-20 relative print:hidden ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
+        <div className={`hidden md:block transition-all duration-300 z-header relative print:hidden ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
           <Sidebar
             collapsed={sidebarCollapsed}
             onToggle={toggleSidebar}
@@ -189,7 +189,7 @@ export default function Layout({ children, contentClassName }: { children: React
 
         {/* 移动端 drawer — 演示模式不提供 */}
         {mobileOpen && !demo.active && (
-          <div className="md:hidden fixed inset-0 z-50 flex">
+          <div className="md:hidden fixed inset-0 z-sheet flex">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={closeMobile} />
             <div className="relative w-64 h-full bg-background shadow-xl animate-fade-in pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
               <Sidebar
@@ -202,7 +202,7 @@ export default function Layout({ children, contentClassName }: { children: React
           </div>
         )}
 
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-sticky">
           <div
             className="md:hidden flex items-center h-12 px-4 border-b border-border bg-card gap-3 shrink-0 print:hidden"
             data-drag-region

@@ -69,6 +69,10 @@ NoteFast 的视觉只通过 **CSS 变量 token** 定义。所有组件应通过 
 ### 1.8 动效
 `--ease: 180ms cubic-bezier(0.4, 0, 0.2, 1)`，全 app 统一。
 
+### 1.9 层级（z-index）
+按现状登记，组件用 `z-popover` / `z-dialog` 等，不要写 `z-[80]`。
+`sticky=10 < header=20 < dropdown=30 < panel=40 < sheet=50 < popover=80 < dialog=90 < modal=100 < auth=200 < tooltip=300`。toast 与命令面板同为 `--z-modal`。
+
 ## 2. 主题系统
 
 **当前状态**：

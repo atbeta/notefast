@@ -46,7 +46,7 @@ export default function AuthPrompt() {
   }
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background animate-fade-in">
+    <div className="fixed inset-0 z-auth flex items-center justify-center bg-background animate-fade-in">
       <form
         onSubmit={handleSubmit}
         className="w-[360px] max-w-[calc(100vw-32px)] rounded-lg border border-border bg-card p-7 shadow-[var(--shadow-floating)] space-y-5"

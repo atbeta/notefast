@@ -203,7 +203,7 @@
   }
   .graph-tooltip {
     position: absolute;
-    z-index: 20;
+    z-index: var(--z-header);
     pointer-events: none;
     padding: 4px 8px;
     font-size: 11px;
@@ -470,7 +470,7 @@ html.theme-fading *::after {
   position: fixed;
   top: 16px;
   right: 16px;
-  z-index: 100;
+  z-index: var(--z-modal);
   display: flex;
   flex-direction: column;
   gap: 10px;

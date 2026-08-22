@@ -67,7 +67,7 @@ export default function SettingsLayout() {
         </aside>
 
         {/* 移动端：顶部胶囊 tabs（窄屏下保留横向滚动） */}
-        <div className="lg:hidden mb-5 sticky top-0 z-20 -mx-2 px-2 py-3 bg-background/80 backdrop-blur-md border-b border-border/50">
+        <div className="lg:hidden mb-5 sticky top-0 z-header -mx-2 px-2 py-3 bg-background/80 backdrop-blur-md border-b border-border/50">
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar mask-edges">
             {NAV_ITEMS.map(({ to, tabKey, Icon: _ }) => (
               <NavLink

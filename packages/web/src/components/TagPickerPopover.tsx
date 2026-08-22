@@ -124,7 +124,7 @@ export default function TagPickerPopover({ anchorRef, existing, onPick, onClose,
       ref={panelRef}
       role="dialog"
       aria-label={t('tagPicker.title')}
-      className="fixed z-[80] w-[280px] max-w-[calc(100vw-16px)] rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
+      className="fixed z-popover w-[280px] max-w-[calc(100vw-16px)] rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
       style={{ top: pos.top, left: pos.left }}
     >
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60">

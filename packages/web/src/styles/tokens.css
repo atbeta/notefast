@@ -130,6 +130,18 @@
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --dur: 150ms;
 
+  /* ───────────── 层级（按现状收口，禁止压进 10–60） ───────────── */
+  --z-sticky: 10;
+  --z-header: 20;
+  --z-dropdown: 30;
+  --z-panel: 40;
+  --z-sheet: 50;
+  --z-popover: 80;
+  --z-dialog: 90;
+  --z-modal: 100;
+  --z-auth: 200;
+  --z-tooltip: 300;
+
   /* ───────────── 演示模式（整体等比缩放；非激活恒为 1） ───────────── */
   --notefast-doc-zoom: 1;
 }

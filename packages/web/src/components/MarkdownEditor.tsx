@@ -641,7 +641,7 @@ function EditorInline({
                 <div
                   role="status"
                   aria-live="polite"
-                  className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-primary/8 border-2 border-dashed border-primary/40 rounded-md animate-fade-in"
+                  className="pointer-events-none absolute inset-0 z-sticky flex items-center justify-center bg-primary/8 border-2 border-dashed border-primary/40 rounded-md animate-fade-in"
                 >
                   <div className="flex flex-col items-center gap-2 text-primary">
                     <ImageDown className="w-7 h-7" strokeWidth={1.5} />

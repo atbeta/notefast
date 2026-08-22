@@ -243,7 +243,7 @@ export default function DocFindBar({
     <div
       data-doc-find
       data-print="hide"
-      className="sticky top-2 z-30 mb-3 flex justify-end print:hidden"
+      className="sticky top-2 z-dropdown mb-3 flex justify-end print:hidden"
     >
       <div className="flex items-center gap-1 rounded-md border border-border bg-card px-1.5 py-1 shadow-floating">
         <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0 ml-0.5" strokeWidth={1.75} />

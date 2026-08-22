@@ -888,7 +888,7 @@ export default function AISettingsPanel() {
 
       {/* Sticky 保存栏：始终悬浮在视口底部，避免「改完顶部配置找不到保存按钮」；
           有未保存修改时高亮 + 提示（dirty 检测见上方 useMemo） */}
-      <div className={`sticky bottom-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 mt-4 border-t bg-background/85 backdrop-blur-md ${dirty ? 'border-warning/40' : 'border-border/60'}`}>
+      <div className={`sticky bottom-0 z-header -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 mt-4 border-t bg-background/85 backdrop-blur-md ${dirty ? 'border-warning/40' : 'border-border/60'}`}>
         <div className="flex items-center gap-2 flex-wrap">
           <ActionButton
             onAction={async () => {

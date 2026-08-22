@@ -1424,7 +1424,7 @@ function DemoModeButton() {
           ref={zoomMenuRef}
           role="menu"
           aria-label={t('doc.zoom.label')}
-          className="fixed z-[80] min-w-[140px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
+          className="fixed z-popover min-w-[140px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
           style={{ top: zoomMenuPos.top, left: zoomMenuPos.left }}
         >
           {DEMO_ZOOMS.map((z, i) => {

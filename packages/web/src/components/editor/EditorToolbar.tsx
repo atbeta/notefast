@@ -121,7 +121,7 @@ export default function EditorToolbar({
   usePopoverDismiss(imageMenuOpen, { onClose: () => setImageMenuOpen(false) }, imageMenuRef, imageBtnRef)
 
   return (
-    <div className="sticky top-14 z-10 -mx-4 sm:-mx-8 px-4 sm:px-8 mb-2 bg-background/85 backdrop-blur-md">
+    <div className="sticky top-14 z-sticky -mx-4 sm:-mx-8 px-4 sm:px-8 mb-2 bg-background/85 backdrop-blur-md">
       <div className="flex flex-wrap items-center gap-x-0.5 gap-y-1 py-1.5 border-b border-border/60">
         {mode === 'edit' && (
           <>
@@ -210,7 +210,7 @@ export default function EditorToolbar({
             ref={imageMenuRef}
             role="menu"
             aria-label={t('editorToolbar.insertImage')}
-            className="fixed z-[80] min-w-[180px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
+            className="fixed z-popover min-w-[180px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
             style={{ top: imageMenuPos.top, left: imageMenuPos.left }}
           >
             <button

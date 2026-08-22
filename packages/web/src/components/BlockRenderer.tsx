@@ -130,7 +130,7 @@ function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: 
         />
       </Tooltip>
       {showBadge && (
-      <span className="absolute bottom-4 right-1.5 opacity-0 group-hover/asset:opacity-100 transition-opacity z-10">
+      <span className="absolute bottom-4 right-1.5 opacity-0 group-hover/asset:opacity-100 transition-opacity z-sticky">
         {uploading ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-background/90 border border-border px-2 py-0.5 text-[10px] text-muted-foreground shadow-sm">
             <Loader2 className="w-3 h-3 animate-spin" />

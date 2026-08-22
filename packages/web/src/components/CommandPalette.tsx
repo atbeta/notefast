@@ -222,7 +222,7 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
   return (
     <div
       aria-hidden={!open}
-      className={`fixed inset-0 z-[100] flex items-start justify-center pt-[12vh] px-4 ${open ? 'pointer-events-auto' : 'pointer-events-none'}`}
+      className={`fixed inset-0 z-modal flex items-start justify-center pt-[12vh] px-4 ${open ? 'pointer-events-auto' : 'pointer-events-none'}`}
       role={open ? 'dialog' : undefined}
       aria-modal={open ? true : undefined}
       aria-label={open ? t('command.dialogLabel') : undefined}

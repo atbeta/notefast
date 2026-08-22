@@ -72,7 +72,7 @@ export default function AssetPickerDialog({ open, onClose, onPick }: AssetPicker
   if (!open) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-dialog flex items-center justify-center p-4">
       <div
         className="fixed inset-0 bg-black/40 backdrop-blur-[2px]"
         onClick={onClose}
