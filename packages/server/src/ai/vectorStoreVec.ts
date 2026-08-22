@@ -233,6 +233,26 @@ export class SqliteVecVectorStore implements VectorStore {
     })()
   }
 
+  async getStoredVector(blockId: string): Promise<Float64Array | null> {
+    const target = activeGeneration()
+    if (!target) return null
+    const row = getDb().query(
+      `SELECT v.embedding AS embedding
+       FROM ${target.table_name} v
+       JOIN vector_entries e ON e.id = v.rowid AND e.generation = ?
+       WHERE e.block_id = ?`,
+    ).get(target.id, blockId) as { embedding: Float32Array | Uint8Array | ArrayBuffer } | undefined
+    if (!row?.embedding) return null
+    const raw = row.embedding
+    if (raw instanceof Float32Array) {
+      return raw.length > 0 ? Float64Array.from(raw) : null
+    }
+    const bytes = raw instanceof ArrayBuffer ? new Uint8Array(raw) : raw
+    if (bytes.byteLength < 4 || bytes.byteLength % 4 !== 0) return null
+    const f32 = new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4)
+    return f32.length > 0 ? Float64Array.from(f32) : null
+  }
+
   async search(query: Float64Array, options: VectorSearchOptions): Promise<SemanticHit[]> {
     const target = activeGeneration()
     if (

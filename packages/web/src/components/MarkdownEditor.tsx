@@ -35,13 +35,26 @@ interface MarkdownEditorProps {
   onSaved: () => void
   /** 每次保存成功（含自动保存）后回调，供历史面板等即时刷新 */
   onAutoSaved?: () => void
+  /** 保存后回写文档树（子块 id 会变），给「相关」跟当前块用 */
+  onDocUpdated?: (doc: Block) => void
+  /** 光标落在哪一段，映射到已保存块 */
+  onCaret?: (offset: number, markdown: string) => void
   autoEdit?: boolean
   onActiveChange?: (editing: boolean) => void
 }
 
 const CJK_WORDS_PER_MIN = 320
 
-export default function MarkdownEditor({ docId, title, onSaved, onAutoSaved, autoEdit = false, onActiveChange }: MarkdownEditorProps) {
+export default function MarkdownEditor({
+  docId,
+  title,
+  onSaved,
+  onAutoSaved,
+  onDocUpdated,
+  onCaret,
+  autoEdit = false,
+  onActiveChange,
+}: MarkdownEditorProps) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(autoEdit)
 
@@ -61,12 +74,38 @@ export default function MarkdownEditor({ docId, title, onSaved, onAutoSaved, aut
     )
   }
 
-  return <EditorInline docId={docId} title={title} onSaved={onSaved} onAutoSaved={onAutoSaved} onClose={() => setEditing(false)} />
+  return (
+    <EditorInline
+      docId={docId}
+      title={title}
+      onSaved={onSaved}
+      onAutoSaved={onAutoSaved}
+      onDocUpdated={onDocUpdated}
+      onCaret={onCaret}
+      onClose={() => setEditing(false)}
+    />
+  )
 }
 
 type Mode = 'edit' | 'view'
 
-function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: string; title?: string; onSaved: () => void; onAutoSaved?: () => void; onClose: () => void }) {
+function EditorInline({
+  docId,
+  title,
+  onSaved,
+  onAutoSaved,
+  onDocUpdated,
+  onCaret,
+  onClose,
+}: {
+  docId: string
+  title?: string
+  onSaved: () => void
+  onAutoSaved?: () => void
+  onDocUpdated?: (doc: Block) => void
+  onCaret?: (offset: number, markdown: string) => void
+  onClose: () => void
+}) {
   const { t } = useTranslation()
   const toast = useToast()
   const draft = useEditorDraft(docId)
@@ -105,9 +144,10 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
     try {
       // checkpoint=false（自动保存）→ 不记整篇快照，避免历史刷屏；
       // checkpoint=true（手动/切走/Ctrl+S）→ 记版本点，可回退
-      const r = await api.put<{ doc: unknown; updated_at?: string }>(`/docs/${docId}/markdown`, { markdown, checkpoint })
+      const r = await api.put<{ doc?: Block; updated_at?: string }>(`/docs/${docId}/markdown`, { markdown, checkpoint })
       lastSavedContentRef.current = markdown
       if (r.updated_at) serverUpdatedAtRef.current = r.updated_at
+      if (r.doc && typeof r.doc === 'object' && r.doc.id) onDocUpdated?.(r.doc)
       draft.clearDraft()
       setAutoSaveStatus('saved')
       onAutoSaved?.()
@@ -117,7 +157,7 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
       setAutoSaveStatus('error')
       return false
     }
-  }, [docId, draft, onAutoSaved])
+  }, [docId, draft, onAutoSaved, onDocUpdated])
 
   const triggerAutoSave = useCallback((markdown: string, checkpoint?: boolean) => {
     if (markdown === lastSavedContentRef.current) return
@@ -591,6 +631,7 @@ function EditorInline({ docId, title, onSaved, onAutoSaved, onClose }: { docId: 
                 onGhostAccept={handleGhostAccept}
                 onGhostDismiss={handleGhostDismiss}
                 onSelectionChange={handleSelectionChange}
+                onCaret={onCaret}
                 autoFocus
                 placeholder={t('mdEditor.placeholder')}
               />

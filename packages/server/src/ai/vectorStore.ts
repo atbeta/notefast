@@ -51,6 +51,8 @@ export interface VectorStore {
    *  替代逐块 delete 的「每块一次 count(*)」O(n²) 退化 */
   deleteMany(blockIds: string[]): Promise<void>
   search(query: Float64Array, options: VectorSearchOptions): Promise<SemanticHit[]>
+  /** 读出某块已入库的向量（无 embed 往返）；没有则 null */
+  getStoredVector(blockId: string): Promise<Float64Array | null>
   scoreCandidates(
     query: Float64Array,
     blockIds: string[],
@@ -97,7 +99,7 @@ function encodeEmbedding(vector: Float64Array): Uint8Array {
 }
 
 /** 解码：新格式 BLOB（float32）或旧格式 JSON 文本（迁移前存量） */
-function decodeEmbedding(raw: string | Uint8Array): Float64Array {
+export function decodeEmbedding(raw: string | Uint8Array): Float64Array {
   if (typeof raw !== 'string') {
     const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw)
     if (bytes.byteLength % 4 === 0) {
@@ -202,6 +204,17 @@ export class JsonVectorStore implements VectorStore {
        SET indexed_count = (SELECT count(*) FROM block_vectors), updated_at = datetime('now')
        WHERE id = 'default'`,
     ).run()
+  }
+
+  async getStoredVector(blockId: string): Promise<Float64Array | null> {
+    const row = getDb()
+      .query(
+        `SELECT embedding FROM block_vectors WHERE block_id = ? AND index_version = ?`,
+      )
+      .get(blockId, VECTOR_INDEX_VERSION) as { embedding: string | Uint8Array } | undefined
+    if (!row) return null
+    const vector = decodeEmbedding(row.embedding)
+    return vector.length > 0 ? vector : null
   }
 
   async search(query: Float64Array, options: VectorSearchOptions): Promise<SemanticHit[]> {

@@ -57,6 +57,8 @@ interface CodeMirrorEditorProps {
   onGhostDismiss: () => void
   /** 非空选区 debounce 上报锚点（含 rect/text/from/to）；清空、失焦、卸载报 null */
   onSelectionChange?: (anchor: SelectionAnchor | null) => void
+  /** 光标位置（含空选区），供右栏「相关」跟当前块 */
+  onCaret?: (offset: number, markdown: string) => void
   placeholder?: string
   autoFocus?: boolean
 }
@@ -289,14 +291,20 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
               },
             }),
             EditorView.updateListener.of((update) => {
-              if (!update.docChanged) return
-              const next = update.state.doc.toString()
-              lastEmittedRef.current = next
-              propsRef.current.onChange(next)
+              if (update.docChanged) {
+                const next = update.state.doc.toString()
+                lastEmittedRef.current = next
+                propsRef.current.onChange(next)
+              }
+              if (update.selectionSet || update.docChanged) {
+                const md = update.state.doc.toString()
+                propsRef.current.onCaret?.(update.state.selection.main.head, md)
+              }
               // 用户输入（含粘贴/拖拽）取消 AI 续写 ghost
               if (
-                propsRef.current.ghostText &&
-                update.transactions.some(
+                update.docChanged
+                && propsRef.current.ghostText
+                && update.transactions.some(
                   (tr) => tr.isUserEvent('input') || tr.isUserEvent('delete'),
                 )
               ) {

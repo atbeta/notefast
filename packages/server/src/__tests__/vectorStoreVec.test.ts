@@ -45,6 +45,11 @@ describe('SqliteVecVectorStore', () => {
     })
     await store.activateGeneration('test-generation')
 
+    const stored = await store.getStoredVector('vec-a')
+    expect(stored).not.toBeNull()
+    expect(Array.from(stored!)).toEqual([1, 0])
+    expect(await store.getStoredVector('missing-block')).toBeNull()
+
     const hits = await store.search(new Float64Array([1, 0]), {
       limit: 2,
       modelFingerprint: 'model-a',

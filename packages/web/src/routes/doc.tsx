@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, type CSSProperties } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, type CSSProperties, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -42,6 +42,7 @@ import { useNavHistory } from '../hooks/useNavHistory'
 import { readDocRailCollapsed, writeDocRailCollapsed } from '../hooks/useDocRailCollapsed'
 import { readDocRailWidth, writeDocRailWidth, type DocRailWidth } from '../hooks/useDocRailWidth'
 
+import { resolveRelatedBlockId } from '../lib/relatedAnchor'
 import { scrollToElement } from '../lib/scroll'
 import { readDocScroll, writeDocScroll } from '../lib/docScroll'
 import DocFindBar from '../components/DocFindBar'
@@ -211,6 +212,9 @@ export default function DocPage() {
   const [relatedLoading, setRelatedLoading] = useState(false)
   /** 当前 related fetch 的 AbortController（ref，不参与渲染；effect 切换时立刻 abort 旧请求） */
   const relatedAbortRef = useRef<AbortController | null>(null)
+  /** 写作时光标块 / 阅读时点选块；null = 整篇（根块） */
+  const [relatedBlockId, setRelatedBlockId] = useState<string | null>(null)
+  const relatedCaretTimer = useRef<number | null>(null)
   /** 桌面右栏收起状态（localStorage 记忆；写路径广播给 GlobalSyncStatus 等避让方） */
   const [railCollapsed, setRailCollapsed] = useState(readDocRailCollapsed)
   useEffect(() => {
@@ -237,7 +241,10 @@ export default function DocPage() {
   const aiChatOpen = useAiChatOpen()
   /** 移动端目录折叠 */
   const [tocOpen, setTocOpen] = useState(false)
-  useEffect(() => { setTocOpen(false) }, [id])
+  useEffect(() => {
+    setTocOpen(false)
+    setRelatedBlockId(null)
+  }, [id])
   // 恢复 AI 可见触发的索引轮询（切换文档/重复点击时中止上一轮）
   const indexJobAcRef = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -331,17 +338,13 @@ useEffect(() => {
     }
   }, [id])
 
-  // 相关笔记：仅「相关」Tab 打开时拉取（对齐 history 的按需模式）。
-  // 不做打开文档即预取——每次切换文档都跑一次 hybridSearch(FTS×2+实体匹配+RRF)
-  // 在 CPU 高（AI 流/索引）时叠加排队，是切文档卡顿的来源之一。
-  // AbortController 真正打断飞行中的请求；旧的 cancelled 标志只是拦 setState，请求
-  // 本身还在跑、占 Bun 单进程事件循环——切文档时旧请求应当立刻被取消。
-  // 切文档/切 Tab 时**不清**旧 items，避免右栏闪空白；只在 loading=true + items=null
-  // 双重条件时才显示加载态。
+  // 相关笔记：仅「相关」Tab 打开且正文已是当前 id 时再拉。
+  // 从相关点进另一篇时，旧 doc 还在、id 已变——若立刻打 /related，会和
+  // GET /docs/:id 抢 bun:sqlite 单线程，表现为跳转卡住。等正文回来再查。
+  // AbortController 取消飞行中的 HTTP；切文档/切 Tab 不清旧 items，避免右栏闪空白。
   useEffect(() => {
-    if (!id || railTab !== 'related') {
-      // 切走时立即停掉当前 fetch，但不擦除 items —— 用户切去其他 Tab 再切回时，
-      // 老结果还在；切文档时也保留上一次结果作为过渡，直到新结果回来。
+    if (!id || railTab !== 'related' || doc?.id !== id) {
+      // 切走或正文未就绪：立刻停掉当前 fetch，但不擦除 items。
       relatedAbortRef.current?.abort()
       setRelatedLoading(false)
       return
@@ -353,8 +356,10 @@ useEffect(() => {
     let cancelled = false
     setRelatedError(null)
     setRelatedLoading(true)
+    const qs = new URLSearchParams({ limit: '8' })
+    if (relatedBlockId) qs.set('blockId', relatedBlockId)
     api
-      .get<{ items: RelatedDocItem[] }>(`/docs/${id}/related?limit=8`, { signal: ac.signal })
+      .get<{ items: RelatedDocItem[] }>(`/docs/${id}/related?${qs}`, { signal: ac.signal })
       .then((res) => {
         if (!cancelled) setRelatedItems(Array.isArray(res?.items) ? res.items : [])
       })
@@ -372,7 +377,7 @@ useEffect(() => {
       cancelled = true
       ac.abort()
     }
-  }, [id, railTab])
+  }, [id, railTab, doc?.id, relatedBlockId])
 
   // 创建/导入后的向量化进度（?index_job=）
   useEffect(() => {
@@ -465,6 +470,7 @@ useEffect(() => {
     const raw = location.hash.slice(1)
     if (!raw) return
     const targetId = raw.startsWith('block-') ? raw.slice(6) : raw
+    if (targetId && targetId !== doc.id) setRelatedBlockId(targetId)
     // 跨路由进场时 RouteTransition 的离场叠影（.animate-page-leave）里可能并行挂载着
     // 同一路由的另一个实例，含相同 block id 的幽灵节点；getElementById 按文档序会命中幽灵——查找时显式排除
     const findTarget = (): HTMLElement | null => {
@@ -500,6 +506,35 @@ useEffect(() => {
     setRefreshKey((k) => k + 1)
     reloadHistoryIfOpen()
   }, [reloadHistoryIfOpen])
+
+  const handleDocTreeUpdated = useCallback((next: Block) => {
+    setDoc(next)
+  }, [])
+
+  const handleEditorCaret = useCallback((offset: number, markdown: string) => {
+    if (!doc) return
+    if (relatedCaretTimer.current) window.clearTimeout(relatedCaretTimer.current)
+    relatedCaretTimer.current = window.setTimeout(() => {
+      const next = resolveRelatedBlockId(doc, markdown, offset)
+      setRelatedBlockId((prev) => (prev === next ? prev : next))
+    }, 280)
+  }, [doc])
+
+  useEffect(() => () => {
+    if (relatedCaretTimer.current) window.clearTimeout(relatedCaretTimer.current)
+  }, [])
+
+  // 退出编辑且没有块锚点时回到整篇（根块）
+  useEffect(() => {
+    if (isEditing) return
+    if (!location.hash) setRelatedBlockId(null)
+  }, [isEditing, location.hash])
+
+  const handleRelatedBlockClick = useCallback((e: MouseEvent<HTMLElement>) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-block-id]')
+    const bid = el?.getAttribute('data-block-id')
+    setRelatedBlockId(bid && bid !== id ? bid : null)
+  }, [id])
 
   const saveTitle = async () => {
     if (!id || !doc || titleDraft.trim() === doc.content) return
@@ -645,8 +680,9 @@ useEffect(() => {
   // 点击大纲项时立即高亮目标（不等平滑滚动结束）；滚动落定后交还 scroll 联动。
   const [outlineJumpId, setOutlineJumpId] = useState<string | null>(null)
   const outlineJumpTimer = useRef<number | null>(null)
-  const jumpToHeading = (id: string) => {
-    setOutlineJumpId(id)
+  const jumpToHeading = (headingId: string) => {
+    setRelatedBlockId(headingId)
+    setOutlineJumpId(headingId)
     if (outlineJumpTimer.current) window.clearTimeout(outlineJumpTimer.current)
     // 平滑滚动 260ms + 余量；超时后交还滚动联动（此时 tolerance 已让目标保持高亮）
     outlineJumpTimer.current = window.setTimeout(() => setOutlineJumpId(null), 500)
@@ -962,6 +998,8 @@ useEffect(() => {
                 title={doc.content}
                 onSaved={handleEditSaved}
                 onAutoSaved={reloadHistoryIfOpen}
+                onDocUpdated={handleDocTreeUpdated}
+                onCaret={handleEditorCaret}
                 autoEdit={true}
                 onActiveChange={handleEditorActiveChange}
               />
@@ -1015,8 +1053,9 @@ useEffect(() => {
                   ref={articleRef}
                   onContextMenu={ctxMenu.onContextMenu}
                   onKeyDown={ctxMenu.onKeyDown}
+                  onClick={handleRelatedBlockClick}
                 >
-                  <BlockRenderer block={doc} />
+                  <BlockRenderer block={doc} relatedBlockId={relatedBlockId} />
                   {ctxMenu.menu}
                 </article>
                </div>
@@ -1111,6 +1150,7 @@ useEffect(() => {
                 items={relatedItems}
                 loading={relatedLoading}
                 error={relatedError}
+                fromBlock={Boolean(relatedBlockId)}
               />
             )}
             {railTab === 'history' && (
@@ -1254,10 +1294,12 @@ function RelatedView({
   items,
   loading,
   error,
+  fromBlock,
 }: {
   items: RelatedDocItem[] | null
   loading: boolean
   error: string | null
+  fromBlock: boolean
 }) {
   const { t } = useTranslation()
 
@@ -1265,6 +1307,9 @@ function RelatedView({
   if (items && items.length > 0) {
     return (
       <div className="flex flex-col gap-1.5">
+        <p className="px-1 text-[11px] text-muted-foreground/55">
+          {fromBlock ? t('doc.relatedFromBlock') : t('doc.relatedFromDoc')}
+        </p>
         {items.map((item) => (
           <Link
             key={item.doc_id}

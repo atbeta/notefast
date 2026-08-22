@@ -166,14 +166,15 @@ docs.get('/:id', (c) => {
 })
 
 /**
- * 语义邻居（右栏「相关」）：hybridSearch(标题+tags, contextDocId) → 文档级列表，排除自身。
+ * 语义邻居（右栏「相关」）：可选 blockId 指定锚点块，缺省为文档根。
  */
 docs.get('/:id/related', async (c) => {
   const id = c.req.param('id')
   const limitRaw = parseInt(c.req.query('limit') || '8', 10)
   const limit = Number.isFinite(limitRaw) ? limitRaw : 8
+  const blockId = c.req.query('blockId') || undefined
   try {
-    const result = await listRelatedDocs(id, { limit })
+    const result = await listRelatedDocs(id, { limit, blockId })
     if (!result) {
       return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
     }

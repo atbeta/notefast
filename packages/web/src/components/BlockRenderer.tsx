@@ -7,7 +7,7 @@ import { highlightCode } from '../lib/highlight'
 import MermaidDiagram from './MermaidDiagram'
 import MathBlock, { MathInline } from './MathBlock'
 import { INLINE_MATH_SRC } from '../lib/katex'
-import BlockSurface, { BlockHandle } from './BlockSurface'
+import BlockSurface, { BlockHandle, RelatedAnchorCtx } from './BlockSurface'
 import { CopyButton, Tooltip } from './ui'
 import { api } from '../hooks/useAPI'
 import { useImageUploadEnabled } from '../hooks/useImageUploadEnabled'
@@ -23,6 +23,8 @@ interface BlockNodeProps {
 interface BlockRendererProps {
   block: Block
   depth?: number
+    /** 右栏「相关」锚点：阅读态点选时轻微高亮该块 */
+  relatedBlockId?: string | null
 }
 
 // ───────────────────────── 图片图床同步状态（hover 徽章）─────────────────────────
@@ -442,6 +444,7 @@ function ListItemView({ block, depth = 0 }: { block: Block; depth?: number }) {
   const checked = Boolean(block.properties.checked)
   const nestedItems = block.children.filter((c) => c.type === 'list_item')
   const otherChildren = block.children.filter((c) => c.type !== 'list_item')
+  const relatedSelected = useContext(RelatedAnchorCtx) === block.id
   return (
     <li
       id={block.id}
@@ -449,7 +452,7 @@ function ListItemView({ block, depth = 0 }: { block: Block; depth?: number }) {
       className={`group/bs relative scroll-mt-20 leading-[1.75] text-foreground/95${
         // hover 桥：li 盒外的 24px marker 区铺 before 伪元素，消除正文 → handle 之间的 hover 死区
         depth === 0 ? " before:absolute before:-left-6 before:top-0 before:bottom-0 before:w-6 before:content-['']" : ''
-      }`}
+      }${relatedSelected ? ' rounded-md ring-1 ring-primary/20 bg-primary/[0.04]' : ''}`}
     >
       {/* 列表项不经过 BlockSurface（ul > li 语义），handle 直接挂 li。仅顶层渲染：
           嵌套项缩进后 handle 会压到正文，且复制/问 AI 由父项菜单（含子块）覆盖 */}
@@ -577,7 +580,7 @@ const BlockNode = memo(function BlockNode({ block }: BlockNodeProps) {
   return <BlockSurface block={block}>{node}</BlockSurface>
 })
 
-export default function BlockRenderer({ block, depth = 0 }: BlockRendererProps) {
+export default function BlockRenderer({ block, depth = 0, relatedBlockId = null }: BlockRendererProps) {
   const { t } = useTranslation()
   const assetSync = useAssetSync(block)
   // 图片放大查看：当前打开的 lightbox src（null = 关闭）
@@ -590,6 +593,7 @@ export default function BlockRenderer({ block, depth = 0 }: BlockRendererProps) 
   if (depth > 20) return null
 
   return (
+    <RelatedAnchorCtx.Provider value={relatedBlockId}>
     <AssetSyncCtx.Provider value={assetSync}>
       <ImageZoomCtx.Provider value={openZoom}>
         {block.type === 'document' ? (
@@ -610,5 +614,6 @@ export default function BlockRenderer({ block, depth = 0 }: BlockRendererProps) 
         )}
       </ImageZoomCtx.Provider>
     </AssetSyncCtx.Provider>
+    </RelatedAnchorCtx.Provider>
   )
 }

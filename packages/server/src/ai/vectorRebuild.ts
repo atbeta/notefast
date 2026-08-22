@@ -78,6 +78,10 @@ class ShadowVectorStore implements VectorStore {
     return this.active.search(query, options)
   }
 
+  getStoredVector(blockId: string) {
+    return this.active.getStoredVector(blockId)
+  }
+
   scoreCandidates(query: Float64Array, blockIds: string[], modelFingerprint: string) {
     return this.active.scoreCandidates(query, blockIds, modelFingerprint)
   }

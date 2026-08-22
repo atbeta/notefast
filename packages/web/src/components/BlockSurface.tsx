@@ -14,7 +14,7 @@
  * `.reading-prose > * + *` 与子块外边距折叠，wrapper 有 padding 会破坏折叠。
  */
 
-import { useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Copy, Link2, MoreVertical, Sparkles } from 'lucide-react'
@@ -195,12 +195,19 @@ export function BlockHandle({ block, className }: BlockHandleProps) {
   )
 }
 
+/** 右栏「相关」当前锚点块（阅读点选 / 大纲跳转） */
+export const RelatedAnchorCtx = createContext<string | null>(null)
+
 /** 块包装器：hover 分组 + handle 锚点，不改变块布局。
  *  顶层挂 data-block-id：DocContextMenu 通过该 attr 反查 Block（避免与
  *  heading 等原生 id 碰撞；同时不必信赖 DOM id 是否一定来自 BlockRenderer）。 */
 export default function BlockSurface({ block, children }: { block: Block; children: ReactNode }) {
+  const selected = useContext(RelatedAnchorCtx) === block.id
   return (
-    <div className="group/bs relative" data-block-id={block.id}>
+    <div
+      className={`group/bs relative${selected ? ' rounded-md ring-1 ring-primary/20 bg-primary/[0.04]' : ''}`}
+      data-block-id={block.id}
+    >
       {/* -left-6 + w-6：按钮右缘与块边缘贴合（-24..0），正文 → handle 无 hover 死区，
           否则鼠标一过界就吃 pointer-events-none 永远点不到（列表项靠 li 的 before 桥解同一问题） */}
       <BlockHandle block={block} className="-left-6 top-1" />
