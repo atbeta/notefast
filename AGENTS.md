@@ -123,6 +123,13 @@ docker compose up -d
 - **PWA** 只做可安装壳（manifest + 图标 + safe-area），不做 Service Worker / 离线缓存。Web 运行时零外部 CDN：字体经 `@fontsource-variable/*` 自托管，禁止恢复 Google Fonts 等外链
 - 内部 AI 只做采集 / 理解 / 检索 / 维护；通用聊天客户端能力外放给 MCP 消费方
 
+#### Web UI
+
+- 样式走 `packages/web/src/styles/tokens.css` + Tailwind 映射；禁止 `text-[Npx]` 任意字号、`emerald-`/`amber-`/`rose-` 直用、`dark:` 变体。主题靠 `<html data-theme>` 翻转 token，不要再开 Tailwind `darkMode`
+- 带边框的文本框走 `Input` / `Textarea`；高曝光操作走 `Button`。文档大标题保留 `input-underline`；file / checkbox / 透明搜索框保持原生
+- lucide 默认 `strokeWidth={1.75}`（填色方块、极小勾选可例外）
+- 用户文案走 web i18n（`zh-CN` + `en`）；源码 CJK 字面量须 `t()` 或行尾 `i18n-allow`。`bun lint` 已挂 `check-typography.ts` + `check-i18n.ts`
+
 #### 鉴权与契约
 
 - **单用户**：`AUTH_PASSWORD`（Web）+ `API_TOKEN`（API/MCP Bearer）。未配置任何鉴权 = 免鉴权（本地开发默认），不要靠自动生成 `data/api.key` 把实例翻成强制登录
