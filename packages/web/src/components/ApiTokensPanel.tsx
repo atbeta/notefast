@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Key, Plus, Trash2, Copy, Check, X } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { currentLocale } from '../lib/time'
-import { ActionButton, Tooltip, useToast } from './ui'
+import { ActionButton, EmptyState, PanelSkeleton, Tooltip, useToast } from './ui'
 import { SettingsCard, StatusBadge } from './settings/ui'
 
 interface ApiTokenView {
@@ -84,7 +84,13 @@ export default function ApiTokensPanel() {
     setCopied(false)
   }
 
-  if (loading) return <div className="rounded-lg border border-border bg-card px-5 py-4 text-[12px] text-muted-foreground">{t('common.loading')}</div>
+  if (loading) {
+    return (
+      <div className="rounded-lg border border-border bg-card px-5 py-4">
+        <PanelSkeleton />
+      </div>
+    )
+  }
 
   return (
     <SettingsCard
@@ -189,9 +195,11 @@ export default function ApiTokensPanel() {
             ))}
           </div>
         ) : !showForm && (
-          <div className="rounded-lg border border-border border-dashed p-8 text-center text-[12.5px] text-muted-foreground">
-            {t('apiTokens.empty')}
-          </div>
+          <EmptyState
+            className="py-8"
+            icon={<Key className="w-5 h-5" />}
+            title={t('apiTokens.empty')}
+          />
         )}
       </div>
     </SettingsCard>

@@ -27,7 +27,18 @@
     "unknown": "未知",
     "confirmDeleteTitle": "确认删除",
     "confirmDeleteDescription": "此操作不可撤销。",
-    "httpError": "HTTP {{status}}"
+    "httpError": "HTTP {{status}}",
+    "backHome": "返回首页",
+    "showDetails": "显示详情",
+    "hideDetails": "收起详情"
+  },
+  "errorBoundary": {
+    "title": "页面渲染出错",
+    "retry": "重试"
+  },
+  "routeBoundary": {
+    "title": "这段内容渲染出错",
+    "retry": "重试这段"
   },
   "time": {
     "justNow": "刚刚",

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import i18next from '../i18n'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../hooks/useAPI'
-import { useToast, Tooltip } from '../components/ui'
+import { ListRowsSkeleton, useToast, Tooltip } from '../components/ui'
 import { formatSqliteDateTime } from '../lib/time'
 
 export interface DocRevision {
@@ -137,7 +137,7 @@ export function HistoryView({
   }
 
   if (loading && revisions.length === 0) {
-    return <div className="px-1 text-[12px] text-muted-foreground/70">{t('common.loading')}</div>
+    return <ListRowsSkeleton rows={4} withIcon={false} />
   }
   if (revisions.length === 0) {
     return (

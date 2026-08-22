@@ -16,7 +16,7 @@ import { useDocChanges } from '../hooks/useDocEvents'
 import { formatRelative, currentLocale } from '../lib/time'
 import DocActionsMenu from '../components/DocActionsMenu'
 import PageHeader from '../components/PageHeader'
-import { ListRowsSkeleton, Tooltip } from '../components/ui'
+import { EmptyState, ListRowsSkeleton, Tooltip } from '../components/ui'
 
 export default function InboxPage() {
   const { t } = useTranslation()
@@ -139,15 +139,11 @@ export default function InboxPage() {
         {loading ? (
           <ListRowsSkeleton rows={4} />
         ) : docs.length === 0 ? (
-          <div className="px-3 py-14 flex flex-col items-center text-center">
-            <div className="empty-icon-tile">
-              <Inbox className="w-5 h-5" />
-            </div>
-            <h3 className="text-[15px] font-medium text-foreground mb-1.5">{t('inbox.emptyTitle')}</h3>
-            <p className="text-[13px] text-muted-foreground mb-5 max-w-[280px] leading-relaxed">
-              {t('inbox.emptyDesc')}
-            </p>
-          </div>
+          <EmptyState
+            icon={<Inbox className="w-5 h-5" />}
+            title={t('inbox.emptyTitle')}
+            description={t('inbox.emptyDesc')}
+          />
         ) : (
           <div className="grid gap-0.5">
             {docs.map((doc) => (

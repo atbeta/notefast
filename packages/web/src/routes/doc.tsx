@@ -54,7 +54,7 @@ import { useDocReadingWidth, writeDocReadingWidth, DOC_READING_WIDTH_REM } from 
 import { formatRelative, relativeTime, currentLocale } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
-import { Kbd, Tooltip, useToast } from '../components/ui'
+import { EmptyState, InlineError, Kbd, ListRowsSkeleton, Tooltip, useToast } from '../components/ui'
 import { deliverExport, fetchDocExportFile } from '../lib/download'
 import { recordVisit } from '../lib/recentVisits'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
@@ -1009,19 +1009,20 @@ useEffect(() => {
             {!isEditing && (
               <div className="relative">
                 {isEmpty && (
-                  <div className="px-3 py-14 flex flex-col items-center text-center select-none">
-                    <div className="empty-icon-tile">
-                      <SquarePen className="w-5 h-5" />
-                    </div>
-                    <h3 className="text-[15px] font-medium text-foreground mb-1.5">{t('doc.emptyDocument')}</h3>
-                    <p className="text-[13px] text-muted-foreground max-w-[300px] leading-relaxed flex items-center justify-center gap-1.5 flex-wrap">
-                      <span>{t('doc.emptyDocumentHintStart')}</span>
-                      <Kbd>⌘E</Kbd>
-                      <span>{t('doc.emptyDocumentHintMid')}</span>
-                      <Kbd>⌘J</Kbd>
-                      <span>{t('doc.emptyDocumentHintEnd')}</span>
-                    </p>
-                  </div>
+                  <EmptyState
+                    className="select-none"
+                    icon={<SquarePen className="w-5 h-5" />}
+                    title={t('doc.emptyDocument')}
+                    description={(
+                      <span className="flex items-center justify-center gap-1.5 flex-wrap">
+                        <span>{t('doc.emptyDocumentHintStart')}</span>
+                        <Kbd>⌘E</Kbd>
+                        <span>{t('doc.emptyDocumentHintMid')}</span>
+                        <Kbd>⌘J</Kbd>
+                        <span>{t('doc.emptyDocumentHintEnd')}</span>
+                      </span>
+                    )}
+                  />
                 )}
 
                 {/* Mobile outline — 折叠目录置于正文前，方便快速导航 */}
@@ -1207,7 +1208,7 @@ function OutlineView({
   const { t } = useTranslation()
   // 仅首次加载（无数据）时显示加载态；切换文档时保留旧大纲直至新数据到达，避免闪烁
   if (loading && headings.length === 0) {
-    return <div className="px-1 text-[12px] text-muted-foreground/70">{t('common.loading')}</div>
+    return <ListRowsSkeleton rows={3} withIcon={false} />
   }
   if (headings.length === 0) {
     return (
@@ -1253,7 +1254,7 @@ function OutlineView({
 function BacklinksView({ backlinks, loading }: { backlinks: Backlink[]; loading: boolean }) {
   const { t } = useTranslation()
   if (loading && backlinks.length === 0) {
-    return <div className="px-1 text-[12px] text-muted-foreground/70">{t('common.loading')}</div>
+    return <ListRowsSkeleton rows={3} withIcon={false} />
   }
   if (backlinks.length === 0) {
     return (
@@ -1330,14 +1331,10 @@ function RelatedView({
     )
   }
   if (loading) {
-    return <div className="px-1 text-[12px] text-muted-foreground/70">{t('common.loading')}</div>
+    return <ListRowsSkeleton rows={3} withIcon={false} />
   }
   if (error) {
-    return (
-      <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
-        {error}
-      </div>
-    )
+    return <InlineError compact message={error} />
   }
   // 没数据 + 不 loading + 不 error：首次打开或真的没相关
   return (

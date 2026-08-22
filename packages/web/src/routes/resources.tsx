@@ -16,7 +16,7 @@ import { formatRelative } from '../lib/time'
 import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
 import ImageLightbox from '../components/ImageLightbox'
-import { ListRowsSkeleton, Tooltip, useToast, CopyButton } from '../components/ui'
+import { EmptyState, InlineError, ListRowsSkeleton, Tooltip, useToast, CopyButton } from '../components/ui'
 
 const PAGE_SIZE = 60
 
@@ -303,38 +303,21 @@ export default function ResourcesPage() {
         {loading && items.length === 0 ? (
           <ListRowsSkeleton rows={6} />
         ) : error && items.length === 0 ? (
-          <div className="px-3 py-14 flex flex-col items-center text-center">
-            <div className="empty-icon-tile">
-              <ImageIcon className="w-5 h-5" />
-            </div>
-            <h3 className="text-[15px] font-medium text-foreground mb-1.5">{t('common.error')}</h3>
-            <p className="text-[13px] text-muted-foreground max-w-sm leading-relaxed break-all">
-              {error}
-            </p>
-            <button
-              type="button"
-              onClick={refetch}
-              className="inline-block mt-3 text-[13px] text-primary hover:underline"
-            >
-              {t('common.retry')}
-            </button>
-          </div>
+          <InlineError message={error} onRetry={refetch} />
         ) : items.length === 0 ? (
-          <div className="px-3 py-14 flex flex-col items-center text-center">
-            <div className="empty-icon-tile">
-              <ImageIcon className="w-5 h-5" />
-            </div>
-            <h3 className="text-[15px] font-medium text-foreground mb-1.5">{t('resources.emptyTitle')}</h3>
-            <p className="text-[13px] text-muted-foreground max-w-sm leading-relaxed">
-              {t('resources.emptyDesc')}
-            </p>
-            <Link
-              to="/settings/images"
-              className="inline-block mt-3 text-[13px] text-primary hover:underline"
-            >
-              {t('resources.openImageSettings')}
-            </Link>
-          </div>
+          <EmptyState
+            icon={<ImageIcon className="w-5 h-5" />}
+            title={t('resources.emptyTitle')}
+            description={t('resources.emptyDesc')}
+            action={(
+              <Link
+                to="/settings/images"
+                className="inline-block text-[13px] text-primary hover:underline"
+              >
+                {t('resources.openImageSettings')}
+              </Link>
+            )}
+          />
         ) : (
           <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {items.map((item) => (

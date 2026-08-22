@@ -10,7 +10,7 @@ import { usePinnedViews } from '../hooks/usePinnedViews'
 import DocList from '../components/DocList'
 import PageHeader from '../components/PageHeader'
 import TagFilter, { TagMatchHint } from '../components/TagFilter'
-import { ListRowsSkeleton, Tooltip } from '../components/ui'
+import { Button, EmptyState, InlineError, ListRowsSkeleton, Tooltip } from '../components/ui'
 
 function viewTitle(params: URLSearchParams): string {
   if (params.get('untagged') === '1' || params.get('view') === 'untagged') return i18next.t('home.viewUntagged')
@@ -107,7 +107,6 @@ export default function HomePage() {
   // 无标签缓存时等 GET /tags 与列表一起出，避免 chip 行插入把列表顶下去
   const waitingTags = tagsLoading && tagCatalog.length === 0
   const showListSkeleton = (loading && docs.length === 0) || waitingTags
-  // 原 .catch(console.error) 语义：失败只打日志，列表保留旧数据
   useEffect(() => {
     if (error) console.error(error)
   }, [error])
@@ -150,10 +149,15 @@ export default function HomePage() {
         <section className="space-y-3 animate-fade-in">
           {showListSkeleton ? (
             <ListRowsSkeleton rows={5} />
+          ) : error && docs.length === 0 ? (
+            <InlineError message={error.message} onRetry={handleRefresh} />
           ) : docs.length === 0 ? (
-            <EmptyState onCreate={goNew} title={title} kind={viewKind} />
+            <HomeEmptyState onCreate={goNew} title={title} kind={viewKind} />
           ) : (
             <>
+            {error && (
+              <InlineError compact message={error.message} onRetry={handleRefresh} />
+            )}
             <DocList docs={docs} onRefresh={handleRefresh} />
             {hasMore && (
               <div className="pt-2 flex justify-center">
@@ -203,28 +207,19 @@ export default function HomePage() {
   )
 }
 
-function EmptyState({ onCreate, title, kind }: { onCreate: () => void; title: string; kind: 'all' | 'tag' | 'other' }) {
+function HomeEmptyState({ onCreate, title, kind }: { onCreate: () => void; title: string; kind: 'all' | 'tag' | 'other' }) {
   const { t } = useTranslation()
   const isAll = kind === 'all'
   return (
-    <div className="px-3 py-12 flex flex-col items-center text-center">
-      <div className="empty-icon-tile">
-        {isAll ? <FileText className="w-5 h-5" /> : kind === 'tag' ? <Tag className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
-      </div>
-      <h3 className="text-[15px] font-medium text-foreground mb-1.5 tracking-[-0.005em]">
-        {isAll ? t('home.emptyAllTitle') : t('home.emptyFilteredTitle', { title })}
-      </h3>
-      <p className="text-[13px] text-muted-foreground mb-5 max-w-[280px] leading-relaxed">
-        {isAll ? t('home.emptyAllDesc') : t('home.emptyFilteredDesc')}
-      </p>
-      <button
-        type="button"
-        onClick={onCreate}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-card hover:border-foreground/30 hover:text-foreground text-foreground text-sm font-medium transition-colors"
-      >
-        <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
-        {t('home.newDoc')}
-      </button>
-    </div>
+    <EmptyState
+      icon={isAll ? <FileText className="w-5 h-5" /> : kind === 'tag' ? <Tag className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+      title={isAll ? t('home.emptyAllTitle') : t('home.emptyFilteredTitle', { title })}
+      description={isAll ? t('home.emptyAllDesc') : t('home.emptyFilteredDesc')}
+      action={(
+        <Button type="button" variant="secondary" size="sm" onClick={onCreate} icon={<Plus className="w-3.5 h-3.5" strokeWidth={1.75} />}>
+          {t('home.newDoc')}
+        </Button>
+      )}
+    />
   )
 }

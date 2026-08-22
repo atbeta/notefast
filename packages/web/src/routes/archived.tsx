@@ -16,7 +16,7 @@ import { useDocChanges } from '../hooks/useDocEvents'
 import { formatRelative } from '../lib/time'
 import DocActionsMenu from '../components/DocActionsMenu'
 import PageHeader from '../components/PageHeader'
-import { ListRowsSkeleton, Tooltip } from '../components/ui'
+import { EmptyState, ListRowsSkeleton, Tooltip } from '../components/ui'
 
 export default function ArchivedPage() {
   const { t } = useTranslation()
@@ -144,15 +144,11 @@ export default function ArchivedPage() {
         {loading ? (
           <ListRowsSkeleton rows={4} />
         ) : docs.length === 0 ? (
-          <div className="px-3 py-14 flex flex-col items-center text-center">
-            <div className="empty-icon-tile">
-              <Archive className="w-5 h-5" />
-            </div>
-            <h3 className="text-[15px] font-medium text-foreground mb-1.5">{t('archived.emptyTitle')}</h3>
-            <p className="text-[13px] text-muted-foreground mb-5 max-w-[280px] leading-relaxed">
-              {t('archived.emptyDesc')}
-            </p>
-          </div>
+          <EmptyState
+            icon={<Archive className="w-5 h-5" />}
+            title={t('archived.emptyTitle')}
+            description={t('archived.emptyDesc')}
+          />
         ) : (
           <>
             <div className="relative">

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import i18next from '../i18n'
 import { Shield, Monitor, Phone, Globe } from 'lucide-react'
 import { api } from '../hooks/useAPI'
-import { HelpTip } from './ui'
+import { HelpTip, PanelSkeleton } from './ui'
 import { SettingsCard } from './settings/ui'
 
 interface AuthEvent {
@@ -80,7 +80,7 @@ export default function AuthEventsPanel() {
       icon={<Shield className="w-4 h-4" strokeWidth={1.75} />}
       collapsible
     >
-      <p className="text-[12px] text-muted-foreground">{t('common.loading')}</p>
+      <PanelSkeleton />
     </SettingsCard>
   )
 

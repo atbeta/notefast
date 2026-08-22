@@ -2,14 +2,13 @@
  * 实体面板 — 文档页右栏（桌面）/ 堆叠区（移动端）展示本文涉及的实体
  *
  * AI 在写入时自动抽取的实体以 chips 形式低调呈现；点击 chip 展开该实体的
- * 相关笔记列表（GET /entities/:id）。无实体时整体不渲染；加载失败静默降级，
+ * 相关笔记列表（GET /entities/:id）。无实体时整体不渲染；提及列表失败展示可重试错误，
  * 不阻塞文档页。
  */
 
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Loader2 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
@@ -19,7 +18,7 @@ import {
   type EntityDetail,
   type EntityMention,
 } from '../lib/entities'
-import { Tooltip } from './ui'
+import { InlineError, ListRowsSkeleton, Tooltip } from './ui'
 
 /** 单条提及：笔记标题 + 非常态状态标注 + 所在块摘要，点击跳转文档 */
 export function MentionRow({ mention }: { mention: EntityMention }) {
@@ -51,19 +50,15 @@ export function MentionRow({ mention }: { mention: EntityMention }) {
 /** 实体的相关笔记列表（EntityPanel 与实体列表页共用）；失败静默 */
 export function EntityMentions({ entityId }: { entityId: string }) {
   const { t } = useTranslation()
-  const { data, loading, error } = useApiQuery(
+  const { data, loading, error, refetch } = useApiQuery(
     () => api.get<EntityDetail>(`/entities/${entityId}`),
     [entityId],
   )
   if (loading && !data) {
-    return (
-      <div className="flex items-center gap-1.5 px-1 py-2 text-[12px] text-muted-foreground/70">
-        <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
-        {t('common.loading')}
-      </div>
-    )
+    return <ListRowsSkeleton rows={2} withIcon={false} />
   }
-  if (error || !data) return null
+  if (error) return <InlineError compact message={error.message} onRetry={refetch} />
+  if (!data) return null
   if (data.mentions.length === 0) {
     return <div className="px-1 py-1 text-[12px] text-muted-foreground/60">{t('entityPanel.noRelatedNotes')}</div>
   }
@@ -115,7 +110,7 @@ export default function EntityPanel({ docId, variant }: EntityPanelProps) {
         </Tooltip>
       )}
       {loading && entities.length === 0 ? (
-        <div className="px-1 text-[12px] text-muted-foreground/70">{t('common.loading')}</div>
+        <ListRowsSkeleton rows={2} withIcon={false} />
       ) : empty ? (
         <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
           {ai.ready && !ai.chat

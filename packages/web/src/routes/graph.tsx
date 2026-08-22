@@ -20,7 +20,7 @@ import { useAiCapabilities } from '../hooks/useAiCapabilities'
 import PageHeader from '../components/PageHeader'
 import EntityGraph from '../components/EntityGraph'
 import { EntityMentions } from '../components/EntityPanel'
-import { Tooltip } from '../components/ui'
+import { EmptyState, InlineError, Tooltip } from '../components/ui'
 import { entityKindLabel, type EntitySummary } from '../lib/entities'
 import {
   GRAPH_NOTE_COLOR,
@@ -489,52 +489,54 @@ export default function GraphPage() {
             {t('graph.loading')}
           </div>
         ) : empty ? (
-          <div className="flex-1 min-h-[55vh] card rounded-xl flex flex-col items-center justify-center text-center px-6">
-            <div className="empty-icon-tile">
-              <Network className="w-5 h-5" />
-            </div>
-            <h3 className="text-[15px] font-medium text-foreground mb-1.5">
-              {ai.ready && !ai.chat && !center && !(mode === 'docs' && titleQ)
-                ? t('graph.emptyNeedChat')
-                : mode === 'docs'
-                  ? titleQ
-                    ? t('graph.emptyNoResults')
-                    : t('graph.emptyInitial')
-                  : center
-                    ? t('graph.emptyNoRelated')
-                    : t('graph.emptyInitial')}
-            </h3>
-            <p className="text-[13px] text-muted-foreground mb-5 max-w-[340px] leading-relaxed">
-              {ai.ready && !ai.chat && !center && !(mode === 'docs' && titleQ)
-                ? t('graph.emptyNeedChatDesc')
-                : mode === 'docs'
-                  ? titleQ
-                    ? t('graph.emptyNoResultsDesc')
-                    : t('graph.emptyInitialDesc')
-                  : center
-                    ? t('graph.emptyNoRelatedDesc')
-                    : t('graph.emptyInitialEntityDesc')}
-            </p>
-            {ai.ready && !ai.chat && !center && !(mode === 'docs' && titleQ) ? (
-              <Link
-                to="/settings/ai"
-                className="rounded-md bg-primary px-3 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:bg-primary-hover transition-colors"
-              >
-                {t('entities.configureChat')}
-              </Link>
-            ) : center ? (
-              <button
-                type="button"
-                onClick={resetView}
-                className="rounded-md bg-primary px-3 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:bg-primary-hover transition-colors"
-              >
-                {t('graph.backToOverview')}
-              </button>
-            ) : null}
+          <div className="flex-1 min-h-[55vh] card rounded-xl flex items-center justify-center px-6">
+            <EmptyState
+              icon={<Network className="w-5 h-5" />}
+              title={
+                ai.ready && !ai.chat && !center && !(mode === 'docs' && titleQ)
+                  ? t('graph.emptyNeedChat')
+                  : mode === 'docs'
+                    ? titleQ
+                      ? t('graph.emptyNoResults')
+                      : t('graph.emptyInitial')
+                    : center
+                      ? t('graph.emptyNoRelated')
+                      : t('graph.emptyInitial')
+              }
+              description={
+                ai.ready && !ai.chat && !center && !(mode === 'docs' && titleQ)
+                  ? t('graph.emptyNeedChatDesc')
+                  : mode === 'docs'
+                    ? titleQ
+                      ? t('graph.emptyNoResultsDesc')
+                      : t('graph.emptyInitialDesc')
+                    : center
+                      ? t('graph.emptyNoRelatedDesc')
+                      : t('graph.emptyInitialEntityDesc')
+              }
+              action={
+                ai.ready && !ai.chat && !center && !(mode === 'docs' && titleQ) ? (
+                  <Link
+                    to="/settings/ai"
+                    className="rounded-md bg-primary px-3 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:bg-primary-hover transition-colors"
+                  >
+                    {t('entities.configureChat')}
+                  </Link>
+                ) : center ? (
+                  <button
+                    type="button"
+                    onClick={resetView}
+                    className="rounded-md bg-primary px-3 py-1.5 text-[12.5px] font-medium text-primary-foreground hover:bg-primary-hover transition-colors"
+                  >
+                    {t('graph.backToOverview')}
+                  </button>
+                ) : undefined
+              }
+            />
           </div>
         ) : error ? (
-          <div className="flex-1 min-h-[55vh] card rounded-xl flex items-center justify-center text-[13px] text-destructive">
-            {t('graph.error', { message: error.message })}
+          <div className="flex-1 min-h-[55vh] card rounded-xl flex items-center justify-center px-6">
+            <InlineError message={t('graph.error', { message: error.message })} />
           </div>
         ) : (
           <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3">

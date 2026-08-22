@@ -19,7 +19,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { SearchResult } from '@notefast/core'
 import { request } from '../hooks/useAPI'
 import { useTheme } from '../hooks/useTheme'
-import { Kbd, ShortcutKeys } from './ui'
+import { EmptyState, Kbd, ShortcutKeys } from './ui'
 import {
   collapseSearchHitsByDoc,
   paletteDocTitle,
@@ -252,9 +252,11 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
 
         <div ref={listRef} className="max-h-[60vh] overflow-y-auto p-2">
           {allItems.length === 0 && (
-            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-              {searching ? t('command.searching') : query ? t('command.noResults') : t('command.hint')}
-            </div>
+            <EmptyState
+              className="py-8"
+              icon={<Search className="w-5 h-5" />}
+              title={searching ? t('command.searching') : query ? t('command.noResults') : t('command.hint')}
+            />
           )}
 
           {commandSection.length > 0 && (

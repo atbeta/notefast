@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Pencil, Trash2, Cloud } from 'lucide-react'
 import { api } from '../hooks/useAPI'
-import { ActionButton, Tooltip, useToast } from './ui'
+import { ActionButton, EmptyState, Tooltip, useToast } from './ui'
 import { SettingsCard, InlineField } from './settings/ui'
 import { useStorageLocations } from '../hooks/useStorageLocations'
 import { STORAGE_SECRET_MASK, type StorageLocation } from '@notefast/core'
@@ -106,9 +106,11 @@ export default function StorageLocationsPanel() {
     >
       <div className="space-y-4">
         {locations.length === 0 && (
-          <p className="text-[12.5px] text-muted-foreground">
-            {t('storageLoc.empty')}
-          </p>
+          <EmptyState
+            className="py-6"
+            icon={<Cloud className="w-5 h-5" />}
+            title={t('storageLoc.empty')}
+          />
         )}
 
         {locations.map((loc) => (

@@ -1,11 +1,13 @@
-import { Component, type ReactNode } from 'react'
+import { Component, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { reportBoundaryError } from '../lib/errorReporter'
+import { Button } from './ui/Button'
 
 interface Props {
   children: ReactNode
   /**
    * 自定义错误 UI：用于路由级（紧凑、嵌入 Layout 之内）或自定义场景。
-   * 不传则使用 root 边界的全屏兜底（带 stack 方便本地排查）。
+   * 不传则使用 root 边界的全屏兜底。
    */
   fallback?: (error: Error, reset: () => void) => ReactNode
 }
@@ -14,9 +16,46 @@ interface State {
   error: Error | null
 }
 
+function RootErrorFallback({ error, onReset }: { error: Error; onReset: () => void }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 gap-3 bg-background">
+      <div className="text-[15px] font-medium text-foreground">{t('errorBoundary.title')}</div>
+      <div className="text-[12px] text-muted-foreground break-all max-w-lg text-center leading-relaxed">
+        {error.message || String(error)}
+      </div>
+      {error.stack && (
+        <div className="flex flex-col items-center gap-2 max-w-xl w-full">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="text-[12px] text-muted-foreground hover:text-foreground"
+          >
+            {open ? t('common.hideDetails') : t('common.showDetails')}
+          </button>
+          {open && (
+            <pre className="text-[10.5px] text-muted-foreground/70 whitespace-pre-wrap break-all max-h-48 overflow-y-auto border border-border rounded-md p-2.5 bg-muted/30 w-full">
+              {error.stack}
+            </pre>
+          )}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Button type="button" variant="primary" onClick={onReset}>
+          {t('errorBoundary.retry')}
+        </Button>
+        <Button type="button" variant="ghost" onClick={() => { window.location.href = '/' }}>
+          {t('common.backHome')}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 /**
  * React 错误边界。任何子组件渲染 / 生命周期抛错都不再白屏：
- *  - root 形态（全屏）：默认带 stack，定位"整站崩溃"类问题
+ *  - root 形态（全屏）：友好文案 + 可折叠 stack
  *  - 自定义 fallback：路由级 / 局部用，Layout 继续可用
  *
  * 局限：仅能捕获 render / 生命周期 / constructor 中的同步抛错。
@@ -31,7 +70,6 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: { componentStack?: string }): void {
-    // 本地日志 + 远程埋点（同一事件，不丢任何一种）
     console.error('[ErrorBoundary]', error)
     reportBoundaryError(error, info.componentStack)
   }
@@ -44,32 +82,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     const { error } = this.state
     if (error) {
       if (this.props.fallback) return this.props.fallback(error, this.handleReset)
-      // root 边界默认 UI
-      return (
-        <div className="min-h-screen flex flex-col items-center justify-center px-6 gap-3 bg-background">
-          <div className="text-[15px] font-medium text-foreground">页面渲染出错</div>
-          <div className="text-[12px] text-destructive break-all max-w-lg text-center leading-relaxed">
-            {error.message || String(error)}
-          </div>
-          {error.stack && (
-            <pre className="text-[10.5px] text-muted-foreground/70 whitespace-pre-wrap break-all max-w-xl max-h-48 overflow-y-auto border border-border rounded-md p-2.5 bg-muted/30">
-              {error.stack}
-            </pre>
-          )}
-          <div className="flex gap-2">
-            <button type="button" onClick={this.handleReset} className="btn-primary-custom">
-              重试
-            </button>
-            <button
-              type="button"
-              onClick={() => { window.location.href = '/' }}
-              className="btn-ghost-custom"
-            >
-              返回首页
-            </button>
-          </div>
-        </div>
-      )
+      return <RootErrorFallback error={error} onReset={this.handleReset} />
     }
     return this.props.children
   }

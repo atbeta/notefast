@@ -17,7 +17,7 @@ import { useDocChanges } from '../hooks/useDocEvents'
 import { formatRelative } from '../lib/time'
 import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
-import { ListRowsSkeleton, Tooltip, useToast } from '../components/ui'
+import { EmptyState, ListRowsSkeleton, Tooltip, useToast } from '../components/ui'
 
 interface TrashItem {
   id: string
@@ -120,15 +120,11 @@ export default function TrashPage() {
         {loading ? (
           <ListRowsSkeleton rows={4} />
         ) : docs.length === 0 ? (
-          <div className="px-3 py-14 flex flex-col items-center text-center">
-            <div className="empty-icon-tile">
-              <Trash2 className="w-5 h-5" />
-            </div>
-            <h3 className="text-[15px] font-medium text-foreground mb-1.5">{t('trash.emptyTitle')}</h3>
-            <p className="text-[13px] text-muted-foreground mb-5 max-w-[280px] leading-relaxed">
-              {t('trash.emptyDesc')}
-            </p>
-          </div>
+          <EmptyState
+            icon={<Trash2 className="w-5 h-5" />}
+            title={t('trash.emptyTitle')}
+            description={t('trash.emptyDesc')}
+          />
         ) : (
           <div className="grid gap-0.5">
             {docs.map((doc) => (

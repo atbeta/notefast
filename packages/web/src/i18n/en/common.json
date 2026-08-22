@@ -27,7 +27,18 @@
     "unknown": "Unknown",
     "confirmDeleteTitle": "Confirm delete",
     "confirmDeleteDescription": "This action cannot be undone.",
-    "httpError": "HTTP {{status}}"
+    "httpError": "HTTP {{status}}",
+    "backHome": "Back to home",
+    "showDetails": "Show details",
+    "hideDetails": "Hide details"
+  },
+  "errorBoundary": {
+    "title": "This page failed to render",
+    "retry": "Retry"
+  },
+  "routeBoundary": {
+    "title": "This section failed to render",
+    "retry": "Retry section"
   },
   "time": {
     "justNow": "just now",
