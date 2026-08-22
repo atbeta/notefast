@@ -4,7 +4,10 @@
  * 为什么不用原生 scrollIntoView({behavior:'smooth'})：
  * 在部分环境（headless 浏览器、rAF 被节流的页面）原生平滑滚动会静默失效，
  * 表现为「点击没反应」。手动 rAF 实现在任何环境都可靠。
+ * 系统减弱动态效果时瞬时落地。
  */
+
+import { prefersReducedMotion } from './reducedMotion'
 
 /** 找到元素最近的可纵向滚动祖先 */
 export function findScrollableAncestor(el: HTMLElement): HTMLElement | null {
@@ -24,7 +27,7 @@ export function smoothScrollTo(container: HTMLElement, target: number, duration 
   const start = container.scrollTop
   const diff = target - start
   if (Math.abs(diff) < 2) return
-  if (duration <= 0) {
+  if (duration <= 0 || prefersReducedMotion()) {
     container.scrollTop = target
     return
   }

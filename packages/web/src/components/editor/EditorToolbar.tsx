@@ -181,7 +181,7 @@ export default function EditorToolbar({
               if (uploadingImage) return
               setImageMenuOpen((v) => !v)
             }}
-            className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-all active:scale-[0.92] disabled:opacity-50 ${
+            className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-[color,background-color,border-color,transform] active:scale-[0.92] disabled:opacity-50 ${
               imageMenuOpen
                 ? 'bg-primary/10 text-primary'
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent'
@@ -277,7 +277,7 @@ export default function EditorToolbar({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex items-center justify-center h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border border-border bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent transition-all active:scale-[0.97]"
+            className="inline-flex items-center justify-center h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border border-border bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent transition-[color,background-color,border-color,transform] active:scale-[0.97]"
           >
             {t('editorToolbar.exitEdit')}
           </button>
@@ -286,7 +286,7 @@ export default function EditorToolbar({
               type="button"
               onClick={onSave}
               disabled={saving || loading}
-              className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border transition-all active:scale-[0.97] disabled:cursor-not-allowed bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] border-[rgb(var(--primary))] shadow-btn hover:bg-[rgb(var(--primary-hover))] hover:border-[rgb(var(--primary-hover))] ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
+              className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border transition-[color,background-color,border-color,transform] active:scale-[0.97] disabled:cursor-not-allowed bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] border-[rgb(var(--primary))] shadow-btn hover:bg-[rgb(var(--primary-hover))] hover:border-[rgb(var(--primary-hover))] ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
             >
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
               {saving ? t('editorToolbar.savingShort') : t('editorToolbar.save')}
@@ -381,7 +381,7 @@ function IconBtn({
         type="button"
         onClick={onClick}
         aria-label={title}
-        className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-all active:scale-[0.92] ${
+        className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-[color,background-color,border-color,transform] active:scale-[0.92] ${
           active
             ? 'bg-primary/10 text-primary'
             : 'text-muted-foreground hover:text-foreground hover:bg-accent'

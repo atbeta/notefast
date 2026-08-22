@@ -87,7 +87,7 @@ export default function AuthPrompt() {
             className="mt-3 flex items-center gap-2 select-none cursor-pointer w-fit group"
           >
             <span
-              className={`w-4 h-4 rounded-md border grid place-items-center transition-all ${
+              className={`w-4 h-4 rounded-md border grid place-items-center transition-colors ${
                 remember
                   ? 'bg-foreground border-foreground text-background'
                   : 'border-border-strong/60 bg-transparent group-hover:border-foreground/40'

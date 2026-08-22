@@ -119,6 +119,15 @@ export default {
         card: 'var(--radius-card)',
         btn:  'var(--radius-btn)',
       },
+      transitionDuration: {
+        fast: 'var(--dur-fast)',
+        DEFAULT: 'var(--dur)',
+        normal: 'var(--dur-normal)',
+        slow: 'var(--dur-slow)',
+      },
+      transitionTimingFunction: {
+        DEFAULT: 'var(--ease)',
+      },
     },
   },
   plugins: [

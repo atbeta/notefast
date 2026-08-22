@@ -108,7 +108,7 @@ export default function ImageUploadPanel() {
         <button
           type="button"
           onClick={() => setMode('off')}
-          className={`rounded-lg border px-3 py-2.5 text-left transition-all ${
+          className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
             mode === 'off'
               ? 'border-primary/45 bg-primary-soft shadow-card'
               : 'border-border bg-card hover:border-border-strong'
@@ -120,7 +120,7 @@ export default function ImageUploadPanel() {
         <button
           type="button"
           onClick={() => setMode('auto')}
-          className={`rounded-lg border px-3 py-2.5 text-left transition-all ${
+          className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
             mode === 'auto'
               ? 'border-primary/45 bg-primary-soft shadow-card'
               : 'border-border bg-card hover:border-border-strong'

@@ -33,11 +33,11 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
 const VARIANT_BASE: Record<ButtonVariant, string> = {
   primary: 'btn-primary-custom',
   secondary:
-    'inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-btn)] border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--ink))] hover:bg-accent active:scale-[0.97] transition-all duration-150',
+    'inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-btn)] border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--ink))] hover:bg-accent active:scale-[0.97] transition-[color,background-color,border-color,transform] duration-150',
   ghost:
-    'inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-btn)] border border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground active:scale-[0.97] transition-all duration-150',
+    'inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-btn)] border border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground active:scale-[0.97] transition-[color,background-color,border-color,transform] duration-150',
   danger:
-    'inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-btn)] border border-transparent bg-transparent text-destructive hover:bg-destructive/10 active:scale-[0.97] transition-all duration-150',
+    'inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-btn)] border border-transparent bg-transparent text-destructive hover:bg-destructive/10 active:scale-[0.97] transition-[color,background-color,border-color,transform] duration-150',
 }
 
 const SIZES: Record<ButtonSize, string> = {

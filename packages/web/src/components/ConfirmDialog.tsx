@@ -117,7 +117,7 @@ export default function ConfirmDialog({
             onClick={busy ? undefined : onConfirm}
             disabled={busy}
             aria-busy={busy || undefined}
-            className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${
+            className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-[color,background-color,transform] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${
               effectiveTone === 'destructive'
                 ? 'bg-destructive/90 text-destructive-foreground hover:bg-destructive shadow-btn'
                 : 'bg-foreground text-background shadow-btn hover:bg-foreground/90'

@@ -378,7 +378,7 @@ export default function DocActionsMenu({
               setOpen((v) => !v)
             }}
             onPointerDown={(e) => e.stopPropagation()}
-            className={`${triggerSize} inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-all ${triggerVisible}`}
+            className={`${triggerSize} inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ${triggerVisible}`}
           >
             <MoreHorizontal className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} strokeWidth={1.75} aria-hidden="true" />
           </button>
@@ -475,7 +475,7 @@ export default function DocActionsMenu({
                 type="button"
                 disabled={busy || !renameDraft.trim()}
                 onClick={() => { void handleRenameSubmit() }}
-                className="px-3.5 py-1.5 text-[13px] font-medium rounded-md bg-foreground text-background shadow-btn hover:bg-foreground/90 disabled:opacity-40 transition-all"
+                className="px-3.5 py-1.5 text-[13px] font-medium rounded-md bg-foreground text-background shadow-btn hover:bg-foreground/90 disabled:opacity-40 transition-colors"
               >
                 {t('common.save')}
               </button>

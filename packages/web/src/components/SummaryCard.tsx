@@ -27,7 +27,7 @@ export default function SummaryCard({ icon, title, badge, description, to }: Sum
         </div>
         {description && <p className="text-[12px] text-muted-foreground mt-1 leading-snug">{description}</p>}
       </div>
-      <ArrowRight className="w-4 h-4 text-muted-foreground/60 group-hover:text-foreground group-hover:translate-x-0.5 transition-all shrink-0" strokeWidth={1.75} />
+      <ArrowRight className="w-4 h-4 text-muted-foreground/60 group-hover:text-foreground group-hover:translate-x-0.5 transition-[color,transform] shrink-0" strokeWidth={1.75} />
     </Link>
   )
 }

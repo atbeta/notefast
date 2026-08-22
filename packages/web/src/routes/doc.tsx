@@ -909,7 +909,7 @@ useEffect(() => {
                   type="button"
                   onClick={handleSuggestTitle}
                   disabled={generatingTitle || aiExclude || !ai.chat}
-                  className="absolute right-1 sm:-right-8 top-3 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-50 p-1.5 text-muted-foreground hover:text-foreground transition-all rounded-md disabled:opacity-30"
+                  className="absolute right-1 sm:-right-8 top-3 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-50 p-1.5 text-muted-foreground hover:text-foreground transition-[color,opacity] rounded-md disabled:opacity-30"
                   aria-label={aiExclude ? t('doc.aiHiddenNoTitle') : t('doc.generateTitleAi')}
                 >
                   {generatingTitle ? (

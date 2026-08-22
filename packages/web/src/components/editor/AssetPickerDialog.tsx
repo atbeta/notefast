@@ -129,7 +129,7 @@ export default function AssetPickerDialog({ open, onClose, onPick }: AssetPicker
                     <button
                       type="button"
                       onClick={() => onPick(`asset:${item.id}`)}
-                      className="w-full aspect-square rounded-md border border-border/60 bg-muted/40 overflow-hidden hover:border-primary/50 hover:ring-1 hover:ring-primary/30 transition-all "
+                      className="w-full aspect-square rounded-md border border-border/60 bg-muted/40 overflow-hidden hover:border-primary/50 hover:ring-1 hover:ring-primary/30 transition-colors"
                     >
                       <img
                         src={`/api/v1/assets/${item.id}`}

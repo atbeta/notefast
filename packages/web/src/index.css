@@ -214,7 +214,7 @@
   }
   /* 新节点入场：内层 g 只做缩放/淡入（外层 g 承担位置，逐 tick 更新不冲突） */
   .graph-node-enter {
-    animation: graph-pop 0.35s var(--ease);
+    animation: graph-pop var(--dur-slow) var(--ease);
     transform-origin: center;
   }
   /* 悬浮聚焦的变暗/高亮平滑过渡：避免节点间快速移动时 opacity 瞬时翻转「一闪一闪」 */
@@ -387,7 +387,7 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 .animate-fade-in {
-  animation: fade-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: fade-in var(--dur-slow) var(--ease) both;
 }
 /* 不要把 animate-fade-in（含 transform）套在 .demo-zoom 祖先上：Chromium 里
    zoom + 祖先 transform 会从左上角抹开，慢加载下像「正文从左往右长出来」。 */
@@ -398,7 +398,7 @@
   to   { opacity: 1; }
 }
 .animate-fade-soft {
-  animation: fade-in-soft 140ms ease-out both;
+  animation: fade-in-soft var(--dur-fast) var(--ease) both;
 }
 
 /* 主题切换过渡：仅切换瞬间由 useTheme 给 <html> 挂 .theme-fading（~180ms 后移除），
@@ -407,8 +407,8 @@ html.theme-fading,
 html.theme-fading *,
 html.theme-fading *::before,
 html.theme-fading *::after {
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease,
-    box-shadow 160ms ease !important;
+  transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease),
+    color var(--dur) var(--ease), box-shadow var(--dur) var(--ease) !important;
 }
 
 /* 无障碍底线：系统「减弱动态效果」开启时，全部动画/过渡压到近零 */
@@ -430,7 +430,7 @@ html.theme-fading *::after {
   to   { opacity: 0; transform: translateY(-2px); }
 }
 .animate-page-leave {
-  animation: page-leave 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: page-leave var(--dur-normal) var(--ease) both;
 }
 
 /* Toast 滑入：从右上角 + 渐显 */
@@ -443,10 +443,10 @@ html.theme-fading *::after {
   to   { opacity: 0; transform: translateX(16px) scale(0.96); }
 }
 .animate-toast-in {
-  animation: toast-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: toast-in var(--dur-slow) var(--ease) both;
 }
 .animate-toast-out {
-  animation: toast-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: toast-out var(--dur) var(--ease) both;
 }
 
 /* progress bar 倒计时 —— 跟 width 一起 transition */
@@ -479,7 +479,7 @@ html.theme-fading *::after {
   height: 1.5px;
   background: rgb(var(--foreground) / 0.85);
   border-radius: 2px;
-  transition: left 220ms cubic-bezier(0.16, 1, 0.3, 1), width 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: left var(--dur-normal) var(--ease), width var(--dur-normal) var(--ease);
 }
 
 /* ────────────────────────────────────────────────────────────────

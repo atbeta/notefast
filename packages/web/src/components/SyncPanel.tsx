@@ -213,7 +213,7 @@ export default function SyncPanel() {
                     if (opt.key === 'localfs') setForm({ ...EMPTY_LOCALFS })
                     else setForm({ ...EMPTY_CONNECTION })
                   }}
-                  className={`flex flex-col gap-1.5 px-3 py-3 rounded-lg border text-left transition-all ${
+                  className={`flex flex-col gap-1.5 px-3 py-3 rounded-lg border text-left transition-colors ${
                     isSelected ? 'border-primary/45 bg-primary-soft shadow-card' : 'border-border bg-card hover:border-border-strong'
                   }`}
                 >

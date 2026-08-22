@@ -71,7 +71,15 @@ NoteFast 的视觉只通过 **CSS 变量 token** 定义。所有组件应通过 
 | `--shadow-btn` | 主按钮压感；类名 `shadow-btn`。inset kbd / 图谱 flood 不走这套 |
 
 ### 1.8 动效
-`--ease: 180ms cubic-bezier(0.4, 0, 0.2, 1)`，全 app 统一。
+| Token | 值 | 用处 |
+|---|---|---|
+| `--ease` | `cubic-bezier(0.2, 0, 0, 1)` | 唯一缓动 |
+| `--dur-fast` | 120ms | 轻提示 / 软淡入 |
+| `--dur` | 150ms | 控件默认（已广泛引用） |
+| `--dur-normal` | 200ms | 页切换 / 指示器 |
+| `--dur-slow` | 320ms | 浮层入场 / toast |
+
+JS 动画（平滑滚动、图谱模拟）读 `prefersReducedMotion()`，系统减弱动态效果时瞬时落地。
 
 ### 1.9 层级（z-index）
 按现状登记，组件用 `z-popover` / `z-dialog` 等，不要写 `z-[80]`。

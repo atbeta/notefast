@@ -40,6 +40,7 @@ import {
   type GraphNode,
 } from '../lib/graph'
 import { entityKindLabel } from '../lib/entities'
+import { prefersReducedMotion } from '../lib/reducedMotion'
 import {
   MAX_ZOOM,
   MIN_ZOOM,
@@ -232,7 +233,7 @@ export default function EntityGraph({
     // 构造时会自动 restart；先停掉。首屏（文档工具栏「查看关联图谱」）同步推进布局，
     // 避免先看几秒粒子飞。同页聚焦仍走动画。
     sim.stop()
-    if (firstLayout) {
+    if (firstLayout || prefersReducedMotion()) {
       sim.tick(90)
       fitView()
       autoFitRef.current = false

@@ -178,7 +178,7 @@ export default function Layout({ children, contentClassName }: { children: React
         </div>
         {/* 桌面侧边栏 — 演示模式隐藏（正文最大化，退出后恢复） */}
         {!demo.active && (
-        <div className={`hidden md:block transition-all duration-300 z-header relative print:hidden ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
+        <div className={`hidden md:block transition-[width] duration-slow z-header relative print:hidden ${sidebarCollapsed ? 'w-14' : 'w-60'}`}>
           <Sidebar
             collapsed={sidebarCollapsed}
             onToggle={toggleSidebar}
