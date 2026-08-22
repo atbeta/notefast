@@ -263,13 +263,13 @@ export default function EditorToolbar({
             />
           ) : (
             !aiConfigured && (
-              <Tooltip label={t('editorToolbar.aiNotConfiguredHint', { defaultValue: 'AI 未配置，点此去设置' })}>
+              <Tooltip label={t('editorToolbar.aiNotConfiguredHint')}>
                 <Link
                   to="/settings/ai"
                   className="inline-flex items-center gap-1 px-2 h-7 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                 >
                   <Sparkles className="w-3.5 h-3.5 opacity-70" strokeWidth={1.75} />
-                  {t('editorToolbar.aiSetup', { defaultValue: 'AI 未配置' })}
+                  {t('editorToolbar.aiSetup')}
                 </Link>
               </Tooltip>
             )

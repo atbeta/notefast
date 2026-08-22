@@ -116,7 +116,7 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
         hint: t('command.newDocHint'),
         section: 'command',
         shortcut: ['mod', 'N'],
-        keywords: ['create', 'doc', 'new', '新建'],
+        keywords: ['create', 'doc', 'new', '新建'], // i18n-allow: 中英检索别名
         action: () => { onClose(); navigate('/new') },
       },
       {
@@ -125,7 +125,7 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
         title: t('command.goHome'),
         hint: t('command.goHomeHint'),
         section: 'command',
-        keywords: ['home', 'list', 'index', '首页'],
+        keywords: ['home', 'list', 'index', '首页'], // i18n-allow: 中英检索别名
         action: () => { onClose(); navigate('/') },
       },
       {
@@ -134,7 +134,7 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
         title: t('command.goResources'),
         hint: t('command.goResourcesHint'),
         section: 'command',
-        keywords: ['resources', 'images', 'media', 'asset', '资源', '图片'],
+        keywords: ['resources', 'images', 'media', 'asset', '资源', '图片'], // i18n-allow: 中英检索别名
         action: () => { onClose(); navigate('/resources') },
       },
       ...(onToggleAiChat
@@ -145,7 +145,7 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
             hint: t('command.toggleAiChatHint'),
             section: 'command' as const,
             shortcut: ['mod', 'J'],
-            keywords: ['ai', 'chat', 'assistant', 'ask', '助手', '聊天', '问答'],
+            keywords: ['ai', 'chat', 'assistant', 'ask', '助手', '聊天', '问答'], // i18n-allow: 中英检索别名
             action: () => { onClose(); onToggleAiChat() },
           }]
         : []),
@@ -156,7 +156,7 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
         hint: t('command.toggleThemeHint'),
         section: 'command',
         shortcut: ['mod', '⇧D'],
-        keywords: ['theme', 'dark', 'light', '主题'],
+        keywords: ['theme', 'dark', 'light', '主题'], // i18n-allow: 中英检索别名
         action: toggleDark,
       },
     ]

@@ -18,28 +18,29 @@ import { forceHealthProbe, useServerHealth } from '../hooks/useServerHealth'
 
 export function ServerHealthDot() {
   const { status } = useServerHealth()
+  const { t } = useTranslation()
   if (status === 'online') return null
   if (status === 'offline') {
     return (
       <span
-        aria-label="server offline"
+        aria-label={t('serverHealth.offline')}
         className="inline-flex items-center gap-1.5 text-xs text-destructive font-medium"
       >
         <span className="relative inline-flex w-1.5 h-1.5">
           <span className="absolute inset-0 rounded-full bg-destructive/40 animate-ping" />
           <span className="relative inline-block w-1.5 h-1.5 rounded-full bg-destructive" />
         </span>
-        服务不可达
+        {t('serverHealth.offline')}
       </span>
     )
   }
   return (
     <span
-      aria-label="server status unknown"
+      aria-label={t('serverHealth.checking')}
       className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
     >
       <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
-      检测中
+      {t('serverHealth.checking')}
     </span>
   )
 }
@@ -55,7 +56,7 @@ export function ServerOfflineBanner() {
     >
       <WifiOff className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
       <span className="flex-1 min-w-0 truncate">
-        {t('serverHealth.offlineBanner', { defaultValue: '无法连接到本地服务。正在重试；检查服务进程是否仍在运行。' })}
+        {t('serverHealth.offlineBanner')}
         {lastError && (
           <span className="ml-2 text-destructive/70 font-mono text-xs">（{lastError}）</span>
         )}
@@ -66,7 +67,7 @@ export function ServerOfflineBanner() {
         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-destructive/30 hover:bg-destructive/10 transition-colors text-xs"
       >
         <RefreshCw className="w-3 h-3" strokeWidth={1.75} />
-        {t('serverHealth.retry', { defaultValue: '立即重试' })}
+        {t('serverHealth.retry')}
       </button>
     </div>
   )

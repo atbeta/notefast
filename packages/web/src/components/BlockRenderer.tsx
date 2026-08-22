@@ -45,6 +45,7 @@ const ImageZoomCtx = createContext<((src: string, alt?: string) => void) | null>
  * 状态一次性批量查询（blocks 变化时重查）；上传后单图更新，不发全量刷新。
  */
 function useAssetSync(block: Block): AssetSyncValue {
+  const { t } = useTranslation()
   const [statusMap, setStatusMap] = useState<Record<string, { remote: boolean; error: string | null }>>({})
   const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set())
 
@@ -71,7 +72,7 @@ function useAssetSync(block: Block): AssetSyncValue {
       const res = await api.post<{ ok: boolean; url: string | null; error: string | null }>(`/assets/${id}/upload`, {})
       setStatusMap((prev) => ({
         ...prev,
-        [id]: { remote: res.ok, error: res.ok ? null : (res.error ?? '上传失败') },
+        [id]: { remote: res.ok, error: res.ok ? null : (res.error ?? t('resources.uploadFailed')) },
       }))
     } catch (e) {
       setStatusMap((prev) => ({

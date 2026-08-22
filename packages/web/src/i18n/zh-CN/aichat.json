@@ -177,6 +177,8 @@
     "timeout": "超时限制",
     "timeoutUnit": "单位：毫秒",
     "displayName": "Provider 显示名",
+    "placeholderChat": "我的 OpenRouter",
+    "placeholderEmbed": "我的 Voyage Embedding",
     "extraHeaders": "额外 Header",
     "extraHeadersHint": "如 HTTP-Referer，某些 Provider 需要",
     "addHeader": "添加 Header"

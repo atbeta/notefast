@@ -154,6 +154,7 @@
     "copyConfig": "Copy config",
     "copied": "Copied",
     "tokenLabel": "Access token",
+    "tokenPlaceholder": "nf_paste_your_api_token_here",
     "tokenDesc": "MCP authenticates with a Bearer token. Generate a dedicated token and the config fills in automatically.",
     "generateToken": "Generate connection token",
     "tokenOnce": "This token is shown only once and cannot be viewed again; revoke it anytime in the API Tokens panel",
@@ -215,6 +216,8 @@
     "username": "Username",
     "password": "Password",
     "save": "Save connection",
-    "addNew": "Add storage connection"
+    "addNew": "Add storage connection",
+    "kindS3": "S3 compatible",
+    "kindWebdav": "WebDAV"
   }
 }

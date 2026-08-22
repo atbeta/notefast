@@ -93,3 +93,40 @@ if (missingEn.length > 0) {
   process.exit(1)
 }
 console.log(`[i18n] OK：en 覆盖全部 ${zhKeys.size} 个 key`)
+
+const CJK = /[\u4e00-\u9fff]/
+const ALLOW = /i18n-allow/
+
+/** 注释换成空格、保留换行，避免行号错位 */
+function maskComments(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:])\/\/.*$/gm, (full, pre: string) => pre + ' '.repeat(full.length - pre.length))
+}
+
+function maskRegexLiterals(line: string): string {
+  return line.replace(/\/(?:\\\/|[^/\n])+\/[gimsuy]*/g, '')
+}
+
+const cjkHits: string[] = []
+for (const file of walk(ROOT)) {
+  if (file.includes('/__tests__/')) continue
+  const rel = file.slice(ROOT.length + 1)
+  const raw = readFileSync(file, 'utf8')
+  const lines = raw.split('\n')
+  const masked = maskComments(raw).split('\n')
+  for (let i = 0; i < masked.length; i++) {
+    if (ALLOW.test(lines[i] ?? '')) continue
+    if (CJK.test(maskRegexLiterals(masked[i]))) {
+      cjkHits.push(`${rel}:${i + 1}  ${lines[i]!.trim().slice(0, 120)}`)
+    }
+  }
+}
+
+if (cjkHits.length > 0) {
+  console.error(`[i18n] ${cjkHits.length} 处源码 CJK 字面量（用户文案请走 t()；注释/测试/正则已跳过；例外加 i18n-allow）：`)
+  for (const h of cjkHits) console.error(`  - ${h}`)
+  process.exit(1)
+}
+console.log('[i18n] OK：源码无未入包的 CJK 字面量')
+

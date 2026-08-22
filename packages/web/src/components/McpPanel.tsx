@@ -18,8 +18,6 @@ interface McpTool {
   description: string
 }
 
-const TOKEN_PLACEHOLDER = 'nf_在此粘贴你的API令牌'
-
 /** 示例配置格式：OpenCode 与 Claude/Cursor 的 MCP 配置结构不同，优雅兼顾 */
 type ConfigFormat = 'opencode' | 'claude'
 const FORMAT_STORAGE_KEY = 'notefast.mcp.configFormat'
@@ -56,7 +54,7 @@ export default function McpPanel() {
     try { localStorage.setItem(FORMAT_STORAGE_KEY, next) } catch { /* ignore */ }
   }
 
-  const auth = `Bearer ${revealedToken ?? TOKEN_PLACEHOLDER}`
+  const auth = `Bearer ${revealedToken ?? t('mcp.tokenPlaceholder')}`
   const configJson = useMemo(() => {
     const base = { url: endpoint, headers: { Authorization: auth } }
     return JSON.stringify(

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "oxlint src && bun scripts/check-typography.ts",
+    "lint": "oxlint src && bun scripts/check-typography.ts && bun scripts/check-i18n.ts",
     "test": "bun test src",
     "typecheck": "tsc --noEmit",
     "check:i18n": "bun scripts/check-i18n.ts"

@@ -51,7 +51,7 @@ import { useActiveHeading } from '../hooks/useActiveHeading'
 import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
 import { useDemoMode, DEMO_ZOOMS, setDemoZoomIndex, toggleDemoMode } from '../hooks/useDemoMode'
 import { useDocReadingWidth, writeDocReadingWidth, DOC_READING_WIDTH_REM } from '../hooks/useDocReadingWidth'
-import { formatRelative, relativeTime, currentLocale } from '../lib/time'
+import { formatRelative, relativeTime, currentLocale, isPlaceholderDocTitle } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
 import { EmptyState, InlineError, Kbd, ListRowsSkeleton, Tooltip, useToast } from '../components/ui'
@@ -576,7 +576,7 @@ useEffect(() => {
         method: 'POST',
         body: JSON.stringify({ content: body.slice(0, 4000) }),
       })
-      if (res.title && (!doc.content || doc.content === t('doc.untitledDocument') || doc.content.match(/^\d+月\d+日$/))) {
+      if (res.title && (!doc.content || isPlaceholderDocTitle(doc.content, t('doc.untitledDocument')))) {
         await api.patch('/blocks/' + id, { content: res.title })
         setRefreshKey((k) => k + 1)
       }

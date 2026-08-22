@@ -53,6 +53,8 @@
     "copyFailed": "Failed to copy"
   },
   "serverHealth": {
+    "offline": "Server unreachable",
+    "checking": "Checking",
     "offlineBanner": "Cannot reach the local server. Retrying; check that the service process is still running.",
     "retry": "Retry now"
   },

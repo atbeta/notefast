@@ -110,6 +110,7 @@
       "nameLabel": "标准名",
       "aliasesLabel": "别名",
       "aliasesHint": "回车或逗号添加",
+      "aliasPlaceholder": "wafer, 晶圆片",
       "kindLabel": "类型",
       "descriptionLabel": "描述",
       "descriptionPlaceholder": "这个实体是什么？（可选；优先级高于 AI 生成）",

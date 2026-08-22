@@ -53,6 +53,8 @@
     "copyFailed": "复制失败"
   },
   "serverHealth": {
+    "offline": "服务不可达",
+    "checking": "检测中",
     "offlineBanner": "无法连接到本地服务。正在重试；检查服务进程是否仍在运行。",
     "retry": "立即重试"
   },

@@ -172,7 +172,7 @@ export default function NewDocPage() {
       }
       const b = body as { doc?: { id: string }; index_job?: { id: string } }
       const docId = b.doc?.id
-      if (!docId) throw new ApiError('docx 导入失败', res.status, body)
+      if (!docId) throw new ApiError(t('newDoc.docxImportFailed'), res.status, body)
       const q = new URLSearchParams()
       const indexJobId = b.index_job?.id
       if (indexJobId) q.set('index_job', indexJobId)

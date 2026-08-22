@@ -92,6 +92,7 @@
     "importUnsupportedFile": "不支持该文件类型。请选择 .md / .txt / .zip / .docx；图片请随文档打成 zip。",
     "zipImporting": "正在导入 zip…",
     "docxImporting": "正在导入 Word 文档…",
+    "docxImportFailed": "docx 导入失败",
     "zipImported": "已导入 {{n}} 篇文档",
     "zipMediaImported": "（含 {{n}} 个媒体文件）",
     "zipSkipped": "跳过 {{n}} 篇",

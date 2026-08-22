@@ -146,7 +146,7 @@ export default function StorageLocationsPanel() {
                 onClick={() => setKind('s3')}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${kind === 's3' ? 'bg-primary-soft text-primary' : 'bg-muted text-muted-foreground'}`}
               >
-                S3 兼容
+                {t('storageLoc.kindS3')}
               </button>
               <button
                 type="button"

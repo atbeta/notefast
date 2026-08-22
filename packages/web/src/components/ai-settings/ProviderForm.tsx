@@ -154,7 +154,7 @@ export function ProviderForm({
           label={t('providerForm.displayName')}
           value={value.label}
           onChange={(v) => onChange({ ...value, label: v })}
-          placeholder={mode === 'chat' ? '我的 OpenRouter' : '我的 Voyage Embedding'}
+          placeholder={mode === 'chat' ? t('providerForm.placeholderChat') : t('providerForm.placeholderEmbed')}
         />
       </div>
       <FieldRow label={t('providerForm.extraHeaders')} hint={t('providerForm.extraHeadersHint')}>

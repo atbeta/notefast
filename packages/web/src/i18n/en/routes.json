@@ -92,6 +92,7 @@
     "importUnsupportedFile": "Unsupported file type. Choose .md / .txt / .zip / .docx; put images in a zip with the document.",
     "zipImporting": "Importing zip…",
     "docxImporting": "Importing Word document…",
+    "docxImportFailed": "Failed to import docx",
     "zipImported": "Imported {{n}} documents",
     "zipMediaImported": "(incl. {{n}} media files)",
     "zipSkipped": "{{n}} skipped",

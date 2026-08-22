@@ -646,7 +646,7 @@ function EditorInline({
                   <div className="flex flex-col items-center gap-2 text-primary">
                     <ImageDown className="w-7 h-7" strokeWidth={1.75} />
                     <span className="text-base font-medium">
-                      {t('mdEditor.dropImageHint', { defaultValue: '松开上传图片' })}
+                      {t('mdEditor.dropImageHint')}
                     </span>
                   </div>
                 </div>

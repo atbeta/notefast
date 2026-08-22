@@ -177,6 +177,8 @@
     "timeout": "Timeout",
     "timeoutUnit": "in milliseconds",
     "displayName": "Provider display name",
+    "placeholderChat": "My OpenRouter",
+    "placeholderEmbed": "My Voyage Embedding",
     "extraHeaders": "Extra headers",
     "extraHeadersHint": "e.g. HTTP-Referer, required by some providers",
     "addHeader": "Add header"

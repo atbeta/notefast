@@ -387,7 +387,7 @@ export default function TermDictPanel() {
                     }
                   }}
                   onBlur={addAlias}
-                  placeholder="wafer, 晶圆片"
+                  placeholder={t('settings.termDict.aliasPlaceholder')}
                   data-no-focus-ring
                   className="flex-1 min-w-[100px] bg-transparent outline-none text-sm text-foreground placeholder:text-muted-foreground/40"
                 />
@@ -419,7 +419,7 @@ export default function TermDictPanel() {
               onChange={(e) => setImportText(e.target.value)}
               rows={5}
               spellCheck={false}
-              placeholder='[ { "name": "晶圆", "aliases": ["wafer"] } ]'
+              placeholder={t('settings.termDict.editorPlaceholder')}
               className="w-full rounded-md border border-border bg-background p-2.5 font-mono text-sm text-foreground "
             />
             {importError && <p className="text-xs text-destructive">{importError}</p>}

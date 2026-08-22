@@ -281,7 +281,7 @@ export default function AIChatPanel({
     for (const file of files) {
       if (!file.type.startsWith('image/')) continue
       if (file.size > 10 * 1024 * 1024) {
-        console.warn(`[chat] 图片超过 10MB，已跳过: ${file.name}`)
+        console.warn(`[chat] 图片超过 10MB，已跳过: ${file.name}`) // i18n-allow: 开发者日志
         continue
       }
       const reader = new FileReader()

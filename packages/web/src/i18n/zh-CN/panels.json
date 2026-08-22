@@ -154,6 +154,7 @@
     "copyConfig": "复制配置",
     "copied": "已复制",
     "tokenLabel": "访问令牌",
+    "tokenPlaceholder": "nf_在此粘贴你的API令牌",
     "tokenDesc": "MCP 使用 Bearer Token 鉴权。生成一个专用令牌，连接配置会自动填入。",
     "generateToken": "生成连接令牌",
     "tokenOnce": "令牌只显示这一次，关闭后无法再查看；可在「API 令牌」面板撤销",
@@ -215,6 +216,8 @@
     "username": "用户名",
     "password": "密码",
     "save": "保存连接",
-    "addNew": "新增存储连接"
+    "addNew": "新增存储连接",
+    "kindS3": "S3 兼容",
+    "kindWebdav": "WebDAV"
   }
 }

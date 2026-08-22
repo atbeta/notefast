@@ -110,6 +110,7 @@
       "nameLabel": "Canonical name",
       "aliasesLabel": "Aliases",
       "aliasesHint": "Enter or comma to add",
+      "aliasPlaceholder": "wafer, 晶圆片",
       "kindLabel": "Kind",
       "descriptionLabel": "Description",
       "descriptionPlaceholder": "What is this entity? (optional; takes priority over AI-generated)",

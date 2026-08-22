@@ -10,6 +10,15 @@ export function currentLocale(): string {
   return i18next.resolvedLanguage || i18next.language || 'zh-CN'
 }
 
+/** 自动生成的占位标题（无标题 / 中英日期短标题），可被 AI 建议覆盖 */
+export function isPlaceholderDocTitle(title: string, untitled: string): boolean {
+  const trimmed = title.trim()
+  if (!trimmed || trimmed === untitled) return true
+  if (/^\d{1,2}月\d{1,2}日$/.test(trimmed)) return true
+  if (/^[A-Z][a-z]{2,8} \d{1,2}(, \d{4})?$/.test(trimmed)) return true
+  return false
+}
+
 /** SQLite datetime('now') 返回 "YYYY-MM-DD HH:MM:SS" 不带时区标记。
  *  JavaScript new Date(不带时区字符串) 会当成本地时间解析，在 UTC+8 产生 +8h 偏差。
  *  此处对无时区信息的日期字符串统一补齐 Z 按 UTC 解读。 */
