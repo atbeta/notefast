@@ -21,7 +21,7 @@
     "noPrevDoc": "已是第一篇",
     "noNextDoc": "已是最后一篇",
     "enterEdit": "进入编辑",
-    "editSaveHint": "编辑内容会自动保存到本地草稿，⌘S 写入知识库",
+    "editSaveHint": "编辑内容会自动保存到知识库，⌘S 保存并返回阅读",
     "editing": "编辑中",
     "viewGraph": "查看笔记关联图谱",
     "alreadyShared": "已公开分享",

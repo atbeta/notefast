@@ -19,7 +19,6 @@ import {
   Images,
   Sparkles,
   Upload,
-  BookOpen,
   Check,
   X,
   Square,
@@ -275,9 +274,13 @@ export default function EditorToolbar({
               </Tooltip>
             )
           )}
-          <IconBtn title={t('editorToolbar.exitEdit')} onClick={onCancel}>
-            <BookOpen className="w-[15px] h-[15px]" strokeWidth={1.75} />
-          </IconBtn>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex items-center justify-center h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border border-border bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent transition-all active:scale-[0.97]"
+          >
+            {t('editorToolbar.exitEdit')}
+          </button>
           <Tooltip label={saving ? t('editorToolbar.saving') : t('editorToolbar.saveAndReturn', { shortcut: shortcutLabel(['mod', 'S']) })}>
             <button
               type="button"

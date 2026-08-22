@@ -21,7 +21,7 @@
     "noPrevDoc": "Already at first document",
     "noNextDoc": "Already at last document",
     "enterEdit": "Enter edit mode",
-    "editSaveHint": "Edits are auto-saved to a local draft; ⌘S writes to the knowledge base",
+    "editSaveHint": "Edits are auto-saved to the knowledge base; ⌘S saves and returns to reading",
     "editing": "Editing",
     "viewGraph": "View note graph",
     "alreadyShared": "Publicly shared",

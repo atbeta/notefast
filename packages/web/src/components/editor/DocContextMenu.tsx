@@ -28,7 +28,8 @@
  *  - `e.preventDefault()` 阻浏览器原生菜单；`e.stopPropagation()` 阻
  *    nativeShell.ts 的全局 listener 兜底拦截。
  *  - 菜单定位：右贴光标 → 溢出则向上翻 → 左/底 clamp 到 PAD。
- *  - Esc / 外部 mousedown / window scroll+resize 关闭（菜单自身右键不关闭）。
+ *  - Esc / 菜单外 mousedown（含文档空白）/ window scroll+resize 关闭；
+ *    菜单自身右键不关闭。文档容器不当成「内部」——否则点空白关不掉。
  *  - 键盘可访问性：Shift+F10 在焦点宿主上任意位置打开菜单（按选区或宿主中心）。
  */
 
@@ -107,7 +108,6 @@ export function useDocContextMenu({
   const { t } = useTranslation()
   const toast = useToast()
   const ai = useAiCapabilities()
-  const triggerRef = useRef<HTMLElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const [snap, setSnap] = useState<{
     pos: MenuPos | null
@@ -222,8 +222,6 @@ export function useDocContextMenu({
       // 自有菜单 + 阻止原生菜单 + 阻止 nativeShell.ts 兜底
       e.preventDefault()
       e.stopPropagation()
-      triggerRef.current = e.currentTarget
-
       const items = buildItems(e.target as HTMLElement)
       if (items.length === 0) return
       setSnap({ pos: computePos(e.clientX, e.clientY, e.currentTarget), items })
@@ -238,7 +236,6 @@ export function useDocContextMenu({
       if (e.key !== 'F10' || !e.shiftKey) return
       e.preventDefault()
       const host = e.currentTarget
-      triggerRef.current = host
       const items = buildItems(host)
       if (items.length === 0) return
       const r = host.getBoundingClientRect()
@@ -257,8 +254,8 @@ export function useDocContextMenu({
     [buildItems, computePos, disabled],
   )
 
-  // Esc / 外部 mousedown / window scroll+resize 关闭
-  usePopoverDismiss(open, { onClose: close, closeOnScroll: true, closeOnResize: true }, triggerRef, panelRef)
+  // 只把菜单面板当内部：点文档空白 / 侧栏 / 顶栏都应关闭
+  usePopoverDismiss(open, { onClose: close, closeOnScroll: true, closeOnResize: true }, panelRef)
 
   // 面板 JSX —— hook 内部统一 manage panelRef，避免 caller 还要 wire ref
   const menu: ReactNode = open && snap.pos

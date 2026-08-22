@@ -68,7 +68,7 @@
     "saveAndReturn": "Save and return to reading ({{shortcut}})",
     "savingShort": "Saving",
     "save": "Save",
-    "exitEdit": "Back to reading, draft kept",
+    "exitEdit": "Back",
     "aiNotConfiguredHint": "AI is not configured — click to set up",
     "aiSetup": "AI not set up",
     "continue": "Continue",
@@ -116,7 +116,7 @@
     "helpAiContinue": "AI continue (requires Chat)",
     "helpAiAccept": "Accept AI continuation",
     "helpEditingTips": "In a list (- / 1.) or quote (>), Enter continues the item; Enter on an empty item exits. Type ``` then Enter to expand a code fence.",
-    "helpExit": "Exit (draft kept)"
+    "helpExit": "Back"
   },
   "selectionBubble": {
     "label": "Selection actions",

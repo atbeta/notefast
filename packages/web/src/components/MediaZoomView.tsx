@@ -184,7 +184,7 @@ export default function MediaZoomView({ children, measureKey, onBackgroundClick 
           <div
             ref={mediaRef}
             data-zoom-media
-            className={`rounded-md bg-white dark:bg-[#1e1e1e] shadow-2xl shrink-0 pointer-events-none ${
+            className={`rounded-md bg-card shadow-2xl shrink-0 pointer-events-none ${
               dispW && dispH
                 ? 'overflow-hidden [&_img]:w-full [&_img]:h-full [&_img]:max-w-none [&_img]:object-contain [&_svg]:!w-full [&_svg]:!h-full [&_svg]:!max-w-none [&_svg]:!max-h-none'
                 : ''
