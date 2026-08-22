@@ -200,7 +200,7 @@ export default function ImageUploadPanel() {
 
           {testResult && (
             <div className={`rounded-md border px-3 py-2 text-[11.5px] leading-relaxed ${
-              testResult.ok ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-700 dark:text-emerald-400' : 'border-destructive/30 bg-destructive/8 text-destructive/90'
+              testResult.ok ? 'border-success/30 bg-success-soft text-success' : 'border-destructive/30 bg-destructive-soft text-destructive/90'
             }`}>
               {testResult.ok && testResult.url ? (
                 <p>{t('settings.imageUpload.testOk', { url: testResult.url })}</p>

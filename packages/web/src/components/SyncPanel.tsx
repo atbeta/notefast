@@ -224,7 +224,7 @@ export default function SyncPanel() {
                     </div>
                     {isActive && (
                       <Tooltip label={t('sync.currentlyActive')}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_rgb(var(--success)/0.55)]" />
                       </Tooltip>
                     )}
                   </div>
@@ -347,7 +347,7 @@ export default function SyncPanel() {
               <span className="font-mono">{status?.lastRunAt ? formatIsoDateTime(status.lastRunAt) : t('sync.neverRun')}</span>
             </div>
             {status?.lastSuccessAt && status.lastResult && (
-              <div className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+              <div className="text-success flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 {t('sync.pushedDocs', { n: status.lastResult.pushed })}
               </div>

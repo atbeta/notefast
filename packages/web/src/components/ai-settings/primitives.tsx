@@ -31,11 +31,11 @@ export function CapabilityBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
       className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded ${
-        ok ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'
+        ok ? 'bg-success-soft text-success' : 'bg-muted text-muted-foreground'
       }`}
     >
       <span
-        className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`}
+        className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-success' : 'bg-muted-foreground/50'}`}
       />
       {label}
     </span>

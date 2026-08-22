@@ -254,8 +254,8 @@ export default function EntitiesPage() {
             </div>
 
             {autoMerged > 0 && (
-              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3.5 py-2.5 flex items-center gap-2 text-[12px] text-foreground">
-                <GitMerge className="w-3.5 h-3.5 text-emerald-500" strokeWidth={1.75} />
+              <div className="rounded-xl border border-success/20 bg-success-soft px-3.5 py-2.5 flex items-center gap-2 text-[12px] text-foreground">
+                <GitMerge className="w-3.5 h-3.5 text-success" strokeWidth={1.75} />
                 {t('entities.autoMerged', { n: autoMerged })}
               </div>
             )}

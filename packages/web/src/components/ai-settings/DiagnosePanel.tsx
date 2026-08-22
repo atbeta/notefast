@@ -64,9 +64,9 @@ export function DiagnosePanel({ result, onClose }: { result: AiDiagnoseResult; o
 function OverallDot({ overall }: { overall: AiDiagnoseResult['overall'] }) {
   const tone =
     overall === 'healthy'
-      ? 'bg-emerald-500'
+      ? 'bg-success'
       : overall === 'partial'
-        ? 'bg-amber-500'
+        ? 'bg-warning'
         : overall === 'degraded'
           ? 'bg-destructive'
           : 'bg-border'
@@ -112,7 +112,7 @@ function DiagRow({
       <span className="w-5 flex justify-center text-foreground/60">{icon}</span>
       <span className="w-16 font-medium text-foreground">{label}</span>
       {ok ? (
-        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+        <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0" />
       ) : (
         <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
       )}

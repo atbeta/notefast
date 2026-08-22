@@ -309,13 +309,13 @@ function Icon({ variant }: { variant: ToastVariant }) {
 function iconDotClass(v: ToastVariant): string {
   switch (v) {
     case 'success':
-      return 'bg-emerald-500/15 text-emerald-500'
+      return 'bg-success-soft text-success'
     case 'error':
       return 'bg-destructive/15 text-destructive'
     case 'info':
-      return 'bg-sky-500/15 text-sky-500'
+      return 'bg-primary/15 text-primary'
     case 'warning':
-      return 'bg-amber-500/15 text-amber-500'
+      return 'bg-warning-soft text-warning'
     case 'loading':
       return 'bg-primary/15 text-primary'
   }

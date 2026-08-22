@@ -433,15 +433,15 @@ export default function EntityGraph({
               dx="0"
               dy={screenToWorld(SHADOW_DY_PX, view.k)}
               stdDeviation={screenToWorld(SHADOW_BLUR_PX, view.k)}
-              floodColor="#141412"
+              floodColor="rgb(var(--graph-shadow))"
               floodOpacity="0.14"
             />
           </filter>
           {/* 节点顶部高光：白色径向渐隐，叠在 kind 底色上形成通透感 */}
           <radialGradient id="graphSheen" cx="35%" cy="28%" r="80%">
-            <stop offset="0%" stopColor="#fff" stopOpacity="0.42" />
-            <stop offset="55%" stopColor="#fff" stopOpacity="0.12" />
-            <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+            <stop offset="0%" stopColor="rgb(var(--graph-sheen))" stopOpacity="0.42" />
+            <stop offset="55%" stopColor="rgb(var(--graph-sheen))" stopOpacity="0.12" />
+            <stop offset="100%" stopColor="rgb(var(--graph-sheen))" stopOpacity="0" />
           </radialGradient>
           {/* 画布点阵背景（屏幕空间，不随平移缩放） */}
           <pattern id="graphDots" width="26" height="26" patternUnits="userSpaceOnUse">

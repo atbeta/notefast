@@ -142,7 +142,7 @@ export function InlineField({
             <span className="text-[11px] text-muted-foreground/60">{description}</span>
           )}
         </div>
-        {localStatus === 'success' && <span className="text-[11px] text-emerald-500 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {t('settingsUI.saved')}</span>}
+        {localStatus === 'success' && <span className="text-[11px] text-success flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {t('settingsUI.saved')}</span>}
         {localStatus === 'testing' && <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> {t('settingsUI.verifying')}</span>}
       </div>
 
@@ -173,7 +173,7 @@ export function StatusBadge({ active, label, error }: { active: boolean; label?:
     return <span className="text-[10px] px-2 py-0.5 rounded-full bg-destructive/10 text-destructive font-medium border border-destructive/20 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> {t('settingsUI.error')}</span>
   }
   return active ? (
-    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 font-medium border border-emerald-500/20">
+    <span className="text-[10px] px-2 py-0.5 rounded-full bg-success-soft text-success font-medium border border-success/20">
       {label || t('settingsUI.active')}
     </span>
   ) : (

@@ -147,7 +147,7 @@ export default function SyncProtocolPanel() {
           <div className="text-[13px] font-medium text-foreground">{t('syncProtocol.enableSync')}</div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" className="sr-only peer" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-            <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+            <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-success"></div>
           </label>
         </div>
 
@@ -195,7 +195,7 @@ export default function SyncProtocolPanel() {
             <div className="flex items-center gap-2">
               <span className="font-medium text-foreground">{t('syncProtocol.statusLabel')}</span>
               {status.running ? (
-                <span className="text-amber-500 flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> {t('syncProtocol.syncing')}</span>
+                <span className="text-warning flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> {t('syncProtocol.syncing')}</span>
               ) : status.lastError ? (
                 <span className="text-destructive flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> {t('syncProtocol.syncFailed')}</span>
               ) : (
@@ -206,7 +206,7 @@ export default function SyncProtocolPanel() {
             <div className="flex items-center gap-2 text-[12px]">
               <span>{t('syncProtocol.syncedChanges', { n: status.state.publishedSeq })}</span>
               {status.pendingChanges > 0 && (
-                <span className="text-amber-600/90">{t('syncProtocol.pendingChanges', { n: status.pendingChanges })}</span>
+                <span className="text-warning/90">{t('syncProtocol.pendingChanges', { n: status.pendingChanges })}</span>
               )}
             </div>
             {status.lastError && (
@@ -240,7 +240,7 @@ export default function SyncProtocolPanel() {
                     <div className="text-muted-foreground text-[11px] mt-0.5 font-mono truncate">
                       {d.device_id.slice(0, 8)}…{d.last_seen ? ` · ${formatIsoDateTime(d.last_seen)}` : ''}
                       {deviceLag(d.device_id) > 0 && (
-                        <span className="text-amber-600/90"> · {t('syncProtocol.deviceLag', { n: deviceLag(d.device_id) })}</span>
+                        <span className="text-warning/90"> · {t('syncProtocol.deviceLag', { n: deviceLag(d.device_id) })}</span>
                       )}
                     </div>
                   </div>

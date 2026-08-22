@@ -45,9 +45,9 @@ export default function EditorFooter({
         ) : autoSaveStatus === 'saved' ? (
           <Check className="w-3 h-3 text-green-500" strokeWidth={2} />
         ) : autoSaveStatus === 'error' ? (
-          <AlertTriangle className="w-3 h-3 text-amber-500" strokeWidth={1.75} />
+          <AlertTriangle className="w-3 h-3 text-warning" strokeWidth={1.75} />
         ) : (
-          <span className={`w-1.5 h-1.5 rounded-full ${dirty ? 'bg-amber-500' : 'bg-border'}`} />
+          <span className={`w-1.5 h-1.5 rounded-full ${dirty ? 'bg-warning' : 'bg-border'}`} />
         )}
         {autoSaveStatus === 'saving'
           ? t('editorFooter.autoSaving')

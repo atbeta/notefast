@@ -116,7 +116,7 @@ export default function McpPanel() {
               {endpoint}
             </code>
             <Button variant="secondary" onClick={() => void copy(endpoint, 'config')} className="shrink-0">
-              {copied === 'config' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied === 'config' ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
             </Button>
           </div>
         </div>
@@ -147,7 +147,7 @@ export default function McpPanel() {
           </pre>
           <div className="flex items-center gap-2">
             <Button variant="secondary" onClick={() => void copy(configJson, 'config')}>
-              {copied === 'config' ? <Check className="w-3.5 h-3.5 text-emerald-600 mr-1.5" /> : <Copy className="w-3.5 h-3.5 mr-1.5" />}
+              {copied === 'config' ? <Check className="w-3.5 h-3.5 text-success mr-1.5" /> : <Copy className="w-3.5 h-3.5 mr-1.5" />}
               {copied === 'config' ? t('mcp.copied') : t('mcp.copyConfig')}
             </Button>
             <span className="text-[11px] text-muted-foreground/70">
@@ -161,16 +161,16 @@ export default function McpPanel() {
           <div className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">{t('mcp.tokenLabel')}</div>
           <p className="text-[12.5px] text-muted-foreground leading-relaxed">{t('mcp.tokenDesc')}</p>
           {revealedToken ? (
-            <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3.5 space-y-2">
+            <div className="rounded-lg border border-success/25 bg-success-soft p-3.5 space-y-2">
               <div className="flex items-center gap-2">
-                <code className="flex-1 rounded-md border border-emerald-200 dark:border-emerald-800 bg-emerald-100 dark:bg-emerald-950/50 px-2.5 py-1.5 text-[12.5px] font-mono text-emerald-900 dark:text-emerald-100 break-all select-all">
+                <code className="flex-1 rounded-md border border-success/25 bg-success/10 px-2.5 py-1.5 text-[12.5px] font-mono text-success break-all select-all">
                   {revealedToken}
                 </code>
                 <Button variant="secondary" onClick={() => void copy(revealedToken, 'token')} className="shrink-0">
-                  {copied === 'token' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied === 'token' ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
                 </Button>
               </div>
-              <p className="text-[11px] text-emerald-600/80 dark:text-emerald-500/80">{t('mcp.tokenOnce')}</p>
+              <p className="text-[11px] text-success/80">{t('mcp.tokenOnce')}</p>
             </div>
           ) : (
             <div className="flex items-center gap-2">

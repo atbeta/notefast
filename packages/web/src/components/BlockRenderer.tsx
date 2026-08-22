@@ -137,7 +137,7 @@ function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: 
             {t('block.assetUploading')}
           </span>
         ) : st?.remote ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-600 dark:text-emerald-400 shadow-sm">
+          <span className="inline-flex items-center gap-1 rounded-full bg-success-soft border border-success/30 px-2 py-0.5 text-[10px] text-success shadow-sm">
             <Cloud className="w-3 h-3" />
             {t('block.assetSynced')}
           </span>

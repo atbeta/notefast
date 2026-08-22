@@ -131,25 +131,25 @@ export default function ApiTokensPanel() {
         )}
 
         {newToken && (
-          <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-4 space-y-3">
+          <div className="rounded-lg border border-success/25 bg-success-soft p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-[13px] font-medium text-emerald-700 dark:text-emerald-400">
+              <div className="flex items-center gap-2 text-[13px] font-medium text-success">
                 <Key className="w-3.5 h-3.5" />
                 {t('apiTokens.generatedOnce')}
               </div>
-              <button onClick={dismissNewToken} className="text-emerald-600/60 hover:text-emerald-600 p-1">
+              <button onClick={dismissNewToken} className="text-success/60 hover:text-success p-1">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <code className="flex-1 rounded-md border border-emerald-200 dark:border-emerald-800 bg-emerald-100 dark:bg-emerald-950/50 px-3 py-2 text-[13px] font-mono text-emerald-900 dark:text-emerald-100 break-all select-all">
+              <code className="flex-1 rounded-md border border-success/25 bg-success/10 px-3 py-2 text-[13px] font-mono text-success break-all select-all">
                 {newToken}
               </code>
               <ActionButton onAction={copyToken} variant="secondary" className="shrink-0">
-                {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                {copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
               </ActionButton>
             </div>
-            <p className="text-[11px] text-emerald-600/80 dark:text-emerald-500/80">
+            <p className="text-[11px] text-success/80">
               {t('apiTokens.saveNow')}
             </p>
           </div>

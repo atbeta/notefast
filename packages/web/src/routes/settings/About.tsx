@@ -85,7 +85,7 @@ export default function SettingsAbout() {
           </div>
 
           {result?.status === 'latest' && (
-            <p className="text-center text-[12.5px] text-emerald-600 dark:text-emerald-400">
+            <p className="text-center text-[12.5px] text-success">
               {t('settings.about.upToDate', { version: result.current })}
             </p>
           )}

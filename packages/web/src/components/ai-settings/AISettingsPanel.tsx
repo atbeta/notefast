@@ -655,7 +655,7 @@ export default function AISettingsPanel() {
               </span>
             </div>
             {status.vectorStore.status === 'stale' && (
-              <p className="text-amber-700 dark:text-amber-400">
+              <p className="text-warning">
                 {t('aiSettings.vectorStaleWarning')}
               </p>
             )}
@@ -701,7 +701,7 @@ export default function AISettingsPanel() {
                       )}
                     </div>
                   ) : jobs.ready + jobs.failed > 0 ? (
-                    <p className="text-[12px] text-emerald-700 dark:text-emerald-400">
+                    <p className="text-[12px] text-success">
                       {t('aiSettings.indexJobIdle', { ready: jobs.ready, failed: jobs.failed })}
                     </p>
                   ) : null}
@@ -760,7 +760,7 @@ export default function AISettingsPanel() {
             {entityRebuild?.indexState && !entityRebuild.running && (
               <p className="text-xs text-muted-foreground">
                 {entityRebuild.indexState.status === 'empty' && (
-                  <span className="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                  <span className="inline-flex items-center gap-1.5 text-warning">
                     <TriangleAlert className="w-3.5 h-3.5" />
                     {t('aiSettings.entityIndexEmpty')}
                   </span>
@@ -888,7 +888,7 @@ export default function AISettingsPanel() {
 
       {/* Sticky 保存栏：始终悬浮在视口底部，避免「改完顶部配置找不到保存按钮」；
           有未保存修改时高亮 + 提示（dirty 检测见上方 useMemo） */}
-      <div className={`sticky bottom-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 mt-4 border-t bg-background/85 backdrop-blur-md ${dirty ? 'border-amber-500/40' : 'border-border/60'}`}>
+      <div className={`sticky bottom-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 mt-4 border-t bg-background/85 backdrop-blur-md ${dirty ? 'border-warning/40' : 'border-border/60'}`}>
         <div className="flex items-center gap-2 flex-wrap">
           <ActionButton
             onAction={async () => {
@@ -902,7 +902,7 @@ export default function AISettingsPanel() {
               durationMs: 6000,
             })}
             disabled={!chat && !embedding}
-            className={dirty ? 'ring-2 ring-amber-500/50' : undefined}
+            className={dirty ? 'ring-2 ring-warning/50' : undefined}
           >
             {t('aiSettings.saveConfig')}
           </ActionButton>
@@ -916,7 +916,7 @@ export default function AISettingsPanel() {
             {t('aiSettings.refreshStatus')}
           </button>
           {dirty && (
-            <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-amber-700 dark:text-amber-400">
+            <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-warning">
               <TriangleAlert className="w-4 h-4" />
               {t('aiSettings.unsavedChanges')}
             </span>

@@ -36,11 +36,11 @@ export default function GlobalSyncStatus() {
     label = t('syncStatus.syncFailed')
     tooltip = t('syncStatus.syncFailedWithError', { error: status.lastError })
   } else if ((status.pendingChanges ?? 0) > 0) {
-    icon = <Cloud className="w-3.5 h-3.5 text-amber-500" strokeWidth={2} />
+    icon = <Cloud className="w-3.5 h-3.5 text-warning" strokeWidth={2} />
     label = t('syncStatus.pendingChanges', { n: status.pendingChanges })
     tooltip = t('syncStatus.hasPendingChanges')
   } else {
-    icon = <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" strokeWidth={2} />
+    icon = <CheckCircle2 className="w-3.5 h-3.5 text-success" strokeWidth={2} />
     label = status.lastSuccessAt ? t('syncStatus.synced') : t('syncStatus.pending')
     tooltip = status.lastSuccessAt
       ? t('syncStatus.syncedAt', { time: formatIsoDateTime(status.lastSuccessAt) })

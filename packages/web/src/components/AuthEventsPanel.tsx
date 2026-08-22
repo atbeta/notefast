@@ -111,7 +111,7 @@ export default function AuthEventsPanel() {
                 key={ev.id}
                 className={`flex items-center gap-3 px-4 py-3 ${i !== events.length - 1 ? 'border-b border-border/50' : ''} bg-background`}
               >
-                <div className={`w-8 h-8 rounded-md grid place-items-center shrink-0 ${isLatest ? 'bg-emerald-500/10 text-emerald-600' : 'bg-accent text-muted-foreground'}`}>
+                <div className={`w-8 h-8 rounded-md grid place-items-center shrink-0 ${isLatest ? 'bg-success-soft text-success' : 'bg-accent text-muted-foreground'}`}>
                   {!ev.ip ? (
                     <Monitor className="w-4 h-4" strokeWidth={1.75} />
                   ) : (
@@ -123,7 +123,7 @@ export default function AuthEventsPanel() {
                     <span className="text-[13px] font-medium text-foreground">{device.label}</span>
                     {browser && <span className="text-[11px] text-muted-foreground">{browser}</span>}
                     {isLatest && (
-                      <span className="px-1.5 py-0.5 rounded text-[9.5px] font-medium bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/20">
+                      <span className="px-1.5 py-0.5 rounded text-[9.5px] font-medium bg-success-soft text-success border border-success/20">
                         {t('authEvents.latest')}
                       </span>
                     )}

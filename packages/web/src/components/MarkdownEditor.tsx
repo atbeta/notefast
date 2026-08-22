@@ -552,7 +552,7 @@ function EditorInline({
       ) : (
         <>
           {showRecoverDraft && (
-            <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[12.5px]">
+            <div className="mb-4 flex items-center gap-2 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-[12.5px]">
               <span className="flex-1 text-muted-foreground">
                 {t('mdEditor.draftNotice')}
               </span>

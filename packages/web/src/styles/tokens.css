@@ -49,10 +49,19 @@
   --ink-foreground: 255 255 255;
   --ink-hover: 58 63 70;     /* hover 提亮，不发灰蓝 */
 
-  /* ───────────── 状态 ───────────── */
+  /* ───────────── 状态（亮/暗在 data-theme 翻转，组件不写 dark: 变体） ───────────── */
+  --success: 5 150 105;
+  --success-foreground: 255 255 255;
+  --success-soft: rgb(var(--success) / 0.12);
+  --warning: 217 115 13;
+  --warning-foreground: 255 255 255;
+  --warning-soft: rgb(var(--warning) / 0.12);
+  --warn: 217 115 13; /* 与 --warning 同值，兼容既有 rgb(var(--warn)) */
   --destructive: 235 87 87;
   --destructive-foreground: 255 255 255;
-  --warn: 217 115 13;
+  --destructive-soft: rgb(var(--destructive) / 0.12);
+  --find-highlight: 250 204 21;
+  --find-current: 251 146 60;
 
   /* ───────────── 边框 / 输入 ───────────── */
   --border: 233 233 231;
@@ -114,6 +123,8 @@
   --graph-other: 105 104 100;  /* 未知 kind 兜底（近 muted-foreground） */
   --graph-edge: 200 200 198;   /* 边 — 近 border-strong，随主题微调 */
   --graph-note-fill: 247 247 245; /* 笔记节点卡片底色 — 白画布上的纸感灰 */
+  --graph-shadow: 20 20 18;       /* 节点投影，深浅主题都用暗色 */
+  --graph-sheen: 255 255 255;     /* 节点顶部高光 */ */
 
   /* ───────────── 动效（全局统一） ───────────── */
   --ease: cubic-bezier(0.2, 0, 0, 1);
@@ -150,9 +161,18 @@
   --ink-foreground: 25 25 25;
   --ink-hover: 200 203 208;
 
-  --destructive: 235 87 87;
-  --destructive-foreground: 255 255 255;
-  --warn: 217 115 13;
+  --success: 52 211 153;
+  --success-foreground: 25 25 25;
+  --success-soft: rgb(var(--success) / 0.15);
+  --warning: 251 191 36;
+  --warning-foreground: 25 25 25;
+  --warning-soft: rgb(var(--warning) / 0.15);
+  --warn: 251 191 36;
+  --destructive: 248 113 113;
+  --destructive-foreground: 25 25 25;
+  --destructive-soft: rgb(var(--destructive) / 0.15);
+  --find-highlight: 250 204 21;
+  --find-current: 251 146 60;
 
   --border: 60 60 60;
   --border-strong: 80 80 80;
@@ -188,6 +208,8 @@
   --graph-other: 140 140 140;
   --graph-edge: 80 80 80;
   --graph-note-fill: 42 42 42;    /* 深色下比画布（32）亮一档，节点浮起 */
+  --graph-shadow: 0 0 0;
+  --graph-sheen: 255 255 255;
 }
 
 

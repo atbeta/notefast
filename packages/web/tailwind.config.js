@@ -39,9 +39,20 @@ export default {
           DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
           foreground: 'rgb(var(--accent-foreground) / <alpha-value>)',
         },
+        success: {
+          DEFAULT: 'rgb(var(--success) / <alpha-value>)',
+          foreground: 'rgb(var(--success-foreground) / <alpha-value>)',
+          soft: 'var(--success-soft)',
+        },
+        warning: {
+          DEFAULT: 'rgb(var(--warning) / <alpha-value>)',
+          foreground: 'rgb(var(--warning-foreground) / <alpha-value>)',
+          soft: 'var(--warning-soft)',
+        },
         destructive: {
           DEFAULT: 'rgb(var(--destructive) / <alpha-value>)',
           foreground: 'rgb(var(--destructive-foreground) / <alpha-value>)',
+          soft: 'var(--destructive-soft)',
         },
         warn: 'rgb(var(--warn) / <alpha-value>)',
         border: 'rgb(var(--border) / <alpha-value>)',

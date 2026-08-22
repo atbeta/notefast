@@ -211,7 +211,7 @@ export default function SettingsMaintenance() {
                 <li key={l.id} className="flex items-start gap-2 px-3 py-2 text-[12.5px]">
                   <span
                     className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${
-                      l.level === 'error' ? 'bg-destructive' : l.level === 'warn' ? 'bg-amber-500' : 'bg-emerald-500'
+                      l.level === 'error' ? 'bg-destructive' : l.level === 'warn' ? 'bg-warning' : 'bg-success'
                     }`}
                   />
                   <div className="min-w-0 flex-1">

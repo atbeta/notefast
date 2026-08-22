@@ -271,9 +271,9 @@ export function RevisionItem({
               <div
                 key={i}
                 className={l.type === 'added'
-                  ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1 -mx-1'
+                  ? 'text-success bg-success-soft px-1 -mx-1'
                   : l.type === 'removed'
-                    ? 'text-rose-700 dark:text-rose-400 bg-rose-500/10 px-1 -mx-1'
+                    ? 'text-destructive bg-destructive-soft px-1 -mx-1'
                     : 'text-muted-foreground/60'}
               >
                 {l.type === 'added' ? '+ ' : l.type === 'removed' ? '− ' : '  '}

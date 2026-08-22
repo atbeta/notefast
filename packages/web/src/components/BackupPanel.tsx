@@ -125,7 +125,7 @@ export default function BackupPanel() {
           <div className="text-[13px] font-medium text-foreground">{t('backup.enableBackup')}</div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" className="sr-only peer" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-            <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+            <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-success"></div>
           </label>
         </div>
 
@@ -171,13 +171,13 @@ export default function BackupPanel() {
             <div className="flex items-center gap-2">
               <span className="font-medium text-foreground">{t('backup.statusLabel')}</span>
               {status.running ? (
-                <span className="text-amber-500 flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5 animate-spin"/> {t('backup.running', { phase: status.phase })}</span>
+                <span className="text-warning flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5 animate-spin"/> {t('backup.running', { phase: status.phase })}</span>
               ) : (
                 t('backup.idle')
               )}
             </div>
             {status.lastSuccessAt && (
-              <div className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+              <div className="text-success flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 {t('backup.lastSuccess', { time: formatIsoDateTime(status.lastSuccessAt) })}
                 {status.lastResult?.objectKey && (

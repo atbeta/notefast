@@ -66,7 +66,7 @@ export function Button({
 
   let visualCls = ''
   if (showSuccessAccent) {
-    visualCls = '!bg-emerald-600 !text-white !border-emerald-600 shadow-[var(--shadow-btn)]'
+    visualCls = '!bg-success !text-success-foreground !border-success shadow-[var(--shadow-btn)]'
   } else if (loading) {
     visualCls = 'opacity-70 cursor-wait'
   }

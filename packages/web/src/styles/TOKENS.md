@@ -34,10 +34,13 @@ NoteFast 的视觉只通过 **CSS 变量 token** 定义。所有组件应通过 
 | `--primary-softer` | 极低强调 hover |
 
 ### 1.4 状态（status）
+亮/暗在 `:root[data-theme='dark']` 翻转，组件用 `text-success` / `bg-warning-soft` 等，**不要写 `dark:` 变体**。
 | Token | 角色 |
 |---|---|
-| `--destructive` / `--destructive-foreground` | 删除 / 不可逆操作 |
-| `--warn` | 警告（MD 编辑器空文档提示等） |
+| `--success` / `--success-foreground` / `--success-soft` | 成功 / 已保存 / 在线 |
+| `--warning` / `--warning-foreground` / `--warning-soft` | 警告 / 脏状态 / 进行中 |
+| `--warn` | 与 `--warning` 同值，兼容既有 `rgb(var(--warn))` |
+| `--destructive` / `--destructive-foreground` / `--destructive-soft` | 删除 / 不可逆 / diff 删除 |
 
 ### 1.5 边框与圆角
 | Token | 值 |
@@ -66,18 +69,14 @@ NoteFast 的视觉只通过 **CSS 变量 token** 定义。所有组件应通过 
 ### 1.8 动效
 `--ease: 180ms cubic-bezier(0.4, 0, 0.2, 1)`，全 app 统一。
 
-## 2. 主题系统（v0.1 雏形）
+## 2. 主题系统
 
 **当前状态**：
-- 仅 light / dark 两套
+- 仅 light / dark 两套 token
 - `:root {}` 为 light 默认
-- `.dark {}` 为 dark 主题
-- 模式切换由 `<html class="dark">` 或 light class 控制
-
-**未来主题钩子**（已就位）：
-- `<html data-theme="default">` —— 当前生效
-- 新增主题时：复制 `:root {}` 改成 `[data-theme="warm"] {}` 或 `[data-theme="high-contrast"] {}`，`<html>` 上同步切换 `data-theme`
-- 主题切换 UI 不在 v0.1 / Wave 1-6 范围内；下一次"主题"需求出现时再补 ThemeProvider + Settings picker
+- `:root[data-theme='dark']` 翻转暗色值
+- 切换由 `<html data-theme="light|dark">` 控制（`index.html` 防闪烁脚本 + 设置里的 system/light/dark）
+- 组件用语义 token，禁止 `dark:` 变体（Tailwind `darkMode: 'class'` 仍在配置里，但不再被消费）
 
 ## 3. 添加新主题的步骤（未来）
 

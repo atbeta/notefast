@@ -290,7 +290,7 @@ export default function ResourcesPage() {
                 <span>{t('resources.batchRunning', { done: batch.done, total: batch.total })}</span>
               </div>
             ) : (
-              <p className="text-emerald-600 dark:text-emerald-400">
+              <p className="text-success">
                 {t('resources.batchDone', { ok: batch.ok, failed: batch.failed })}
               </p>
             )}
@@ -375,13 +375,13 @@ export default function ResourcesPage() {
                     {item.remote ? (
                       item.remote_url ? (
                         <Tooltip label={item.remote_url}>
-                          <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
+                          <span className="inline-flex items-center gap-0.5 text-success">
                             <Cloud className="w-3 h-3" strokeWidth={1.75} />
                             {t('resources.remote')}
                           </span>
                         </Tooltip>
                       ) : (
-                        <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
+                        <span className="inline-flex items-center gap-0.5 text-success">
                           <Cloud className="w-3 h-3" strokeWidth={1.75} />
                           {t('resources.remote')}
                         </span>

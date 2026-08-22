@@ -21,6 +21,12 @@ function getMermaid(): Promise<Mermaid> {
   return mermaidPromise
 }
 
+function cssRgbToken(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return raw ? `rgb(${raw})` : fallback
+}
+
 function applyTheme(mermaid: Mermaid, theme: 'light' | 'dark'): void {
   const next = theme === 'dark' ? 'dark' : 'default'
   if (lastTheme === next) return
@@ -28,9 +34,9 @@ function applyTheme(mermaid: Mermaid, theme: 'light' | 'dark'): void {
     startOnLoad: false,
     securityLevel: 'strict',
     theme: next,
-    // 画布跟 data-theme 的 --card 对齐；勿依赖 Tailwind dark:（本仓库 darkMode=class，html 只写 data-theme）
+    // 画布跟 data-theme 的 --card 对齐，不写死 hex
     themeVariables: {
-      background: theme === 'dark' ? '#202020' : '#ffffff',
+      background: cssRgbToken('--card', theme === 'dark' ? '#202020' : '#ffffff'),
     },
     // 避免 mermaid 在失败时往 DOM 注入默认错误 UI（我们自己展示）
     suppressErrorRendering: true,
