@@ -233,7 +233,7 @@
     transition: stroke-opacity var(--dur) var(--ease), stroke var(--dur) var(--ease);
   }
   .sidebar-link {
-    @apply flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] text-sidebar-foreground
+    @apply flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] text-sidebar-muted
            transition-colors duration-150;
   }
   /* 色阶统一：hover = primary-softer（浅），选中 = primary-soft（中），选中 hover 再深一档 */

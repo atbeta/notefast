@@ -61,7 +61,7 @@ const EMPTY_COUNTS: SidebarCounts = { inbox: 0, archived: 0, trash: 0, untagged:
 
 /** 计数徽章统一样式（收集箱 / 回收站 / 智能视图共用） */
 const COUNT_BADGE_CLS =
-  'ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-sidebar-accent text-sidebar-muted tabular-nums'
+  'ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-sidebar-accent/70 text-sidebar-muted/80 tabular-nums'
 
 function formatCount(n: number): string {
   return n > 99 ? '99+' : String(n)
@@ -112,10 +112,10 @@ function SidebarSectionLabel({
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center gap-1 px-2.5 mb-1 select-none text-left group"
+        className="w-full flex items-center gap-1 px-2.5 mb-1.5 select-none text-left group"
         aria-expanded={open}
       >
-        <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-sidebar-muted/70 group-hover:text-sidebar-muted transition-colors">
+        <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-sidebar-muted/55 group-hover:text-sidebar-muted transition-colors">
           {label}
         </span>
         <ChevronDown
@@ -126,8 +126,8 @@ function SidebarSectionLabel({
     )
   }
   return (
-    <div className="px-2.5 mb-1 select-none">
-      <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-sidebar-muted/70">
+    <div className="px-2.5 mb-1.5 select-none">
+      <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-sidebar-muted/55">
         {label}
       </span>
     </div>
@@ -164,10 +164,10 @@ function PinnedViewItem({
       <Link
         to={`/?${canonicalViewQuery(view.query)}`}
         onClick={onNavigate}
-        className={`flex-1 px-2.5 py-1 rounded-md text-[13px] truncate transition-colors ${
+        className={`flex-1 px-2.5 py-2 rounded-md text-[13px] truncate transition-colors ${
           active
             ? 'bg-primary-soft text-primary font-medium'
-            : 'text-sidebar-foreground hover:bg-[var(--primary-softer)] hover:text-sidebar-accent-foreground'
+            : 'text-sidebar-muted hover:bg-[var(--primary-softer)] hover:text-sidebar-accent-foreground'
         }`}
         title={view.name}
         onDoubleClick={(e) => {
@@ -316,7 +316,7 @@ export default function Sidebar({
 
   if (collapsed) {
     return (
-      <aside className="w-14 flex flex-col items-center shrink-0 h-full bg-sidebar border-r border-border/50">
+      <aside className="w-14 flex flex-col items-center shrink-0 h-full bg-sidebar border-r border-border/40">
         {/* 折叠轨窄于红绿灯：仅此处下移展开钮；展开态用左侧让位、与 web 同高 */}
         <div
           data-drag-region
@@ -324,7 +324,7 @@ export default function Sidebar({
             if (!isWindowZoomDoubleClickTarget(e.target)) return
             nativeToggleWindowZoom()
           }}
-          className="w-full flex items-center justify-center border-b border-border/50 shrink-0 h-[calc(2.5rem+var(--shell-traffic-top-collapsed,0px))] pt-[var(--shell-traffic-top-collapsed,0px)]"
+          className="w-full flex items-center justify-center border-b border-border/40 shrink-0 h-[calc(2.5rem+var(--shell-traffic-top-collapsed,0px))] pt-[var(--shell-traffic-top-collapsed,0px)]"
         >
           <Tooltip label={t('sidebar.expandSidebar')}>
             <button onClick={onToggle} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors group">
@@ -332,7 +332,7 @@ export default function Sidebar({
             </button>
           </Tooltip>
         </div>
-        <div className="w-full flex-1 flex flex-col items-center pt-4 pb-3 gap-1">
+        <div className="w-full flex-1 flex flex-col items-center pt-4 pb-3 gap-1.5">
           <Tooltip label={t('sidebar.docs')}>
             <Link to="/" className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-sidebar-accent text-sidebar-muted hover:text-primary transition-colors">
               <FileText className="w-4 h-4" strokeWidth={1.75} />
@@ -369,7 +369,7 @@ export default function Sidebar({
   }
 
   return (
-    <aside className="w-60 flex flex-col shrink-0 h-full bg-sidebar border-r border-border/50">
+    <aside className="w-60 flex flex-col shrink-0 h-full bg-sidebar border-r border-border/40">
       {/* ⌘K 行：与浏览器同高（仅 pt-3）。勿再叠 --shell-top-inset / 空顶带——曾两度叠出「两段留白」 */}
       <div
         data-drag-region
@@ -402,75 +402,75 @@ export default function Sidebar({
         </Tooltip>
       </div>
 
-      <nav ref={navFadeRef} className="scroll-fade px-2 pt-2 pb-1 flex-1 overflow-y-auto">
+      <nav ref={navFadeRef} className="scroll-fade px-2 pt-1 pb-2 flex-1 overflow-y-auto">
         <SidebarSectionLabel label={t('sidebar.sectionNotes')} collapsible open={notesOpen} onToggle={toggleNotes} />
         {notesOpen && (
-          <>
+          <div className="flex flex-col gap-0.5">
             <Link to="/" onClick={closeAfterNav} className={location.pathname === '/' && !location.search ? 'sidebar-link-active' : 'sidebar-link'}>
-              <LayoutGrid className="w-[15px] h-[15px]" strokeWidth={1.75} />
+              <LayoutGrid className="w-4 h-4" strokeWidth={1.75} />
               {t('sidebar.allDocs')}
             </Link>
             <Tooltip className="w-full" label={t('sidebar.newDocTitle', { shortcut: shortcutLabel(['mod', 'N']) })}>
               <Link to="/new" onClick={closeAfterNav} className={`w-full ${location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'}`}>
-                <Plus className="w-[15px] h-[15px]" strokeWidth={1.75} />
+                <Plus className="w-4 h-4" strokeWidth={1.75} />
                 {t('sidebar.newDoc')}
               </Link>
             </Tooltip>
             <Link to="/inbox" onClick={closeAfterNav} className={location.pathname === '/inbox' ? 'sidebar-link-active' : 'sidebar-link'}>
-              <Inbox className="w-[15px] h-[15px]" strokeWidth={1.75} />
+              <Inbox className="w-4 h-4" strokeWidth={1.75} />
               <span className="flex-1">{t('sidebar.inbox')}</span>
               {counts.inbox > 0 && (
                 <span className={COUNT_BADGE_CLS}>{formatCount(counts.inbox)}</span>
               )}
             </Link>
             <Link to="/archived" onClick={closeAfterNav} className={location.pathname === '/archived' ? 'sidebar-link-active' : 'sidebar-link'}>
-              <Archive className="w-[15px] h-[15px]" strokeWidth={1.75} />
+              <Archive className="w-4 h-4" strokeWidth={1.75} />
               <span className="flex-1">{t('sidebar.archived')}</span>
             </Link>
             <Link to="/trash" onClick={closeAfterNav} className={location.pathname === '/trash' ? 'sidebar-link-active' : 'sidebar-link'}>
-              <Trash2 className="w-[15px] h-[15px]" strokeWidth={1.75} />
+              <Trash2 className="w-4 h-4" strokeWidth={1.75} />
               <span className="flex-1">{t('sidebar.trash')}</span>
               {counts.trash > 0 && (
                 <span className={COUNT_BADGE_CLS}>{formatCount(counts.trash)}</span>
               )}
             </Link>
-          </>
+          </div>
         )}
 
-        <div className="mt-5">
+        <div className="mt-6">
           <SidebarSectionLabel label={t('sidebar.sectionResources')} />
           <Link to="/resources" onClick={closeAfterNav} className={location.pathname.startsWith('/resources') ? 'sidebar-link-active' : 'sidebar-link'}>
-            <Images className="w-[15px] h-[15px]" strokeWidth={1.75} />
+            <Images className="w-4 h-4" strokeWidth={1.75} />
             <span className="flex-1">{t('sidebar.resources')}</span>
           </Link>
         </div>
 
-        <div className="mt-5">
+        <div className="mt-6">
           <SidebarSectionLabel label={t('sidebar.sectionRelations')} collapsible open={relationsOpen} onToggle={toggleRelations} />
           {relationsOpen && (
-            <>
+            <div className="flex flex-col gap-0.5">
               <Link to="/entities" onClick={closeAfterNav} className={location.pathname === '/entities' ? 'sidebar-link-active' : 'sidebar-link'}>
-                <Waypoints className="w-[15px] h-[15px]" strokeWidth={1.75} />
+                <Waypoints className="w-4 h-4" strokeWidth={1.75} />
                 <span className="flex-1">{t('sidebar.entities')}</span>
               </Link>
               <Link to="/graph" onClick={closeAfterNav} className={location.pathname === '/graph' ? 'sidebar-link-active' : 'sidebar-link'}>
-                <Network className="w-[15px] h-[15px]" strokeWidth={1.75} />
+                <Network className="w-4 h-4" strokeWidth={1.75} />
                 <span className="flex-1">{t('sidebar.graph')}</span>
               </Link>
-            </>
+            </div>
           )}
         </div>
 
-        <div className="mt-5">
+        <div className="mt-6">
           <SidebarSectionLabel label={t('sidebar.smartViews')} collapsible open={smartOpen} onToggle={toggleSmart} />
           {smartOpen && (
-            <>
+            <div className="flex flex-col gap-0.5">
               <Link
                 to="/?updated_within=7d"
                 onClick={closeAfterNav}
                 className={location.search.includes('updated_within=7d') ? 'sidebar-link-active' : 'sidebar-link'}
               >
-                <Clock className="w-[15px] h-[15px]" strokeWidth={1.75} />
+                <Clock className="w-4 h-4" strokeWidth={1.75} />
                 {t('sidebar.recent7Days')}
               </Link>
               <Link
@@ -478,7 +478,7 @@ export default function Sidebar({
                 onClick={closeAfterNav}
                 className={location.search.includes('stale_within=90d') ? 'sidebar-link-active' : 'sidebar-link'}
               >
-                <Hourglass className="w-[15px] h-[15px]" strokeWidth={1.75} />
+                <Hourglass className="w-4 h-4" strokeWidth={1.75} />
                 {t('sidebar.stale90Days')}
               </Link>
               <Link
@@ -486,7 +486,7 @@ export default function Sidebar({
                 onClick={closeAfterNav}
                 className={location.search.includes('ai_exclude=1') ? 'sidebar-link-active' : 'sidebar-link'}
               >
-                <EyeOff className="w-[15px] h-[15px]" strokeWidth={1.75} />
+                <EyeOff className="w-4 h-4" strokeWidth={1.75} />
                 <span className="flex-1">{t('sidebar.aiHidden')}</span>
                 {counts.ai_exclude > 0 && (
                   <span className={COUNT_BADGE_CLS}>{formatCount(counts.ai_exclude)}</span>
@@ -497,17 +497,17 @@ export default function Sidebar({
                 onClick={closeAfterNav}
                 className={location.search.includes('untagged') || location.search.includes('view=untagged') ? 'sidebar-link-active' : 'sidebar-link'}
               >
-                <Tag className="w-[15px] h-[15px]" strokeWidth={1.75} />
+                <Tag className="w-4 h-4" strokeWidth={1.75} />
                 <span className="flex-1">{t('sidebar.untagged')}</span>
                 {counts.untagged > 0 && (
                   <span className={COUNT_BADGE_CLS}>{formatCount(counts.untagged)}</span>
                 )}
               </Link>
-            </>
+            </div>
           )}
         </div>
 
-        <div className="mt-5">
+        <div className="mt-6">
           <SidebarSectionLabel label={t('sidebar.pinnedViews')} collapsible open={pinnedOpen} onToggle={togglePinned} />
           {pinnedOpen && pinnedViews.length === 0 && (
             <p className="px-2.5 py-1.5 text-[11.5px] text-sidebar-muted leading-relaxed">
@@ -526,7 +526,7 @@ export default function Sidebar({
           ))}
         </div>
 
-        <div className="mt-5">
+        <div className="mt-6">
             <SidebarSectionLabel
               label={t('sidebar.recentVisited')}
               collapsible
@@ -553,13 +553,13 @@ export default function Sidebar({
                     className={`group flex items-center gap-0.5 rounded-md transition-colors ${
                       isActive
                         ? 'bg-primary-soft text-primary hover:bg-[rgb(var(--primary)_/_0.16)]'
-                        : 'text-sidebar-foreground hover:bg-[var(--primary-softer)] hover:text-sidebar-accent-foreground'
+                        : 'text-sidebar-muted hover:bg-[var(--primary-softer)] hover:text-sidebar-accent-foreground'
                     }`}
                   >
                     <Link
                       to={`/doc/${doc.id}`}
                       onClick={closeAfterNav}
-                      className={`min-w-0 flex-1 flex items-center gap-1.5 px-2.5 py-1 text-[13px] ${
+                      className={`min-w-0 flex-1 flex items-center gap-1.5 px-2.5 py-2 text-[13px] ${
                         isActive ? 'font-medium' : ''
                       }`}
                       title={doc.title}
@@ -589,7 +589,7 @@ export default function Sidebar({
                 <button
                   type="button"
                   onClick={() => setRecentExpanded((v) => !v)}
-                  className="px-2.5 py-1 text-[11.5px] text-sidebar-muted hover:text-sidebar-accent-foreground text-left transition-colors"
+                  className="px-2.5 py-1.5 text-[11.5px] text-sidebar-muted/80 hover:text-sidebar-accent-foreground text-left transition-colors"
                 >
                   {recentExpanded ? t('sidebar.collapse') : t('sidebar.expandAll', { n: allRecent.length })}
                 </button>
@@ -599,8 +599,8 @@ export default function Sidebar({
         </div>
       </nav>
 
-      <div className="border-t border-sidebar-border shrink-0">
-        <div className="px-3 pt-2 pb-2.5 flex items-center justify-between gap-2">
+      <div className="border-t border-sidebar-border/50 shrink-0">
+        <div className="px-3 pt-2.5 pb-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Tooltip label={t('sidebar.settings')}>
               <Link
