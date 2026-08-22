@@ -28,13 +28,13 @@ export default function DocNeighborPager({
             to={`/doc/${prev.id}`}
             className="group block min-w-0 rounded-md -m-2 p-2 hover:bg-accent/50 transition-colors"
           >
-            <div className="text-[11px] text-muted-foreground/80 mb-1">{t('doc.prevDocLabel')}</div>
-            <div className="text-[13.5px] font-medium text-foreground truncate group-hover:text-foreground">
+            <div className="text-xs text-muted-foreground/80 mb-1">{t('doc.prevDocLabel')}</div>
+            <div className="text-base font-medium text-foreground truncate group-hover:text-foreground">
               {prev.title || t('doc.untitledDocument')}
             </div>
           </Link>
         ) : (
-          <div className="text-[12px] text-muted-foreground/50">{t('doc.noPrevDoc')}</div>
+          <div className="text-sm text-muted-foreground/50">{t('doc.noPrevDoc')}</div>
         )}
       </div>
       <div className="min-w-0 text-right">
@@ -43,13 +43,13 @@ export default function DocNeighborPager({
             to={`/doc/${next.id}`}
             className="group block min-w-0 rounded-md -m-2 p-2 hover:bg-accent/50 transition-colors"
           >
-            <div className="text-[11px] text-muted-foreground/80 mb-1">{t('doc.nextDocLabel')}</div>
-            <div className="text-[13.5px] font-medium text-foreground truncate">
+            <div className="text-xs text-muted-foreground/80 mb-1">{t('doc.nextDocLabel')}</div>
+            <div className="text-base font-medium text-foreground truncate">
               {next.title || t('doc.untitledDocument')}
             </div>
           </Link>
         ) : (
-          <div className="text-[12px] text-muted-foreground/50">{t('doc.noNextDoc')}</div>
+          <div className="text-sm text-muted-foreground/50">{t('doc.noNextDoc')}</div>
         )}
       </div>
     </nav>

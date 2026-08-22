@@ -66,7 +66,7 @@ export default function MarkdownEditor({
     return (
       <button
         onClick={() => setEditing(true)}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground bg-card border border-border rounded-md transition-colors"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-base font-medium text-muted-foreground hover:text-foreground bg-card border border-border rounded-md transition-colors"
       >
         <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
         {t('mdEditor.edit')}
@@ -552,7 +552,7 @@ function EditorInline({
       ) : (
         <>
           {showRecoverDraft && (
-            <div className="mb-4 flex items-center gap-2 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-[12.5px]">
+            <div className="mb-4 flex items-center gap-2 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-sm">
               <span className="flex-1 text-muted-foreground">
                 {t('mdEditor.draftNotice')}
               </span>
@@ -645,7 +645,7 @@ function EditorInline({
                 >
                   <div className="flex flex-col items-center gap-2 text-primary">
                     <ImageDown className="w-7 h-7" strokeWidth={1.5} />
-                    <span className="text-[13px] font-medium">
+                    <span className="text-base font-medium">
                       {t('mdEditor.dropImageHint', { defaultValue: '松开上传图片' })}
                     </span>
                   </div>
@@ -681,7 +681,7 @@ function EditorInline({
       />
 
       {showHelp && (
-        <div className="mt-3 pt-3 border-t border-border/50 text-[11.5px] text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-1.5">
+        <div className="mt-3 pt-3 border-t border-border/50 text-xs text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-1.5">
           <ShortcutsHelp keys={['mod', 'S']} desc={t('mdEditor.helpSave')} />
           <ShortcutsHelp keys={['mod', 'P']} desc={t('mdEditor.helpTogglePreview')} />
           <ShortcutsHelp keys={['mod', 'B']} desc={t('mdEditor.helpBold')} />
@@ -690,7 +690,7 @@ function EditorInline({
           <ShortcutsHelp keys={['mod', '⇧K']} desc={t('mdEditor.helpInsertLink')} />
           <ShortcutsHelp keys={['mod', 'Enter']} desc={t('mdEditor.helpAiContinue')} />
           <ShortcutsHelp keys={['Tab']} desc={t('mdEditor.helpAiAccept')} />
-          <p className="col-span-2 mt-1 text-[11px] leading-relaxed text-muted-foreground/80">
+          <p className="col-span-2 mt-1 text-xs leading-relaxed text-muted-foreground/80">
             {t('mdEditor.helpEditingTips')}
           </p>
         </div>

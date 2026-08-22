@@ -19,7 +19,7 @@ export function Section({
           {icon}
           <span>{title}</span>
         </div>
-        {hint && <div className="text-[11px] text-muted-foreground mt-1">{hint}</div>}
+        {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
       </div>
       <div className="p-5">{children}</div>
     </div>

@@ -13,9 +13,9 @@ export function EmptyState({ icon, title, description, action, className = '' }:
   return (
     <div className={`px-3 py-14 flex flex-col items-center text-center ${className}`}>
       <div className="empty-icon-tile">{icon}</div>
-      <h3 className="text-[15px] font-medium text-foreground mb-1.5 tracking-[-0.005em]">{title}</h3>
+      <h3 className="text-md font-medium text-foreground mb-1.5 tracking-[-0.005em]">{title}</h3>
       {description != null && description !== '' && (
-        <div className="text-[13px] text-muted-foreground mb-5 max-w-[280px] leading-relaxed">
+        <div className="text-base text-muted-foreground mb-5 max-w-[280px] leading-relaxed">
           {description}
         </div>
       )}

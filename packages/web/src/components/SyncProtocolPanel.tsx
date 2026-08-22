@@ -144,7 +144,7 @@ export default function SyncProtocolPanel() {
     >
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div className="text-[13px] font-medium text-foreground">{t('syncProtocol.enableSync')}</div>
+          <div className="text-base font-medium text-foreground">{t('syncProtocol.enableSync')}</div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" className="sr-only peer" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
             <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:bg-success"></div>
@@ -153,7 +153,7 @@ export default function SyncProtocolPanel() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
           <div>
-            <label className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">{t('syncProtocol.storageConnection')}</label>
+            <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t('syncProtocol.storageConnection')}</label>
             <div className="mt-1.5"><LocationSelect value={locationId} onChange={setLocationId} kind="s3" /></div>
           </div>
           <InlineField
@@ -191,7 +191,7 @@ export default function SyncProtocolPanel() {
         </div>
 
         {status && (
-          <div className="text-[12.5px] text-muted-foreground pt-4 space-y-1.5">
+          <div className="text-sm text-muted-foreground pt-4 space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="font-medium text-foreground">{t('syncProtocol.statusLabel')}</span>
               {status.running ? (
@@ -203,7 +203,7 @@ export default function SyncProtocolPanel() {
               )}
               <span className="ml-2">{t('syncProtocol.lastSync')}<span className="font-mono">{lastRunText}</span></span>
             </div>
-            <div className="flex items-center gap-2 text-[12px]">
+            <div className="flex items-center gap-2 text-sm">
               <span>{t('syncProtocol.syncedChanges', { n: status.state.publishedSeq })}</span>
               {status.pendingChanges > 0 && (
                 <span className="text-warning/90">{t('syncProtocol.pendingChanges', { n: status.pendingChanges })}</span>
@@ -218,26 +218,26 @@ export default function SyncProtocolPanel() {
           </div>
         )}
 
-        <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
+        <p className="text-xs text-muted-foreground/60 leading-relaxed">
           {t('syncProtocol.hint')}
         </p>
 
         {status.enabled && devices.length > 0 && (
           <div className="space-y-2 pt-2 border-t border-border/40">
-            <h4 className="text-[11.5px] uppercase tracking-[0.08em] text-muted-foreground font-semibold">
+            <h4 className="text-xs uppercase tracking-[0.08em] text-muted-foreground font-semibold">
               {t('syncProtocol.devices')}
             </h4>
             <div className="space-y-2">
               {devices.map((d) => (
                 <div
                   key={d.device_id}
-                  className="flex items-center justify-between gap-3 px-3.5 py-2 rounded-lg border border-border/60 bg-accent/10 text-[12.5px]"
+                  className="flex items-center justify-between gap-3 px-3.5 py-2 rounded-lg border border-border/60 bg-accent/10 text-sm"
                 >
                   <div className="min-w-0">
                     <div className="font-medium text-foreground truncate">
                       {d.name || t('syncProtocol.unnamedDevice')}
                     </div>
-                    <div className="text-muted-foreground text-[11px] mt-0.5 font-mono truncate">
+                    <div className="text-muted-foreground text-xs mt-0.5 font-mono truncate">
                       {d.device_id.slice(0, 8)}…{d.last_seen ? ` · ${formatIsoDateTime(d.last_seen)}` : ''}
                       {deviceLag(d.device_id) > 0 && (
                         <span className="text-warning/90"> · {t('syncProtocol.deviceLag', { n: deviceLag(d.device_id) })}</span>
@@ -256,7 +256,7 @@ export default function SyncProtocolPanel() {
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-muted-foreground/60">
+            <p className="text-xs text-muted-foreground/60">
               {t('syncProtocol.deviceHint')}
             </p>
           </div>

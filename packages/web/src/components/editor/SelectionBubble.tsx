@@ -26,7 +26,7 @@ const QUOTE_MAX = 600
 const DESKTOP_MQ = '(min-width: 640px)'
 
 const btnCls =
-  'flex items-center gap-1.5 px-2 py-1 text-[13px] rounded-md text-foreground hover:bg-accent transition-colors'
+  'flex items-center gap-1.5 px-2 py-1 text-base rounded-md text-foreground hover:bg-accent transition-colors'
 
 interface SelectionBubbleProps {
   /** 当前非空选区锚点（null = 无选区/已收起） */
@@ -121,7 +121,7 @@ export default function SelectionBubble({
     >
       {refining ? (
         <>
-          <span className="flex items-center gap-1.5 px-2 py-1 text-[13px] text-muted-foreground">
+          <span className="flex items-center gap-1.5 px-2 py-1 text-base text-muted-foreground">
             <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
             {t('selectionBubble.generating')}
           </span>

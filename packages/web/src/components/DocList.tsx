@@ -61,7 +61,7 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
               onKeyDown={handleTitleKeyDown}
               onBlur={() => { setTitle(doc.title); setEditing(false) }}
               data-no-focus-ring
-              className="flex-1 text-[14px] font-medium bg-transparent border-b border-primary text-foreground outline-none"
+              className="flex-1 text-md font-medium bg-transparent border-b border-primary text-foreground outline-none"
             />
             <button onMouseDown={(e) => { e.preventDefault(); saveTitle() }} className="p-0.5 text-primary hover:bg-primary/10 rounded-md transition-colors">
               <Check className="w-3.5 h-3.5" />
@@ -72,16 +72,16 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
           </div>
         ) : (
           <Link to={'/doc/' + doc.id} className="block">
-            <h3 className="font-medium text-[14px] text-foreground tracking-[-0.005em] truncate flex items-center gap-1.5 leading-snug">
+            <h3 className="font-medium text-md text-foreground tracking-[-0.005em] truncate flex items-center gap-1.5 leading-snug">
               <span className="truncate">{doc.title || t('docList.untitled')}</span>
               {shared && (
-                <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded-md border border-border/70 text-muted-foreground">
+                <span className="shrink-0 inline-flex items-center gap-1 text-2xs font-medium px-1.5 py-px rounded-md border border-border/70 text-muted-foreground">
                   <Globe className="w-2.5 h-2.5" strokeWidth={1.75} />
                   {t('docList.shared')}
                 </span>
               )}
               {aiExclude && (
-                <span className="shrink-0 text-[10px] font-medium px-1.5 py-px rounded-md border border-border/70 text-muted-foreground">
+                <span className="shrink-0 text-2xs font-medium px-1.5 py-px rounded-md border border-border/70 text-muted-foreground">
                   {t('docList.aiExclude')}
                 </span>
               )}
@@ -94,13 +94,13 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
               <Link
                 key={t}
                 to={`/?tags=${encodeURIComponent(t)}`}
-                className="text-[10.5px] font-mono px-1.5 py-px rounded-full bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                className="text-2xs font-mono px-1.5 py-px rounded-full bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               >
                 {t}
               </Link>
             ))}
             {tags.length > 4 && (
-              <span className="text-[10.5px] text-muted-foreground/70 font-mono">+{tags.length - 4}</span>
+              <span className="text-2xs text-muted-foreground/70 font-mono">+{tags.length - 4}</span>
             )}
           </div>
         )}
@@ -110,7 +110,7 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
         <div className="flex items-center gap-1 shrink-0">
           <Tooltip label={t('docList.updatedAt', { date: doc.updated_at })}>
             <time
-              className="text-[11.5px] text-muted-foreground font-mono tabular-nums whitespace-nowrap text-right min-w-[4.5rem]"
+              className="text-xs text-muted-foreground font-mono tabular-nums whitespace-nowrap text-right min-w-[4.5rem]"
               dateTime={doc.updated_at}
             >
               {formatRelative(doc.updated_at)}
@@ -118,7 +118,7 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
           </Tooltip>
           {doc.created_at && doc.created_at !== doc.updated_at && (
             <Tooltip label={t('docList.createdAt', { date: doc.created_at })}>
-              <span className="text-[11.5px] text-muted-foreground/55 font-mono tabular-nums whitespace-nowrap">
+              <span className="text-xs text-muted-foreground/55 font-mono tabular-nums whitespace-nowrap">
                 · {t('docList.createdAt', { date: formatRelative(doc.created_at) })}
               </span>
             </Tooltip>

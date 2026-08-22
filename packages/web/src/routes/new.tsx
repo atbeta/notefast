@@ -242,14 +242,14 @@ export default function NewDocPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <div className="flex items-baseline justify-between mb-1">
-              <label htmlFor="doc-title" className="text-[12px] font-medium text-muted-foreground">{t('common.title')}</label>
+              <label htmlFor="doc-title" className="text-sm font-medium text-muted-foreground">{t('common.title')}</label>
               {ai.chat && (
               <Tooltip label={t('newDoc.aiTitleHint')}>
                 <button
                   type="button"
                   onClick={handleSuggestTitle}
                   disabled={generating || (!markdown.trim() && !title.trim())}
-                  className="inline-flex items-center gap-1 text-[11.5px] text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
                 >
                   {generating ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -274,8 +274,8 @@ export default function NewDocPage() {
 
           <div>
             <div className="flex items-baseline justify-between mb-2">
-              <label htmlFor="doc-markdown" className="text-[12px] font-medium text-muted-foreground">{t('newDoc.markdownLabel')}</label>
-              <span className="text-[11.5px] text-muted-foreground/60">{t('newDoc.optional')}</span>
+              <label htmlFor="doc-markdown" className="text-sm font-medium text-muted-foreground">{t('newDoc.markdownLabel')}</label>
+              <span className="text-xs text-muted-foreground/60">{t('newDoc.optional')}</span>
             </div>
             <textarea
               id="doc-markdown"
@@ -289,15 +289,15 @@ export default function NewDocPage() {
 
           <div>
             <div className="flex items-baseline justify-between mb-2">
-              <label className="text-[12px] font-medium text-muted-foreground">{t('newDoc.tagsLabel')}</label>
-              <span className="text-[11.5px] text-muted-foreground/60">{t('newDoc.optional')}</span>
+              <label className="text-sm font-medium text-muted-foreground">{t('newDoc.tagsLabel')}</label>
+              <span className="text-xs text-muted-foreground/60">{t('newDoc.optional')}</span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <Tag className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" strokeWidth={1.75} />
               {tags.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11.5px] bg-muted/60 text-foreground/85"
+                  className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-xs bg-muted/60 text-foreground/85"
                 >
                   <span className="font-mono">{tag}</span>
                   <button
@@ -317,7 +317,7 @@ export default function NewDocPage() {
                 className="inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full border border-dashed border-border/70 hover:border-foreground/30 text-muted-foreground/70 hover:text-foreground transition-colors"
               >
                 <Plus className="w-3 h-3 text-muted-foreground/60" strokeWidth={2} />
-                <span className="text-[11.5px]">{t('tagEditor.addTag')}</span>
+                <span className="text-xs">{t('tagEditor.addTag')}</span>
               </button>
               {pickerOpen && (
                 <TagPickerPopover
@@ -423,7 +423,7 @@ export default function NewDocPage() {
                 </p>
               )}
               {zipResult.errors.length > 0 && (
-                <ul className="text-[11.5px] text-destructive/90 space-y-0.5 max-h-28 overflow-y-auto pl-1">
+                <ul className="text-xs text-destructive/90 space-y-0.5 max-h-28 overflow-y-auto pl-1">
                   {zipResult.errors.map((msg, i) => (
                     <li key={i} className="truncate" title={msg}>{msg}</li>
                   ))}

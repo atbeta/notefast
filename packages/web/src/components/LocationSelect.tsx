@@ -25,7 +25,7 @@ export default function LocationSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full px-3 py-1.5 rounded-md border border-border bg-background transition-colors focus:border-primary/50 text-[14px]"
+      className="w-full px-3 py-1.5 rounded-md border border-border bg-background transition-colors focus:border-primary/50 text-md"
     >
       {allowEmpty && <option value="">{t('locationSelect.placeholder')}</option>}
       {filtered.map((l) => (

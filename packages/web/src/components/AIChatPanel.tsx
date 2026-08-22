@@ -475,7 +475,7 @@ export default function AIChatPanel({
           <Sparkles className="w-4 h-4 text-primary shrink-0" strokeWidth={1.75} />
           <span className="truncate">{t('chat.title')}</span>
           <Tooltip label={contextDocId ? t('chat.contextDocTitle') : t('chat.contextAllTitle')}>
-            <span className="shrink-0 text-[10.5px] font-medium px-1.5 py-px rounded-md border border-primary/25 bg-primary-soft text-primary/90">
+            <span className="shrink-0 text-2xs font-medium px-1.5 py-px rounded-md border border-primary/25 bg-primary-soft text-primary/90">
               {contextDocId ? t('chat.contextDoc') : t('chat.contextAll')}
             </span>
           </Tooltip>
@@ -501,7 +501,7 @@ export default function AIChatPanel({
               <Tooltip label={t('chat.clearTitle')}>
                 <button
                   onClick={() => setShowClearConfirm(true)}
-                  className="text-[11px] text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                  className="text-xs text-muted-foreground hover:text-destructive transition-colors shrink-0"
                 >
                   {t('chat.clear')}
                 </button>
@@ -549,8 +549,8 @@ export default function AIChatPanel({
               <div className="w-9 h-9 mx-auto rounded-lg bg-primary-soft text-primary grid place-items-center mb-2">
                 <Sparkles className="w-4 h-4" strokeWidth={1.5} />
               </div>
-              <p className="text-[14px] font-medium text-foreground">{t('chat.askKb')}</p>
-              <p className="text-[12px] text-muted-foreground leading-relaxed px-2">
+              <p className="text-md font-medium text-foreground">{t('chat.askKb')}</p>
+              <p className="text-sm text-muted-foreground leading-relaxed px-2">
                 {contextDocId ? t('chat.emptyDocHint') : t('chat.emptyAllHint')}
               </p>
             </div>
@@ -572,8 +572,8 @@ export default function AIChatPanel({
                         <SkillIcon className="w-3.5 h-3.5" strokeWidth={1.75} />
                       </span>
                       <span className="min-w-0">
-                        <span className="block text-[13px] font-medium text-foreground">{s.name}</span>
-                        <span className="block text-[11.5px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
+                        <span className="block text-base font-medium text-foreground">{s.name}</span>
+                        <span className="block text-xs text-muted-foreground mt-0.5 leading-snug line-clamp-2">
                           {s.description}
                         </span>
                       </span>
@@ -668,7 +668,7 @@ export default function AIChatPanel({
                       </span>
                       <button
                         onClick={handleStop}
-                        className="ml-1 text-[10px] text-muted-foreground hover:text-foreground"
+                        className="ml-1 text-2xs text-muted-foreground hover:text-foreground"
                       >
                         {t('chat.stop')}
                       </button>
@@ -678,7 +678,7 @@ export default function AIChatPanel({
                 {!showSpinner && !toolStatus && (
                   <button
                     onClick={handleStop}
-                    className="ml-11 text-[10px] text-muted-foreground hover:text-foreground"
+                    className="ml-11 text-2xs text-muted-foreground hover:text-foreground"
                   >
                     {t('chat.stopGenerating')}
                   </button>
@@ -705,7 +705,7 @@ export default function AIChatPanel({
                       setInput(s.prompt)
                       inputRef.current?.focus()
                     }}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-primary/20 bg-primary-softer text-[11px] text-primary hover:border-primary/40 hover:bg-primary-soft transition-colors whitespace-nowrap shrink-0"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-primary/20 bg-primary-softer text-xs text-primary hover:border-primary/40 hover:bg-primary-soft transition-colors whitespace-nowrap shrink-0"
                   >
                     <SkillIcon className="w-3 h-3" strokeWidth={1.75} />
                     {s.name}
@@ -724,7 +724,7 @@ export default function AIChatPanel({
                   <button
                     type="button"
                     onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
-                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-ink text-ink-foreground text-[10px] leading-none flex items-center justify-center opacity-80 hover:opacity-100"
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-ink text-ink-foreground text-2xs leading-none flex items-center justify-center opacity-80 hover:opacity-100"
                     aria-label={t('chat.removeAttachment')}
                   >
                     <X className="w-2.5 h-2.5" />

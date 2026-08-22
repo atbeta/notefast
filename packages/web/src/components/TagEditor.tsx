@@ -53,7 +53,7 @@ export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
       {tags.map((tag) => (
         <span
           key={tag}
-          className="group/chip inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11.5px] bg-muted/60 hover:bg-muted text-foreground/85 hover:text-foreground transition-colors"
+          className="group/chip inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-xs bg-muted/60 hover:bg-muted text-foreground/85 hover:text-foreground transition-colors"
           title={tag}
         >
           <span className="font-mono">{tag}</span>
@@ -77,7 +77,7 @@ export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
         className="inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full border border-dashed border-border/70 hover:border-foreground/30 text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-40"
       >
         <Plus className="w-3 h-3" strokeWidth={2} />
-        <span className="text-[11.5px]">{t('tagEditor.addTag')}</span>
+        <span className="text-xs">{t('tagEditor.addTag')}</span>
         {saving && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground/60" />}
       </button>
       {pickerOpen && (

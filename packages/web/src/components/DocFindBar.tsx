@@ -259,10 +259,10 @@ export default function DocFindBar({
           }}
           placeholder={t('doc.findPlaceholder')}
           data-no-focus-ring
-          className="w-40 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/60 outline-none px-1"
+          className="w-40 bg-transparent text-base text-foreground placeholder:text-muted-foreground/60 outline-none px-1"
           aria-label={t('doc.findPlaceholder')}
         />
-        <span className="text-[11px] tabular-nums text-muted-foreground min-w-[2.75rem] text-right">
+        <span className="text-xs tabular-nums text-muted-foreground min-w-[2.75rem] text-right">
           {query.trim() ? (count === 0 ? t('doc.findNone') : t('doc.findCount', { n: current + 1, total: count })) : ''}
         </span>
         <button

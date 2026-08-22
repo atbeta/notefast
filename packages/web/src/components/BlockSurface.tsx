@@ -182,7 +182,7 @@ export function BlockHandle({ block, className }: BlockHandleProps) {
               type="button"
               role="menuitem"
               onClick={() => item.onSelect()}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] text-left text-foreground hover:bg-accent transition-colors"
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-base text-left text-foreground hover:bg-accent transition-colors"
             >
               <span className="text-muted-foreground">{item.icon}</span>
               <span className="truncate">{item.label}</span>

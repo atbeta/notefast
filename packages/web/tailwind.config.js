@@ -72,12 +72,12 @@ export default {
         'color-primary': 'rgb(var(--primary) / <alpha-value>)',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"PingFang SC"', '"Microsoft YaHei"', '"Noto Sans CJK SC"', 'sans-serif'],
-        serif: ['"Source Serif 4"', '"Source Serif Pro"', 'Iowan Old Style', 'Charter', 'Georgia', 'Songti SC', 'serif'],
-        // 等宽栈补 CJK 回退：JetBrains Mono/Consolas 无中文字形，缺了会掉到宋体
-        mono: ['"JetBrains Mono"', '"Fira Code"', '"SF Mono"', 'ui-monospace', 'Menlo', 'Consolas', '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', '"Noto Sans CJK SC"', 'monospace'],
+        sans: ['var(--font-sans)'],
+        serif: ['var(--font-serif)'],
+        mono: ['var(--font-mono)'],
       },
       fontSize: {
+        '2xs': ['var(--text-2xs)',    { lineHeight: '1.4' }],
         xs:    ['var(--text-xs)',     { lineHeight: '1.5' }],
         sm:    ['var(--text-sm)',     { lineHeight: '1.5' }],
         base:  ['var(--text-base)',   { lineHeight: '1.6' }],
@@ -87,6 +87,12 @@ export default {
         '2xl': ['var(--text-2xl)',    { lineHeight: '1.3' }],
         '3xl': ['var(--text-3xl)',    { lineHeight: '1.25' }],
         display: ['var(--text-display)', { lineHeight: '1.15' }],
+        h1: ['var(--text-h1)', { lineHeight: '1.3', letterSpacing: '-0.01em' }],
+        h2: ['var(--text-h2)', { lineHeight: '1.3', letterSpacing: '-0.01em' }],
+        h3: ['var(--text-h3)', { lineHeight: '1.3', letterSpacing: '-0.01em' }],
+        h4: ['var(--text-h4)', { lineHeight: '1.3', letterSpacing: '-0.01em' }],
+        h5: ['var(--text-h5)', { lineHeight: '1.3', letterSpacing: '-0.01em' }],
+        h6: ['var(--text-h6)', { lineHeight: '1.3', letterSpacing: '-0.01em' }],
       },
       maxWidth: {
         prose: '42rem',

@@ -296,17 +296,17 @@ export default function TermDictPanel() {
       helpTip={t('settings.termDict.helpTip')}
     >
       <div className="space-y-4">
-        <p className="text-[12.5px] text-muted-foreground">{t('settings.termDict.description')}</p>
+        <p className="text-sm text-muted-foreground">{t('settings.termDict.description')}</p>
 
         {/* 工具行：状态 + 搜索 + 操作 */}
         <div className="flex flex-wrap items-center gap-2">
           {stats && (
             stats.enabled ? (
-              <span className="px-2 py-1 rounded-md bg-primary-soft text-primary font-medium text-[12px]">
+              <span className="px-2 py-1 rounded-md bg-primary-soft text-primary font-medium text-sm">
                 {t('settings.termDict.enabled', { count: stats.count, aliases: stats.aliasCount })}
               </span>
             ) : (
-              <span className="px-2 py-1 rounded-md bg-muted text-muted-foreground text-[12px]">
+              <span className="px-2 py-1 rounded-md bg-muted text-muted-foreground text-sm">
                 {t('settings.termDict.disabled')}
               </span>
             )
@@ -318,7 +318,7 @@ export default function TermDictPanel() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('settings.termDict.searchPlaceholder')}
-              className="pl-8 pr-3 py-1.5 w-52 rounded-md border border-border/60 bg-background text-[12.5px] text-foreground placeholder:text-muted-foreground/50 focus:border-foreground/40"
+              className="pl-8 pr-3 py-1.5 w-52 rounded-md border border-border/60 bg-background text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-foreground/40"
             />
           </div>
           <ActionButton variant="secondary" size="sm" onAction={startNew}>
@@ -340,22 +340,22 @@ export default function TermDictPanel() {
           <div className="rounded-lg border border-primary/30 bg-primary-softer/40 p-4 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-3">
               <div className="space-y-1">
-                <label className="text-[11px] font-medium text-muted-foreground">{t('settings.termDict.nameLabel')}</label>
+                <label className="text-xs font-medium text-muted-foreground">{t('settings.termDict.nameLabel')}</label>
                 <input
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder={t('settings.termDict.nameLabel')}
                   autoFocus
-                  className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[13px] text-foreground placeholder:text-muted-foreground/40 "
+                  className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-base text-foreground placeholder:text-muted-foreground/40 "
                 />
-                {formDup && <p className="text-[10.5px] text-destructive">{t('settings.termDict.nameDuplicate')}</p>}
+                {formDup && <p className="text-2xs text-destructive">{t('settings.termDict.nameDuplicate')}</p>}
               </div>
               <div className="space-y-1">
-                <label className="text-[11px] font-medium text-muted-foreground">{t('settings.termDict.kindLabel')}</label>
+                <label className="text-xs font-medium text-muted-foreground">{t('settings.termDict.kindLabel')}</label>
                 <select
                   value={form.kind}
                   onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))}
-                  className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground "
+                  className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-base text-foreground "
                 >
                   <option value="">—</option>
                   {KINDS.map((k) => (
@@ -365,12 +365,12 @@ export default function TermDictPanel() {
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-[11px] font-medium text-muted-foreground">
+              <label className="text-xs font-medium text-muted-foreground">
                 {t('settings.termDict.aliasesLabel')} <span className="text-muted-foreground/60">· {t('settings.termDict.aliasesHint')}</span>
               </label>
               <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5">
                 {form.aliases.map((a) => (
-                  <span key={a} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-muted/70 text-[11.5px] font-mono text-foreground/85">
+                  <span key={a} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-muted/70 text-xs font-mono text-foreground/85">
                     {a}
                     <button type="button" onClick={() => removeAlias(a)} className="w-3.5 h-3.5 rounded-full grid place-items-center text-muted-foreground/50 hover:text-destructive">
                       <X className="w-2.5 h-2.5" strokeWidth={2} />
@@ -389,18 +389,18 @@ export default function TermDictPanel() {
                   onBlur={addAlias}
                   placeholder="wafer, 晶圆片"
                   data-no-focus-ring
-                  className="flex-1 min-w-[100px] bg-transparent outline-none text-[12.5px] text-foreground placeholder:text-muted-foreground/40"
+                  className="flex-1 min-w-[100px] bg-transparent outline-none text-sm text-foreground placeholder:text-muted-foreground/40"
                 />
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-[11px] font-medium text-muted-foreground">{t('settings.termDict.descriptionLabel')}</label>
+              <label className="text-xs font-medium text-muted-foreground">{t('settings.termDict.descriptionLabel')}</label>
               <textarea
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 placeholder={t('settings.termDict.descriptionPlaceholder')}
                 rows={2}
-                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[12.5px] text-foreground placeholder:text-muted-foreground/40  resize-y"
+                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/40  resize-y"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -413,16 +413,16 @@ export default function TermDictPanel() {
         {/* 导入合并 */}
         {importOpen && (
           <div className="rounded-lg border border-border p-4 space-y-3 bg-accent/20">
-            <div className="text-[12.5px] text-muted-foreground">{t('settings.termDict.importHint')}</div>
+            <div className="text-sm text-muted-foreground">{t('settings.termDict.importHint')}</div>
             <textarea
               value={importText}
               onChange={(e) => setImportText(e.target.value)}
               rows={5}
               spellCheck={false}
               placeholder='[ { "name": "晶圆", "aliases": ["wafer"] } ]'
-              className="w-full rounded-md border border-border bg-background p-2.5 font-mono text-[12px] text-foreground "
+              className="w-full rounded-md border border-border bg-background p-2.5 font-mono text-sm text-foreground "
             />
-            {importError && <p className="text-[11.5px] text-destructive">{importError}</p>}
+            {importError && <p className="text-xs text-destructive">{importError}</p>}
             <div className="flex items-center gap-2">
               <ActionButton size="sm" onAction={() => parseImport(importText)} disabled={!importText.trim()}>
                 {t('settings.termDict.importConfirm')}
@@ -450,7 +450,7 @@ export default function TermDictPanel() {
         {/* 条目列表 */}
         <div className="rounded-lg border border-border/70 overflow-hidden">
           {filtered.length === 0 ? (
-            <div className="px-4 py-8 text-center text-[12.5px] text-muted-foreground">
+            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
               {terms.length === 0 ? t('settings.termDict.disabled') : t('settings.termDict.noResults')}
             </div>
           ) : (
@@ -460,9 +460,9 @@ export default function TermDictPanel() {
                 <div key={e.name} className={`flex items-start gap-3 px-4 py-2.5 ${fi !== filtered.length - 1 ? 'border-b border-border/40' : ''} bg-background`}>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[13px] font-medium text-foreground">{e.name}</span>
+                      <span className="text-base font-medium text-foreground">{e.name}</span>
                       {e.kind && (
-                        <span className="px-1.5 py-px rounded-md text-[10px] uppercase tracking-wider font-mono bg-accent text-muted-foreground border border-border/50">
+                        <span className="px-1.5 py-px rounded-md text-2xs uppercase tracking-wider font-mono bg-accent text-muted-foreground border border-border/50">
                           {t(`settings.termDict.kind.${e.kind}`)}
                         </span>
                       )}
@@ -470,12 +470,12 @@ export default function TermDictPanel() {
                     {e.aliases.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {e.aliases.map((a) => (
-                          <span key={a} className="px-1.5 py-px rounded-full bg-muted/60 text-[10.5px] font-mono text-muted-foreground">{a}</span>
+                          <span key={a} className="px-1.5 py-px rounded-full bg-muted/60 text-2xs font-mono text-muted-foreground">{a}</span>
                         ))}
                       </div>
                     )}
                     {e.description && (
-                      <p className="text-[12px] text-muted-foreground/80 mt-1 leading-relaxed">{e.description}</p>
+                      <p className="text-sm text-muted-foreground/80 mt-1 leading-relaxed">{e.description}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">

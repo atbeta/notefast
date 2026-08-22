@@ -141,7 +141,7 @@ export function HistoryView({
   }
   if (revisions.length === 0) {
     return (
-      <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
+      <div className="px-1 text-sm text-muted-foreground/60 leading-relaxed">
         {t('doc.noHistory')}
       </div>
     )
@@ -152,14 +152,14 @@ export function HistoryView({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="px-1 text-[11px] text-muted-foreground/60 leading-relaxed">
+      <p className="px-1 text-xs text-muted-foreground/60 leading-relaxed">
         {t('doc.historyDescription')}
       </p>
 
       {/* 整篇快照：文档级时间线 */}
       {snapshots.length > 0 && (
         <section>
-          <h4 className="px-1 pb-1.5 text-[10.5px] font-medium uppercase tracking-[0.05em] text-muted-foreground/50">
+          <h4 className="px-1 pb-1.5 text-2xs font-medium uppercase tracking-[0.05em] text-muted-foreground/50">
             {t('doc.snapshotSection')}
           </h4>
           <div className="flex flex-col gap-1">
@@ -187,7 +187,7 @@ export function HistoryView({
       {/* 块级修改：单块历史 */}
       {blockEdits.length > 0 && (
         <section>
-          <h4 className="px-1 pb-1.5 text-[10.5px] font-medium uppercase tracking-[0.05em] text-muted-foreground/50">
+          <h4 className="px-1 pb-1.5 text-2xs font-medium uppercase tracking-[0.05em] text-muted-foreground/50">
             {t('doc.blockEditSection')}
           </h4>
           <div className="flex flex-col gap-1">
@@ -238,8 +238,8 @@ export function RevisionItem({
           onClick={() => onToggle(key)}
           className="min-w-0 flex-1 text-left"
         >
-          <span className="block text-[11.5px] text-muted-foreground truncate">{label}</span>
-          <span className="block text-[10.5px] text-muted-foreground/60 tabular-nums">
+          <span className="block text-xs text-muted-foreground truncate">{label}</span>
+          <span className="block text-2xs text-muted-foreground/60 tabular-nums">
             {formatSqliteDateTime(rev.created_at)}
           </span>
         </button>
@@ -258,7 +258,7 @@ export function RevisionItem({
             type="button"
             disabled={restoring === key}
             onClick={() => onRestore(rev)}
-            className="shrink-0 px-1.5 py-1 text-[11px] font-medium text-primary/80 hover:text-primary disabled:opacity-50 transition-colors"
+            className="shrink-0 px-1.5 py-1 text-xs font-medium text-primary/80 hover:text-primary disabled:opacity-50 transition-colors"
           >
             {restoring === key ? '…' : t('doc.revert')}
           </button>
@@ -266,7 +266,7 @@ export function RevisionItem({
       </div>
       {isOpen && (
         diff && diff.length > 0 ? (
-          <div className="px-3 py-2 border-t border-border/40 text-[11px] leading-relaxed font-mono max-h-40 overflow-y-auto">
+          <div className="px-3 py-2 border-t border-border/40 text-xs leading-relaxed font-mono max-h-40 overflow-y-auto">
             {diff.map((l, i) => (
               <div
                 key={i}
@@ -282,7 +282,7 @@ export function RevisionItem({
             ))}
           </div>
         ) : (
-          <pre className="px-3 py-2 border-t border-border/40 text-[11px] leading-relaxed whitespace-pre-wrap font-sans text-muted-foreground bg-background/40 max-h-40 overflow-y-auto">
+          <pre className="px-3 py-2 border-t border-border/40 text-xs leading-relaxed whitespace-pre-wrap font-sans text-muted-foreground bg-background/40 max-h-40 overflow-y-auto">
             {rev.content || t('doc.emptyContent')}
           </pre>
         )

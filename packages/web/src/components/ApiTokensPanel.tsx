@@ -100,7 +100,7 @@ export default function ApiTokensPanel() {
     >
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div className="text-[12.5px] text-muted-foreground leading-relaxed">
+          <div className="text-sm text-muted-foreground leading-relaxed">
             {t('apiTokens.description')}
           </div>
           <ActionButton onAction={() => setShowForm(!showForm)} variant="secondary" size="sm">
@@ -116,15 +116,15 @@ export default function ApiTokensPanel() {
               placeholder={t('apiTokens.namePlaceholder')}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/40 "
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground/40 "
               autoFocus
             />
             <div className="flex items-center gap-6">
-              <label className="flex items-center gap-2 text-[13px] text-foreground cursor-pointer">
+              <label className="flex items-center gap-2 text-base text-foreground cursor-pointer">
                 <input type="checkbox" checked={scopeRead} onChange={(e) => setScopeRead(e.target.checked)} className="rounded-md border-border" />
                 <span>read</span>
               </label>
-              <label className="flex items-center gap-2 text-[13px] text-foreground cursor-pointer">
+              <label className="flex items-center gap-2 text-base text-foreground cursor-pointer">
                 <input type="checkbox" checked={scopeWrite} onChange={(e) => setScopeWrite(e.target.checked)} className="rounded-md border-border" />
                 <span>write</span>
               </label>
@@ -139,7 +139,7 @@ export default function ApiTokensPanel() {
         {newToken && (
           <div className="rounded-lg border border-success/25 bg-success-soft p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-[13px] font-medium text-success">
+              <div className="flex items-center gap-2 text-base font-medium text-success">
                 <Key className="w-3.5 h-3.5" />
                 {t('apiTokens.generatedOnce')}
               </div>
@@ -148,14 +148,14 @@ export default function ApiTokensPanel() {
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <code className="flex-1 rounded-md border border-success/25 bg-success/10 px-3 py-2 text-[13px] font-mono text-success break-all select-all">
+              <code className="flex-1 rounded-md border border-success/25 bg-success/10 px-3 py-2 text-base font-mono text-success break-all select-all">
                 {newToken}
               </code>
               <ActionButton onAction={copyToken} variant="secondary" className="shrink-0">
                 {copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
               </ActionButton>
             </div>
-            <p className="text-[11px] text-success/80">
+            <p className="text-xs text-success/80">
               {t('apiTokens.saveNow')}
             </p>
           </div>
@@ -167,12 +167,12 @@ export default function ApiTokensPanel() {
               <div key={tok.token_id} className={`flex items-center justify-between gap-4 px-4 py-3 ${i !== tokens.length - 1 ? 'border-b border-border/50' : ''} bg-background`}>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <div className="text-[13px] font-medium text-foreground truncate">{tok.name}</div>
+                    <div className="text-base font-medium text-foreground truncate">{tok.name}</div>
                     <div className="flex gap-1">
-                      {tok.scopes.map(s => <span key={s} className="px-1.5 py-0.5 rounded-md text-[9.5px] uppercase tracking-wider font-mono bg-accent text-muted-foreground border border-border/50">{s}</span>)}
+                      {tok.scopes.map(s => <span key={s} className="px-1.5 py-0.5 rounded-md text-2xs uppercase tracking-wider font-mono bg-accent text-muted-foreground border border-border/50">{s}</span>)}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground font-mono">
+                  <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground font-mono">
                     <span>{t('apiTokens.createdAt', { date: new Date(tok.created_at).toLocaleDateString(currentLocale()) })}</span>
                     {tok.last_used_at && (
                       <>

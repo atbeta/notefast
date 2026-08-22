@@ -86,7 +86,7 @@ export function ProviderForm({
                 href={preset.signupUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
               >
                 <ExternalLink className="w-3 h-3" />
                 {t('providerForm.getApiKey')}
@@ -211,7 +211,7 @@ function ExtraHeadersEditor({
       <button
         type="button"
         onClick={add}
-        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
       >
         <Plus className="w-3 h-3" />
         {t('providerForm.addHeader')}

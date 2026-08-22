@@ -21,8 +21,8 @@ function RootErrorFallback({ error, onReset }: { error: Error; onReset: () => vo
   const [open, setOpen] = useState(false)
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 gap-3 bg-background">
-      <div className="text-[15px] font-medium text-foreground">{t('errorBoundary.title')}</div>
-      <div className="text-[12px] text-muted-foreground break-all max-w-lg text-center leading-relaxed">
+      <div className="text-md font-medium text-foreground">{t('errorBoundary.title')}</div>
+      <div className="text-sm text-muted-foreground break-all max-w-lg text-center leading-relaxed">
         {error.message || String(error)}
       </div>
       {error.stack && (
@@ -30,12 +30,12 @@ function RootErrorFallback({ error, onReset }: { error: Error; onReset: () => vo
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="text-[12px] text-muted-foreground hover:text-foreground"
+            className="text-sm text-muted-foreground hover:text-foreground"
           >
             {open ? t('common.hideDetails') : t('common.showDetails')}
           </button>
           {open && (
-            <pre className="text-[10.5px] text-muted-foreground/70 whitespace-pre-wrap break-all max-h-48 overflow-y-auto border border-border rounded-md p-2.5 bg-muted/30 w-full">
+            <pre className="text-2xs text-muted-foreground/70 whitespace-pre-wrap break-all max-h-48 overflow-y-auto border border-border rounded-md p-2.5 bg-muted/30 w-full">
               {error.stack}
             </pre>
           )}

@@ -114,8 +114,8 @@ export default function ImageUploadPanel() {
               : 'border-border bg-card hover:border-border-strong'
           }`}
         >
-          <p className={`text-[13px] font-medium ${mode === 'off' ? 'text-primary' : 'text-foreground/80'}`}>{t('settings.imageUpload.modeOff')}</p>
-          <p className="text-[11px] text-muted-foreground/80 mt-0.5">{t('settings.imageUpload.modeOffHint')}</p>
+          <p className={`text-base font-medium ${mode === 'off' ? 'text-primary' : 'text-foreground/80'}`}>{t('settings.imageUpload.modeOff')}</p>
+          <p className="text-xs text-muted-foreground/80 mt-0.5">{t('settings.imageUpload.modeOffHint')}</p>
         </button>
         <button
           type="button"
@@ -126,15 +126,15 @@ export default function ImageUploadPanel() {
               : 'border-border bg-card hover:border-border-strong'
           }`}
         >
-          <p className={`text-[13px] font-medium ${mode === 'auto' ? 'text-primary' : 'text-foreground/80'}`}>{t('settings.imageUpload.modeAuto')}</p>
-          <p className="text-[11px] text-muted-foreground/80 mt-0.5">{t('settings.imageUpload.modeAutoHint')}</p>
+          <p className={`text-base font-medium ${mode === 'auto' ? 'text-primary' : 'text-foreground/80'}`}>{t('settings.imageUpload.modeAuto')}</p>
+          <p className="text-xs text-muted-foreground/80 mt-0.5">{t('settings.imageUpload.modeAutoHint')}</p>
         </button>
       </div>
 
       {mode === 'auto' && (
         <div className="space-y-3 rounded-lg border border-border bg-muted/25 p-3.5">
           <div>
-            <label htmlFor="iu-command" className="text-[12px] font-medium text-muted-foreground block mb-1">
+            <label htmlFor="iu-command" className="text-sm font-medium text-muted-foreground block mb-1">
               {t('settings.imageUpload.command')}
             </label>
             <input
@@ -145,11 +145,11 @@ export default function ImageUploadPanel() {
               className="input-mono w-full"
               spellCheck={false}
             />
-            <p className="text-[11px] text-muted-foreground/70 mt-1">{t('settings.imageUpload.commandHint')}</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">{t('settings.imageUpload.commandHint')}</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="iu-args" className="text-[12px] font-medium text-muted-foreground block mb-1">
+              <label htmlFor="iu-args" className="text-sm font-medium text-muted-foreground block mb-1">
                 {t('settings.imageUpload.args')}
               </label>
               <input
@@ -162,7 +162,7 @@ export default function ImageUploadPanel() {
               />
             </div>
             <div>
-              <label htmlFor="iu-timeout" className="text-[12px] font-medium text-muted-foreground block mb-1">
+              <label htmlFor="iu-timeout" className="text-sm font-medium text-muted-foreground block mb-1">
                 {t('settings.imageUpload.timeout')}
               </label>
               <input
@@ -176,14 +176,14 @@ export default function ImageUploadPanel() {
               />
             </div>
           </div>
-          <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+          <p className="text-xs text-muted-foreground/70 leading-relaxed">
             {t('settings.imageUpload.contractHint')}
           </p>
 
           {lastError && (
             <div className="rounded-md border border-destructive/30 bg-destructive/8 px-3 py-2">
               <div className="flex items-start justify-between gap-2">
-                <p className="text-[11px] font-medium text-destructive mb-0.5">{t('settings.imageUpload.lastError')}</p>
+                <p className="text-xs font-medium text-destructive mb-0.5">{t('settings.imageUpload.lastError')}</p>
                 <button
                   type="button"
                   onClick={() => setLastError(null)}
@@ -193,13 +193,13 @@ export default function ImageUploadPanel() {
                   <X className="w-3.5 h-3.5" strokeWidth={2} />
                 </button>
               </div>
-              <p className="text-[11px] text-destructive/90 break-all leading-relaxed">{lastError.message}</p>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{new Date(lastError.at).toLocaleString()}</p>
+              <p className="text-xs text-destructive/90 break-all leading-relaxed">{lastError.message}</p>
+              <p className="text-2xs text-muted-foreground/70 mt-0.5">{new Date(lastError.at).toLocaleString()}</p>
             </div>
           )}
 
           {testResult && (
-            <div className={`rounded-md border px-3 py-2 text-[11.5px] leading-relaxed ${
+            <div className={`rounded-md border px-3 py-2 text-xs leading-relaxed ${
               testResult.ok ? 'border-success/30 bg-success-soft text-success' : 'border-destructive/30 bg-destructive-soft text-destructive/90'
             }`}>
               {testResult.ok && testResult.url ? (
@@ -208,8 +208,8 @@ export default function ImageUploadPanel() {
                 <>
                   <p className="font-medium">{t('settings.imageUpload.testFailed')}</p>
                   {testResult.error && <p className="break-all mt-0.5">{testResult.error}</p>}
-                  {testResult.stderr && <pre className="whitespace-pre-wrap break-all mt-1 text-[10.5px] opacity-90 max-h-24 overflow-y-auto">{testResult.stderr}</pre>}
-                  {testResult.stdout && <pre className="whitespace-pre-wrap break-all mt-1 text-[10.5px] opacity-80 max-h-24 overflow-y-auto">{testResult.stdout}</pre>}
+                  {testResult.stderr && <pre className="whitespace-pre-wrap break-all mt-1 text-2xs opacity-90 max-h-24 overflow-y-auto">{testResult.stderr}</pre>}
+                  {testResult.stdout && <pre className="whitespace-pre-wrap break-all mt-1 text-2xs opacity-80 max-h-24 overflow-y-auto">{testResult.stdout}</pre>}
                   {testResult.exit_code != null && <p className="mt-0.5 opacity-80">{t('settings.imageUpload.exitCode', { code: testResult.exit_code })}</p>}
                 </>
               )}

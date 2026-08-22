@@ -71,7 +71,7 @@ export default function TitleBar() {
           draggable={false}
           className="w-4 h-4 rounded-md shrink-0 pointer-events-none"
         />
-        <span className="text-[13px] font-semibold tracking-[-0.01em] text-foreground/90 truncate pointer-events-none">
+        <span className="text-base font-semibold tracking-[-0.01em] text-foreground/90 truncate pointer-events-none">
           NoteFast
         </span>
       </div>

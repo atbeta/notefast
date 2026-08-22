@@ -30,7 +30,7 @@ export interface TagFilterProps {
 
 const CHIP_WRAP = 'flex flex-wrap gap-x-1.5 gap-y-1.5'
 const CHIP_FACE =
-  'inline-flex items-center gap-1.5 pl-2 pr-1.5 py-0.5 rounded-full text-[11.5px] font-mono'
+  'inline-flex items-center gap-1.5 pl-2 pr-1.5 py-0.5 rounded-full text-xs font-mono'
 const TOGGLE_FACE =
   'inline-flex items-center justify-center w-7 h-7 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0'
 
@@ -57,7 +57,7 @@ export function TagMatchHint() {
     <Tooltip label={t('tagFilter.matchHint')}>
       <button
         type="button"
-        className="text-[12px] text-muted-foreground/70 hover:text-foreground transition-colors shrink-0"
+        className="text-sm text-muted-foreground/70 hover:text-foreground transition-colors shrink-0"
         aria-label={t('tagFilter.tagMatchMode')}
         aria-pressed={tagMatch === 'any'}
         onClick={() => setTagMatch(tagMatch === 'any' ? 'all' : 'any')}
@@ -161,7 +161,7 @@ export default function TagFilter({ onChange }: TagFilterProps) {
           {catalog.map((ti) => (
             <span key={ti.tag} data-tag-measure className={CHIP_FACE}>
               <span>{ti.tag}</span>
-              <span className="text-[10px] tabular-nums">{ti.count}</span>
+              <span className="text-2xs tabular-nums">{ti.count}</span>
             </span>
           ))}
           <span data-tag-more-measure className={TOGGLE_FACE} />
@@ -187,7 +187,7 @@ export default function TagFilter({ onChange }: TagFilterProps) {
                 >
                   <span>{ti.tag}</span>
                   <span
-                    className={`text-[10px] tabular-nums ${isSelected ? 'text-background/60' : 'text-muted-foreground/55'}`}
+                    className={`text-2xs tabular-nums ${isSelected ? 'text-background/60' : 'text-muted-foreground/55'}`}
                   >
                     {ti.count}
                   </span>

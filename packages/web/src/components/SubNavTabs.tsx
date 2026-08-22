@@ -54,7 +54,7 @@ export default function SubNavTabs({ tabs, activeKey, onChange, trailing, embedd
               ref={(el) => { itemRefs.current[tab.key] = el }}
               onClick={() => onChange(tab.key)}
               className={
-                'relative h-full flex items-center text-[13.5px] transition-colors ' +
+                'relative h-full flex items-center text-base transition-colors ' +
                 (embedded ? '' : 'pb-3 ') +
                 (isActive
                   ? 'font-semibold text-foreground'

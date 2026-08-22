@@ -215,12 +215,12 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
     >
       <div className="px-3.5 pt-3 pb-2 flex items-center gap-2 border-b border-border/60">
         <Globe className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.75} />
-        <span className="text-[13px] font-medium text-foreground">{t('share.title')}</span>
+        <span className="text-base font-medium text-foreground">{t('share.title')}</span>
       </div>
 
       <div className="p-3.5 space-y-3">
         {info === null ? (
-          <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground py-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
             <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
             {t('common.loading')}
           </div>
@@ -231,12 +231,12 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
                 <Globe className="w-3.5 h-3.5 text-foreground/80" strokeWidth={1.75} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-foreground">{t('share.anyoneAccess')}</p>
-                <p className="text-[12px] text-muted-foreground mt-0.5 leading-relaxed">
+                <p className="text-base font-medium text-foreground">{t('share.anyoneAccess')}</p>
+                <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
                   {t('share.noLoginNeeded')}
                 </p>
               </div>
-              <span className="shrink-0 text-[11.5px] text-muted-foreground px-1.5 py-0.5 rounded-md border border-border/70">
+              <span className="shrink-0 text-xs text-muted-foreground px-1.5 py-0.5 rounded-md border border-border/70">
                 {t('share.canView')}
               </span>
             </div>
@@ -246,13 +246,13 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
                 readOnly
                 value={shareUrl}
                 onFocus={(e) => e.target.select()}
-                className="flex-1 min-w-0 rounded-md border border-border bg-background px-2.5 py-1.5 text-[11.5px] font-mono text-foreground focus:border-foreground/25"
+                className="flex-1 min-w-0 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-mono text-foreground focus:border-foreground/25"
               />
               <Tooltip label={t('share.copyLink')}>
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-border text-[12px] text-foreground hover:bg-muted transition-colors"
+                  className="shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-border text-sm text-foreground hover:bg-muted transition-colors"
                 >
                   {copied
                     ? <Check className="w-3.5 h-3.5 text-green-600" strokeWidth={2} />
@@ -263,16 +263,16 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
             </div>
 
             {isLocalHost && (
-              <p className="text-[11px] text-muted-foreground/70 -mt-1">{t('share.localOnlyHint')}</p>
+              <p className="text-xs text-muted-foreground/70 -mt-1">{t('share.localOnlyHint')}</p>
             )}
 
-            <div className="flex items-center justify-between gap-2 text-[12.5px]">
+            <div className="flex items-center justify-between gap-2 text-sm">
               <span className="text-muted-foreground">{t('share.expiry')}</span>
               <select
                 value={expiry}
                 disabled={busy}
                 onChange={(e) => handleExpiryChange(e.target.value as ExpiryChoice)}
-                className="rounded-md border border-border bg-background px-2 py-1 text-[12.5px] text-foreground  disabled:opacity-50"
+                className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground  disabled:opacity-50"
               >
                 <option value="never">{t('share.expiryNever')}</option>
                 <option value="1">{t('share.expiryDays', { n: 1 })}</option>
@@ -281,7 +281,7 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
               </select>
             </div>
             {expiryText && (
-              <p className="text-[11.5px] text-muted-foreground/70 -mt-1">{t('share.expiresAt', { time: expiryText })}</p>
+              <p className="text-xs text-muted-foreground/70 -mt-1">{t('share.expiresAt', { time: expiryText })}</p>
             )}
 
             <div className="pt-1 border-t border-border/60 flex justify-end">
@@ -289,7 +289,7 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
                 type="button"
                 onClick={handleDisable}
                 disabled={busy}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-destructive rounded-md hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium text-destructive rounded-md hover:bg-destructive/10 transition-colors disabled:opacity-50"
               >
                 <Trash2 className="w-3 h-3" strokeWidth={1.75} />
                 {t('share.disable')}
@@ -298,14 +298,14 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
           </>
         ) : (
           <>
-            <p className="text-[12.5px] text-muted-foreground leading-relaxed">
+            <p className="text-sm text-muted-foreground leading-relaxed">
               {t('share.enableDesc')}
             </p>
             <button
               type="button"
               onClick={handleEnable}
               disabled={busy}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[13px] font-medium bg-foreground text-background rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-base font-medium bg-foreground text-background rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2} />}
               {t('share.enable')}

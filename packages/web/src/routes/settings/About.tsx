@@ -44,16 +44,16 @@ export default function SettingsAbout() {
             draggable={false}
           />
           <div>
-            <div className="text-[18px] font-semibold tracking-[-0.02em] text-foreground">
+            <div className="text-xl font-semibold tracking-[-0.02em] text-foreground">
               NoteFast
             </div>
-            <p className="mt-1 text-[13px] text-muted-foreground">
+            <p className="mt-1 text-base text-muted-foreground">
               {version
                 ? t('settings.about.version', { version })
                 : t('settings.about.versionLoading')}
             </p>
           </div>
-          <p className="max-w-sm text-[12.5px] text-muted-foreground leading-relaxed">
+          <p className="max-w-sm text-sm text-muted-foreground leading-relaxed">
             {t('settings.about.blurb')}
           </p>
         </div>
@@ -64,7 +64,7 @@ export default function SettingsAbout() {
               type="button"
               onClick={() => void onCheck()}
               disabled={!version || checking}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[var(--radius-btn)] border border-border bg-background text-[13px] font-medium text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[var(--radius-btn)] border border-border bg-background text-base font-medium text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               {checking ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2} />
@@ -77,7 +77,7 @@ export default function SettingsAbout() {
               href={RELEASES_PAGE}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[var(--radius-btn)] text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[var(--radius-btn)] text-base font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             >
               <ExternalLink className="w-3.5 h-3.5" strokeWidth={1.75} />
               {t('settings.about.openReleases')}
@@ -85,12 +85,12 @@ export default function SettingsAbout() {
           </div>
 
           {result?.status === 'latest' && (
-            <p className="text-center text-[12.5px] text-success">
+            <p className="text-center text-sm text-success">
               {t('settings.about.upToDate', { version: result.current })}
             </p>
           )}
           {result?.status === 'update' && (
-            <p className="text-center text-[12.5px] text-foreground">
+            <p className="text-center text-sm text-foreground">
               {t('settings.about.updateAvailable', {
                 latest: result.latest.version,
                 current: result.current,
@@ -106,7 +106,7 @@ export default function SettingsAbout() {
             </p>
           )}
           {result?.status === 'error' && (
-            <p className="text-center text-[12.5px] text-muted-foreground">
+            <p className="text-center text-sm text-muted-foreground">
               {t('settings.about.checkFailed')}{' '}
               <a
                 href={RELEASES_PAGE}
@@ -118,7 +118,7 @@ export default function SettingsAbout() {
               </a>
             </p>
           )}
-          <p className="text-center text-[11px] text-muted-foreground/75 leading-relaxed">
+          <p className="text-center text-xs text-muted-foreground/75 leading-relaxed">
             {t('settings.about.manualHint')}
           </p>
         </div>

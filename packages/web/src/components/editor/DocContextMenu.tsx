@@ -286,7 +286,7 @@ export function useDocContextMenu({
                 item.onSelect()
                 close()
               }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-[13px] text-foreground hover:bg-accent focus:bg-accent transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-base text-foreground hover:bg-accent focus:bg-accent transition-colors"
             >
               {item.icon}
               <span>{item.label}</span>

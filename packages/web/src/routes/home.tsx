@@ -120,7 +120,7 @@ export default function HomePage() {
     <div className="animate-fade-in">
       <PageHeader innerClassName="flex items-center gap-4">
         <div className="min-w-0 flex items-center gap-2">
-          <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
+          <h1 className="text-md font-medium text-foreground truncate tracking-[-0.005em]">
             {title}
           </h1>
           <TagMatchHint />
@@ -136,7 +136,7 @@ export default function HomePage() {
             </Tooltip>
           )}
           {!showListSkeleton && docs.length > 0 && (
-            <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
+            <span className="font-mono text-xs text-muted-foreground/80 tabular-nums shrink-0">
               {docs.length}{hasMore ? '+' : ''}
             </span>
           )}
@@ -165,7 +165,7 @@ export default function HomePage() {
                   type="button"
                   onClick={loadMore}
                   disabled={loadingMore}
-                  className="text-[13px] text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
+                  className="text-base text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
                 >
                   {loadingMore ? t('home.loadingMore') : t('home.loadMore')}
                 </button>
@@ -179,12 +179,12 @@ export default function HomePage() {
       {showPinModal && (
         <div className="fixed inset-0 z-sheet flex items-center justify-center bg-black/30" onClick={() => setShowPinModal(false)}>
           <div className="bg-card border border-border rounded-lg p-5 w-80 shadow-floating space-y-3" onClick={(e) => e.stopPropagation()}>
-            <div className="text-[14px] font-medium text-foreground">{t('home.pinViewTitle')}</div>
+            <div className="text-md font-medium text-foreground">{t('home.pinViewTitle')}</div>
             <input
               type="text"
               value={pinName}
               onChange={(e) => setPinName(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/60 "
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground/60 "
               placeholder={t('home.pinViewPlaceholder')}
               autoFocus
               onKeyDown={(e) => {
@@ -196,8 +196,8 @@ export default function HomePage() {
               }}
             />
             <div className="flex items-center justify-end gap-2">
-              <button onClick={() => setShowPinModal(false)} className="px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors">{t('common.cancel')}</button>
-              <button onClick={() => { pin(pinName || title, listQuery); setShowPinModal(false) }} className="px-3 py-1.5 text-[12px] font-medium bg-foreground text-background rounded-md hover:opacity-90 transition-opacity">{t('home.pin')}</button>
+              <button onClick={() => setShowPinModal(false)} className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">{t('common.cancel')}</button>
+              <button onClick={() => { pin(pinName || title, listQuery); setShowPinModal(false) }} className="px-3 py-1.5 text-sm font-medium bg-foreground text-background rounded-md hover:opacity-90 transition-opacity">{t('home.pin')}</button>
             </div>
           </div>
         </div>

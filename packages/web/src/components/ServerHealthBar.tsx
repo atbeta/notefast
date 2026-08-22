@@ -23,7 +23,7 @@ export function ServerHealthDot() {
     return (
       <span
         aria-label="server offline"
-        className="inline-flex items-center gap-1.5 text-[11.5px] text-destructive font-medium"
+        className="inline-flex items-center gap-1.5 text-xs text-destructive font-medium"
       >
         <span className="relative inline-flex w-1.5 h-1.5">
           <span className="absolute inset-0 rounded-full bg-destructive/40 animate-ping" />
@@ -36,7 +36,7 @@ export function ServerHealthDot() {
   return (
     <span
       aria-label="server status unknown"
-      className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground"
+      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
     >
       <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
       检测中
@@ -51,19 +51,19 @@ export function ServerOfflineBanner() {
   return (
     <div
       role="alert"
-      className="w-full bg-destructive/8 border-b border-destructive/20 px-4 py-2 text-[12px] text-destructive flex items-center gap-3"
+      className="w-full bg-destructive/8 border-b border-destructive/20 px-4 py-2 text-sm text-destructive flex items-center gap-3"
     >
       <WifiOff className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
       <span className="flex-1 min-w-0 truncate">
         {t('serverHealth.offlineBanner', { defaultValue: '无法连接到本地服务。正在重试；检查服务进程是否仍在运行。' })}
         {lastError && (
-          <span className="ml-2 text-destructive/70 font-mono text-[11px]">（{lastError}）</span>
+          <span className="ml-2 text-destructive/70 font-mono text-xs">（{lastError}）</span>
         )}
       </span>
       <button
         type="button"
         onClick={forceHealthProbe}
-        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-destructive/30 hover:bg-destructive/10 transition-colors text-[11.5px]"
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-destructive/30 hover:bg-destructive/10 transition-colors text-xs"
       >
         <RefreshCw className="w-3 h-3" strokeWidth={1.75} />
         {t('serverHealth.retry', { defaultValue: '立即重试' })}

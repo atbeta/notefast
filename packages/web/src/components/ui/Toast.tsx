@@ -258,9 +258,9 @@ function ToastCard({
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[13px] font-medium leading-snug">{title}</div>
+          <div className="text-base font-medium leading-snug">{title}</div>
           {description && (
-            <div className="mt-0.5 text-[12px] text-muted-foreground leading-snug break-words">
+            <div className="mt-0.5 text-sm text-muted-foreground leading-snug break-words">
               {description}
             </div>
           )}
@@ -271,7 +271,7 @@ function ToastCard({
                 action.onClick()
                 onDismiss(id)
               }}
-              className="mt-1.5 text-[12px] font-medium text-primary hover:text-primary/80 transition-colors"
+              className="mt-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
             >
               {action.label}
             </button>

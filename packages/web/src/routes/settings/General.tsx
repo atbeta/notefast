@@ -22,8 +22,8 @@ function ThemePicker() {
     <div className="rounded-lg border border-border/60 bg-card shadow-card p-5 space-y-4">
       <div className="flex items-baseline justify-between gap-3">
         <div>
-          <div className="text-[13.5px] font-medium text-foreground">{t('settings.theme.title')}</div>
-          <p className="text-[12px] text-muted-foreground mt-1">
+          <div className="text-base font-medium text-foreground">{t('settings.theme.title')}</div>
+          <p className="text-sm text-muted-foreground mt-1">
             {t('settings.theme.current')}：
             <span className="text-foreground">{resolvedTheme === 'dark' ? t('settings.theme.dark') : t('settings.theme.light')}</span>
             {theme === 'system' && (
@@ -67,8 +67,8 @@ function LanguagePicker() {
     <div className="rounded-lg border border-border/60 bg-card shadow-card p-5 space-y-4">
       <div className="flex items-baseline justify-between gap-3">
         <div>
-          <div className="text-[13.5px] font-medium text-foreground">{t('settings.language.title')}</div>
-          <p className="text-[12px] text-muted-foreground mt-1">
+          <div className="text-base font-medium text-foreground">{t('settings.language.title')}</div>
+          <p className="text-sm text-muted-foreground mt-1">
             {t('settings.language.current')}：
             <span className="text-foreground">{currentName}</span>
             {choice === 'system' && (
@@ -126,9 +126,9 @@ function ThemeOption({
     >
       <div className="flex items-center gap-2">
         {icon}
-        <span className="text-[12.5px] font-medium">{label}</span>
+        <span className="text-sm font-medium">{label}</span>
       </div>
-      <span className="text-[10.5px] text-muted-foreground/80 leading-tight">{hint}</span>
+      <span className="text-2xs text-muted-foreground/80 leading-tight">{hint}</span>
     </button>
   )
 }

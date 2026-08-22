@@ -765,7 +765,7 @@ useEffect(() => {
             )}
             {isEditing && (
               <Tooltip label={t('doc.editSaveHint')}>
-                <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                   {t('doc.editing')}
                 </span>
@@ -819,16 +819,16 @@ useEffect(() => {
             <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-8 pb-32">
             <DocFindBar rootRef={articleRef} docId={id} />
             {indexJob && (indexJob.state === 'pending' || indexJob.state === 'running') && (
-              <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
+              <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                 <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" strokeWidth={1.75} />
                 <span className="flex-1">{formatIndexProgress(indexJob)}</span>
-                <span className="tabular-nums text-[11px]">
+                <span className="tabular-nums text-xs">
                   {(indexJob.elapsed_ms / 1000).toFixed(1)}s
                 </span>
               </div>
             )}
             {!isEditing && draftInfo && (
-              <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
+              <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                 <PencilLine className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
                 <span className="flex-1">
                   {draftInfo.updatedAt > 0
@@ -852,7 +852,7 @@ useEffect(() => {
               </div>
             )}
             {docStatus === 'inbox' && (
-              <div className="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
+              <div className="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                 <Inbox className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
                 <span className="flex-1 min-w-[12rem]">{t('doc.inboxDescription')}</span>
                 <button
@@ -869,7 +869,7 @@ useEffect(() => {
               </div>
             )}
             {docStatus === 'archived' && (
-              <div className="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[12.5px] text-muted-foreground">
+              <div className="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                 <Archive className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
                 <span className="flex-1 min-w-[12rem]">{t('doc.archivedDescription')}</span>
                 <button
@@ -924,7 +924,7 @@ useEffect(() => {
 
             {/* Meta row — 阅读态展示，融入标题与正文之间 */}
             {!isEditing && (
-              <div className="mt-2 mb-8 text-[12px] text-muted-foreground/70 tabular-nums select-none">
+              <div className="mt-2 mb-8 text-sm text-muted-foreground/70 tabular-nums select-none">
                 {wordCount.toLocaleString(currentLocale())} {t('doc.charCount')}
                 {createdAt && (
                   <>
@@ -952,7 +952,7 @@ useEffect(() => {
                       type="button"
                       onClick={handleToggleArchive}
                       disabled={statusSaving}
-                      className="text-[11.5px] text-muted-foreground/75 hover:text-foreground transition-colors"
+                      className="text-xs text-muted-foreground/75 hover:text-foreground transition-colors"
                     >
                       {t('doc.archive')}
                     </button>
@@ -964,7 +964,7 @@ useEffect(() => {
                       type="button"
                       onClick={handleToggleAiExclude}
                       disabled={aiExcludeSaving}
-                      className="text-[11.5px] text-muted-foreground/75 hover:text-foreground transition-colors"
+                      className="text-xs text-muted-foreground/75 hover:text-foreground transition-colors"
                     >
                       {t('doc.aiExclude')}
                     </button>
@@ -974,7 +974,7 @@ useEffect(() => {
             </div>
 
             {aiExclude && (
-              <div className="mb-4 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground/80 leading-relaxed">
+              <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground/80 leading-relaxed">
                 <span className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-foreground/80">
                   <EyeOff className="w-3 h-3 shrink-0" strokeWidth={1.75} />
                   {t('doc.aiExcluded')}
@@ -1031,14 +1031,14 @@ useEffect(() => {
                     <button
                       type="button"
                       onClick={() => setTocOpen((v) => !v)}
-                      className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground hover:text-foreground transition-colors"
+                      className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
                       <ChevronDown
                         className={`w-3.5 h-3.5 transition-transform ${tocOpen ? '' : '-rotate-90'}`}
                         strokeWidth={2}
                       />
                       {t('doc.tableOfContents')}
-                      <span className="text-[11px] text-muted-foreground/60 tabular-nums ml-0.5">
+                      <span className="text-xs text-muted-foreground/60 tabular-nums ml-0.5">
                         {flatHeadings.length}
                       </span>
                     </button>
@@ -1095,7 +1095,7 @@ useEffect(() => {
                       type="button"
                       title={tab.label}
                       onClick={() => setRailTab(tab.id)}
-                      className={`min-w-0 px-0.5 pb-2.5 pt-3 text-[11px] font-medium transition-colors border-b-2 -mb-px truncate text-center ${
+                      className={`min-w-0 px-0.5 pb-2.5 pt-3 text-xs font-medium transition-colors border-b-2 -mb-px truncate text-center ${
                         active
                           ? 'text-primary border-primary'
                           : 'text-muted-foreground border-transparent hover:text-foreground'
@@ -1212,7 +1212,7 @@ function OutlineView({
   }
   if (headings.length === 0) {
     return (
-      <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
+      <div className="px-1 text-sm text-muted-foreground/60 leading-relaxed">
         {t('doc.noHeadings')}
       </div>
     )
@@ -1235,7 +1235,7 @@ function OutlineView({
               onJump?.(h.id)
               history.replaceState(null, '', `#${h.id}`)
             }}
-            className={`px-1.5 -mx-1.5 py-1 text-[12px] rounded-md transition-colors truncate ${
+            className={`px-1.5 -mx-1.5 py-1 text-sm rounded-md transition-colors truncate ${
               isActive
                 ? 'text-primary font-medium bg-primary-soft'
                 : 'text-muted-foreground/85 hover:text-foreground'
@@ -1258,7 +1258,7 @@ function BacklinksView({ backlinks, loading }: { backlinks: Backlink[]; loading:
   }
   if (backlinks.length === 0) {
     return (
-      <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
+      <div className="px-1 text-sm text-muted-foreground/60 leading-relaxed">
         {t('doc.noBacklinks')}
       </div>
     )
@@ -1271,10 +1271,10 @@ function BacklinksView({ backlinks, loading }: { backlinks: Backlink[]; loading:
           to={'/doc/' + bl.source_root_id + '#block-' + bl.source_id}
           className="group block px-2.5 py-2 -mx-1 rounded-lg hover:bg-accent transition-colors"
         >
-          <div className="text-[11px] font-medium text-foreground/75 line-clamp-1 mb-0.5">
+          <div className="text-xs font-medium text-foreground/75 line-clamp-1 mb-0.5">
             {bl.source_doc_title ?? '—'}
           </div>
-          <p className="text-[12.5px] text-muted-foreground group-hover:text-foreground line-clamp-2 leading-relaxed transition-colors">
+          <p className="text-sm text-muted-foreground group-hover:text-foreground line-clamp-2 leading-relaxed transition-colors">
             {bl.source_content}
           </p>
         </Link>
@@ -1308,7 +1308,7 @@ function RelatedView({
   if (items && items.length > 0) {
     return (
       <div className="flex flex-col gap-1.5">
-        <p className="px-1 text-[11px] text-muted-foreground/55">
+        <p className="px-1 text-xs text-muted-foreground/55">
           {fromBlock ? t('doc.relatedFromBlock') : t('doc.relatedFromDoc')}
         </p>
         {items.map((item) => (
@@ -1317,11 +1317,11 @@ function RelatedView({
             to={'/doc/' + item.doc_id}
             className="group block px-2.5 py-2 -mx-1 rounded-lg hover:bg-accent transition-colors"
           >
-            <div className="text-[11px] font-medium text-foreground/75 line-clamp-1 mb-0.5">
+            <div className="text-xs font-medium text-foreground/75 line-clamp-1 mb-0.5">
               {item.title || t('doc.untitledDocument')}
             </div>
             {item.snippet && (
-              <p className="text-[12.5px] text-muted-foreground group-hover:text-foreground line-clamp-2 leading-relaxed transition-colors">
+              <p className="text-sm text-muted-foreground group-hover:text-foreground line-clamp-2 leading-relaxed transition-colors">
                 {item.snippet}
               </p>
             )}
@@ -1339,8 +1339,8 @@ function RelatedView({
   // 没数据 + 不 loading + 不 error：首次打开或真的没相关
   return (
 <div className="px-1 space-y-1.5">
-      <p className="text-[12px] text-muted-foreground/60 leading-relaxed">{t('doc.noRelated')}</p>
-      <p className="text-[11.5px] text-muted-foreground/50 leading-relaxed">{t('doc.noRelatedHint')}</p>
+      <p className="text-sm text-muted-foreground/60 leading-relaxed">{t('doc.noRelated')}</p>
+      <p className="text-xs text-muted-foreground/50 leading-relaxed">{t('doc.noRelatedHint')}</p>
     </div>
   )
 }
@@ -1437,7 +1437,7 @@ function DemoModeButton() {
                 role="menuitemradio"
                 aria-checked={active}
                 aria-label={i === 0 ? t('doc.zoomReset') : `${pct}%`}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] text-left text-foreground hover:bg-accent transition-colors"
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-base text-left text-foreground hover:bg-accent transition-colors"
                 onClick={() => {
                   setDemoZoomIndex(i)
                   setZoomMenuOpen(false)
@@ -1450,7 +1450,7 @@ function DemoModeButton() {
                 />
                 <span className="font-mono tabular-nums">{pct}%</span>
                 {i === 0 && (
-                  <span className="ml-auto text-[11px] text-muted-foreground">{t('doc.zoomReset')}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">{t('doc.zoomReset')}</span>
                 )}
               </button>
             )

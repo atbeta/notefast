@@ -405,7 +405,7 @@ export default function EntityGraph({
   if (size.w === 0) {
     return (
       <div ref={containerRef} className="h-full w-full">
-        <div className="flex h-full items-center justify-center text-[12px] text-muted-foreground/60">
+        <div className="flex h-full items-center justify-center text-sm text-muted-foreground/60">
           {t('entityGraph.layoutComputing')}
         </div>
       </div>
@@ -515,11 +515,11 @@ export default function EntityGraph({
         >
           <div className="max-w-[240px] truncate">{hoverNode.display}</div>
           {hoverNode.description && (
-            <div className="max-w-[240px] truncate text-[10px] text-muted-foreground/80">
+            <div className="max-w-[240px] truncate text-2xs text-muted-foreground/80">
               {hoverNode.description}
             </div>
           )}
-          <div className="mt-0.5 text-[10px] text-muted-foreground tabular-nums">
+          <div className="mt-0.5 text-2xs text-muted-foreground tabular-nums">
             {hoverNode.type === 'doc'
               ? t('entityGraph.tooltipBlocks', { n: hoverNode.mention_count })
               : t('entityGraph.tooltipMentions', { kind: entityKindLabel(hoverNode.kind), n: hoverNode.mention_count })}
@@ -528,7 +528,7 @@ export default function EntityGraph({
       )}
 
       {/* 图例 */}
-      <div className="absolute bottom-2.5 left-2.5 z-sticky pointer-events-none rounded-lg border border-border bg-card/90 backdrop-blur px-2.5 py-1.5 text-[10.5px] text-muted-foreground leading-relaxed">
+      <div className="absolute bottom-2.5 left-2.5 z-sticky pointer-events-none rounded-lg border border-border bg-card/90 backdrop-blur px-2.5 py-1.5 text-2xs text-muted-foreground leading-relaxed">
         {isDoc ? (
           <>
             <div className="flex items-center gap-1.5">

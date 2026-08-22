@@ -31,9 +31,9 @@ export default function RouteBoundary({ name, children }: Props) {
           role="alert"
           className="flex flex-col items-center justify-center px-6 py-16 gap-3 text-center"
         >
-          <div className="text-[14px] font-medium text-foreground">{t('routeBoundary.title')}</div>
-          <div className="text-[11.5px] text-muted-foreground font-mono">{label}</div>
-          <div className="text-[11.5px] text-muted-foreground break-all max-w-md leading-relaxed">
+          <div className="text-md font-medium text-foreground">{t('routeBoundary.title')}</div>
+          <div className="text-xs text-muted-foreground font-mono">{label}</div>
+          <div className="text-xs text-muted-foreground break-all max-w-md leading-relaxed">
             {error.message || String(error)}
           </div>
           <div className="flex gap-2 mt-1">

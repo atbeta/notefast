@@ -56,8 +56,8 @@ export default function AuthPrompt() {
             <Lock className="w-4 h-4" strokeWidth={1.75} />
           </div>
           <div>
-            <h1 className="text-[15px] font-semibold tracking-[-0.01em]">{t('auth.loginTitle')}</h1>
-            <p className="text-[11.5px] text-muted-foreground mt-0.5">
+            <h1 className="text-md font-semibold tracking-[-0.01em]">{t('auth.loginTitle')}</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
               {t('auth.passwordRequired')}
             </p>
           </div>
@@ -77,7 +77,7 @@ export default function AuthPrompt() {
             className="input-mono"
           />
           {error && (
-            <p className="mt-1.5 text-[11.5px] text-destructive">{error}</p>
+            <p className="mt-1.5 text-xs text-destructive">{error}</p>
           )}
           <button
             type="button"
@@ -95,9 +95,9 @@ export default function AuthPrompt() {
             >
               {remember && <Check className="w-3 h-3" strokeWidth={3} />}
             </span>
-            <span className="text-[12px] text-foreground/80">{t('auth.rememberMe')}</span>
+            <span className="text-sm text-foreground/80">{t('auth.rememberMe')}</span>
           </button>
-          <p className="text-[10.5px] text-muted-foreground/70 mt-1.5 leading-relaxed">
+          <p className="text-2xs text-muted-foreground/70 mt-1.5 leading-relaxed">
             {remember
               ? t('auth.rememberDesc')
               : t('auth.noRememberDesc')}

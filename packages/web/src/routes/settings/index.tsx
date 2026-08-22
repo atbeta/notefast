@@ -32,12 +32,12 @@ export default function SettingsLayout() {
     <div className="w-full max-w-5xl mx-auto px-4 sm:px-8 py-8 sm:py-10 animate-fade-in pb-32">
       <header className="space-y-3 mb-6 sm:mb-8">
         <div className="flex items-start justify-between gap-3">
-          <h1 className="text-[28px] font-bold tracking-[-0.02em] text-foreground">
+          <h1 className="text-h1 font-bold tracking-[-0.02em] text-foreground">
             {t('settings.title')}
           </h1>
           <AiChatHeaderSlot triggerClassName="mt-1.5" />
         </div>
-        <p className="text-[13px] text-muted-foreground leading-relaxed">
+        <p className="text-base text-muted-foreground leading-relaxed">
           {t('settings.description')}
         </p>
       </header>
@@ -52,7 +52,7 @@ export default function SettingsLayout() {
                 to={to}
                 end
                 className={({ isActive }) =>
-                  `flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] transition-colors ${
+                  `flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-base transition-colors ${
                     isActive
                       ? 'bg-foreground/[0.06] text-foreground font-medium'
                       : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
@@ -75,7 +75,7 @@ export default function SettingsLayout() {
                 to={to}
                 end
                 className={({ isActive }) =>
-                  `whitespace-nowrap px-3 py-1.5 text-[13px] font-medium rounded-full transition-colors ${
+                  `whitespace-nowrap px-3 py-1.5 text-base font-medium rounded-full transition-colors ${
                     isActive
                       ? 'bg-foreground text-background'
                       : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'

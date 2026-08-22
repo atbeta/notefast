@@ -49,23 +49,23 @@ export default function MathBlock({ code }: { code: string }) {
   return (
     <div className="my-5 rounded-lg border border-border bg-muted/30 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 bg-muted/60 border-b border-border">
-        <span className="text-[11px] font-mono text-muted-foreground/80">math</span>
+        <span className="text-xs font-mono text-muted-foreground/80">math</span>
         <CopyButton
           text={code}
-          className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded-md"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded-md"
           ariaLabel="Copy math source"
           showText
         />
       </div>
 
       {loading && (
-        <div className="px-4 py-8 text-center text-[13px] text-muted-foreground">{t('math.loading')}</div>
+        <div className="px-4 py-8 text-center text-base text-muted-foreground">{t('math.loading')}</div>
       )}
 
       {!loading && error && (
         <div className="p-4 space-y-3">
-          <p className="text-[13px] text-destructive">{t('math.renderFailedWith', { error })}</p>
-          <pre className="overflow-x-auto text-[13px] font-mono leading-[1.6] text-foreground whitespace-pre-wrap">
+          <p className="text-base text-destructive">{t('math.renderFailedWith', { error })}</p>
+          <pre className="overflow-x-auto text-base font-mono leading-[1.6] text-foreground whitespace-pre-wrap">
             <code>{code}</code>
           </pre>
         </div>

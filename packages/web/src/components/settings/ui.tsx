@@ -6,7 +6,7 @@ import { HelpTip } from '../ui'
 export function SettingsSection({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
     <section id={id} className="space-y-4 scroll-mt-28">
-      <h2 className="px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70 select-none">
+      <h2 className="px-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground/70 select-none">
         {title}
       </h2>
       <div className="space-y-4">
@@ -48,7 +48,7 @@ export function SettingsCard({
       >
         <div className="flex items-center gap-2.5">
           {icon && <div className="text-muted-foreground">{icon}</div>}
-          <h3 className="text-[13.5px] font-medium text-foreground">{title}</h3>
+          <h3 className="text-base font-medium text-foreground">{title}</h3>
           {helpTip && <HelpTip label={helpTip} />}
         </div>
         <div className="flex items-center gap-3">
@@ -137,13 +137,13 @@ export function InlineField({
     <div className="group space-y-1.5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <label className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">{label}</label>
+          <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{label}</label>
           {description && (
-            <span className="text-[11px] text-muted-foreground/60">{description}</span>
+            <span className="text-xs text-muted-foreground/60">{description}</span>
           )}
         </div>
-        {localStatus === 'success' && <span className="text-[11px] text-success flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {t('settingsUI.saved')}</span>}
-        {localStatus === 'testing' && <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> {t('settingsUI.verifying')}</span>}
+        {localStatus === 'success' && <span className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {t('settingsUI.saved')}</span>}
+        {localStatus === 'testing' && <span className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> {t('settingsUI.verifying')}</span>}
       </div>
 
       <div className="space-y-2">
@@ -154,10 +154,10 @@ export function InlineField({
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={`w-full px-3 py-1.5 rounded-md border ${localStatus === 'error' ? 'border-destructive/50' : 'border-border focus:border-primary/50'} bg-background transition-colors placeholder:text-muted-foreground/40 ${mono ? 'font-mono text-[13px]' : 'text-[14px]'}`}
+          className={`w-full px-3 py-1.5 rounded-md border ${localStatus === 'error' ? 'border-destructive/50' : 'border-border focus:border-primary/50'} bg-background transition-colors placeholder:text-muted-foreground/40 ${mono ? 'font-mono text-base' : 'text-md'}`}
         />
         {localStatus === 'error' && statusMessage && (
-          <div className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+          <div className="text-xs text-destructive flex items-center gap-1 mt-1">
             <AlertCircle className="w-3 h-3" />
             {statusMessage}
           </div>
@@ -170,14 +170,14 @@ export function InlineField({
 export function StatusBadge({ active, label, error }: { active: boolean; label?: string; error?: boolean }) {
   const { t } = useTranslation()
   if (error) {
-    return <span className="text-[10px] px-2 py-0.5 rounded-full bg-destructive/10 text-destructive font-medium border border-destructive/20 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> {t('settingsUI.error')}</span>
+    return <span className="text-2xs px-2 py-0.5 rounded-full bg-destructive/10 text-destructive font-medium border border-destructive/20 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> {t('settingsUI.error')}</span>
   }
   return active ? (
-    <span className="text-[10px] px-2 py-0.5 rounded-full bg-success-soft text-success font-medium border border-success/20">
+    <span className="text-2xs px-2 py-0.5 rounded-full bg-success-soft text-success font-medium border border-success/20">
       {label || t('settingsUI.active')}
     </span>
   ) : (
-    <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50">
+    <span className="text-2xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50">
       {label || t('settingsUI.disabled')}
     </span>
   )

@@ -91,14 +91,14 @@ export default function AuthEventsPanel() {
       collapsible
     >
       <div className="flex items-center gap-1.5">
-        <p className="text-[12.5px] text-muted-foreground leading-relaxed">{t('authEvents.recentCount')}</p>
+        <p className="text-sm text-muted-foreground leading-relaxed">{t('authEvents.recentCount')}</p>
         <HelpTip label={t('authEvents.helpTip')} />
       </div>
 
       {events.length === 0 ? (
         <div className="space-y-1">
-          <p className="text-[12px] text-muted-foreground">{t('authEvents.empty')}</p>
-          <p className="text-[11.5px] text-muted-foreground/70 leading-relaxed">{t('authEvents.emptyHint')}</p>
+          <p className="text-sm text-muted-foreground">{t('authEvents.empty')}</p>
+          <p className="text-xs text-muted-foreground/70 leading-relaxed">{t('authEvents.emptyHint')}</p>
         </div>
       ) : (
         <div className="rounded-lg border border-border overflow-hidden">
@@ -120,15 +120,15 @@ export default function AuthEventsPanel() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-medium text-foreground">{device.label}</span>
-                    {browser && <span className="text-[11px] text-muted-foreground">{browser}</span>}
+                    <span className="text-base font-medium text-foreground">{device.label}</span>
+                    {browser && <span className="text-xs text-muted-foreground">{browser}</span>}
                     {isLatest && (
-                      <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-medium bg-success-soft text-success border border-success/20">
+                      <span className="px-1.5 py-0.5 rounded-md text-2xs font-medium bg-success-soft text-success border border-success/20">
                         {t('authEvents.latest')}
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
+                  <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
                     {ev.ip && (
                       <span className="font-mono">{ev.ip}</span>
                     )}

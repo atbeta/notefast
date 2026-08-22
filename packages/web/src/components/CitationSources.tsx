@@ -73,15 +73,15 @@ export default function CitationSources({
     <div className="rounded-lg border border-border/60 bg-card/60 overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
         <span className="w-1 h-3.5 rounded-full bg-primary shrink-0" aria-hidden />
-        <span className="text-[12px] font-medium text-foreground">{t('chat.citationTitle')}</span>
-        <span className="text-[11px] text-muted-foreground tabular-nums">
+        <span className="text-sm font-medium text-foreground">{t('chat.citationTitle')}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">
           {t('chat.citationStats', { docs: groups.length, segments: totalSnippets })}
         </span>
         {hasDiag && (
           <button
             type="button"
             onClick={() => setDiagOpen((v) => !v)}
-            className="ml-auto inline-flex items-center gap-0.5 text-[10.5px] text-muted-foreground hover:text-foreground transition-colors"
+            className="ml-auto inline-flex items-center gap-0.5 text-2xs text-muted-foreground hover:text-foreground transition-colors"
             aria-expanded={diagOpen}
           >
             {t('chat.retrievalDetail')}
@@ -91,7 +91,7 @@ export default function CitationSources({
       </div>
 
       {diagOpen && retrieval && (
-        <div className="px-3 py-1.5 border-b border-border/40 text-[10.5px] text-muted-foreground leading-relaxed tabular-nums font-mono">
+        <div className="px-3 py-1.5 border-b border-border/40 text-2xs text-muted-foreground leading-relaxed tabular-nums font-mono">
           {retrieval.reranked
             ? t('chat.rerankedWith', { model: retrieval.model || 'reranker' })
             : t('chat.hybridSearch')}
@@ -121,11 +121,11 @@ export default function CitationSources({
               <div className="flex items-center gap-1.5 min-w-0 mb-1.5">
                 <Link
                   to={`/doc/${group.doc_id}`}
-                  className="min-w-0 truncate text-[12.5px] font-medium text-foreground hover:text-primary transition-colors"
+                  className="min-w-0 truncate text-sm font-medium text-foreground hover:text-primary transition-colors"
                 >
                   {group.doc_title || t('chat.untitledDoc')}
                 </Link>
-                <span className="shrink-0 text-[10.5px] text-muted-foreground tabular-nums">
+                <span className="shrink-0 text-2xs text-muted-foreground tabular-nums">
                   {t('chat.segments', { n: group.items.length })}
                 </span>
                 <Tooltip label={t('chat.openDoc')}>
@@ -144,9 +144,9 @@ export default function CitationSources({
                     <Tooltip label={t('chat.jumpToBlock')}>
                       <Link
                         to={`/doc/${c.doc_id}#block-${c.block_id}`}
-                        className="flex gap-2 rounded-md px-1.5 py-1.5 -mx-0.5 text-[11.5px] text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-colors group/snip"
+                        className="flex gap-2 rounded-md px-1.5 py-1.5 -mx-0.5 text-xs text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-colors group/snip"
                       >
-                        <span className="shrink-0 w-4 text-right font-mono text-[10px] text-muted-foreground/55 group-hover/snip:text-primary/70 tabular-nums pt-px">
+                        <span className="shrink-0 w-4 text-right font-mono text-2xs text-muted-foreground/55 group-hover/snip:text-primary/70 tabular-nums pt-px">
                           {c.ref}
                         </span>
                         <span className="min-w-0 line-clamp-2 leading-relaxed">{c.snippet}</span>
@@ -159,7 +159,7 @@ export default function CitationSources({
                 <button
                   type="button"
                   onClick={() => toggleDoc(group.doc_id)}
-                  className="mt-1 ml-5 text-[11px] text-primary/80 hover:text-primary transition-colors"
+                  className="mt-1 ml-5 text-xs text-primary/80 hover:text-primary transition-colors"
                 >
                   {t('chat.expandMore', { n: hidden })}
                 </button>
@@ -168,7 +168,7 @@ export default function CitationSources({
                 <button
                   type="button"
                   onClick={() => toggleDoc(group.doc_id)}
-                  className="mt-1 ml-5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                  className="mt-1 ml-5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {t('chat.collapse')}
                 </button>

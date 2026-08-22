@@ -36,7 +36,7 @@ export function DiagnosePanel({ result, onClose }: { result: AiDiagnoseResult; o
                   : t('diagnose.none')}
           </span>
           {result.elapsedMs != null && (
-            <span className="text-[10px] text-muted-foreground/70 font-mono">
+            <span className="text-2xs text-muted-foreground/70 font-mono">
               {result.elapsedMs} ms
             </span>
           )}
@@ -44,7 +44,7 @@ export function DiagnosePanel({ result, onClose }: { result: AiDiagnoseResult; o
         <button
           type="button"
           onClick={onClose}
-          className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+          className="text-2xs text-muted-foreground hover:text-foreground transition-colors"
         >
           {t('common.close')}
         </button>
@@ -92,7 +92,7 @@ function DiagRow({
       <div className="flex items-center gap-3 px-3 py-2 text-muted-foreground/70">
         <span className="w-5 flex justify-center text-foreground/60">{icon}</span>
         <span className="w-16 font-medium text-foreground/80">{label}</span>
-        <span className="text-[11px] italic">{t('diagnose.notConfigured')}</span>
+        <span className="text-xs italic">{t('diagnose.notConfigured')}</span>
       </div>
     )
   }
@@ -119,7 +119,7 @@ function DiagRow({
       <span className={`flex-1 truncate ${ok ? 'text-foreground/85' : 'text-destructive'}`}>
         {detail}
       </span>
-      <span className="text-[10px] text-muted-foreground/65 font-mono shrink-0">{meta}</span>
+      <span className="text-2xs text-muted-foreground/65 font-mono shrink-0">{meta}</span>
     </div>
   )
 }

@@ -57,7 +57,7 @@ NoteFast 的视觉只通过 **CSS 变量 token** 定义。所有组件应通过 
 | 焦点环 | 全局 `:focus-visible` outline；不要写 `focus:ring-*` |
 
 ### 1.6 排版
-字体栈 + Tailwind `text-xs / sm / base / md / lg / xl / 2xl / 3xl / display`，映射到 `--text-*` 变量。`font-serif` 为阅读视图的衬线字体，不要在 UI 控件上用。
+字体栈走 `var(--font-sans/serif/mono)`。UI 字号用 `text-2xs`（10.5px，侧栏/徽章）到 `text-display`；文档标题用 `text-h1`…`text-h6`（与编辑态 `--text-h1`…同源）。不要写 `text-[12px]` 这类任意值，`bun lint` 会拦。`font-serif` 只给阅读正文。
 
 ### 1.6.1 阅读列宽
 `--reading-max-w`（48rem）— 仅 doc 路由的内层阅读列引用，外层页面容器仍走 `max-w-4xl`。详见 `routes/doc.tsx` 的 `reading-col` 包裹。

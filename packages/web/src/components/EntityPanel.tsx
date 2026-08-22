@@ -29,17 +29,17 @@ export function MentionRow({ mention }: { mention: EntityMention }) {
       className="group block px-2.5 py-2 -mx-1 rounded-lg hover:bg-accent transition-colors"
     >
       <div className="flex items-center gap-1.5">
-        <span className="min-w-0 truncate text-[12.5px] text-muted-foreground group-hover:text-foreground transition-colors">
+        <span className="min-w-0 truncate text-sm text-muted-foreground group-hover:text-foreground transition-colors">
           {mention.doc_title || t('entityPanel.untitled')}
         </span>
         {mention.doc_status !== 'note' && (
-          <span className="shrink-0 rounded-md border border-border/60 bg-muted/40 px-1 py-px text-[10px] text-muted-foreground/80">
+          <span className="shrink-0 rounded-md border border-border/60 bg-muted/40 px-1 py-px text-2xs text-muted-foreground/80">
             {entityDocStatusLabel(mention.doc_status) ?? mention.doc_status}
           </span>
         )}
       </div>
       {mention.block_snippet && (
-        <p className="mt-0.5 text-[12px] text-muted-foreground/75 line-clamp-2 leading-relaxed">
+        <p className="mt-0.5 text-sm text-muted-foreground/75 line-clamp-2 leading-relaxed">
           {mention.block_snippet}
         </p>
       )}
@@ -60,7 +60,7 @@ export function EntityMentions({ entityId }: { entityId: string }) {
   if (error) return <InlineError compact message={error.message} onRetry={refetch} />
   if (!data) return null
   if (data.mentions.length === 0) {
-    return <div className="px-1 py-1 text-[12px] text-muted-foreground/60">{t('entityPanel.noRelatedNotes')}</div>
+    return <div className="px-1 py-1 text-sm text-muted-foreground/60">{t('entityPanel.noRelatedNotes')}</div>
   }
   return (
     <div className="flex flex-col gap-1">
@@ -101,7 +101,7 @@ export default function EntityPanel({ docId, variant }: EntityPanelProps) {
           <h3
             className={
               variant === 'aside'
-                ? 'text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2'
+                ? 'text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2'
                 : 'text-sm font-medium text-foreground mb-3'
             }
           >
@@ -112,7 +112,7 @@ export default function EntityPanel({ docId, variant }: EntityPanelProps) {
       {loading && entities.length === 0 ? (
         <ListRowsSkeleton rows={2} withIcon={false} />
       ) : empty ? (
-        <div className="px-1 text-[12px] text-muted-foreground/60 leading-relaxed">
+        <div className="px-1 text-sm text-muted-foreground/60 leading-relaxed">
           {ai.ready && !ai.chat
             ? t('entityPanel.noEntitiesNeedChat')
             : t('entityPanel.noEntitiesYet')}
@@ -125,14 +125,14 @@ export default function EntityPanel({ docId, variant }: EntityPanelProps) {
                 key={e.id}
                 type="button"
                 onClick={() => setOpenId(openId === e.id ? null : e.id)}
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-sm transition-colors ${
                   openId === e.id
                     ? 'border-primary/40 bg-primary-soft text-primary'
                     : 'border-border/70 text-muted-foreground hover:text-foreground hover:border-foreground/20'
                 }`}
               >
                 {e.display}
-                <span className="text-[10px] text-muted-foreground/70 tabular-nums">
+                <span className="text-2xs text-muted-foreground/70 tabular-nums">
                   {e.mention_count}
                 </span>
               </button>

@@ -30,7 +30,7 @@ export default function EditorFooter({
 }: EditorFooterProps) {
   const { t } = useTranslation()
   return (
-    <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground/70 tabular-nums">
+    <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground/70 tabular-nums">
       <span>
         {t('editorFooter.stats', {
           chars: charCount.toLocaleString(currentLocale()),

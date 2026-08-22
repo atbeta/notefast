@@ -110,9 +110,9 @@ export default function McpPanel() {
       <div className="space-y-6">
         {/* 端点 */}
         <div className="space-y-1.5">
-          <div className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">{t('mcp.endpointLabel')}</div>
+          <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t('mcp.endpointLabel')}</div>
           <div className="flex items-center gap-2">
-            <code className="flex-1 rounded-md border border-border bg-muted/40 px-3 py-2 text-[12.5px] font-mono text-foreground break-all select-all">
+            <code className="flex-1 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm font-mono text-foreground break-all select-all">
               {endpoint}
             </code>
             <Button variant="secondary" onClick={() => void copy(endpoint, 'config')} className="shrink-0">
@@ -124,14 +124,14 @@ export default function McpPanel() {
         {/* 连接配置 */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <div className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">{t('mcp.configLabel')}</div>
+            <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t('mcp.configLabel')}</div>
             <div className="flex items-center rounded-md border border-border bg-muted/40 p-0.5">
               {(['opencode', 'claude'] as const).map((f) => (
                 <button
                   key={f}
                   type="button"
                   onClick={() => switchFormat(f)}
-                  className={`px-2 py-0.5 rounded-md text-[11px] transition-colors ${
+                  className={`px-2 py-0.5 rounded-md text-xs transition-colors ${
                     format === f
                       ? 'bg-popover text-foreground shadow-card border border-border/70'
                       : 'text-muted-foreground hover:text-foreground'
@@ -142,7 +142,7 @@ export default function McpPanel() {
               ))}
             </div>
           </div>
-          <pre className="rounded-lg border border-border bg-muted/30 p-3.5 text-[12px] font-mono leading-[1.7] overflow-x-auto text-foreground/90">
+          <pre className="rounded-lg border border-border bg-muted/30 p-3.5 text-sm font-mono leading-[1.7] overflow-x-auto text-foreground/90">
             {configJson}
           </pre>
           <div className="flex items-center gap-2">
@@ -150,7 +150,7 @@ export default function McpPanel() {
               {copied === 'config' ? <Check className="w-3.5 h-3.5 text-success mr-1.5" /> : <Copy className="w-3.5 h-3.5 mr-1.5" />}
               {copied === 'config' ? t('mcp.copied') : t('mcp.copyConfig')}
             </Button>
-            <span className="text-[11px] text-muted-foreground/70">
+            <span className="text-xs text-muted-foreground/70">
               {format === 'opencode' ? t('mcp.configHintOpencode') : t('mcp.configHintClaude')}
             </span>
           </div>
@@ -158,19 +158,19 @@ export default function McpPanel() {
 
         {/* 令牌 */}
         <div className="space-y-1.5">
-          <div className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">{t('mcp.tokenLabel')}</div>
-          <p className="text-[12.5px] text-muted-foreground leading-relaxed">{t('mcp.tokenDesc')}</p>
+          <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t('mcp.tokenLabel')}</div>
+          <p className="text-sm text-muted-foreground leading-relaxed">{t('mcp.tokenDesc')}</p>
           {revealedToken ? (
             <div className="rounded-lg border border-success/25 bg-success-soft p-3.5 space-y-2">
               <div className="flex items-center gap-2">
-                <code className="flex-1 rounded-md border border-success/25 bg-success/10 px-2.5 py-1.5 text-[12.5px] font-mono text-success break-all select-all">
+                <code className="flex-1 rounded-md border border-success/25 bg-success/10 px-2.5 py-1.5 text-sm font-mono text-success break-all select-all">
                   {revealedToken}
                 </code>
                 <Button variant="secondary" onClick={() => void copy(revealedToken, 'token')} className="shrink-0">
                   {copied === 'token' ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
                 </Button>
               </div>
-              <p className="text-[11px] text-success/80">{t('mcp.tokenOnce')}</p>
+              <p className="text-xs text-success/80">{t('mcp.tokenOnce')}</p>
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -178,7 +178,7 @@ export default function McpPanel() {
                 {!generating && <Key className="w-3.5 h-3.5 mr-1.5" />}
                 {t('mcp.generateToken')}
               </Button>
-              <span className="text-[11px] text-muted-foreground/70">{t('mcp.manageHint')}</span>
+              <span className="text-xs text-muted-foreground/70">{t('mcp.manageHint')}</span>
             </div>
           )}
         </div>
@@ -186,13 +186,13 @@ export default function McpPanel() {
         {/* 能力清单 */}
         {sortedTools.length > 0 && (
           <div className="space-y-1.5">
-            <div className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">
+            <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
               {t('mcp.toolsLabel', { n: sortedTools.length })}
             </div>
             <div className="flex flex-wrap gap-1.5">
               {sortedTools.map((tool) => (
                 <Tooltip key={tool.name} label={tool.description || tool.name}>
-                  <span className="px-2 py-1 rounded-md border border-border/60 bg-muted/40 text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-border transition-colors cursor-default">
+                  <span className="px-2 py-1 rounded-md border border-border/60 bg-muted/40 text-xs font-mono text-muted-foreground hover:text-foreground hover:border-border transition-colors cursor-default">
                     {tool.name}
                   </span>
                 </Tooltip>

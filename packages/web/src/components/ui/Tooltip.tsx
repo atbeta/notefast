@@ -69,7 +69,7 @@ export function Tooltip({
         createPortal(
           <span
             role="tooltip"
-            className="pointer-events-none fixed z-tooltip max-w-[min(280px,80vw)] whitespace-normal break-words rounded-md bg-ink px-2.5 py-1.5 text-left text-[11px] font-medium leading-relaxed text-ink-foreground shadow-floating"
+            className="pointer-events-none fixed z-tooltip max-w-[min(280px,80vw)] whitespace-normal break-words rounded-md bg-ink px-2.5 py-1.5 text-left text-xs font-medium leading-relaxed text-ink-foreground shadow-floating"
             style={style}
           >
             {label}

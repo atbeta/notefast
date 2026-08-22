@@ -17,7 +17,7 @@ export default function RouteLoadingShell() {
       className="flex flex-col items-center justify-center gap-2 pt-[12vh] text-muted-foreground"
     >
       <Loader2 className="w-5 h-5 animate-spin text-primary" strokeWidth={1.75} />
-      <span className="text-[13px]">{t('common.loading')}</span>
+      <span className="text-base">{t('common.loading')}</span>
     </div>
   )
 }

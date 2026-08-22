@@ -452,7 +452,7 @@ export default function AISettingsPanel() {
         <div className="flex items-center gap-2 text-sm">
           <span className="font-medium">{t('aiSettings.aiCapabilities')}</span>
           {capabilities && (
-            <div className="flex items-center gap-1.5 text-[10px]">
+            <div className="flex items-center gap-1.5 text-2xs">
               <CapabilityBadge ok={capabilities.chat} label="Chat" />
               <CapabilityBadge ok={capabilities.embedding} label="Embedding" />
               <CapabilityBadge ok={capabilities.reranker} label="Reranker" />
@@ -461,7 +461,7 @@ export default function AISettingsPanel() {
         </div>
         <div className="flex items-center gap-2">
           {status?.usage?.lastSuccessAt && (
-            <div className="text-[10px] text-muted-foreground hidden md:block opacity-60">
+            <div className="text-2xs text-muted-foreground hidden md:block opacity-60">
               {t('aiSettings.lastSuccess', { time: new Date(status.usage.lastSuccessAt).toLocaleTimeString(currentLocale()) })}
             </div>
           )}
@@ -622,7 +622,7 @@ export default function AISettingsPanel() {
         />
         {/* 附加参数：自动索引的子选项（视觉次级化；自动索引关闭时禁用） */}
         <div className={`mt-3 pt-3 border-t border-border/50 ${autoIndex ? '' : 'opacity-60'}`}>
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70 mb-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground/70 mb-2">
             {t('aiSettings.additionalParams')}
           </p>
           <Toggle
@@ -637,12 +637,12 @@ export default function AISettingsPanel() {
                   : t('aiSettings.visionRequiresChat')
             }
           />
-          <p className="mt-1.5 text-[12px] text-muted-foreground/80 leading-relaxed">
+          <p className="mt-1.5 text-sm text-muted-foreground/80 leading-relaxed">
             {t('aiSettings.visionDescription')}
           </p>
         </div>
         {status?.vectorStore && (
-          <div className="mt-3 rounded-md border border-border/70 bg-muted/20 px-3 py-2.5 space-y-2 text-[12.5px]">
+          <div className="mt-3 rounded-md border border-border/70 bg-muted/20 px-3 py-2.5 space-y-2 text-sm">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="font-medium text-foreground">
                 {status.vectorStore.status === 'ready' && t('aiSettings.vectorReady')}
@@ -681,7 +681,7 @@ export default function AISettingsPanel() {
               return (
                 <div className="pt-1.5 border-t border-border/60 space-y-1.5">
                   {busy ? (
-                    <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
                       {active ? (
                         <span className="tabular-nums">
@@ -701,12 +701,12 @@ export default function AISettingsPanel() {
                       )}
                     </div>
                   ) : jobs.ready + jobs.failed > 0 ? (
-                    <p className="text-[12px] text-success">
+                    <p className="text-sm text-success">
                       {t('aiSettings.indexJobIdle', { ready: jobs.ready, failed: jobs.failed })}
                     </p>
                   ) : null}
                   {jobs.indexedBlocks > 0 && (
-                    <p className="text-[11px] text-muted-foreground/60">
+                    <p className="text-xs text-muted-foreground/60">
                       {t('aiSettings.indexJobBlocks', { n: jobs.indexedBlocks.toLocaleString(currentLocale()) })}
                     </p>
                   )}
@@ -879,7 +879,7 @@ export default function AISettingsPanel() {
               type="password"
               mono
             />
-            <p className="text-[12px] text-muted-foreground/80 leading-relaxed">
+            <p className="text-sm text-muted-foreground/80 leading-relaxed">
               {t('aiSettings.braveApiHint1')} <a href="https://brave.com/search/api/" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">{t('aiSettings.braveApiKey')}</a>{t('aiSettings.braveApiHint2')}
             </p>
           </div>
@@ -916,7 +916,7 @@ export default function AISettingsPanel() {
             {t('aiSettings.refreshStatus')}
           </button>
           {dirty && (
-            <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-warning">
+            <span className="inline-flex items-center gap-1.5 text-sm font-medium text-warning">
               <TriangleAlert className="w-4 h-4" />
               {t('aiSettings.unsavedChanges')}
             </span>
@@ -930,7 +930,7 @@ export default function AISettingsPanel() {
 /** 分组小标题（模型配置 / 功能） */
 function GroupLabel({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="px-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70 select-none">
+    <h3 className="px-1 pt-3 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground/70 select-none">
       {children}
     </h3>
   )

@@ -83,14 +83,14 @@ export default function ArchivedPage() {
       </div>
       <div className="min-w-0 flex-1">
         <Link to={`/doc/${doc.id}`} className="block">
-          <h3 className="font-medium text-[14px] text-foreground tracking-[-0.005em] truncate leading-snug">
+          <h3 className="font-medium text-md text-foreground tracking-[-0.005em] truncate leading-snug">
             {doc.title || t('common.unnamed')}
           </h3>
         </Link>
         {snippet && (
-          <p className="text-[12px] text-muted-foreground truncate mt-0.5">{snippet}</p>
+          <p className="text-sm text-muted-foreground truncate mt-0.5">{snippet}</p>
         )}
-        <p className="text-[11.5px] text-muted-foreground mt-0.5 font-mono tabular-nums">
+        <p className="text-xs text-muted-foreground mt-0.5 font-mono tabular-nums">
           {t('archived.archivedAt', { time: formatRelative(doc.updated_at) })}
         </p>
       </div>
@@ -100,7 +100,7 @@ export default function ArchivedPage() {
             type="button"
             disabled={busyId === doc.id}
             onClick={() => restore(doc.id)}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
           >
             {busyId === doc.id ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
@@ -125,11 +125,11 @@ export default function ArchivedPage() {
     <div className="animate-fade-in">
       <PageHeader innerClassName="flex items-center justify-between gap-4">
         <div className="min-w-0 flex items-center gap-2">
-          <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
+          <h1 className="text-md font-medium text-foreground truncate tracking-[-0.005em]">
             {t('archived.title')}
           </h1>
           {!loading && docs.length > 0 && (
-            <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
+            <span className="font-mono text-xs text-muted-foreground/80 tabular-nums shrink-0">
               {docs.length}
             </span>
           )}
@@ -137,7 +137,7 @@ export default function ArchivedPage() {
       </PageHeader>
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
-        <p className="text-[13px] text-muted-foreground leading-relaxed px-1">
+        <p className="text-base text-muted-foreground leading-relaxed px-1">
           {t('archived.description')}
         </p>
 
@@ -158,7 +158,7 @@ export default function ArchivedPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t('archived.searchPlaceholder')}
-                className="w-full rounded-lg border border-border bg-card pl-9 pr-8 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/60 "
+                className="w-full rounded-lg border border-border bg-card pl-9 pr-8 py-2 text-base text-foreground placeholder:text-muted-foreground/60 "
               />
               {searching && (
                 <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted-foreground/60" strokeWidth={1.75} />
@@ -167,7 +167,7 @@ export default function ArchivedPage() {
 
             {matchedDocs ? (
               matchedDocs.length === 0 ? (
-                <p className="px-1 py-8 text-center text-[13px] text-muted-foreground">
+                <p className="px-1 py-8 text-center text-base text-muted-foreground">
                   {t('archived.noMatch', { query: query.trim() })}
                 </p>
               ) : (
@@ -186,7 +186,7 @@ export default function ArchivedPage() {
                   type="button"
                   onClick={loadMore}
                   disabled={loadingMore}
-                  className="text-[13px] text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
+                  className="text-base text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
                 >
                   {loadingMore ? t('home.loadingMore') : t('home.loadMore')}
                 </button>

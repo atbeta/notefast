@@ -409,7 +409,7 @@ export default function DocActionsMenu({
                 role="menuitem"
                 disabled={item.disabled}
                 onClick={() => item.onSelect()}
-                className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] text-left transition-colors disabled:opacity-40 ${
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-base text-left transition-colors disabled:opacity-40 ${
                   item.danger
                     ? 'text-destructive hover:bg-destructive/10'
                     : 'text-foreground hover:bg-accent'
@@ -450,7 +450,7 @@ export default function DocActionsMenu({
         <div className="fixed inset-0 z-dialog flex items-center justify-center">
           <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowRename(false)} />
           <div className="relative bg-card rounded-lg shadow-floating shadow-black/40 max-w-sm w-full mx-4 p-6 animate-fade-in">
-            <h3 className="text-[15px] font-medium text-foreground tracking-tight mb-3">{t('docActions.renameTitle')}</h3>
+            <h3 className="text-md font-medium text-foreground tracking-tight mb-3">{t('docActions.renameTitle')}</h3>
             <input
               ref={renameInputRef}
               value={renameDraft}
@@ -459,7 +459,7 @@ export default function DocActionsMenu({
                 if (e.key === 'Enter') { e.preventDefault(); void handleRenameSubmit() }
                 if (e.key === 'Escape') setShowRename(false)
               }}
-              className="w-full px-3 py-2 text-[14px] rounded-md border border-border bg-background text-foreground focus:border-foreground/30"
+              className="w-full px-3 py-2 text-md rounded-md border border-border bg-background text-foreground focus:border-foreground/30"
               placeholder={t('docActions.titlePlaceholder')}
               disabled={busy}
             />
@@ -467,7 +467,7 @@ export default function DocActionsMenu({
               <button
                 type="button"
                 onClick={() => setShowRename(false)}
-                className="px-3.5 py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 rounded-md transition-colors"
+                className="px-3.5 py-1.5 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 rounded-md transition-colors"
               >
                 {t('common.cancel')}
               </button>
@@ -475,7 +475,7 @@ export default function DocActionsMenu({
                 type="button"
                 disabled={busy || !renameDraft.trim()}
                 onClick={() => { void handleRenameSubmit() }}
-                className="px-3.5 py-1.5 text-[13px] font-medium rounded-md bg-foreground text-background shadow-btn hover:bg-foreground/90 disabled:opacity-40 transition-colors"
+                className="px-3.5 py-1.5 text-base font-medium rounded-md bg-foreground text-background shadow-btn hover:bg-foreground/90 disabled:opacity-40 transition-colors"
               >
                 {t('common.save')}
               </button>

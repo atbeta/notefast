@@ -137,18 +137,18 @@ export default function TagPickerPopover({ anchorRef, existing, onPick, onClose,
           placeholder={t('tagPicker.placeholder')}
           disabled={disabled}
           data-no-focus-ring
-          className="flex-1 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/50 outline-none disabled:opacity-50"
+          className="flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground/50 outline-none disabled:opacity-50"
         />
       </div>
 
       <div ref={listRef} className="max-h-[240px] overflow-y-auto p-1.5">
         {allTags === null ? (
-          <div className="flex items-center gap-2 px-2 py-4 text-[12px] text-muted-foreground">
+          <div className="flex items-center gap-2 px-2 py-4 text-sm text-muted-foreground">
             <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.75} />
             {t('common.loading')}
           </div>
         ) : suggestions.length === 0 && !canCreate ? (
-          <div className="px-2 py-4 text-center text-[12px] text-muted-foreground">
+          <div className="px-2 py-4 text-center text-sm text-muted-foreground">
             {q ? t('tagPicker.noMatch') : t('tagPicker.noTags')}
           </div>
         ) : (
@@ -166,8 +166,8 @@ export default function TagPickerPopover({ anchorRef, existing, onPick, onClose,
                 }`}
               >
                 <Hash className="w-3 h-3 text-muted-foreground/60 shrink-0" strokeWidth={1.75} />
-                <span className="min-w-0 flex-1 truncate text-[12.5px] font-mono">{ti.tag}</span>
-                <span className="text-[10.5px] text-muted-foreground/70 tabular-nums shrink-0">×{ti.count}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-mono">{ti.tag}</span>
+                <span className="text-2xs text-muted-foreground/70 tabular-nums shrink-0">×{ti.count}</span>
               </button>
             ))}
             {canCreate && (
@@ -182,14 +182,14 @@ export default function TagPickerPopover({ anchorRef, existing, onPick, onClose,
                 }`}
               >
                 <Plus className="w-3 h-3 text-muted-foreground/60 shrink-0" strokeWidth={1.75} />
-                <span className="min-w-0 flex-1 truncate text-[12.5px]">{t('tagPicker.createTag', { tag: q })}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{t('tagPicker.createTag', { tag: q })}</span>
               </button>
             )}
           </>
         )}
       </div>
 
-      <div className="px-3 py-1.5 border-t border-border/60 text-[10.5px] text-muted-foreground/70">
+      <div className="px-3 py-1.5 border-t border-border/60 text-2xs text-muted-foreground/70">
         {t('tagPicker.hint')}
       </div>
     </div>,

@@ -116,8 +116,8 @@ export default function StorageLocationsPanel() {
         {locations.map((loc) => (
           <div key={loc.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border border-border/60 bg-accent/10">
             <div className="min-w-0">
-              <div className="font-medium text-foreground text-[13px] truncate">{loc.name}</div>
-              <div className="text-muted-foreground text-[11.5px] mt-0.5 font-mono truncate">
+              <div className="font-medium text-foreground text-base truncate">{loc.name}</div>
+              <div className="text-muted-foreground text-xs mt-0.5 font-mono truncate">
                 {loc.kind === 's3'
                   ? `S3 · s3://${loc.s3?.bucket ?? ''}${loc.s3?.endpoint ? ` · ${loc.s3.endpoint}` : ''}`
                   : `WebDAV · ${loc.webdav?.endpoint ?? ''}`}
@@ -144,14 +144,14 @@ export default function StorageLocationsPanel() {
               <button
                 type="button"
                 onClick={() => setKind('s3')}
-                className={`px-3 py-1.5 rounded-md text-[12.5px] font-medium transition-colors ${kind === 's3' ? 'bg-primary-soft text-primary' : 'bg-muted text-muted-foreground'}`}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${kind === 's3' ? 'bg-primary-soft text-primary' : 'bg-muted text-muted-foreground'}`}
               >
                 S3 兼容
               </button>
               <button
                 type="button"
                 onClick={() => setKind('webdav')}
-                className={`px-3 py-1.5 rounded-md text-[12.5px] font-medium transition-colors ${kind === 'webdav' ? 'bg-primary-soft text-primary' : 'bg-muted text-muted-foreground'}`}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${kind === 'webdav' ? 'bg-primary-soft text-primary' : 'bg-muted text-muted-foreground'}`}
               >
                 WebDAV
               </button>
@@ -166,8 +166,8 @@ export default function StorageLocationsPanel() {
                 <InlineField label="Secret Access Key" value={secretAccessKey} onChange={setSecretAccessKey} mono type="password" placeholder={STORAGE_SECRET_MASK} />
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox" checked={forcePathStyle} onChange={(e) => setForcePathStyle(e.target.checked)} className="rounded-md border-border" />
-                  <span className="text-[13px] text-foreground">{t('storageLoc.pathStyle')}</span>
-                  <span className="text-[11px] text-muted-foreground/60">{t('storageLoc.pathStyleHint')}</span>
+                  <span className="text-base text-foreground">{t('storageLoc.pathStyle')}</span>
+                  <span className="text-xs text-muted-foreground/60">{t('storageLoc.pathStyleHint')}</span>
                 </label>
               </div>
             ) : (
@@ -186,7 +186,7 @@ export default function StorageLocationsPanel() {
           <button
             type="button"
             onClick={startNew}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-border text-[12.5px] text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
             {t('storageLoc.addNew')}

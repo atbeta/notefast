@@ -86,7 +86,7 @@ export default function AssetPickerDialog({ open, onClose, onPick }: AssetPicker
         className="relative bg-card rounded-lg border border-border shadow-floating shadow-black/40 w-full max-w-lg max-h-[min(70vh,560px)] flex flex-col animate-fade-in"
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border/60 shrink-0">
-          <h3 id="asset-picker-title" className="text-[15px] font-medium text-foreground tracking-tight">
+          <h3 id="asset-picker-title" className="text-md font-medium text-foreground tracking-tight">
             {t('editorToolbar.pickFromLibrary')}
           </h3>
           <button
@@ -106,18 +106,18 @@ export default function AssetPickerDialog({ open, onClose, onPick }: AssetPicker
             </div>
           ) : error ? (
             <div className="px-2 py-10 text-center space-y-2">
-              <p className="text-[13px] text-destructive">{t('editorToolbar.assetPickerLoadFailed')}</p>
-              <p className="text-[12px] text-muted-foreground">{error}</p>
+              <p className="text-base text-destructive">{t('editorToolbar.assetPickerLoadFailed')}</p>
+              <p className="text-sm text-muted-foreground">{error}</p>
             </div>
           ) : items.length === 0 ? (
             <div className="px-2 py-12 flex flex-col items-center text-center">
               <div className="empty-icon-tile mb-3">
                 <ImageIcon className="w-5 h-5" />
               </div>
-              <p className="text-[14px] font-medium text-foreground mb-1">
+              <p className="text-md font-medium text-foreground mb-1">
                 {t('editorToolbar.assetPickerEmptyTitle')}
               </p>
-              <p className="text-[12.5px] text-muted-foreground max-w-xs leading-relaxed">
+              <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
                 {t('editorToolbar.assetPickerEmptyDesc')}
               </p>
             </div>

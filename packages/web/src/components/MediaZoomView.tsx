@@ -154,10 +154,10 @@ export default function MediaZoomView({ children, measureKey, onBackgroundClick 
   return (
     <div className="relative h-full min-h-0 flex flex-col">
       <div className="absolute top-3 left-4 z-sticky flex items-center gap-2 pointer-events-none">
-        <span className="text-[12px] tabular-nums text-white/85 bg-black/30 rounded-md px-2 py-1">
+        <span className="text-sm tabular-nums text-white/85 bg-black/30 rounded-md px-2 py-1">
           {Math.round(zoom * 100)}%
         </span>
-        <span className="text-[11px] text-white/55 hidden sm:inline">
+        <span className="text-xs text-white/55 hidden sm:inline">
           {t('lightbox.zoomHint')}
         </span>
       </div>
@@ -165,7 +165,7 @@ export default function MediaZoomView({ children, measureKey, onBackgroundClick 
         <button
           type="button"
           onClick={() => setZoom(1)}
-          className="absolute bottom-4 right-4 z-sticky inline-flex items-center gap-1.5 text-[12px] text-white/80 hover:text-white bg-black/25 hover:bg-black/40 rounded-md px-2.5 py-1.5 transition-colors"
+          className="absolute bottom-4 right-4 z-sticky inline-flex items-center gap-1.5 text-sm text-white/80 hover:text-white bg-black/25 hover:bg-black/40 rounded-md px-2.5 py-1.5 transition-colors"
         >
           <RotateCcw className="w-3.5 h-3.5" strokeWidth={1.75} />
           {t('lightbox.zoomReset')}

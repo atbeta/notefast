@@ -244,7 +244,7 @@ export default function TableEditorDialog({
 
         <div className="order-1 flex items-center justify-between gap-3 px-4 py-3 border-b border-border/60 shrink-0">
           <div className="flex items-center gap-1.5 min-w-0">
-            <h3 id="table-editor-title" className="text-[15px] font-medium text-foreground tracking-tight">
+            <h3 id="table-editor-title" className="text-md font-medium text-foreground tracking-tight">
               {t('tableEditor.title')}
             </h3>
             <HelpTip label={t('tableEditor.markdownHint')} />
@@ -253,7 +253,7 @@ export default function TableEditorDialog({
             <button
               type="button"
               onClick={() => finish(true)}
-              className="btn-ghost-custom h-7 px-2.5 text-[12px]"
+              className="btn-ghost-custom h-7 px-2.5 text-sm"
             >
               {t('tableEditor.editSource')}
             </button>

@@ -41,9 +41,9 @@ const VARIANT_BASE: Record<ButtonVariant, string> = {
 }
 
 const SIZES: Record<ButtonSize, string> = {
-  sm: 'h-7 min-h-0 px-2.5 text-[12px]',
+  sm: 'h-7 min-h-0 px-2.5 text-sm',
   md: 'h-8 min-h-0 px-3.5 text-sm',
-  lg: 'h-10 min-h-0 px-5 text-[14px]',
+  lg: 'h-10 min-h-0 px-5 text-md',
 }
 
 export function Button({

@@ -220,7 +220,7 @@ export default function SyncPanel() {
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2">
                       <span className={`${isSelected ? 'text-primary' : 'text-muted-foreground'}`}>{opt.icon}</span>
-                      <span className={`font-medium text-[13px] ${isSelected ? 'text-foreground' : 'text-foreground/80'}`}>{opt.name}</span>
+                      <span className={`font-medium text-base ${isSelected ? 'text-foreground' : 'text-foreground/80'}`}>{opt.name}</span>
                     </div>
                     {isActive && (
                       <Tooltip label={t('sync.currentlyActive')}>
@@ -228,7 +228,7 @@ export default function SyncPanel() {
                       </Tooltip>
                     )}
                   </div>
-                  <span className="text-[11px] text-muted-foreground/80">{opt.desc}</span>
+                  <span className="text-xs text-muted-foreground/80">{opt.desc}</span>
                 </button>
               )
             })}
@@ -260,7 +260,7 @@ export default function SyncPanel() {
           {form.kind === 'connection' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
               <div className="md:col-span-2">
-                <label className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">{t('sync.storageConnection')}</label>
+                <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t('sync.storageConnection')}</label>
                 <div className="mt-1.5">
                   <LocationSelect
                     value={form.locationId}
@@ -279,14 +279,14 @@ export default function SyncPanel() {
           )}
 
           {form.kind !== 'none' && (
-            <p className="text-[11px] text-muted-foreground/60 pt-1">
+            <p className="text-xs text-muted-foreground/60 pt-1">
               {t('sync.manualOnly')}
             </p>
           )}
 
           {activeConfig && (
             <div className="flex items-center justify-between pt-1">
-              <span className="text-[13px] font-medium text-foreground">
+              <span className="text-base font-medium text-foreground">
                 {status?.enabled ? t('sync.enabled') : t('sync.pausedRetainConfig')}
               </span>
               <Toggle
@@ -332,7 +332,7 @@ export default function SyncPanel() {
                 </>
               ) : null}
               {status?.configured && !formMatchesConfigured && (
-                <span className="text-[12px] text-muted-foreground ml-2">
+                <span className="text-sm text-muted-foreground ml-2">
                   {t('sync.replaceAdapter', { adapter: status.adapterName })}
                 </span>
               )}
@@ -341,7 +341,7 @@ export default function SyncPanel() {
         </div>
 
         {(status?.lastRunAt || status?.lastResult || info) && (
-          <div className="text-[12.5px] text-muted-foreground pt-4 border-t border-border/40 space-y-1.5">
+          <div className="text-sm text-muted-foreground pt-4 border-t border-border/40 space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="font-medium text-foreground">{t('sync.lastArchive')}</span>
               <span className="font-mono">{status?.lastRunAt ? formatIsoDateTime(status.lastRunAt) : t('sync.neverRun')}</span>
@@ -359,7 +359,7 @@ export default function SyncPanel() {
               </div>
             )}
             {status?.lastResult?.errors && status.lastResult.errors.length > 0 && (
-              <ul className="list-disc pl-4 space-y-0.5 text-destructive/90 text-[11.5px] mt-1">
+              <ul className="list-disc pl-4 space-y-0.5 text-destructive/90 text-xs mt-1">
                 {status.lastResult.errors.slice(0, 5).map((err) => (
                   <li key={err} className="break-all">{err}</li>
                 ))}
@@ -367,7 +367,7 @@ export default function SyncPanel() {
             )}
 
             {info && (
-              <div className="mt-3 bg-accent/20 p-3 rounded-lg border border-border/30 space-y-1 text-[11.5px]">
+              <div className="mt-3 bg-accent/20 p-3 rounded-lg border border-border/30 space-y-1 text-xs">
                 {typeof info.remoteDocCount === 'number' && (
                   <div>{t('sync.remoteMdCount')}<span className="font-mono font-medium text-foreground ml-1">{info.remoteDocCount}</span></div>
                 )}
@@ -412,7 +412,7 @@ export default function SyncPanel() {
               e.target.value = ''
             }}
           />
-          <span className="text-[11px] text-muted-foreground/60">
+          <span className="text-xs text-muted-foreground/60">
             {t('sync.exportHint')}
           </span>
         </div>

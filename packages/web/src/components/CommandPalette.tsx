@@ -247,7 +247,7 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
             data-no-focus-ring
             className="flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground outline-none"
           />
-          <Kbd className="text-[11px]">esc</Kbd>
+          <Kbd className="text-xs">esc</Kbd>
         </div>
 
         <div ref={listRef} className="max-h-[60vh] overflow-y-auto p-2">
@@ -294,7 +294,7 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
           })}
         </div>
 
-        <div className="flex items-center justify-between gap-4 px-3 py-2 border-t border-border bg-secondary/40 text-[11px] text-muted-foreground">
+        <div className="flex items-center justify-between gap-4 px-3 py-2 border-t border-border bg-secondary/40 text-xs text-muted-foreground">
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center gap-1">
               <ArrowUp className="w-3 h-3" />
@@ -319,7 +319,7 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-3 pt-3 pb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+    <div className="px-3 pt-3 pb-1.5 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
       {children}
     </div>
   )

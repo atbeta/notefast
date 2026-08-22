@@ -61,7 +61,7 @@ const EMPTY_COUNTS: SidebarCounts = { inbox: 0, archived: 0, trash: 0, untagged:
 
 /** 计数徽章统一样式（收集箱 / 回收站 / 智能视图共用） */
 const COUNT_BADGE_CLS =
-  'ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-sidebar-accent/70 text-sidebar-muted/80 tabular-nums'
+  'ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-2xs font-medium bg-sidebar-accent/70 text-sidebar-muted/80 tabular-nums'
 
 function formatCount(n: number): string {
   return n > 99 ? '99+' : String(n)
@@ -115,7 +115,7 @@ function SidebarSectionLabel({
         className="w-full flex items-center gap-1 px-2.5 mb-1.5 select-none text-left group"
         aria-expanded={open}
       >
-        <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-sidebar-muted/55 group-hover:text-sidebar-muted transition-colors">
+        <span className="text-2xs font-medium uppercase tracking-[0.08em] text-sidebar-muted/55 group-hover:text-sidebar-muted transition-colors">
           {label}
         </span>
         <ChevronDown
@@ -127,7 +127,7 @@ function SidebarSectionLabel({
   }
   return (
     <div className="px-2.5 mb-1.5 select-none">
-      <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-sidebar-muted/55">
+      <span className="text-2xs font-medium uppercase tracking-[0.08em] text-sidebar-muted/55">
         {label}
       </span>
     </div>
@@ -164,7 +164,7 @@ function PinnedViewItem({
       <Link
         to={`/?${canonicalViewQuery(view.query)}`}
         onClick={onNavigate}
-        className={`flex-1 px-2.5 py-2 rounded-md text-[13px] truncate transition-colors ${
+        className={`flex-1 px-2.5 py-2 rounded-md text-base truncate transition-colors ${
           active
             ? 'bg-primary-soft text-primary font-medium'
             : 'text-sidebar-muted hover:bg-[var(--primary-softer)] hover:text-sidebar-accent-foreground'
@@ -188,7 +188,7 @@ function PinnedViewItem({
             }}
             onClick={(e) => e.preventDefault()}
             data-no-focus-ring
-            className="w-full text-[13px] bg-transparent border-b border-border outline-none"
+            className="w-full text-base bg-transparent border-b border-border outline-none"
           />
         ) : (
           <span className="flex items-center gap-1.5">
@@ -383,7 +383,7 @@ export default function Sidebar({
         <button
           type="button"
           onClick={onOpenPalette}
-          className="group min-w-0 flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background text-muted-foreground hover:text-foreground hover:border-foreground/15 transition-colors text-[13px]"
+          className="group min-w-0 flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background text-muted-foreground hover:text-foreground hover:border-foreground/15 transition-colors text-base"
           aria-label={t('sidebar.openPalette')}
         >
           <Search className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
@@ -511,7 +511,7 @@ export default function Sidebar({
         <div className="mt-6">
           <SidebarSectionLabel label={t('sidebar.pinnedViews')} collapsible open={pinnedOpen} onToggle={togglePinned} />
           {pinnedOpen && pinnedViews.length === 0 && (
-            <p className="px-2.5 py-1.5 text-[11.5px] text-sidebar-muted leading-relaxed">
+            <p className="px-2.5 py-1.5 text-xs text-sidebar-muted leading-relaxed">
               {t('sidebar.pinnedViewsEmpty')}
             </p>
           )}
@@ -535,12 +535,12 @@ export default function Sidebar({
               onToggle={toggleRecent}
             />
             {recentOpen && recentEmpty && (
-              <p className="px-2.5 py-1.5 text-[11.5px] text-sidebar-muted leading-relaxed">
+              <p className="px-2.5 py-1.5 text-xs text-sidebar-muted leading-relaxed">
                 {t('sidebar.recentVisitedEmpty')}
               </p>
             )}
             {recentOpen && recentGone && (
-              <p className="px-2.5 py-1.5 text-[11.5px] text-sidebar-muted leading-relaxed">
+              <p className="px-2.5 py-1.5 text-xs text-sidebar-muted leading-relaxed">
                 {t('sidebar.recentVisitedEmpty')}
               </p>
             )}
@@ -560,7 +560,7 @@ export default function Sidebar({
                     <Link
                       to={`/doc/${doc.id}`}
                       onClick={closeAfterNav}
-                      className={`min-w-0 flex-1 flex items-center gap-1.5 px-2.5 py-2 text-[13px] ${
+                      className={`min-w-0 flex-1 flex items-center gap-1.5 px-2.5 py-2 text-base ${
                         isActive ? 'font-medium' : ''
                       }`}
                       title={doc.title}
@@ -590,7 +590,7 @@ export default function Sidebar({
                 <button
                   type="button"
                   onClick={() => setRecentExpanded((v) => !v)}
-                  className="px-2.5 py-1.5 text-[11.5px] text-sidebar-muted/80 hover:text-sidebar-accent-foreground text-left transition-colors"
+                  className="px-2.5 py-1.5 text-xs text-sidebar-muted/80 hover:text-sidebar-accent-foreground text-left transition-colors"
                 >
                   {recentExpanded ? t('sidebar.collapse') : t('sidebar.expandAll', { n: allRecent.length })}
                 </button>
@@ -622,7 +622,7 @@ export default function Sidebar({
             <Link
               to="/settings/about"
               onClick={closeAfterNav}
-              className="text-[10px] font-mono tabular-nums text-sidebar-muted/55 hover:text-sidebar-muted transition-colors"
+              className="text-2xs font-mono tabular-nums text-sidebar-muted/55 hover:text-sidebar-muted transition-colors"
               title={t('settings.tabs.about')}
             >
               v{version}

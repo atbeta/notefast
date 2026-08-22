@@ -216,7 +216,7 @@ export default function EditorToolbar({
             <button
               type="button"
               role="menuitem"
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] text-left text-foreground hover:bg-accent transition-colors"
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-base text-left text-foreground hover:bg-accent transition-colors"
               onClick={() => {
                 setImageMenuOpen(false)
                 imageInputRef.current?.click()
@@ -228,7 +228,7 @@ export default function EditorToolbar({
             <button
               type="button"
               role="menuitem"
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] text-left text-foreground hover:bg-accent transition-colors"
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-base text-left text-foreground hover:bg-accent transition-colors"
               onClick={() => {
                 setImageMenuOpen(false)
                 setPickerOpen(true)
@@ -248,7 +248,7 @@ export default function EditorToolbar({
           </>
         )}
         <IconBtn title={t('editorToolbar.shortcuts')} onClick={() => onToggleHelp(!showHelp)} active={showHelp}>
-          <span className="text-[12px] font-medium leading-none">?</span>
+          <span className="text-sm font-medium leading-none">?</span>
         </IconBtn>
 
         <div className="flex items-center gap-1 ml-auto">
@@ -266,7 +266,7 @@ export default function EditorToolbar({
               <Tooltip label={t('editorToolbar.aiNotConfiguredHint', { defaultValue: 'AI 未配置，点此去设置' })}>
                 <Link
                   to="/settings/ai"
-                  className="inline-flex items-center gap-1 px-2 h-7 rounded-md text-[11.5px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  className="inline-flex items-center gap-1 px-2 h-7 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                 >
                   <Sparkles className="w-3.5 h-3.5 opacity-70" strokeWidth={1.75} />
                   {t('editorToolbar.aiSetup', { defaultValue: 'AI 未配置' })}
@@ -277,7 +277,7 @@ export default function EditorToolbar({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex items-center justify-center h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border border-border bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent transition-[color,background-color,border-color,transform] active:scale-[0.97]"
+            className="inline-flex items-center justify-center h-7 px-3 min-w-[64px] rounded-md text-sm font-medium border border-border bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent transition-[color,background-color,border-color,transform] active:scale-[0.97]"
           >
             {t('editorToolbar.exitEdit')}
           </button>
@@ -286,7 +286,7 @@ export default function EditorToolbar({
               type="button"
               onClick={onSave}
               disabled={saving || loading}
-              className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border transition-[color,background-color,border-color,transform] active:scale-[0.97] disabled:cursor-not-allowed bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] border-[rgb(var(--primary))] shadow-btn hover:bg-[rgb(var(--primary-hover))] hover:border-[rgb(var(--primary-hover))] ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
+              className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-sm font-medium border transition-[color,background-color,border-color,transform] active:scale-[0.97] disabled:cursor-not-allowed bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] border-[rgb(var(--primary))] shadow-btn hover:bg-[rgb(var(--primary-hover))] hover:border-[rgb(var(--primary-hover))] ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
             >
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
               {saving ? t('editorToolbar.savingShort') : t('editorToolbar.save')}
@@ -321,7 +321,7 @@ function AiContinueControls({
         <button
           type="button"
           onClick={onStop}
-          className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent border border-border/80 transition-colors"
+          className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent border border-border/80 transition-colors"
         >
           <Square className="w-3 h-3 fill-current" strokeWidth={0} />
           {t('editorToolbar.continueStop')}
@@ -337,7 +337,7 @@ function AiContinueControls({
           <button
             type="button"
             onClick={onAccept}
-            className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-[12px] font-medium bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] hover:bg-[rgb(var(--primary-hover))] transition-colors"
+            className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-sm font-medium bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] hover:bg-[rgb(var(--primary-hover))] transition-colors"
           >
             <Check className="w-3.5 h-3.5" strokeWidth={2} />
             {t('editorToolbar.continueAccept')}
@@ -355,7 +355,7 @@ function AiContinueControls({
       <button
         type="button"
         onClick={onStart}
-        className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
       >
         <Sparkles className="w-3.5 h-3.5 opacity-70" strokeWidth={1.75} />
         {t('editorToolbar.continue')}
@@ -421,7 +421,7 @@ function UploadProgressRing({ progress }: { progress: number }) {
           className="text-primary transition-[stroke-dasharray] duration-150 ease-out"
         />
       </svg>
-      <span className="relative text-[8px] font-medium tabular-nums leading-none text-foreground/80">
+      <span className="relative text-[8px] font-medium tabular-nums leading-none text-foreground/80"> {/* typography-allow: 上传进度环内数字 */}
         {Math.min(99, Math.max(0, progress))}
       </span>
     </div>

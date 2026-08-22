@@ -12,7 +12,7 @@ import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
 import { Tooltip } from './ui'
 
 const iconCls = 'w-3.5 h-3.5 shrink-0'
-const itemCls = 'w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] text-left text-foreground hover:bg-accent transition-colors disabled:opacity-40'
+const itemCls = 'w-full flex items-center gap-2 px-2.5 py-1.5 text-base text-left text-foreground hover:bg-accent transition-colors disabled:opacity-40'
 
 interface DocHeaderMoreProps {
   docId: string
@@ -142,7 +142,7 @@ export default function DocHeaderMore({
               close()
               onDelete()
             }}
-            className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] text-left text-destructive hover:bg-destructive/10 transition-colors"
+            className="w-full flex items-center gap-2 px-2.5 py-1.5 text-base text-left text-destructive hover:bg-destructive/10 transition-colors"
           >
             <Trash2 className={iconCls} strokeWidth={1.75} />
             <span>{t('doc.deleteDoc')}</span>

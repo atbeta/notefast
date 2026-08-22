@@ -95,10 +95,10 @@ export default function ConfirmDialog({
             </div>
           )}
           <div className="min-w-0">
-            <h3 id="confirm-dialog-title" className="text-[15px] font-medium text-foreground tracking-tight">
+            <h3 id="confirm-dialog-title" className="text-md font-medium text-foreground tracking-tight">
               {title}
             </h3>
-            <p id="confirm-dialog-message" className="text-[13.5px] text-muted-foreground/80 mt-1.5 leading-relaxed">
+            <p id="confirm-dialog-message" className="text-base text-muted-foreground/80 mt-1.5 leading-relaxed">
               {message}
             </p>
           </div>
@@ -108,7 +108,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={busy ? undefined : onCancel}
             disabled={busy}
-            className="px-3.5 py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-secondary/60 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3.5 py-1.5 text-base font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-secondary/60 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {t('confirm.cancel')}
           </button>
@@ -117,7 +117,7 @@ export default function ConfirmDialog({
             onClick={busy ? undefined : onConfirm}
             disabled={busy}
             aria-busy={busy || undefined}
-            className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-[color,background-color,transform] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${
+            className={`px-3.5 py-1.5 text-base font-medium rounded-md transition-[color,background-color,transform] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${
               effectiveTone === 'destructive'
                 ? 'bg-destructive/90 text-destructive-foreground hover:bg-destructive shadow-btn'
                 : 'bg-foreground text-background shadow-btn hover:bg-foreground/90'

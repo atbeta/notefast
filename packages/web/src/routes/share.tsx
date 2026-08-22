@@ -71,8 +71,8 @@ export default function SharePage() {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center text-center px-6">
         <FileWarning className="w-8 h-8 text-muted-foreground/60 mb-4" strokeWidth={1.5} />
-        <h1 className="text-[17px] font-medium text-foreground mb-1.5">{t('share.notFoundTitle')}</h1>
-        <p className="text-[13.5px] text-muted-foreground">{t('share.notFoundDesc')}</p>
+        <h1 className="text-lg font-medium text-foreground mb-1.5">{t('share.notFoundTitle')}</h1>
+        <p className="text-base text-muted-foreground">{t('share.notFoundDesc')}</p>
       </div>
     )
   }
@@ -90,23 +90,23 @@ export default function SharePage() {
     <div className="min-h-screen bg-background">
       {/* 公开可见提示：页面与登录后阅读页样式一致，需让访问者明确知道这是无需登录的公开分享页 */}
       <div className="border-b border-border/60 bg-muted/40">
-        <div className="max-w-[var(--reading-max-w,42rem)] mx-auto px-6 py-2 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+        <div className="max-w-[var(--reading-max-w,42rem)] mx-auto px-6 py-2 flex items-center gap-1.5 text-sm text-muted-foreground">
           <Globe className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
           {t('share.publicBanner')}
         </div>
       </div>
       <article className="max-w-[var(--reading-max-w,42rem)] mx-auto px-6 pt-12 pb-24">
         <header className="mb-8">
-          <h1 className="text-[28px] font-bold text-foreground leading-snug tracking-[-0.01em]">
+          <h1 className="text-h1 font-bold text-foreground leading-snug tracking-[-0.01em]">
             {doc.title || t('share.untitled')}
           </h1>
           {dateText && (
-            <p className="mt-2 text-[12.5px] text-muted-foreground/80">{t('share.updatedAt', { time: dateText })}</p>
+            <p className="mt-2 text-sm text-muted-foreground/80">{t('share.updatedAt', { time: dateText })}</p>
           )}
         </header>
         <ChatMarkdown content={markdown} />
         <footer className="mt-16 pt-6 border-t border-border/60 text-center">
-          <span className="text-[12px] text-muted-foreground/70">{t('share.byNoteFast')}</span>
+          <span className="text-sm text-muted-foreground/70">{t('share.byNoteFast')}</span>
         </footer>
       </article>
     </div>

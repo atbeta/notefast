@@ -89,15 +89,23 @@
   --radius-2xl: 16px;
 
   /* ───────────── 字号（节奏化 scale：辅助 → 正文 → 展示） ───────────── */
+  --text-2xs: 10.5px;  /* 侧栏标签 / 徽章，不并进 xs */
   --text-xs: 11.5px;   /* 微小标签 / 状态行 */
   --text-sm: 12.5px;   /* 辅助信息 */
   --text-base: 13.5px; /* UI 主文本 */
-  --text-md: 14.5px;   /* 强调列表项 */
+  --text-md: 14.5px;   /* 强调列表项 / 页内标题 */
   --text-lg: 16px;     /* 阅读正文 */
   --text-xl: 20px;
   --text-2xl: 24px;
   --text-3xl: 30px;
   --text-display: 36px; /* 页面标题 */
+  /* 文档标题梯度：编辑态 / 阅读态共用，H4 以下靠字重与颜色分层 */
+  --text-h1: 28px;
+  --text-h2: 24px;
+  --text-h3: 20px;
+  --text-h4: 16px;
+  --text-h5: 14px;
+  --text-h6: 13px;
 
   /* ───────────── 阅读列宽 ───────────── */
   /* 外层页面容器仍走 max-w-4xl（路由间导航不抖），仅 doc 路由的正文 prose

@@ -24,7 +24,7 @@ export function InlineError({ message, title, onRetry, compact = false }: Inline
     return (
       <div
         role="alert"
-        className="flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive-soft px-3 py-2 text-[12.5px]"
+        className="flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive-soft px-3 py-2 text-sm"
       >
         <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" strokeWidth={1.75} />
         <div className="min-w-0 flex-1">

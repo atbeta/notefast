@@ -76,11 +76,11 @@ export default function InboxPage() {
     <div className="animate-fade-in">
       <PageHeader innerClassName="flex items-center justify-between gap-4">
         <div className="min-w-0 flex items-center gap-2">
-          <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
+          <h1 className="text-md font-medium text-foreground truncate tracking-[-0.005em]">
             {t('inbox.title')}
           </h1>
           {!loading && docs.length > 0 && (
-            <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
+            <span className="font-mono text-xs text-muted-foreground/80 tabular-nums shrink-0">
               {docs.length}
             </span>
           )}
@@ -96,7 +96,7 @@ export default function InboxPage() {
       </PageHeader>
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
-        <p className="text-[13px] text-muted-foreground leading-relaxed px-1">
+        <p className="text-base text-muted-foreground leading-relaxed px-1">
           {t('inbox.description')}
         </p>
 
@@ -107,7 +107,7 @@ export default function InboxPage() {
               onChange={(e) => setTitle(e.target.value)}
               placeholder={t('inbox.titlePlaceholder')}
               data-no-focus-ring
-              className="w-full text-[14px] bg-transparent border-b border-border outline-none py-1.5 text-foreground placeholder:text-muted-foreground/50"
+              className="w-full text-md bg-transparent border-b border-border outline-none py-1.5 text-foreground placeholder:text-muted-foreground/50"
               autoFocus
             />
             <textarea
@@ -115,13 +115,13 @@ export default function InboxPage() {
               onChange={(e) => setBody(e.target.value)}
               placeholder={t('inbox.bodyPlaceholder')}
               rows={5}
-              className="w-full text-[13px] bg-muted/30 rounded-md border border-border/60 px-3 py-2 resize-y text-foreground placeholder:text-muted-foreground/50"
+              className="w-full text-base bg-muted/30 rounded-md border border-border/60 px-3 py-2 resize-y text-foreground placeholder:text-muted-foreground/50"
             />
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowCapture(false)}
-                className="text-[13px] px-3 py-1.5 text-muted-foreground hover:text-foreground"
+                className="text-base px-3 py-1.5 text-muted-foreground hover:text-foreground"
               >
                 {t('common.cancel')}
               </button>
@@ -157,11 +157,11 @@ export default function InboxPage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <Link to={`/doc/${doc.id}`} className="block">
-                    <h3 className="font-medium text-[14px] text-foreground tracking-[-0.005em] truncate leading-snug">
+                    <h3 className="font-medium text-md text-foreground tracking-[-0.005em] truncate leading-snug">
                       {doc.title || t('common.unnamed')}
                     </h3>
                   </Link>
-                  <p className="text-[11.5px] text-muted-foreground mt-0.5 font-mono tabular-nums">
+                  <p className="text-xs text-muted-foreground mt-0.5 font-mono tabular-nums">
                     {t('inbox.capturedAt', { time: formatRelative(doc.created_at) })}
                     {doc.updated_at !== doc.created_at && t('inbox.updatedSuffix', { time: formatRelative(doc.updated_at) })}
                   </p>
@@ -172,7 +172,7 @@ export default function InboxPage() {
                       type="button"
                       disabled={busyId === doc.id}
                       onClick={() => promote(doc.id)}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11.5px] text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-foreground hover:bg-accent transition-colors opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                     >
                       <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={1.75} />
                       {t('inbox.addToNotes')}
@@ -196,7 +196,7 @@ export default function InboxPage() {
               type="button"
               onClick={loadMore}
               disabled={loadingMore}
-              className="text-[13px] text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
+              className="text-base text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
             >
               {loadingMore ? t('home.loadingMore') : t('home.loadMore')}
             </button>

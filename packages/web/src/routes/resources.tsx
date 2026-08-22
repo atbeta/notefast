@@ -233,11 +233,11 @@ export default function ResourcesPage() {
     <div className="animate-fade-in">
       <PageHeader innerClassName="flex items-center justify-between gap-4">
         <div className="min-w-0 flex items-center gap-2">
-          <h1 className="text-[15px] font-medium text-foreground truncate tracking-[-0.005em]">
+          <h1 className="text-md font-medium text-foreground truncate tracking-[-0.005em]">
             {t('resources.title')}
           </h1>
           {!loading && total > 0 && (
-            <span className="font-mono text-[11px] text-muted-foreground/80 tabular-nums shrink-0">
+            <span className="font-mono text-xs text-muted-foreground/80 tabular-nums shrink-0">
               {total}
             </span>
           )}
@@ -263,7 +263,7 @@ export default function ResourcesPage() {
               type="button"
               onClick={() => setCleanupOpen(true)}
               disabled={cleaning}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 shrink-0"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 shrink-0"
             >
               {cleaning ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
@@ -277,13 +277,13 @@ export default function ResourcesPage() {
       </PageHeader>
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
-        <p className="text-[13px] text-muted-foreground leading-relaxed px-1">
+        <p className="text-base text-muted-foreground leading-relaxed px-1">
           {t('resources.description')}
         </p>
 
         {/* 存量补传进度（仅运行时出现，平时不占空间） */}
         {batch && (batch.running || batch.total > 0) && (
-          <div className="rounded-md border border-border bg-muted/25 px-3 py-2 text-[11.5px] space-y-1">
+          <div className="rounded-md border border-border bg-muted/25 px-3 py-2 text-xs space-y-1">
             {batch.running ? (
               <div className="flex items-center gap-2">
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
@@ -312,7 +312,7 @@ export default function ResourcesPage() {
             action={(
               <Link
                 to="/settings/images"
-                className="inline-block text-[13px] text-primary hover:underline"
+                className="inline-block text-base text-primary hover:underline"
               >
                 {t('resources.openImageSettings')}
               </Link>
@@ -354,7 +354,7 @@ export default function ResourcesPage() {
                   </Tooltip>
                 )}
                 <div className="px-2.5 py-2 space-y-1">
-                  <div className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
+                  <div className="flex items-center gap-1.5 text-2xs text-muted-foreground">
                     {item.remote ? (
                       item.remote_url ? (
                         <Tooltip label={item.remote_url}>
@@ -404,13 +404,13 @@ export default function ResourcesPage() {
                       </Tooltip>
                     )}
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground/80 tabular-nums">
+                  <div className="flex items-center justify-between gap-2 text-2xs text-muted-foreground/80 tabular-nums">
                     <span>{formatBytes(item.size)}</span>
                     <span className="truncate">{formatRelative(item.created_at)}</span>
                   </div>
                   {/* 文件名 + 复制本地路径：让用户知道这图是哪个文件、在哪能找到 */}
                   <div className="flex items-center gap-1 min-w-0 pt-0.5">
-                    <span className="truncate text-[10.5px] text-muted-foreground/80" title={item.filename || item.local_path}>
+                    <span className="truncate text-2xs text-muted-foreground/80" title={item.filename || item.local_path}>
                       {item.filename || item.id.slice(0, 8)}
                     </span>
                     <CopyButton
@@ -432,7 +432,7 @@ export default function ResourcesPage() {
               type="button"
               onClick={loadMore}
               disabled={loadingMore}
-              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md text-[12.5px] text-muted-foreground border border-border/70 hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md text-sm text-muted-foreground border border-border/70 hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50"
             >
               {loadingMore ? (
                 <>
@@ -453,7 +453,7 @@ export default function ResourcesPage() {
           alt={preview.filename || t('resources.preview')}
           onClose={() => setPreviewId(null)}
           headerStart={
-            <div className="min-w-0 text-[12.5px] text-white/70 tabular-nums truncate">
+            <div className="min-w-0 text-sm text-white/70 tabular-nums truncate">
               {formatBytes(preview.size)}
               <span className="mx-1.5 text-white/30">·</span>
               {preview.ref_count > 1
@@ -466,7 +466,7 @@ export default function ResourcesPage() {
               <button
                 type="button"
                 onClick={() => setPendingDelete(preview)}
-                className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[12.5px] text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+                className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-sm text-white/80 hover:text-white hover:bg-white/10 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                 {t('common.delete')}
@@ -475,16 +475,16 @@ export default function ResourcesPage() {
           }
           footer={
             <div className="max-h-40 overflow-y-auto">
-              <div className="flex items-center gap-1.5 text-[11.5px] text-white/60 mb-1.5">
+              <div className="flex items-center gap-1.5 text-xs text-white/60 mb-1.5">
                 <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
                 {t('resources.refsIn')}
               </div>
               {previewRefsError ? (
-                <p className="text-[12px] text-white/40">{t('resources.refsLoadError')}</p>
+                <p className="text-sm text-white/40">{t('resources.refsLoadError')}</p>
               ) : previewRefs === null ? (
-                <p className="text-[12px] text-white/30">{t('common.loading')}</p>
+                <p className="text-sm text-white/30">{t('common.loading')}</p>
               ) : previewRefs.length === 0 ? (
-                <p className="text-[12px] text-white/40">{t('resources.refsNone')}</p>
+                <p className="text-sm text-white/40">{t('resources.refsNone')}</p>
               ) : (
                 <ul className="space-y-0.5">
                   {previewRefs.map((d) => (
@@ -492,7 +492,7 @@ export default function ResourcesPage() {
                       <Link
                         to={`/doc/${d.doc_id}`}
                         onClick={() => setPreviewId(null)}
-                        className="text-[12.5px] text-white/80 hover:text-white hover:underline underline-offset-2 transition-colors break-all line-clamp-1"
+                        className="text-sm text-white/80 hover:text-white hover:underline underline-offset-2 transition-colors break-all line-clamp-1"
                       >
                         {d.title || t('common.untitled')}
                       </Link>

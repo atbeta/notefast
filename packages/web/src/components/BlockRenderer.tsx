@@ -132,12 +132,12 @@ function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: 
       {showBadge && (
       <span className="absolute bottom-4 right-1.5 opacity-0 group-hover/asset:opacity-100 transition-opacity z-sticky">
         {uploading ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-background/90 border border-border px-2 py-0.5 text-[10px] text-muted-foreground shadow-card">
+          <span className="inline-flex items-center gap-1 rounded-full bg-background/90 border border-border px-2 py-0.5 text-2xs text-muted-foreground shadow-card">
             <Loader2 className="w-3 h-3 animate-spin" />
             {t('block.assetUploading')}
           </span>
         ) : st?.remote ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-success-soft border border-success/30 px-2 py-0.5 text-[10px] text-success shadow-card">
+          <span className="inline-flex items-center gap-1 rounded-full bg-success-soft border border-success/30 px-2 py-0.5 text-2xs text-success shadow-card">
             <Cloud className="w-3 h-3" />
             {t('block.assetSynced')}
           </span>
@@ -147,7 +147,7 @@ function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: 
               <button
                 type="button"
                 onClick={() => void ctx?.upload(assetId)}
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] shadow-card transition-colors ${
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-2xs shadow-card transition-colors ${
                   failed
                     ? 'bg-destructive/10 border-destructive/30 text-destructive hover:bg-destructive/15'
                     : 'bg-background/90 border-border text-muted-foreground hover:text-foreground'
@@ -292,12 +292,12 @@ function HeadingTag({ block }: { block: Block }) {
     1
   const tagLevel = Math.min(Math.max(level, 1), 6) as 1 | 2 | 3 | 4 | 5 | 6
   const sizes: Record<number, string> = {
-    1: 'text-[28px] mt-9 mb-3 font-bold',
-    2: 'text-[24px] mt-7 mb-2.5 font-semibold',
-    3: 'text-[20px] mt-6 mb-2 font-semibold',
-    4: 'text-[16px] mt-5 mb-1.5 font-semibold',
-    5: 'text-[14px] mt-4 mb-1 font-semibold',
-    6: 'text-[13px] mt-4 mb-1 font-semibold text-muted-foreground',
+    1: 'text-h1 mt-9 mb-3 font-bold text-foreground',
+    2: 'text-h2 mt-7 mb-2.5 font-semibold text-foreground',
+    3: 'text-h3 mt-6 mb-2 font-semibold text-foreground',
+    4: 'text-h4 mt-5 mb-1.5 font-semibold text-foreground',
+    5: 'text-h5 mt-4 mb-1 font-semibold text-foreground/80',
+    6: 'text-h6 mt-4 mb-1 font-semibold text-muted-foreground',
   }
   return (
     <>
@@ -306,7 +306,7 @@ function HeadingTag({ block }: { block: Block }) {
         {
           // id 使用 block.id：与大纲（HeadingNode.id = block.id）一致，支持点击定位
           id: block.id,
-          className: `${sizes[tagLevel]} leading-[1.3] tracking-[-0.01em] text-foreground scroll-mt-20`,
+          className: `${sizes[tagLevel]} scroll-mt-20`,
         },
         renderInline(block.content || '', 'h'),
       )}
@@ -349,19 +349,19 @@ function HighlightedCodeBlock({ block, lang }: { block: Block; lang: string }) {
   return (
     <div id={block.id} className="scroll-mt-20 my-5 rounded-lg border border-border bg-muted/30 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 bg-muted/60 border-b border-border">
-        <span className="text-[11px] font-mono text-muted-foreground/80">
+        <span className="text-xs font-mono text-muted-foreground/80">
           {lang || 'text'}
         </span>
         <CopyButton
           text={block.content || ''}
-          className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded-md"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded-md"
           ariaLabel="Copy code"
           showText
         />
       </div>
       {/* 代码区：整体一块，无上下 padding（区分靠 header 的 border-b + 色差）；
           code-block-body 覆盖 .reading-prose pre 的 14px/18px，px-4 作非 reading-prose 兜底 */}
-      <pre className="code-block-body px-4 overflow-x-auto text-[13px] font-mono leading-[1.6] text-foreground">
+      <pre className="code-block-body px-4 overflow-x-auto text-base font-mono leading-[1.6] text-foreground">
         {highlighted ? (
           <code
             className={`hljs language-${lang}`}
@@ -401,7 +401,7 @@ function TableBlock({ block }: { block: Block }) {
 
   return (
     <div id={block.id} className="scroll-mt-20 my-5 overflow-x-auto rounded-lg border border-border">
-      <table className="w-full border-collapse text-[13.5px]">
+      <table className="w-full border-collapse text-base">
         <thead>
           <tr className="bg-muted/50">
             {header.map((h, i) => (
