@@ -19,7 +19,6 @@ export default {
         primary: {
           DEFAULT: 'rgb(var(--primary) / <alpha-value>)',
           foreground: 'rgb(var(--primary-foreground) / <alpha-value>)',
-          soft: 'rgb(var(--primary) / 0.06)',
         },
         'primary-soft': 'var(--primary-soft)',
         'primary-softer': 'var(--primary-softer)',
@@ -59,31 +58,6 @@ export default {
           border: 'rgb(var(--sidebar-border) / <alpha-value>)',
           muted: 'rgb(var(--sidebar-muted) / <alpha-value>)',
         },
-        // 保留 brand/warm 以便渐进迁移（组件迁移完成后可删除）
-        brand: {
-          50:  '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
-        },
-        warm: {
-          50:  '#fafaf9',
-          100: '#f5f5f4',
-          200: '#e7e5e4',
-          300: '#d6d3d1',
-          400: '#a8a29e',
-          500: '#78716c',
-          600: '#57534e',
-          700: '#44403c',
-          800: '#292524',
-          900: '#1c1917',
-        },
         'color-primary': 'rgb(var(--primary) / <alpha-value>)',
       },
       fontFamily: {
@@ -111,6 +85,7 @@ export default {
         'card':       'var(--shadow-card)',
         'card-hover': 'var(--shadow-card-hover)',
         'btn':        'var(--shadow-btn)',
+        'floating':   'var(--shadow-floating)',
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -118,9 +93,6 @@ export default {
         sm: 'calc(var(--radius) - 4px)',
         card: 'var(--radius-card)',
         btn:  'var(--radius-btn)',
-      },
-      transitionTimingFunction: {
-        soft: 'cubic-bezier(0.4, 0, 0.2, 1)',
       },
     },
   },
