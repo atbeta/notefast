@@ -115,7 +115,7 @@ export default function SelectionBubble({
       ref={panelRef}
       role="toolbar"
       aria-label={t('selectionBubble.label')}
-      className="fixed z-popover flex items-center gap-0.5 p-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
+      className="fixed z-popover flex items-center gap-0.5 p-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-floating animate-fade-in"
       style={{ top: pos?.top ?? -10000, left: pos?.left ?? -10000 }}
       onMouseDown={(e) => e.preventDefault()}
     >

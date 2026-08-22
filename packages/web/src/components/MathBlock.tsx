@@ -52,7 +52,7 @@ export default function MathBlock({ code }: { code: string }) {
         <span className="text-[11px] font-mono text-muted-foreground/80">math</span>
         <CopyButton
           text={code}
-          className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded"
+          className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded-md"
           ariaLabel="Copy math source"
           showText
         />

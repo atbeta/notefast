@@ -210,7 +210,7 @@ export default function EditorToolbar({
             ref={imageMenuRef}
             role="menu"
             aria-label={t('editorToolbar.insertImage')}
-            className="fixed z-popover min-w-[180px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
+            className="fixed z-popover min-w-[180px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-floating animate-fade-in"
             style={{ top: imageMenuPos.top, left: imageMenuPos.left }}
           >
             <button
@@ -286,7 +286,7 @@ export default function EditorToolbar({
               type="button"
               onClick={onSave}
               disabled={saving || loading}
-              className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border transition-all active:scale-[0.97] disabled:cursor-not-allowed bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] border-[rgb(var(--primary))] shadow-[var(--shadow-btn)] hover:bg-[rgb(var(--primary-hover))] hover:border-[rgb(var(--primary-hover))] ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
+              className={`inline-flex items-center justify-center gap-1 h-7 px-3 min-w-[64px] rounded-md text-[12px] font-medium border transition-all active:scale-[0.97] disabled:cursor-not-allowed bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] border-[rgb(var(--primary))] shadow-btn hover:bg-[rgb(var(--primary-hover))] hover:border-[rgb(var(--primary-hover))] ${saving ? 'opacity-70 cursor-wait' : 'disabled:opacity-40'}`}
             >
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
               {saving ? t('editorToolbar.savingShort') : t('editorToolbar.save')}

@@ -33,7 +33,7 @@ export function ProviderForm({
   const errBaseUrl = fieldErrors?.baseUrl
   const errModel = mode === 'chat' ? fieldErrors?.chatModel : fieldErrors?.embeddingModel
   const errTimeout = fieldErrors?.timeoutMs
-  const inputErrClass = 'border-destructive focus-visible:ring-destructive/30'
+  const inputErrClass = 'border-destructive'
   const inputOkClass = 'border-border'
 
   const availablePresets = PROVIDER_PRESET_IDS.filter(id => PRESETS[id].supportedModes.includes(mode))

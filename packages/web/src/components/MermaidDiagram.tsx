@@ -94,7 +94,7 @@ export default function MermaidDiagram({
             <button
               type="button"
               onClick={() => setZoomed(true)}
-              className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded"
+              className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded-md"
               aria-label={t('mermaid.zoom')}
             >
               <Maximize2 className="w-3.5 h-3.5" strokeWidth={1.75} />
@@ -102,7 +102,7 @@ export default function MermaidDiagram({
           )}
           <CopyButton
             text={code}
-            className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded"
+            className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded-md"
             ariaLabel="Copy diagram source"
             showText
           />

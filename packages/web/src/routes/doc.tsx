@@ -715,11 +715,11 @@ useEffect(() => {
                   className="mx-auto max-w-[var(--reading-max-w)] demo-zoom space-y-3"
                   style={{ '--reading-max-w': `${readingMaxW}rem` } as CSSProperties}
                 >
-                  <div className="h-9 bg-secondary rounded w-1/2" />
-                  <div className="h-3.5 bg-secondary rounded w-28" />
-                  <div className="h-4 bg-secondary rounded w-full mt-8" />
-                  <div className="h-4 bg-secondary rounded w-5/6" />
-                  <div className="h-4 bg-secondary rounded w-4/6" />
+                  <div className="h-9 bg-secondary rounded-md w-1/2" />
+                  <div className="h-3.5 bg-secondary rounded-md w-28" />
+                  <div className="h-4 bg-secondary rounded-md w-full mt-8" />
+                  <div className="h-4 bg-secondary rounded-md w-5/6" />
+                  <div className="h-4 bg-secondary rounded-md w-4/6" />
                 </div>
               </div>
             )}
@@ -909,7 +909,7 @@ useEffect(() => {
                   type="button"
                   onClick={handleSuggestTitle}
                   disabled={generatingTitle || aiExclude || !ai.chat}
-                  className="absolute right-1 sm:-right-8 top-3 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-50 p-1.5 text-muted-foreground hover:text-foreground transition-all rounded disabled:opacity-30"
+                  className="absolute right-1 sm:-right-8 top-3 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-50 p-1.5 text-muted-foreground hover:text-foreground transition-all rounded-md disabled:opacity-30"
                   aria-label={aiExclude ? t('doc.aiHiddenNoTitle') : t('doc.generateTitleAi')}
                 >
                   {generatingTitle ? (
@@ -1235,7 +1235,7 @@ function OutlineView({
               onJump?.(h.id)
               history.replaceState(null, '', `#${h.id}`)
             }}
-            className={`px-1.5 -mx-1.5 py-1 text-[12px] rounded transition-colors truncate ${
+            className={`px-1.5 -mx-1.5 py-1 text-[12px] rounded-md transition-colors truncate ${
               isActive
                 ? 'text-primary font-medium bg-primary-soft'
                 : 'text-muted-foreground/85 hover:text-foreground'
@@ -1424,7 +1424,7 @@ function DemoModeButton() {
           ref={zoomMenuRef}
           role="menu"
           aria-label={t('doc.zoom.label')}
-          className="fixed z-popover min-w-[140px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
+          className="fixed z-popover min-w-[140px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-floating animate-fade-in"
           style={{ top: zoomMenuPos.top, left: zoomMenuPos.left }}
         >
           {DEMO_ZOOMS.map((z, i) => {

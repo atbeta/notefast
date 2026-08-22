@@ -41,7 +41,7 @@ export function SettingsCard({
   const [expanded, setExpanded] = useState(defaultExpanded)
 
   return (
-    <div className="rounded-lg border border-border/60 bg-card shadow-[var(--shadow-card)] overflow-hidden transition-colors hover:border-border/80">
+    <div className="rounded-lg border border-border/60 bg-card shadow-card overflow-hidden transition-colors hover:border-border/80">
       <div 
         className={`flex items-center justify-between px-5 py-3.5 ${collapsible ? 'cursor-pointer hover:bg-accent/30' : ''}`}
         onClick={() => collapsible && setExpanded(!expanded)}
@@ -154,7 +154,7 @@ export function InlineField({
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={`w-full px-3 py-1.5 rounded-md border ${localStatus === 'error' ? 'border-destructive/50 ring-1 ring-destructive/30' : 'border-border focus:ring-1 focus:ring-primary/30 focus:border-primary/50'} bg-background outline-none transition-all placeholder:text-muted-foreground/40 ${mono ? 'font-mono text-[13px]' : 'text-[14px]'}`}
+          className={`w-full px-3 py-1.5 rounded-md border ${localStatus === 'error' ? 'border-destructive/50' : 'border-border focus:border-primary/50'} bg-background transition-colors placeholder:text-muted-foreground/40 ${mono ? 'font-mono text-[13px]' : 'text-[14px]'}`}
         />
         {localStatus === 'error' && statusMessage && (
           <div className="text-[11px] text-destructive flex items-center gap-1 mt-1">

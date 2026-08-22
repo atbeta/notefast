@@ -131,9 +131,9 @@ export default function McpPanel() {
                   key={f}
                   type="button"
                   onClick={() => switchFormat(f)}
-                  className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
+                  className={`px-2 py-0.5 rounded-md text-[11px] transition-colors ${
                     format === f
-                      ? 'bg-popover text-foreground shadow-sm border border-border/70'
+                      ? 'bg-popover text-foreground shadow-card border border-border/70'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >

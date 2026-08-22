@@ -30,7 +30,7 @@ export function Section({
 export function CapabilityBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
-      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded ${
+      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md ${
         ok ? 'bg-success-soft text-success' : 'bg-muted text-muted-foreground'
       }`}
     >

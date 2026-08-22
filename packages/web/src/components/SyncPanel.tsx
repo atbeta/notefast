@@ -214,7 +214,7 @@ export default function SyncPanel() {
                     else setForm({ ...EMPTY_CONNECTION })
                   }}
                   className={`flex flex-col gap-1.5 px-3 py-3 rounded-lg border text-left transition-all ${
-                    isSelected ? 'border-primary/45 bg-primary-soft shadow-sm' : 'border-border bg-card hover:border-border-strong'
+                    isSelected ? 'border-primary/45 bg-primary-soft shadow-card' : 'border-border bg-card hover:border-border-strong'
                   }`}
                 >
                   <div className="flex items-center justify-between w-full">

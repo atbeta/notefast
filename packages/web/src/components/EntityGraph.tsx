@@ -531,7 +531,7 @@ export default function EntityGraph({
         {isDoc ? (
           <>
             <div className="flex items-center gap-1.5">
-              <span className="inline-block w-3.5 h-3 rounded-[3px] border"
+              <span className="inline-block w-3.5 h-3 rounded-md border"
                 style={{ background: 'rgb(var(--graph-note-fill))', borderColor: 'rgb(var(--border-strong))' }}
               />
               <span>{t('entityGraph.legendDoc')}</span>

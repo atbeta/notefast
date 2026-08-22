@@ -68,7 +68,7 @@ export default function EditorFooter({
             <button
               type="button"
               onClick={onClearDraft}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-muted-foreground/80 hover:text-destructive transition-colors"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-muted-foreground/80 hover:text-destructive transition-colors"
             >
               <Loader2 className="w-3 h-3" strokeWidth={1.75} />
               {t('editorFooter.discardDraft')}
@@ -92,7 +92,7 @@ export default function EditorFooter({
                 input.click()
               }}
               aria-label={t('editorFooter.appendFile')}
-              className="inline-flex items-center justify-center w-6 h-6 rounded text-muted-foreground/80 hover:text-foreground hover:bg-accent transition-colors"
+              className="inline-flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground/80 hover:text-foreground hover:bg-accent transition-colors"
             >
               <FilePlus2 className="w-3.5 h-3.5" strokeWidth={1.75} />
             </button>

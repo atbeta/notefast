@@ -132,12 +132,12 @@ function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: 
       {showBadge && (
       <span className="absolute bottom-4 right-1.5 opacity-0 group-hover/asset:opacity-100 transition-opacity z-sticky">
         {uploading ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-background/90 border border-border px-2 py-0.5 text-[10px] text-muted-foreground shadow-sm">
+          <span className="inline-flex items-center gap-1 rounded-full bg-background/90 border border-border px-2 py-0.5 text-[10px] text-muted-foreground shadow-card">
             <Loader2 className="w-3 h-3 animate-spin" />
             {t('block.assetUploading')}
           </span>
         ) : st?.remote ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-success-soft border border-success/30 px-2 py-0.5 text-[10px] text-success shadow-sm">
+          <span className="inline-flex items-center gap-1 rounded-full bg-success-soft border border-success/30 px-2 py-0.5 text-[10px] text-success shadow-card">
             <Cloud className="w-3 h-3" />
             {t('block.assetSynced')}
           </span>
@@ -147,7 +147,7 @@ function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: 
               <button
                 type="button"
                 onClick={() => void ctx?.upload(assetId)}
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] shadow-sm transition-colors ${
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] shadow-card transition-colors ${
                   failed
                     ? 'bg-destructive/10 border-destructive/30 text-destructive hover:bg-destructive/15'
                     : 'bg-background/90 border-border text-muted-foreground hover:text-foreground'
@@ -354,7 +354,7 @@ function HighlightedCodeBlock({ block, lang }: { block: Block; lang: string }) {
         </span>
         <CopyButton
           text={block.content || ''}
-          className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded"
+          className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded-md"
           ariaLabel="Copy code"
           showText
         />
@@ -459,7 +459,7 @@ function ListItemView({ block, depth = 0 }: { block: Block; depth?: number }) {
       {depth === 0 && <BlockHandle block={block} className="-left-[48px] top-0.5" />}
       {isTask && (
         <span
-          className={`mr-2 inline-flex h-3.5 w-3.5 translate-y-[2px] items-center justify-center rounded-[3px] border transition-colors ${
+          className={`mr-2 inline-flex h-3.5 w-3.5 translate-y-[2px] items-center justify-center rounded-md border transition-colors ${
             checked
               ? 'border-foreground bg-foreground text-background'
               : 'border-border-strong/60 bg-transparent'

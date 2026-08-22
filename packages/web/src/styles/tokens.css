@@ -85,6 +85,8 @@
   --radius: 6px;
   --radius-card: 8px;
   --radius-btn: 6px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
 
   /* ───────────── 字号（节奏化 scale：辅助 → 正文 → 展示） ───────────── */
   --text-xs: 11.5px;   /* 微小标签 / 状态行 */

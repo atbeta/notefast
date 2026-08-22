@@ -66,14 +66,14 @@ export function Button({
 
   let visualCls = ''
   if (showSuccessAccent) {
-    visualCls = '!bg-success !text-success-foreground !border-success shadow-[var(--shadow-btn)]'
+    visualCls = '!bg-success !text-success-foreground !border-success shadow-btn'
   } else if (loading) {
     visualCls = 'opacity-70 cursor-wait'
   }
 
   const baseCls =
     `${VARIANT_BASE[variant]} ${SIZES[size]} font-medium leading-[1.2] ` +
-    `transition-colors duration-150 focus-visible:outline-none ` +
+    `transition-colors duration-150 ` +
     `disabled:opacity-40 disabled:cursor-not-allowed ` +
     `min-w-[88px] ` +
     (fullWidth ? 'w-full ' : '') +

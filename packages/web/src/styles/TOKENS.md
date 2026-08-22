@@ -49,9 +49,12 @@ NoteFast 的视觉只通过 **CSS 变量 token** 定义。所有组件应通过 
 | `--border-strong` | 强调边框（暂未启用，留扩展） |
 | `--input` | 输入框边框（同 border） |
 | `--ring` | focus ring（= primary） |
-| `--radius` | 0.375rem |
-| `--radius-card` | 0.625rem |
-| `--radius-btn` | 0.375rem |
+| `--radius` | 6px（控件默认） |
+| `--radius-card` | 8px |
+| `--radius-btn` | 6px |
+| `--radius-xl` | 12px（toast / 空态图标 / think 块） |
+| `--radius-2xl` | 16px（命令面板） |
+| 焦点环 | 全局 `:focus-visible` outline；不要写 `focus:ring-*` |
 
 ### 1.6 排版
 字体栈 + Tailwind `text-xs / sm / base / md / lg / xl / 2xl / 3xl / display`，映射到 `--text-*` 变量。`font-serif` 为阅读视图的衬线字体，不要在 UI 控件上用。
@@ -62,9 +65,10 @@ NoteFast 的视觉只通过 **CSS 变量 token** 定义。所有组件应通过 
 ### 1.7 阴影
 | Token | 用处 |
 |---|---|
-| `--shadow-card` | 卡片基础阴影（1px hairline + 2px blur） |
-| `--shadow-card-hover` | 卡片 hover 抬起 |
-| `--shadow-floating` | 浮层（popover / modal） |
+| `--shadow-card` | 卡片基础阴影（1px hairline + 2px blur）；类名 `shadow-card` |
+| `--shadow-card-hover` | 卡片 hover 抬起；类名 `shadow-card-hover` |
+| `--shadow-floating` | 浮层（popover / modal）；类名 `shadow-floating` |
+| `--shadow-btn` | 主按钮压感；类名 `shadow-btn`。inset kbd / 图谱 flood 不走这套 |
 
 ### 1.8 动效
 `--ease: 180ms cubic-bezier(0.4, 0, 0.2, 1)`，全 app 统一。

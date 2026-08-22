@@ -110,7 +110,7 @@ export default function ImageUploadPanel() {
           onClick={() => setMode('off')}
           className={`rounded-lg border px-3 py-2.5 text-left transition-all ${
             mode === 'off'
-              ? 'border-primary/45 bg-primary-soft shadow-sm'
+              ? 'border-primary/45 bg-primary-soft shadow-card'
               : 'border-border bg-card hover:border-border-strong'
           }`}
         >
@@ -122,7 +122,7 @@ export default function ImageUploadPanel() {
           onClick={() => setMode('auto')}
           className={`rounded-lg border px-3 py-2.5 text-left transition-all ${
             mode === 'auto'
-              ? 'border-primary/45 bg-primary-soft shadow-sm'
+              ? 'border-primary/45 bg-primary-soft shadow-card'
               : 'border-border bg-card hover:border-border-strong'
           }`}
         >

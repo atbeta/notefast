@@ -214,7 +214,7 @@ export default function EntitiesPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t('entities.searchPlaceholder')}
-                className="w-full rounded-lg border border-border bg-card pl-9 pr-8 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/40"
+                className="w-full rounded-lg border border-border bg-card pl-9 pr-8 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:border-primary/40"
               />
               {searching && (
                 <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted-foreground/60" strokeWidth={1.75} />
@@ -334,7 +334,7 @@ export default function EntitiesPage() {
                             <h3 className="font-medium text-[14px] text-foreground tracking-[-0.005em] truncate">
                               {e.display}
                             </h3>
-                            <span className="shrink-0 inline-flex items-center gap-1 rounded border border-border/60 bg-muted/40 px-1.5 py-px text-[10.5px] text-muted-foreground">
+                            <span className="shrink-0 inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-1.5 py-px text-[10.5px] text-muted-foreground">
                               <span className="w-1.5 h-1.5 rounded-full" style={{ background: graphKindColor(e.kind) }} />
                               {entityKindLabel(e.kind)}
                             </span>
@@ -345,12 +345,12 @@ export default function EntitiesPage() {
                           {e.description && (
                             <p className="text-[12px] text-muted-foreground/80 mt-1 leading-relaxed flex items-start gap-1.5">
                               {e.description_source === 'dict' && (
-                                <span className="shrink-0 inline-flex items-center gap-1 rounded border border-primary/20 bg-primary-soft px-1.5 py-px text-[10px] text-primary font-medium">
+                                <span className="shrink-0 inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary-soft px-1.5 py-px text-[10px] text-primary font-medium">
                                   {t('graph.dictSource')}
                                 </span>
                               )}
                               {e.description_source === 'ai' && (
-                                <span className="shrink-0 inline-flex items-center gap-1 rounded border border-border/60 bg-muted/40 px-1.5 py-px text-[10px] text-muted-foreground">
+                                <span className="shrink-0 inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-1.5 py-px text-[10px] text-muted-foreground">
                                   {t('graph.aiSource')}
                                 </span>
                               )}

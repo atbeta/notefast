@@ -104,12 +104,12 @@ function DetailPanel({
               {node.display}
             </h2>
             {isDoc ? (
-              <span className="shrink-0 inline-flex items-center gap-1 rounded border border-border/60 bg-muted/40 px-1.5 py-px text-[10.5px] text-muted-foreground">
+              <span className="shrink-0 inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-1.5 py-px text-[10.5px] text-muted-foreground">
                 <FileText className="w-3 h-3" strokeWidth={1.75} />
                 {t('graph.docLabel')}
               </span>
             ) : (
-              <span className="shrink-0 inline-flex items-center gap-1 rounded border border-border/60 bg-muted/40 px-1.5 py-px text-[10.5px] text-muted-foreground">
+              <span className="shrink-0 inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-1.5 py-px text-[10.5px] text-muted-foreground">
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: graphKindColor(node.kind) }} />
                 {entityKindLabel(node.kind)}
               </span>
@@ -358,7 +358,7 @@ export default function GraphPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={mode === 'docs' ? t('graph.searchPlaceholderDocs') : t('graph.searchPlaceholderEntities')}
-              className="w-48 rounded-lg border border-border bg-card pl-8 pr-7 py-1.5 text-[12.5px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/40"
+              className="w-48 rounded-lg border border-border bg-card pl-8 pr-7 py-1.5 text-[12.5px] text-foreground placeholder:text-muted-foreground/60 focus:border-primary/40"
             />
             {searching && (
               <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 animate-spin text-muted-foreground/60" strokeWidth={1.75} />
@@ -436,7 +436,7 @@ export default function GraphPage() {
                   value={minMention}
                   onChange={(e) => setMinMention(Number(e.target.value))}
                   aria-label={t('graph.mentionThreshold')}
-                  className="rounded-md border border-border bg-card px-2 py-1 text-[12px] text-muted-foreground focus:outline-none"
+                  className="rounded-md border border-border bg-card px-2 py-1 text-[12px] text-muted-foreground"
                 >
                   {MIN_MENTION_OPTS.map((n) => (
                     <option key={n} value={n}>

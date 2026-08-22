@@ -53,7 +53,7 @@
                 box-shadow var(--dur) var(--ease);
   }
   input[type='checkbox'] {
-    border-radius: 0.25rem;
+    border-radius: calc(var(--radius) - 2px);
   }
   input[type='radio'] {
     border-radius: 999px;
@@ -62,12 +62,7 @@
   input[type='radio']:hover:not(:disabled) {
     border-color: rgb(var(--muted-foreground) / 0.55);
   }
-  input[type='checkbox']:focus-visible,
-  input[type='radio']:focus-visible {
-    outline: none;
-    /* 与下方按钮/链接的双层 ring 保持一致 */
-    box-shadow: 0 0 0 2px rgb(var(--background)), 0 0 0 4px rgb(var(--ring) / 0.55);
-  }
+  /* checkbox / radio 焦点走全局 :focus-visible outline，不另写 ring */
   input[type='checkbox']:checked {
     background-color: rgb(var(--ink));
     border-color: rgb(var(--ink));
@@ -151,12 +146,9 @@
   .scroll-fade[data-fade-bottom='true'] {
     --sf-bottom: 16px;
   }
-  /* 焦点环：低饱和、不喧宾夺主——键盘可达，但视觉上像「细描边」而非「高亮框」。
-     设计权衡：
-     - 按钮/链接：1px 外描边 + 2px 偏移（不进元素内部，不破坏圆角阴影）
-     - 输入框/textarea/select：1px 主色细外描边 + 1px 偏移（替代原来 3px 厚 ring）
-     组件自己写 `focus:ring-X` 仍然生效（box-shadow 优先级高于 outline）；
-     不要的就用 `[data-no-focus-ring]` 跳过（兼容深色主题下本来就描边的控件）。 */
+  /* 焦点环唯一方案：:focus-visible + outline。
+     按钮/链接 1px + 2px 偏移；输入框 1px + 1px 偏移。
+     不要再写 focus:ring-* / 3px box-shadow；透明搜索框用 [data-no-focus-ring]。 */
   :focus-visible {
     outline: none;
   }
@@ -368,14 +360,12 @@
   font-size: 12.5px;
   line-height: 1.55;
   color: rgb(var(--foreground));
-  outline: none;
   resize: vertical;
-  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  transition: border-color var(--dur) var(--ease);
 }
 .input-mono::placeholder { color: rgb(var(--muted-foreground) / 0.55); }
-.input-mono:focus {
+.input-mono:focus-visible:not([data-no-focus-ring]) {
   border-color: rgb(var(--ring) / 0.6);
-  box-shadow: 0 0 0 3px rgb(var(--primary) / 0.1);
 }
 
 .field-label {
@@ -548,7 +538,7 @@ html.theme-fading *::after {
   width: 44px;
   height: 44px;
   margin: 0 auto 14px;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: rgb(var(--muted));
   display: grid;
   place-items: center;
@@ -600,7 +590,7 @@ html.theme-fading *::after {
   color: rgb(var(--muted-foreground));
   font-size: 0.98em;
   background: rgb(var(--muted) / 0.35);
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0;
 }
 .reading-prose code {
   font-family: var(--font-mono);
@@ -609,7 +599,7 @@ html.theme-fading *::after {
   background: rgb(var(--muted));
   color: rgb(var(--foreground));
   padding: 0.15em 0.4em;
-  border-radius: 3px;
+  border-radius: calc(var(--radius) - 2px);
   border: 1px solid rgb(var(--border) / 0.8);
 }
 .reading-prose pre {
@@ -620,7 +610,7 @@ html.theme-fading *::after {
   padding: 14px 18px;
   background: rgb(var(--muted) / 0.55);
   border: 1px solid rgb(var(--border) / 0.7);
-  border-radius: 6px;
+  border-radius: var(--radius);
   overflow-x: auto;
   color: rgb(var(--foreground));
 }
@@ -701,7 +691,7 @@ html.theme-fading *::after {
   font-size: 0.85em;
   background: rgb(var(--muted));
   padding: 0.15em 0.35em;
-  border-radius: 3px;
+  border-radius: calc(var(--radius) - 2px);
 }
 .chat-prose a {
   color: rgb(var(--primary));
@@ -718,7 +708,7 @@ html.theme-fading *::after {
   text-decoration: none;
   margin-left: 0.12em;
   padding: 0.05em 0.28em;
-  border-radius: 4px;
+  border-radius: calc(var(--radius) - 2px);
   background: rgb(var(--primary) / 0.12);
 }
 .chat-prose a.chat-cite:hover {
@@ -752,7 +742,7 @@ html.theme-fading *::after {
 .chat-code-block {
   margin: 0.6em 0;
   border: 1px solid rgb(var(--border) / 0.6);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   overflow: hidden;
   background: rgb(var(--muted) / 0.35);
 }
@@ -773,7 +763,7 @@ html.theme-fading *::after {
 .chat-code-copy {
   color: rgb(var(--muted-foreground));
   padding: 2px;
-  border-radius: 4px;
+  border-radius: calc(var(--radius) - 2px);
 }
 .chat-code-copy:hover {
   color: rgb(var(--foreground));
@@ -797,7 +787,7 @@ html.theme-fading *::after {
 
 .chat-think {
   border: 1px solid rgb(var(--border) / 0.45);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: rgb(var(--muted) / 0.25);
   overflow: hidden;
 }
@@ -829,7 +819,7 @@ html.theme-fading *::after {
 .reading-prose .block-surface {
   margin: 0.2em 0;
   padding: 2px 4px;
-  border-radius: 4px;
+  border-radius: calc(var(--radius) - 2px);
   transition: background var(--dur) var(--ease);
 }
 .reading-prose .block-surface:hover { background: rgb(var(--muted)); }
@@ -868,7 +858,7 @@ html.theme-fading *::after {
 }
 .cm-image-preview img {
   max-width: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   border: 1px solid rgb(var(--border));
   cursor: text;
 }
@@ -884,7 +874,7 @@ html.theme-fading *::after {
   margin: 6px 0;
   overflow-x: auto;
   border: 1px solid rgb(var(--border));
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   cursor: pointer;
 }
 .cm-table-preview:hover {
@@ -918,7 +908,7 @@ html.theme-fading *::after {
 }
 .cm-table-preview code {
   background: rgb(var(--muted-foreground) / 0.1);
-  border-radius: 3px;
+  border-radius: calc(var(--radius) - 2px);
   padding: 0 3px;
   font-size: 0.85em;
 }
@@ -927,7 +917,7 @@ html.theme-fading *::after {
 }
 .cm-table-preview .cm-table-img {
   max-height: 40px;
-  border-radius: 4px;
+  border-radius: calc(var(--radius) - 2px);
   vertical-align: middle;
 }
 
@@ -935,7 +925,7 @@ html.theme-fading *::after {
 .nf-table-editor-grid {
   overflow: auto;
   border: 1px solid rgb(var(--border));
-  border-radius: 8px;
+  border-radius: var(--radius-card);
 }
 .nf-table-editor-grid table {
   width: 100%;
@@ -1032,7 +1022,7 @@ html.theme-fading *::after {
   padding: 12px 16px;
   overflow-x: auto;
   border: 1px solid rgb(var(--border));
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   cursor: text;
   text-align: center;
 }

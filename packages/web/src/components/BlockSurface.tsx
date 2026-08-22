@@ -168,7 +168,7 @@ export function BlockHandle({ block, className }: BlockHandleProps) {
           id={menuId}
           role="menu"
           aria-label={t('block.menuLabel')}
-          className="fixed z-popover min-w-[180px] max-w-[240px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
+          className="fixed z-popover min-w-[180px] max-w-[240px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-floating animate-fade-in"
           style={{
             top: pos.openUp ? undefined : pos.top,
             bottom: pos.openUp ? window.innerHeight - pos.top : undefined,

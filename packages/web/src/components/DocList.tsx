@@ -60,12 +60,13 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
               onChange={(e) => setTitle(e.target.value)}
               onKeyDown={handleTitleKeyDown}
               onBlur={() => { setTitle(doc.title); setEditing(false) }}
+              data-no-focus-ring
               className="flex-1 text-[14px] font-medium bg-transparent border-b border-primary text-foreground outline-none"
             />
-            <button onMouseDown={(e) => { e.preventDefault(); saveTitle() }} className="p-0.5 text-primary hover:bg-primary/10 rounded transition-colors">
+            <button onMouseDown={(e) => { e.preventDefault(); saveTitle() }} className="p-0.5 text-primary hover:bg-primary/10 rounded-md transition-colors">
               <Check className="w-3.5 h-3.5" />
             </button>
-            <button onMouseDown={(e) => { e.preventDefault(); setTitle(doc.title); setEditing(false) }} className="p-0.5 text-muted-foreground hover:bg-accent rounded transition-colors">
+            <button onMouseDown={(e) => { e.preventDefault(); setTitle(doc.title); setEditing(false) }} className="p-0.5 text-muted-foreground hover:bg-accent rounded-md transition-colors">
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -74,13 +75,13 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
             <h3 className="font-medium text-[14px] text-foreground tracking-[-0.005em] truncate flex items-center gap-1.5 leading-snug">
               <span className="truncate">{doc.title || t('docList.untitled')}</span>
               {shared && (
-                <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded border border-border/70 text-muted-foreground">
+                <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded-md border border-border/70 text-muted-foreground">
                   <Globe className="w-2.5 h-2.5" strokeWidth={1.75} />
                   {t('docList.shared')}
                 </span>
               )}
               {aiExclude && (
-                <span className="shrink-0 text-[10px] font-medium px-1.5 py-px rounded border border-border/70 text-muted-foreground">
+                <span className="shrink-0 text-[10px] font-medium px-1.5 py-px rounded-md border border-border/70 text-muted-foreground">
                   {t('docList.aiExclude')}
                 </span>
               )}

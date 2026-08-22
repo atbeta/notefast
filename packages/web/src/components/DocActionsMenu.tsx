@@ -391,7 +391,7 @@ export default function DocActionsMenu({
           id={menuId}
           role="menu"
           aria-label={t('docActions.menuLabel')}
-          className="fixed z-popover min-w-[180px] max-w-[240px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in "
+          className="fixed z-popover min-w-[180px] max-w-[240px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-floating animate-fade-in "
           style={{
             top: pos.openUp ? undefined : pos.top,
             bottom: pos.openUp ? window.innerHeight - pos.top : undefined,
@@ -449,7 +449,7 @@ export default function DocActionsMenu({
       {showRename && createPortal(
         <div className="fixed inset-0 z-dialog flex items-center justify-center">
           <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowRename(false)} />
-          <div className="relative bg-card rounded-lg shadow-2xl shadow-black/40 max-w-sm w-full mx-4 p-6 animate-fade-in">
+          <div className="relative bg-card rounded-lg shadow-floating shadow-black/40 max-w-sm w-full mx-4 p-6 animate-fade-in">
             <h3 className="text-[15px] font-medium text-foreground tracking-tight mb-3">{t('docActions.renameTitle')}</h3>
             <input
               ref={renameInputRef}
@@ -459,7 +459,7 @@ export default function DocActionsMenu({
                 if (e.key === 'Enter') { e.preventDefault(); void handleRenameSubmit() }
                 if (e.key === 'Escape') setShowRename(false)
               }}
-              className="w-full px-3 py-2 text-[14px] rounded-md border border-border bg-background text-foreground outline-none focus:border-foreground/30"
+              className="w-full px-3 py-2 text-[14px] rounded-md border border-border bg-background text-foreground focus:border-foreground/30"
               placeholder={t('docActions.titlePlaceholder')}
               disabled={busy}
             />
@@ -475,7 +475,7 @@ export default function DocActionsMenu({
                 type="button"
                 disabled={busy || !renameDraft.trim()}
                 onClick={() => { void handleRenameSubmit() }}
-                className="px-3.5 py-1.5 text-[13px] font-medium rounded-md bg-foreground text-background shadow-sm hover:bg-foreground/90 disabled:opacity-40 transition-all"
+                className="px-3.5 py-1.5 text-[13px] font-medium rounded-md bg-foreground text-background shadow-btn hover:bg-foreground/90 disabled:opacity-40 transition-all"
               >
                 {t('common.save')}
               </button>

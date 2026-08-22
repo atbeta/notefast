@@ -58,7 +58,7 @@ export default function GlobalSyncStatus() {
       <button
         type="button"
         onClick={() => navigate('/settings/backup')}
-        className={`fixed bottom-3 right-3 z-panel flex items-center gap-1.5 h-7 pl-2 pr-2.5 rounded-full border border-border/60 bg-card/90 backdrop-blur text-[11.5px] text-muted-foreground shadow-sm hover:border-border hover:text-foreground transition-colors ${positionClass}`}
+        className={`fixed bottom-3 right-3 z-panel flex items-center gap-1.5 h-7 pl-2 pr-2.5 rounded-full border border-border/60 bg-card/90 backdrop-blur text-[11.5px] text-muted-foreground shadow-card hover:border-border hover:text-foreground transition-colors ${positionClass}`}
         aria-label={t('syncStatus.statusLabel', { status: label })}
       >
         {icon}

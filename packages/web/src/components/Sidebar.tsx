@@ -187,6 +187,7 @@ function PinnedViewItem({
               if (e.key === 'Escape') setEditing(false)
             }}
             onClick={(e) => e.preventDefault()}
+            data-no-focus-ring
             className="w-full text-[13px] bg-transparent border-b border-border outline-none"
           />
         ) : (
@@ -203,7 +204,7 @@ function PinnedViewItem({
             e.stopPropagation()
             onUnpin(view.id)
           }}
-          className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all shrink-0"
+          className="p-0.5 rounded-md opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all shrink-0"
           aria-label={t('sidebar.unpin')}
         >
           <X className="w-3 h-3" strokeWidth={2} />

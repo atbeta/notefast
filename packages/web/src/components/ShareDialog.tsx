@@ -210,7 +210,7 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
       ref={panelRef}
       role="dialog"
       aria-label={t('share.dialogLabel')}
-      className="fixed z-popover w-[360px] max-w-[calc(100vw-16px)] rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
+      className="fixed z-popover w-[360px] max-w-[calc(100vw-16px)] rounded-lg border border-border bg-popover text-popover-foreground shadow-floating animate-fade-in"
       style={{ top: pos.top, left: pos.left }}
     >
       <div className="px-3.5 pt-3 pb-2 flex items-center gap-2 border-b border-border/60">
@@ -236,7 +236,7 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
                   {t('share.noLoginNeeded')}
                 </p>
               </div>
-              <span className="shrink-0 text-[11.5px] text-muted-foreground px-1.5 py-0.5 rounded border border-border/70">
+              <span className="shrink-0 text-[11.5px] text-muted-foreground px-1.5 py-0.5 rounded-md border border-border/70">
                 {t('share.canView')}
               </span>
             </div>
@@ -246,7 +246,7 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
                 readOnly
                 value={shareUrl}
                 onFocus={(e) => e.target.select()}
-                className="flex-1 min-w-0 rounded-md border border-border bg-background px-2.5 py-1.5 text-[11.5px] font-mono text-foreground focus:outline-none focus:border-foreground/25"
+                className="flex-1 min-w-0 rounded-md border border-border bg-background px-2.5 py-1.5 text-[11.5px] font-mono text-foreground focus:border-foreground/25"
               />
               <Tooltip label={t('share.copyLink')}>
                 <button
@@ -272,7 +272,7 @@ export default function ShareDialog({ docId, onClose, anchorRef, onSharedChange 
                 value={expiry}
                 disabled={busy}
                 onChange={(e) => handleExpiryChange(e.target.value as ExpiryChoice)}
-                className="rounded-md border border-border bg-background px-2 py-1 text-[12.5px] text-foreground focus:outline-none focus:ring-1 focus:ring-foreground/20 disabled:opacity-50"
+                className="rounded-md border border-border bg-background px-2 py-1 text-[12.5px] text-foreground  disabled:opacity-50"
               >
                 <option value="never">{t('share.expiryNever')}</option>
                 <option value="1">{t('share.expiryDays', { n: 1 })}</option>

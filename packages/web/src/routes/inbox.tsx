@@ -106,6 +106,7 @@ export default function InboxPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={t('inbox.titlePlaceholder')}
+              data-no-focus-ring
               className="w-full text-[14px] bg-transparent border-b border-border outline-none py-1.5 text-foreground placeholder:text-muted-foreground/50"
               autoFocus
             />
@@ -114,7 +115,7 @@ export default function InboxPage() {
               onChange={(e) => setBody(e.target.value)}
               placeholder={t('inbox.bodyPlaceholder')}
               rows={5}
-              className="w-full text-[13px] bg-muted/30 rounded-md border border-border/60 px-3 py-2 outline-none resize-y text-foreground placeholder:text-muted-foreground/50"
+              className="w-full text-[13px] bg-muted/30 rounded-md border border-border/60 px-3 py-2 resize-y text-foreground placeholder:text-muted-foreground/50"
             />
             <div className="flex justify-end gap-2">
               <button

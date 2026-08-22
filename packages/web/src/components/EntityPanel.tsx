@@ -33,7 +33,7 @@ export function MentionRow({ mention }: { mention: EntityMention }) {
           {mention.doc_title || t('entityPanel.untitled')}
         </span>
         {mention.doc_status !== 'note' && (
-          <span className="shrink-0 rounded border border-border/60 bg-muted/40 px-1 py-px text-[10px] text-muted-foreground/80">
+          <span className="shrink-0 rounded-md border border-border/60 bg-muted/40 px-1 py-px text-[10px] text-muted-foreground/80">
             {entityDocStatusLabel(mention.doc_status) ?? mention.doc_status}
           </span>
         )}

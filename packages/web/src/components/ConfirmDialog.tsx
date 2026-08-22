@@ -82,7 +82,7 @@ export default function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-message"
-        className="relative bg-card rounded-lg shadow-2xl shadow-black/40 max-w-sm w-full mx-4 p-6 sm:p-7 animate-fade-in"
+        className="relative bg-card rounded-lg shadow-floating shadow-black/40 max-w-sm w-full mx-4 p-6 sm:p-7 animate-fade-in"
       >
         <div className="flex items-start gap-3.5 mb-6">
           {effectiveTone === 'destructive' ? (
@@ -119,8 +119,8 @@ export default function ConfirmDialog({
             aria-busy={busy || undefined}
             className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${
               effectiveTone === 'destructive'
-                ? 'bg-destructive/90 text-destructive-foreground hover:bg-destructive shadow-sm'
-                : 'bg-foreground text-background shadow-sm hover:bg-foreground/90'
+                ? 'bg-destructive/90 text-destructive-foreground hover:bg-destructive shadow-btn'
+                : 'bg-foreground text-background shadow-btn hover:bg-foreground/90'
             }`}
           >
             {label}

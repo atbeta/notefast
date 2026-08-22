@@ -225,7 +225,7 @@ export default function BackupPanel() {
               ))}
             </div>
             <p className="text-[11.5px] text-muted-foreground">
-              {t('backup.restoreHint1')} <code className="font-mono bg-accent/50 px-1 py-0.5 rounded text-[10.5px]">--dry-run</code> {t('backup.restoreHint2')}
+              {t('backup.restoreHint1')} <code className="font-mono bg-accent/50 px-1 py-0.5 rounded-md text-[10.5px]">--dry-run</code> {t('backup.restoreHint2')}
             </p>
           </div>
         )}

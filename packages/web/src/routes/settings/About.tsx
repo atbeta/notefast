@@ -33,14 +33,14 @@ export default function SettingsAbout() {
 
   return (
     <SettingsSection id="about" title={t('settings.tabs.about')}>
-      <div className="rounded-lg border border-border/60 bg-card shadow-[var(--shadow-card)] p-6 sm:p-7">
+      <div className="rounded-lg border border-border/60 bg-card shadow-card p-6 sm:p-7">
         <div className="flex flex-col items-center text-center gap-3 sm:gap-4">
           <img
             src="/favicon.svg"
             alt=""
             width={56}
             height={56}
-            className="w-14 h-14 rounded-[12px] shadow-sm"
+            className="w-14 h-14 rounded-xl shadow-card"
             draggable={false}
           />
           <div>

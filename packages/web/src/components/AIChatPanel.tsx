@@ -463,7 +463,7 @@ export default function AIChatPanel({
           e.stopPropagation()
           onClose()
         }}
-        className={`fixed right-0 ${shellTop} bg-card border-l border-border shadow-[var(--shadow-floating)] z-panel flex flex-col
+        className={`fixed right-0 ${shellTop} bg-card border-l border-border shadow-floating z-panel flex flex-col
           w-full md:w-[400px] ${expanded ? 'md:w-[600px]' : ''}
           transition-[transform,width] duration-[var(--dur)] ease-[var(--ease)]
           ${isOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
@@ -475,7 +475,7 @@ export default function AIChatPanel({
           <Sparkles className="w-4 h-4 text-primary shrink-0" strokeWidth={1.75} />
           <span className="truncate">{t('chat.title')}</span>
           <Tooltip label={contextDocId ? t('chat.contextDocTitle') : t('chat.contextAllTitle')}>
-            <span className="shrink-0 text-[10.5px] font-medium px-1.5 py-px rounded border border-primary/25 bg-primary-soft text-primary/90">
+            <span className="shrink-0 text-[10.5px] font-medium px-1.5 py-px rounded-md border border-primary/25 bg-primary-soft text-primary/90">
               {contextDocId ? t('chat.contextDoc') : t('chat.contextAll')}
             </span>
           </Tooltip>
@@ -736,7 +736,7 @@ export default function AIChatPanel({
         )}
         <form
           onSubmit={handleSubmit}
-          className="relative flex items-end gap-2 bg-card border border-border rounded-xl shadow-sm focus-within:border-primary/50 transition-colors p-2"
+          className="relative flex items-end gap-2 bg-card border border-border rounded-xl shadow-card focus-within:border-primary/50 transition-colors p-2"
         >
           {capabilities?.vision && (
             <>

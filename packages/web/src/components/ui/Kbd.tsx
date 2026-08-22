@@ -4,7 +4,7 @@ import { usePlatform } from '../../hooks/usePlatform'
 export function Kbd({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
     <kbd
-      className={`inline-flex items-center whitespace-nowrap rounded border border-border bg-card px-1.5 py-[3px] font-mono text-[10.5px] leading-none text-muted-foreground/80 shadow-[inset_0_-1px_0_rgb(var(--border))] ${className}`}
+      className={`inline-flex items-center whitespace-nowrap rounded-md border border-border bg-card px-1.5 py-[3px] font-mono text-[10.5px] leading-none text-muted-foreground/80 shadow-[inset_0_-1px_0_rgb(var(--border))] ${className}`}
     >
       {children}
     </kbd>

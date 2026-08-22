@@ -117,7 +117,7 @@ export default function SettingsMaintenance() {
   return (
     <SettingsSection id="maintenance" title={t('settings.tabs.maintenance')}>
       {/* 数据库健康 */}
-      <div className="rounded-lg border border-border/60 bg-card shadow-[var(--shadow-card)] p-5 sm:p-6">
+      <div className="rounded-lg border border-border/60 bg-card shadow-card p-5 sm:p-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-[14px] font-semibold text-foreground">
             <Database className="w-4 h-4" strokeWidth={1.75} />
@@ -187,7 +187,7 @@ export default function SettingsMaintenance() {
       </div>
 
       {/* 应用日志 */}
-      <div className="mt-5 rounded-lg border border-border/60 bg-card shadow-[var(--shadow-card)] p-5 sm:p-6">
+      <div className="mt-5 rounded-lg border border-border/60 bg-card shadow-card p-5 sm:p-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-[14px] font-semibold text-foreground">
             <ScrollText className="w-4 h-4" strokeWidth={1.75} />

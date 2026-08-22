@@ -323,12 +323,12 @@ export default function ResourcesPage() {
             {items.map((item) => (
               <li
                 key={item.id}
-                className="group relative rounded-lg border border-border/60 bg-card overflow-hidden shadow-[var(--shadow-card)]"
+                className="group relative rounded-lg border border-border/60 bg-card overflow-hidden shadow-card"
               >
                 <button
                   type="button"
                   onClick={() => setPreviewId(item.id)}
-                  className="aspect-square w-full bg-muted/40 flex items-center justify-center overflow-hidden cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  className="aspect-square w-full bg-muted/40 flex items-center justify-center overflow-hidden cursor-zoom-in "
                   aria-label={t('resources.preview')}
                 >
                   <img
@@ -346,7 +346,7 @@ export default function ResourcesPage() {
                         e.stopPropagation()
                         setPendingDelete(item)
                       }}
-                      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity inline-flex items-center justify-center w-7 h-7 rounded-md bg-background/90 border border-border/70 text-muted-foreground hover:text-destructive hover:border-destructive/40 shadow-sm"
+                      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity inline-flex items-center justify-center w-7 h-7 rounded-md bg-background/90 border border-border/70 text-muted-foreground hover:text-destructive hover:border-destructive/40 shadow-card"
                       aria-label={t('common.delete')}
                     >
                       <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
@@ -415,7 +415,7 @@ export default function ResourcesPage() {
                     </span>
                     <CopyButton
                       text={item.local_path}
-                      className="ml-auto shrink-0 p-0.5 rounded text-muted-foreground/60 hover:text-primary transition-colors disabled:opacity-50"
+                      className="ml-auto shrink-0 p-0.5 rounded-md text-muted-foreground/60 hover:text-primary transition-colors disabled:opacity-50"
                       ariaLabel={t('resources.copyPath')}
                       title={t('resources.copyPath')}
                     />

@@ -318,7 +318,7 @@ export default function TermDictPanel() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('settings.termDict.searchPlaceholder')}
-              className="pl-8 pr-3 py-1.5 w-52 rounded-md border border-border/60 bg-background text-[12.5px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/40"
+              className="pl-8 pr-3 py-1.5 w-52 rounded-md border border-border/60 bg-background text-[12.5px] text-foreground placeholder:text-muted-foreground/50 focus:border-foreground/40"
             />
           </div>
           <ActionButton variant="secondary" size="sm" onAction={startNew}>
@@ -346,7 +346,7 @@ export default function TermDictPanel() {
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder={t('settings.termDict.nameLabel')}
                   autoFocus
-                  className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[13px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[13px] text-foreground placeholder:text-muted-foreground/40 "
                 />
                 {formDup && <p className="text-[10.5px] text-destructive">{t('settings.termDict.nameDuplicate')}</p>}
               </div>
@@ -355,7 +355,7 @@ export default function TermDictPanel() {
                 <select
                   value={form.kind}
                   onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))}
-                  className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground "
                 >
                   <option value="">—</option>
                   {KINDS.map((k) => (
@@ -388,6 +388,7 @@ export default function TermDictPanel() {
                   }}
                   onBlur={addAlias}
                   placeholder="wafer, 晶圆片"
+                  data-no-focus-ring
                   className="flex-1 min-w-[100px] bg-transparent outline-none text-[12.5px] text-foreground placeholder:text-muted-foreground/40"
                 />
               </div>
@@ -399,7 +400,7 @@ export default function TermDictPanel() {
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 placeholder={t('settings.termDict.descriptionPlaceholder')}
                 rows={2}
-                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[12.5px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30 resize-y"
+                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[12.5px] text-foreground placeholder:text-muted-foreground/40  resize-y"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -419,7 +420,7 @@ export default function TermDictPanel() {
               rows={5}
               spellCheck={false}
               placeholder='[ { "name": "晶圆", "aliases": ["wafer"] } ]'
-              className="w-full rounded-md border border-border bg-background p-2.5 font-mono text-[12px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
+              className="w-full rounded-md border border-border bg-background p-2.5 font-mono text-[12px] text-foreground "
             />
             {importError && <p className="text-[11.5px] text-destructive">{importError}</p>}
             <div className="flex items-center gap-2">
@@ -461,7 +462,7 @@ export default function TermDictPanel() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[13px] font-medium text-foreground">{e.name}</span>
                       {e.kind && (
-                        <span className="px-1.5 py-px rounded text-[10px] uppercase tracking-wider font-mono bg-accent text-muted-foreground border border-border/50">
+                        <span className="px-1.5 py-px rounded-md text-[10px] uppercase tracking-wider font-mono bg-accent text-muted-foreground border border-border/50">
                           {t(`settings.termDict.kind.${e.kind}`)}
                         </span>
                       )}
@@ -482,7 +483,7 @@ export default function TermDictPanel() {
                       <button
                         type="button"
                         onClick={() => startEdit(index)}
-                        className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                         aria-label={t('settings.termDict.edit')}
                       >
                         <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
@@ -492,7 +493,7 @@ export default function TermDictPanel() {
                       <button
                         type="button"
                         onClick={() => deleteEntry(index)}
-                        className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                         aria-label={t('settings.termDict.delete')}
                       >
                         <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />

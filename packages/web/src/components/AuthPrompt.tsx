@@ -49,7 +49,7 @@ export default function AuthPrompt() {
     <div className="fixed inset-0 z-auth flex items-center justify-center bg-background animate-fade-in">
       <form
         onSubmit={handleSubmit}
-        className="w-[360px] max-w-[calc(100vw-32px)] rounded-lg border border-border bg-card p-7 shadow-[var(--shadow-floating)] space-y-5"
+        className="w-[360px] max-w-[calc(100vw-32px)] rounded-lg border border-border bg-card p-7 shadow-floating space-y-5"
       >
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-md bg-foreground text-background grid place-items-center">
@@ -87,7 +87,7 @@ export default function AuthPrompt() {
             className="mt-3 flex items-center gap-2 select-none cursor-pointer w-fit group"
           >
             <span
-              className={`w-4 h-4 rounded-[4px] border grid place-items-center transition-all ${
+              className={`w-4 h-4 rounded-md border grid place-items-center transition-all ${
                 remember
                   ? 'bg-foreground border-foreground text-background'
                   : 'border-border-strong/60 bg-transparent group-hover:border-foreground/40'

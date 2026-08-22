@@ -178,13 +178,13 @@ export default function HomePage() {
 
       {showPinModal && (
         <div className="fixed inset-0 z-sheet flex items-center justify-center bg-black/30" onClick={() => setShowPinModal(false)}>
-          <div className="bg-card border border-border rounded-lg p-5 w-80 shadow-xl space-y-3" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-card border border-border rounded-lg p-5 w-80 shadow-floating space-y-3" onClick={(e) => e.stopPropagation()}>
             <div className="text-[14px] font-medium text-foreground">{t('home.pinViewTitle')}</div>
             <input
               type="text"
               value={pinName}
               onChange={(e) => setPinName(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-foreground/20"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/60 "
               placeholder={t('home.pinViewPlaceholder')}
               autoFocus
               onKeyDown={(e) => {

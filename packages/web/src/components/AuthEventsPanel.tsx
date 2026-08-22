@@ -123,7 +123,7 @@ export default function AuthEventsPanel() {
                     <span className="text-[13px] font-medium text-foreground">{device.label}</span>
                     {browser && <span className="text-[11px] text-muted-foreground">{browser}</span>}
                     {isLatest && (
-                      <span className="px-1.5 py-0.5 rounded text-[9.5px] font-medium bg-success-soft text-success border border-success/20">
+                      <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-medium bg-success-soft text-success border border-success/20">
                         {t('authEvents.latest')}
                       </span>
                     )}

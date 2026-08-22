@@ -258,6 +258,7 @@ export default function DocFindBar({
             }
           }}
           placeholder={t('doc.findPlaceholder')}
+          data-no-focus-ring
           className="w-40 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/60 outline-none px-1"
           aria-label={t('doc.findPlaceholder')}
         />

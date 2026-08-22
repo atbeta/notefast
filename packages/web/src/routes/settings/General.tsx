@@ -19,7 +19,7 @@ function ThemePicker() {
   const { t } = useTranslation()
   const { theme, resolvedTheme, setTheme } = useTheme()
   return (
-    <div className="rounded-lg border border-border/60 bg-card shadow-[var(--shadow-card)] p-5 space-y-4">
+    <div className="rounded-lg border border-border/60 bg-card shadow-card p-5 space-y-4">
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <div className="text-[13.5px] font-medium text-foreground">{t('settings.theme.title')}</div>
@@ -64,7 +64,7 @@ function LanguagePicker() {
   const { choice, locale, setLocale } = useLocale()
   const currentName = SUPPORTED_LOCALES.find((l) => l.code === locale)?.nativeName ?? locale
   return (
-    <div className="rounded-lg border border-border/60 bg-card shadow-[var(--shadow-card)] p-5 space-y-4">
+    <div className="rounded-lg border border-border/60 bg-card shadow-card p-5 space-y-4">
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <div className="text-[13.5px] font-medium text-foreground">{t('settings.language.title')}</div>

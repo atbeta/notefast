@@ -264,7 +264,7 @@ export function useDocContextMenu({
           ref={panelRef}
           role="menu"
           aria-label={t('contextMenu.menuLabel')}
-          className="fixed z-popover min-w-[180px] max-w-[240px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)] animate-fade-in"
+          className="fixed z-popover min-w-[180px] max-w-[240px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-floating animate-fade-in"
           style={{
             top: snap.pos.openUp ? undefined : snap.pos.top,
             bottom: snap.pos.openUp ? window.innerHeight - snap.pos.top : undefined,
@@ -286,7 +286,7 @@ export function useDocContextMenu({
                 item.onSelect()
                 close()
               }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-[13px] text-foreground hover:bg-accent focus:bg-accent focus:outline-none transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-[13px] text-foreground hover:bg-accent focus:bg-accent transition-colors"
             >
               {item.icon}
               <span>{item.label}</span>

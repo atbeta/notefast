@@ -165,7 +165,7 @@ export default function StorageLocationsPanel() {
                 <InlineField label="Access Key ID" value={accessKeyId} onChange={setAccessKeyId} mono placeholder={STORAGE_SECRET_MASK} />
                 <InlineField label="Secret Access Key" value={secretAccessKey} onChange={setSecretAccessKey} mono type="password" placeholder={STORAGE_SECRET_MASK} />
                 <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={forcePathStyle} onChange={(e) => setForcePathStyle(e.target.checked)} className="rounded border-border" />
+                  <input type="checkbox" checked={forcePathStyle} onChange={(e) => setForcePathStyle(e.target.checked)} className="rounded-md border-border" />
                   <span className="text-[13px] text-foreground">{t('storageLoc.pathStyle')}</span>
                   <span className="text-[11px] text-muted-foreground/60">{t('storageLoc.pathStyleHint')}</span>
                 </label>

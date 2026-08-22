@@ -83,7 +83,7 @@ export default function AssetPickerDialog({ open, onClose, onPick }: AssetPicker
         role="dialog"
         aria-modal="true"
         aria-labelledby="asset-picker-title"
-        className="relative bg-card rounded-lg border border-border shadow-2xl shadow-black/40 w-full max-w-lg max-h-[min(70vh,560px)] flex flex-col animate-fade-in"
+        className="relative bg-card rounded-lg border border-border shadow-floating shadow-black/40 w-full max-w-lg max-h-[min(70vh,560px)] flex flex-col animate-fade-in"
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border/60 shrink-0">
           <h3 id="asset-picker-title" className="text-[15px] font-medium text-foreground tracking-tight">
@@ -129,7 +129,7 @@ export default function AssetPickerDialog({ open, onClose, onPick }: AssetPicker
                     <button
                       type="button"
                       onClick={() => onPick(`asset:${item.id}`)}
-                      className="w-full aspect-square rounded-md border border-border/60 bg-muted/40 overflow-hidden hover:border-primary/50 hover:ring-1 hover:ring-primary/30 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                      className="w-full aspect-square rounded-md border border-border/60 bg-muted/40 overflow-hidden hover:border-primary/50 hover:ring-1 hover:ring-primary/30 transition-all "
                     >
                       <img
                         src={`/api/v1/assets/${item.id}`}

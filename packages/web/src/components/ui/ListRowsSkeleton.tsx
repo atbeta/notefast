@@ -7,9 +7,9 @@
 export function PanelSkeleton() {
   return (
     <div className="animate-pulse space-y-3 px-1 py-2" aria-hidden>
-      <div className="h-3.5 bg-secondary rounded w-1/4" />
-      <div className="h-2.5 bg-secondary rounded w-3/4" />
-      <div className="h-2.5 bg-secondary rounded w-2/3" />
+      <div className="h-3.5 bg-secondary rounded-md w-1/4" />
+      <div className="h-2.5 bg-secondary rounded-md w-3/4" />
+      <div className="h-2.5 bg-secondary rounded-md w-2/3" />
       <div className="h-20 bg-secondary rounded-md" />
     </div>
   )
@@ -19,11 +19,11 @@ export function PanelSkeleton() {
 export function DetailSkeleton() {
   return (
     <div className="animate-pulse space-y-4 px-1 py-2" aria-hidden>
-      <div className="h-6 bg-secondary rounded w-2/5" />
+      <div className="h-6 bg-secondary rounded-md w-2/5" />
       <div className="space-y-2">
-        <div className="h-3 bg-secondary rounded w-full" />
-        <div className="h-3 bg-secondary rounded w-11/12" />
-        <div className="h-3 bg-secondary rounded w-4/5" />
+        <div className="h-3 bg-secondary rounded-md w-full" />
+        <div className="h-3 bg-secondary rounded-md w-11/12" />
+        <div className="h-3 bg-secondary rounded-md w-4/5" />
       </div>
       <div className="h-40 bg-secondary rounded-md" />
     </div>
@@ -37,10 +37,10 @@ export function ListRowsSkeleton({ rows = 5, withIcon = true }: { rows?: number;
         <div key={i} className="animate-pulse px-3 py-2 flex items-center gap-3">
           {withIcon && <div className="w-7 h-7 rounded-md bg-secondary shrink-0" />}
           <div className="flex-1 space-y-1.5">
-            <div className="h-3.5 bg-secondary rounded w-1/3" />
-            <div className="h-2.5 bg-secondary rounded w-1/5" />
+            <div className="h-3.5 bg-secondary rounded-md w-1/3" />
+            <div className="h-2.5 bg-secondary rounded-md w-1/5" />
           </div>
-          <div className="h-2.5 bg-secondary rounded w-12 shrink-0" />
+          <div className="h-2.5 bg-secondary rounded-md w-12 shrink-0" />
         </div>
       ))}
     </div>

@@ -245,7 +245,7 @@ function ToastCard({
     <div
       role={variant === 'error' ? 'alert' : 'status'}
       data-variant={variant}
-      className={`relative overflow-hidden rounded-[10px] bg-card text-card-foreground border border-border/40 shadow-[0_4px_12px_-4px_rgba(0,0,0,0.08)] ${
+      className={`relative overflow-hidden rounded-xl bg-card text-card-foreground border border-border/40 shadow-card-hover ${
         exiting ? 'animate-toast-out' : 'animate-toast-in'
       }`}
     >
@@ -281,7 +281,7 @@ function ToastCard({
           type="button"
           onClick={() => onDismiss(id)}
           aria-label={t('toastUI.close')}
-          className="shrink-0 p-0.5 rounded text-muted-foreground/40 hover:text-foreground transition-colors"
+          className="shrink-0 p-0.5 rounded-md text-muted-foreground/40 hover:text-foreground transition-colors"
         >
           <X className="w-3 h-3" />
         </button>
