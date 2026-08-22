@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.76.0](https://github.com/atbeta/notefast/compare/v0.75.0...v0.76.0) (2026-08-22)
+
+
+### Features
+
+* **related:** use stored-vector KNN on the current block ([9a23281](https://github.com/atbeta/notefast/commit/9a232812c1b11fa98cc4c15ee25b571f5a5b34ae))
+* **web:** add Input primitive and tighten icon chrome ([60f655d](https://github.com/atbeta/notefast/commit/60f655d9977fd37daf256ed1003f8f9cd164e754))
+* **web:** share empty, error, and skeleton surfaces ([f9e42c1](https://github.com/atbeta/notefast/commit/f9e42c1ee26d50bcb704c756f427ef7fd85e9a40))
+
+
+### Bug Fixes
+
+* **term-dict:** persist entries immediately and make aliases searchable ([974cf10](https://github.com/atbeta/notefast/commit/974cf1017dec5644af06cc9e836a34d6e7db577d))
+* **web:** clear leftover CJK copy and gate i18n in lint ([2309f8b](https://github.com/atbeta/notefast/commit/2309f8b500c145b19cd42e80a79492c53e370758))
+* **web:** converge UI type scale onto tokens ([9048705](https://github.com/atbeta/notefast/commit/90487051602cedef0876749c04e5807ecc63df5d))
+* **web:** finish Input, Button, and icon convergence ([2f7ae90](https://github.com/atbeta/notefast/commit/2f7ae908139200adf03adb228c036b0c238e166c))
+* **web:** loosen sidebar density and mute inactive chrome ([a2fd3b0](https://github.com/atbeta/notefast/commit/a2fd3b0b4de9735c720544b127d589bb8225d1ae))
+* **web:** name stacking layers from the live z-index scale ([d5bdee4](https://github.com/atbeta/notefast/commit/d5bdee40b98dcb39ad2d92ac6bc6f2b455f53d3c))
+* **web:** polish editor exit, context menu, and mermaid lightbox ([bf159f2](https://github.com/atbeta/notefast/commit/bf159f2c5d43cd0e7b11cf22924969ef26889346))
+* **web:** repair tokens.css comment that broke the stylesheet ([777b128](https://github.com/atbeta/notefast/commit/777b128b6e758e6979547e3918adcdcde1554d1d))
+* **web:** route radius, shadow, and focus through tokens ([e71c484](https://github.com/atbeta/notefast/commit/e71c48494067494f252c69ed500d266b19720c97))
+* **web:** route status colors through theme tokens ([a1f9245](https://github.com/atbeta/notefast/commit/a1f92455b47791e92df52820183c303c265cd81f))
+* **web:** tokenize motion durations and honor reduced-motion ([a36a352](https://github.com/atbeta/notefast/commit/a36a3528cfe46c87ca6bf78a589504081ce95617))
+* **web:** wire floating shadow and drop unused Tailwind tokens ([2f3f9bd](https://github.com/atbeta/notefast/commit/2f3f9bd38b72756ae70f3a662c5139583b1b3883))
+
 ## [0.75.0](https://github.com/atbeta/notefast/compare/v0.74.2...v0.75.0) (2026-08-21)
 
 
