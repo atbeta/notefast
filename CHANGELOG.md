@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.76.1](https://github.com/atbeta/notefast/compare/v0.76.0...v0.76.1) (2026-08-23)
+
+
+### Performance Improvements
+
+* **import:** skip inbox AI work and open files in-app ([a7708b0](https://github.com/atbeta/notefast/commit/a7708b026b21a712343c837b33756a912ac81ec6))
+
 ## [0.76.0](https://github.com/atbeta/notefast/compare/v0.75.0...v0.76.0) (2026-08-22)
 
 
