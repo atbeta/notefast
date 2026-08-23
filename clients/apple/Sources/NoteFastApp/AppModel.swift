@@ -23,6 +23,8 @@ final class AppModel: ObservableObject {
     @Published var syncActionMessage: String?
     /// 有新版可下载（检查更新后非空；帮助菜单出现「下载新版」入口）
     @Published var availableUpdate: ReleaseInfo?
+    /// 冷启动带文件：跳过首页，WebView 尚未有 URL 时显示「正在打开…」
+    @Published var openingImportedFile = false
 
     let navigator = WebNavigator()
 
@@ -135,7 +137,13 @@ final class AppModel: ObservableObject {
             state = .running(hs)
             engineVersion = hs.version
             verifyEngineVersion(hs.version)
-            navigator.navigate(to: entryURL ?? URL(string: "http://127.0.0.1")!)
+            // 冷启动双击 .md：不要先灌首页再跳文档（两次整页加载）。
+            // 有待导入文件时直接 drain → 导入完成后导航到文档/收集箱。
+            if pendingImportFiles.isEmpty {
+                navigator.navigate(to: entryURL ?? URL(string: "http://127.0.0.1")!)
+            } else {
+                openingImportedFile = true
+            }
             drainPendingImports()
         } catch {
             state = .failed(error)
@@ -274,6 +282,7 @@ final class AppModel: ObservableObject {
     /// 导入为 inbox 文档：单篇直接打开（满足「双击为了看」的场景，页面带升格/丢弃入口）；
     /// 多篇跳收集箱列表批量整理
     private func importMarkdownFiles(_ files: [URL]) async {
+        defer { openingImportedFile = false }
         guard case .running(let hs) = state, let base = baseURL else { return }
         guard let notebookId = hs.notebookId else {
             showTransientMessage("导入失败：engine 握手缺少 notebookId")

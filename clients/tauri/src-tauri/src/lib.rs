@@ -148,6 +148,14 @@ pub fn run() {
                 .map(PathBuf::from)
                 .filter(|p| import::is_markdown_path(p) && p.is_file())
                 .collect();
+            // 启动页可能还在倒计时 replace：标 pending，让 splash 让出跳转权
+            if !files.is_empty() {
+                if let Some(state) = app.try_state::<PendingOpenFiles>() {
+                    if let Ok(mut g) = state.0.lock() {
+                        *g = true;
+                    }
+                }
+            }
             import::handle_open_files(app, files, false);
         }))
         // 保存对话框 + 文件写入：前端导出 markdown/zip 时让用户选位置（而非静默下载到 Downloads）

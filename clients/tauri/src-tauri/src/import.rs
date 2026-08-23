@@ -6,8 +6,9 @@
 //!
 //! 导入走 engine REST（POST /api/v1/import/markdown，回环 trustedLocal 免鉴权）；
 //! HTTP 用裸 TcpStream（与 engine.rs 的 send_shutdown_request 同模式，不引 HTTP 依赖）。
-//! 注意：导入完成后导航须延时——前端启动页（ui/app.js）拿到 engine 信息会整页
-//! replace 到 engine origin，过早 eval 会被这次启动跳转覆盖。
+//! 导航：冷启动由 splash 停留等导入后整页跳文档；已运行实例走
+//! `window.__notefastNavigate`（无则 location.href）。用 `window.__nfImported`
+//! 挡住 splash 晚到的 replace，不再死等 1.8s。
 
 use crate::engine::EngineInfo;
 use crate::EngineState;
@@ -20,9 +21,6 @@ use tauri::{AppHandle, Manager};
 
 /// 等 engine 就绪（engine 由前端启动页拉起，文件打开可能先于它完成）
 const ENGINE_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
-/// 导入完成到导航的固定延时：让 app.js 的启动跳转先落地（见模块注释）。
-/// 须 ≥ 启动页最短停留 + 淡出（app.js MIN_SPLASH_MS + FADE_MS ≈ 1.7s）。
-const NAV_DELAY: Duration = Duration::from_millis(1800);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// 判断 Markdown 后缀（与 macOS 壳的集合一致）
@@ -112,15 +110,48 @@ fn import_and_open(app: &AppHandle, files: Vec<PathBuf>, is_initial: bool) {
         Some(format!("http://127.0.0.1:{}/inbox?native=tauri", info.port))
     };
     if let (Some(win), Some(url)) = (app.get_webview_window("main"), target) {
-        // 冷启动带文件时 splash 停留等这次跳转（无启动 replace 竞态），不必再等 NAV_DELAY；
-        // 应用已运行（第二实例导入）才需要延时，让 app.js 的启动跳转先落地。
-        if !is_initial {
-            std::thread::sleep(NAV_DELAY);
-        }
-        if let Ok(js) = serde_json::to_string(&url) {
-            let _ = win.eval(format!("location.href = {js}"));
+        // 先标已接管，避免 splash 淡出后 replace 回首页盖掉这次跳转
+        let _ = win.eval("window.__nfImported = true");
+        if is_initial {
+            // splash 页没有 React Router，整页跳到文档
+            if let Ok(js) = serde_json::to_string(&url) {
+                let _ = win.eval(format!("location.href = {js}"));
+            }
+        } else {
+            navigate_imported(&win, &url);
         }
     }
+}
+
+/// 已运行实例：优先客户端路由（__notefastNavigate），避免整页重载；
+/// hook 未就绪（仍在 splash）则整页跳转。
+fn navigate_imported(win: &tauri::WebviewWindow, href: &str) {
+    let path = url_path_and_query(href);
+    let Ok(path_js) = serde_json::to_string(&path) else { return };
+    let Ok(href_js) = serde_json::to_string(href) else { return };
+    let script = format!(
+        r#"(function(){{
+          try {{
+            if (typeof window.__notefastNavigate === 'function') {{
+              window.__notefastNavigate({path_js});
+              return;
+            }}
+          }} catch (e) {{}}
+          location.href = {href_js};
+        }})()"#
+    );
+    let _ = win.eval(script);
+}
+
+fn url_path_and_query(href: &str) -> String {
+    // http://127.0.0.1:3876/doc/xxx?native=tauri → /doc/xxx?native=tauri
+    if let Some(scheme) = href.find("://") {
+        let rest = &href[scheme + 3..];
+        if let Some(slash) = rest.find('/') {
+            return rest[slash..].to_string();
+        }
+    }
+    href.to_string()
 }
 
 /// 冷启动导入失败时把 splash 放行到首页（避免停在「正在打开文档…」）。

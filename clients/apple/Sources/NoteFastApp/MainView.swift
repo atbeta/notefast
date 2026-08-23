@@ -9,18 +9,31 @@ struct MainView: View {
     let handshake: EngineHandshake
 
     var body: some View {
-        DocWebView(
-            navigator: model.navigator,
-            onTitleChange: { title in
-                guard !model.versionIncompatible else { return }
-                model.windowTitle = title.isEmpty ? "NoteFast" : title
-            },
-            onThemeChange: { dark in
-                model.applyWebTheme(dark: dark)
+        ZStack {
+            DocWebView(
+                navigator: model.navigator,
+                onTitleChange: { title in
+                    guard !model.versionIncompatible else { return }
+                    model.windowTitle = title.isEmpty ? "NoteFast" : title
+                },
+                onThemeChange: { dark in
+                    model.applyWebTheme(dark: dark)
+                }
+            )
+            .background(WindowAccessor { window in
+                model.attachWindowChrome(to: window)
+            })
+
+            if model.openingImportedFile {
+                VStack(spacing: 14) {
+                    ProgressView()
+                    Text("正在打开文档…")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.background)
             }
-        )
-        .background(WindowAccessor { window in
-            model.attachWindowChrome(to: window)
-        })
+        }
     }
 }

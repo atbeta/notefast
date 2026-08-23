@@ -26,7 +26,57 @@ final class WebNavigator {
     func navigate(to url: URL) {
         lastURL = url
         pendingURL = url
-        webView?.load(URLRequest(url: url))
+        guard let webView else { return }
+
+        // 已在同源 SPA：走客户端路由，避免整页重载（双击打开的热路径）
+        if Self.canUseSpaNavigation(from: webView.url, to: url) {
+            let path = Self.pathAndQuery(of: url)
+            let script = """
+            (function(){
+              try {
+                if (typeof window.__notefastNavigate === 'function') {
+                  window.__notefastNavigate(\(Self.jsString(path)));
+                  return 'spa';
+                }
+              } catch (e) {}
+              return 'missing';
+            })()
+            """
+            pendingURL = nil
+            webView.evaluateJavaScript(script) { [weak webView] result, _ in
+                guard (result as? String) != "spa" else { return }
+                DispatchQueue.main.async {
+                    webView?.load(URLRequest(url: url))
+                }
+            }
+            return
+        }
+
+        webView.load(URLRequest(url: url))
+    }
+
+    /// 当前页已是 engine 同源（非 about:blank / 启动占位）时才能走 SPA
+    private static func canUseSpaNavigation(from current: URL?, to target: URL) -> Bool {
+        guard let current, let ch = current.host, let th = target.host else { return false }
+        guard current.scheme == target.scheme, ch == th else { return false }
+        if current.port != target.port { return false }
+        if current.path == "about:blank" || current.absoluteString == "about:blank" { return false }
+        return true
+    }
+
+    private static func pathAndQuery(of url: URL) -> String {
+        guard let query = url.query, !query.isEmpty else { return url.path }
+        return "\(url.path)?\(query)"
+    }
+
+    /// JSON 字符串字面量，供拼进 evaluateJavaScript
+    /// （JSONSerialization 顶层只接受数组/字典，包一层再剥掉）
+    private static func jsString(_ value: String) -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: [value]),
+              let wrapped = String(data: data, encoding: .utf8),
+              wrapped.first == "[", wrapped.last == "]"
+        else { return "\"\"" }
+        return String(wrapped.dropFirst().dropLast())
     }
 
     func reload() {

@@ -17,6 +17,7 @@ import { prefetchTagCatalog } from '../hooks/useTagCatalog'
 import { ASK_AI_EVENT } from '../lib/askAi'
 import { useDemoMode } from '../hooks/useDemoMode'
 import { isWindowZoomDoubleClickTarget, nativeToggleWindowZoom } from '../lib/nativeWindow'
+import { installNativeNavigate } from '../lib/nativeNavigate'
 
 /** AI 聊天面板控制 — 开合状态 + toggle（内容顶栏常驻入口 / 文档右栏避让共用） */
 type AiChatCtl = { open: boolean; toggle: () => void }
@@ -41,6 +42,9 @@ export default function Layout({ children, contentClassName }: { children: React
   const navigate = useNavigate()
   const location = useLocation()
   useRecordNavHistory()
+
+  // 原生壳双击打开：走客户端路由，避免整页重载
+  useEffect(() => installNativeNavigate((path) => { navigate(path) }), [navigate])
   
   // 提取当前文档ID作为 AI 上下文
   const docIdMatch = location.pathname.match(/\/doc\/([^/]+)/)

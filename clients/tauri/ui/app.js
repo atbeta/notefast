@@ -15,8 +15,7 @@
 
     // 冷启动双击 .md：Rust 后台导入完成后会直接跳文档/收集箱页，
     // splash 停留等它，避免「先看到文档列表、再跳目标页」的闪烁。
-    const pending = await window.__TAURI__.core.invoke('has_pending_open_files')
-    if (pending) {
+    if (await shouldHoldForImport()) {
       msg.textContent = '正在打开文档…'
       await alignWebviewToAppBg()
       // 不 replace：跳转由 import 完成后的 win.eval 驱动；失败兜底也会跳首页
@@ -26,12 +25,21 @@
     const wait = Math.max(0, MIN_SPLASH_MS - (performance.now() - t0))
     if (wait > 0) await new Promise((r) => setTimeout(r, wait))
 
+    // 启动等待期间又双击了文件：让出跳转权，避免 replace 回首页盖掉导入
+    if (await shouldHoldForImport()) {
+      msg.textContent = '正在打开文档…'
+      await alignWebviewToAppBg()
+      return
+    }
+
     // 跳转前把 webview 底色对齐主 UI tokens（亮 #fff / 暗 #191919），
     // 减少 replace 后、React 挂载前露出 splash 色或 conf 默认色。
     await alignWebviewToAppBg()
 
     boot.classList.add('out')
     await new Promise((r) => setTimeout(r, FADE_MS))
+
+    if (window.__nfImported || await shouldHoldForImport()) return
 
     window.location.replace(info.url)
   } catch (err) {
@@ -42,6 +50,15 @@
     boot.appendChild(el)
   }
 })()
+
+async function shouldHoldForImport() {
+  if (window.__nfImported) return true
+  try {
+    return await window.__TAURI__.core.invoke('has_pending_open_files')
+  } catch {
+    return false
+  }
+}
 
 /** 系统主题近似主 UI 底色；theme 存在 engine origin localStorage，启动页读不到 */
 async function alignWebviewToAppBg() {

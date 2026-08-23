@@ -23,15 +23,25 @@ import { scheduleDocIndex } from '../ai/indexJobs'
 
 const importRouter = new Hono()
 
+/**
+ * 收集箱导入降级：不建向量、不逐块 afterCreate。
+ * inbox 本就不进 RAG / AutoLink；升格为 note 时 afterStatusChange 会补索引与建链。
+ * 双击打开等「先看到再说」路径省掉 O(n) hook / 索引排队，避免和首屏抢 sqlite。
+ */
+function isInboxImport(status: string | undefined): boolean {
+  return status === 'inbox'
+}
+
 function respondCreated(
   result: InsertDocFromMarkdownResult,
   markdown: string,
+  opts?: { status?: string },
 ) {
   const db = getDb()
   const docRow = getBlockById(db, result.docId)!
-  const indexJob = scheduleDocIndex(result.docId, result.blockIds)
+  const lightweight = isInboxImport(opts?.status ?? readDocStatus(docRow))
+  // 文档根 hook + 文档级事件：侧栏 / SSE 仍要知道「来了一篇」
   fireAfterCreate(rowToBlock(docRow))
-  fireAfterCreateMany(getBlocksByIds(db, result.blockIds).map(rowToBlock))
   fireDocAfterCreate({
     doc: rowToBlock(docRow),
     meta: { status: readDocStatus(docRow), tags: readTags(docRow), source: 'import' },
@@ -45,6 +55,13 @@ function respondCreated(
     outcome: 'success',
     fields: { status: readDocStatus(docRow), block_count: result.blockIds.length + 1 },
   })
+
+  let indexJob: ReturnType<typeof scheduleDocIndex> = null
+  if (!lightweight) {
+    indexJob = scheduleDocIndex(result.docId, result.blockIds)
+    fireAfterCreateMany(getBlocksByIds(db, result.blockIds).map(rowToBlock))
+  }
+
   const missingAssets = findMissingAssets(extractAssetRefs(markdown))
   return {
     doc: rowToBlock(docRow),
@@ -119,7 +136,7 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
 
   return c.json(
     {
-      ...respondCreated(result, markdown),
+      ...respondCreated(result, markdown, { status: input.status }),
       ...(ingestedCount > 0 ? { media_imported: ingestedCount } : {}),
     },
     201,
@@ -194,7 +211,7 @@ importRouter.post('/markdown-files', async (c) => {
 
   return c.json(
     {
-      ...respondCreated(result, markdown),
+      ...respondCreated(result, markdown, { status: 'inbox' }),
       ...(ingestedCount > 0 ? { media_imported: ingestedCount } : {}),
     },
     201,
@@ -269,7 +286,7 @@ importRouter.post('/file', async (c) => {
       status,
       tags,
     })
-    return c.json(respondCreated(result, result.markdown), 201)
+    return c.json(respondCreated(result, result.markdown, { status }), 201)
   } catch (e) {
     if (e instanceof DocFileImportError) {
       return c.json({ error: 'bad_request', message: e.message }, 400)
@@ -441,7 +458,7 @@ importRouter.post('/docx', async (c) => {
       tags,
     })
     return c.json({
-      ...respondCreated(result, content),
+      ...respondCreated(result, content, { status }),
       ...(assetSrcs.size > 0 ? { media_imported: assetSrcs.size } : {}),
     }, 201)
   } catch (e) {

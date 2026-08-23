@@ -25,6 +25,7 @@ import {
 import { initVectorStore, indexBlock, indexBlockBatch, indexAllBlocks } from '../ai/indexer'
 import { runVectorRebuild } from '../ai/vectorRebuild'
 import { JsonVectorStore, setVectorStore } from '../ai/vectorStore'
+import { getLatestIndexJobForDoc, _resetIndexJobsForTests } from '../ai/indexJobs'
 
 let testDir: string
 let notebookId: string
@@ -90,6 +91,7 @@ beforeEach(() => {
   _setRuntimeForTests(null)
   initAiRuntime(pluginSystem, testDir)
   configure()
+  _resetIndexJobsForTests()
   embedInputs = []
   getDb().query('DELETE FROM blocks').run()
   // 重置 vector store state + 清 vec0 表，确保每个测试在 json backend 起跑
@@ -421,5 +423,45 @@ describe('doc.afterStatusChange hook（applyAutoIndex）', () => {
     })
     await new Promise((r) => setTimeout(r, 30))
     expect(countVectors()).toBe(before)
+  })
+})
+
+describe('inbox 导入不调度索引作业', () => {
+  test('POST /import/markdown status=inbox：即使 autoIndex 开启也不排 index_job', async () => {
+    _resetIndexJobsForTests()
+    const { Hono } = await import('hono')
+    const { default: importRouter } = await import('../api/import')
+    const app = new Hono()
+    app.route('/import', importRouter)
+
+    const inboxRes = await app.request('/import/markdown', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        notebook_id: notebookId,
+        title: '快开',
+        markdown: '# 快开\n\n一段正文，不应触发向量作业',
+        status: 'inbox',
+      }),
+    })
+    expect(inboxRes.status).toBe(201)
+    const inboxBody = (await inboxRes.json()) as { doc: { id: string }; index_job?: unknown }
+    expect(inboxBody.index_job).toBeUndefined()
+    expect(getLatestIndexJobForDoc(inboxBody.doc.id)).toBeNull()
+
+    const noteRes = await app.request('/import/markdown', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        notebook_id: notebookId,
+        title: '正式',
+        markdown: '# 正式\n\n应调度索引',
+        status: 'note',
+      }),
+    })
+    expect(noteRes.status).toBe(201)
+    const noteBody = (await noteRes.json()) as { doc: { id: string }; index_job?: { id: string } }
+    expect(noteBody.index_job).toBeTruthy()
+    expect(getLatestIndexJobForDoc(noteBody.doc.id)?.id).toBe(noteBody.index_job!.id)
   })
 })
