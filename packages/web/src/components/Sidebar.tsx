@@ -411,6 +411,10 @@ export default function Sidebar({
               <LayoutGrid className="w-4 h-4" strokeWidth={1.75} />
               {t('sidebar.allDocs')}
             </Link>
+            <Link to="/resources" onClick={closeAfterNav} className={location.pathname.startsWith('/resources') ? 'sidebar-link-active' : 'sidebar-link'}>
+              <Images className="w-4 h-4" strokeWidth={1.75} />
+              <span className="flex-1">{t('sidebar.resources')}</span>
+            </Link>
             <Tooltip className="w-full" label={t('sidebar.newDocTitle', { shortcut: shortcutLabel(['mod', 'N']) })}>
               <Link to="/new" onClick={closeAfterNav} className={`w-full ${location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'}`}>
                 <Plus className="w-4 h-4" strokeWidth={1.75} />
@@ -439,11 +443,22 @@ export default function Sidebar({
         )}
 
         <div className="mt-6">
-          <SidebarSectionLabel label={t('sidebar.sectionResources')} />
-          <Link to="/resources" onClick={closeAfterNav} className={location.pathname.startsWith('/resources') ? 'sidebar-link-active' : 'sidebar-link'}>
-            <Images className="w-4 h-4" strokeWidth={1.75} />
-            <span className="flex-1">{t('sidebar.resources')}</span>
-          </Link>
+          <SidebarSectionLabel label={t('sidebar.pinnedViews')} collapsible open={pinnedOpen} onToggle={togglePinned} />
+          {pinnedOpen && pinnedViews.length === 0 && (
+            <p className="px-2.5 py-1.5 text-xs text-sidebar-muted leading-relaxed">
+              {t('sidebar.pinnedViewsEmpty')}
+            </p>
+          )}
+          {pinnedOpen && pinnedViews.map((v) => (
+            <PinnedViewItem
+              key={v.id}
+              view={v}
+              active={location.search === `?${canonicalViewQuery(v.query)}`}
+              onNavigate={closeAfterNav}
+              onRename={rename}
+              onUnpin={unpin}
+            />
+          ))}
         </div>
 
         <div className="mt-6">
@@ -506,25 +521,6 @@ export default function Sidebar({
               </Link>
             </div>
           )}
-        </div>
-
-        <div className="mt-6">
-          <SidebarSectionLabel label={t('sidebar.pinnedViews')} collapsible open={pinnedOpen} onToggle={togglePinned} />
-          {pinnedOpen && pinnedViews.length === 0 && (
-            <p className="px-2.5 py-1.5 text-xs text-sidebar-muted leading-relaxed">
-              {t('sidebar.pinnedViewsEmpty')}
-            </p>
-          )}
-          {pinnedOpen && pinnedViews.map((v) => (
-            <PinnedViewItem
-              key={v.id}
-              view={v}
-              active={location.search === `?${canonicalViewQuery(v.query)}`}
-              onNavigate={closeAfterNav}
-              onRename={rename}
-              onUnpin={unpin}
-            />
-          ))}
         </div>
 
         <div className="mt-6">

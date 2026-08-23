@@ -118,7 +118,7 @@ docker compose up -d
 - **API/MCP first**：能力先经 API 暴露，再补 UI。扩展走 MCP / 连接器 / 内部钩子，不做 Obsidian 式社区插件宇宙
 - **AI 是第一公民**：外部 MCP 与内部 API 双通道。零模型配置须优雅降级——基础读写与词法检索可用，AI 入口隐藏/禁用，不要报错墙
 - **文档默认对 AI 可见**。`properties.ai_exclude: true` 只挡 AI 索引 / MCP 发现与按 ID 读取；人类 Web、多端同步、备份仍带全文。禁止把 ai_exclude 当成不同步、删除或 `is_erased` tombstone
-- **单 Notebook**；组织靠 tag + 智能视图，不主推多笔记本 UI。侧栏按对象分「笔记 / 资源 / 关系」。侧栏「最近访问」是本机打开足迹，与首页「最近更新」分开
+- **单 Notebook**；组织靠 tag + 智能视图，不主推多笔记本 UI。侧栏顺序：笔记（「所有」后接资源入口）→ 固定视图 → 关系 → 智能视图 → 最近访问。「最近访问」是本机打开足迹，与首页「最近更新」分开
 - AI 助手不常驻左侧导航（⌘J / ⌘K / 顶栏 / 情境「问 AI」）。新模型槽（chat/embedding/reranker）默认「自定义」空表单，不按 locale 预选云端厂商
 - **PWA** 只做可安装壳（manifest + 图标 + safe-area），不做 Service Worker / 离线缓存。Web 运行时零外部 CDN：字体经 `@fontsource-variable/*` 自托管，禁止恢复 Google Fonts 等外链
 - 内部 AI 只做采集 / 理解 / 检索 / 维护；通用聊天客户端能力外放给 MCP 消费方
