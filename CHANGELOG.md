@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.76.2](https://github.com/atbeta/notefast/compare/v0.76.1...v0.76.2) (2026-08-23)
+
+
+### Bug Fixes
+
+* **tauri:** open About download links in the system browser ([95f9e83](https://github.com/atbeta/notefast/commit/95f9e83142260e4214401e1eec736918ddd55023))
+
 ## [0.76.1](https://github.com/atbeta/notefast/compare/v0.76.0...v0.76.1) (2026-08-23)
 
 
