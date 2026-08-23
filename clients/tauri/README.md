@@ -72,3 +72,4 @@ bun run build:full
 | 停机 | SIGTERM | `POST /internal/shutdown` + 超时强杀 |
 | dev 定位 engine | `NOTEFAST_ENGINE_DIR` | 同 |
 | UI 复用 | WKWebView 加载 engine 页面 | WebView2 加载 engine 页面（同源，天然无桥） |
+| 打开外链 | `NSWorkspace` 拦截 http(s)/mailto | `tauri-plugin-opener`（`opener:default`） |

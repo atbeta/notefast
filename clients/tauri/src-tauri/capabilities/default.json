@@ -16,6 +16,7 @@
     "core:window:allow-set-background-color",
     "core:webview:allow-set-webview-background-color",
     "dialog:allow-save",
-    { "identifier": "fs:write-files", "allow": [{ "path": "**" }] }
+    { "identifier": "fs:write-files", "allow": [{ "path": "**" }] },
+    "opener:default"
   ]
 }

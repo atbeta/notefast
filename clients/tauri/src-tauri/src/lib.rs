@@ -161,6 +161,8 @@ pub fn run() {
         // 保存对话框 + 文件写入：前端导出 markdown/zip 时让用户选位置（而非静默下载到 Downloads）
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        // 外链：WebView2 默认吞掉 target=_blank；插件拦截后用系统浏览器打开
+        .plugin(tauri_plugin_opener::init())
         .manage(EngineState(Mutex::new(None)))
         // 冷启动带入文件才置位；single_instance 第二实例导入不影响
         .manage(PendingOpenFiles(Mutex::new(!initial_files.is_empty())))
