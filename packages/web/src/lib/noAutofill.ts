@@ -31,9 +31,9 @@ export function resolveNoAutofillToken(
   return NO_AUTOFILL_TOKEN
 }
 
-/** 给单个控件打上禁用标记（已豁免则不动） */
+/** 给单个控件打上禁用标记（已豁免则不动）。tagName 判定（不用 instanceof，便于测试与跨 realm） */
 export function applyNoAutofill(el: HTMLInputElement | HTMLTextAreaElement | HTMLFormElement): void {
-  if (el instanceof HTMLFormElement) {
+  if (el.tagName === 'FORM') {
     const next = resolveNoAutofillToken(null, el.getAttribute('autocomplete'))
     if (next && el.getAttribute('autocomplete') !== next) el.setAttribute('autocomplete', next)
     return
@@ -44,6 +44,15 @@ export function applyNoAutofill(el: HTMLInputElement | HTMLTextAreaElement | HTM
 }
 
 function disableIn(root: ParentNode): void {
+  // MutationObserver 的 addedNodes 可能是控件本体（{editing && <input/>} 内联重命名、
+  // 条件渲染的裸输入框等）：querySelectorAll 不匹配 root 自身，本体必须单独处理，
+  // 否则这类输入框永远打不上标记、浏览器照样弹历史下拉
+  if (root instanceof Element) {
+    const tag = root.tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'FORM') {
+      applyNoAutofill(root as HTMLInputElement)
+    }
+  }
   root.querySelectorAll<HTMLFormElement>('form').forEach(applyNoAutofill)
   root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(SELECTOR).forEach(applyNoAutofill)
 }
