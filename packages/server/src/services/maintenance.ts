@@ -208,7 +208,49 @@ export function runMaintenancePass(): MaintenanceResult {
   }
 
   vecGenerations = dropStaleVectorGenerations()
+  // 维护后刷新健康快照（供设置页 health 读取，避免每次点进维护页实时跑重型查询）
+  refreshMaintenanceHealthSnapshot(db)
   return { tombstones, feedRows, vecGenerations }
+}
+
+// ── 维护健康快照 ──────────────────────────────────────────────
+// 设置页 /db/health 直接读这个内存快照。tombstone 计数 / 表行数都是重型查询，
+// 实时算会阻塞事件循环（实测 1.5 万块时 countOrphanTombstones 11s）。维护循环
+// 每圈之后量一次缓存，健康页 = 「上次维护结果」，语义也正确。
+
+export interface MaintenanceHealthSnapshot {
+  tombstones: { total: number; purgeable: number; retained: number }
+  tables: Record<string, number>
+  at: string
+}
+
+let healthSnapshot: MaintenanceHealthSnapshot | null = null
+
+export function getMaintenanceHealthSnapshot(): MaintenanceHealthSnapshot | null {
+  return healthSnapshot
+}
+
+export function _resetMaintenanceHealthSnapshotForTests(): void {
+  healthSnapshot = null
+}
+
+function refreshMaintenanceHealthSnapshot(db: ReturnType<typeof getDb>): void {
+  let tombstones: MaintenanceHealthSnapshot['tombstones'] = { total: 0, purgeable: 0, retained: 0 }
+  try {
+    tombstones = countOrphanTombstones(db)
+  } catch {
+    // blocks 表异常时快照仍提供表行数
+  }
+  const tables: Record<string, number> = {}
+  for (const t of ['blocks', 'block_vectors', 'entities', 'entity_mentions', 'block_refs', 'block_revisions', 'doc_snapshots', 'assets', 'app_logs', 'client_errors']) {
+    try {
+      const row = db.query(`SELECT count(*) AS c FROM ${t}`).get() as { c: number }
+      tables[t] = row.c
+    } catch {
+      tables[t] = 0
+    }
+  }
+  healthSnapshot = { tombstones, tables, at: new Date().toISOString() }
 }
 
 /** 顶层孤儿 tombstone：超期（维护会物理删）vs 保留期内（满 30 天才清） */

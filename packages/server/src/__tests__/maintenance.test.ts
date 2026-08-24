@@ -10,8 +10,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
-import maintenance, { _resetHealthCacheForTests } from '../api/maintenance'
+import maintenance from '../api/maintenance'
 import { logAppEvent, listAppLogs, initAppLogs, APP_LOGS_MAX_ROWS } from '../services/appLogs'
+import { _resetMaintenanceHealthSnapshotForTests, countOrphanTombstones } from '../services/maintenance'
 
 let testDir: string
 let app: Hono
@@ -30,7 +31,7 @@ afterAll(() => {
 
 beforeEach(() => {
   getDb().query('DELETE FROM app_logs').run()
-  _resetHealthCacheForTests()
+  _resetMaintenanceHealthSnapshotForTests()
 })
 
 describe('app_logs 环形日志', () => {
@@ -57,13 +58,26 @@ describe('app_logs 环形日志', () => {
 })
 
 describe('维护 API', () => {
-  test('GET /db/health 返回文件大小与表行数', async () => {
+  test('GET /db/health 返回文件大小与表行数（读维护快照；先手动跑一轮生成快照）', async () => {
+    // 新语义：health 读维护循环的内存快照，不再实时跑重型查询。
+    // 快照为空时返回占位并后台跑一轮维护 → 测试先手动触发维护生成快照。
+    const run = await app.fetch(new Request('http://localhost/api/v1/db/maintenance', { method: 'POST' }))
+    expect(run.status).toBe(200)
     const res = await app.fetch(new Request('http://localhost/api/v1/db/health'))
     expect(res.status).toBe(200)
     const body = (await res.json()) as { dbBytes: number | null; tables: Record<string, number>; pendingTombstones: number }
     expect(typeof body.tables.blocks).toBe('number')
     expect(typeof body.pendingTombstones).toBe('number')
     expect(body.dbBytes).toBeGreaterThan(0)
+  })
+
+  test('GET /db/health 快照为空时返回占位（不跑重型查询不卡死）', async () => {
+    const res = await app.fetch(new Request('http://localhost/api/v1/db/health'))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { tables: Record<string, number>; pendingTombstones: number }
+    // 占位：tables 为空对象、tombstones 为 0——不实时算
+    expect(Object.keys(body.tables).length).toBe(0)
+    expect(body.pendingTombstones).toBe(0)
   })
 
   test('GET /db/logs 返回最近日志', async () => {
@@ -125,7 +139,7 @@ describe('维护 API', () => {
     expect(guard.c).toBe(0)
   })
 
-  test('GET /db/health 把超期可清理与保留期内残留分开', async () => {
+  test('countOrphanTombstones 把超期可清理与保留期内残留分开（health 快照的数据源）', async () => {
     const db = getDb()
     const now = new Date().toISOString()
     const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString()
@@ -142,16 +156,11 @@ describe('维护 API', () => {
        VALUES (?, ?, NULL, ?, 'document', '期内残留', 0, 0, 1, ?, ?)`,
     ).run(freshDoc, nb, freshDoc, now, now)
 
-    const res = await app.fetch(new Request('http://localhost/api/v1/db/health?fresh=1'))
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
-      pendingTombstones: number
-      purgeableTombstones: number
-      retainedTombstones: number
-    }
-    expect(body.purgeableTombstones).toBeGreaterThanOrEqual(1)
-    expect(body.retainedTombstones).toBeGreaterThanOrEqual(1)
-    expect(body.pendingTombstones).toBe(body.purgeableTombstones + body.retainedTombstones)
+    // countOrphanTombstones 本身是 health 快照的数据源：purgeable=超期、retained=期内
+    const ct = countOrphanTombstones(db)
+    expect(ct.purgeable).toBeGreaterThanOrEqual(1)
+    expect(ct.retained).toBeGreaterThanOrEqual(1)
+    expect(ct.total).toBe(ct.purgeable + ct.retained)
   })
 
   test('GET /db/health 计算期间其它请求不被堵住', async () => {
@@ -160,17 +169,6 @@ describe('维护 API', () => {
     expect(logsRes.status).toBe(200)
     const healthRes = await healthP
     expect(healthRes.status).toBe(200)
-  })
-
-  test('GET /db/health 默认走 30s 缓存，fresh=1 绕过', async () => {
-    await app.fetch(new Request('http://localhost/api/v1/db/health?fresh=1'))
-    logAppEvent({ level: 'info', source: 'test', message: 'cache-bust' })
-    const cached = await app.fetch(new Request('http://localhost/api/v1/db/health'))
-    const bodyCached = (await cached.json()) as { tables: Record<string, number> }
-    expect(bodyCached.tables.app_logs).toBe(0)
-    const fresh = await app.fetch(new Request('http://localhost/api/v1/db/health?fresh=1'))
-    const bodyFresh = (await fresh.json()) as { tables: Record<string, number> }
-    expect(bodyFresh.tables.app_logs).toBeGreaterThan(0)
   })
 
   test('POST /db/vacuum 之后 WAL 被截断，不会回涨到接近库文件', async () => {

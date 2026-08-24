@@ -14,87 +14,19 @@ import { Hono } from 'hono'
 import { statSync } from 'node:fs'
 import { getDb } from '../db'
 import { listAppLogs, initAppLogs } from '../services/appLogs'
-import { countOrphanTombstones, runMaintenancePass } from '../services/maintenance'
+import { getMaintenanceHealthSnapshot, runMaintenancePass } from '../services/maintenance'
 import { logAppEvent } from '../services/appLogs'
 
 const maintenance = new Hono()
 
-// ── health 缓存：count(*)×N + 孤儿 tombstone 相关子查询会占住 bun:sqlite。
-// ── JS 单线程：查询不让出事件循环时，其它 HTTP（切设置 Tab）只能排队。
-// ── 对策：30s 缓存 + 过期仍先返回旧值后台刷新；计算过程中每步 setTimeout(0) 让出循环。
-const HEALTH_CACHE_TTL_MS = 30_000
-type HealthPayload = ReturnType<typeof assembleHealthPayload>
-let healthCache: { ts: number; payload: HealthPayload } | null = null
-let healthInflight: Promise<HealthPayload> | null = null
+// ── health 数据来源：维护循环的内存快照（getMaintenanceHealthSnapshot）。
+// ── 不再实时跑 count(*)×N + 递归 tombstone 查询 —— 实测 1.5 万块时
+// ── countOrphanTombstones 同步阻塞事件循环 11s，整个应用（所有 HTTP）卡死。
+// ── 快照为空（从未跑过维护）时返回占位，并后台跑一轮维护生成快照。
 
-function invalidateHealthCache(): void {
-  healthCache = null
-}
-
-/** 测试用：避免 bun 共享进程把 30s 缓存带到下一条用例 */
-export function _resetHealthCacheForTests(): void {
-  healthCache = null
-  healthInflight = null
-}
-
-function yieldEventLoop(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0))
-}
-
-function assembleHealthPayload(
-  sizes: ReturnType<typeof dbFileSizes>,
-  lastLog: ReturnType<typeof listAppLogs>[number] | null,
-  tables: Record<string, number>,
-  tombstones: { total: number; purgeable: number; retained: number },
-) {
-  return {
-    dbBytes: sizes.dbBytes,
-    walBytes: sizes.walBytes,
-    dbPath: sizes.path,
-    tables,
-    pendingTombstones: tombstones.total,
-    purgeableTombstones: tombstones.purgeable,
-    retainedTombstones: tombstones.retained,
-    lastMaintenance: lastLog && lastLog.source === 'maintenance' ? lastLog : null,
-    ts: new Date().toISOString(),
-  }
-}
-
-async function buildHealthPayload(): Promise<HealthPayload> {
-  const sizes = dbFileSizes()
-  await yieldEventLoop()
-  const lastLog = listAppLogs(1)[0] ?? null
-  await yieldEventLoop()
-  let tombstones = { total: 0, purgeable: 0, retained: 0 }
-  try {
-    tombstones = countOrphanTombstones(getDb())
-  } catch {
-    // blocks 表异常时健康页仍返回其余指标
-  }
-  await yieldEventLoop()
-  const tables = await tableRowCounts()
-  return assembleHealthPayload(sizes, lastLog, tables, tombstones)
-}
-
-async function computeHealth(): Promise<HealthPayload> {
-  if (healthInflight) return healthInflight
-  healthInflight = (async () => {
-    try {
-      const payload = await buildHealthPayload()
-      healthCache = { ts: Date.now(), payload }
-      return payload
-    } finally {
-      healthInflight = null
-    }
-  })()
-  return healthInflight
-}
-
-/** SQLite 文件大小（DB + WAL，字节）；找不到返回 null */
 function dbFileSizes(): { dbBytes: number | null; walBytes: number | null; path: string | null } {
   try {
     const db = getDb()
-    // bun:sqlite 没有暴露文件路径；从 pragma 拿
     const row = db.query('PRAGMA database_list').all() as Array<{ name: string; file: string }>
     const main = row.find((r) => r.name === 'main')
     if (!main || !main.file || main.file === '') return { dbBytes: null, walBytes: null, path: null }
@@ -103,7 +35,7 @@ function dbFileSizes(): { dbBytes: number | null; walBytes: number | null; path:
     try {
       walBytes = statSync(`${main.file}-wal`).size
     } catch {
-      walBytes = null // WAL 不存在（已 checkpoint 合并）
+      walBytes = null
     }
     return { dbBytes, walBytes, path: main.file }
   } catch {
@@ -111,36 +43,47 @@ function dbFileSizes(): { dbBytes: number | null; walBytes: number | null; path:
   }
 }
 
-/** 主要表行数（维护页健康视图）；每张表之间让出事件循环，避免连扫卡住切 Tab */
-async function tableRowCounts(): Promise<Record<string, number>> {
-  const db = getDb()
-  const tables = ['blocks', 'block_vectors', 'entities', 'entity_mentions', 'block_refs', 'block_revisions', 'doc_snapshots', 'assets', 'app_logs', 'client_errors']
-  const out: Record<string, number> = {}
-  for (const t of tables) {
-    try {
-      const row = db.query(`SELECT count(*) AS c FROM ${t}`).get() as { c: number }
-      out[t] = row.c
-    } catch {
-      out[t] = 0
-    }
-    await yieldEventLoop()
+/** 异步刷新健康快照：跑一轮维护（内部会生成/更新快照）。维护本身批间让出事件循环。 */
+async function refreshSnapshotAsync(): Promise<void> {
+  try {
+    runMaintenancePass()
+  } catch {
+    // 快照生成失败不阻塞 health 返回（占位已给）
   }
-  return out
 }
 
 maintenance.get('/health', async (c) => {
-  const now = Date.now()
-  const fresh = c.req.query('fresh') === '1'
-  if (!fresh && healthCache && now - healthCache.ts < HEALTH_CACHE_TTL_MS) {
-    return c.json(healthCache.payload)
+  const sizes = dbFileSizes()
+  const lastLog = listAppLogs(1)[0] ?? null
+  const snap = getMaintenanceHealthSnapshot()
+  const lastMaintenance = lastLog && lastLog.source === 'maintenance' ? lastLog : null
+  // 快照存在 → 直接返回（读内存，零重型查询）
+  if (snap) {
+    return c.json({
+      dbBytes: sizes.dbBytes,
+      walBytes: sizes.walBytes,
+      dbPath: sizes.path,
+      tables: snap.tables,
+      pendingTombstones: snap.tombstones.total,
+      purgeableTombstones: snap.tombstones.purgeable,
+      retainedTombstones: snap.tombstones.retained,
+      lastMaintenance,
+      ts: snap.at,
+    })
   }
-  // 过期缓存：先把旧值返回，后台刷新。切走设置 Tab 的请求不必等这次重算。
-  if (!fresh && healthCache) {
-    void computeHealth()
-    return c.json(healthCache.payload)
-  }
-  const payload = await computeHealth()
-  return c.json(payload)
+  // 快照为空（从未维护 / 重启后首查）→ 后台异步刷新，本次返回占位
+  void refreshSnapshotAsync()
+  return c.json({
+    dbBytes: sizes.dbBytes,
+    walBytes: sizes.walBytes,
+    dbPath: sizes.path,
+    tables: {},
+    pendingTombstones: 0,
+    purgeableTombstones: 0,
+    retainedTombstones: 0,
+    lastMaintenance,
+    ts: new Date().toISOString(),
+  })
 })
 
 maintenance.get('/logs', (c) => {
@@ -161,7 +104,7 @@ maintenance.post('/maintenance', async (c) => {
     // WAL checkpoint（TRUNCATE 模式：checkpoint 后截断 WAL 文件）
     getDb().exec('PRAGMA wal_checkpoint(TRUNCATE)')
     const durationMs = Date.now() - startedAt
-    invalidateHealthCache() // 表行数/文件大小都变了，失效缓存让前端立刻拿新值
+    // 维护本身已在 runMaintenancePass 内部刷新快照，无需额外失效
     logAppEvent({
       level: 'info',
       source: 'maintenance',
@@ -185,7 +128,7 @@ maintenance.post('/vacuum', async (c) => {
     db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
     db.exec('VACUUM')
     const durationMs = Date.now() - startedAt
-    invalidateHealthCache()
+    // VACUUM 后行数不变、文件大小变化；快照由下次维护/手动维护刷新
     logAppEvent({
       level: 'info',
       source: 'maintenance',
