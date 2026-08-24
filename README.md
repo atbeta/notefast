@@ -2,7 +2,7 @@
 
 **An AI-native Markdown knowledge base — every note you write is automatically indexed, linked, and retrievable. Self-hosted, multi-platform, and your data stays in your hands.**
 
-NoteFast automatically indexes every note — full-text and semantic — links related ideas together, and makes it all retrievable through hybrid search, RAG chat with citations, and an entity graph. It's a single-user, self-hosted system built on one SQLite file, with native clients for macOS and Windows, and every capability exposed through a stable REST API and MCP server for AI agents.
+NoteFast automatically indexes every note — full-text and semantic — links related ideas together, and makes it all retrievable through hybrid search, RAG chat with citations, and an entity graph. It's a single-user, self-hosted system built on one SQLite file, with native clients for macOS and Windows. For AI agents, the full knowledge domain — block read/write, search, chat, entities, sharing — is exposed through a stable REST API and MCP server; instance administration (backup, sync, tokens, maintenance) stays REST-only.
 
 ## Quick Start
 
@@ -40,9 +40,9 @@ bun --filter @notefast/web dev        # Web UI on :5173
 ## Why NoteFast
 
 - **Your data, one file.** Everything lives in a single SQLite database under `data/` — no external database, no vendor lock-in. Vectors are a rebuildable secondary index, not a separate store.
-- **AI is a first-class citizen.** Retrieval, chat, auto-linking, and writing assistance are built into the core and exposed via MCP — external agents (Claude Desktop, Cursor, …) get the same capabilities as the built-in UI.
+- **AI is a first-class citizen.** Retrieval, chat, auto-linking, and writing assistance are built into the core and exposed via MCP — external agents (Claude Desktop, Cursor, …) get the same knowledge-domain capabilities as the built-in UI. AI calls made over MCP bill against your own configured provider key.
 - **Real writing experience.** A CodeMirror-based hybrid editor (Typora-lite) with image/table/LaTeX previews, Mermaid rendering, ghost-text continuation, and selection-level AI rewrite.
-- **Open by contract.** Every capability is API-first; portable Markdown export with frontmatter, and verified backup/restore paths.
+- **Open by contract.** Capabilities land in the API/MCP layer first, UI second; portable Markdown export with frontmatter, and verified backup/restore paths.
 
 ## Features
 
@@ -89,7 +89,7 @@ External AI agents connect to NoteFast over MCP:
 }
 ```
 
-Tools cover the full surface: `notefast_search` / `notefast_semantic_search`, `notefast_get_doc`, `notefast_create_doc` / `notefast_update_block`, `notefast_stage_markdown` + `notefast_create_doc_from_file` for large imports, `notefast_share_doc`, `notefast_restore_block`, `notefast_chat`, and more.
+Tools cover the knowledge-domain surface: `notefast_search` / `notefast_semantic_search`, `notefast_get_doc`, `notefast_create_doc` / `notefast_update_block` / `notefast_delete_block` / `notefast_move_block`, `notefast_stage_markdown` + `notefast_create_doc_from_file` for large imports, `notefast_create_ref` / `notefast_delete_ref` for explicit linking, `notefast_share_doc`, `notefast_restore_block`, `notefast_chat`, and more. Read-only tokens (an api-token without the `write` scope, or `READ_TOKEN` in split mode) can call read tools only; write tools return a `forbidden` tool error.
 
 ## Keyboard Shortcuts
 
