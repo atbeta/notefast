@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.76.6](https://github.com/atbeta/notefast/compare/v0.76.5...v0.76.6) (2026-08-24)
+
+
+### Bug Fixes
+
+* **server:** allow saving an emptied document ([9f13941](https://github.com/atbeta/notefast/commit/9f13941c47dc2b2c16e4b328dad21b7f1e20ab06))
+* **web:** disable autofill history on bare-mounted inputs too ([2dae50b](https://github.com/atbeta/notefast/commit/2dae50be149d6ecaa340b5ded73a330de9d666f1))
+* **web:** render soft line breaks in reading view ([31a903b](https://github.com/atbeta/notefast/commit/31a903ba115a57be6e85debc9edc49c237ad4d8f))
+
 ## [0.76.5](https://github.com/atbeta/notefast/compare/v0.76.4...v0.76.5) (2026-08-24)
 
 

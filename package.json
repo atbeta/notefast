@@ -1,6 +1,6 @@
 {
   "name": "notefast",
-  "version": "0.76.5",
+  "version": "0.76.6",
   "private": true,
   "workspaces": [
     "packages/core",
