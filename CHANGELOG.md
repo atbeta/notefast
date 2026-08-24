@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.76.7](https://github.com/atbeta/notefast/compare/v0.76.6...v0.76.7) (2026-08-24)
+
+
+### Bug Fixes
+
+* **core:** preserve soft line breaks in paragraph blocks ([69fffdd](https://github.com/atbeta/notefast/commit/69fffddd6fcfe4874b29a458a61ff9841ef08347))
+* **web:** drop native datalist from AI provider model fields ([87c6462](https://github.com/atbeta/notefast/commit/87c6462a5360501bfa1cf94b224476459931614c))
+
 ## [0.76.6](https://github.com/atbeta/notefast/compare/v0.76.5...v0.76.6) (2026-08-24)
 
 
