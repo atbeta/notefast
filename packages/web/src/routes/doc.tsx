@@ -825,6 +825,12 @@ useEffect(() => {
           <div>
             <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-8 pb-32">
             <DocFindBar rootRef={articleRef} docId={id} />
+            {/* 提示条（索引进度 / 草稿 / 收集箱 / 归档）与阅读列同宽，跟随「加宽正文」档位；
+                不参与 demo-zoom——演示缩放只放正文，提示条是 UI chrome */}
+            <div
+              className="mx-auto max-w-[var(--reading-max-w)]"
+              style={{ '--reading-max-w': `${readingMaxW}rem` } as CSSProperties}
+            >
             {indexJob && (indexJob.state === 'pending' || indexJob.state === 'running') && (
               <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                 <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" strokeWidth={1.75} />
@@ -892,7 +898,8 @@ useEffect(() => {
                 </Link>
               </div>
             )}
-            {/* 阅读列：标题/meta/tags/正文 走 --reading-max-w；状态横幅保留在外层 max-w-4xl。
+            </div>
+            {/* 阅读列：标题/meta/tags/正文 走 --reading-max-w。
                 demo-zoom：缩放档位整体等比放大（阅读/演示通用；仅编辑态不缩放）。
                 readingWidth 两档：normal=46rem（最佳行宽）/ wide=64rem（图表友好） */}
             <div
