@@ -1,6 +1,6 @@
 {
   "name": "@notefast/tauri-client",
-  "version": "0.76.2",
+  "version": "0.76.3",
   "private": true,
   "scripts": {
     "dev": "tauri dev",
