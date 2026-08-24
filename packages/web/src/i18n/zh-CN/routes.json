@@ -80,7 +80,7 @@
     "untitledPlaceholder": "无标题文档",
     "markdownLabel": "Markdown 内容",
     "optional": "可选",
-    "markdownPlaceholder": "# 从这里开始写\n\n支持 **粗体**、代码块与 [[双向链接]]\n\n保存时这些链接会解析为 block 节点",
+    "markdownPlaceholder": "# 从这里开始写\n\n支持 **粗体**、代码块、Mermaid 图与行内公式",
     "tagsLabel": "标签",
     "createFailed": "创建失败",
     "creating": "创建中…",

@@ -80,7 +80,7 @@
     "untitledPlaceholder": "Untitled document",
     "markdownLabel": "Markdown content",
     "optional": "optional",
-    "markdownPlaceholder": "# Start writing here\n\nSupports **bold**, code blocks and [[wiki-links]]\n\nThese links are resolved into block nodes on save",
+    "markdownPlaceholder": "# Start writing here\n\nSupports **bold**, code blocks, Mermaid diagrams and inline math",
     "tagsLabel": "Tags",
     "createFailed": "Failed to create",
     "creating": "Creating…",
