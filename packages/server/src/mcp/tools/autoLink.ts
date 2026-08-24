@@ -25,6 +25,7 @@ export function registerAutoLinkTools(ctx: ToolContext): void {
   registerTool(
     'notefast_autolink_run',
     {
+      annotations: { readOnlyHint: false, destructiveHint: false },
       description: '立即对单个 block 执行 AI 建链分析（抽取实体锚点 + 语义命中候选）；满足高置信阈值即直接建立引用（block_refs，ref_type=ai_auto），无需人工审核。',
       inputSchema: {
         block_id: z.string().describe('Block ID'),

@@ -1,10 +1,11 @@
 /**
  * MCP 工具 —— 文档写入与列表组
  *
- * notefast_create_block / update_block / create_doc /
- * stage_markdown / create_doc_from_file /
+ * notefast_create_block / update_block / move_block / delete_block /
+ * create_doc / stage_markdown / create_doc_from_file /
  * list_docs / list_tags / set_doc_tags /
- * delete_doc（软删除，回收站可恢复）/ restore_block / list_deleted。
+ * delete_doc（软删除，回收站可恢复）/ restore_block / list_deleted /
+ * create_ref / delete_ref（block_refs 显式建链 / by-pair 解链）。
  */
 
 import { z } from 'zod'
@@ -29,6 +30,7 @@ import {
   stageMarkdownChunk,
 } from '../../services/markdownStage'
 import {
+  blockExists,
   fetchRestorableSubtreeIds,
   fetchSubtreeBlocks,
   getBlockAnchor,
@@ -36,21 +38,25 @@ import {
   getBlocksByIds,
   getDeletedBlockById,
   getDocById,
+  getLiveBlockById,
   getLiveDocById,
   insertBlock,
   listDocRows,
   listRecentlyDeletedBlocks,
+  moveBlock,
   msToSqliteTime,
   nowTimestamp,
+  reRootDescendants,
   restoreBlocks,
+  shiftDescendantLevels,
   softDeleteBlocks,
   updateBlock,
 } from '../../store/blocks'
-import { deleteRefsTouchingBlocks } from '../../store/refs'
+import { deleteRefByPair, deleteRefsTouchingBlocks, findRefByPair, insertRef } from '../../store/refs'
 import { deleteMentionsTouchingBlocks } from '../../store/entities'
 import { deleteSharesByDocIds } from '../../store/shares'
-import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate, fireAfterDeleteMany, fireDocAfterDelete } from '../../services/hooks'
-import { deleteVectorMany } from '../../ai/indexer'
+import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate, fireAfterDelete, fireAfterDeleteMany, fireDocAfterDelete } from '../../services/hooks'
+import { deleteVector, deleteVectorMany } from '../../ai/indexer'
 import { scheduleDocIndex } from '../../ai/indexJobs'
 import { reanalyzeDoc } from '../../ai/autoLink'
 import { emitAppEvent } from '../../events'
@@ -72,6 +78,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
   registerTool(
     'notefast_create_block',
     {
+      annotations: { readOnlyHint: false, destructiveHint: false },
       description: '创建新 block',
       inputSchema: {
         notebook_id: z.string().optional().describe('笔记本 ID，默认使用默认笔记本'),
@@ -129,6 +136,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
   registerTool(
     'notefast_update_block',
     {
+      annotations: { readOnlyHint: false, destructiveHint: false },
       description: '更新 block 内容',
       inputSchema: {
         block_id: z.string().describe('Block ID'),
@@ -154,8 +162,124 @@ export function registerDocWriteTools(ctx: ToolContext): void {
   )
 
   registerTool(
+    'notefast_move_block',
+    {
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      description: '移动 block（换父 / 调整同级排序）；后代块的 level 与 root_id 自动跟随',
+      inputSchema: {
+        block_id: z.string().describe('要移动的 block ID'),
+        new_parent_id: z.string().nullable().describe('新父块 ID；null 表示移为顶层块'),
+        new_sort: z.number().int().optional().describe('同级排序值；缺省保持原值'),
+      },
+    },
+    async ({ block_id, new_parent_id, new_sort }) => {
+      const denied = denyAiExcludedBlock(block_id)
+      if (denied) return denied
+      // 目标父块属于 ai_exclude 文档时同样拒绝（不能往 AI 不可见的文档里塞内容）
+      if (new_parent_id) {
+        const deniedParent = denyAiExcludedBlock(new_parent_id)
+        if (deniedParent) return deniedParent
+      }
+
+      // 与 PATCH /blocks/:id/move 同一语义
+      const existing = getBlockById(db, block_id)
+      if (!existing) {
+        return toolError('not_found', `Block ${block_id} 不存在`, { block_id })
+      }
+
+      let newRootId: string
+      let newLevel: number
+
+      if (new_parent_id) {
+        const parent = getBlockAnchor(db, new_parent_id)
+        if (!parent) {
+          return toolError('not_found', `目标父块 ${new_parent_id} 不存在`, { parent_id: new_parent_id })
+        }
+        newRootId = parent.root_id
+        newLevel = parent.level + 1
+      } else {
+        newRootId = block_id
+        newLevel = 0
+      }
+
+      const levelDiff = newLevel - existing.level
+      const rootChanged = newRootId !== existing.root_id
+
+      moveBlock(db, block_id, {
+        parentId: new_parent_id,
+        rootId: newRootId,
+        levelDiff,
+        sort: new_sort ?? existing.sort,
+      })
+
+      // level 与 root_id 传播相互独立：跨文档同层移动时 levelDiff 为 0，但后代 root_id 仍须跟随
+      if (levelDiff !== 0 || rootChanged) {
+        db.transaction(() => {
+          const descendantIds = fetchSubtreeBlocks(db, block_id).map((r) => r.id)
+          if (levelDiff !== 0) {
+            shiftDescendantLevels(db, descendantIds, levelDiff)
+          }
+          if (rootChanged) {
+            reRootDescendants(db, descendantIds, newRootId)
+          }
+        })()
+      }
+
+      const row = getBlockById(db, block_id)!
+      fireAfterUpdate(rowToBlock(row))
+      scheduleSyncNow()
+      return { content: [toText({ block: rowToBlock(row) })] }
+    },
+  )
+
+  registerTool(
+    'notefast_delete_block',
+    {
+      annotations: { readOnlyHint: false, destructiveHint: true },
+      description:
+        '软删除单个 block 及其子树（可从回收站经 notefast_restore_block 恢复）。删除整篇文档请改用 notefast_delete_doc',
+      inputSchema: {
+        block_id: z.string().describe('要删除的 block ID（文档根块请用 notefast_delete_doc）'),
+      },
+    },
+    async ({ block_id }) => {
+      const denied = denyAiExcludedBlock(block_id)
+      if (denied) return denied
+
+      const existing = getLiveBlockById(db, block_id)
+      if (!existing) {
+        return toolError('not_found', `Block ${block_id} 不存在`, { block_id })
+      }
+      // 文档根块走 notefast_delete_doc（含分享切断、整篇向量清理等文档级副作用）
+      if (existing.type === 'document') {
+        return toolError(
+          'invalid_params',
+          `Block ${block_id} 是文档根块，请改用 notefast_delete_doc 删除整篇文档`,
+          { block_id, hint_tool: 'notefast_delete_doc' },
+        )
+      }
+
+      // 与 DELETE /blocks/:id 同一事务语义：refs/mentions 级联清理 + 软删除
+      const childIds = fetchSubtreeBlocks(db, block_id)
+      const allIds = [block_id, ...childIds.map((r) => r.id)]
+      db.transaction(() => {
+        deleteRefsTouchingBlocks(db, allIds)
+        deleteMentionsTouchingBlocks(db, allIds)
+        softDeleteBlocks(db, allIds)
+      })()
+
+      void deleteVector(block_id)
+      fireAfterDelete(block_id)
+      scheduleSyncNow()
+
+      return { content: [toText({ deleted: true, block_id, count: allIds.length })] }
+    },
+  )
+
+  registerTool(
     'notefast_create_doc',
     {
+      annotations: { readOnlyHint: false, destructiveHint: false },
       description:
         '从短 Markdown 字符串创建文档（适合几段以内）。长文/本地文件请用 notefast_stage_markdown + notefast_create_doc_from_file，避免正文经模型转写导致换行丢失。',
       inputSchema: {
@@ -203,6 +327,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
   registerTool(
     'notefast_stage_markdown',
     {
+      annotations: { readOnlyHint: false, destructiveHint: false },
       description:
         '分块上传 Markdown 正文到服务端暂存（大文件建档用）。返回 upload_id；继续追加时传入同一 upload_id。单次 chunk 建议 ≤64KiB。完成后调用 notefast_create_doc_from_file(upload_id=...)。',
       inputSchema: {
@@ -233,6 +358,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
   registerTool(
     'notefast_create_doc_from_file',
     {
+      annotations: { readOnlyHint: false, destructiveHint: false },
       description:
         '从文件正文创建文档：传 content（小文件一次上传）或 upload_id（先 stage_markdown 分块）。服务端按 Markdown 解析为多 block；会规范化换行并尽量修复字面量 \\n 损坏。长文请走 upload_id，勿用 create_doc。',
       inputSchema: {
@@ -289,6 +415,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
   registerTool(
     'notefast_list_docs',
     {
+      annotations: { readOnlyHint: true },
       description: '列出文档列表（默认排除「对 AI 隐藏」、收集箱与归档；status=inbox/archived 可列对应集合）',
       inputSchema: {
         notebook_id: z.string().optional().describe('笔记本 ID，默认使用默认笔记本'),
@@ -338,6 +465,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
   registerTool(
     'notefast_list_tags',
     {
+      annotations: { readOnlyHint: true },
       description: '列出知识库中使用过的标签及文档计数',
       inputSchema: {
         notebook_id: z.string().optional().describe('限定笔记本 ID'),
@@ -366,6 +494,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
   registerTool(
     'notefast_set_doc_tags',
     {
+      annotations: { readOnlyHint: false, destructiveHint: false },
       description: '设置文档标签（全量替换）',
       inputSchema: {
         doc_id: z.string().describe('文档 ID'),
@@ -393,6 +522,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
   registerTool(
     'notefast_delete_doc',
     {
+      annotations: { readOnlyHint: false, destructiveHint: true },
       description:
         '删除文档（软删除，整篇含全部子块）。可从回收站恢复（notefast_restore_block / Web 回收站），但分享旧链接永久失效、实体提及需重抽。仅在确需删除时使用，勿用于日常整理',
       inputSchema: {
@@ -440,6 +570,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
   registerTool(
     'notefast_restore_block',
     {
+      annotations: { readOnlyHint: false, destructiveHint: false },
       description: '恢复已软删除的 block 及其子树',
       inputSchema: {
         block_id: z.string().describe('要恢复的 block ID（is_deleted=1 的行）'),
@@ -468,6 +599,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
   registerTool(
     'notefast_list_deleted',
     {
+      annotations: { readOnlyHint: true },
       description: '列出最近软删除的 blocks',
       inputSchema: {
         within: z.enum(['7d', '30d']).optional().describe('时间窗口，默认 30d'),
@@ -493,6 +625,76 @@ export function registerDocWriteTools(ctx: ToolContext): void {
           })),
         })],
       }
+    },
+  )
+
+  registerTool(
+    'notefast_create_ref',
+    {
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      description:
+        '在两个 block 之间显式建立引用（ref_type 固定为 link，不暴露其他取值）。同一对重复调用幂等返回 already_exists，不重复插入',
+      inputSchema: {
+        source_id: z.string().min(1).max(200).describe('引用发起方 block ID'),
+        target_id: z.string().min(1).max(200).describe('被引用的目标 block ID'),
+      },
+    },
+    async ({ source_id, target_id }) => {
+      if (source_id === target_id) {
+        return toolError('invalid_params', 'source_id 与 target_id 不能相同（不支持自引用）', { source_id, target_id })
+      }
+      const deniedSource = denyAiExcludedBlock(source_id)
+      if (deniedSource) return deniedSource
+      const deniedTarget = denyAiExcludedBlock(target_id)
+      if (deniedTarget) return deniedTarget
+
+      // 与 POST /refs 对齐：存在性含软删除行（blockExists 保持既有语义）
+      if (!blockExists(db, source_id)) {
+        return toolError('not_found', `源块 ${source_id} 不存在`, { source_id })
+      }
+      if (!blockExists(db, target_id)) {
+        return toolError('not_found', `目标块 ${target_id} 不存在`, { target_id })
+      }
+
+      // 同对已存在 → 幂等成功（REST 返回 200 + message，这里用 already_exists 标记）
+      if (findRefByPair(db, source_id, target_id)) {
+        return { content: [toText({ created: false, already_exists: true, source_id, target_id, ref_type: 'link' })] }
+      }
+
+      insertRef(db, { sourceId: source_id, targetId: target_id, refType: 'link' })
+      return { content: [toText({ created: true, source_id, target_id, ref_type: 'link' })] }
+    },
+  )
+
+  registerTool(
+    'notefast_delete_ref',
+    {
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      description: '按 (source_id, target_id) 对解除 block 之间的引用（不限 ref_type）；该对不存在时报 not_found',
+      inputSchema: {
+        source_id: z.string().min(1).max(200).describe('引用发起方 block ID'),
+        target_id: z.string().min(1).max(200).describe('被引用的目标 block ID'),
+      },
+    },
+    async ({ source_id, target_id }) => {
+      const deniedSource = denyAiExcludedBlock(source_id)
+      if (deniedSource) return deniedSource
+      const deniedTarget = denyAiExcludedBlock(target_id)
+      if (deniedTarget) return deniedTarget
+
+      if (!blockExists(db, source_id)) {
+        return toolError('not_found', `源块 ${source_id} 不存在`, { source_id })
+      }
+      if (!blockExists(db, target_id)) {
+        return toolError('not_found', `目标块 ${target_id} 不存在`, { target_id })
+      }
+
+      // by-pair 删除（对齐 DELETE /auto-link/refs）；删除 0 行 → not_found（调用方无法区分「没有这条链」和「id 错了」之外的第三种歧义，直接报错）
+      const changed = deleteRefByPair(db, source_id, target_id)
+      if (changed === 0) {
+        return toolError('not_found', `未找到 ${source_id} → ${target_id} 的引用关系`, { source_id, target_id })
+      }
+      return { content: [toText({ deleted: true, count: changed, source_id, target_id })] }
     },
   )
 }

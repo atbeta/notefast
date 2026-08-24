@@ -325,3 +325,106 @@ describe('scoped token 的 write scope 强制', () => {
     expect(res.status).toBe(200)
   })
 })
+
+describe('/mcp 路径的 scope 推导（按凭证角色，不按 HTTP 方法一刀切）', () => {
+  // MCP 工具调用全是 POST：按方法拆分会让只读 token 连 search 都 403。
+  // /mcp 改为推导 scopes 放行进会话，写工具门禁下沉到工具层。
+  // 非 /mcp 路径行为必须保持不变（回归对照）。
+
+  function createMcpApp() {
+    const app = new Hono()
+    app.all('/mcp', authMiddleware, (c) => c.json({ scopes: c.get('authScopes') ?? null }))
+    app.all('/api/v1/test', authMiddleware, (c) => c.json({ scopes: c.get('authScopes') ?? null }))
+    return app
+  }
+
+  function post(app: Hono, path: string, token?: string) {
+    return app.fetch(new Request(`http://localhost${path}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }))
+  }
+
+  test('READ_TOKEN → read；WRITE_TOKEN → admin（POST 均不再 403）', async () => {
+    process.env.API_TOKEN = ''
+    process.env.AUTH_PASSWORD = ''
+    process.env.READ_TOKEN = 'mcp-read'
+    process.env.WRITE_TOKEN = 'mcp-write'
+
+    const app = createMcpApp()
+
+    const ro = await post(app, '/mcp', 'mcp-read')
+    expect(ro.status).toBe(200)
+    expect(((await ro.json()) as { scopes: string[] }).scopes).toEqual(['read'])
+
+    const rw = await post(app, '/mcp', 'mcp-write')
+    expect(rw.status).toBe(200)
+    expect(((await rw.json()) as { scopes: string[] }).scopes).toEqual(['admin'])
+
+    // 无凭证仍 401
+    const anon = await post(app, '/mcp')
+    expect(anon.status).toBe(401)
+
+    // 回归：非 /mcp 路径仍按方法拆分（READ_TOKEN 不能写）
+    const apiWrite = await post(app, '/api/v1/test', 'mcp-read')
+    expect(apiWrite.status).toBe(401)
+  })
+
+  test('仅 API_TOKEN（未设 WRITE_TOKEN）→ admin', async () => {
+    process.env.API_TOKEN = 'mcp-full'
+    process.env.AUTH_PASSWORD = ''
+    process.env.READ_TOKEN = ''
+    process.env.WRITE_TOKEN = ''
+
+    const app = createMcpApp()
+    const res = await post(app, '/mcp', 'mcp-full')
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { scopes: string[] }).scopes).toEqual(['admin'])
+  })
+
+  test('同时设 WRITE_TOKEN + API_TOKEN（收窄场景）→ API_TOKEN 在 /mcp 得 read', async () => {
+    process.env.API_TOKEN = 'mcp-legacy'
+    process.env.AUTH_PASSWORD = ''
+    process.env.READ_TOKEN = ''
+    process.env.WRITE_TOKEN = 'mcp-write'
+
+    const app = createMcpApp()
+    const res = await post(app, '/mcp', 'mcp-legacy')
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { scopes: string[] }).scopes).toEqual(['read'])
+
+    // 回归：同一 token 在非 /mcp 的写操作仍被拒（收窄语义不变）
+    const apiWrite = await post(app, '/api/v1/test', 'mcp-legacy')
+    expect(apiWrite.status).toBe(401)
+  })
+
+  test('api_tokens 表 read-only token：POST /mcp 放行且保留记录 scopes；非 /mcp 写仍 403（回归）', async () => {
+    process.env.API_TOKEN = ''
+    process.env.AUTH_PASSWORD = 'scoped-pw'
+    process.env.READ_TOKEN = ''
+    process.env.WRITE_TOKEN = ''
+
+    const { plain } = createToken('ro-mcp-client', ['read'])
+    const app = createMcpApp()
+
+    const mcp = await post(app, '/mcp', plain)
+    expect(mcp.status).toBe(200)
+    expect(((await mcp.json()) as { scopes: string[] }).scopes).toEqual(['read'])
+
+    const apiWrite = await post(app, '/api/v1/test', plain)
+    expect(apiWrite.status).toBe(403)
+  })
+
+  test('api_tokens 表 read+write token：POST /mcp 透传记录 scopes', async () => {
+    process.env.API_TOKEN = ''
+    process.env.AUTH_PASSWORD = 'scoped-pw'
+    process.env.READ_TOKEN = ''
+    process.env.WRITE_TOKEN = ''
+
+    const { plain } = createToken('rw-mcp-client', ['read', 'write'])
+    const app = createMcpApp()
+    const mcp = await post(app, '/mcp', plain)
+    expect(mcp.status).toBe(200)
+    expect(((await mcp.json()) as { scopes: string[] }).scopes).toEqual(['read', 'write'])
+  })
+})

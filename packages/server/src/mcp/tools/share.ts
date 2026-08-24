@@ -57,6 +57,7 @@ export function registerShareTools(ctx: ToolContext): void {
   registerTool(
     'notefast_share_doc',
     {
+      annotations: { readOnlyHint: false, destructiveHint: false },
       description:
         '开启文档的公开只读分享链接（幂等：已开启则返回现有链接）。任何拿到链接的人无需登录即可阅读全文，请确认用户确实要公开这篇文档。关闭用 notefast_unshare_doc',
       inputSchema: {
@@ -102,6 +103,7 @@ export function registerShareTools(ctx: ToolContext): void {
   registerTool(
     'notefast_get_share',
     {
+      annotations: { readOnlyHint: true },
       description: '查询文档的公开分享状态；未开启返回 shared: false',
       inputSchema: {
         doc_id: z.string().min(1).describe('文档 ID'),
@@ -119,6 +121,7 @@ export function registerShareTools(ctx: ToolContext): void {
   registerTool(
     'notefast_unshare_doc',
     {
+      annotations: { readOnlyHint: false, destructiveHint: false },
       description:
         '关闭文档的公开分享（幂等）。旧链接立即失效；重新开启会生成全新链接，旧链接不可恢复',
       inputSchema: {

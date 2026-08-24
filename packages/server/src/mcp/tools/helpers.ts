@@ -159,30 +159,44 @@ export function withToolLogging<A, R>(name: string, handler: (args: A) => Promis
 /** 已包日志的 registerTool（与原 tools.ts 内联包装一致） */
 export type RegisterToolFn = McpServer['registerTool']
 
-/** 统一在注册处包一层日志，避免逐个 handler 手动包裹 */
-export function createRegisterTool(server: McpServer, collect = true): RegisterToolFn {
+/**
+ * 统一在注册处包一层日志 + 只读 scope 门禁，避免逐个 handler 手动包裹。
+ * 门禁：工具 config 带 annotations.readOnlyHint=true 视为只读；非只读工具
+ * 且会话 scopes 既不含 'write' 也不含 'admin' → 直接返回 forbidden，
+ * 不触达原 handler（MCP 全是 POST，无法靠 HTTP 方法区分读写，只能在这里按
+ * 工具的语义标注判定）。
+ */
+export function createRegisterTool(server: McpServer, collect = true, scopes: string[] = ['admin']): RegisterToolFn {
+  const canWrite = scopes.includes('write') || scopes.includes('admin')
   return ((name: string, config: unknown, handler: (args: never) => Promise<unknown>) => {
-    const desc = typeof config === 'object' && config !== null && 'description' in config
-      ? String((config as { description: unknown }).description)
+    const cfg = config as { description?: unknown; annotations?: { readOnlyHint?: boolean } } | null
+    const desc = typeof cfg === 'object' && cfg !== null && 'description' in cfg
+      ? String(cfg.description)
       : ''
-    if (collect) mcpToolRegistry.push({ name, description: desc })
-    return server.registerTool(name, config as never, withToolLogging(name, handler) as never)
+    const readOnly = cfg?.annotations?.readOnlyHint === true
+    if (collect) mcpToolRegistry.push({ name, description: desc, readOnly })
+    const effectiveHandler = (!readOnly && !canWrite)
+      ? ((async () => toolError('forbidden', '该 Token 为只读，无法调用写工具', { tool: name })) as typeof handler)
+      : handler
+    return server.registerTool(name, config as never, withToolLogging(name, effectiveHandler) as never)
   }) as RegisterToolFn
 }
 
 /** MCP 工具注册表：注册时收集（供 GET /api/v1/mcp/tools 展示，设置页「MCP 能力清单」用） */
-export const mcpToolRegistry: Array<{ name: string; description: string }> = []
+export const mcpToolRegistry: Array<{ name: string; description: string; readOnly: boolean }> = []
 
 /** 清空注册表（registerMcpTools 开头调用，保证重复初始化不叠加） */
 export function resetMcpToolRegistry(): void {
   mcpToolRegistry.length = 0
 }
 
-/** 工具组注册上下文：server + db + 默认 notebook + 包日志的 registerTool */
+/** 工具组注册上下文：server + db + 默认 notebook + 会话 scopes + 包日志的 registerTool */
 export interface ToolContext {
   server: McpServer
   db: Db
   notebookId: string
+  /** 会话创建者的 authScopes；写工具门禁在 createRegisterTool 统一判定 */
+  scopes: string[]
   registerTool: RegisterToolFn
 }
 

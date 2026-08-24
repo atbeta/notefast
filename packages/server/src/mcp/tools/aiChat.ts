@@ -31,6 +31,7 @@ export function registerAiChatTools(ctx: ToolContext): void {
   registerTool(
     'notefast_semantic_search',
     {
+      annotations: { readOnlyHint: true },
       description: '语义搜索知识库（需配置 AI Provider），用自然语言查找最相关的 block',
       inputSchema: {
         query: z.string().min(1).max(1000).describe('自然语言查询，如 "关于 React 性能优化我写过什么"'),
@@ -59,6 +60,7 @@ export function registerAiChatTools(ctx: ToolContext): void {
   registerTool(
     'notefast_suggest_title',
     {
+      annotations: { readOnlyHint: true },
       description: '根据笔记内容 AI 生成标题和摘要',
       inputSchema: {
         content: z.string().describe('笔记正文内容'),
@@ -85,6 +87,7 @@ export function registerAiChatTools(ctx: ToolContext): void {
   registerTool(
     'notefast_chat',
     {
+      annotations: { readOnlyHint: false, destructiveHint: false },
       description:
         '与用户知识库对话：FTS5 + 语义检索 + 可选 reranker，再交给 LLM 生成带 [n] 引用的回答。LLM 可在 agent loop 中调用 notefast_search_more 重新检索（最多 3 轮）。返回完整 answer、citations 列表、retrieval 统计和 tool 轨迹。',
       inputSchema: {
@@ -172,8 +175,9 @@ export function registerAiChatTools(ctx: ToolContext): void {
   registerTool(
     'notefast_get_config',
     {
+      annotations: { readOnlyHint: true },
       description:
-        '获取服务端当前 AI / 鉴权配置概况（脱敏）。包含 chat、embedding、reranker 的模型名和 provider 标签，以及是否启用读写分离 token、密码鉴权等。不包含 API Key。',
+        '获取服务端当前 AI / 鉴权配置概况（脱敏）。包含 chat、embedding、reranker 的模型名和 provider 标签、是否启用读写分离 token/密码鉴权，以及 usage 调用计数（embedding/chat/rerank 调用与错误数）。不包含 API Key。',
       inputSchema: {},
     },
     async () => {
@@ -204,6 +208,8 @@ export function registerAiChatTools(ctx: ToolContext): void {
               }
             : null,
           auth: mode,
+          // 调用计数透传：MCP 面没有 /ai/status，agent 据此感知自用成本
+          usage: s.usage,
         })],
       }
     },

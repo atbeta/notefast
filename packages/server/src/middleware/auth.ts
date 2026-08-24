@@ -109,12 +109,45 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
   //   没有任何 token 设过 → 鉴权不启用
   //   注意：同时设 WRITE_TOKEN + API_TOKEN 时，API_TOKEN 不再拥有写权限
   //         （这是有意行为：切到 split 模式后旧的全能 token 必须收窄）
+  //
+  //   特例 /mcp：MCP 工具调用全是 POST，按 HTTP 方法拆权限会让只读 token
+  //   连 notefast_search 都 403。因此 /mcp 不按方法一刀切，改按凭证角色
+  //   推导 scopes，写工具的门禁下沉到工具层（mcp/tools/helpers.ts）：
+  //     命中 WRITE_TOKEN                       → ['admin']
+  //     命中 API_TOKEN，未设 WRITE_TOKEN        → ['admin']
+  //     命中 API_TOKEN，已设 WRITE_TOKEN（收窄）→ ['read']
+  //     命中 READ_TOKEN                        → ['read']
+  //   非 /mcp 路径行为不变。
+  const isMcp = c.req.path === '/mcp'
   const isWrite = c.req.method === 'POST' || c.req.method === 'PATCH' || c.req.method === 'PUT' || c.req.method === 'DELETE'
+
+  if (isMcp && (apiToken.length > 0 || readToken.length > 0 || writeToken.length > 0)) {
+    const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i)
+    if (bearerMatch) {
+      const provided = bearerMatch[1]!
+      if (writeToken.length > 0 && safeEquals(provided, writeToken)) {
+        c.set('authScopes', ['admin'])
+        await next()
+        return
+      }
+      if (apiToken.length > 0 && safeEquals(provided, apiToken)) {
+        c.set('authScopes', writeToken.length > 0 ? ['read'] : ['admin'])
+        await next()
+        return
+      }
+      if (readToken.length > 0 && safeEquals(provided, readToken)) {
+        c.set('authScopes', ['read'])
+        await next()
+        return
+      }
+    }
+  }
+
   const effectiveToken = isWrite
     ? (writeToken || apiToken)
     : (readToken || apiToken)
 
-  if (effectiveToken.length > 0) {
+  if (!isMcp && effectiveToken.length > 0) {
     const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i)
     if (bearerMatch && safeEquals(bearerMatch[1]!, effectiveToken)) {
       c.set('authScopes', ['admin'])
@@ -140,8 +173,10 @@ export const authMiddleware: MiddlewareHandler = async (c: Context, next: Next) 
           // write scope 强制：api_tokens 表签发的 token 按 scopes 收窄写操作
           // （此前仅 /api-tokens 管理端点查 scope，read-only token 也能写全库）。
           // admin（web-session）与显式 write 放行；env API_TOKEN / api.key / 免鉴权 /
-          // trustedLocal 均在上方分支以 admin 直通，不受此检查影响
-          if (isWrite && !requireScope(c, 'write')) {
+          // trustedLocal 均在上方分支以 admin 直通，不受此检查影响。
+          // /mcp 例外：MCP 全是 POST，写权限由工具层按 annotations.readOnlyHint 门禁，
+          // 这里放行进会话（session 绑定此处推导的 scopes）。
+          if (isWrite && !isMcp && !requireScope(c, 'write')) {
             return c.json({ error: 'forbidden', message: '该 Token 为只读（scopes 缺少 write），无法执行写操作' }, 403)
           }
           // fire-and-forget 更新 last_used_at

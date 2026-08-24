@@ -27,6 +27,7 @@ export function registerEntityTools(ctx: ToolContext): void {
   registerTool(
     'notefast_search_entities',
     {
+      annotations: { readOnlyHint: true },
       description: '搜索实体（概念/人物/工具/文档），返回提及次数与一句话描述。实体是知识库自动维护的主题索引',
       inputSchema: {
         query: z.string().min(1).max(200).describe('实体名关键词'),
@@ -60,6 +61,7 @@ export function registerEntityTools(ctx: ToolContext): void {
   registerTool(
     'notefast_get_entity_notes',
     {
+      annotations: { readOnlyHint: true },
       description: '获取提及某实体的笔记列表（按文档去重，含引用片段）。实体 ID 来自 notefast_search_entities',
       inputSchema: {
         entity_id: z.string().min(1).describe('实体 ID'),

@@ -9,11 +9,17 @@ const MAX_SESSIONS = 1000 // 防止 OOM DoS
 interface SessionEntry {
   transport: WebStandardStreamableHTTPServerTransport
   createdAt: number
+  /**
+   * 会话绑定创建者的 authScopes（如 ['read'] / ['admin']），写工具门禁按此判定。
+   * 语义：scopes 在会话建立时快照，30 分钟 TTL 内不随 token 撤销/改权变化
+   * （token 失效只影响新会话；要立刻收权需重启服务清会话）。
+   */
+  scopes: string[]
 }
 
 const sessions = new Map<string, SessionEntry>()
 
-export async function createSession(notebookId: string): Promise<{
+export async function createSession(notebookId: string, scopes: string[] = ['admin']): Promise<{
   sid: string
   transport: WebStandardStreamableHTTPServerTransport
 }> {
@@ -29,7 +35,7 @@ export async function createSession(notebookId: string): Promise<{
     { name: serverName, version: '0.1.0' },
     { capabilities: { tools: {}, resources: {} } },
   )
-  registerMcpTools(server, notebookId)
+  registerMcpTools(server, notebookId, scopes)
 
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: () => sid,
@@ -46,7 +52,7 @@ export async function createSession(notebookId: string): Promise<{
   if (caps.tools) caps.tools.listChanged = false
   if (caps.resources) caps.resources.listChanged = false
 
-  sessions.set(sid, { transport, createdAt: Date.now() })
+  sessions.set(sid, { transport, createdAt: Date.now(), scopes })
   return { sid, transport }
 }
 
@@ -100,6 +106,10 @@ function ensureCleanupTimer(): void {
 export async function handleMcpRequest(notebookId: string, c: Context): Promise<Response> {
   cleanupStale()
 
+  // authMiddleware 推导的凭证 scopes（/mcp 按凭证角色而非 HTTP 方法拆分）；
+  // 未经中间件的直连（测试）缺省 [] = 只读，写工具会被工具层门禁拒绝
+  const scopes = c.get('authScopes') ?? []
+
   const sid = c.req.header('mcp-session-id')
   if (sid && sessions.has(sid)) {
     const entry = sessions.get(sid)!
@@ -111,7 +121,7 @@ export async function handleMcpRequest(notebookId: string, c: Context): Promise<
 
   if (httpMethod !== 'POST') {
     if (!sid) {
-      const s = await createSession(notebookId)
+      const s = await createSession(notebookId, scopes)
       const h = new Headers(c.req.raw.headers)
       h.set('mcp-session-id', s.sid)
       ensureCleanupTimer()
@@ -163,7 +173,7 @@ export async function handleMcpRequest(notebookId: string, c: Context): Promise<
     )
   }
 
-  const session = await createSession(notebookId)
+  const session = await createSession(notebookId, scopes)
   ensureCleanupTimer()
 
   const rewrapped = new Headers(c.req.raw.headers)

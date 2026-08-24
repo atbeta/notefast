@@ -111,7 +111,7 @@ describe('createSession', () => {
     const msg = list.body[0] as Record<string, unknown>
     expect(msg.result).toBeDefined()
     const tools = (msg.result as Record<string, unknown>).tools as { name: string }[]
-    expect(tools.length).toBe(27)
+    expect(tools.length).toBe(32)
 
     const toolNames = tools.map((t) => t.name)
     expect(toolNames).toContain('notefast_search')
@@ -136,6 +136,11 @@ describe('createSession', () => {
     expect(toolNames).toContain('notefast_get_share')
     expect(toolNames).toContain('notefast_unshare_doc')
     expect(toolNames).toContain('notefast_delete_doc')
+    expect(toolNames).toContain('notefast_delete_block')
+    expect(toolNames).toContain('notefast_move_block')
+    expect(toolNames).toContain('notefast_list_revisions')
+    expect(toolNames).toContain('notefast_create_ref')
+    expect(toolNames).toContain('notefast_delete_ref')
     // 三态审核工具已随「高置信直接建链」模型下线
     expect(toolNames).not.toContain('notefast_autolink_suggestions')
     expect(toolNames).not.toContain('notefast_autolink_apply')

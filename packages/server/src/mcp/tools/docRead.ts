@@ -2,7 +2,7 @@
  * MCP 工具 —— 文档只读组
  *
  * notefast_search / get_doc / get_block / get_doc_tree / export_markdown /
- * get_backlinks，以及 2 个 resource（notefast://docs 索引与单篇文档）。
+ * get_backlinks / list_revisions，以及 2 个 resource（notefast://docs 索引与单篇文档）。
  */
 
 import { z } from 'zod'
@@ -19,6 +19,7 @@ import {
   fetchDocBlocks,
   getBlockById,
   getDocById,
+  listBlockRevisions,
   listChildBlocks,
   listDocRows,
 } from '../../store/blocks'
@@ -43,6 +44,7 @@ export function registerDocReadTools(ctx: ToolContext): void {
   registerTool(
     'notefast_search',
     {
+      annotations: { readOnlyHint: true },
       description: '全文搜索知识库，返回匹配的 block 列表',
       inputSchema: {
         query: z.string().min(1).max(1000).describe('搜索关键词'),
@@ -75,6 +77,7 @@ export function registerDocReadTools(ctx: ToolContext): void {
   registerTool(
     'notefast_get_doc',
     {
+      annotations: { readOnlyHint: true },
       description: '获取文档完整内容（block 树）',
       inputSchema: {
         doc_id: z.string().describe('文档 ID'),
@@ -104,6 +107,7 @@ export function registerDocReadTools(ctx: ToolContext): void {
   registerTool(
     'notefast_get_block',
     {
+      annotations: { readOnlyHint: true },
       description: '获取单个 block 及其上下文',
       inputSchema: {
         block_id: z.string().describe('Block ID'),
@@ -147,6 +151,7 @@ export function registerDocReadTools(ctx: ToolContext): void {
   registerTool(
     'notefast_get_backlinks',
     {
+      annotations: { readOnlyHint: true },
       description: '获取反向链接（引用此 block 的 block 列表）',
       inputSchema: {
         block_id: z.string().describe('Block ID'),
@@ -181,6 +186,7 @@ export function registerDocReadTools(ctx: ToolContext): void {
   registerTool(
     'notefast_get_doc_tree',
     {
+      annotations: { readOnlyHint: true },
       description: '获取文档大纲（仅 heading 层级）',
       inputSchema: {
         doc_id: z.string().describe('文档 ID'),
@@ -209,6 +215,7 @@ export function registerDocReadTools(ctx: ToolContext): void {
   registerTool(
     'notefast_export_markdown',
     {
+      annotations: { readOnlyHint: true },
       description: '导出文档为 Markdown',
       inputSchema: {
         doc_id: z.string().describe('文档 ID'),
@@ -227,6 +234,28 @@ export function registerDocReadTools(ctx: ToolContext): void {
       const markdown = blocksToMarkdown(tree)
 
       return { content: [toText({ doc_id, markdown })] }
+    },
+  )
+
+  registerTool(
+    'notefast_list_revisions',
+    {
+      annotations: { readOnlyHint: true },
+      description: '列出 block 的内容修订历史（新→旧）；软删除块的修订仍可查（回退/审计兜底）',
+      inputSchema: {
+        block_id: z.string().describe('Block ID'),
+        limit: z.number().int().min(1).max(100).optional().default(50).describe('最多返回条数，默认 50'),
+      },
+    },
+    async ({ block_id, limit }) => {
+      const denied = denyAiExcludedBlock(block_id)
+      if (denied) return denied
+      // 与 GET /blocks/:id/revisions 对齐：目标不存在报 not_found，而非空列表
+      if (!blockExists(db, block_id)) {
+        return toolError('not_found', `Block ${block_id} 不存在`, { block_id })
+      }
+      const revisions = listBlockRevisions(db, block_id, limit)
+      return { content: [toText({ block_id, revisions })] }
     },
   )
 
