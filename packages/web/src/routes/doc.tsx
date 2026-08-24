@@ -43,7 +43,7 @@ import { readDocRailCollapsed, writeDocRailCollapsed } from '../hooks/useDocRail
 import { readDocRailWidth, writeDocRailWidth, type DocRailWidth } from '../hooks/useDocRailWidth'
 
 import { resolveRelatedBlockId } from '../lib/relatedAnchor'
-import { scrollToElement } from '../lib/scroll'
+import { scrollToElement, scrollLandingTop, SCROLL_TOP_GAP } from '../lib/scroll'
 import { readDocScroll, writeDocScroll } from '../lib/docScroll'
 import DocFindBar from '../components/DocFindBar'
 import { HistoryView, type DocRevision } from './docHistory'
@@ -481,13 +481,13 @@ useEffect(() => {
     }
     const jump = () => {
       const el = findTarget()
-      if (el) scrollToElement(el, 72, 0)
+      if (el) scrollToElement(el, SCROLL_TOP_GAP, 0)
     }
     const inPlace = () => {
       const el = findTarget()
       if (!el) return false
-      // 视口基准（与 scrollToElement 一致：目标 heading 停在视口 topOffset 处）
-      return Math.abs(el.getBoundingClientRect().top - 72) < 24
+      // 落点基准与 scrollToElement 一致（滚动容器上沿 + gap，实测）
+      return Math.abs(el.getBoundingClientRect().top - scrollLandingTop(el)) < 24
     }
     const timers = [
       window.setTimeout(jump, 60),

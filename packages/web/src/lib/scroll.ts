@@ -42,17 +42,27 @@ export function smoothScrollTo(container: HTMLElement, target: number, duration 
   requestAnimationFrame(step)
 }
 
-/** 平滑滚动到指定元素（相对视口顶部预留偏移） */
-export function scrollToElement(el: HTMLElement, topOffset = 72, duration = 260) {
+/** 大纲定位落点与滚动容器上沿的间距（px）。
+ *  浏览器下容器上沿即顶栏下沿（≈57px），落点 ≈ 73px 视口；与原固定 72px 观感一致。 */
+export const SCROLL_TOP_GAP = 16
+
+/** 定位落点的视口 y：滚动容器上沿 + gap。
+ *  以容器为基准而非固定视口偏移——Tauri 壳在顶栏之上还有 36px 标题栏（容器上沿 ≈92px），
+ *  若按固定 72px 视口偏移，目标 heading 会被压进顶栏区域（容器上沿以下才可见），
+ *  表现为「定位到的标题被上方遮挡一截」；useActiveHeading 的激活线同理必须跟随容器。 */
+export function scrollLandingTop(el: HTMLElement, gap = SCROLL_TOP_GAP): number {
+  const scroller = findScrollableAncestor(el)
+  return (scroller ? scroller.getBoundingClientRect().top : 0) + gap
+}
+
+/** 平滑滚动到指定元素（停在滚动容器上沿 + gap 处，见 scrollLandingTop） */
+export function scrollToElement(el: HTMLElement, gap = SCROLL_TOP_GAP, duration = 260) {
   const scroller = findScrollableAncestor(el)
   if (!scroller) {
     el.scrollIntoView({ block: 'start' })
     return
   }
-  // 目标 = 让 el 停在「视口 topOffset 处」：滚动 delta = el 当前视口 top - topOffset。
-  // 注意是视口基准而非 scroller 基准——doc 页滚动容器顶部下方常有 PageHeader（h-14=56px），
-  // 若按 scroller 内偏移算，heading 会停在视口 56+72=128px，既偏下又让 useActiveHeading
-  // 的激活线（视口 72px）判定「未滚过」→ 高亮跳回上方章节。
-  const target = el.getBoundingClientRect().top - topOffset + scroller.scrollTop
+  // 滚动 delta = el 当前视口 top - 落点视口 top（视口内滚动位移 1:1）
+  const target = el.getBoundingClientRect().top - scrollLandingTop(el, gap) + scroller.scrollTop
   smoothScrollTo(scroller, Math.max(0, target), duration)
 }

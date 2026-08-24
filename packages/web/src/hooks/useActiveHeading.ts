@@ -14,25 +14,26 @@
  *      * 两节之间没有任何 heading 在带内 → activeId = null（最常见场景）
  *      * 文档开头 / 滚到底部同样 null
  *  - 改用 scroll listener + getBoundingClientRect：
- *      * 精确计算位置，与 scrollToElement 的 topOffset=72 一致（点击大纲后
- *        heading 停在 72px 处，激活线同值，所见即所得）
+ *      * 精确计算位置，激活线与 scrollToElement 落点同基准（滚动容器上沿 + gap，
+ *        经 scrollLandingTop 实测——Tauri 壳标题栏会推低容器上沿，固定 72px 会误判）
  *      * 滚动容器用 findScrollableAncestor 精确定位（嵌套 .overflow-y-auto），
  *        不依赖 IO 的隐式 ancestor 语义
  *      * rAF throttle 合并高频 scroll，开销可忽略
  */
 
 import { useEffect, useState } from 'react'
-import { findScrollableAncestor } from '../lib/scroll'
+import { findScrollableAncestor, scrollLandingTop } from '../lib/scroll'
 
-/** 激活线：与 doc.tsx scrollToElement 的 topOffset 一致（72px 顶栏） */
+/** 纯函数默认激活线（px）：仅作测试基线与无容器兜底；
+ *  运行时由 scrollLandingTop 按「滚动容器上沿 + gap」实测（Tauri 壳标题栏会把容器推低） */
 const ACTIVATION_LINE = 72
-/** 激活容差：scrollTop 可能落在 subpixel（如 72.4px），严格 <= 72 会漏判——4px 内都算「已滚过」 */
+/** 激活容差：scrollTop 可能落在 subpixel（如落点 +0.4px），严格比较会漏判——4px 内都算「已滚过」 */
 const ACTIVATION_TOLERANCE = 4
 
 /**
  * 从 heading 的视口 top 序列（document order）选出活跃项下标。
  * 规则：最后一个 top <= 激活线 + 容差 的下标；一个都没滚过 → 0（文档开头高亮第一节）。
- * 容差吸收滚动定位的 subpixel 误差（scrollToElement 停在 72px 时 rect.top 可能是 72.4）。
+ * 容差吸收滚动定位的 subpixel 误差（scrollTop 可能落在落点 +0.4px 处）。
  * 返回下标，供调用方映射回 heading id；空数组返回 -1。
  */
 export function pickActiveHeadingIndex(
@@ -67,9 +68,10 @@ export function useActiveHeading(headingIds: string[]): string | null {
     let raf = 0
     const compute = () => {
       raf = 0
+      // 激活线 = 滚动容器上沿 + gap（与 scrollToElement 落点同基准，随布局实测）；
       // 收集 heading 的视口 top（document order），交给纯函数选活跃项
       const tops = elements.map((el) => el.getBoundingClientRect().top)
-      setActiveId(elements[pickActiveHeadingIndex(tops)]?.id ?? null)
+      setActiveId(elements[pickActiveHeadingIndex(tops, scrollLandingTop(elements[0]!))]?.id ?? null)
     }
 
     const onScroll = () => {
