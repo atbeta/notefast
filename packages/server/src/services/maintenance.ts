@@ -234,6 +234,15 @@ export function _resetMaintenanceHealthSnapshotForTests(): void {
   healthSnapshot = null
 }
 
+/**
+ * 只读刷新健康快照（tombstone 计数 + 表行数，均为快速查询）。
+ * 供 GET /db/health 在快照为空时后台补一份；不要在此做 purge 等写操作 —
+ * 健康检查是 GET，必须无副作用。
+ */
+export function refreshHealthSnapshot(): void {
+  refreshMaintenanceHealthSnapshot(getDb())
+}
+
 function refreshMaintenanceHealthSnapshot(db: ReturnType<typeof getDb>): void {
   let tombstones: MaintenanceHealthSnapshot['tombstones'] = { total: 0, purgeable: 0, retained: 0 }
   try {
@@ -260,6 +269,9 @@ export function countOrphanTombstones(db: ReturnType<typeof getDb>): {
   retained: number
 } {
   const cutoff = sqlCutoff(TOMBSTONE_RETENTION_MS)
+  // 子查询 2 必须 INDEXED BY idx_blocks_parent：否则 SQLite 会选
+  // idx_blocks_is_deleted_date (is_deleted=?)，每个外层行全扫存活块，
+  // 删除×存活 = 千万级行访问（15k 块实测 ~1.5s，大库 11s 卡死事件循环）
   const row = db.query(`
     SELECT
       count(*) AS total,
@@ -267,7 +279,7 @@ export function countOrphanTombstones(db: ReturnType<typeof getDb>): {
     FROM blocks b
     WHERE b.is_deleted = 1
       AND NOT EXISTS (SELECT 1 FROM blocks p WHERE p.id = b.parent_id AND p.is_deleted = 1)
-      AND NOT EXISTS (SELECT 1 FROM blocks c WHERE c.parent_id = b.id AND c.is_deleted = 0)
+      AND NOT EXISTS (SELECT 1 FROM blocks c INDEXED BY idx_blocks_parent WHERE c.parent_id = b.id AND c.is_deleted = 0)
   `).get(cutoff) as { total: number; purgeable: number }
   const total = Number(row.total) || 0
   const purgeable = Number(row.purgeable) || 0

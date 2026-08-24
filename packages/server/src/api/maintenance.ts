@@ -2,7 +2,7 @@
  * 维护 API（设置 → 维护）
  *
  * GET  /api/v1/db/health       数据库健康：文件/WAL 大小、各表行数、tombstone 待清理、上次维护
- *                              ?fresh=1 绕过 30s 缓存（设置页「刷新」）
+ *                              （读维护循环的内存快照；快照为空时返回占位并后台只读补算）
  * GET  /api/v1/db/logs         最近应用日志（环形表，默认 100 条）
  * POST /api/v1/db/maintenance  手动触发一轮维护（tombstone purge + feed 裁剪 + checkpoint）
  * POST /api/v1/db/vacuum       手动 VACUUM（整理物理文件；会短暂锁库，须用户确认后调用）
@@ -14,15 +14,15 @@ import { Hono } from 'hono'
 import { statSync } from 'node:fs'
 import { getDb } from '../db'
 import { listAppLogs, initAppLogs } from '../services/appLogs'
-import { getMaintenanceHealthSnapshot, runMaintenancePass } from '../services/maintenance'
+import { getMaintenanceHealthSnapshot, refreshHealthSnapshot, runMaintenancePass } from '../services/maintenance'
 import { logAppEvent } from '../services/appLogs'
 
 const maintenance = new Hono()
 
 // ── health 数据来源：维护循环的内存快照（getMaintenanceHealthSnapshot）。
-// ── 不再实时跑 count(*)×N + 递归 tombstone 查询 —— 实测 1.5 万块时
-// ── countOrphanTombstones 同步阻塞事件循环 11s，整个应用（所有 HTTP）卡死。
-// ── 快照为空（从未跑过维护）时返回占位，并后台跑一轮维护生成快照。
+// ── 快照为空（重启后首查）时返回占位，并经 setTimeout 跳出请求栈做只读补算。
+// ── 注意：不能在 GET 里跑 runMaintenancePass —— 它是同步的（first await 前
+// ── 全在当前栈上执行，照样卡死事件循环），且 purge 是写操作，GET 必须无副作用。
 
 function dbFileSizes(): { dbBytes: number | null; walBytes: number | null; path: string | null } {
   try {
@@ -43,13 +43,19 @@ function dbFileSizes(): { dbBytes: number | null; walBytes: number | null; path:
   }
 }
 
-/** 异步刷新健康快照：跑一轮维护（内部会生成/更新快照）。维护本身批间让出事件循环。 */
-async function refreshSnapshotAsync(): Promise<void> {
-  try {
-    runMaintenancePass()
-  } catch {
-    // 快照生成失败不阻塞 health 返回（占位已给）
-  }
+/** 占位路径的后台只读补算：跳出请求栈 + 去重，避免并发首查叠多次刷新 */
+let healthRefreshScheduled = false
+function scheduleHealthSnapshotRefresh(): void {
+  if (healthRefreshScheduled) return
+  healthRefreshScheduled = true
+  setTimeout(() => {
+    healthRefreshScheduled = false
+    try {
+      refreshHealthSnapshot()
+    } catch {
+      // 快照生成失败不阻塞 health 返回（占位已给）
+    }
+  }, 0)
 }
 
 maintenance.get('/health', async (c) => {
@@ -71,8 +77,8 @@ maintenance.get('/health', async (c) => {
       ts: snap.at,
     })
   }
-  // 快照为空（从未维护 / 重启后首查）→ 后台异步刷新，本次返回占位
-  void refreshSnapshotAsync()
+  // 快照为空（从未维护 / 重启后首查）→ 后台只读补算，本次返回占位
+  scheduleHealthSnapshotRefresh()
   return c.json({
     dbBytes: sizes.dbBytes,
     walBytes: sizes.walBytes,

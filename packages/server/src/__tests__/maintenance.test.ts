@@ -60,7 +60,7 @@ describe('app_logs 环形日志', () => {
 describe('维护 API', () => {
   test('GET /db/health 返回文件大小与表行数（读维护快照；先手动跑一轮生成快照）', async () => {
     // 新语义：health 读维护循环的内存快照，不再实时跑重型查询。
-    // 快照为空时返回占位并后台跑一轮维护 → 测试先手动触发维护生成快照。
+    // 快照为空时返回占位并后台只读补算 → 测试先手动触发维护生成快照。
     const run = await app.fetch(new Request('http://localhost/api/v1/db/maintenance', { method: 'POST' }))
     expect(run.status).toBe(200)
     const res = await app.fetch(new Request('http://localhost/api/v1/db/health'))
@@ -78,6 +78,30 @@ describe('维护 API', () => {
     // 占位：tables 为空对象、tombstones 为 0——不实时算
     expect(Object.keys(body.tables).length).toBe(0)
     expect(body.pendingTombstones).toBe(0)
+  })
+
+  test('GET /db/health 占位路径只读：不触发 purge，后台补算后快照可用', async () => {
+    const db = getDb()
+    const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString()
+    const nb = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'RO')
+    const docId = crypto.randomUUID()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, is_deleted, updated_at, created_at)
+       VALUES (?, ?, NULL, ?, 'document', '超期文档', 0, 0, 1, ?, ?)`,
+    ).run(docId, nb, docId, old, old)
+
+    const res = await app.fetch(new Request('http://localhost/api/v1/db/health'))
+    expect(res.status).toBe(200)
+    // GET 必须无副作用：超期 tombstone 不得被 purge（purge 只属于 POST /maintenance）
+    const left = db.query('SELECT count(*) AS c FROM blocks WHERE id = ?').get(docId) as { c: number }
+    expect(left.c).toBe(1)
+    // 后台只读补算（setTimeout 跳出请求栈）后，快照可用
+    await new Promise((r) => setTimeout(r, 20))
+    const res2 = await app.fetch(new Request('http://localhost/api/v1/db/health'))
+    const body2 = (await res2.json()) as { tables: Record<string, number>; purgeableTombstones: number }
+    expect(typeof body2.tables.blocks).toBe('number')
+    expect(body2.purgeableTombstones).toBeGreaterThanOrEqual(1)
   })
 
   test('GET /db/logs 返回最近日志', async () => {
