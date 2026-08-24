@@ -490,8 +490,24 @@ const x = 1
     expect(fetchedCode.properties.language).toBe('js')
   })
 
-  test('PUT /api/v1/docs/:id/markdown 缺少 markdown 返回 400', async () => {
+  test('PUT /api/v1/docs/:id/markdown 空内容合法（删空重来）', async () => {
     const { body: doc } = await api('POST', '/api/v1/docs', {
+      notebook_id: notebookId,
+      title: '将被清空',
+      markdown: '先有内容',
+    })
+
+    const { status, body } = await api('PUT', `/api/v1/docs/${doc.id}/markdown`, { markdown: '' })
+    expect(status).toBe(200)
+    // 文档回到空态：根块保留，子块清空
+    expect(body.doc.children ?? []).toEqual([])
+
+    // 持久化确认
+    const { body: fetched } = await api('GET', `/api/v1/docs/${doc.id}`)
+    expect(fetched.children ?? []).toEqual([])
+  })
+
+  test('PUT /api/v1/docs/:id/markdown 缺少 markdown 返回 400', async () => {    const { body: doc } = await api('POST', '/api/v1/docs', {
       notebook_id: notebookId,
       title: '测试文档',
     })

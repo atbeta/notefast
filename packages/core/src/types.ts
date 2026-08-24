@@ -304,7 +304,8 @@ export const updateDocStatusSchema = z.object({
 })
 
 export const updateDocMarkdownSchema = z.object({
-  markdown: z.string().min(1).max(5_000_000),
+  // 允许空串：删空重来是合法编辑（清空后保存应成功，文档回到空态）
+  markdown: z.string().max(5_000_000),
   title: z.string().min(1).max(500).optional(),
   /**
    * 是否为「版本点」保存（切走/手动保存/Ctrl+S）：
