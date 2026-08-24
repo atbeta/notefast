@@ -25,7 +25,7 @@
     "apply_failed": "Apply failed",
     "already_rebuilding": "Rebuild already in progress",
     "ai_not_configured": "AI not configured",
-    "ai_exclude_share_needs_confirm": "Please confirm sharing a document that is hidden from AI",
+    "ai_exclude_share_needs_confirm": "This document is hidden from AI — sharing it needs confirmation",
     "in_use": "Still in use and cannot be deleted"
   }
 }

@@ -74,7 +74,7 @@
     "relatedFromBlock": "与当前块相关",
     "confirmDeleteTitle": "删除文档",
     "confirmDeleteDescription": "确定要删除这篇文档吗？删除后可在右下角提示中撤销。",
-    "deleting": "删除中...",
+    "deleting": "删除中…",
     "noHeadings": "无标题章节",
     "noBacklinks": "还没有文档引用此处",
     "confirmRevertSnapshot": "确定回退到该整篇快照吗？正文与标题都会恢复为此版本，当前内容会作为新的历史版本保留。",

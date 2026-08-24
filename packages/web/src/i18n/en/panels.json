@@ -33,7 +33,7 @@
     "copyRestoreCmdTitle": "Copy restore command",
     "command": "Command",
     "restoreHint1": "Stop the service before restoring. You can dry-run with",
-    "restoreHint2": "."
+    "restoreHint2": " to verify."
   },
   "locationSelect": {
     "placeholder": "(select a storage connection)",
@@ -82,7 +82,7 @@
     "archiveFailed": "Archive failed",
     "archiveNow": "Archive now",
     "probeRemote": "Probe remote",
-    "replaceAdapter": "Note: enabling will replace the currently used {{adapter}} adapter.",
+    "replaceAdapter": "Note: enabling will replace the current {{adapter}} adapter.",
     "lastArchive": "Last archive:",
     "neverRun": "never run",
     "pushedDocs": "Uploaded {{n}} documents",
@@ -138,7 +138,7 @@
     "unnamedDevice": "Unnamed device",
     "removeTitle": "Remove (display-only; rotate S3 credentials to truly block a device)",
     "remove": "Remove",
-    "deviceHint": "Device registrations live in the shared storage (one record per device); “Remove” only deletes the record — a device holding S3 credentials still needs its credentials rotated to be truly blocked.",
+    "deviceHint": "Device registrations live in the shared storage (one record per device). “Remove” only deletes the record — a device holding S3 credentials still needs its credentials rotated to be truly blocked.",
     "deviceLag": "{{n}} behind"
   },
   "mcp": {

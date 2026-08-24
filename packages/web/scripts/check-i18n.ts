@@ -5,6 +5,7 @@
  * 校验项：
  *   1. 每个 t()/i18next.t() key 都在 zh-CN 语言包里（缺翻译即退出码 1）
  *   2. en 语言包覆盖 zh-CN 的全部 key（保证切英文不漏 key）
+ *   3. 同名语言包文件中同一 key 的行号在 zh-CN 与 en 完全一致（AGENTS.md 双语对齐约定）
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -93,6 +94,49 @@ if (missingEn.length > 0) {
   process.exit(1)
 }
 console.log(`[i18n] OK：en 覆盖全部 ${zhKeys.size} 个 key`)
+
+// 语言包行号对齐：同一 key 在 zh-CN 与 en 同名文件中必须处于同一行号。
+// 按本仓库语言包格式（一行一个 key、纯对象嵌套、无数组）逐行扫描；
+// 统计花括号前剔除字符串字面量，避免 {{placeholder}} 干扰。
+const I18N_DIR = join(import.meta.dir, '../src/i18n')
+
+function keyLines(path: string): Map<string, number> {
+  const out = new Map<string, number>()
+  const stack: string[] = []
+  const stripStrings = (s: string) => s.replace(/"(?:\\.|[^"\\])*"/g, '')
+  const lines = readFileSync(path, 'utf8').split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    const m = line.match(/^\s*"((?:\\.|[^"\\])*)"\s*:/)
+    if (m) {
+      const rest = stripStrings(line.slice(m[0].length))
+      if (rest.includes('{')) stack.push(m[1]!)
+      else out.set([...stack, m[1]!].join('.'), i + 1)
+    }
+    const closes = (stripStrings(line).match(/}/g) || []).length
+    for (let c = 0; c < closes; c++) stack.pop()
+  }
+  return out
+}
+
+let misaligned = 0
+for (const file of readdirSync(join(I18N_DIR, 'zh-CN')).filter((f) => f.endsWith('.json'))) {
+  const zhMap = keyLines(join(I18N_DIR, 'zh-CN', file))
+  const enMap = keyLines(join(I18N_DIR, 'en', file))
+  for (const [key, line] of zhMap) {
+    const enLine = enMap.get(key)
+    if (enLine !== undefined && enLine !== line) {
+      if (misaligned === 0) console.error('[i18n] 以下 key 在 zh-CN 与 en 中行号不一致：')
+      console.error(`  - ${file} ${key}: zh-CN L${line} vs en L${enLine}`)
+      misaligned++
+    }
+  }
+}
+if (misaligned > 0) {
+  console.error(`[i18n] 共 ${misaligned} 处行号错位（新增/移动 key 时两边物理位置须保持一致）`)
+  process.exit(1)
+}
+console.log('[i18n] OK：zh-CN 与 en 同名文件 key 行号全部对齐')
 
 const CJK = /[\u4e00-\u9fff]/
 const ALLOW = /i18n-allow/

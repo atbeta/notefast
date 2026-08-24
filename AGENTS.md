@@ -51,6 +51,7 @@ Conventional Commits，简洁英文。`type(scope): subject`，subject ≤ 72 �
 - 遵循已有框架模式（React、Hono、CodeMirror 6），不引入平行技术栈
 - 优先使用类型化 API，避免 `any` 扩散
 - 代码注释和文档使用中文；用户可见文案走 web i18n（`zh-CN` + `en`）
+- **i18n 双语严格对齐**：`packages/web/src/i18n/zh-CN/<file>.json` 与 `en/<file>.json` 必须 **key 完全相同 + 行号完全相同**。新增/重命名/删除 key、改占位符、调整嵌套结构、改顶层顺序，都必须两边同步，且保持 key 在文件中的物理位置一致（同一行号）。仅修改 value 文案无需对齐；改 key 或结构必须对齐。`bun lint` 会检查。
 
 ```bash
 bun install

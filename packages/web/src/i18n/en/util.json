@@ -3,7 +3,7 @@
     "eta": " · ~{{sec}}s",
     "ready": "Indexing complete · {{total}} blocks · {{elapsed}}s",
     "partial": "Indexing partially complete · {{done}}/{{total}} ok · {{errors}} failed · {{elapsed}}s",
-    "failed": "Indexing failed{{error}}",
+    "failed": "Indexing failed: {{error}}",
     "progress": "Vectorizing {{processed}}/{{total}} ({{pct}}%){{eta}}"
   },
   "imageUploader": {

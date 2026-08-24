@@ -101,7 +101,7 @@
     "saveFailed": "Failed to save",
     "checkNetwork": "Please check your network connection and retry",
     "loadingDoc": "Loading document…",
-    "draftNotice": "You have an unsaved local draft (possibly left before editing on another device)",
+    "draftNotice": "You have an unsaved local draft (possibly left over from an earlier session)",
     "recoverDraft": "Recover draft",
     "discard": "Discard",
     "emptyPreview": "(empty document, nothing to preview)",

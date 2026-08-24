@@ -40,7 +40,7 @@ export function formatIndexProgress(job: IndexJob): string {
     })
   }
   if (job.state === 'failed') {
-    return i18next.t('indexJob.failed', { error: job.error ? `：${job.error}` : '' })
+    return i18next.t('indexJob.failed', { error: job.error ?? '' })
   }
   return i18next.t('indexJob.progress', { processed, total, pct, eta })
 }
