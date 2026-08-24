@@ -199,13 +199,28 @@ function trimUrlTail(url: string): string {
  */
 const HANGING_OPEN_PUNCT_RE = /^[「『《（【〈［｛]/
 
-function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
+/**
+ * 行内渲染（阅读态段落/引用/列表项/标题共用）。
+ *
+ * 软换行（内容里的单个 \n）渲染为 <br>，对齐 Obsidian 默认 / GitHub 评论的行为：
+ * HTML 默认把文本换行折叠成空格，用户感知是「按一次回车没反应」。
+ * 存储与解析仍是 CommonMark（空行分段、行尾两空格硬换行），这里只改显示层。
+ */
+export function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
   const nodes: ReactNode[] = []
   let last = 0
   let k = 0
+  // 纯文本段按 \n 切开，段间插 <br>（行内 token 的正则都不跨行，不会误切匹配内部）
+  const pushText = (chunk: string) => {
+    const parts = chunk.split('\n')
+    for (let i = 0; i < parts.length; i++) {
+      if (i > 0) nodes.push(<br key={`${keyPrefix}-br${k++}`} />)
+      if (parts[i]) nodes.push(parts[i])
+    }
+  }
   for (const m of text.matchAll(INLINE_RE)) {
     const idx = m.index ?? 0
-    if (idx > last) nodes.push(text.slice(last, idx))
+    if (idx > last) pushText(text.slice(last, idx))
     if (m[1]) {
       const im = m[1].match(/!\[([^\]]*)\]\(([^)\s]+)\)/)!
       // asset:<id> 是 AssetStore 的稳定引用（见 server/assets/store.ts），渲染时解析为 API 路径
@@ -253,11 +268,11 @@ function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
           {url}
         </MarkdownHref>,
       )
-      if (tail) nodes.push(tail)
+      if (tail) pushText(tail)
     }
     last = idx + m[0].length
   }
-  if (last < text.length) nodes.push(text.slice(last))
+  if (last < text.length) pushText(text.slice(last))
   return nodes
 }
 
