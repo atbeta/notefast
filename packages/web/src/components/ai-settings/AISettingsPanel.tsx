@@ -14,8 +14,6 @@ import {
   X,
 } from 'lucide-react'
 import {
-  KNOWN_EMBEDDING_MODELS,
-  KNOWN_CHAT_MODELS,
   KEY_MASK,
   definitionFromPreset,
   defaultAutoLinkConfig,
@@ -511,7 +509,6 @@ export default function AISettingsPanel() {
               value={chat}
               onChange={setChat}
               mode="chat"
-              knownModels={KNOWN_CHAT_MODELS}
               modelLabel={t('aiSettings.chatModelLabel')}
               fieldErrors={formErrors.chat}
             />
@@ -558,7 +555,6 @@ export default function AISettingsPanel() {
               value={embedding}
               onChange={setEmbedding}
               mode="embedding"
-              knownModels={KNOWN_EMBEDDING_MODELS}
               modelLabel={t('aiSettings.embeddingModelLabel')}
               fieldErrors={formErrors.embedding}
             />
@@ -593,7 +589,6 @@ export default function AISettingsPanel() {
               value={rerankerAsProvider}
               onChange={handleRerankerChange}
               mode="reranker"
-              knownModels={['BAAI/bge-reranker-v2-m3', 'qwen3-rerank', 'jina-reranker-v3', 'voyage-rerank-2', 'voyage-rerank-2-lite']}
               modelLabel={t('aiSettings.rerankerModelLabel')}
             />
           </div>

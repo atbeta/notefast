@@ -17,14 +17,12 @@ export function ProviderForm({
   value,
   onChange,
   mode,
-  knownModels,
   modelLabel,
   fieldErrors,
 }: {
   value: ProviderDefinition
   onChange: (v: ProviderDefinition) => void
   mode: 'chat' | 'embedding' | 'reranker'
-  knownModels: string[]
   modelLabel: string
   fieldErrors?: FieldErrors
 }) {
@@ -117,6 +115,8 @@ export function ProviderForm({
         </div>
         <div className="md:col-span-2">
           <FieldRow label={modelLabel} error={errModel}>
+            {/* 纯文本输入：原生 datalist 下拉样式不受设计 token 控制（深色下是系统原生弹层），
+                且 custom 预设下建议别家模型没有意义；预设切换时已自动填入推荐模型 */}
             <Input
               type="text"
               value={mode === 'chat' ? value.chatModel : value.embeddingModel}
@@ -127,16 +127,12 @@ export function ProviderForm({
                     : { ...value, embeddingModel: e.target.value },
                 )
               }
-              list={`known-${mode}-models`}
               placeholder={mode === 'chat' ? 'deepseek-chat / gpt-4o-mini' : mode === 'embedding' ? 'jina-embeddings-v3 / voyage-3' : 'jina-reranker-v3 / voyage-rerank-2'}
               aria-invalid={!!errModel}
               invalid={!!errModel}
               mono
               className="text-sm"
             />
-            <datalist id={`known-${mode}-models`}>
-              {knownModels.map((m) => <option key={m} value={m} />)}
-            </datalist>
           </FieldRow>
         </div>
         <InlineField
