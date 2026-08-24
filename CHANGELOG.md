@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.76.3](https://github.com/atbeta/notefast/compare/v0.76.2...v0.76.3) (2026-08-24)
+
+
+### Bug Fixes
+
+* **server:** settings maintenance page no longer freezes the app ([7ce68d9](https://github.com/atbeta/notefast/commit/7ce68d9694f4bfbe276c937e0943616352b08979))
+* **web:** table edit dialog no longer jumps scroll to doc top ([8b3608e](https://github.com/atbeta/notefast/commit/8b3608ef8d1fa50889605987d7dc611a454c15f2))
+
 ## [0.76.2](https://github.com/atbeta/notefast/compare/v0.76.1...v0.76.2) (2026-08-23)
 
 
