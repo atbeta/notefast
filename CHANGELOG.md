@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.76.5](https://github.com/atbeta/notefast/compare/v0.76.4...v0.76.5) (2026-08-24)
+
+
+### Bug Fixes
+
+* **server:** propagate child block writes to doc root updated_at ([98f83ff](https://github.com/atbeta/notefast/commit/98f83ff87e6fb87e7f576ead0ad04551b42bc43a))
+
 ## [0.76.4](https://github.com/atbeta/notefast/compare/v0.76.3...v0.76.4) (2026-08-24)
 
 

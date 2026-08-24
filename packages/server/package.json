@@ -1,6 +1,6 @@
 {
   "name": "@notefast/server",
-  "version": "0.76.4",
+  "version": "0.76.5",
   "private": true,
   "type": "module",
   "scripts": {
