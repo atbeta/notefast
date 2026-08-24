@@ -177,7 +177,7 @@ describe('GET /api/v1/mcp/tools 注册表带 readOnly 字段', () => {
       const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js')
       const { registerMcpTools } = await import('../mcp/tools')
       resetMcpToolRegistry()
-      registerMcpTools(new McpServer({ name: 't', version: '0' }), notebookId, ['admin'])
+      registerMcpTools(new McpServer({ name: 't', version: '0' }), notebookId)
     }
 
     const app = new Hono()
@@ -192,5 +192,55 @@ describe('GET /api/v1/mcp/tools 注册表带 readOnly 字段', () => {
     expect(byName.get('notefast_update_block')!.readOnly).toBe(false)
     expect(byName.get('notefast_delete_doc')!.readOnly).toBe(false)
     expect(byName.get('notefast_chat')!.readOnly).toBe(false)
+  })
+})
+
+describe('会话 scopes 每请求刷新（门禁惰性读取）', () => {
+  test('同一会话内降权 read → 写工具立即 forbidden；升回 admin → 立即恢复', async () => {
+    let scopes = ['admin']
+    const { handleMcpRequest } = await import('../mcp/server')
+    const app = new Hono()
+    app.use('/mcp', async (c, next) => {
+      c.set('authScopes', scopes)
+      await next()
+    })
+    app.all('/mcp', (c) => handleMcpRequest(notebookId, c))
+
+    async function rpc(method: string, params?: unknown, id?: number, sessionId?: string) {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream',
+      }
+      if (sessionId) headers['Mcp-Session-Id'] = sessionId
+      const res = await app.request('/mcp', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ jsonrpc: '2.0', method, params, id: id ?? null }),
+      })
+      return { sessionId: res.headers.get('Mcp-Session-Id') || sessionId || '', body: parseSseText(await res.text()) }
+    }
+    const errCodeOf = (body: unknown[]): string => {
+      const msg = body[0] as { result: { content: Array<{ text: string }> } }
+      const payload = JSON.parse(msg.result.content[0]!.text) as { error: { code: string } }
+      return payload.error.code
+    }
+
+    const init = await rpc('initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    const sid = init.sessionId
+    await rpc('notifications/initialized', undefined, undefined, sid)
+    const callWrite = () => rpc('tools/call', { name: 'notefast_update_block', arguments: { block_id: 'ghost-lazy', content: 'x' } }, 2, sid)
+
+    // admin：过门禁进 handler → 块不存在 not_found（证明没被门禁拦）
+    expect(errCodeOf((await callWrite()).body)).toBe('not_found')
+    // 同一会话降权 read：立即 forbidden（不等会话 TTL / 重启）
+    scopes = ['read']
+    expect(errCodeOf((await callWrite()).body)).toBe('forbidden')
+    // 升回 admin：立即恢复
+    scopes = ['admin']
+    expect(errCodeOf((await callWrite()).body)).toBe('not_found')
   })
 })

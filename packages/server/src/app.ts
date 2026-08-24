@@ -314,11 +314,10 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
 
     // MCP 工具注册表预填充：真实 SDK 注册在首次 MCP 会话时（createSession 懒加载），
     // 但设置页 /api/v1/mcp/tools 需要启动即有数据；重复注册幂等（reset + 重推）。
-    // 这里只为填清单，scopes 传 ['admin']（全量注册，不做只读门禁）
+    // 这里只为填清单，用缺省 getter（全量注册，不做只读门禁）
     registerMcpTools(
       new McpServer({ name: 'notefast', version: '0.1.0' }, { capabilities: { tools: {}, resources: {} } }),
       notebookId,
-      ['admin'],
     )
 
     app.all('/mcp', authMiddleware, async (c) => {

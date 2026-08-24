@@ -165,9 +165,11 @@ export type RegisterToolFn = McpServer['registerTool']
  * 且会话 scopes 既不含 'write' 也不含 'admin' → 直接返回 forbidden，
  * 不触达原 handler（MCP 全是 POST，无法靠 HTTP 方法区分读写，只能在这里按
  * 工具的语义标注判定）。
+ * scopes 用惰性 getter：会话期间每个请求都会按当前凭证刷新（见 mcp/server.ts
+ * handleMcpRequest），token 撤销/改权在下一个工具调用即生效，不等会话 TTL。
+ * 漏标 readOnlyHint 的失败方向是「按写处理 = 只读被拒」（安全方向）。
  */
-export function createRegisterTool(server: McpServer, collect = true, scopes: string[] = ['admin']): RegisterToolFn {
-  const canWrite = scopes.includes('write') || scopes.includes('admin')
+export function createRegisterTool(server: McpServer, collect = true, getScopes: () => string[] = () => ['admin']): RegisterToolFn {
   return ((name: string, config: unknown, handler: (args: never) => Promise<unknown>) => {
     const cfg = config as { description?: unknown; annotations?: { readOnlyHint?: boolean } } | null
     const desc = typeof cfg === 'object' && cfg !== null && 'description' in cfg
@@ -175,10 +177,16 @@ export function createRegisterTool(server: McpServer, collect = true, scopes: st
       : ''
     const readOnly = cfg?.annotations?.readOnlyHint === true
     if (collect) mcpToolRegistry.push({ name, description: desc, readOnly })
-    const effectiveHandler = (!readOnly && !canWrite)
-      ? ((async () => toolError('forbidden', '该 Token 为只读，无法调用写工具', { tool: name })) as typeof handler)
-      : handler
-    return server.registerTool(name, config as never, withToolLogging(name, effectiveHandler) as never)
+    const gatedHandler = (async (args: never) => {
+      if (!readOnly) {
+        const scopes = getScopes()
+        if (!scopes.includes('write') && !scopes.includes('admin')) {
+          return toolError('forbidden', '该 Token 为只读，无法调用写工具', { tool: name })
+        }
+      }
+      return handler(args)
+    }) as typeof handler
+    return server.registerTool(name, config as never, withToolLogging(name, gatedHandler) as never)
   }) as RegisterToolFn
 }
 
@@ -190,13 +198,13 @@ export function resetMcpToolRegistry(): void {
   mcpToolRegistry.length = 0
 }
 
-/** 工具组注册上下文：server + db + 默认 notebook + 会话 scopes + 包日志的 registerTool */
+/** 工具组注册上下文：server + db + 默认 notebook + 会话 scopes 读取器 + 包日志的 registerTool */
 export interface ToolContext {
   server: McpServer
   db: Db
   notebookId: string
-  /** 会话创建者的 authScopes；写工具门禁在 createRegisterTool 统一判定 */
-  scopes: string[]
+  /** 惰性读取会话当前 authScopes（每请求刷新）；写工具门禁在 createRegisterTool 统一判定 */
+  getScopes: () => string[]
   registerTool: RegisterToolFn
 }
 

@@ -26,15 +26,15 @@ import { registerAutoLinkTools } from './tools/autoLink'
 import { registerEntityTools } from './tools/entityTools'
 import { registerShareTools } from './tools/share'
 
-export function registerMcpTools(server: McpServer, notebookId: string, scopes: string[] = ['admin']): void {
+export function registerMcpTools(server: McpServer, notebookId: string, getScopes: () => string[] = () => ['admin']): void {
   // 清单只填一次：并发 session 不得 reset 全局数组，否则 GET /mcp/tools 会被清空
   const collect = mcpToolRegistry.length === 0
   const ctx: ToolContext = {
     server,
     db: getDb(),
     notebookId,
-    scopes,
-    registerTool: createRegisterTool(server, collect, scopes),
+    getScopes,
+    registerTool: createRegisterTool(server, collect, getScopes),
   }
 
   registerDocReadTools(ctx)

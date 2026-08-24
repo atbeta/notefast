@@ -10,9 +10,9 @@ interface SessionEntry {
   transport: WebStandardStreamableHTTPServerTransport
   createdAt: number
   /**
-   * 会话绑定创建者的 authScopes（如 ['read'] / ['admin']），写工具门禁按此判定。
-   * 语义：scopes 在会话建立时快照，30 分钟 TTL 内不随 token 撤销/改权变化
-   * （token 失效只影响新会话；要立刻收权需重启服务清会话）。
+   * 会话当前的 authScopes（如 ['read'] / ['admin']），写工具门禁按此惰性判定。
+   * 语义：scopes 在每个请求进入时按当前凭证刷新（见 handleMcpRequest），
+   * token 撤销/改权在下一个工具调用即生效，无需等会话 TTL 或重启。
    */
   scopes: string[]
 }
@@ -35,12 +35,14 @@ export async function createSession(notebookId: string, scopes: string[] = ['adm
     { name: serverName, version: '0.1.0' },
     { capabilities: { tools: {}, resources: {} } },
   )
-  registerMcpTools(server, notebookId, scopes)
 
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: () => sid,
     onsessionclosed: () => { sessions.delete(sid) },
   })
+  // entry 先于工具注册创建：门禁闭包经 getter 读它的 scopes，注册后即可被每请求刷新
+  const entry: SessionEntry = { transport, createdAt: Date.now(), scopes }
+  registerMcpTools(server, notebookId, () => entry.scopes)
   await server.connect(transport)
 
   // 工具集在进程生命周期内是静态的（无运行时增删），如实声明 listChanged: false，
@@ -52,7 +54,7 @@ export async function createSession(notebookId: string, scopes: string[] = ['adm
   if (caps.tools) caps.tools.listChanged = false
   if (caps.resources) caps.resources.listChanged = false
 
-  sessions.set(sid, { transport, createdAt: Date.now(), scopes })
+  sessions.set(sid, entry)
   return { sid, transport }
 }
 
@@ -114,6 +116,8 @@ export async function handleMcpRequest(notebookId: string, c: Context): Promise<
   if (sid && sessions.has(sid)) {
     const entry = sessions.get(sid)!
     entry.createdAt = Date.now()
+    // 每请求按当前凭证刷新 scopes：token 撤销/改权立刻生效（门禁惰性读取，见 helpers.ts）
+    entry.scopes = scopes
     return entry.transport.handleRequest(c.req.raw)
   }
 
