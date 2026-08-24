@@ -1,4 +1,4 @@
-import { Undo2, Redo2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Tooltip } from './ui'
 import { useNavHistory } from '../hooks/useNavHistory'
@@ -24,7 +24,7 @@ export default function DocVisitNav() {
           className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label={backLabel}
         >
-          <Undo2 className="w-4 h-4" strokeWidth={1.75} />
+          <ArrowLeft className="w-4 h-4" strokeWidth={1.75} />
         </button>
       </Tooltip>
       <Tooltip label={forwardLabel}>
@@ -35,7 +35,7 @@ export default function DocVisitNav() {
           className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label={forwardLabel}
         >
-          <Redo2 className="w-4 h-4" strokeWidth={1.75} />
+          <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
         </button>
       </Tooltip>
     </div>
