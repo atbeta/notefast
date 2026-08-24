@@ -60,6 +60,6 @@
   },
   "lightbox": {
     "zoomReset": "Reset",
-    "zoomHint": "Ctrl/⌘ + scroll to zoom, drag to pan"
+    "zoomHint": "{{mod}} + scroll to zoom, drag to pan"
   }
 }

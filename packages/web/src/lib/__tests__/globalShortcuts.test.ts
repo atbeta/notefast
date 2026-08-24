@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import {
   handleGlobalKeyDown,
+  isEnterEditShortcut,
   overlayBlocksEscape,
   collectBlockingOverlays,
   type GlobalKeyEvent,
@@ -105,6 +106,20 @@ describe('handleGlobalKeyDown · Ctrl 缩放', () => {
     const e = ev({ key: '=', ctrlKey: true })
     const handled = handleGlobalKeyDown(e, { inEditable: true })
     expect(handled).toBe(false)
+  })
+})
+
+describe('isEnterEditShortcut', () => {
+  test('⌘E / Ctrl+E 进入编辑', () => {
+    expect(isEnterEditShortcut({ key: 'e', metaKey: true })).toBe(true)
+    expect(isEnterEditShortcut({ key: 'E', ctrlKey: true })).toBe(true)
+  })
+
+  test('带 Shift/Alt 或不按修饰键不算', () => {
+    expect(isEnterEditShortcut({ key: 'e', ctrlKey: true, shiftKey: true })).toBe(false)
+    expect(isEnterEditShortcut({ key: 'e', ctrlKey: true, altKey: true })).toBe(false)
+    expect(isEnterEditShortcut({ key: 'e' })).toBe(false)
+    expect(isEnterEditShortcut({ key: 'k', ctrlKey: true })).toBe(false)
   })
 })
 

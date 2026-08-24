@@ -54,6 +54,18 @@ export function handleGlobalKeyDown(e: GlobalKeyEvent, doc: GlobalKeyDoc = {}): 
   return false
 }
 
+/** 阅读态进入编辑：⌘E / Ctrl+E（编辑器内同键留给行内代码） */
+export function isEnterEditShortcut(e: {
+  key: string
+  ctrlKey?: boolean
+  metaKey?: boolean
+  shiftKey?: boolean
+  altKey?: boolean
+}): boolean {
+  if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return false
+  return e.key.toLowerCase() === 'e'
+}
+
 /** querySelector 命中节点上、用来判断是否抢走 Esc 的最小表面 */
 export interface OverlayLike {
   hidden?: boolean

@@ -60,6 +60,6 @@
   },
   "lightbox": {
     "zoomReset": "重置",
-    "zoomHint": "Ctrl/⌘ + 滚轮缩放，拖动平移"
+    "zoomHint": "{{mod}} + 滚轮缩放，拖动平移"
   }
 }

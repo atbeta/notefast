@@ -28,7 +28,7 @@
     "matchHint": "Toggle match all / match any",
     "expandTags": "Show all tags",
     "collapseTags": "Show fewer tags",
-    "chipHint": "Click to filter this tag · ⌘/Ctrl to add",
+    "chipHint": "Click to filter this tag · {{mod}} to add",
     "chipHintSelected": "Click to remove this tag"
   },
   "docList": {

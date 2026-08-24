@@ -28,7 +28,7 @@
     "matchHint": "切换同时包含 / 包含任一",
     "expandTags": "展开全部标签",
     "collapseTags": "收起标签",
-    "chipHint": "单击只看此项 · ⌘/Ctrl 加选",
+    "chipHint": "单击只看此项 · {{mod}} 加选",
     "chipHintSelected": "单击取消此项"
   },
   "docList": {

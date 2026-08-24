@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { isMacPlatform } from '../lib/shortcutDisplay'
 
 export function usePlatform() {
-  const [isMac, setIsMac] = useState(false)
-  useEffect(() => {
-    setIsMac(/Mac|iPhone|iPad/i.test(navigator.platform))
-  }, [])
+  const [isMac] = useState(() => isMacPlatform())
   return { isMac }
 }

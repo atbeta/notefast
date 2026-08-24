@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RotateCcw } from 'lucide-react'
+import { shortcutLabel } from './ui'
 import {
   clampUserZoom,
   fitScale,
@@ -158,7 +159,7 @@ export default function MediaZoomView({ children, measureKey, onBackgroundClick 
           {Math.round(zoom * 100)}%
         </span>
         <span className="text-xs text-white/55 hidden sm:inline">
-          {t('lightbox.zoomHint')}
+          {t('lightbox.zoomHint', { mod: shortcutLabel(['mod']) })}
         </span>
       </div>
       {isZoomed && (

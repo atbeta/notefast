@@ -105,7 +105,7 @@
     "recoverDraft": "Recover draft",
     "discard": "Discard",
     "emptyPreview": "(empty document, nothing to preview)",
-    "placeholder": "Start writing… (⌘B bold / ⌘I italic / # heading / - list; ⌘P preview; ⌘S save)",
+    "placeholder": "Start writing… ({{mod}}B bold / {{mod}}I italic / # heading / - list; {{mod}}P preview; {{mod}}S save)",
     "dropImageHint": "Drop to upload image",
     "helpSave": "Save",
     "helpTogglePreview": "Toggle preview / edit",

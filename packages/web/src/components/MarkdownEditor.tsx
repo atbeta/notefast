@@ -14,7 +14,7 @@ import {
 } from '@notefast/core'
 import type { Block } from '@notefast/core'
 import { api } from '../hooks/useAPI'
-import { useToast } from './ui'
+import { shortcutLabel, useToast } from './ui'
 import { relativeTime } from '../lib/time'
 import { useEditorDraft } from '../hooks/useEditorDraft'
 import { useImageUploader } from '../hooks/useImageUploader'
@@ -633,7 +633,7 @@ function EditorInline({
                 onSelectionChange={handleSelectionChange}
                 onCaret={onCaret}
                 autoFocus
-                placeholder={t('mdEditor.placeholder')}
+                placeholder={t('mdEditor.placeholder', { mod: shortcutLabel(['mod']) })}
               />
               {/* 图片拖入反馈：拖拽文件进入区域时铺底高亮，提示“松开即上传”。
                   CM 的 domEventHandlers 仍然处理 drop、CodeMirrorFocus 里调 uploadImage。 */}

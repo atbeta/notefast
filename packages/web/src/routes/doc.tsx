@@ -54,7 +54,8 @@ import { useDocReadingWidth, writeDocReadingWidth, DOC_READING_WIDTH_REM } from 
 import { formatRelative, relativeTime, currentLocale, isPlaceholderDocTitle } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
-import { EmptyState, InlineError, Kbd, ListRowsSkeleton, Tooltip, useToast } from '../components/ui'
+import { EmptyState, InlineError, ListRowsSkeleton, ShortcutKeys, Tooltip, shortcutLabel, useToast } from '../components/ui'
+import { isEnterEditShortcut } from '../lib/globalShortcuts'
 import { deliverExport, fetchDocExportFile } from '../lib/download'
 import { recordVisit } from '../lib/recentVisits'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
@@ -131,6 +132,25 @@ export default function DocPage() {
     setEditingDocId(editing ? (id ?? null) : null)
   }, [id])
   const handleStartEdit = useCallback(() => setEditingDocId(id ?? null), [id])
+
+  // 阅读态 ⌘E / Ctrl+E 进入编辑（编辑器挂载后同键是行内代码，这里先卸掉）
+  useEffect(() => {
+    if (isEditing || !id) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing || e.keyCode === 229) return
+      if (!isEnterEditShortcut(e)) return
+      const el = document.activeElement
+      if (el) {
+        const tag = el.tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+        if (el.getAttribute('contenteditable') === 'true') return
+      }
+      e.preventDefault()
+      handleStartEdit()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [isEditing, id, handleStartEdit])
 
   useLayoutEffect(() => {
     const el = scrollRef.current
@@ -758,7 +778,7 @@ useEffect(() => {
           {/* 右：操作按钮组 */}
           <div className="flex items-center gap-2">
             {!isEditing && (
-              <Tooltip label={t('doc.enterEdit')}>
+              <Tooltip label={`${t('doc.enterEdit')} (${shortcutLabel(['mod', 'E'])})`}>
                 <button
                   type="button"
                   onClick={handleStartEdit}
@@ -770,7 +790,7 @@ useEffect(() => {
               </Tooltip>
             )}
             {isEditing && (
-              <Tooltip label={t('doc.editSaveHint')}>
+              <Tooltip label={t('doc.editSaveHint', { shortcut: shortcutLabel(['mod', 'S']) })}>
                 <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                   {t('doc.editing')}
@@ -1030,9 +1050,9 @@ useEffect(() => {
                     description={(
                       <span className="flex items-center justify-center gap-1.5 flex-wrap">
                         <span>{t('doc.emptyDocumentHintStart')}</span>
-                        <Kbd>⌘E</Kbd>
+                        <ShortcutKeys keys={['mod', 'E']} />
                         <span>{t('doc.emptyDocumentHintMid')}</span>
-                        <Kbd>⌘J</Kbd>
+                        <ShortcutKeys keys={['mod', 'J']} />
                         <span>{t('doc.emptyDocumentHintEnd')}</span>
                       </span>
                     )}

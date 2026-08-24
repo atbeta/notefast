@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { usePlatform } from '../../hooks/usePlatform'
+import { formatShortcutParts, shortcutLabel as formatShortcutLabel } from '../../lib/shortcutDisplay'
 
 export function Kbd({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
@@ -14,14 +15,7 @@ export function Kbd({ children, className = '' }: { children: ReactNode; classNa
 /** 组合键展示：自动检测平台，Mac 用符号、非 Mac 用文字 + 分隔符 */
 export function ShortcutKeys({ keys, className = '' }: { keys: string[]; className?: string }) {
   const { isMac } = usePlatform()
-
-  const resolved = keys.flatMap((key) => {
-    const lower = key.toLowerCase()
-    if (lower === 'mod') return isMac ? ['⌘'] : ['Ctrl']
-    if (lower === 'shift') return isMac ? ['⇧'] : ['Shift']
-    if (lower === 'option' || lower === 'alt') return isMac ? ['⌥'] : ['Alt']
-    return [key]
-  })
+  const resolved = formatShortcutParts(keys, isMac)
 
   return (
     <span className={`inline-flex items-center gap-0.5 ${className}`}>
@@ -37,14 +31,5 @@ export function ShortcutKeys({ keys, className = '' }: { keys: string[]; classNa
 
 /** 单个修饰键快捷文本（不上 Kbd 壳），如 Tooltip label 中用 */
 export function shortcutLabel(keys: string[]): string {
-  const mac = /Mac|iPhone|iPad/i.test(navigator?.platform ?? '')
-  return keys
-    .map((k) => {
-      const lower = k.toLowerCase()
-      if (lower === 'mod') return mac ? '⌘' : 'Ctrl'
-      if (lower === 'shift') return mac ? '⇧' : 'Shift'
-      if (lower === 'option' || lower === 'alt') return mac ? '⌥' : 'Alt'
-      return k
-    })
-    .join('+')
+  return formatShortcutLabel(keys)
 }

@@ -310,7 +310,7 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
               {t('command.close')}
             </span>
           </div>
-          <span>⌘K</span>
+          <ShortcutKeys keys={['mod', 'K']} />
         </div>
       </div>
     </div>

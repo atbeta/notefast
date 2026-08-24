@@ -14,7 +14,7 @@ import type { TagMatchMode } from '@notefast/core'
 import { parseTagMatchMode } from '@notefast/core'
 import { useTagCatalog } from '../hooks/useTagCatalog'
 import { useTranslation } from 'react-i18next'
-import { Tooltip } from './ui'
+import { Tooltip, shortcutLabel } from './ui'
 import {
   TAG_CHIP_MAX_ROWS,
   catalogWithSelected,
@@ -172,7 +172,7 @@ export default function TagFilter({ onChange }: TagFilterProps) {
             return (
               <Tooltip
                 key={ti.tag}
-                label={isSelected ? t('tagFilter.chipHintSelected') : t('tagFilter.chipHint')}
+                label={isSelected ? t('tagFilter.chipHintSelected') : t('tagFilter.chipHint', { mod: shortcutLabel(['mod']) })}
               >
                 <button
                   type="button"
