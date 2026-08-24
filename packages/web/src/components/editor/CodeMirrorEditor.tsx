@@ -18,6 +18,7 @@ import { editorTheme, editorHighlight } from './cm/theme'
 import { imagePreview } from './cm/imagePreview'
 import { tablePreview } from './cm/tablePreview'
 import { mathPreview } from './cm/mathPreview'
+import { mermaidPreview } from './cm/mermaidPreview'
 import { ghostTextExtension, ghostTextState, setGhostText, clearGhostText } from './cm/ghostText'
 import { MD_LINK_HREF_PLACEHOLDER } from '../../lib/markdownHref'
 import { editorKeymap } from './cm/keymap'
@@ -238,6 +239,7 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
             imagePreview,
             tablePreview,
             mathPreview,
+            mermaidPreview,
             ghostTextExtension,
             editorKeymap({
               hasGhost: () => !!propsRef.current.ghostText,
