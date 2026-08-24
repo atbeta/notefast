@@ -41,6 +41,7 @@ import {
   getLiveBlockById,
   getLiveDocById,
   insertBlock,
+  isSelfOrDescendant,
   listDocRows,
   listRecentlyDeletedBlocks,
   moveBlock,
@@ -194,6 +195,10 @@ export function registerDocWriteTools(ctx: ToolContext): void {
         const parent = getBlockAnchor(db, new_parent_id)
         if (!parent) {
           return toolError('not_found', `目标父块 ${new_parent_id} 不存在`, { parent_id: new_parent_id })
+        }
+        // 循环父守卫：移到自身/后代下会成 parent 环（与 REST 同守卫）
+        if (isSelfOrDescendant(db, block_id, new_parent_id)) {
+          return toolError('invalid_params', '不能移动到自身或其子块下（会形成循环）', { block_id, parent_id: new_parent_id })
         }
         newRootId = parent.root_id
         newLevel = parent.level + 1

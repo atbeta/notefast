@@ -812,6 +812,14 @@ export function reRootDescendants(db: Db, ids: string[], rootId: string): void {
   )
 }
 
+/** 移动守卫：targetId 是 id 自身或其后代时 true。
+ *  把块移到自身/后代下会形成 parent 环——树渲染与各种子树遍历都会被破坏。
+ *  （fetchSubtreeBlocks 的 CTE 用 UNION 去重，环上不会死循环，但环内节点会从文档树消失） */
+export function isSelfOrDescendant(db: Db, id: string, targetId: string): boolean {
+  if (targetId === id) return true
+  return fetchSubtreeBlocks(db, id).some((r) => r.id === targetId)
+}
+
 /** 软删除：is_deleted = 1 + delete_id tombstone + updated_at（幂等：已删除行不受影响） */
 export function softDeleteBlocks(db: Db, ids: string[]): void {
   if (ids.length === 0) return

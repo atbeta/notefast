@@ -199,6 +199,20 @@ describe('notefast_move_block', () => {
     expect(deniedSelf.result.isError).toBe(true)
     expect(errCode(deniedSelf.payload)).toBe('forbidden')
   })
+
+  test('循环父守卫：移到自身或后代下 → invalid_params', async () => {
+    const { para1, para2 } = setupDoc()
+    // 先建立 para1 → para2 的父子关系
+    await callTool('notefast_move_block', { block_id: para2, new_parent_id: para1 })
+
+    const self = await callTool('notefast_move_block', { block_id: para1, new_parent_id: para1 })
+    expect(self.result.isError).toBe(true)
+    expect(errCode(self.payload)).toBe('invalid_params')
+
+    const cycle = await callTool('notefast_move_block', { block_id: para1, new_parent_id: para2 })
+    expect(cycle.result.isError).toBe(true)
+    expect(errCode(cycle.payload)).toBe('invalid_params')
+  })
 })
 
 describe('notefast_list_revisions', () => {

@@ -22,6 +22,7 @@ import {
   moveBlock,
   shiftDescendantLevels,
   reRootDescendants,
+  isSelfOrDescendant,
   softDeleteBlocks,
   restoreBlocks,
   listRecentlyDeletedBlocks,
@@ -212,6 +213,10 @@ blocks.patch('/:id/move', zValidator('json', moveBlockSchema), (c) => {
     const parent = getBlockAnchor(db, input.new_parent_id)
     if (!parent) {
       return c.json({ error: 'not_found', message: `目标父块 ${input.new_parent_id} 不存在` }, 404)
+    }
+    // 循环父守卫：移到自身/后代下会成 parent 环
+    if (isSelfOrDescendant(db, id, input.new_parent_id)) {
+      return c.json({ error: 'invalid_params', message: '不能移动到自身或其子块下（会形成循环）' }, 400)
     }
     newRootId = parent.root_id
     newLevel = parent.level + 1

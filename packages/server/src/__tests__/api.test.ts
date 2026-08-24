@@ -623,4 +623,34 @@ describe('Blocks move 传播', () => {
     expect(movedChild.root_id).toBe(docB.id)
     expect(movedChild.level).toBe(2)
   })
+
+  test('循环父守卫：移到自身或后代下 → 400 invalid_params', async () => {
+    const { body: doc } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: 'move-cycle' })
+    const { body: heading } = await api('POST', '/api/v1/blocks', {
+      notebook_id: notebookId,
+      parent_id: doc.id,
+      type: 'heading',
+      content: 'h',
+    })
+    const { body: child } = await api('POST', '/api/v1/blocks', {
+      notebook_id: notebookId,
+      parent_id: heading.id,
+      type: 'paragraph',
+      content: 'c',
+    })
+
+    // 移到自身下
+    const self = await api('PATCH', `/api/v1/blocks/${heading.id}/move`, { new_parent_id: heading.id })
+    expect(self.status).toBe(400)
+    expect((self.body as { error: string }).error).toBe('invalid_params')
+
+    // 移到自己的后代下
+    const cycle = await api('PATCH', `/api/v1/blocks/${heading.id}/move`, { new_parent_id: child.id })
+    expect(cycle.status).toBe(400)
+    expect((cycle.body as { error: string }).error).toBe('invalid_params')
+
+    // 结构未被破坏：父子关系保持原样
+    const { body: unchanged } = await api('GET', `/api/v1/blocks/${child.id}`)
+    expect(unchanged.parent_id).toBe(heading.id)
+  })
 })
