@@ -641,6 +641,23 @@ describe('MCP 写入的 actor 标注（历史面板可识别）', () => {
     ).get(blockId) as { actor: string } | undefined
     expect(rev?.actor).toBe('mcp')
   })
+
+  test('update_block 子块 → 文档根 updated_at 冒泡更新（列表「最近更新」语义）', async () => {
+    const { getDb } = await import('../db')
+    const db = getDb()
+    const nb = db.query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { insertDocFromMarkdown } = await import('../services/docImport')
+    const created = insertDocFromMarkdown(db, { notebookId: nb.id, title: 'MCP 冒泡测试', markdown: '原始内容' })
+    const blockId = created.blockIds[0]!
+    const rootU = () =>
+      (db.query('SELECT updated_at FROM blocks WHERE id = ?').get(created.docId) as { updated_at: string }).updated_at
+
+    const t0 = rootU()
+    await new Promise((r) => setTimeout(r, 10)) // SQL_NOW 毫秒精度，确保有差异窗口
+    const { result } = await callTool('notefast_update_block', { block_id: blockId, content: 'MCP 改的' })
+    expect(result.isError).toBeFalsy()
+    expect(rootU() > t0).toBe(true)
+  })
 })
 
 describe('notefast 分享工具（公开只读链接）', () => {

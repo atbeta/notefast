@@ -395,8 +395,12 @@ describe('sync protocol (publish → consume)', () => {
       now: nowTimestamp(),
     })
     const local = listChanges(target)
-    expect(local.length).toBe(1)
-    expect(local[0]!.is_erased).toBe(0)
+    // 两条：子块 INSERT + 文档根冒泡 UPDATE（子块变更顶根块 updated_at，
+    // 多端「最近更新」与 editor 整篇保存语义一致）；均非删除事件
+    expect(local.length).toBe(2)
+    expect(local.every((c) => c.is_erased === 0)).toBe(true)
+    // 其中一条是文档根 a 的冒泡事件
+    expect(local.some((c) => c.entity_id === a)).toBe(true)
     target.close()
   })
 

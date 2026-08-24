@@ -17,7 +17,7 @@
 import { normalizeTagList, parseMarkdownToBlocks, stripDocFrontmatter, stripTitleHeading } from '@notefast/core'
 import type { CreateBlockInput } from '@notefast/core'
 import type { getDb } from '../db'
-import { findDocIdBySource, getMaxChildSort, insertBlock, nowTimestamp } from '../store/blocks'
+import { findDocIdBySource, getMaxChildSort, insertBlock, nowTimestamp, touchDocRoot } from '../store/blocks'
 
 type Db = ReturnType<typeof getDb>
 
@@ -127,6 +127,8 @@ export function insertDocFromMarkdown(
       inputs,
       sortOffset: 0,
       now,
+      // 新文档：根块刚创建（updated_at = now），无需再冒泡
+      touchRoot: false,
     })
   })()
 
@@ -185,6 +187,13 @@ export interface InsertChildBlocksOptions {
   /** 起始 sort（追加场景接在当前最大 sort 之后） */
   sortOffset: number
   now: string
+  /**
+   * 末尾统一 bump 一次文档根 updated_at（默认 true，追加/整篇替换都是文档变更）。
+   * 新建文档（insertDocFromMarkdown）传 false：根块刚创建，无需再冒泡。
+   * 逐块冒泡在 insertBlock 里被 touchRoot:false 关掉 —— 批量场景只产生
+   * 一条根块 change-feed 事件，而非 N 条。
+   */
+  touchRoot?: boolean
 }
 
 /** 把解析出的 block 树插入为 rootId 的子块，返回实际入库的 block id（插入顺序） */
@@ -233,9 +242,14 @@ export function insertChildBlocks(db: Db, opts: InsertChildBlocksOptions): strin
       sort: opts.sortOffset + i,
       level: levelOf(inp),
       now: opts.now,
+      // 批量插入不做逐块冒泡，统一在末尾 touch 一次（避免 N 条根块 change-feed 事件）
+      touchRoot: false,
     })
     blockIds.push(blockId)
   }
 
+  if (opts.touchRoot !== false && blockIds.length > 0) {
+    touchDocRoot(db, opts.rootId)
+  }
   return blockIds
 }

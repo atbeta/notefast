@@ -483,6 +483,12 @@ export interface NewBlockRow {
   sort: number
   level: number
   now: string
+  /**
+   * 插入后是否冒泡 bump 文档根 updated_at（默认 true）。
+   * 批量路径（insertChildBlocks）传 false，由调用方末尾统一 touch 一次，
+   * 避免 N 个子块产生 N 条根块 change-feed 事件。
+   */
+  touchRoot?: boolean
 }
 
 /**
@@ -510,6 +516,36 @@ export function insertBlock(db: Db, row: NewBlockRow): void {
     row.now,
     row.now,
   )
+  // 子块插入冒泡到文档根（根块自身 id === root_id，天然跳过）
+  if (row.touchRoot !== false && row.id !== row.root_id) {
+    touchDocRoot(db, row.root_id)
+  }
+}
+
+/**
+ * 子块变更冒泡：把文档根 block 的 updated_at 顶到当前时间。
+ *
+ * 文档列表「最近更新」按文档根（type='document'）的 updated_at 排序；
+ * 块级写入（MCP update_block / 块 API PATCH / 追加等）只动子块时，
+ * 文档在列表里原地不动 —— 所有写原语在这里统一冒泡。
+ *
+ * 与 updateBlock 的 touchUpdatedAt 语义对齐：元数据变更（tags/ai_exclude）
+ * 不冒泡；批量路径（整篇替换/导入）由 insertChildBlocks 统一 touch 一次，
+ * 避免 N 个子块产生 N 条根块 change-feed 事件。
+ *
+ * 只 bump 未删除的根：回收站按根块 updated_at = 删除时间排序、恢复按
+ * deleted_at 匹配（fetchRestorableSubtreeIds），bump 已删除根会破坏两者。
+ */
+export function touchDocRoot(db: Db, rootId: string): void {
+  db.query(`UPDATE blocks SET updated_at = ${SQL_NOW} WHERE id = ? AND is_deleted = 0`).run(rootId)
+}
+
+/** id 是文档根时 no-op（根块自身已被调用方 bump） */
+function touchDocRootOf(db: Db, blockId: string): void {
+  db.query(
+    `UPDATE blocks SET updated_at = ${SQL_NOW}
+     WHERE id = (SELECT b.root_id FROM blocks b WHERE b.id = ?) AND id != ? AND is_deleted = 0`,
+  ).run(blockId, blockId)
 }
 
 /** 可更新字段（properties/tags 为 JSON 文本） */
@@ -611,6 +647,10 @@ export function updateBlock(db: Db, id: string, patch: BlockPatch): void {
   db.query(`UPDATE blocks SET ${updates.join(', ')} WHERE id = ?`).run(
     ...(params as [string, ...string[]]),
   )
+  // 内容/状态类变更冒泡到文档根；touchUpdatedAt=false（tags/ai_exclude 等元数据）不冒泡
+  if (patch.touchUpdatedAt !== false) {
+    touchDocRootOf(db, id)
+  }
 }
 
 /** block 的 revision 列表（新→旧）；内容来自历史表 */
@@ -739,11 +779,17 @@ export function moveBlock(
   id: string,
   target: { parentId: string | null; rootId: string; levelDiff: number; sort: number },
 ): void {
+  // 结构变更同时影响源文档与（跨文档移动时的）目标文档：两个根都冒泡
+  const before = db.query('SELECT root_id FROM blocks WHERE id = ?').get(id) as
+    | { root_id: string }
+    | undefined
   db.query(
     `UPDATE blocks SET parent_id = ?, root_id = ?, level = level + ?,
      sort = ?, updated_at = ${SQL_NOW}
      WHERE id = ?`,
   ).run(target.parentId, target.rootId, target.levelDiff, target.sort, id)
+  if (before && before.root_id !== id) touchDocRoot(db, before.root_id)
+  if (target.rootId !== id && target.rootId !== before?.root_id) touchDocRoot(db, target.rootId)
 }
 
 /** 后代 level 平移（move 的 levelDiff 传播） */
@@ -770,19 +816,35 @@ export function reRootDescendants(db: Db, ids: string[], rootId: string): void {
 export function softDeleteBlocks(db: Db, ids: string[]): void {
   if (ids.length === 0) return
   const placeholders = ids.map(() => '?').join(',')
+  // 删子块是文档变更：冒泡受影响文档根（排除自身在删除集里的根，根已被主 UPDATE bump）
+  const roots = db
+    .query(`SELECT DISTINCT root_id FROM blocks WHERE id IN (${placeholders})`)
+    .all(...(ids as [string, ...string[]])) as Array<{ root_id: string }>
+  const idSet = new Set(ids)
   db.query(
     `UPDATE blocks SET is_deleted = 1, delete_id = lower(hex(randomblob(16))), updated_at = ${SQL_NOW}
      WHERE id IN (${placeholders}) AND is_deleted = 0`,
   ).run(...(ids as [string, ...string[]]))
+  for (const { root_id } of roots) {
+    if (!idSet.has(root_id)) touchDocRoot(db, root_id)
+  }
 }
 
 /** 恢复软删除（含子树，由调用方收集 id）；同时清掉 delete_id tombstone */
 export function restoreBlocks(db: Db, ids: string[]): void {
   if (ids.length === 0) return
   const placeholders = ids.map(() => '?').join(',')
+  // 恢复同样是文档变更：冒泡受影响文档根
+  const roots = db
+    .query(`SELECT DISTINCT root_id FROM blocks WHERE id IN (${placeholders})`)
+    .all(...(ids as [string, ...string[]])) as Array<{ root_id: string }>
+  const idSet = new Set(ids)
   db.query(`UPDATE blocks SET is_deleted = 0, delete_id = NULL, updated_at = ${SQL_NOW} WHERE id IN (${placeholders})`).run(
     ...(ids as [string, ...string[]]),
   )
+  for (const { root_id } of roots) {
+    if (!idSet.has(root_id)) touchDocRoot(db, root_id)
+  }
 }
 
 /** 物理删除 block 行（永久删除）。FTS 由 AFTER DELETE 触发器清理；其余级联（refs/提及/分享/修订/快照/向量）由调用方在事务内完成。 */

@@ -468,8 +468,87 @@ describe('更新时间语义（元数据变更不 bump updated_at）', () => {
     expect(readU()).not.toBe(t0)
   })
 
-  test('清空回收站：批量物理删除全部软删文档', async () => {
-    const d1 = await createDoc('清空测试一')
+  test('子块变更冒泡 bump 文档根 updated_at；元数据不冒泡；已删除根不冒泡', async () => {
+    const { insertBlock, updateBlock, softDeleteBlocks, nowTimestamp } = await import('../store/blocks')
+    const db = getDb()
+    const docId = await createDoc('冒泡语义测试')
+    const readU = (id: string) =>
+      (db.query('SELECT updated_at FROM blocks WHERE id = ?').get(id) as { updated_at: string }).updated_at
+
+    const childId = crypto.randomUUID()
+    insertBlock(db, {
+      id: childId, notebook_id: notebookId, parent_id: docId, root_id: docId,
+      type: 'paragraph', content: '子块', sort: 100, level: 1, now: nowTimestamp(),
+    })
+    const t0 = readU(docId)
+    await new Promise((r) => setTimeout(r, 10)) // SQL_NOW 毫秒精度，确保有差异窗口
+
+    // 子块内容变更（MCP update_block / REST PATCH /blocks 共用此原语）→ 冒泡
+    updateBlock(db, childId, { content: '子块改' })
+    const t1 = readU(docId)
+    expect(t1 > t0).toBe(true)
+
+    await new Promise((r) => setTimeout(r, 10))
+    // 子块元数据变更（touchUpdatedAt: false）→ 不冒泡（与文档根 tags 语义一致）
+    updateBlock(db, childId, { tags: '["x"]', touchUpdatedAt: false })
+    expect(readU(docId)).toBe(t1)
+
+    await new Promise((r) => setTimeout(r, 10))
+    // 删子块 → 冒泡
+    softDeleteBlocks(db, [childId])
+    const t2 = readU(docId)
+    expect(t2 > t1).toBe(true)
+
+    // 整篇文档进回收站后：对残留子块的写入不得 bump 已删除根
+    // （回收站按 updated_at=删除时间排序，恢复按 deleted_at 匹配）
+    const tDel = readU(docId)
+    await app.request(`/docs/${docId}`, { method: 'DELETE' })
+    const tDeleted = readU(docId)
+    expect(tDeleted >= tDel).toBe(true)
+    await new Promise((r) => setTimeout(r, 10))
+    updateBlock(db, childId, { content: '回收站里改' })
+    expect(readU(docId)).toBe(tDeleted)
+  })
+
+  test('跨文档移动子块：源文档与目标文档根都冒泡', async () => {
+    const { insertBlock, moveBlock, nowTimestamp } = await import('../store/blocks')
+    const db = getDb()
+    const srcDoc = await createDoc('移动源文档')
+    const dstDoc = await createDoc('移动目标文档')
+    const childId = crypto.randomUUID()
+    insertBlock(db, {
+      id: childId, notebook_id: notebookId, parent_id: srcDoc, root_id: srcDoc,
+      type: 'paragraph', content: '待移动', sort: 100, level: 1, now: nowTimestamp(),
+    })
+    const srcT = (db.query('SELECT updated_at FROM blocks WHERE id = ?').get(srcDoc) as { updated_at: string }).updated_at
+    const dstT = (db.query('SELECT updated_at FROM blocks WHERE id = ?').get(dstDoc) as { updated_at: string }).updated_at
+    await new Promise((r) => setTimeout(r, 10))
+
+    moveBlock(db, childId, { parentId: dstDoc, rootId: dstDoc, levelDiff: 0, sort: 100 })
+    const srcAfter = (db.query('SELECT updated_at FROM blocks WHERE id = ?').get(srcDoc) as { updated_at: string }).updated_at
+    const dstAfter = (db.query('SELECT updated_at FROM blocks WHERE id = ?').get(dstDoc) as { updated_at: string }).updated_at
+    expect(srcAfter > srcT).toBe(true)
+    expect(dstAfter > dstT).toBe(true)
+  })
+
+  test('批量插入子块只产生一条文档根 change-feed 事件（不逐块冒泡）', async () => {
+    const { insertDocFromMarkdown, appendMarkdownToDoc } = await import('../services/docImport')
+    const db = getDb()
+    const created = insertDocFromMarkdown(db, { notebookId, title: '批量冒泡测试', markdown: '一' })
+    const docId = created.docId
+    // 清掉创建期事件，只观察追加阶段
+    db.query("DELETE FROM entity_changes").run()
+
+    const r = appendMarkdownToDoc(db, { docId, notebookId, markdown: '## 甲\n\n乙\n\n## 丙\n\n丁' })
+    expect(r.parsedCount).toBeGreaterThan(2)
+    const rootEvents = db
+      .query("SELECT count(*) AS c FROM entity_changes WHERE entity = 'block' AND entity_id = ?")
+      .get(docId) as { c: number }
+    // 追加 N 个子块 → 文档根只 bump 一次
+    expect(rootEvents.c).toBe(1)
+  })
+
+  test('清空回收站：批量物理删除全部软删文档', async () => {    const d1 = await createDoc('清空测试一')
     const d2 = await createDoc('清空测试二')
     const d3 = await createDoc('清空测试三')
     for (const id of [d1, d2, d3]) {
