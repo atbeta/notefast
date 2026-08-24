@@ -651,8 +651,9 @@ useEffect(() => {
       await api.del('/docs/' + id)
       navigate('/')
       // 软删除 + restore 端点：Undo toast 是 Web 上唯一的恢复入口
+      // 收集箱条目沿用列表侧「丢弃」措辞，语义一致
       toast.success({
-        title: t('doc.deleted'),
+        title: docStatus === 'inbox' ? t('docActions.discarded') : t('doc.deleted'),
         durationMs: 6000,
         action: {
           label: t('doc.undo'),
@@ -743,9 +744,14 @@ useEffect(() => {
         {/* Global Sticky Header — 左：访问历史 ｜ 中：标题 ｜ 右：操作 */}
         <PageHeader bare className="shrink-0 px-3 sm:px-6 print:hidden">
           <DocVisitNav />
-          {/* 中：文档标题（flex-1 撑满中间，居中截断） */}
-          <div className="flex-1 min-w-0 flex justify-center">
-            <span className="font-medium text-foreground truncate text-sm max-w-full">
+          {/* 中：状态小字（收集箱/归档）+ 文档标题（flex-1 撑满中间，居中截断） */}
+          <div className="flex-1 min-w-0 flex justify-center items-center gap-1.5">
+            {docStatus !== 'note' && (
+              <span className="shrink-0 text-2xs font-medium px-1.5 py-px rounded-md border border-border/70 text-muted-foreground">
+                {docStatus === 'inbox' ? t('sidebar.inbox') : t('sidebar.archived')}
+              </span>
+            )}
+            <span className="font-medium text-foreground truncate text-sm min-w-0">
               {doc.content || t('doc.untitledDocument')}
             </span>
           </div>
@@ -799,6 +805,7 @@ useEffect(() => {
                 docId={id}
                 exporting={exporting}
                 disabled={loading}
+                isInbox={docStatus === 'inbox'}
                 onExport={() => void handleExport()}
                 onDelete={() => setShowDelete(true)}
               />
@@ -1175,11 +1182,15 @@ useEffect(() => {
 
        <ConfirmDialog
         open={showDelete}
-        title={t('doc.confirmDeleteTitle')}
-        message={t('doc.confirmDeleteDescription')}
-        confirmLabel={t('common.delete')}
+        title={docStatus === 'inbox' ? t('docActions.confirmDiscardTitle') : t('doc.confirmDeleteTitle')}
+        message={
+          docStatus === 'inbox'
+            ? t('docActions.confirmDiscardMsg', { title: doc?.content || t('doc.untitledDocument') })
+            : t('doc.confirmDeleteDescription')
+        }
+        confirmLabel={docStatus === 'inbox' ? t('docActions.discard') : t('common.delete')}
         busy={deleting}
-        busyLabel={t('doc.deleting')}
+        busyLabel={docStatus === 'inbox' ? t('docActions.discarding') : t('doc.deleting')}
         tone="destructive"
         onConfirm={handleDelete}
         onCancel={() => setShowDelete(false)}

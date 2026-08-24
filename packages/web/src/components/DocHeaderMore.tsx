@@ -18,6 +18,8 @@ interface DocHeaderMoreProps {
   docId: string
   exporting: boolean
   disabled?: boolean
+  /** 收集箱条目删除走「丢弃」措辞（与列表侧 DocActionsMenu 一致） */
+  isInbox?: boolean
   onExport: () => void
   onDelete: () => void
 }
@@ -26,6 +28,7 @@ export default function DocHeaderMore({
   docId,
   exporting,
   disabled,
+  isInbox,
   onExport,
   onDelete,
 }: DocHeaderMoreProps) {
@@ -145,7 +148,7 @@ export default function DocHeaderMore({
             className="w-full flex items-center gap-2 px-2.5 py-1.5 text-base text-left text-destructive hover:bg-destructive/10 transition-colors"
           >
             <Trash2 className={iconCls} strokeWidth={1.75} />
-            <span>{t('doc.deleteDoc')}</span>
+            <span>{isInbox ? t('docActions.discard') : t('doc.deleteDoc')}</span>
           </button>
         </div>,
         document.body,

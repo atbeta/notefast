@@ -563,6 +563,12 @@ export default function Sidebar({
                         }`}
                       >
                         <span className="truncate">{doc.title || t('sidebar.untitled')}</span>
+                        {/* 来源标识：最近访问拉的是 status=all，仅对非默认态（收集箱/归档）标出，普通笔记不加噪；样式对齐 DocList 的状态 chip */}
+                        {doc.status && doc.status !== 'note' && (
+                          <span className="shrink-0 text-2xs font-medium px-1.5 py-px rounded-md border border-border/60 text-sidebar-muted/80">
+                            {doc.status === 'inbox' ? t('sidebar.inbox') : t('sidebar.archived')}
+                          </span>
+                        )}
                         {draftIds.has(doc.id) && (
                           <Tooltip label={t('sidebar.hasDraft')}>
                             <span
