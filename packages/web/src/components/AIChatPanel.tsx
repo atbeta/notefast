@@ -316,9 +316,14 @@ export default function AIChatPanel({
     setLoading(true)
     setConfigMissing(false)
 
+    // 出站前剔除 content 为空的历史消息：推理阶段（reasoning 先于 token）被停止/出错时，
+    // messages 里会留下只有思考过程、content 为 '' 的 assistant 空壳；
+    // 服务端 chatSchema 要求 content min(1)，带上它会让本轮及之后每轮都 400。
+    // 只影响出站载荷，UI 中的思考过程展示不受影响。
+    const historyForSend = newHistory.filter((m) => m.content.trim().length > 0)
     // 图片只随当轮发送（data URL 透传给视觉模型），历史轮次保持纯文本以控制 token 成本
-    const outgoing = newHistory.map((m, i) => {
-      if (i === newHistory.length - 1 && hasImages) {
+    const outgoing = historyForSend.map((m, i) => {
+      if (i === historyForSend.length - 1 && hasImages) {
         return {
           role: m.role,
           content: [
@@ -426,8 +431,11 @@ export default function AIChatPanel({
   }
 
   const handleStop = () => {
-    if (abortRef.current) abortRef.current.abort()
-    setLoading(false)
+    // 只触发中断，loading / abortRef 的清理由 handleSubmit 收尾统一做。
+    // 若在此抢先 setLoading(false)，用户可在旧轮次收尾前发出新消息：
+    // 旧收尾的 flushAssistant 会把过期 assistant 追加到新 user 消息之后、
+    // 并把 abortRef 置空，导致新一轮「停止」失效。
+    abortRef.current?.abort()
     setToolStatus(null)
   }
 
