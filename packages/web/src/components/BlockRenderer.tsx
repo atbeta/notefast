@@ -280,12 +280,11 @@ function MarkdownHref({ href, children }: { href: string; children: ReactNode })
   const resolved = resolveMarkdownHref(href)
   if (resolved.kind === 'invalid') {
     return (
-      <span
-        className="underline decoration-dotted decoration-muted-foreground/70 text-muted-foreground"
-        title={i18next.t('block.invalidLink')}
-      >
-        {children}
-      </span>
+      <Tooltip label={i18next.t('block.invalidLink')}>
+        <span className="underline decoration-dotted decoration-muted-foreground/70 text-muted-foreground">
+          {children}
+        </span>
+      </Tooltip>
     )
   }
   if (resolved.kind === 'hash') {

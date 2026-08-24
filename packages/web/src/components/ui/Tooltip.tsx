@@ -65,7 +65,8 @@ export function Tooltip({
       onMouseDown={hide}
     >
       {children}
-      {style &&
+      {/* 空 label 不弹空框（如无标题文档的悬浮提示） */}
+      {style && label &&
         createPortal(
           <span
             role="tooltip"

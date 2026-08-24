@@ -54,7 +54,6 @@ export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
         <span
           key={tag}
           className="group/chip inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-xs bg-muted/60 hover:bg-muted text-foreground/85 hover:text-foreground transition-colors"
-          title={tag}
         >
           <span className="font-mono">{tag}</span>
           <button

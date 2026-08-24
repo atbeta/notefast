@@ -8,7 +8,7 @@ import { splitCiteParts } from '../lib/chatCites'
 import MermaidDiagram from './MermaidDiagram'
 import MathBlock, { MathInline } from './MathBlock'
 import { LightboxImg } from './ImageLightbox'
-import { CopyButton } from './ui'
+import { CopyButton, Tooltip } from './ui'
 import { useTranslation } from 'react-i18next'
 import i18next from '../i18n'
 import { resolveMarkdownHref } from '../lib/markdownHref'
@@ -102,12 +102,11 @@ function ChatMarkdown({ content, className = '', maxCite = 0 }: ChatMarkdownProp
             const resolved = resolveMarkdownHref(href ?? '')
             if (resolved.kind === 'invalid') {
               return (
-                <span
-                  className="underline decoration-dotted decoration-muted-foreground/70 text-muted-foreground"
-                  title={i18next.t('block.invalidLink')}
-                >
-                  {children}
-                </span>
+                <Tooltip label={i18next.t('block.invalidLink')}>
+                  <span className="underline decoration-dotted decoration-muted-foreground/70 text-muted-foreground">
+                    {children}
+                  </span>
+                </Tooltip>
               )
             }
             if (resolved.kind === 'hash') {

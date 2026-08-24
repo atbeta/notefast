@@ -161,21 +161,21 @@ function PinnedViewItem({
 
   return (
     <div className="group flex items-center gap-1">
-      <Link
-        to={`/?${canonicalViewQuery(view.query)}`}
-        onClick={onNavigate}
-        className={`flex-1 px-2.5 py-2 rounded-md text-base truncate transition-colors ${
-          active
-            ? 'bg-primary-soft text-primary font-medium'
-            : 'text-sidebar-muted hover:bg-[var(--primary-softer)] hover:text-sidebar-accent-foreground'
-        }`}
-        title={view.name}
-        onDoubleClick={(e) => {
-          e.preventDefault()
-          setEditing(true)
-          setEditName(view.name)
-        }}
-      >
+      <Tooltip label={view.name} className="flex-1 min-w-0">
+        <Link
+          to={`/?${canonicalViewQuery(view.query)}`}
+          onClick={onNavigate}
+          className={`block w-full px-2.5 py-2 rounded-md text-base truncate transition-colors ${
+            active
+              ? 'bg-primary-soft text-primary font-medium'
+              : 'text-sidebar-muted hover:bg-[var(--primary-softer)] hover:text-sidebar-accent-foreground'
+          }`}
+          onDoubleClick={(e) => {
+            e.preventDefault()
+            setEditing(true)
+            setEditName(view.name)
+          }}
+        >
         {editing ? (
           <input
             autoFocus
@@ -196,7 +196,8 @@ function PinnedViewItem({
             {view.name}
           </span>
         )}
-      </Link>
+        </Link>
+      </Tooltip>
       <Tooltip label={t('sidebar.unpin')}>
         <button
           onClick={(e) => {
@@ -553,24 +554,25 @@ export default function Sidebar({
                         : 'text-sidebar-muted hover:bg-[var(--primary-softer)] hover:text-sidebar-accent-foreground'
                     }`}
                   >
-                    <Link
-                      to={`/doc/${doc.id}`}
-                      onClick={closeAfterNav}
-                      className={`min-w-0 flex-1 flex items-center gap-1.5 px-2.5 py-2 text-base ${
-                        isActive ? 'font-medium' : ''
-                      }`}
-                      title={doc.title}
-                    >
-                      <span className="truncate">{doc.title || t('sidebar.untitled')}</span>
-                      {draftIds.has(doc.id) && (
-                        <Tooltip label={t('sidebar.hasDraft')}>
-                          <span
-                            aria-label={t('sidebar.hasDraft')}
-                            className="w-1.5 h-1.5 rounded-full bg-warn shrink-0"
-                          />
-                        </Tooltip>
-                      )}
-                    </Link>
+                    <Tooltip label={doc.title} className="min-w-0 flex-1">
+                      <Link
+                        to={`/doc/${doc.id}`}
+                        onClick={closeAfterNav}
+                        className={`w-full flex items-center gap-1.5 px-2.5 py-2 text-base ${
+                          isActive ? 'font-medium' : ''
+                        }`}
+                      >
+                        <span className="truncate">{doc.title || t('sidebar.untitled')}</span>
+                        {draftIds.has(doc.id) && (
+                          <Tooltip label={t('sidebar.hasDraft')}>
+                            <span
+                              aria-label={t('sidebar.hasDraft')}
+                              className="w-1.5 h-1.5 rounded-full bg-warn shrink-0"
+                            />
+                          </Tooltip>
+                        )}
+                      </Link>
+                    </Tooltip>
                     <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0 pr-0.5">
                       <DocActionsMenu
                         doc={doc}
@@ -615,14 +617,15 @@ export default function Sidebar({
             </Tooltip>
           </div>
           {version && (
-            <Link
-              to="/settings/about"
-              onClick={closeAfterNav}
-              className="text-2xs font-mono tabular-nums text-sidebar-muted/55 hover:text-sidebar-muted transition-colors"
-              title={t('settings.tabs.about')}
-            >
-              v{version}
-            </Link>
+            <Tooltip label={t('settings.tabs.about')}>
+              <Link
+                to="/settings/about"
+                onClick={closeAfterNav}
+                className="text-2xs font-mono tabular-nums text-sidebar-muted/55 hover:text-sidebar-muted transition-colors"
+              >
+                v{version}
+              </Link>
+            </Tooltip>
           )}
         </div>
       </div>

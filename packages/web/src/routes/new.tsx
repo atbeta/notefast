@@ -420,7 +420,11 @@ export default function NewDocPage() {
               {zipResult.errors.length > 0 && (
                 <ul className="text-xs text-destructive/90 space-y-0.5 max-h-28 overflow-y-auto pl-1">
                   {zipResult.errors.map((msg, i) => (
-                    <li key={i} className="truncate" title={msg}>{msg}</li>
+                    <li key={i}>
+                      <Tooltip label={msg} className="w-full min-w-0">
+                        <span className="block w-full truncate">{msg}</span>
+                      </Tooltip>
+                    </li>
                   ))}
                 </ul>
               )}

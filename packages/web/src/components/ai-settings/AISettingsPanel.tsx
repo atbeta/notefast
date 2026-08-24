@@ -790,7 +790,7 @@ export default function AISettingsPanel() {
                 )}
                 {entityRebuild.errors > 0 && t('aiSettings.entityRebuildErrors', { n: entityRebuild.errors })}
                 {entityRebuild.last_error && (
-                  <span className="text-destructive" title={entityRebuild.last_error}>
+                  <span className="text-destructive">
                     {' '}· {entityRebuild.last_error}
                   </span>
                 )}

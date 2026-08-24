@@ -1093,7 +1093,6 @@ useEffect(() => {
                     <button
                       key={tab.id}
                       type="button"
-                      title={tab.label}
                       onClick={() => setRailTab(tab.id)}
                       className={`min-w-0 px-0.5 pb-2.5 pt-3 text-xs font-medium transition-colors border-b-2 -mb-px truncate text-center ${
                         active
@@ -1101,7 +1100,9 @@ useEffect(() => {
                           : 'text-muted-foreground border-transparent hover:text-foreground'
                       }`}
                     >
-                      {tab.label}
+                      <Tooltip label={tab.label} className="w-full min-w-0">
+                        <span className="block w-full truncate">{tab.label}</span>
+                      </Tooltip>
                     </button>
                   )
                 })}
@@ -1222,29 +1223,29 @@ function OutlineView({
       {headings.map((h) => {
         const isActive = h.id === activeId
         return (
-          <a
-            key={h.id}
-            href={`#${h.id}`}
-            aria-current={isActive ? 'location' : undefined}
-            onClick={(e) => {
-              e.preventDefault()
-              // heading id = block.id（见 BlockRenderer）；手动 rAF 平滑滚动，规避部分环境原生 smooth 失效
-              const el = document.getElementById(h.id)
-              if (el) scrollToElement(el)
-              // 立即高亮目标，不等滚动动画结束（滚动落定后 tolerance 保持高亮）
-              onJump?.(h.id)
-              history.replaceState(null, '', `#${h.id}`)
-            }}
-            className={`px-1.5 -mx-1.5 py-1 text-sm rounded-md transition-colors truncate ${
-              isActive
-                ? 'text-primary font-medium bg-primary-soft'
-                : 'text-muted-foreground/85 hover:text-foreground'
-            }`}
-            style={{ paddingLeft: `${(h.depth * 12) + 6}px` }}
-            title={h.content}
-          >
-            {h.content}
-          </a>
+          <Tooltip key={h.id} label={h.content} className="w-full min-w-0">
+            <a
+              href={`#${h.id}`}
+              aria-current={isActive ? 'location' : undefined}
+              onClick={(e) => {
+                e.preventDefault()
+                // heading id = block.id（见 BlockRenderer）；手动 rAF 平滑滚动，规避部分环境原生 smooth 失效
+                const el = document.getElementById(h.id)
+                if (el) scrollToElement(el)
+                // 立即高亮目标，不等滚动动画结束（滚动落定后 tolerance 保持高亮）
+                onJump?.(h.id)
+                history.replaceState(null, '', `#${h.id}`)
+              }}
+              className={`block w-full px-1.5 -mx-1.5 py-1 text-sm rounded-md transition-colors truncate ${
+                isActive
+                  ? 'text-primary font-medium bg-primary-soft'
+                  : 'text-muted-foreground/85 hover:text-foreground'
+              }`}
+              style={{ paddingLeft: `${(h.depth * 12) + 6}px` }}
+            >
+              {h.content}
+            </a>
+          </Tooltip>
         )
       })}
     </div>
