@@ -21,6 +21,12 @@
     background: var(--selection);
     color: rgb(var(--foreground));
   }
+  /* 墨色深底气泡（AI 聊天用户消息等）：全局选中色会把白字压成深色，需按 ink-foreground 反转（暗色主题下 token 自动翻转） */
+  .bg-ink::selection,
+  .bg-ink ::selection {
+    background: rgb(var(--ink-foreground) / 0.28);
+    color: rgb(var(--ink-foreground));
+  }
 
   /* ───────────── 表单控件：去掉原生丑箭头 / 复选框 / 单选 ───────────── */
   input[type='number'] {
