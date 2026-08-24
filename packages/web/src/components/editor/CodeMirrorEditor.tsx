@@ -126,9 +126,6 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
     const propsRef = useRef(props)
     propsRef.current = props
     const lastEmittedRef = useRef(props.value)
-    // 标记「最近一次 dispatch 是编辑器内部写回（表格等）」：value effect 检测到
-    // 时跳过光标跳转，避免表格编辑完成后光标/滚动被重置到别处
-    const tableWritebackRef = useRef(false)
 
     const [tableSession, setTableSession] = useState<{
       from: number
@@ -143,7 +140,6 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
       const sess = tableSessionRef.current
       if (!view || !sess) return
       if (!tablesEqual(table, sess.table)) {
-        tableWritebackRef.current = true
         view.dispatch({
           changes: { from: sess.from, to: sess.to, insert: serializeTable(table) },
           userEvent: 'input',
@@ -154,8 +150,10 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
         requestAnimationFrame(() => {
           const v = viewRef.current
           if (!v) return
-          v.dispatch({ selection: { anchor: sess.from } })
-          v.focus()
+          // scrollIntoView 显式滚到表格位置；focus 用 preventScroll 避免浏览器
+          // 把整个 contentDOM 对齐视口（整页跳到文档头）
+          v.dispatch({ selection: { anchor: sess.from }, scrollIntoView: true })
+          v.contentDOM.focus({ preventScroll: true })
         })
       }
     }, [])
@@ -367,22 +365,19 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
     }, [])
 
     // 外部 value 变化（文档加载完成 / 草稿恢复）时整体替换文档内容。
-    // 表格编辑等「内部 dispatch 写回」不重置光标（tableWritebackRef 标记）：
-    // 否则 dispatch 后父组件 value 变化会触发这里全量替换 + 光标跳到文档末尾，
-    // 表现为「编辑完表格跳回文档头/不在原位置」。
+    // 编辑器内部 dispatch（输入、表格写回等）经 updateListener 同步更新
+    // lastEmittedRef，props 回流相同字符串时下方首个 if 直接短路，不会走到替换。
     useEffect(() => {
       const view = viewRef.current
       if (!view) return
       if (props.value === lastEmittedRef.current) return
       const current = view.state.doc.toString()
       if (props.value !== current) {
+        // CM 会把 \r\n 规范化为 \n（每个 CRLF 少 1 字符）：anchor 必须按规范化后的长度计算，
+        // 否则含 CRLF 的文档（zip 导入的 Windows md 等）dispatch 时 selection 越界，
+        // 抛 RangeError("Selection points outside of document") → 整页白屏
         const anchor = props.value.replace(/\r\n/g, '\n').length
         lastEmittedRef.current = props.value
-        if (tableWritebackRef.current) {
-          // 内部表格写回：内容已在 CM 最新，无需全量替换；保持当前光标/滚动
-          tableWritebackRef.current = false
-          return
-        }
         view.dispatch({
           changes: { from: 0, to: current.length, insert: props.value },
           selection: { anchor },

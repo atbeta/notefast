@@ -92,9 +92,11 @@ export function useFocusTrap(
     return () => {
       cancelAnimationFrame(raf)
       document.removeEventListener('keydown', handleKeyDown)
-      // 还原焦点：优先回到打开弹窗前的元素
+      // 还原焦点：优先回到打开弹窗前的元素。
+      // 必须 preventScroll —— 原焦点若是 CodeMirror contentDOM（整篇文档高度），
+      // 浏览器 focus 默认 scrollIntoView 会把元素顶部对齐视口，表现为「关闭弹窗跳回文档头」
       if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
-        previouslyFocused.focus()
+        previouslyFocused.focus({ preventScroll: true })
       }
     }
   }, [ref, active])
