@@ -27,13 +27,13 @@ import { request } from '../hooks/useAPI'
 import { useAiCapabilities, refreshAiCapabilitiesSilent } from '../hooks/useAiCapabilities'
 import { streamSSE, type SSEError } from '../lib/streaming'
 import { useScrollFade } from '../hooks/useScrollFade'
-import { isTauriShell } from '../hooks/useShell'
+import { isTauriShell, getShell } from '../hooks/useShell'
 import { ASK_AI_EVENT, type AskAiDetail } from '../lib/askAi'
 import ChatMarkdown from './ChatMarkdown'
 import { LightboxImg } from './ImageLightbox'
 import CitationSources, { type Citation, type CitationGroup, type RetrievalInfo } from './CitationSources'
 import ConfirmDialog from './ConfirmDialog'
-import { Tooltip } from './ui'
+import { Tooltip, useToast } from './ui'
 
 interface AiSkill {
   id: string
@@ -60,7 +60,7 @@ interface SpeechRecognitionLike {
   continuous: boolean
   onresult: ((ev: SpeechResultEvent) => void) | null
   onend: (() => void) | null
-  onerror: (() => void) | null
+  onerror: ((ev: { error?: string }) => void) | null
   start(): void
   stop(): void
   abort(): void
@@ -71,6 +71,23 @@ function speechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
     webkitSpeechRecognition?: new () => SpeechRecognitionLike
   }
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+}
+
+/** SpeechRecognition error 码 → i18n key（onerror 与 start() 抛错共用入口提示） */
+function voiceErrorKey(code?: string): string {
+  switch (code) {
+    case 'not-allowed':
+    case 'service-not-allowed':
+      return 'chat.voiceErrorNotAllowed'
+    case 'audio-capture':
+      return 'chat.voiceErrorNoMic'
+    case 'network':
+      return 'chat.voiceErrorNetwork'
+    case 'no-speech':
+      return 'chat.voiceErrorNoSpeech'
+    default:
+      return 'chat.voiceErrorGeneric'
+  }
 }
 
 interface Message {
@@ -105,6 +122,7 @@ export default function AIChatPanel({
   onToggleExpand,
 }: AIChatPanelProps) {
   const { t } = useTranslation()
+  const toast = useToast()
   const [messages, setMessages] = useState<Message[]>([])
   const [citations, setCitations] = useState<Citation[]>([])
   const [retrieval, setRetrieval] = useState<RetrievalInfo | null>(null)
@@ -127,7 +145,11 @@ export default function AIChatPanel({
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const speechBaseRef = useRef('')
   const [listening, setListening] = useState(false)
-  const speechSupported = typeof window !== 'undefined' && speechRecognitionCtor() !== null
+  // Web Speech API 在原生壳里不可用：WKWebView 需要壳层实现识别权限委托（未实现则
+  // start() 抛错/静默失败），WebView2 不带 Google 语音服务（能启动但永无结果）。
+  // 壳内直接隐藏入口，等后续服务端转写（MediaRecorder + /audio/transcriptions）再恢复。
+  const speechSupported =
+    typeof window !== 'undefined' && !getShell() && speechRecognitionCtor() !== null
 
   const toggleListen = () => {
     if (listening) {
@@ -155,12 +177,24 @@ export default function AIChatPanel({
       recognitionRef.current = null
       setListening(false)
     }
-    rec.onerror = () => {
+    rec.onerror = (ev) => {
       recognitionRef.current = null
       setListening(false)
+      // 失败原因对用户可见（原实现静默吞掉，表现为「录了半天没内容」）
+      const key = voiceErrorKey(ev?.error)
+      const payload = { title: t('chat.voiceErrorTitle'), description: t(key) }
+      if (ev?.error === 'no-speech') toast.info(payload)
+      else toast.error(payload)
     }
     recognitionRef.current = rec
-    rec.start()
+    try {
+      rec.start()
+    } catch {
+      // 部分嵌入式 webview 里 start() 会同步抛错；复位并提示，不要留下假 listening 态
+      recognitionRef.current = null
+      toast.error({ title: t('chat.voiceErrorTitle'), description: t('chat.voiceErrorStart') })
+      return
+    }
     setListening(true)
   }
 
