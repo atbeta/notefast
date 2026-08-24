@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.76.4](https://github.com/atbeta/notefast/compare/v0.76.3...v0.76.4) (2026-08-24)
+
+
+### Bug Fixes
+
+* **server:** health endpoint root-cause index hint + read-only refresh ([16ef1ed](https://github.com/atbeta/notefast/commit/16ef1ed28b03246dff40d649c05e40a7b59461d3))
+* **web:** stop table dialog close from scrolling to doc top ([7a856b1](https://github.com/atbeta/notefast/commit/7a856b15b9ca6d9ba315593d17cc1e52d72a478d))
+
 ## [0.76.3](https://github.com/atbeta/notefast/compare/v0.76.2...v0.76.3) (2026-08-24)
 
 
