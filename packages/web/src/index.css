@@ -383,11 +383,11 @@
    ──────────────────────────────────────────────────────────────── */
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .animate-fade-in {
-  animation: fade-in var(--dur-slow) var(--ease) both;
+  animation: fade-in var(--dur) var(--ease) both;
 }
 /* 不要把 animate-fade-in（含 transform）套在 .demo-zoom 祖先上：Chromium 里
    zoom + 祖先 transform 会从左上角抹开，慢加载下像「正文从左往右长出来」。 */
