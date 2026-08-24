@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.77.0](https://github.com/atbeta/notefast/compare/v0.76.7...v0.77.0) (2026-08-24)
+
+
+### Features
+
+* **server:** close MCP knowledge-domain gaps and enforce token scopes ([ad62f06](https://github.com/atbeta/notefast/commit/ad62f068aa65d82ff9334b8e803ada2bc971ff07))
+* **web:** inline mermaid preview in editor when cursor leaves block ([5cbd2e7](https://github.com/atbeta/notefast/commit/5cbd2e7c3f2f10980ff938c4ad83acf5947a4499))
+* **web:** polish i18n copy and enforce zh/en line alignment ([1dc02c4](https://github.com/atbeta/notefast/commit/1dc02c4f79975263955f0dc229404c8adc9efa9b))
+* **web:** surface doc lifecycle status in recent list and doc header ([81c35c6](https://github.com/atbeta/notefast/commit/81c35c6bab769d326a55fbdb102eca9b63977730))
+
+
+### Bug Fixes
+
+* **server:** refresh MCP session scopes per request so revocation takes effect immediately ([1637af5](https://github.com/atbeta/notefast/commit/1637af58786891e89b2173d845411343b721b440))
+* **server:** reject moving a block under itself or its descendant ([ea14f93](https://github.com/atbeta/notefast/commit/ea14f93c1460cb82a930c17ae164c5a6f4e00865))
+* **web:** align doc notice banners with reading column width ([5fd92f7](https://github.com/atbeta/notefast/commit/5fd92f7c6e565f82cc846619cc192059eb5cfac1))
+* **web:** anchor outline scroll landing to scroller top, not fixed viewport offset ([58f4dc6](https://github.com/atbeta/notefast/commit/58f4dc62bbeec61c1b3c0c52ead9f802ea2ef7e1))
+* **web:** degrade voice input gracefully in native shells ([c4a4364](https://github.com/atbeta/notefast/commit/c4a436433fb4ada68d1ddc70587e79ed10c58aed))
+* **web:** drop unimplemented wikilink promise from new-doc placeholder ([789a703](https://github.com/atbeta/notefast/commit/789a703bc5fa0b0a4f0a06b0130dce7c40609dd4))
+* **web:** invert selection color on dark ink chat bubbles ([a442a61](https://github.com/atbeta/notefast/commit/a442a61d9ea9068089e78ff778135f18ce48b5a5))
+* **web:** prevent 400s and stale state when resending after chat stop ([2aadae7](https://github.com/atbeta/notefast/commit/2aadae7d4e655513097b918df61e9aec67ddf729))
+
 ## [0.76.7](https://github.com/atbeta/notefast/compare/v0.76.6...v0.76.7) (2026-08-24)
 
 
