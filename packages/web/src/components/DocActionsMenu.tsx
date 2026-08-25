@@ -449,8 +449,8 @@ export default function DocActionsMenu({
 
       {showRename && createPortal(
         <div className="fixed inset-0 z-dialog flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowRename(false)} />
-          <div className="relative bg-card rounded-lg shadow-floating shadow-black/40 max-w-sm w-full mx-4 p-6 animate-fade-in">
+          <div className="fixed inset-0 dialog-overlay" onClick={() => setShowRename(false)} />
+          <div className="relative bg-card dialog-card max-w-sm w-full mx-4 p-6 animate-fade-in">
             <h3 className="text-md font-medium text-foreground tracking-tight mb-3">{t('docActions.renameTitle')}</h3>
             <Input
               ref={renameInputRef}

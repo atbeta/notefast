@@ -197,7 +197,7 @@ export default function Layout({ children, contentClassName }: { children: React
         {/* 移动端 drawer — 演示模式不提供 */}
         {mobileOpen && !demo.active && (
           <div className="md:hidden fixed inset-0 z-sheet flex">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={closeMobile} />
+            <div className="absolute inset-0 dialog-overlay animate-fade-in" onClick={closeMobile} />
             <div className="relative w-64 h-full bg-background shadow-floating animate-fade-in pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
               <Sidebar
                 collapsed={false}

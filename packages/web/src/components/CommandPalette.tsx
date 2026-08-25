@@ -231,9 +231,9 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
           会「先糊满、黑色才淡入」。半透明遮罩 + 面板同时长 fade/slide，一条动效。 */}
       <div
         onClick={onClose}
-        className={`absolute inset-0 bg-black/40 transition-opacity duration-100 ease-[var(--ease)] ${open ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 dialog-overlay transition-opacity duration-100 ease-[var(--ease)] ${open ? 'opacity-100' : 'opacity-0'}`}
       />
-      <div className={`relative w-full max-w-xl bg-popover rounded-2xl border border-border shadow-floating overflow-hidden transition-[opacity,transform] duration-100 ease-[var(--ease)] ${open ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-1 scale-[0.99]'}`}>
+      <div className={`relative w-full max-w-xl bg-popover dialog-card overflow-hidden transition-[opacity,transform] duration-100 ease-[var(--ease)] ${open ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-1 scale-[0.99]'}`}>
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
           <Search className="w-4 h-4 text-muted-foreground shrink-0" />
           <input

@@ -75,14 +75,14 @@ export default function ConfirmDialog({
   // 裁剪，导致全屏弹窗不可见
   return createPortal(
     <div className="fixed inset-0 z-modal flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity" onClick={busy ? undefined : onCancel} aria-hidden="true" />
+      <div className="fixed inset-0 dialog-overlay transition-opacity" onClick={busy ? undefined : onCancel} aria-hidden="true" />
       <div
         ref={containerRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-message"
-        className="relative bg-card rounded-lg shadow-floating shadow-black/40 max-w-sm w-full mx-4 p-6 sm:p-7 animate-fade-in"
+        className="relative bg-card dialog-card max-w-sm w-full mx-4 p-6 sm:p-7 animate-fade-in"
       >
         <div className="flex items-start gap-3.5 mb-6">
           {effectiveTone === 'destructive' ? (

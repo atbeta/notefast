@@ -180,6 +180,18 @@
     @apply bg-card text-card-foreground rounded-card border border-border;
     box-shadow: var(--shadow-card);
   }
+  /* 模态弹窗遮罩/卡片：样式走 dialog token，原生壳（data-shell）按平台惯例翻转；
+     组件不再写死 bg-black/40 + backdrop-blur + rounded-* */
+  .dialog-overlay {
+    background-color: rgb(var(--dialog-overlay) / var(--dialog-overlay-alpha));
+    backdrop-filter: blur(var(--dialog-blur));
+    -webkit-backdrop-filter: blur(var(--dialog-blur));
+  }
+  .dialog-card {
+    border-radius: var(--dialog-radius);
+    border: 1px solid rgb(var(--border));
+    box-shadow: var(--dialog-shadow);
+  }
   .card-interactive {
     @apply bg-transparent text-card-foreground rounded-card cursor-pointer;
     transition: background-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);

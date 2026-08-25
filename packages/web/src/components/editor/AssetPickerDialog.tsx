@@ -74,7 +74,7 @@ export default function AssetPickerDialog({ open, onClose, onPick }: AssetPicker
   return createPortal(
     <div className="fixed inset-0 z-dialog flex items-center justify-center p-4">
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-[2px]"
+        className="fixed inset-0 dialog-overlay"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -83,7 +83,7 @@ export default function AssetPickerDialog({ open, onClose, onPick }: AssetPicker
         role="dialog"
         aria-modal="true"
         aria-labelledby="asset-picker-title"
-        className="relative bg-card rounded-lg border border-border shadow-floating shadow-black/40 w-full max-w-lg max-h-[min(70vh,560px)] flex flex-col animate-fade-in"
+        className="relative bg-card dialog-card w-full max-w-lg max-h-[min(70vh,560px)] flex flex-col animate-fade-in"
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border/60 shrink-0">
           <h3 id="asset-picker-title" className="text-md font-medium text-foreground tracking-tight">

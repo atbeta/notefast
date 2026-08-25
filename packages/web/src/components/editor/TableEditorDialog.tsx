@@ -138,7 +138,7 @@ export default function TableEditorDialog({
   return createPortal(
     <div className="fixed inset-0 z-dialog flex items-center justify-center p-4">
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-[2px]"
+        className="fixed inset-0 dialog-overlay"
         onClick={() => finish(false)}
         aria-hidden="true"
       />
@@ -147,7 +147,7 @@ export default function TableEditorDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="table-editor-title"
-        className="relative bg-card rounded-lg border border-border shadow-floating shadow-black/40 w-full max-w-4xl max-h-[min(80vh,720px)] flex flex-col overflow-hidden animate-fade-in"
+        className="relative bg-card dialog-card w-full max-w-4xl max-h-[min(80vh,720px)] flex flex-col overflow-hidden animate-fade-in"
       >
         {/* 网格放 DOM 前部，焦点落到第一个单元格；视觉上标题仍在顶 */}
         <div className="order-2 flex-1 min-h-0 overflow-auto px-4 py-3">

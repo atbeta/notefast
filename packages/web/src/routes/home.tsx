@@ -177,8 +177,8 @@ export default function HomePage() {
       </div>
 
       {showPinModal && (
-        <div className="fixed inset-0 z-sheet flex items-center justify-center bg-black/30" onClick={() => setShowPinModal(false)}>
-          <div className="bg-card border border-border rounded-lg p-5 w-80 shadow-floating space-y-3" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-sheet flex items-center justify-center dialog-overlay" onClick={() => setShowPinModal(false)}>
+          <div className="bg-card dialog-card p-5 w-80 space-y-3" onClick={(e) => e.stopPropagation()}>
             <div className="text-md font-medium text-foreground">{t('home.pinViewTitle')}</div>
             <Input
               type="text"

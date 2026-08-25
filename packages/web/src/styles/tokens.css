@@ -118,6 +118,14 @@
   --shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
   --shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
+  /* ───────────── 弹窗（模态 dialog 遮罩/卡片） ───────────── */
+  /* 默认（浏览器）保持现有 web 观感；原生壳按平台惯例翻转（文件底部 data-shell 块） */
+  --dialog-overlay: 0 0 0;
+  --dialog-overlay-alpha: 0.4;
+  --dialog-blur: 2px;
+  --dialog-radius: 8px;
+  --dialog-shadow: var(--shadow-floating);
+
   /* ───────────── 代码高亮（低饱和，贴合极简基调） ───────────── */
   --code-keyword: 90 116 176;  /* 与品牌 primary 同值 */
   --code-string: 21 128 61;    /* green-700 */
@@ -257,4 +265,25 @@ html[data-os='windows'] {
   --font-sans: 'Segoe UI', 'Microsoft YaHei', 'Inter Variable', 'Inter', system-ui, 'PingFang SC', 'Hiragino Sans GB', Helvetica, 'Apple Color Emoji', Arial, sans-serif, 'Segoe UI Emoji', 'Segoe UI Symbol';
   /* Windows：等宽里中文优先雅黑（ClearType 优化，与 sans 一致） */
   --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'Fira Code', 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', monospace;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   原生壳弹窗惯例（data-shell 由 index.html 内联脚本按 ?native= 注入）
+   浏览器保持默认 web 观感；壳内按平台惯例收敛——
+   macOS：遮罩极轻、不模糊背景、圆角 10px、阴影克制（NSAlert 惯例）
+   Windows(Tauri)：dimmer 保留但不模糊、圆角 8px、轻阴影（WinUI ContentDialog 惯例）
+   主题无关（亮暗通用），故放 :root/[data-theme] 体系之外。
+   ──────────────────────────────────────────────────────────────── */
+html[data-shell='macos'] {
+  --dialog-overlay-alpha: 0.15;
+  --dialog-blur: 0px;
+  --dialog-radius: 10px;
+  --dialog-shadow: 0 4px 16px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(0, 0, 0, 0.1);
+}
+
+html[data-shell='tauri'] {
+  --dialog-overlay-alpha: 0.45;
+  --dialog-blur: 0px;
+  --dialog-radius: 8px;
+  --dialog-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
 }

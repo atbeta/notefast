@@ -504,7 +504,7 @@ export default function AIChatPanel({
       <div
         aria-hidden="true"
         onClick={() => onClose()}
-        className={`fixed inset-0 z-dropdown bg-black/30 backdrop-blur-[1px] md:hidden transition-opacity duration-[var(--dur)] ${
+        className={`fixed inset-0 z-dropdown dialog-overlay md:hidden transition-opacity duration-[var(--dur)] ${
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       />
