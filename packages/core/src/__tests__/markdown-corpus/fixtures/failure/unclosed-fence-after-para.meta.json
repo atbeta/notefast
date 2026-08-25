@@ -1,0 +1,5 @@
+{
+  "defect": "unclosed_fence_drops_tail",
+  "allowImprove": true,
+  "note": "段落后未闭合围栏：段落保留，围栏内源码丢失。"
+}

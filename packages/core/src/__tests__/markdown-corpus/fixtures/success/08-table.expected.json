@@ -1,0 +1,8 @@
+[
+  {
+    "type": "table",
+    "content": "| 类型 | 说明 |\n| --- | --- |\n| document | 根节点 |\n| heading | 标题 |",
+    "properties": {},
+    "children": []
+  }
+]

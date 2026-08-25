@@ -1,0 +1,29 @@
+[
+  {
+    "type": "list_item",
+    "content": "苹果",
+    "properties": {
+      "marker": "+",
+      "ordered": false
+    },
+    "children": []
+  },
+  {
+    "type": "list_item",
+    "content": "香蕉",
+    "properties": {
+      "marker": "*",
+      "ordered": false
+    },
+    "children": []
+  },
+  {
+    "type": "list_item",
+    "content": "橘子",
+    "properties": {
+      "marker": "-",
+      "ordered": false
+    },
+    "children": []
+  }
+]

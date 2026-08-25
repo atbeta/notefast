@@ -1,0 +1,30 @@
+[
+  {
+    "type": "list_item",
+    "content": "a",
+    "properties": {
+      "marker": "-",
+      "ordered": false
+    },
+    "children": [
+      {
+        "type": "list_item",
+        "content": "b",
+        "properties": {
+          "marker": "-",
+          "ordered": false
+        },
+        "children": []
+      }
+    ]
+  },
+  {
+    "type": "list_item",
+    "content": "c",
+    "properties": {
+      "marker": "-",
+      "ordered": false
+    },
+    "children": []
+  }
+]

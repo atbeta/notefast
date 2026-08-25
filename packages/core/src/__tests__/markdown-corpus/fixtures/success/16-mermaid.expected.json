@@ -1,0 +1,10 @@
+[
+  {
+    "type": "code",
+    "content": "graph TD\n  A-->B",
+    "properties": {
+      "language": "mermaid"
+    },
+    "children": []
+  }
+]

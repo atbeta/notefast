@@ -1,0 +1,10 @@
+[
+  {
+    "type": "code",
+    "content": "const x = 1\nconsole.log(x)",
+    "properties": {
+      "language": "typescript"
+    },
+    "children": []
+  }
+]

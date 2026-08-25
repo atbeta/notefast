@@ -1,0 +1,14 @@
+[
+  {
+    "type": "quote",
+    "content": "第一行\n第二行",
+    "properties": {},
+    "children": []
+  },
+  {
+    "type": "quote",
+    "content": "另一块",
+    "properties": {},
+    "children": []
+  }
+]

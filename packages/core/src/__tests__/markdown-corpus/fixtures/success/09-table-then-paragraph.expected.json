@@ -1,0 +1,14 @@
+[
+  {
+    "type": "table",
+    "content": "| A | B |\n| --- | --- |\n| 1 | 2 |",
+    "properties": {},
+    "children": []
+  },
+  {
+    "type": "paragraph",
+    "content": "普通段落",
+    "properties": {},
+    "children": []
+  }
+]

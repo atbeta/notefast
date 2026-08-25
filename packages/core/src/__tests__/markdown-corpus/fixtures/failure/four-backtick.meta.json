@@ -1,0 +1,5 @@
+{
+  "defect": "fence_length_not_matched",
+  "allowImprove": true,
+  "note": "四反引号开围栏被当成 language=`md 的三反引号，内层 ``` 提前闭合。"
+}

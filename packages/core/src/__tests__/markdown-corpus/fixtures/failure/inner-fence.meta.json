@@ -1,0 +1,5 @@
+{
+  "defect": "inner_fence_closes_early",
+  "allowImprove": true,
+  "note": "围栏内较短的 ``` 会提前闭合；内容被拆成空 code + paragraph + 空 code。"
+}

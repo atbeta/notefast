@@ -1,0 +1,4 @@
+- [ ] todo
+- [x] done
+- [X] done2
+- plain

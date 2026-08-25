@@ -1,0 +1,20 @@
+[
+  {
+    "type": "paragraph",
+    "content": "intro",
+    "properties": {},
+    "children": []
+  },
+  {
+    "type": "code",
+    "content": "A",
+    "properties": {},
+    "children": []
+  },
+  {
+    "type": "code",
+    "content": "B",
+    "properties": {},
+    "children": []
+  }
+]

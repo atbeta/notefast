@@ -1,0 +1,5 @@
+{
+  "defect": "unclosed_fence_drops_content",
+  "allowImprove": true,
+  "note": "未闭合围栏整段丢失，parse 结果为空数组。"
+}

@@ -1,0 +1,44 @@
+[
+  {
+    "type": "list_item",
+    "content": "todo",
+    "properties": {
+      "checked": false,
+      "marker": "-",
+      "ordered": false,
+      "task": true
+    },
+    "children": []
+  },
+  {
+    "type": "list_item",
+    "content": "done",
+    "properties": {
+      "checked": true,
+      "marker": "-",
+      "ordered": false,
+      "task": true
+    },
+    "children": []
+  },
+  {
+    "type": "list_item",
+    "content": "done2",
+    "properties": {
+      "checked": true,
+      "marker": "-",
+      "ordered": false,
+      "task": true
+    },
+    "children": []
+  },
+  {
+    "type": "list_item",
+    "content": "plain",
+    "properties": {
+      "marker": "-",
+      "ordered": false
+    },
+    "children": []
+  }
+]

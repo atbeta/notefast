@@ -1,0 +1,18 @@
+[
+  {
+    "type": "list_item",
+    "content": "first",
+    "properties": {
+      "ordered": true
+    },
+    "children": []
+  },
+  {
+    "type": "list_item",
+    "content": "second",
+    "properties": {
+      "ordered": true
+    },
+    "children": []
+  }
+]

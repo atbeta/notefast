@@ -1,0 +1,5 @@
+{
+  "defect": "tilde_fence_not_recognized",
+  "allowImprove": true,
+  "note": "~~~ 围栏被当成普通段落（content 含换行），不是 code block。"
+}

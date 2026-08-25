@@ -1,0 +1,26 @@
+[
+  {
+    "type": "code",
+    "content": "x^2",
+    "properties": {
+      "language": "latex"
+    },
+    "children": []
+  },
+  {
+    "type": "code",
+    "content": "y^2",
+    "properties": {
+      "language": "katex"
+    },
+    "children": []
+  },
+  {
+    "type": "code",
+    "content": "z^2",
+    "properties": {
+      "language": "tex"
+    },
+    "children": []
+  }
+]

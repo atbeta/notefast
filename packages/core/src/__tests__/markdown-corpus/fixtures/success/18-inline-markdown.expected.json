@@ -1,0 +1,8 @@
+[
+  {
+    "type": "paragraph",
+    "content": "这是 **粗** 和 $x^2$ 以及 ~~删~~",
+    "properties": {},
+    "children": []
+  }
+]

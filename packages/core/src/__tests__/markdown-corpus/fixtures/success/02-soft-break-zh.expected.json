@@ -1,0 +1,14 @@
+[
+  {
+    "type": "paragraph",
+    "content": "第一行硬换行\n第二行继续。",
+    "properties": {},
+    "children": []
+  },
+  {
+    "type": "paragraph",
+    "content": "下一段。",
+    "properties": {},
+    "children": []
+  }
+]

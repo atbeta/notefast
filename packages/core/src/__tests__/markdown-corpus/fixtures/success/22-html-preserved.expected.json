@@ -1,0 +1,20 @@
+[
+  {
+    "type": "paragraph",
+    "content": "前",
+    "properties": {},
+    "children": []
+  },
+  {
+    "type": "paragraph",
+    "content": "<div class=\"x\">hi</div>",
+    "properties": {},
+    "children": []
+  },
+  {
+    "type": "paragraph",
+    "content": "后",
+    "properties": {},
+    "children": []
+  }
+]

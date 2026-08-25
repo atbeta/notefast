@@ -1,0 +1,30 @@
+[
+  {
+    "type": "heading",
+    "content": "标题一",
+    "properties": {
+      "headingLevel": 1
+    },
+    "children": []
+  },
+  {
+    "type": "paragraph",
+    "content": "一些段落文字。",
+    "properties": {},
+    "children": []
+  },
+  {
+    "type": "heading",
+    "content": "标题二",
+    "properties": {
+      "headingLevel": 2
+    },
+    "children": []
+  },
+  {
+    "type": "paragraph",
+    "content": "更多段落。",
+    "properties": {},
+    "children": []
+  }
+]

@@ -1,0 +1,22 @@
+[
+  {
+    "type": "code",
+    "content": "",
+    "properties": {
+      "language": "`md"
+    },
+    "children": []
+  },
+  {
+    "type": "paragraph",
+    "content": "code",
+    "properties": {},
+    "children": []
+  },
+  {
+    "type": "code",
+    "content": "",
+    "properties": {},
+    "children": []
+  }
+]

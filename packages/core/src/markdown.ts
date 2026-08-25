@@ -1,3 +1,9 @@
+/**
+ * Markdown → blocks 手写 parser（现行默认实现）。
+ *
+ * 并行 mdast 实现见 `./markdown/parseMdast.ts`（尚未接入保存路径）。
+ * 契约语料见 `__tests__/markdown-corpus/`。
+ */
 import { BlockType } from './types'
 import type { Block, CreateBlockInput } from './types'
 import { stripDocFrontmatter } from './frontmatter'

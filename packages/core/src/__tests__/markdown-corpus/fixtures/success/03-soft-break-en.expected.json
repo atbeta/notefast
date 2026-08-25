@@ -1,0 +1,14 @@
+[
+  {
+    "type": "paragraph",
+    "content": "This is a\nlong line.",
+    "properties": {},
+    "children": []
+  },
+  {
+    "type": "paragraph",
+    "content": "Next.",
+    "properties": {},
+    "children": []
+  }
+]

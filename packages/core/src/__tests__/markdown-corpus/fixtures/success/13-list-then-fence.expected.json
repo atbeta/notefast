@@ -1,0 +1,19 @@
+[
+  {
+    "type": "list_item",
+    "content": "item 3",
+    "properties": {
+      "marker": "-",
+      "ordered": false
+    },
+    "children": []
+  },
+  {
+    "type": "code",
+    "content": "code",
+    "properties": {
+      "language": "python"
+    },
+    "children": []
+  }
+]

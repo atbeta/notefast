@@ -1,0 +1,4 @@
+{
+  "roundtrip": false,
+  "note": "parse 树正确（b 为 a 的子项）。现行 serializer 导出子列表时不加缩进，reparse 会拍平。本语料不修导出。"
+}
