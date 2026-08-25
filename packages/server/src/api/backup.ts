@@ -39,6 +39,7 @@ backup.put('/config', zValidator('json', backupConfigSchema), async (c) => {
   const next: BackupConfigInput = {
     enabled: body.enabled,
     locationId: body.locationId,
+    localDir: body.localDir,
     prefix: body.prefix ?? '',
     retentionDays: body.retentionDays ?? 30,
   }

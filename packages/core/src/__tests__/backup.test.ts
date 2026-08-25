@@ -35,6 +35,45 @@ describe('backup 领域模型', () => {
     expect(merged.retentionDays).toBe(14)
   })
 
+  test('mergeBackupConfig localDir 三态：缺省保留 / null 清除 / 字符串设置', () => {
+    const base = { ...emptyBackupConfig(), localDir: '/data/bak' }
+    // 旧客户端未传 localDir → 保留现有
+    const kept = mergeBackupConfig(
+      { enabled: true, locationId: null, prefix: '', retentionDays: 30 },
+      base,
+    )
+    expect(kept.localDir).toBe('/data/bak')
+    // 显式 null（切回存储连接）→ 清除
+    const cleared = mergeBackupConfig(
+      { enabled: true, locationId: 'loc-1', localDir: null, prefix: '', retentionDays: 30 },
+      base,
+    )
+    expect(cleared.localDir).toBeNull()
+    // 字符串 → 设置（去空白）
+    const set = mergeBackupConfig(
+      { enabled: true, locationId: null, localDir: '  /data/nb  ', prefix: '', retentionDays: 30 },
+      emptyBackupConfig(),
+    )
+    expect(set.localDir).toBe('/data/nb')
+    // 空串 → 清除
+    const emptyStr = mergeBackupConfig(
+      { enabled: true, locationId: null, localDir: '   ', prefix: '', retentionDays: 30 },
+      base,
+    )
+    expect(emptyStr.localDir).toBeNull()
+  })
+
+  test('backupConfigSchema 接受 localDir', () => {
+    const parsed = backupConfigSchema.parse({
+      enabled: true,
+      locationId: null,
+      localDir: '/data/bak',
+      prefix: 'p',
+      retentionDays: 7,
+    })
+    expect(parsed.localDir).toBe('/data/bak')
+  })
+
   test('backupConfigSchema 接受 locationId + prefix', () => {
     const parsed = backupConfigSchema.parse({
       enabled: true,

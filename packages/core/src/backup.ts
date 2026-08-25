@@ -19,14 +19,21 @@ export interface BackupPersistedConfig {
   enabled: boolean
   /** 引用的存储连接 id（storage-locations.json）；null = 未配置 */
   locationId: string | null
+  /**
+   * 本地备份目录（LocalFS，客户端/单机场景）；非空时优先于 locationId。
+   * 与 Markdown 归档的 localfs 适配器同语义：快照写入 <dir>/<prefix>snapshots/。
+   */
+  localDir: string | null
   /** 备份对象前缀（snapshots/、media/ 之下的命名空间）；归一化带尾斜杠 */
   prefix: string
   /** 保留天数；超过后删除 NoteFast 管理的恢复点 */
   retentionDays: number
 }
 
-/** applyBackupConfig 入参形态（version 由服务端补全） */
-export type BackupConfigInput = Omit<BackupPersistedConfig, 'version'>
+/** applyBackupConfig 入参形态（version 由服务端补全；localDir 缺省 = 保留现有值） */
+export type BackupConfigInput = Omit<BackupPersistedConfig, 'version' | 'localDir'> & {
+  localDir?: string | null
+}
 
 export type BackupPhase =
   | 'idle'
@@ -93,6 +100,7 @@ export function emptyBackupConfig(): BackupPersistedConfig {
     version: 1,
     enabled: false,
     locationId: null,
+    localDir: null,
     prefix: '',
     retentionDays: DEFAULT_BACKUP_RETENTION_DAYS,
   }
@@ -103,15 +111,19 @@ export function publicBackupView(cfg: BackupPersistedConfig): BackupPersistedCon
   return cfg
 }
 
-/** 合并 PUT 请求与磁盘配置（仅归一化前缀；密钥随连接库） */
+/** 合并 PUT 请求与磁盘配置（归一化前缀；密钥随连接库；localDir 三态见下） */
 export function mergeBackupConfig(
   incoming: BackupConfigInput,
-  _existing: BackupPersistedConfig,
+  existing: BackupPersistedConfig,
 ): BackupPersistedConfig {
   return {
     version: 1,
     enabled: incoming.enabled,
     locationId: incoming.locationId ?? null,
+    // localDir 三态：undefined（旧客户端未传）= 保留现有；null/空串 = 显式清除（切回存储连接）
+    localDir: incoming.localDir === undefined
+      ? (existing.localDir ?? null)
+      : (incoming.localDir?.trim() || null),
     prefix: normalizeBackupPrefix(incoming.prefix),
     retentionDays: Math.max(1, incoming.retentionDays ?? DEFAULT_BACKUP_RETENTION_DAYS),
   }
@@ -147,6 +159,7 @@ export function assertSchemaCompatible(backupSchemaVersion: number, current = CU
 export const backupConfigSchema = z.object({
   enabled: z.boolean(),
   locationId: z.string().nullable(),
+  localDir: z.string().max(500).nullable().optional(),
   prefix: z.string().optional(),
   retentionDays: z.number().int().min(1).max(3650).optional(),
 })

@@ -1,7 +1,8 @@
 /**
  * 数据库备份对象存储：上传快照/manifest、列举恢复点、按保留策略清理。
  *
- * 构建在 ObjectStore 抽象之上（当前为 S3 实现），后续可换 WebDAV / LocalFS。
+ * 构建在 ObjectStore 抽象之上：缺省 S3（cfg 创建），也可经 injected 注入
+ * LocalFS（本地目录备份）等其它后端 —— 注入时 cfg 传 null。
  */
 
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -34,14 +35,14 @@ export interface BackupStore {
 }
 
 export function createBackupStore(
-  cfg: S3LocationConfig,
+  cfg: S3LocationConfig | null,
   prefix: string,
   injected?: ObjectStore,
 ): BackupStore {
   const normalizedPrefix = normalizeBackupPrefix(prefix)
-  const objectStore =
-    injected ??
-    createS3ObjectStore({
+  const objectStore = injected ?? (() => {
+    if (!cfg) throw new Error('createBackupStore: cfg 与 injected 至少提供一个')
+    return createS3ObjectStore({
       bucket: cfg.bucket,
       region: cfg.region,
       endpoint: cfg.endpoint,
@@ -49,6 +50,7 @@ export function createBackupStore(
       secretAccessKey: cfg.secretAccessKey,
       forcePathStyle: cfg.forcePathStyle,
     })
+  })()
 
   return {
     objectStore,

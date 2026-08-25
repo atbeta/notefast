@@ -7,6 +7,8 @@ import {
   AlertCircle,
   Copy,
   Plug,
+  FolderOpen,
+  Cloud,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { type BackupRuntimeStatus, type BackupRestorePoint } from '@notefast/core'
@@ -18,15 +20,21 @@ import { formatIsoDateTime } from '../lib/time'
 interface BackupConfig {
   enabled: boolean
   locationId: string | null
+  localDir: string | null
   prefix: string
   retentionDays: number
 }
+
+/** 备份目标：本地目录（LocalFS，客户端单机可用）或 S3 存储连接 */
+type TargetKind = 'localfs' | 'connection'
 
 export default function BackupPanel() {
   const { t } = useTranslation()
   const [status, setStatus] = useState<BackupRuntimeStatus | null>(null)
   const [enabled, setEnabled] = useState(false)
+  const [targetKind, setTargetKind] = useState<TargetKind>('connection')
   const [locationId, setLocationId] = useState('')
+  const [localDir, setLocalDir] = useState('')
   const [prefix, setPrefix] = useState('')
   const [retentionDays, setRetentionDays] = useState(30)
   const [points, setPoints] = useState<BackupRestorePoint[]>([])
@@ -38,7 +46,9 @@ export default function BackupPanel() {
     )
     setStatus(res.status)
     setEnabled(res.config.enabled)
+    setTargetKind(res.config.localDir ? 'localfs' : 'connection')
     setLocationId(res.config.locationId ?? '')
+    setLocalDir(res.config.localDir ?? '')
     setPrefix((res.config.prefix ?? '').replace(/\/$/, ''))
     setRetentionDays(res.config.retentionDays || 30)
     if (res.configured) {
@@ -62,11 +72,12 @@ export default function BackupPanel() {
   const handleSave = async () => {
     await toast.promise(
       async () => {
-        // 选了存储连接即视为「要配置备份」
-        const hasLocation = Boolean(locationId)
+        // 选了目标即视为「要配置备份」；两种目标互斥，未选的一侧显式清空
+        const hasTarget = targetKind === 'localfs' ? Boolean(localDir.trim()) : Boolean(locationId)
         await api.put('/backup/config', {
-          enabled: enabled || hasLocation,
-          locationId: locationId || null,
+          enabled: enabled || hasTarget,
+          locationId: targetKind === 'connection' ? locationId || null : null,
+          localDir: targetKind === 'localfs' ? localDir.trim() || null : null,
           prefix,
           retentionDays,
         })
@@ -129,11 +140,58 @@ export default function BackupPanel() {
           </label>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
-          <div>
-            <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t('backup.storageConnection')}</label>
-            <div className="mt-1.5"><LocationSelect value={locationId} onChange={setLocationId} kind="s3" /></div>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {([
+              { key: 'localfs', name: t('backup.optLocalfs'), desc: t('backup.optLocalfsDesc'), icon: <FolderOpen className="w-4 h-4" /> },
+              { key: 'connection', name: t('backup.storageConnection'), desc: t('backup.optConnectionDesc'), icon: <Cloud className="w-4 h-4" /> },
+            ] as const).map((opt) => {
+              const isSelected = targetKind === opt.key
+              const isActive = !!status?.configured && isSelected
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setTargetKind(opt.key)}
+                  className={`flex flex-col gap-1.5 px-3 py-3 rounded-lg border text-left transition-colors ${
+                    isSelected ? 'border-primary/45 bg-primary-soft shadow-card' : 'border-border bg-card hover:border-border-strong'
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2">
+                      <span className={`${isSelected ? 'text-primary' : 'text-muted-foreground'}`}>{opt.icon}</span>
+                      <span className={`font-medium text-base ${isSelected ? 'text-foreground' : 'text-foreground/80'}`}>{opt.name}</span>
+                    </div>
+                    {isActive && (
+                      <Tooltip label={t('backup.enabled')}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_rgb(var(--success)/0.55)]" />
+                      </Tooltip>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground/80">{opt.desc}</span>
+                </button>
+              )
+            })}
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
+          {targetKind === 'localfs' && (
+            <InlineField
+              label={t('backup.localDir')}
+              description={t('backup.localDirDesc')}
+              value={localDir}
+              onChange={setLocalDir}
+              mono
+              placeholder="/path/to/backup"
+            />
+          )}
+          {targetKind === 'connection' && (
+            <div>
+              <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t('backup.storageConnection')}</label>
+              <div className="mt-1.5"><LocationSelect value={locationId} onChange={setLocationId} kind="s3" /></div>
+            </div>
+          )}
           <InlineField
             label={t('backup.prefix')}
             description={t('backup.prefixDesc')}
@@ -144,6 +202,7 @@ export default function BackupPanel() {
           />
           <InlineField
             label={t('backup.retentionDays')}
+            description={t('backup.retentionDaysDesc')}
             value={String(retentionDays)}
             onChange={(v) => setRetentionDays(parseInt(v, 10) || 30)}
             type="number"

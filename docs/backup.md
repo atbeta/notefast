@@ -4,7 +4,7 @@
 
 | 能力 | 作用 | 覆盖范围 |
 |------|------|----------|
-| **数据库备份** | SQLite 一致快照 → S3 | 完整实例数据（blocks、refs、vectors、FTS、AutoLink 等） |
+| **数据库备份** | SQLite 一致快照 → 本地目录 或 S3 | 完整实例数据（blocks、refs、vectors、FTS、AutoLink 等） |
 | **Markdown 归档** | 单向推送 `.md` | 正文 + YAML frontmatter（tags / 时间 / `notefast_id`）；仍丢失引用图 / 向量等关系数据 |
 
 完整灾备请使用数据库备份。Markdown 归档用于可读副本与内容主权，不能替代恢复。
@@ -14,8 +14,10 @@
 ### 配置
 
 1. 打开 Web「设置 → 数据库备份」
-2. 填写 S3 兼容存储（AWS / R2 / MinIO）
-3. 设置间隔（默认 1 小时）与保留天数（默认 30）
+2. 选择备份目标（二选一，互斥）：
+   - **本地目录**：快照写入 `<目录>/<前缀>snapshots/`，客户端/单机零依赖即可用（与 Markdown 归档的 localfs 共用 ObjectStore 实现）
+   - **存储连接**：S3 兼容存储（AWS / R2 / MinIO），适合异地容灾
+3. 设置前缀与保留天数（默认 30）：每次备份完成后自动删除超过天数的旧快照
 4. 「测试连接」→「立即备份」
 
 配置落盘：`data/backup.config.json`（权限尽量 `0600`）。密钥不会通过 API 明文回传；保存时传 `***set***` 表示沿用旧值。
@@ -55,6 +57,7 @@ docker compose start notefast
 恢复写入顺序：`write staging → fsync(file) → rename → fsync(dir)`，降低崩溃后得到空/残缺 `notefast.db` 的风险。
 恢复前校验：manifest、SHA-256、`quick_check`、schema 版本（不得高于当前程序）。
 现有 `notefast.db` / WAL / SHM 会移入 `data/rollback-<timestamp>/`。
+本地目录目标的恢复走同一 CLI（自动从 `backup.config.json` 读取目标类型），`--object-key` 为目录下的相对键（如 `backup/snapshots/....db`）。
 
 Web **不提供**一键覆盖恢复。
 

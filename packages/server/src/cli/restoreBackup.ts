@@ -81,26 +81,34 @@ async function main(): Promise<void> {
   }
 
   const cfg = loadBackupConfig(dataDir)
-  if (!cfg.locationId) {
-    console.error('未找到 backup.config.json 中的存储连接引用')
-    process.exit(1)
-  }
-  initStorageLocations(dataDir)
-  const location = getStorageLocation(cfg.locationId)
-  if (location?.kind !== 's3' || !location.s3) {
-    console.error(`存储连接 ${cfg.locationId} 未找到或非 S3`)
-    process.exit(1)
-  }
-  const s3 = location.s3
 
-  const store = createBackupStore(s3, cfg.prefix, createS3ObjectStore({
-    bucket: s3.bucket,
-    region: s3.region,
-    endpoint: s3.endpoint,
-    accessKeyId: s3.accessKeyId,
-    secretAccessKey: s3.secretAccessKey,
-    forcePathStyle: s3.forcePathStyle,
-  }))
+  // 目标二选一：本地目录（LocalFS）或 S3 存储连接 —— 与运行期 manager.rebuild 同规则
+  let store: ReturnType<typeof createBackupStore>
+  if (cfg.localDir) {
+    const { createLocalFsObjectStore } = await import('../storage/webdavStore')
+    store = createBackupStore(null, cfg.prefix, createLocalFsObjectStore(cfg.localDir))
+  } else {
+    if (!cfg.locationId) {
+      console.error('未找到 backup.config.json 中的存储连接引用或本地目录')
+      process.exit(1)
+    }
+    initStorageLocations(dataDir)
+    const location = getStorageLocation(cfg.locationId)
+    if (location?.kind !== 's3' || !location.s3) {
+      console.error(`存储连接 ${cfg.locationId} 未找到或非 S3`)
+      process.exit(1)
+    }
+    const s3 = location.s3
+
+    store = createBackupStore(s3, cfg.prefix, createS3ObjectStore({
+      bucket: s3.bucket,
+      region: s3.region,
+      endpoint: s3.endpoint,
+      accessKeyId: s3.accessKeyId,
+      secretAccessKey: s3.secretAccessKey,
+      forcePathStyle: s3.forcePathStyle,
+    }))
+  }
   const manifestKey = buildManifestObjectKey(objectKey)
   const workDir = join(dataDir, '.restore-tmp')
   mkdirSync(workDir, { recursive: true })

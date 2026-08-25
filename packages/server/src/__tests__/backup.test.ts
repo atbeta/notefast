@@ -267,8 +267,31 @@ describe('backup manager', () => {
     expect(mem.objects.has('test/media/' + sha)).toBe(true)
   })
 
-  test('并发备份返回 backup_in_progress', async () => {
-    const mem = createMemoryStore()
+  test('本地目录备份：写入 localDir 下 snapshots/ 并可列举恢复点', async () => {
+    // 不传 storeFactory：走真实 createBackupStore + LocalFS ObjectStore 路径
+    const dir = join(testDir, 'local-backup')
+    initBackupManager(testDir)
+    await applyBackupManagerConfig({
+      enabled: true,
+      locationId: null,
+      localDir: dir,
+      prefix: 'nb',
+      retentionDays: 30,
+    })
+    const result = await runBackupNow()
+    expect(result.ok).toBe(true)
+    expect(result.objectKey!.startsWith('nb/snapshots/')).toBe(true)
+    // 快照与 manifest 确实落在本地目录
+    expect(existsSync(join(dir, result.objectKey!))).toBe(true)
+    expect(existsSync(join(dir, result.manifestKey!))).toBe(true)
+    const points = await listBackupRestorePoints()
+    expect(points.length).toBe(1)
+    expect(backupStatus().configured).toBe(true)
+    // 清理磁盘配置：merge 对缺省 localDir 是「保留现有」，不清理会泄漏进后续用例
+    await applyBackupManagerConfig({ enabled: false, locationId: null, localDir: null, prefix: '', retentionDays: 30 })
+  })
+
+  test('并发备份返回 backup_in_progress', async () => {    const mem = createMemoryStore()
     // 慢上传
     const orig = mem.uploadSnapshot.bind(mem)
     mem.uploadSnapshot = async (opts) => {
@@ -335,6 +358,32 @@ describe('backup HTTP', () => {
     const disk = JSON.parse(readFileSync(join(testDir, 'backup.config.json'), 'utf-8'))
     expect(disk.locationId).toBe(locationId)
     expect(disk.enabled).toBe(true)
+  })
+
+  test('PUT config 本地目录目标可保存（与存储连接互斥）', async () => {
+    const mem = createMemoryStore()
+    initBackupManager(testDir, { storeFactory: () => mem })
+    const put = await api('PUT', '/config', {
+      enabled: true,
+      locationId: null,
+      localDir: '/tmp/nf-backup-test',
+      prefix: 'p',
+      retentionDays: 7,
+    })
+    expect(put.status).toBe(200)
+    expect(put.body.config.localDir).toBe('/tmp/nf-backup-test')
+    const disk = JSON.parse(readFileSync(join(testDir, 'backup.config.json'), 'utf-8'))
+    expect(disk.localDir).toBe('/tmp/nf-backup-test')
+    // 切回存储连接：localDir 被显式清空
+    const back = await api('PUT', '/config', {
+      enabled: true,
+      locationId,
+      localDir: null,
+      prefix: 'p',
+      retentionDays: 7,
+    })
+    expect(back.status).toBe(200)
+    expect(back.body.config.localDir).toBeNull()
   })
 
   test('POST /run + GET restore-points', async () => {

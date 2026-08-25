@@ -27,6 +27,7 @@ import { uploadMissingMedia, mediaPrefixFor } from './mediaBackup'
 import { getMediaDir } from '../assets/store'
 import { getStorageLocation } from '../storage/locations'
 import { createS3ObjectStore } from '../storage/objectStore'
+import { createLocalFsObjectStore } from '../storage/webdavStore'
 
 let dataDir = ''
 let store: BackupStore | null = null
@@ -50,14 +51,14 @@ export function initBackupManager(
 
 export function isBackupConfigured(): boolean {
   const c = getBackupConfig()
-  return Boolean(c.enabled && c.locationId && store)
+  return Boolean(c.enabled && (c.locationId || c.localDir) && store)
 }
 
 export function backupStatus(): BackupRuntimeStatus {
   const c = getBackupConfig()
   return {
     configured: isBackupConfigured(),
-    enabled: Boolean(c.enabled && c.locationId),
+    enabled: Boolean(c.enabled && (c.locationId || c.localDir)),
     running,
     phase,
     lastRunAt,
@@ -131,9 +132,9 @@ export async function runBackupNow(): Promise<BackupRunResult> {
     })
 
     // media 上送：内容寻址增量（幂等）。失败不阻断快照本身（库仍完整），单独记录。
-    // 复用 store 的底层对象存储（同一凭据/连接）
+    // 复用 store 的底层对象存储（S3 与本地目录同一抽象）
     let mediaUploaded: { uploaded: number; skipped: number } | undefined
-    if (c.locationId && store) {
+    if ((c.locationId || c.localDir) && store) {
       const mediaDir = getMediaDir()
       if (mediaDir) {
         try {
@@ -193,10 +194,22 @@ export async function runBackupNow(): Promise<BackupRunResult> {
 function rebuild(): void {
   store = null
   const c = getBackupConfig()
-  if (!c.enabled || !c.locationId) {
+  if (!c.enabled || (!c.locationId && !c.localDir)) {
     return
   }
-  const loc = getStorageLocation(c.locationId)
+  // 本地目录目标（LocalFS）：快照写入 <localDir>/<prefix>snapshots/，
+  // 与 Markdown 归档的 localfs 适配器共用 ObjectStore 实现
+  if (c.localDir) {
+    try {
+      store = storeFactory ? storeFactory(c) : createBackupStore(null, c.prefix, createLocalFsObjectStore(c.localDir))
+      console.log(`💾 Backup: 本地目录 ${c.localDir}/${c.prefix || ''}`)
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e)
+      console.error('💾 Backup 初始化失败:', lastError)
+    }
+    return
+  }
+  const loc = getStorageLocation(c.locationId!)
   if (!loc) {
     lastError = `存储连接 ${c.locationId} 未找到`
     return
