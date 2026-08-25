@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.79.0](https://github.com/atbeta/notefast/compare/v0.78.0...v0.79.0) (2026-08-25)
+
+
+### Features
+
+* **core:** parse Markdown to blocks with mdast by default ([a4309e8](https://github.com/atbeta/notefast/commit/a4309e839b4a4cd106ffcab39f00fabe5fe9a852))
+* **server:** shadow-compare mdast parse on save without changing writes ([4ee25b2](https://github.com/atbeta/notefast/commit/4ee25b21ffdfc5c2b27332ff5999d3c5e7bfb0c9))
+* **web:** refresh the open document from live SSE events ([bc55873](https://github.com/atbeta/notefast/commit/bc55873848ab4908d95e6b5f0c6fb3e4e30d136f))
+* **web:** share fenced-code ranges between save and editor previews ([fb9fa31](https://github.com/atbeta/notefast/commit/fb9fa31b23f22848352f940c9b147060415f443f))
+* **web:** show current shortcuts in a header keyboard sheet ([e40464c](https://github.com/atbeta/notefast/commit/e40464c77b757ca09584b70d962dcfbbe700ec79))
+* **web:** tighten reading display, code lines, and fence language complete ([eb7ffc0](https://github.com/atbeta/notefast/commit/eb7ffc0ff003b04058fea503ac9f3a7d005ae31b))
+
 ## [0.78.0](https://github.com/atbeta/notefast/compare/v0.77.1...v0.78.0) (2026-08-25)
 
 
