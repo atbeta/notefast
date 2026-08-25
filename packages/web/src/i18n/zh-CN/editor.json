@@ -38,6 +38,10 @@
     "renderFailedWith": "公式渲染失败：{{error}}",
     "loading": "公式加载中…"
   },
+  "codeFence": {
+    "wrap": "折行显示",
+    "scroll": "横向滚动"
+  },
   "editorToolbar": {
     "h1": "一级标题 (#)",
     "h2": "二级标题 (##)",

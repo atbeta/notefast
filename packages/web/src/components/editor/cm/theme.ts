@@ -101,6 +101,14 @@ export const editorTheme = EditorView.theme({
     color: 'rgb(var(--foreground))',
     border: '1px solid rgb(var(--border))',
   },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul': {
+    fontFamily: 'var(--font-mono)',
+    fontSize: 'var(--text-sm)',
+  },
+  '.cm-tooltip-autocomplete ul li[aria-selected]': {
+    backgroundColor: 'rgb(var(--accent))',
+    color: 'rgb(var(--foreground))',
+  },
 })
 
 /**

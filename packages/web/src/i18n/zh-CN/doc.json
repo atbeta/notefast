@@ -112,8 +112,12 @@
       "current": "缩放 {{pct}}%"
     },
     "zoomReset": "恢复 100%",
-    "widenReading": "加宽正文",
-    "narrowReading": "恢复最佳行宽",
+    "readingDisplay": {
+      "label": "阅读显示",
+      "width": "行宽",
+      "widthNormal": "标准",
+      "widthWide": "宽版"
+    },
     "findPlaceholder": "在本文中查找",
     "findCount": "{{n}} / {{total}}",
     "findNone": "无结果",

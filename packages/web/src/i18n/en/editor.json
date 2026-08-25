@@ -38,6 +38,10 @@
     "renderFailedWith": "Math render failed: {{error}}",
     "loading": "Loading formula…"
   },
+  "codeFence": {
+    "wrap": "Wrap lines",
+    "scroll": "Scroll horizontally"
+  },
   "editorToolbar": {
     "h1": "Heading 1 (#)",
     "h2": "Heading 2 (##)",

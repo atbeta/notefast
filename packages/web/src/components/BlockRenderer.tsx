@@ -3,12 +3,12 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, Cloud, CloudOff, Loader2 } from 'lucide-react'
 import type { Block } from '@notefast/core'
-import { highlightCode } from '../lib/highlight'
 import MermaidDiagram from './MermaidDiagram'
 import MathBlock, { MathInline } from './MathBlock'
+import { CodeFenceView } from './CodeFenceView'
 import { INLINE_MATH_SRC } from '../lib/katex'
 import BlockSurface, { BlockHandle, RelatedAnchorCtx } from './BlockSurface'
-import { CopyButton, Tooltip } from './ui'
+import { Tooltip } from './ui'
 import { api } from '../hooks/useAPI'
 import { useImageUploadEnabled } from '../hooks/useImageUploadEnabled'
 import ImageLightbox from './ImageLightbox'
@@ -347,47 +347,7 @@ function CodeBlock({ block }: { block: Block }) {
 }
 
 function HighlightedCodeBlock({ block, lang }: { block: Block; lang: string }) {
-  const [highlighted, setHighlighted] = useState<string | null>(null)
-
-  // 语法高亮：异步懒加载 highlight.js；失败/未知语言回退纯文本
-  useEffect(() => {
-    let cancelled = false
-    setHighlighted(null)
-    if (lang && block.content) {
-      highlightCode(block.content, lang)
-        .then((html) => { if (!cancelled && html) setHighlighted(html) })
-        .catch(() => {})
-    }
-    return () => { cancelled = true }
-  }, [block.content, lang])
-
-  return (
-    <div id={block.id} className="scroll-mt-20 my-5 rounded-lg border border-border bg-muted/30 overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-muted/60 border-b border-border">
-        <span className="text-xs font-mono text-muted-foreground/80">
-          {lang || 'text'}
-        </span>
-        <CopyButton
-          text={block.content || ''}
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded-md"
-          ariaLabel="Copy code"
-          showText
-        />
-      </div>
-      {/* 代码区：整体一块，无上下 padding（区分靠 header 的 border-b + 色差）；
-          code-block-body 覆盖 .reading-prose pre 的 14px/18px，px-4 作非 reading-prose 兜底 */}
-      <pre className="code-block-body px-4 overflow-x-auto text-base font-mono leading-[1.6] text-foreground">
-        {highlighted ? (
-          <code
-            className={`hljs language-${lang}`}
-            dangerouslySetInnerHTML={{ __html: highlighted }}
-          />
-        ) : (
-          <code className={lang ? `language-${lang}` : ''}>{block.content}</code>
-        )}
-      </pre>
-    </div>
-  )
+  return <CodeFenceView id={block.id} code={block.content || ''} language={lang} />
 }
 
 // ───────────────────────── Table ─────────────────────────

@@ -1,15 +1,14 @@
-import { useState, useEffect, createElement, memo, cloneElement, type ReactNode, Children, isValidElement } from 'react'
+import { createElement, memo, cloneElement, type ReactNode, Children, isValidElement } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
-import { highlightCode } from '../lib/highlight'
 import { classifyChatMath } from '../lib/chatMath'
 import { splitCiteParts } from '../lib/chatCites'
 import MermaidDiagram from './MermaidDiagram'
 import MathBlock, { MathInline } from './MathBlock'
+import { CodeFenceView } from './CodeFenceView'
 import { LightboxImg } from './ImageLightbox'
-import { CopyButton, Tooltip } from './ui'
-import { useTranslation } from 'react-i18next'
+import { Tooltip } from './ui'
 import i18next from '../i18n'
 import { resolveMarkdownHref } from '../lib/markdownHref'
 
@@ -96,7 +95,7 @@ function ChatMarkdown({ content, className = '', maxCite = 0 }: ChatMarkdownProp
             if (language.toLowerCase() === 'mermaid') {
               return <MermaidDiagram code={text} className="my-3" />
             }
-            return <ChatCodeBlock code={text} language={language} />
+            return <CodeFenceView code={text} language={language} compact />
           },
           a({ href, children }) {
             const resolved = resolveMarkdownHref(href ?? '')
@@ -132,42 +131,6 @@ function ChatMarkdown({ content, className = '', maxCite = 0 }: ChatMarkdownProp
       >
         {content}
       </Markdown>
-    </div>
-  )
-}
-
-function ChatCodeBlock({ code, language }: { code: string; language: string }) {
-  const [html, setHtml] = useState<string | null>(null)
-  const { t } = useTranslation()
-
-  useEffect(() => {
-    let cancelled = false
-    if (!language) {
-      setHtml(null)
-      return
-    }
-    highlightCode(code, language).then((h) => {
-      if (!cancelled) setHtml(h)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [code, language])
-
-  return (
-    <div className="chat-code-block">
-      <div className="chat-code-block-bar">
-        <span className="chat-code-lang">{language || 'text'}</span>
-        <CopyButton text={code} className="chat-code-copy" title={t('chat.copy')} iconClassName="w-3 h-3" />
-      </div>
-      <pre>
-        {html
-          ? createElement('code', {
-              className: `hljs language-${language}`,
-              dangerouslySetInnerHTML: { __html: html },
-            })
-          : createElement('code', null, code as ReactNode)}
-      </pre>
     </div>
   )
 }

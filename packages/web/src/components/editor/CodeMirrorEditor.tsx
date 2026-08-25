@@ -11,7 +11,7 @@ import {
 import { history, defaultKeymap, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
-import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
+import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } from '@codemirror/autocomplete'
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 import { editorTheme, editorHighlight } from './cm/theme'
@@ -22,6 +22,7 @@ import { mermaidPreview } from './cm/mermaidPreview'
 import { ghostTextExtension, ghostTextState, setGhostText, clearGhostText } from './cm/ghostText'
 import { MD_LINK_HREF_PLACEHOLDER } from '../../lib/markdownHref'
 import { editorKeymap } from './cm/keymap'
+import { fenceInfoCompletion } from './cm/fenceInfoCompletion'
 import { SelectionReporter } from './cm/selectionReport'
 import type { SelectionAnchor } from './cm/selectionReport'
 import { buildReplaceRangeUpdate } from './cm/refineReplace'
@@ -231,6 +232,8 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
             closeBrackets(),
             highlightSelectionMatches(),
             markdown({ base: markdownLanguage, codeLanguages: languages }),
+            markdownLanguage.data.of({ autocomplete: fenceInfoCompletion }),
+            autocompletion({ icons: false }),
             syntaxHighlighting(editorHighlight),
             syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
             editorTheme,
@@ -344,7 +347,7 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
                 selectionReporter.clear()
               },
             }),
-            keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+            keymap.of([...closeBracketsKeymap, ...completionKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
           ],
         }),
       })

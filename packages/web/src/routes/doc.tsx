@@ -23,7 +23,7 @@ import {
   Minimize2,
   Maximize2,
   Presentation,
-  ZoomIn,
+  ALargeSmall,
 } from 'lucide-react'
 import { api, request, ApiError } from '../hooks/useAPI'
 import BlockRenderer from '../components/BlockRenderer'
@@ -1404,75 +1404,74 @@ function ErrorState({ message }: { message: string }) {
     </div>
   )
 }
-/** 缩放 + 阅读宽度 + 演示（右上角，仅阅读态）：
- *  - 缩放：ZoomIn 图标（与邻钮同形）→ 点击弹出 5 档菜单；非 100% 时浅选中态
- *  - 宽度切换 normal=46rem（最佳行宽）/ wide=64rem（图表友好），持久化
- *  - Presentation 图标 = 演示模式开关（隐藏侧栏/窗口标题栏，纯展示态） */
+/** 阅读显示（缩放 + 行宽）与演示（右上角，仅阅读态）：
+ *  - 显示：ALargeSmall → 一个弹层收口缩放 5 档与标准/宽版行宽；不改 zoom 语义
+ *  - Presentation = 演示模式开关（隐藏侧栏/窗口标题栏，纯展示态） */
 function DemoModeButton() {
   const { t } = useTranslation()
   const demo = useDemoMode()
   const readingWidth = useDocReadingWidth()
-  const toggleReadingWidth = () => writeDocReadingWidth(readingWidth === 'normal' ? 'wide' : 'normal')
   const zoomPct = Math.round((DEMO_ZOOMS[demo.zoomIndex] ?? 1) * 100)
-  const zoomBtnRef = useRef<HTMLButtonElement>(null)
-  const zoomMenuRef = useRef<HTMLDivElement>(null)
-  const [zoomMenuOpen, setZoomMenuOpen] = useState(false)
-  const [zoomMenuPos, setZoomMenuPos] = useState<{ top: number; left: number } | null>(null)
+  const displayBtnRef = useRef<HTMLButtonElement>(null)
+  const displayMenuRef = useRef<HTMLDivElement>(null)
+  const [displayOpen, setDisplayOpen] = useState(false)
+  const [displayPos, setDisplayPos] = useState<{ top: number; left: number } | null>(null)
+  const displayActive = demo.zoomIndex !== 0 || readingWidth === 'wide'
 
   useLayoutEffect(() => {
-    if (!zoomMenuOpen) {
-      setZoomMenuPos(null)
+    if (!displayOpen) {
+      setDisplayPos(null)
       return
     }
-    const el = zoomBtnRef.current
+    const el = displayBtnRef.current
     if (!el) return
     const r = el.getBoundingClientRect()
-    const menuW = 140
+    const menuW = 176
     const left = Math.max(8, Math.min(r.right - menuW, window.innerWidth - menuW - 8))
-    setZoomMenuPos({ top: r.bottom + 6, left })
-  }, [zoomMenuOpen])
+    setDisplayPos({ top: r.bottom + 6, left })
+  }, [displayOpen])
 
-  usePopoverDismiss(zoomMenuOpen, {
-    onClose: () => setZoomMenuOpen(false),
+  usePopoverDismiss(displayOpen, {
+    onClose: () => setDisplayOpen(false),
     onEscape: (e) => {
-      // 先关菜单，阻止冒泡到全局 Esc→退出演示
       e.preventDefault()
       e.stopPropagation()
-      setZoomMenuOpen(false)
+      setDisplayOpen(false)
     },
-  }, zoomMenuRef, zoomBtnRef)
+  }, displayMenuRef, displayBtnRef)
 
   return (
     <div
       className="flex items-center gap-1"
       role="group"
-      aria-label={t('doc.demoMode.label')}
+      aria-label={t('doc.readingDisplay.label')}
     >
-      <Tooltip label={`${t('doc.zoom.current', { pct: zoomPct })} · ${t('doc.demoMode.shortcutHint')}`}>
+      <Tooltip label={`${t('doc.readingDisplay.label')} · ${t('doc.zoom.current', { pct: zoomPct })} · ${t('doc.demoMode.shortcutHint')}`}>
         <button
-          ref={zoomBtnRef}
+          ref={displayBtnRef}
           type="button"
           aria-haspopup="menu"
-          aria-expanded={zoomMenuOpen}
-          aria-label={t('doc.zoom.current', { pct: zoomPct })}
-          onClick={() => setZoomMenuOpen((v) => !v)}
+          aria-expanded={displayOpen}
+          aria-label={t('doc.readingDisplay.label')}
+          onClick={() => setDisplayOpen((v) => !v)}
           className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
-            zoomMenuOpen || demo.zoomIndex !== 0
+            displayOpen || displayActive
               ? 'text-primary bg-primary/12 hover:bg-primary/15'
               : 'text-muted-foreground hover:text-foreground hover:bg-accent'
           }`}
         >
-          <ZoomIn className="w-3.5 h-3.5" strokeWidth={1.75} />
+          <ALargeSmall className="w-3.5 h-3.5" strokeWidth={1.75} />
         </button>
       </Tooltip>
-      {zoomMenuOpen && zoomMenuPos && createPortal(
+      {displayOpen && displayPos && createPortal(
         <div
-          ref={zoomMenuRef}
+          ref={displayMenuRef}
           role="menu"
-          aria-label={t('doc.zoom.label')}
-          className="fixed z-popover min-w-[140px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-floating animate-fade-in"
-          style={{ top: zoomMenuPos.top, left: zoomMenuPos.left }}
+          aria-label={t('doc.readingDisplay.label')}
+          className="fixed z-popover min-w-[176px] py-1 rounded-lg border border-border bg-popover text-popover-foreground shadow-floating animate-fade-in"
+          style={{ top: displayPos.top, left: displayPos.left }}
         >
+          <div className="px-2.5 pt-1.5 pb-1 text-xs text-muted-foreground">{t('doc.zoom.label')}</div>
           {DEMO_ZOOMS.map((z, i) => {
             const active = demo.zoomIndex === i
             const pct = Math.round(z * 100)
@@ -1486,7 +1485,6 @@ function DemoModeButton() {
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 text-base text-left text-foreground hover:bg-accent transition-colors"
                 onClick={() => {
                   setDemoZoomIndex(i)
-                  setZoomMenuOpen(false)
                 }}
               >
                 <Check
@@ -1501,25 +1499,36 @@ function DemoModeButton() {
               </button>
             )
           })}
+          <div className="my-1 mx-2 h-px bg-border/60" />
+          <div className="px-2.5 pt-0.5 pb-1 text-xs text-muted-foreground">{t('doc.readingDisplay.width')}</div>
+          {(['normal', 'wide'] as const).map((width) => {
+            const active = readingWidth === width
+            const label = width === 'normal'
+              ? t('doc.readingDisplay.widthNormal')
+              : t('doc.readingDisplay.widthWide')
+            return (
+              <button
+                key={width}
+                type="button"
+                role="menuitemradio"
+                aria-checked={active}
+                aria-label={label}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-base text-left text-foreground hover:bg-accent transition-colors"
+                onClick={() => writeDocReadingWidth(width)}
+              >
+                <Check
+                  className={`w-3.5 h-3.5 shrink-0 ${active ? 'opacity-100' : 'opacity-0'}`}
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
+                {label}
+              </button>
+            )
+          })}
         </div>,
         document.body,
       )}
       <div className="w-px h-4 bg-border/60 mx-0.5" />
-      <Tooltip label={readingWidth === 'wide' ? t('doc.narrowReading') : t('doc.widenReading')}>
-        <button
-          type="button"
-          onClick={toggleReadingWidth}
-          aria-pressed={readingWidth === 'wide'}
-          aria-label={readingWidth === 'wide' ? t('doc.narrowReading') : t('doc.widenReading')}
-          className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
-            readingWidth === 'wide'
-              ? 'text-primary bg-primary/12 hover:bg-primary/15'
-              : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-          }`}
-        >
-          {readingWidth === 'wide' ? <Minimize2 className="w-3.5 h-3.5" strokeWidth={1.75} /> : <Maximize2 className="w-3.5 h-3.5" strokeWidth={1.75} />}
-        </button>
-      </Tooltip>
       <Tooltip label={demo.active ? t('doc.demoMode.exit') : t('doc.demoMode.enter')}>
         <button
           type="button"

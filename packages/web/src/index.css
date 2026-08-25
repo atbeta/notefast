@@ -642,15 +642,52 @@ html.theme-fading *::after {
   border: 0;
   border-radius: 0;
 }
-/* 文档代码块（HighlightedCodeBlock）：代码区整体一块，无上下 padding、
+/* 文档代码块（CodeFenceView）：代码区整体一块，无上下 padding、
    无自带背景/边框（交给外层容器），与 header 的区分靠 border-b + 色差。
    特异性高于 .reading-prose pre，覆盖其 14px/18px 默认内边距。 */
 .reading-prose pre.code-block-body {
   margin: 0;
-  padding: 0 18px;
+  padding: 0;
   background: transparent;
   border: 0;
   border-radius: 0;
+}
+
+/* 行号与正文同一套 DOM：每行 flex，折行时行号跟着源码行走。复制不含 gutter。 */
+.code-fence-body {
+  overflow-x: auto;
+  margin: 0;
+}
+.code-fence-body.is-wrap {
+  overflow-x: hidden;
+}
+.code-fence-body code {
+  display: block;
+  padding: 0.35em 0;
+}
+.code-line {
+  display: flex;
+  align-items: flex-start;
+  min-height: 1.6em;
+}
+.code-line-num {
+  flex: none;
+  width: calc(var(--code-gutter-ch, 2) * 1ch + 1.5rem);
+  padding: 0 0.5rem 0 0.75rem;
+  text-align: right;
+  color: rgb(var(--muted-foreground) / 0.55);
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+.code-line-src {
+  flex: 1;
+  min-width: 0;
+  padding-right: 1rem;
+  white-space: pre;
+}
+.code-fence-body.is-wrap .code-line-src {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .reading-prose ul,
 .reading-prose ol {
@@ -789,8 +826,7 @@ html.theme-fading *::after {
 }
 .chat-code-block pre {
   margin: 0;
-  /* 代码区整体一块：去掉上下 padding，与 header 的区分靠背景色差 + border-b */
-  padding: 0 0.75em;
+  padding: 0;
   overflow-x: auto;
   font-family: var(--font-mono);
   font-size: 12px;

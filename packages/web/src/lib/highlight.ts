@@ -84,3 +84,17 @@ export async function highlightCode(code: string, lang: string): Promise<string 
     return null
   }
 }
+
+/** 开围栏 info string 补全用：高亮已支持的语言 + 别名 + mermaid/math。空语言仍是合法默认。 */
+export const FENCE_INFO_LANGUAGES: string[] = [
+  ...Object.keys(LANGUAGE_LOADERS),
+  ...Object.keys(LANG_ALIASES),
+  'mermaid',
+  'math',
+  'latex',
+  'katex',
+  'tex',
+  'text',
+].filter((name, i, all) => all.indexOf(name) === i)
+  .sort((a, b) => a.localeCompare(b))
+
