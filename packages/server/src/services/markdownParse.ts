@@ -1,9 +1,8 @@
 /**
  * 服务端 Markdown 入库解析。
  *
- * NOTEFAST_MARKDOWN_PARSER=legacy（默认）只走手写 parser。
- * NOTEFAST_MARKDOWN_PARSER=shadow 同时跑 mdast 对照，仍写入手写结果；
- * 日志只含块数与差异路径，不含正文。
+ * 默认 mdast。`NOTEFAST_MARKDOWN_PARSER=legacy` 回退手写 parser；
+ * `shadow` 双跑后仍写 mdast。日志只含块数与差异路径，不含正文。
  */
 
 import { parseMarkdownForPersistence, safeLogError, safeLogWarn } from '@notefast/core'
@@ -11,7 +10,8 @@ import type { CreateBlockInput, MarkdownParserMode } from '@notefast/core'
 
 export function readMarkdownParserMode(): MarkdownParserMode {
   const raw = (process.env.NOTEFAST_MARKDOWN_PARSER || '').trim().toLowerCase()
-  return raw === 'shadow' ? 'shadow' : 'legacy'
+  if (raw === 'legacy' || raw === 'shadow') return raw
+  return 'mdast'
 }
 
 export function parseMarkdownToBlocksForSave(markdown: string, notebookId: string): CreateBlockInput[] {

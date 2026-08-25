@@ -7,7 +7,7 @@
 
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { parseMarkdownToBlocks } from '../../markdown'
+import { parseMarkdownToBlocksLegacy } from '../../markdown'
 import { toSemanticForest } from '../../markdown/semantics'
 import { readFixtureFile } from './loadFixture'
 
@@ -19,7 +19,7 @@ function dumpDir(kind: 'success' | 'failure'): void {
   for (const name of readdirSync(dir).filter((n) => n.endsWith('.md')).sort()) {
     const id = name.slice(0, -3)
     const markdown = readFixtureFile(kind, `${id}.md`)
-    const forest = toSemanticForest(parseMarkdownToBlocks(markdown, 'corpus'))
+    const forest = toSemanticForest(parseMarkdownToBlocksLegacy(markdown, 'corpus'))
     const out = join(dir, `${id}.expected.json`)
     writeFileSync(out, `${JSON.stringify(forest, null, 2)}\n`)
     console.log(`wrote ${kind}/${id}.expected.json`)

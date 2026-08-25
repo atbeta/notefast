@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
-import { parseMarkdownToBlocks } from '@notefast/core'
+import { parseMarkdownToBlocks, parseMarkdownToBlocksLegacy } from '@notefast/core'
 import { parseMarkdownToBlocksForSave, readMarkdownParserMode } from '../services/markdownParse'
 
 function shape(inputs: ReturnType<typeof parseMarkdownToBlocks>) {
@@ -21,22 +21,32 @@ afterEach(() => {
 })
 
 describe('readMarkdownParserMode', () => {
-  test('未设置或未知值都是 legacy', () => {
+  test('未设置或未知值都是 mdast', () => {
+    expect(readMarkdownParserMode()).toBe('mdast')
+    process.env[ENV_KEY] = 'yes'
+    expect(readMarkdownParserMode()).toBe('mdast')
+    process.env[ENV_KEY] = 'LEGACY'
     expect(readMarkdownParserMode()).toBe('legacy')
-    process.env[ENV_KEY] = 'mdast'
-    expect(readMarkdownParserMode()).toBe('legacy')
-    process.env[ENV_KEY] = 'SHADOW'
+    process.env[ENV_KEY] = 'shadow'
     expect(readMarkdownParserMode()).toBe('shadow')
   })
 })
 
 describe('parseMarkdownToBlocksForSave', () => {
-  test('默认写入与手写 parser 一致', () => {
-    const md = '# 标题\n\n正文\n'
+  test('默认写入 mdast（tilde 围栏为 code）', () => {
+    const md = '~~~\ncode\n~~~\n'
     expect(shape(parseMarkdownToBlocksForSave(md, 'nb'))).toEqual(shape(parseMarkdownToBlocks(md, 'nb')))
+    expect(parseMarkdownToBlocksForSave(md, 'nb')[0]?.type).toBe('code')
   })
 
-  test('shadow 仍写入手写结果，围栏差异只打 warn 不含正文', () => {
+  test('legacy 回退手写 parser', () => {
+    process.env[ENV_KEY] = 'legacy'
+    const md = '~~~\ncode\n~~~\n'
+    expect(shape(parseMarkdownToBlocksForSave(md, 'nb'))).toEqual(shape(parseMarkdownToBlocksLegacy(md, 'nb')))
+    expect(parseMarkdownToBlocksForSave(md, 'nb')[0]?.type).toBe('paragraph')
+  })
+
+  test('shadow 写 mdast，围栏差异只打 warn 不含正文', () => {
     process.env[ENV_KEY] = 'shadow'
     const md = '~~~\nsecret-code\n~~~\n'
     const warns: string[] = []
@@ -46,7 +56,7 @@ describe('parseMarkdownToBlocksForSave', () => {
     }
     try {
       const out = parseMarkdownToBlocksForSave(md, 'nb')
-      expect(shape(out)).toEqual(shape(parseMarkdownToBlocks(md, 'nb')))
+      expect(out[0]?.type).toBe('code')
     } finally {
       console.warn = orig
     }

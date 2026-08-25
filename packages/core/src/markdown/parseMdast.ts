@@ -1,7 +1,7 @@
 /**
  * Markdown → blocks（mdast 并行实现）
  *
- * 默认保存路径仍走 markdown.ts 手写 parser。本模块只供对照测试与后续开关使用。
+ * 默认保存路径与 `parseMarkdownToBlocks` 均走本实现。
  * 映射目标是现行产品语义（软换行保 \n、Setext 当段落、水平线当 --- paragraph），
  * 不是完整 CommonMark 作业。
  */

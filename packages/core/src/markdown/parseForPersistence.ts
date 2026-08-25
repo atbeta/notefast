@@ -1,16 +1,16 @@
 /**
  * 持久化入口用的 Markdown 解析（导入 / 整篇保存）。
  *
- * 默认仍用手写 parser。shadow 模式双跑 mdast，但始终返回手写结果；
- * 对照报告不含正文，只含块数与第一处差异路径。
+ * 默认写 mdast。`legacy` 回退手写 parser；`shadow` 双跑后仍写 mdast，
+ * 对照报告不含正文，只含块数与第一处差异路径。mdast 抛错时回退手写结果。
  */
 
 import type { CreateBlockInput } from '../types'
-import { parseMarkdownToBlocks } from '../markdown'
+import { parseMarkdownToBlocksLegacy } from '../markdown'
 import { parseMarkdownToBlocksMdast } from './parseMdast'
 import { firstSemanticDiff, toSemanticForest } from './semantics'
 
-export type MarkdownParserMode = 'legacy' | 'shadow'
+export type MarkdownParserMode = 'legacy' | 'shadow' | 'mdast'
 
 export interface ParserShadowReport {
   match: boolean
@@ -30,28 +30,50 @@ export function parseMarkdownForPersistence(
     onShadow?: (report: ParserShadowReport) => void
   },
 ): CreateBlockInput[] {
-  const legacy = parseMarkdownToBlocks(markdown, notebookId)
-  if (opts?.mode !== 'shadow') return legacy
+  const mode = opts?.mode ?? 'mdast'
 
-  try {
-    const mdast = parseMarkdownToBlocksMdast(markdown, notebookId)
-    const left = toSemanticForest(legacy)
-    const right = toSemanticForest(mdast)
-    const firstDiff = firstSemanticDiff(left, right) ?? undefined
-    opts.onShadow?.({
-      match: firstDiff == null,
-      legacyCount: legacy.length,
-      mdastCount: mdast.length,
-      firstDiff,
-    })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    opts.onShadow?.({
-      match: false,
-      legacyCount: legacy.length,
-      mdastCount: 0,
-      mdastError: message.slice(0, 200),
-    })
+  if (mode === 'legacy') {
+    return parseMarkdownToBlocksLegacy(markdown, notebookId)
   }
-  return legacy
+
+  let mdastInputs: CreateBlockInput[] | undefined
+  let mdastError: string | undefined
+  try {
+    mdastInputs = parseMarkdownToBlocksMdast(markdown, notebookId)
+  } catch (err) {
+    mdastError = (err instanceof Error ? err.message : String(err)).slice(0, 200)
+  }
+
+  if (mode === 'shadow') {
+    const legacyInputs = parseMarkdownToBlocksLegacy(markdown, notebookId)
+    if (mdastInputs && !mdastError) {
+      const firstDiff = firstSemanticDiff(toSemanticForest(legacyInputs), toSemanticForest(mdastInputs)) ?? undefined
+      opts?.onShadow?.({
+        match: firstDiff == null,
+        legacyCount: legacyInputs.length,
+        mdastCount: mdastInputs.length,
+        firstDiff,
+      })
+      return mdastInputs
+    }
+    opts?.onShadow?.({
+      match: false,
+      legacyCount: legacyInputs.length,
+      mdastCount: 0,
+      mdastError,
+    })
+    return legacyInputs
+  }
+
+  if (!mdastInputs) {
+    opts?.onShadow?.({
+      match: false,
+      legacyCount: 0,
+      mdastCount: 0,
+      mdastError,
+    })
+    return parseMarkdownToBlocksLegacy(markdown, notebookId)
+  }
+
+  return mdastInputs
 }

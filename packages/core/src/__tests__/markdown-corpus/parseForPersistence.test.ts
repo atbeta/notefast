@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { parseMarkdownToBlocks } from '../../markdown'
+import { parseMarkdownToBlocks, parseMarkdownToBlocksLegacy } from '../../markdown'
 import { parseMarkdownForPersistence } from '../../markdown/parseForPersistence'
 import { firstSemanticDiff, toSemanticForest } from '../../markdown/semantics'
 
@@ -16,15 +16,35 @@ describe('firstSemanticDiff', () => {
   })
 })
 
-describe('parseMarkdownForPersistence', () => {
-  test('默认与手写 parser 同一棵语义树', () => {
+describe('parseMarkdownToBlocks 默认 mdast', () => {
+  test('成功样本与手写语义一致', () => {
     const md = '- [x] done\n\n```ts\nconst x = 1\n```\n'
-    const a = toSemanticForest(parseMarkdownToBlocks(md, 'nb'))
-    const b = toSemanticForest(parseMarkdownForPersistence(md, 'nb'))
-    expect(b).toEqual(a)
+    expect(toSemanticForest(parseMarkdownToBlocks(md, 'nb'))).toEqual(
+      toSemanticForest(parseMarkdownToBlocksLegacy(md, 'nb')),
+    )
   })
 
-  test('shadow 仍返回手写结果，成功样本 match', () => {
+  test('未闭合围栏不再丢内容', () => {
+    const forest = toSemanticForest(parseMarkdownToBlocks('```js\nconst x = 1\n', 'nb'))
+    expect(forest.some((n) => n.type === 'code' && n.content.includes('const x = 1'))).toBe(true)
+  })
+})
+
+describe('parseMarkdownForPersistence', () => {
+  test('默认写 mdast（tilde 围栏成为 code）', () => {
+    const md = '~~~\ncode\n~~~\n'
+    const forest = toSemanticForest(parseMarkdownForPersistence(md, 'nb'))
+    expect(forest).toEqual([{ type: 'code', content: 'code', properties: {}, children: [] }])
+  })
+
+  test('legacy 模式仍写入手写结果', () => {
+    const md = '~~~\ncode\n~~~\n'
+    expect(toSemanticForest(parseMarkdownForPersistence(md, 'nb', { mode: 'legacy' }))).toEqual(
+      toSemanticForest(parseMarkdownToBlocksLegacy(md, 'nb')),
+    )
+  })
+
+  test('shadow 写 mdast，成功样本 match', () => {
     const md = '第一行\n第二行\n\n下一段。\n'
     const reports: Array<{ match: boolean; firstDiff?: string }> = []
     const out = parseMarkdownForPersistence(md, 'nb', {
@@ -34,17 +54,16 @@ describe('parseMarkdownForPersistence', () => {
     expect(toSemanticForest(out)).toEqual(toSemanticForest(parseMarkdownToBlocks(md, 'nb')))
     expect(reports).toHaveLength(1)
     expect(reports[0]!.match).toBe(true)
-    expect(reports[0]!.firstDiff).toBeUndefined()
   })
 
-  test('shadow 在围栏改善样本上 mismatch，仍写手写结果', () => {
+  test('shadow 在围栏样本上 mismatch，但仍写 mdast', () => {
     const md = '~~~\ncode\n~~~\n'
     const reports: Array<{ match: boolean; firstDiff?: string }> = []
     const out = parseMarkdownForPersistence(md, 'nb', {
       mode: 'shadow',
       onShadow: (r) => reports.push(r),
     })
-    expect(toSemanticForest(out)).toEqual(toSemanticForest(parseMarkdownToBlocks(md, 'nb')))
+    expect(out[0]?.type).toBe('code')
     expect(reports[0]!.match).toBe(false)
     expect(reports[0]!.firstDiff).toBe('0.type')
   })

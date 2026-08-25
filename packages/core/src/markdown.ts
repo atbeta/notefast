@@ -1,12 +1,14 @@
 /**
- * Markdown → blocks 手写 parser（现行默认实现）。
+ * Markdown → blocks。
  *
- * 并行 mdast 实现见 `./markdown/parseMdast.ts`（尚未接入保存路径）。
+ * `parseMarkdownToBlocks` 默认走 mdast；手写实现保留为 `parseMarkdownToBlocksLegacy`，
+ * 供契约冻结与 `NOTEFAST_MARKDOWN_PARSER=legacy` 回退。
  * 契约语料见 `__tests__/markdown-corpus/`。
  */
 import { BlockType } from './types'
 import type { Block, CreateBlockInput } from './types'
 import { stripDocFrontmatter } from './frontmatter'
+import { parseMarkdownToBlocksMdast } from './markdown/parseMdast'
 
 export interface ParsedBlock {
   type: BlockType
@@ -26,6 +28,15 @@ const CONTAINER_TYPES = new Set<BlockType>([
 ])
 
 export function parseMarkdownToBlocks(markdown: string, notebookId: string): CreateBlockInput[] {
+  try {
+    return parseMarkdownToBlocksMdast(markdown, notebookId)
+  } catch {
+    return parseMarkdownToBlocksLegacy(markdown, notebookId)
+  }
+}
+
+/** 手写按行扫描；仅用于语料冻结与紧急回退，新代码不要直接依赖其缺陷。 */
+export function parseMarkdownToBlocksLegacy(markdown: string, notebookId: string): CreateBlockInput[] {
   // 便携导出可能带 frontmatter；解析前剥离，避免 --- 块落入正文
   const { body: markdownBody } = stripDocFrontmatter(markdown)
   const lines = markdownBody.split('\n')
