@@ -12,6 +12,7 @@ import AIChatPanel from './AIChatPanel'
 import GlobalSyncStatus from './GlobalSyncStatus'
 import TitleBar from './TitleBar'
 import { ServerOfflineBanner } from './ServerHealthBar'
+import { ShortcutScopeProvider } from '../hooks/useShortcutScope'
 import { useTheme } from '../hooks/useTheme'
 import { prefetchTagCatalog } from '../hooks/useTagCatalog'
 import { ASK_AI_EVENT } from '../lib/askAi'
@@ -174,8 +175,9 @@ export default function Layout({ children, contentClassName }: { children: React
   }, [toggleSidebar, navigate, paletteOpen, aiChatOpen, resolvedTheme, setTheme])
 
   return (
-    // 根容器 pt/pb 用 env() 吸收刘海/Home 指示条安全区（非 standalone/无刘海环境恒为 0，不影响现有布局）
-    <div className="flex flex-col h-screen overflow-hidden bg-background relative w-full pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] print:h-auto print:overflow-visible">
+    <ShortcutScopeProvider>
+      {/* 根容器 pt/pb 用 env() 吸收刘海/Home 指示条安全区（非 standalone/无刘海环境恒为 0，不影响现有布局） */}
+      <div className="flex flex-col h-screen overflow-hidden bg-background relative w-full pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] print:h-auto print:overflow-visible">
       {/* 原生壳自绘标题栏（仅 Tauri 壳渲染；macOS 壳走系统标题栏，浏览器不渲染）。
           演示模式隐藏：避免用户把窗口关闭按钮误当「退出演示」 */}
       {!demo.active && <div className="print:hidden"><TitleBar /></div>}
@@ -274,5 +276,6 @@ export default function Layout({ children, contentClassName }: { children: React
         />
       </div>
     </div>
+    </ShortcutScopeProvider>
   )
 }

@@ -53,7 +53,7 @@
     "sectionNotes": "Notes",
     "sectionRelations": "Relations",
     "allDocs": "All documents",
-    "newDocTitle": "New document ({{shortcut}})",
+    "newDocTitle": "New document",
     "newDoc": "New",
     "inbox": "Inbox",
     "archived": "Archive",
@@ -78,7 +78,7 @@
   },
   "layout": {
     "openMenu": "Open menu",
-    "openAiChat": "Chat / knowledge base Q&A",
+    "openAiChat": "AI Assistant",
     "search": "Search",
     "minimize": "Minimize",
     "maximize": "Maximize",
@@ -179,5 +179,29 @@
   },
   "notify": {
     "syncFailed": "Sync failed"
+  },
+  "shortcuts": {
+    "sheetLabel": "Keyboard shortcuts",
+    "thisPage": "This page",
+    "global": "Global",
+    "search": "Search",
+    "newDoc": "New document",
+    "aiChat": "Ask AI",
+    "sidebar": "Sidebar",
+    "theme": "Switch theme",
+    "enterEdit": "Enter edit mode",
+    "find": "Find in document",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomReset": "Reset zoom",
+    "exitDemo": "Exit demo",
+    "save": "Save and return to reading",
+    "preview": "Preview / edit",
+    "bold": "Bold",
+    "italic": "Italic",
+    "inlineCode": "Inline code",
+    "link": "Insert link",
+    "aiContinue": "AI continue",
+    "aiAccept": "Accept continuation"
   }
 }

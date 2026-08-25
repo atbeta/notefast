@@ -1,11 +1,13 @@
 import type { ReactNode, MouseEvent } from 'react'
 import AiChatTrigger from './AiChatTrigger'
+import ShortcutSheet from './ShortcutSheet'
 import { isWindowZoomDoubleClickTarget, nativeToggleWindowZoom } from '../lib/nativeWindow'
 
-/** 顶栏最右 AI 入口：竖线与本页按钮分开 */
+/** 顶栏最右：快捷键清单 + AI 入口；竖线与本页按钮分开 */
 export function AiChatHeaderSlot({ triggerClassName = '' }: { triggerClassName?: string }) {
   return (
-    <div className="shrink-0 flex items-center self-center pl-2 ml-0.5 border-l border-border/60">
+    <div className="shrink-0 flex items-center self-center gap-0.5 pl-2 ml-0.5 border-l border-border/60">
+      <ShortcutSheet />
       <AiChatTrigger className={triggerClassName} />
     </div>
   )

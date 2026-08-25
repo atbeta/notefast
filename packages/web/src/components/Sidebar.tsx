@@ -39,7 +39,7 @@ import {
 import { isWindowZoomDoubleClickTarget, nativeToggleWindowZoom } from '../lib/nativeWindow'
 import type { DocSummary } from '@notefast/core'
 import DocActionsMenu from './DocActionsMenu'
-import { Tooltip, ShortcutKeys, shortcutLabel } from './ui'
+import { Tooltip, ShortcutKeys } from './ui'
 
 interface SidebarProps {
   collapsed: boolean
@@ -416,7 +416,7 @@ export default function Sidebar({
               <Images className="w-4 h-4" strokeWidth={1.75} />
               <span className="flex-1">{t('sidebar.resources')}</span>
             </Link>
-            <Tooltip className="w-full" label={t('sidebar.newDocTitle', { shortcut: shortcutLabel(['mod', 'N']) })}>
+            <Tooltip className="w-full" label={t('sidebar.newDocTitle')}>
               <Link to="/new" onClick={closeAfterNav} className={`w-full ${location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'}`}>
                 <Plus className="w-4 h-4" strokeWidth={1.75} />
                 {t('sidebar.newDoc')}

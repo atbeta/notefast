@@ -1,7 +1,7 @@
 import { Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAiChatCtl } from './Layout'
-import { Tooltip, shortcutLabel } from './ui'
+import { Tooltip } from './ui'
 
 /**
  * 桌面端内容顶栏 AI 常驻入口（md+）。
@@ -12,7 +12,7 @@ export default function AiChatTrigger({ className = '' }: { className?: string }
   const { open, toggle } = useAiChatCtl()
 
   return (
-    <Tooltip label={`${t('layout.openAiChat')} (${shortcutLabel(['mod', 'J'])})`}>
+    <Tooltip label={t('layout.openAiChat')}>
       <button
         type="button"
         onClick={toggle}

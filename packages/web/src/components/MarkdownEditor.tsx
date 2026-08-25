@@ -14,12 +14,12 @@ import {
 } from '@notefast/core'
 import type { Block } from '@notefast/core'
 import { api } from '../hooks/useAPI'
-import { shortcutLabel, useToast } from './ui'
+import { useToast } from './ui'
 import { relativeTime } from '../lib/time'
 import { useEditorDraft } from '../hooks/useEditorDraft'
 import { useImageUploader } from '../hooks/useImageUploader'
 import BlockRenderer from './BlockRenderer'
-import EditorToolbar, { ShortcutsHelp } from './editor/EditorToolbar'
+import EditorToolbar from './editor/EditorToolbar'
 import { useDocContextMenu } from './editor/DocContextMenu'
 import EditorFooter from './editor/EditorFooter'
 import CodeMirrorEditor from './editor/CodeMirrorEditor'
@@ -118,7 +118,6 @@ function EditorInline({
   const [mode, setMode] = useState<Mode>('edit')
   const [imageDragOver, setImageDragOver] = useState(false)
   const imageDragCounter = useRef(0)
-  const [showHelp, setShowHelp] = useState(false)
   const [ghostText, setGhostText] = useState('')
   const ghostTextRef = useRef('')
   const editorRef = useRef<CodeMirrorEditorHandle>(null)
@@ -523,8 +522,6 @@ function EditorInline({
         loading={loading}
         uploadingImage={imageUploader.uploading}
         uploadProgress={imageUploader.progress}
-        showHelp={showHelp}
-        onToggleHelp={setShowHelp}
         onSave={handleSave}
         onCancel={handleCancel}
         insertAtCursor={insertAtCursor}
@@ -633,7 +630,7 @@ function EditorInline({
                 onSelectionChange={handleSelectionChange}
                 onCaret={onCaret}
                 autoFocus
-                placeholder={t('mdEditor.placeholder', { mod: shortcutLabel(['mod']) })}
+                placeholder={t('mdEditor.placeholder')}
               />
               {/* 图片拖入反馈：拖拽文件进入区域时铺底高亮，提示“松开即上传”。
                   CM 的 domEventHandlers 仍然处理 drop、CodeMirrorFocus 里调 uploadImage。 */}
@@ -679,22 +676,6 @@ function EditorInline({
         relativeTime={relativeTime}
         autoSaveStatus={autoSaveStatus}
       />
-
-      {showHelp && (
-        <div className="mt-3 pt-3 border-t border-border/50 text-xs text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-1.5">
-          <ShortcutsHelp keys={['mod', 'S']} desc={t('mdEditor.helpSave')} />
-          <ShortcutsHelp keys={['mod', 'P']} desc={t('mdEditor.helpTogglePreview')} />
-          <ShortcutsHelp keys={['mod', 'B']} desc={t('mdEditor.helpBold')} />
-          <ShortcutsHelp keys={['mod', 'I']} desc={t('mdEditor.helpItalic')} />
-          <ShortcutsHelp keys={['mod', 'E']} desc={t('mdEditor.helpInlineCode')} />
-          <ShortcutsHelp keys={['mod', '⇧K']} desc={t('mdEditor.helpInsertLink')} />
-          <ShortcutsHelp keys={['mod', 'Enter']} desc={t('mdEditor.helpAiContinue')} />
-          <ShortcutsHelp keys={['Tab']} desc={t('mdEditor.helpAiAccept')} />
-          <p className="col-span-2 mt-1 text-xs leading-relaxed text-muted-foreground/80">
-            {t('mdEditor.helpEditingTips')}
-          </p>
-        </div>
-      )}
     </div>
   )
 }

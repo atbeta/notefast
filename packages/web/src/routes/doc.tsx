@@ -56,11 +56,12 @@ import { useDocReadingWidth, writeDocReadingWidth, DOC_READING_WIDTH_REM } from 
 import { formatRelative, relativeTime, currentLocale } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
-import { EmptyState, InlineError, ListRowsSkeleton, ShortcutKeys, Tooltip, shortcutLabel, useToast } from '../components/ui'
+import { EmptyState, InlineError, ListRowsSkeleton, Tooltip, useToast } from '../components/ui'
 import { isEnterEditShortcut } from '../lib/globalShortcuts'
 import { deliverExport, fetchDocExportFile } from '../lib/download'
 import { recordVisit } from '../lib/recentVisits'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
+import { useRegisterShortcutPage } from '../hooks/useShortcutScope'
 
 interface Backlink {
   id: number
@@ -126,6 +127,7 @@ export default function DocPage() {
     searchParams.get('edit') === '1' ? (id ?? null) : null,
   )
   const isEditing = editingDocId !== null && editingDocId === id
+  useRegisterShortcutPage(isEditing ? 'doc-editing' : 'doc-reading')
   // 离开被编辑的文档后编辑会话结束（未保存内容由 useEditorDraft 草稿保留）
   useEffect(() => {
     if (editingDocId && editingDocId !== id) setEditingDocId(null)
@@ -837,7 +839,7 @@ useEffect(() => {
           {/* 右：操作按钮组 */}
           <div className="flex items-center gap-2">
             {!isEditing && (
-              <Tooltip label={`${t('doc.enterEdit')} (${shortcutLabel(['mod', 'E'])})`}>
+              <Tooltip label={t('doc.enterEdit')}>
                 <button
                   type="button"
                   onClick={handleStartEdit}
@@ -849,12 +851,10 @@ useEffect(() => {
               </Tooltip>
             )}
             {isEditing && (
-              <Tooltip label={t('doc.editSaveHint', { shortcut: shortcutLabel(['mod', 'S']) })}>
-                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                  {t('doc.editing')}
-                </span>
-              </Tooltip>
+              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                {t('doc.editing')}
+              </span>
             )}
             {!isEditing && <DemoModeButton />}
             <div className="w-px h-4 bg-border/60 mx-1" />
@@ -1106,15 +1106,7 @@ useEffect(() => {
                     className="select-none"
                     icon={<SquarePen className="w-5 h-5" />}
                     title={t('doc.emptyDocument')}
-                    description={(
-                      <span className="flex items-center justify-center gap-1.5 flex-wrap">
-                        <span>{t('doc.emptyDocumentHintStart')}</span>
-                        <ShortcutKeys keys={['mod', 'E']} />
-                        <span>{t('doc.emptyDocumentHintMid')}</span>
-                        <ShortcutKeys keys={['mod', 'J']} />
-                        <span>{t('doc.emptyDocumentHintEnd')}</span>
-                      </span>
-                    )}
+                    description={t('doc.emptyDocumentHint')}
                   />
                 )}
 
@@ -1498,7 +1490,7 @@ function DemoModeButton() {
       role="group"
       aria-label={t('doc.readingDisplay.label')}
     >
-      <Tooltip label={`${t('doc.readingDisplay.label')} · ${t('doc.zoom.current', { pct: zoomPct })} · ${t('doc.demoMode.shortcutHint')}`}>
+      <Tooltip label={`${t('doc.readingDisplay.label')} · ${t('doc.zoom.current', { pct: zoomPct })}`}>
         <button
           ref={displayBtnRef}
           type="button"

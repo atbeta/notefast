@@ -23,7 +23,7 @@ import {
   X,
   Square,
 } from 'lucide-react'
-import { Tooltip, ShortcutKeys, shortcutLabel } from '../ui'
+import { Tooltip } from '../ui'
 import { useAiCapabilities } from '../../hooks/useAiCapabilities'
 import { usePopoverDismiss } from '../../hooks/usePopoverDismiss'
 import type { CodeMirrorEditorHandle } from './CodeMirrorEditor'
@@ -39,8 +39,6 @@ interface EditorToolbarProps {
   uploadingImage: boolean
   /** 上传进度 0-100。>0 时在图片按钮上叠加进度环与百分比。 */
   uploadProgress?: number
-  showHelp: boolean
-  onToggleHelp: (show: boolean) => void
   onSave: () => void
   onCancel: () => void
   insertAtCursor: (text: string, opts?: { cursorOffset?: number; selectStart?: number }) => void
@@ -65,8 +63,6 @@ export default function EditorToolbar({
   loading,
   uploadingImage,
   uploadProgress = 0,
-  showHelp,
-  onToggleHelp,
   onSave,
   onCancel,
   insertAtCursor,
@@ -151,16 +147,16 @@ export default function EditorToolbar({
           <Table className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
         <ToolbarDivider />
-        <IconBtn title={t('editorToolbar.bold', { shortcut: shortcutLabel(['mod', 'B']) })} onClick={() => wrapSelection('**')}>
+        <IconBtn title={t('editorToolbar.bold')} onClick={() => wrapSelection('**')}>
           <Bold className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn title={t('editorToolbar.italic', { shortcut: shortcutLabel(['mod', 'I']) })} onClick={() => wrapSelection('*')}>
+        <IconBtn title={t('editorToolbar.italic')} onClick={() => wrapSelection('*')}>
           <Italic className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn title={t('editorToolbar.inlineCode', { shortcut: shortcutLabel(['mod', 'E']) })} onClick={() => wrapSelection('`')}>
+        <IconBtn title={t('editorToolbar.inlineCode')} onClick={() => wrapSelection('`')}>
           <Code className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
-        <IconBtn title={t('editorToolbar.link', { shortcut: shortcutLabel(['mod', '⇧K']) })} onClick={handleInsertLink}>
+        <IconBtn title={t('editorToolbar.link')} onClick={handleInsertLink}>
           <Link2 className="w-4 h-4" strokeWidth={1.75} />
         </IconBtn>
         <Tooltip
@@ -247,9 +243,6 @@ export default function EditorToolbar({
         />
           </>
         )}
-        <IconBtn title={t('editorToolbar.shortcuts')} onClick={() => onToggleHelp(!showHelp)} active={showHelp}>
-          <span className="text-sm font-medium leading-none">?</span>
-        </IconBtn>
 
         <div className="flex items-center gap-1 ml-auto">
           {mode === 'edit' && aiContinue?.available ? (
@@ -281,7 +274,7 @@ export default function EditorToolbar({
           >
             {t('editorToolbar.exitEdit')}
           </button>
-          <Tooltip label={saving ? t('editorToolbar.saving') : t('editorToolbar.saveAndReturn', { shortcut: shortcutLabel(['mod', 'S']) })}>
+          <Tooltip label={saving ? t('editorToolbar.saving') : t('editorToolbar.saveAndReturn')}>
             <button
               type="button"
               onClick={onSave}
@@ -351,7 +344,7 @@ function AiContinueControls({
   }
 
   return (
-    <Tooltip label={t('editorToolbar.continueHint', { shortcut: shortcutLabel(['mod', 'Enter']) })}>
+    <Tooltip label={t('editorToolbar.continueHint')}>
       <button
         type="button"
         onClick={onStart}
@@ -424,15 +417,6 @@ function UploadProgressRing({ progress }: { progress: number }) {
       <span className="relative text-[8px] font-medium tabular-nums leading-none text-foreground/80"> {/* typography-allow: 上传进度环内数字 */}
         {Math.min(99, Math.max(0, progress))}
       </span>
-    </div>
-  )
-}
-
-export function ShortcutsHelp({ keys, desc }: { keys: string[]; desc: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <ShortcutKeys keys={keys} />
-      <span>{desc}</span>
     </div>
   )
 }
