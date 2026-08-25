@@ -8,7 +8,8 @@
       (function () {
         try {
           var SUPPORTED_CODES = ['zh-CN', 'en'];
-          var stored = localStorage.getItem('notefast.locale');
+          var boot = window.__NF_PREFS || {};
+          var stored = boot.locale || localStorage.getItem('notefast.locale');
           var lang = 'zh-CN';
           if (stored && stored !== 'system') {
             var s = stored.toLowerCase();
@@ -44,15 +45,16 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <!--
-      内联防闪烁脚本：React 挂载前同步读 localStorage + 系统偏好，把
-      <html data-theme> 设为 light/dark，避免页面先亮后暗的闪烁。
+      内联防闪烁脚本：React 挂载前同步读 __NF_PREFS（engine 注入）/
+      localStorage + 系统偏好，把 <html data-theme> 设为 light/dark。
       必须放在 <head> 内联且 module script 之前；不要 await / import。
       同步脚本只决定 data-theme（CSS hook），实际状态管理交给 useTheme()。
     -->
     <script>
       (function () {
         try {
-          var stored = localStorage.getItem('notefast.theme');
+          var boot = window.__NF_PREFS || {};
+          var stored = boot.theme || localStorage.getItem('notefast.theme');
           var systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
           var resolved;
           if (stored === 'dark') resolved = 'dark';

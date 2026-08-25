@@ -1,9 +1,9 @@
 /**
  * Theme hook — 三档主题（light / dark / system）+ 系统跟随
  *
- * 持久化：localStorage 'notefast.theme' = 'light' | 'dark' | 'system'（首屏缓存）
- *         + 服务端 /api/v1/preferences（权威——原生壳 origin 随 engine 随机端口
- *         变化，localStorage 不持久；浏览器形态双写无副作用）
+ * 持久化：window.__NF_PREFS（engine 吐 HTML 时注入 ui-preferences）
+ *         + localStorage 'notefast.theme'（浏览器形态首屏缓存）
+ *         + 服务端 /api/v1/preferences（权威；壳 origin 随端口变，localStorage 不稳）
  * 渲染：<html data-theme="light|dark"> 由防闪烁脚本（在 index.html 内联）
  *       和本 hook 在系统变化时同步更新。
  *
@@ -12,6 +12,7 @@
  */
 
 import { useSyncExternalStore } from 'react'
+import { readBootPrefs } from '../lib/bootPrefs'
 import { fetchWithAuth } from './useAPI'
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
@@ -21,6 +22,8 @@ const STORAGE_KEY = 'notefast.theme'
 const VALID_CHOICES: readonly ThemeChoice[] = ['light', 'dark', 'system']
 
 function readStoredChoice(): ThemeChoice {
+  const boot = readBootPrefs().theme
+  if (boot && (VALID_CHOICES as readonly string[]).includes(boot)) return boot as ThemeChoice
   try {
     const v = localStorage.getItem(STORAGE_KEY)
     if (v && (VALID_CHOICES as readonly string[]).includes(v)) return v as ThemeChoice

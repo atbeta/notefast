@@ -3,6 +3,8 @@
 //
 // 闪烁对策：engine 很快就绪时也不要立刻跳走——给 logo 动画留足时间，
 // 淡出后再 replace；否则会看到「启动页闪一下 → 空白 → React 冒出」。
+applySplashTheme()
+
 ;(async () => {
   const MIN_SPLASH_MS = 1400
   const FADE_MS = 320
@@ -60,10 +62,33 @@ async function shouldHoldForImport() {
   }
 }
 
-/** 系统主题近似主 UI 底色；theme 存在 engine origin localStorage，启动页读不到 */
+async function readThemePref() {
+  try {
+    return await window.__TAURI__.core.invoke('ui_theme_pref')
+  } catch {
+    return null
+  }
+}
+
+function systemPrefersDark() {
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+function resolveDark(pref) {
+  if (pref === 'light') return false
+  if (pref === 'dark') return true
+  return systemPrefersDark()
+}
+
+/** 立刻按 ui-preferences 设 splash data-theme，避免只跟系统 */
+async function applySplashTheme() {
+  const dark = resolveDark(await readThemePref())
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
+}
+
+/** 跳转前底色跟设置（light/dark）或系统；不再只信 prefers-color-scheme */
 async function alignWebviewToAppBg() {
-  const dark =
-    window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+  const dark = resolveDark(await readThemePref())
   const [r, g, b] = dark ? [25, 25, 25] : [255, 255, 255]
   const color = { red: r, green: g, blue: b, alpha: 255 }
   document.body.style.background = `rgb(${r},${g},${b})`

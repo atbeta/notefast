@@ -15,8 +15,16 @@
       --fg: #26272e;
       --fg-dim: rgba(38, 39, 46, 0.45);
     }
+    [data-theme="dark"] {
+      --brand-soft: rgba(90, 116, 176, 0.35);
+      --bg: #15161a;
+      --bg-glow: #1b1d24;
+      --fg: #e8e9ed;
+      --fg-dim: rgba(232, 233, 237, 0.45);
+    }
+    /* 未设 data-theme 时才跟系统（Rust/JS 尚未写入偏好） */
     @media (prefers-color-scheme: dark) {
-      :root {
+      :root:not([data-theme]) {
         --brand-soft: rgba(90, 116, 176, 0.35);
         --bg: #15161a;
         --bg-glow: #1b1d24;

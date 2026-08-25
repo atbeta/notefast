@@ -36,7 +36,8 @@ import { initSyncManager } from './sync/manager'
 import { initProtocolManager } from './sync/protocolManager'
 import { initBackupManager, stopBackupManager } from './backup/manager'
 import { initStorageLocations } from './storage/locations'
-import { initPreferences } from './api/preferences'
+import { getUiPreferences, initPreferences } from './api/preferences'
+import { injectBootPrefs } from './web/bootPrefs'
 import { initTermDict } from './termDict'
 import { seedWelcomeDocIfNeeded } from './services/welcomeSeed'
 import { initVectorStore } from './ai/indexer'
@@ -326,8 +327,16 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
 
     const webDist = process.env.WEB_DIST || ''
     if (webDist) {
+      const indexPath = join(webDist, 'index.html')
+      const serveIndex = (c: Context) => {
+        if (!existsSync(indexPath)) return c.notFound()
+        const html = injectBootPrefs(readFileSync(indexPath, 'utf8'), getUiPreferences())
+        c.header('Cache-Control', 'no-store')
+        return c.html(html)
+      }
+      app.get('/', serveIndex)
       app.use('/*', serveStatic({ root: webDist }))
-      app.get('/*', serveStatic({ path: 'index.html', root: webDist }))
+      app.get('/*', serveIndex)
     }
 
     const exportDir = process.env.AUTO_EXPORT_DIR || ''

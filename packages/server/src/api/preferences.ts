@@ -39,6 +39,11 @@ function load(): Record<string, unknown> {
   return prefsStore.get()
 }
 
+/** 给 engine 吐 index.html 用：已 init 后的内存态，不走 HTTP */
+export function getUiPreferences(): Record<string, unknown> {
+  return load()
+}
+
 function save(data: Record<string, unknown>): void {
   prefsStore.set(data)
 }

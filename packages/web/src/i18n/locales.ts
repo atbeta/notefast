@@ -7,6 +7,8 @@
  * 3. 同步 index.html 内联防闪烁脚本里的 SUPPORTED_CODES 列表
  */
 
+import { readBootPrefs } from '../lib/bootPrefs'
+
 export interface LocaleInfo {
   /** BCP 47 代码，同时是 i18next lng 与 <html lang> 值 */
   code: string
@@ -39,10 +41,11 @@ export function resolveLocale(choice: string | null | undefined, systemLocale?: 
   return byPrimary ? byPrimary.code : DEFAULT_LOCALE
 }
 
-/** 读取 localStorage 里的语言选择；异常/非法值一律当 'system' */
+/** 读取启动注入 / localStorage 里的语言选择；异常/非法值一律当 'system' */
 export function readStoredLocaleChoice(): string | null {
   try {
-    const v = localStorage.getItem(LOCALE_STORAGE_KEY)
+    const boot = readBootPrefs().locale
+    const v = (typeof boot === 'string' && boot) ? boot : localStorage.getItem(LOCALE_STORAGE_KEY)
     if (v === 'system') return 'system'
     if (v && SUPPORTED_LOCALES.some((l) => l.code.toLowerCase() === v.toLowerCase())) return v
     return null

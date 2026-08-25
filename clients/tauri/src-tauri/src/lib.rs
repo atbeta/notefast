@@ -5,6 +5,7 @@
 
 mod engine;
 mod import;
+mod ui_theme;
 
 use engine::{EngineHandle, EngineInfo};
 use std::path::PathBuf;
@@ -22,6 +23,14 @@ struct PendingOpenFiles(Mutex<bool>);
 #[tauri::command]
 fn has_pending_open_files(state: State<'_, PendingOpenFiles>) -> bool {
     state.0.lock().map(|g| *g).unwrap_or(false)
+}
+
+/// 读 data/ui-preferences.json 的 theme；文件不存在或非法则 null（启动页跟系统）。
+#[tauri::command]
+fn ui_theme_pref(app: AppHandle) -> Option<String> {
+    default_data_dir(&app)
+        .ok()
+        .and_then(|dir| ui_theme::read_theme_pref(&dir))
 }
 
 /// 启动内嵌 engine 并返回入口信息；已运行则直接返回既有实例（幂等）。
@@ -166,16 +175,26 @@ pub fn run() {
         .manage(EngineState(Mutex::new(None)))
         // 冷启动带入文件才置位；single_instance 第二实例导入不影响
         .manage(PendingOpenFiles(Mutex::new(!initial_files.is_empty())))
-        .invoke_handler(tauri::generate_handler![engine_start, has_pending_open_files])
+        .invoke_handler(tauri::generate_handler![
+            engine_start,
+            has_pending_open_files,
+            ui_theme_pref
+        ])
         .setup(move |app| {
-            // 启动闪屏：conf 里 visible=false，先按系统主题设 webview 底色再 show。
-            // 色值对齐 ui/index.html 的 --bg（#f4f5f9 / #15161a），避免先闪 conf 默认深色。
+            // 启动闪屏：conf 里 visible=false。light/dark 用 ui-preferences；
+            // 未设或 system 才跟 OS。色值对齐 ui/index.html 的 --bg。
             if let Some(win) = app.get_webview_window("main") {
-                let (r, g, b) = match win.theme() {
-                    Ok(tauri::Theme::Light) => (0xf4, 0xf5, 0xf9),
-                    _ => (0x15, 0x16, 0x1a),
-                };
+                let system_dark = !matches!(win.theme(), Ok(tauri::Theme::Light));
+                let choice = default_data_dir(app.handle())
+                    .ok()
+                    .and_then(|dir| ui_theme::read_theme_pref(&dir));
+                let is_dark = ui_theme::startup_is_dark(choice.as_deref(), system_dark);
+                let (r, g, b) = ui_theme::splash_rgb(is_dark);
                 let _ = win.set_background_color(Some(tauri::webview::Color::from((r, g, b, 255))));
+                let theme_attr = if is_dark { "dark" } else { "light" };
+                let _ = win.eval(&format!(
+                    "document.documentElement.setAttribute('data-theme','{theme_attr}')"
+                ));
                 let _ = win.show();
             }
             // 冷启动带入的 .md：engine 由前端启动页拉起，import 内部会等它就绪。
