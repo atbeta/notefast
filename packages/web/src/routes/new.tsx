@@ -103,7 +103,12 @@ export default function NewDocPage() {
 
   const handleSuggestTitle = async () => {
     const source = markdown.trim() || title.trim()
-    if (!source || generating) return
+    if (generating) return
+    // 空内容：显式反馈，不要点了没反应
+    if (!source) {
+      toast.info({ title: t('newDoc.aiTitleNoContent') })
+      return
+    }
     if (!ai.chat) {
       toast.info({ title: t('newDoc.aiTitleNeedChat') })
       return
@@ -114,8 +119,8 @@ export default function NewDocPage() {
         method: 'POST',
         body: JSON.stringify({ content: source }),
       })
-      if (!title.trim()) setTitle(res.title)
-      else if (!title.trim().includes(res.title)) setTitle(res.title)
+      // 显式点击 = 明确要 AI 标题：有结果即应用
+      if (res.title) setTitle(res.title)
     } catch {
       toast.error({ title: t('newDoc.aiTitleNeedChat') })
     }

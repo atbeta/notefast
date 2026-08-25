@@ -47,6 +47,7 @@
     "generateTitleAi": "AI 生成标题",
     "generateTitleNeedChat": "需先配置 Chat 模型",
     "generateTitleFailed": "标题生成失败，请稍后重试",
+    "generateTitleNoContent": "暂无可用于生成标题的内容",
     "aiContinueNeedChat": "续写需要先配置 Chat 模型",
     "charCount": "字",
     "updatedAtLabel": "更新于 {{time}}",

@@ -51,7 +51,7 @@ import { useActiveHeading } from '../hooks/useActiveHeading'
 import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
 import { useDemoMode, DEMO_ZOOMS, setDemoZoomIndex, toggleDemoMode } from '../hooks/useDemoMode'
 import { useDocReadingWidth, writeDocReadingWidth, DOC_READING_WIDTH_REM } from '../hooks/useDocReadingWidth'
-import { formatRelative, relativeTime, currentLocale, isPlaceholderDocTitle } from '../lib/time'
+import { formatRelative, relativeTime, currentLocale } from '../lib/time'
 import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
 import { EmptyState, InlineError, ListRowsSkeleton, ShortcutKeys, Tooltip, shortcutLabel, useToast } from '../components/ui'
@@ -588,7 +588,11 @@ useEffect(() => {
     const walk = (b: Block) => { if (b.content && b.type !== 'document') texts.push(b.content); b.children.forEach(walk) }
     walk(doc)
     const body = texts.join('\n')
-    if (!body.trim()) return
+    // 空内容：显式反馈，不要点了没反应
+    if (!body.trim()) {
+      toast.info({ title: t('doc.generateTitleNoContent') })
+      return
+    }
 
     setGeneratingTitle(true)
     try {
@@ -596,7 +600,10 @@ useEffect(() => {
         method: 'POST',
         body: JSON.stringify({ content: body.slice(0, 4000) }),
       })
-      if (res.title && (!doc.content || isPlaceholderDocTitle(doc.content, t('doc.untitledDocument')))) {
+      // 显式点击 = 明确要 AI 生成标题：有结果即应用。
+      // 旧逻辑只在空标题/占位标题时应用——已有标题的文档点了转圈后静默丢弃，
+      // 表现为「AI 生成标题没效果」。
+      if (res.title) {
         await api.patch('/blocks/' + id, { content: res.title })
         setRefreshKey((k) => k + 1)
       }

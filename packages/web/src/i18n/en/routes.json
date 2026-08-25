@@ -75,6 +75,7 @@
     "tabImport": "Import",
     "aiTitleHint": "Generate title with AI",
     "aiTitleNeedChat": "Configure a Chat model first",
+    "aiTitleNoContent": "Nothing to generate a title from yet",
     "generating": "Generating…",
     "aiTitle": "AI title",
     "untitledPlaceholder": "Untitled document",

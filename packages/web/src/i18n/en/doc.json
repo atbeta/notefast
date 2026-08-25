@@ -47,6 +47,7 @@
     "generateTitleAi": "Generate title with AI",
     "generateTitleNeedChat": "Configure a Chat model first",
     "generateTitleFailed": "Failed to generate title, please try again later",
+    "generateTitleNoContent": "Nothing to generate a title from yet",
     "aiContinueNeedChat": "Configure a Chat model to use AI continue",
     "charCount": "chars",
     "updatedAtLabel": "Updated {{time}}",
