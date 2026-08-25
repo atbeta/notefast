@@ -6,14 +6,10 @@
  * 不是完整 CommonMark 作业。
  */
 
-import { fromMarkdown } from 'mdast-util-from-markdown'
-import { gfmTableFromMarkdown } from 'mdast-util-gfm-table'
-import { gfmTaskListItemFromMarkdown } from 'mdast-util-gfm-task-list-item'
-import { gfmTable } from 'micromark-extension-gfm-table'
-import { gfmTaskListItem } from 'micromark-extension-gfm-task-list-item'
 import { stripDocFrontmatter } from '../frontmatter'
 import { BlockType } from '../types'
 import type { CreateBlockInput } from '../types'
+import { fromNoteFastMarkdown } from './fromMarkdown'
 
 type MdNode = {
   type: string
@@ -36,14 +32,7 @@ export function parseMarkdownToBlocksMdast(markdown: string, notebookId: string)
   const { body } = stripDocFrontmatter(markdown)
   if (body === '') return []
 
-  const tree = fromMarkdown(body, {
-    extensions: [
-      { disable: { null: ['setextUnderline', 'codeIndented'] } },
-      gfmTable(),
-      gfmTaskListItem(),
-    ],
-    mdastExtensions: [gfmTableFromMarkdown(), gfmTaskListItemFromMarkdown()],
-  }) as MdNode
+  const tree = fromNoteFastMarkdown(body) as MdNode
 
   const out: CreateBlockInput[] = []
 

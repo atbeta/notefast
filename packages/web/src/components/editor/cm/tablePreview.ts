@@ -11,6 +11,7 @@ import {
   parseTable,
   type ParsedTable,
 } from './tableModel'
+import { fencedCodeSpansIn, offsetInFencedCode } from './fencedCode'
 
 /**
  * 表格块内联预览：连续的 GFM pipe table（表头 + 分隔行 + 数据行）在光标不在块内时
@@ -121,21 +122,18 @@ interface TableBlockRange {
 }
 
 /** 扫描文档找出所有表格块（跳过代码围栏内部，避免 fence 里的 | 误判）。
- *  表格紧跟 ATX 标题（## ...）时不识别为表格：lezer 会把「表头 + |---|---|」误判为 Setext 二级标题，
+ *  围栏范围与 core mapper 共用。表格紧跟 ATX 标题（## ...）时不识别为表格：lezer 会把「表头 + |---|---|」误判为 Setext 二级标题，
  *  对应的 syntax tree 不是 Table。Markdown 源层面仍是合法 GFM 表格，但交给预览渲染会与阅读态语义不一致；
  *  此处退回源码态，由阅读态的 core 解析负责正确呈现。 */
 export function findTableBlocks(state: EditorState): TableBlockRange[] {
   const blocks: TableBlockRange[] = []
-  let inFence = false
+  const fences = fencedCodeSpansIn(state.doc)
   for (let i = 1; i <= state.doc.lines; i++) {
     const line = state.doc.line(i)
-    if (/^\s*```/.test(line.text)) {
-      inFence = !inFence
-      continue
-    }
-    if (inFence) continue
+    if (offsetInFencedCode(fences, line.from)) continue
     if (i + 1 > state.doc.lines) break
     const next = state.doc.line(i + 1)
+    if (offsetInFencedCode(fences, next.from)) continue
     if (!isTableRow(line.text) || !isTableDelimiter(next.text)) continue
     const previous = i > 1 ? state.doc.line(i - 1).text.trim() : ''
     if (/^#{1,6}\s/.test(previous)) continue
@@ -145,7 +143,7 @@ export function findTableBlocks(state: EditorState): TableBlockRange[] {
     let j = i + 2
     while (j <= state.doc.lines) {
       const l = state.doc.line(j)
-      if (/^\s*```/.test(l.text)) break
+      if (offsetInFencedCode(fences, l.from)) break
       if (!isTableRow(l.text)) break
       lines.push(l.text)
       last = l

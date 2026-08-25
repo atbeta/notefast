@@ -4,17 +4,16 @@ import { Decoration, EditorView, WidgetType } from '@codemirror/view'
 import type { DecorationSet } from '@codemirror/view'
 import i18next from '../../../i18n'
 import { renderMathToHtml } from '../../../lib/katex'
+import { fencedCodeSpansIn } from './fencedCode'
+
+const MATH_FENCE_LANGS = new Set(['math', 'latex', 'katex', 'tex'])
 
 /**
- * 块级公式内联预览：```math（别名 latex/katex/tex）围栏块在光标不在块内时
- * 渲染为 KaTeX 公式；光标进入块内回退源码。与 tablePreview 同一模式，文档仍是 Markdown。
+ * 块级公式内联预览：```math / ~~~math（别名 latex/katex/tex）围栏在光标不在块内时
+ * 渲染为 KaTeX；光标进入块内回退源码。围栏范围与 core mapper 共用 mdast 识别。
  * KaTeX 经 lib/katex 懒加载（首个公式才拉库 + CSS），本模块只静态引入异步入口，
  * 编辑器静态依赖链不含 katex。
  */
-
-// math 开围栏：```math / ```latex / ```katex / ```tex
-const MATH_FENCE_OPEN_RE = /^\s*```(math|latex|katex|tex)\s*$/
-const ANY_FENCE_RE = /^\s*```/
 
 class MathWidget extends WidgetType {
   private cancelRender: (() => void) | null = null
@@ -84,38 +83,15 @@ interface MathBlockRange {
   src: string
 }
 
-/** 扫描文档找出所有 math 围栏块。与 tablePreview 同款的朴素围栏扫描，
- *  接受同款局限：不识别 ~~~ 围栏、围栏内的 ``` 行会提前闭合。 */
+/** 扫描已闭合的 math 围栏。未闭合不装饰，避免输入中途把后文吃进预览。 */
 export function findMathBlocks(state: EditorState): MathBlockRange[] {
   const blocks: MathBlockRange[] = []
-  let inFence = false
-  for (let i = 1; i <= state.doc.lines; i++) {
-    const line = state.doc.line(i)
-    if (!ANY_FENCE_RE.test(line.text)) continue
-    if (!inFence && MATH_FENCE_OPEN_RE.test(line.text)) {
-      // 消费到下一个 ``` 闭围栏
-      const srcLines: string[] = []
-      let j = i + 1
-      let closeTo = -1
-      while (j <= state.doc.lines) {
-        const l = state.doc.line(j)
-        if (ANY_FENCE_RE.test(l.text)) {
-          closeTo = l.to
-          break
-        }
-        srcLines.push(l.text)
-        j++
-      }
-      if (closeTo >= 0) {
-        const src = srcLines.join('\n').trim()
-        // 空公式块不装饰（留源码态便于直接编辑）
-        if (src) blocks.push({ from: line.from, to: closeTo, src })
-        i = j // for 循环 i++ 后从闭围栏下一行继续
-        continue
-      }
-      // 未闭合的 math 开围栏按普通围栏处理（落入下方 inFence 翻转）
-    }
-    inFence = !inFence
+  for (const span of fencedCodeSpansIn(state.doc)) {
+    if (!span.closed) continue
+    if (!MATH_FENCE_LANGS.has(span.language.toLowerCase())) continue
+    const src = span.value.trim()
+    if (!src) continue
+    blocks.push({ from: span.from, to: span.to, src })
   }
   return blocks
 }

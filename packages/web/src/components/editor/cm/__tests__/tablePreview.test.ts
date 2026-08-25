@@ -38,6 +38,21 @@ describe('findTableBlocks', () => {
     expect(blocks[0].rows).toBe(3)
   })
 
+  test('跳过 ~~~ 围栏内部的 |', () => {
+    const blocks = scan([
+      '~~~',
+      '| a | b |',
+      '|---|---|',
+      '| 1 | 2 |',
+      '~~~',
+      '| x | y |',
+      '|---|---|',
+      '| 9 | 9 |',
+    ].join('\n'))
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].rows).toBe(3)
+  })
+
   test('ATX 标题紧跟表格时跳过（lezer Setext 误判守卫）', () => {
     const blocks = scan([
       '## 附录',

@@ -49,6 +49,20 @@ describe('findMermaidBlocks', () => {
     expect(blocks).toHaveLength(0)
   })
 
+  test('较长开围栏内的 ```mermaid 不识别', () => {
+    const blocks = scan(['````md', '```mermaid', 'graph TD', '```', '````'].join('\n'))
+    expect(blocks).toHaveLength(0)
+  })
+
+  test('~~~mermaid 与反引号围栏同等识别', () => {
+    const doc = ['~~~mermaid', 'graph TD', '  A --> B', '~~~'].join('\n')
+    const blocks = scan(doc)
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].from).toBe(0)
+    expect(blocks[0].to).toBe(doc.length)
+    expect(blocks[0].src).toBe('graph TD\n  A --> B')
+  })
+
   test('未闭合的 mermaid 围栏不识别', () => {
     const blocks = scan(['```mermaid', 'graph TD'].join('\n'))
     expect(blocks).toHaveLength(0)

@@ -57,6 +57,18 @@ describe('findMathBlocks', () => {
     expect(blocks).toHaveLength(0)
   })
 
+  test('较长开围栏内的 ```math 不识别', () => {
+    const blocks = scan(['````md', '```math', 'E=mc^2', '```', '````'].join('\n'))
+    expect(blocks).toHaveLength(0)
+  })
+
+  test('~~~math 与反引号围栏同等识别', () => {
+    const doc = ['~~~math', 'E = mc^2', '~~~'].join('\n')
+    const blocks = scan(doc)
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].src).toBe('E = mc^2')
+  })
+
   test('未闭合的 math 围栏不识别', () => {
     const blocks = scan(['```math', 'E=mc^2'].join('\n'))
     expect(blocks).toHaveLength(0)

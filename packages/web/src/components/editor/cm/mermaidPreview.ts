@@ -4,20 +4,17 @@ import { Decoration, EditorView, WidgetType } from '@codemirror/view'
 import type { DecorationSet } from '@codemirror/view'
 import i18next from '../../../i18n'
 import { nextMermaidId, renderMermaidSvg } from '../../../lib/mermaid'
+import { fencedCodeSpansIn } from './fencedCode'
 
 /**
- * Mermaid 内联预览：```mermaid 围栏块在光标不在块内时渲染为 SVG 图；
- * 光标进入块内回退源码。与 mathPreview / tablePreview 同一模式，文档仍是 Markdown。
+ * Mermaid 内联预览：```mermaid / ~~~mermaid 围栏在光标不在块内时渲染为 SVG；
+ * 光标进入块内回退源码。围栏范围与 core mapper 共用 mdast 识别。
  * mermaid 经 lib/mermaid 懒加载（首个图表才拉库），本模块只静态引入异步入口，
  * 编辑器静态依赖链不含 mermaid。
  *
  * 与 math 的差异：mermaid SVG 按 data-theme 着色，widget 需监听主题切换重渲染
  * （KaTeX 继承文字色，无此需求）。
  */
-
-// mermaid 开围栏：```mermaid（无别名；alias 由阅读态 BlockRenderer 也仅认 mermaid）
-const MERMAID_FENCE_OPEN_RE = /^\s*```mermaid\s*$/
-const ANY_FENCE_RE = /^\s*```/
 
 function currentTheme(): 'light' | 'dark' {
   if (typeof document === 'undefined') return 'light'
@@ -117,38 +114,15 @@ export interface MermaidBlockRange {
   src: string
 }
 
-/** 扫描文档找出所有 mermaid 围栏块。与 mathPreview 同款的朴素围栏扫描，
- *  接受同款局限：不识别 ~~~ 围栏、围栏内的 ``` 行会提前闭合。 */
+/** 扫描已闭合的 mermaid 围栏。未闭合不装饰，避免输入中途把后文吃进预览。 */
 export function findMermaidBlocks(state: EditorState): MermaidBlockRange[] {
   const blocks: MermaidBlockRange[] = []
-  let inFence = false
-  for (let i = 1; i <= state.doc.lines; i++) {
-    const line = state.doc.line(i)
-    if (!ANY_FENCE_RE.test(line.text)) continue
-    if (!inFence && MERMAID_FENCE_OPEN_RE.test(line.text)) {
-      // 消费到下一个 ``` 闭围栏
-      const srcLines: string[] = []
-      let j = i + 1
-      let closeTo = -1
-      while (j <= state.doc.lines) {
-        const l = state.doc.line(j)
-        if (ANY_FENCE_RE.test(l.text)) {
-          closeTo = l.to
-          break
-        }
-        srcLines.push(l.text)
-        j++
-      }
-      if (closeTo >= 0) {
-        const src = srcLines.join('\n').trim()
-        // 空图块不装饰（留源码态便于直接编辑）
-        if (src) blocks.push({ from: line.from, to: closeTo, src })
-        i = j // for 循环 i++ 后从闭围栏下一行继续
-        continue
-      }
-      // 未闭合的 mermaid 开围栏按普通围栏处理（落入下方 inFence 翻转）
-    }
-    inFence = !inFence
+  for (const span of fencedCodeSpansIn(state.doc)) {
+    if (!span.closed) continue
+    if (span.language.toLowerCase() !== 'mermaid') continue
+    const src = span.value.trim()
+    if (!src) continue
+    blocks.push({ from: span.from, to: span.to, src })
   }
   return blocks
 }
