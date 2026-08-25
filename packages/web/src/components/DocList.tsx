@@ -45,7 +45,8 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
   }
 
   return (
-    <div className="card-interactive px-3 py-2 group flex items-center gap-3">
+    // relative 供标题链接的 ::after 定位（stretched link：整卡可点打开文档）
+    <div className="card-interactive relative px-3 py-2 group flex items-center gap-3">
       <div className="w-7 h-7 rounded-md bg-muted/70 text-foreground/55 grid place-items-center shrink-0 group-hover:bg-muted group-hover:text-foreground/80 transition-colors">
         {aiExclude
           ? <EyeOff className="w-3.5 h-3.5" strokeWidth={1.75} />
@@ -71,7 +72,10 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
             </button>
           </div>
         ) : (
-          <Link to={'/doc/' + doc.id} className="block">
+          // ::after 铺满整张卡片 → 点卡片任意空白处都能打开文档（图标、留白、时间区）。
+          // 标签链接与操作菜单用 relative z-10 压在其上，保持独立点击。
+          // 保留 <a> 语义：中键新标签、右键菜单、键盘可达都不丢。
+          <Link to={'/doc/' + doc.id} className="block after:absolute after:inset-0 after:content-['']">
             <h3 className="font-medium text-md text-foreground tracking-[-0.005em] truncate flex items-center gap-1.5 leading-snug">
               <span className="truncate">{doc.title || t('docList.untitled')}</span>
               {shared && (
@@ -89,7 +93,7 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
           </Link>
         )}
         {tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-0.5">
+          <div className="relative z-10 flex flex-wrap gap-1 mt-0.5">
             {tags.slice(0, 4).map((t) => (
               <Link
                 key={t}
@@ -123,7 +127,7 @@ function DocCard({ doc, onRefresh }: { doc: DocSummary; onRefresh: () => void })
               </span>
             </Tooltip>
           )}
-          <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+          <div className="relative z-10 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
             <DocActionsMenu
               doc={doc}
               surface="list"
