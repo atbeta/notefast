@@ -116,8 +116,9 @@ export default function Layout({ children, contentClassName }: { children: React
       if (e.isComposing || e.keyCode === 229) return
       const mod = e.metaKey || e.ctrlKey
       const key = e.key.toLowerCase()
-      // ⌘K/⌘J 在面板/聊天已开时优先关闭——即使焦点在面板输入框内
-      // （isEditing 守卫只保护「未开时不在输入态打断」，开了就该能关）
+      // ⌘K 在面板已开时优先关闭——即使焦点在面板输入框内
+      // （isEditing 守卫只保护「未开时不在输入态打断」；
+      //   ⌘J 在编辑器/输入框无任何绑定冲突，见下方分支，不做守卫）
       if (mod && key === 'k') {
         if (paletteOpen) { e.preventDefault(); setPaletteOpen(false); return }
         if (isEditing(document.activeElement)) return
@@ -126,10 +127,12 @@ export default function Layout({ children, contentClassName }: { children: React
         return
       }
       if (mod && key === 'j') {
-        if (aiChatOpen) { e.preventDefault(); setAiChatOpen(false); return }
-        if (isEditing(document.activeElement)) return
+        // ⌘J 是 AI 聊天全局入口，一律接管开关：编辑器（Mod-Shift-k 插入链接，无 Mod-J
+        // 绑定）与输入框都没有占用它。守卫若拦下又不 preventDefault，Ctrl+J 会放行
+        // 给浏览器默认行为（打开下载）。例外：命令面板打开时不抢（模态上下文优先）。
+        if (paletteOpen) return
         e.preventDefault()
-        setAiChatOpen(true)
+        setAiChatOpen(!aiChatOpen)
         return
       }
       // ⌘⇧D 主题切换：面板打开时即使输入框聚焦也生效（面板里展示了该快捷键提示）

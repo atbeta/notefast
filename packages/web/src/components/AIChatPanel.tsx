@@ -140,6 +140,7 @@ export default function AIChatPanel({
   const pendingAssistantRef = useRef<{ content?: string; reasoning?: string } | null>(null)
   const assistantRafRef = useRef<number | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   // 语音转文字：识别中的实例 + 开始识别时的输入框基底文本
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
@@ -237,6 +238,17 @@ export default function AIChatPanel({
     if (!isOpen) return
     const id = window.setTimeout(() => inputRef.current?.focus(), 200)
     return () => window.clearTimeout(id)
+  }, [isOpen])
+
+  /** 关闭时收回焦点：面板常驻挂载仅 translate 出屏（不卸载），焦点若留在
+   *  隐藏面板的 textarea 里，后续按键落入不可见控件；且全局快捷键的
+   *  isEditing 守卫会因此不 preventDefault，Ctrl+J 放行给浏览器（打开下载）。 */
+  useEffect(() => {
+    if (isOpen) return
+    const active = document.activeElement
+    if (active instanceof HTMLElement && panelRef.current?.contains(active)) {
+      active.blur()
+    }
   }, [isOpen])
 
   // 阅读态块菜单「问 AI 关于这一段」：预填引用草稿（不自动发送，用户审阅后自行发出）
@@ -497,6 +509,7 @@ export default function AIChatPanel({
         }`}
       />
       <div
+        ref={panelRef}
         aria-hidden={!isOpen}
         onKeyDown={(e) => {
           // 桌面端面板内 Esc 关闭；清空确认打开时由 ConfirmDialog 处理，勿连带关面板
