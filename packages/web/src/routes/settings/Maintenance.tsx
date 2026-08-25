@@ -14,6 +14,7 @@ interface HealthData {
   pendingTombstones: number
   purgeableTombstones?: number
   retainedTombstones?: number
+  tombstoneRetentionDays?: number
   lastMaintenance: {
     id: number
     ts: string
@@ -150,6 +151,7 @@ export default function SettingsMaintenance() {
               {t('settings.maintenance.pendingTombstonesHint', {
                 purgeable: health?.purgeableTombstones ?? 0,
                 retained: health?.retainedTombstones ?? 0,
+                days: health?.tombstoneRetentionDays ?? 30,
               })}
             </dd>
           </div>

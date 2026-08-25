@@ -14,10 +14,13 @@ import { Hono } from 'hono'
 import { statSync } from 'node:fs'
 import { getDb } from '../db'
 import { listAppLogs, initAppLogs } from '../services/appLogs'
-import { getMaintenanceHealthSnapshot, refreshHealthSnapshot, runMaintenancePass } from '../services/maintenance'
+import { getMaintenanceHealthSnapshot, refreshHealthSnapshot, runMaintenancePass, TOMBSTONE_RETENTION_MS } from '../services/maintenance'
 import { logAppEvent } from '../services/appLogs'
 
 const maintenance = new Hono()
+
+/** tombstone 保留天数（health 返回给前端展示，避免文案硬编码与常量漂移） */
+const TOMBSTONE_RETENTION_DAYS = Math.round(TOMBSTONE_RETENTION_MS / 86_400_000)
 
 // ── health 数据来源：维护循环的内存快照（getMaintenanceHealthSnapshot）。
 // ── 快照为空（重启后首查）时返回占位，并经 setTimeout 跳出请求栈做只读补算。
@@ -73,6 +76,7 @@ maintenance.get('/health', async (c) => {
       pendingTombstones: snap.tombstones.total,
       purgeableTombstones: snap.tombstones.purgeable,
       retainedTombstones: snap.tombstones.retained,
+      tombstoneRetentionDays: TOMBSTONE_RETENTION_DAYS,
       lastMaintenance,
       ts: snap.at,
     })
@@ -87,6 +91,7 @@ maintenance.get('/health', async (c) => {
     pendingTombstones: 0,
     purgeableTombstones: 0,
     retainedTombstones: 0,
+    tombstoneRetentionDays: TOMBSTONE_RETENTION_DAYS,
     lastMaintenance,
     ts: new Date().toISOString(),
   })

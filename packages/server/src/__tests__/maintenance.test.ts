@@ -65,10 +65,12 @@ describe('维护 API', () => {
     expect(run.status).toBe(200)
     const res = await app.fetch(new Request('http://localhost/api/v1/db/health'))
     expect(res.status).toBe(200)
-    const body = (await res.json()) as { dbBytes: number | null; tables: Record<string, number>; pendingTombstones: number }
+    const body = (await res.json()) as { dbBytes: number | null; tables: Record<string, number>; pendingTombstones: number; tombstoneRetentionDays: number }
     expect(typeof body.tables.blocks).toBe('number')
     expect(typeof body.pendingTombstones).toBe('number')
     expect(body.dbBytes).toBeGreaterThan(0)
+    // 保留天数由服务端下发（前端文案不硬编码 30）
+    expect(body.tombstoneRetentionDays).toBe(30)
   })
 
   test('GET /db/health 快照为空时返回占位（不跑重型查询不卡死）', async () => {
