@@ -10,8 +10,8 @@ export default function SettingsBackup() {
   return (
     <SettingsSection id="backup" title={t('settings.tabs.backup')}>
       <StorageLocationsPanel />
-      <BackupPanel />
       <SyncProtocolPanel />
+      <BackupPanel />
       <SyncPanel />
     </SettingsSection>
   )
