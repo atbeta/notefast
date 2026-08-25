@@ -14,7 +14,8 @@
  * - 子块 level 按父链深度计算（文档根 = 0，顶层子块 = 1，逐层 +1）
  */
 
-import { normalizeTagList, parseMarkdownToBlocks, stripDocFrontmatter, stripTitleHeading } from '@notefast/core'
+import { normalizeTagList, stripDocFrontmatter, stripTitleHeading } from '@notefast/core'
+import { parseMarkdownToBlocksForSave } from './markdownParse'
 import type { CreateBlockInput } from '@notefast/core'
 import type { getDb } from '../db'
 import { findDocIdBySource, getMaxChildSort, insertBlock, nowTimestamp, touchDocRoot } from '../store/blocks'
@@ -83,7 +84,7 @@ export function insertDocFromMarkdown(
   // 便携导出的 frontmatter：正文剥离由 parseMarkdownToBlocks 完成；
   // 若调用方未显式传 tags，则采用 frontmatter 中的 tags（不按 notefast_id 覆盖既有文档）
   const stripped = stripDocFrontmatter(opts.markdown)
-  const rawInputs = parseMarkdownToBlocks(stripped.body, opts.notebookId)
+  const rawInputs = parseMarkdownToBlocksForSave(stripped.body, opts.notebookId)
   if (opts.rejectEmpty && rawInputs.length === 0) {
     throw new EmptyMarkdownError('无法解析 Markdown 内容')
   }
@@ -159,7 +160,7 @@ export function appendMarkdownToDoc(
   db: Db,
   opts: AppendMarkdownToDocOptions,
 ): AppendMarkdownToDocResult {
-  const inputs = parseMarkdownToBlocks(opts.markdown, opts.notebookId)
+  const inputs = parseMarkdownToBlocksForSave(opts.markdown, opts.notebookId)
 
   const maxSort = getMaxChildSort(db, opts.docId)
   const now = nowTimestamp()

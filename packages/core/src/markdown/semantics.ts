@@ -73,6 +73,23 @@ export function semanticEqual(a: SemanticNode[], b: SemanticNode[]): boolean {
 }
 
 /**
+ * 找出第一处语义差异路径。只返回路径（如 `0.type`、`1.children.0.content`），不含正文。
+ * 无差异时返回 null。
+ */
+export function firstSemanticDiff(a: SemanticNode[], b: SemanticNode[], path = ''): string | null {
+  if (a.length !== b.length) return path ? `${path}.length` : 'length'
+  for (let i = 0; i < a.length; i++) {
+    const here = path ? `${path}.${i}` : `${i}`
+    if (a[i]!.type !== b[i]!.type) return `${here}.type`
+    if (a[i]!.content !== b[i]!.content) return `${here}.content`
+    if (JSON.stringify(a[i]!.properties) !== JSON.stringify(b[i]!.properties)) return `${here}.properties`
+    const child = firstSemanticDiff(a[i]!.children, b[i]!.children, `${here}.children`)
+    if (child) return child
+  }
+  return null
+}
+
+/**
  * 给 parse 产出补上文档序 sort，再建树，供 blocksToMarkdown round-trip。
  * parseMarkdownToBlocks 目前把 sort 全写成 0，不补序的话子块顺序不稳定。
  */

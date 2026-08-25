@@ -1,6 +1,7 @@
 export * from './types'
 export * from './model'
 export * from './markdown'
+export * from './markdown/parseForPersistence'
 export * from './frontmatter'
 export * from './search'
 export * from './plugin'

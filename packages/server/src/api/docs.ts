@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, parseMarkdownToBlocks, stripTitleHeading, updateDocMarkdownSchema, updateDocStatusSchema, rowToBlock, readTags, readAiExclude, readDocStatus, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, parseDocStatusFilter, parseCreatedWithin, parseStaleWithin } from '@notefast/core'
+import { createDocSchema, buildBlockTree, buildHeadingTree, blocksToMarkdown, stripTitleHeading, updateDocMarkdownSchema, updateDocStatusSchema, rowToBlock, readTags, readAiExclude, readDocStatus, getTagProvider, parseTagsQueryParam, parseTagMatchMode, parseUpdatedWithin, parseDocStatusFilter, parseCreatedWithin, parseStaleWithin } from '@notefast/core'
 import type { DocSummary } from '@notefast/core'
 import { getDb } from '../db'
 import {
@@ -29,6 +29,7 @@ import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
 import { deleteShare, deleteSharesByDocIds, listSharedDocIdsFor } from '../store/shares'
 import { insertDocFromMarkdown, insertChildBlocks, normalizeDocTags } from '../services/docImport'
+import { parseMarkdownToBlocksForSave } from '../services/markdownParse'
 import { fireAfterCreate, fireAfterUpdate, fireAfterCreateMany, fireAfterDeleteMany, fireDocAfterCreate, fireDocAfterStatusChange, fireDocAfterTagChange, fireDocAfterDelete, auditDocAction } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
 import { writeDocAiExclude, applyAiExcludeChange } from '../ai/aiExclude'
@@ -397,7 +398,7 @@ function applyMarkdownReplace(
     return { ok: false, error: `文档 ${id} 不存在` }
   }
 
-  const rawInputs = parseMarkdownToBlocks(markdown, docRow.notebook_id)
+  const rawInputs = parseMarkdownToBlocksForSave(markdown, docRow.notebook_id)
   // 剥离与标题重复的首个 H1（导出的 markdown 首行是 `# {标题}`，直接回解析会重复入库）
   const newTitle = title || docRow.content
   const inputs = stripTitleHeading(rawInputs, newTitle)
