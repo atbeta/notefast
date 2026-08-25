@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.78.0](https://github.com/atbeta/notefast/compare/v0.77.1...v0.78.0) (2026-08-25)
+
+
+### Features
+
+* **server:** support local directory as database backup target ([4ce401e](https://github.com/atbeta/notefast/commit/4ce401ebe0ee79dfe27d5d27d51cb8968757645a))
+* **web:** make the whole doc card clickable to open the doc ([f35da54](https://github.com/atbeta/notefast/commit/f35da54c65b5fad19fe038c544220da881b85eac))
+* **web:** order multi-device sync before database backup in settings ([a4b8a4d](https://github.com/atbeta/notefast/commit/a4b8a4dc9c002d0b4b9349e930fbcb3a4f75438f))
+* **web:** platform-native dialog styling via data-shell tokens ([e8820a8](https://github.com/atbeta/notefast/commit/e8820a837a0878776932639e8a22c02e6fded353))
+
+
+### Bug Fixes
+
+* **web:** apply AI-suggested title on explicit click ([8b8c33a](https://github.com/atbeta/notefast/commit/8b8c33a0b70f2fd96dde301136bc50ecb99a575c))
+* **web:** clarify deleted-blocks copy on the maintenance page ([e8a88dc](https://github.com/atbeta/notefast/commit/e8a88dc341fbef9479dbd61e5b3062f8ff47e7ec))
+* **web:** Ctrl+J toggles AI chat reliably instead of opening Downloads ([2e2482b](https://github.com/atbeta/notefast/commit/2e2482b84af2f1053b0daea2fc1dcd2452e11248))
+
 ## [0.77.1](https://github.com/atbeta/notefast/compare/v0.77.0...v0.77.1) (2026-08-25)
 
 
