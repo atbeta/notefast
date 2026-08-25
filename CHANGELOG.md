@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.77.1](https://github.com/atbeta/notefast/compare/v0.77.0...v0.77.1) (2026-08-25)
+
+
+### Bug Fixes
+
+* **ui:** honor saved theme on first paint ([fb93201](https://github.com/atbeta/notefast/commit/fb932016982652d3a9562da35fe7cc6f4a3db045))
+* **web:** bind Ctrl+E to enter edit and localize shortcut labels ([66f5d2b](https://github.com/atbeta/notefast/commit/66f5d2be4f0528f6d6039db04c600eb875843a02))
+
 ## [0.77.0](https://github.com/atbeta/notefast/compare/v0.76.7...v0.77.0) (2026-08-24)
 
 
