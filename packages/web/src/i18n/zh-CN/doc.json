@@ -28,6 +28,7 @@
     "shareDoc": "分享文档",
     "deleteDoc": "删除文档",
     "deleted": "已删除",
+    "updatedWhileEditing": "文档已在外部更新，退出编辑后会刷新",
     "undo": "撤销",
     "restored": "已恢复",
     "undoFailed": "撤销失败",

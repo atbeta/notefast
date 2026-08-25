@@ -28,6 +28,7 @@
     "shareDoc": "Share document",
     "deleteDoc": "Delete document",
     "deleted": "Deleted",
+    "updatedWhileEditing": "Document updated elsewhere; it will refresh when you leave edit mode",
     "undo": "Undo",
     "restored": "Restored",
     "undoFailed": "Undo failed",

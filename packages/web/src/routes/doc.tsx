@@ -26,6 +26,7 @@ import {
   ALargeSmall,
 } from 'lucide-react'
 import { api, request, ApiError } from '../hooks/useAPI'
+import { useDocChanges } from '../hooks/useDocEvents'
 import BlockRenderer from '../components/BlockRenderer'
 import MarkdownEditor from '../components/MarkdownEditor'
 import TagEditor from '../components/TagEditor'
@@ -42,6 +43,7 @@ import { useNavHistory } from '../hooks/useNavHistory'
 import { readDocRailCollapsed, writeDocRailCollapsed } from '../hooks/useDocRailCollapsed'
 import { readDocRailWidth, writeDocRailWidth, type DocRailWidth } from '../hooks/useDocRailWidth'
 
+import { openDocChangeAction } from '../lib/openDocChange'
 import { resolveRelatedBlockId } from '../lib/relatedAnchor'
 import { scrollToElement, scrollLandingTop, SCROLL_TOP_GAP } from '../lib/scroll'
 import { readDocScroll, writeDocScroll } from '../lib/docScroll'
@@ -160,16 +162,23 @@ export default function DocPage() {
   }, [id])
 
   useLayoutEffect(() => {
-    if (!id || !doc || isEditing) return
+    if (isEditing) {
+      // 退出编辑后再 restore；阅读中 SSE 换 doc 不得把滚动打回存档位置
+      restoredScrollForIdRef.current = null
+      return
+    }
+    if (!id || !doc || doc.id !== id) return
+    if (restoredScrollForIdRef.current === id) return
     const el = scrollRef.current
     if (!el) return
     const top = readDocScroll(id) ?? 0
     el.scrollTop = top
+    restoredScrollForIdRef.current = id
     const timer = window.setTimeout(() => {
       if (scrollRef.current) scrollRef.current.scrollTop = top
     }, 200)
     return () => window.clearTimeout(timer)
-  }, [id, doc, isEditing])
+  }, [id, doc?.id, isEditing])
 
   useEffect(() => {
     return () => {
@@ -270,6 +279,8 @@ export default function DocPage() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const articleRef = useRef<HTMLElement>(null)
   const prevScrollIdRef = useRef<string | undefined>(undefined)
+  /** 阅读态已按 id restore 过则跳过（避免 SSE 刷新把 scrollTop 打回存档） */
+  const restoredScrollForIdRef = useRef<string | null>(null)
   useEffect(() => () => indexJobAcRef.current?.abort(), [])
 
 useEffect(() => {
@@ -296,7 +307,11 @@ useEffect(() => {
       .catch((e: unknown) => {
         // 主动取消（切文档/refreshKey）→ 静默
         if (ac.signal.aborted) return
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+        if (!cancelled) {
+          // 刷新若 404 必须清掉旧树，否则 ErrorState 出不来
+          if (e instanceof ApiError && e.status === 404) setDoc(null)
+          setError(e instanceof Error ? e.message : String(e))
+        }
       })
       .finally(() => {
         if (!cancelled) {
@@ -482,11 +497,11 @@ useEffect(() => {
 
   // 引用/反链/大纲跳转：文档加载后按 hash 滚动到目标块。
   // 兼容两种形式：引用链接的 #block-<id> 与大纲/heading 锚的 #<id>。
-  // SPA 导航时内容分多拍到达（旧文档保留 → 新数据替换 → SSE 再刷新），
+  // SPA 导航时内容分多拍到达（旧文档保留 → 新数据替换），
   // 单次滚动会落在过期布局上（且并发平滑动画会互相截停）——
-  // 瞬时跳 + 两次位置校验补跳，覆盖所有时序。
+  // 瞬时跳 + 两次位置校验补跳。依赖 doc.id 而非 doc 对象，避免阅读中 SSE 刷新把人拽回锚点。
   useEffect(() => {
-    if (!doc) return
+    if (!doc || doc.id !== id) return
     const raw = location.hash.slice(1)
     if (!raw) return
     const targetId = raw.startsWith('block-') ? raw.slice(6) : raw
@@ -520,14 +535,51 @@ useEffect(() => {
       }, 900),
     ]
     return () => timers.forEach(clearTimeout)
-  }, [doc, location.hash])
+  }, [id, doc?.id, location.hash])
+
+  /** 本页自己的 PUT/PATCH 也会打 SSE，编辑态不能把回声当成「外部更新」弹 toast */
+  const suppressEchoUntilRef = useRef(0)
+  const staleWhileEditingRef = useRef(false)
 
   const handleEditSaved = useCallback(() => {
+    suppressEchoUntilRef.current = Date.now() + 1500
     setRefreshKey((k) => k + 1)
     reloadHistoryIfOpen()
   }, [reloadHistoryIfOpen])
 
+  useDocChanges((ev) => {
+    const action = openDocChangeAction(ev, id, isEditing)
+    if (action === 'ignore') return
+    if (action === 'gone') {
+      staleWhileEditingRef.current = false
+      setDoc(null)
+      setError(null)
+      return
+    }
+    const isEcho = Date.now() < suppressEchoUntilRef.current
+    if (isEcho) return
+    if (action === 'defer') {
+      if (!staleWhileEditingRef.current) {
+        staleWhileEditingRef.current = true
+        toast.info({ title: t('doc.updatedWhileEditing') })
+      }
+      return
+    }
+    setRefreshKey((k) => k + 1)
+    reloadHistoryIfOpen()
+  })
+  useEffect(() => {
+    staleWhileEditingRef.current = false
+  }, [id])
+  useEffect(() => {
+    if (isEditing) return
+    if (!staleWhileEditingRef.current) return
+    staleWhileEditingRef.current = false
+    setRefreshKey((k) => k + 1)
+  }, [isEditing])
+
   const handleDocTreeUpdated = useCallback((next: Block) => {
+    suppressEchoUntilRef.current = Date.now() + 1500
     setDoc(next)
   }, [])
 
