@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.81.1](https://github.com/atbeta/notefast/compare/v0.81.0...v0.81.1) (2026-08-26)
+
+
+### Bug Fixes
+
+* **server:** keep schema migrations idempotent across upgrades ([91afa2f](https://github.com/atbeta/notefast/commit/91afa2f9a992ac5fd6a76681003da2f5625b52f7))
+* **tauri:** open the data dir with the opener plugin ([10526a3](https://github.com/atbeta/notefast/commit/10526a39fc32bc1d000799ceb05b13e2a05b7046))
+
 ## [0.81.0](https://github.com/atbeta/notefast/compare/v0.80.0...v0.81.0) (2026-08-26)
 
 
