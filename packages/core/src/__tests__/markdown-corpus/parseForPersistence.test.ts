@@ -67,4 +67,10 @@ describe('parseMarkdownForPersistence', () => {
     expect(reports[0]!.match).toBe(false)
     expect(reports[0]!.firstDiff).toBe('0.type')
   })
+
+  test('独占行 $$ 默认写 math 代码块', () => {
+    const md = '$$\nE = mc^2\n$$\n'
+    const forest = toSemanticForest(parseMarkdownForPersistence(md, 'nb'))
+    expect(forest).toEqual([{ type: 'code', content: 'E = mc^2', properties: { language: 'math' }, children: [] }])
+  })
 })

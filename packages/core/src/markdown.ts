@@ -9,6 +9,7 @@ import { BlockType } from './types'
 import type { Block, CreateBlockInput } from './types'
 import { stripDocFrontmatter } from './frontmatter'
 import { parseMarkdownToBlocksMdast } from './markdown/parseMdast'
+import { safeLogError } from './safeLog'
 
 export interface ParsedBlock {
   type: BlockType
@@ -30,7 +31,9 @@ const CONTAINER_TYPES = new Set<BlockType>([
 export function parseMarkdownToBlocks(markdown: string, notebookId: string): CreateBlockInput[] {
   try {
     return parseMarkdownToBlocksMdast(markdown, notebookId)
-  } catch {
+  } catch (err) {
+    const mdastError = (err instanceof Error ? err.message : String(err)).slice(0, 200)
+    safeLogError('markdown parser: mdast failed, falling back to legacy', { error: mdastError })
     return parseMarkdownToBlocksLegacy(markdown, notebookId)
   }
 }

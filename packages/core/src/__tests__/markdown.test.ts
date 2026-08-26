@@ -444,3 +444,16 @@ describe('CommonMark 软换行合段', () => {
     expect(paras[0]!.content).toBe('foo\nbar')
   })
 })
+
+describe('独占行 $$ 块级公式', () => {
+  test('解析为 code/math；单行 $$x$$ 与货币不提升', () => {
+    const inputs = parseMarkdownToBlocks('$$\nE = mc^2\n$$\n', 'nb1')
+    const code = inputs.filter((i) => i.type === BlockType.Code)
+    expect(code).toHaveLength(1)
+    expect(code[0]!.content).toBe('E = mc^2')
+    expect(code[0]!.properties?.language).toBe('math')
+
+    expect(parseMarkdownToBlocks('$$x^2$$', 'nb1')[0]!.type).toBe(BlockType.Paragraph)
+    expect(parseMarkdownToBlocks('价格 $5-$10', 'nb1')[0]!.type).toBe(BlockType.Paragraph)
+  })
+})

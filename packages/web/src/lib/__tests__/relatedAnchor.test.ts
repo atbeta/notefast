@@ -45,4 +45,22 @@ describe('scanMarkdownBlocks', () => {
     const doc = block({ id: 'doc', type: BlockType.Document, content: '标题' })
     expect(resolveRelatedBlockId(doc, '', 0)).toBeNull()
   })
+
+  test('较长围栏内的 ``` 不提前切块', () => {
+    const md = ['````md', '```js', 'code', '```', '````'].join('\n')
+    const spans = scanMarkdownBlocks(md)
+    expect(spans).toHaveLength(1)
+    expect(spans[0]?.content).toContain('```js')
+    expect(spans[0]?.content).toContain('code')
+  })
+
+  test('~~~ 围栏与反引号同等切成一块', () => {
+    const md = ['~~~', 'code', '~~~', '', '后段'].join('\n')
+    expect(scanMarkdownBlocks(md).map((s) => s.content)).toEqual(['code', '后段'])
+  })
+
+  test('闭合独占行 $$ 切成一块', () => {
+    const md = ['前段', '', '$$', 'E = mc^2', '$$', '', '后段'].join('\n')
+    expect(scanMarkdownBlocks(md).map((s) => s.content)).toEqual(['前段', 'E = mc^2', '后段'])
+  })
 })

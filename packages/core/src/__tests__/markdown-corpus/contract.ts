@@ -3,6 +3,7 @@
  *
  * 成功样本 = 已支持且下次保存必须与今天语义等价。
  * 失败样本 = 旧 parser 会丢内容 / 截断 / 认不出围栏；mdast 实现只允许这些条目改善。
+ * 扩展样本 = 切 mdast 之后才支持的方言（独占行 $$）；不与手写 parser 对照。
  */
 
 export const SUCCESS_FIXTURES = [
@@ -40,8 +41,15 @@ export const FAILURE_FIXTURES = [
   'four-backtick',
 ] as const
 
-export type SuccessFixtureId = (typeof SUCCESS_FIXTURES)[number]
-export type FailureFixtureId = (typeof FAILURE_FIXTURES)[number]
+export const EXTENSION_FIXTURES = [
+  'dollar-display',
+  'dollar-unclosed',
+  'dollar-inline-not-display',
+  'dollar-inside-code',
+  'dollar-currency',
+  'dollar-inner-dollar',
+  'dollar-then-table',
+] as const
 
 export interface FixtureMeta {
   /** 解析后经 serialize 再 parse，语义必须不变。默认 true */

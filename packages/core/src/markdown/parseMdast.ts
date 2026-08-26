@@ -3,12 +3,14 @@
  *
  * 默认保存路径与 `parseMarkdownToBlocks` 均走本实现。
  * 映射目标是现行产品语义（软换行保 \n、Setext 当段落、水平线当 --- paragraph），
- * 不是完整 CommonMark 作业。
+ * 不是完整 CommonMark 作业。独占行 $$ 在进 mdast 前改写成 ```math（不引入 remark-math）。
  */
 
 import { stripDocFrontmatter } from '../frontmatter'
 import { BlockType } from '../types'
 import type { CreateBlockInput } from '../types'
+import { rewriteClosedExclusiveDollarMath } from './displayMath'
+import { findMdastFencedCodeSpans } from './fencedCode'
 import { fromNoteFastMarkdown } from './fromMarkdown'
 
 type MdNode = {
@@ -32,7 +34,9 @@ export function parseMarkdownToBlocksMdast(markdown: string, notebookId: string)
   const { body } = stripDocFrontmatter(markdown)
   if (body === '') return []
 
-  const tree = fromNoteFastMarkdown(body) as MdNode
+  const occupied = findMdastFencedCodeSpans(body)
+  const doc = rewriteClosedExclusiveDollarMath(body, occupied)
+  const tree = fromNoteFastMarkdown(doc) as MdNode
 
   const out: CreateBlockInput[] = []
 
@@ -65,7 +69,7 @@ export function parseMarkdownToBlocksMdast(markdown: string, notebookId: string)
         }
         case 'table': {
           const id = crypto.randomUUID()
-          out.push(makeInput(id, notebookId, parentId, BlockType.Table, sliceTrimEnd(node, body), {}))
+          out.push(makeInput(id, notebookId, parentId, BlockType.Table, sliceTrimEnd(node, doc), {}))
           break
         }
         case 'thematicBreak': {
@@ -79,13 +83,13 @@ export function parseMarkdownToBlocksMdast(markdown: string, notebookId: string)
           break
         }
         case 'list': {
-          walkListItems(node, parentId, notebookId, body, out, walk)
+          walkListItems(node, parentId, notebookId, doc, out, walk)
           break
         }
         case 'definition':
         case 'footnoteDefinition': {
           const id = crypto.randomUUID()
-          out.push(makeInput(id, notebookId, parentId, BlockType.Paragraph, sliceTrimEnd(node, body), {
+          out.push(makeInput(id, notebookId, parentId, BlockType.Paragraph, sliceTrimEnd(node, doc), {
             markdownFallback: true,
             markdownNodeType: node.type,
           }))

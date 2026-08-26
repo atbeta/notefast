@@ -113,7 +113,7 @@ function getWriteToolDefinitions(lang: AiLang): ToolDefinition[] {
           type: 'object',
           properties: {
             title: { type: 'string', description: en ? 'Note title, 5-20 characters' : '笔记标题，5-20字' },
-            markdown: { type: 'string', description: en ? 'Note body, Markdown. Do not write YAML tags just to label the note.' : '笔记正文，Markdown 格式。不要为了打标签而写 YAML frontmatter。' },
+            markdown: { type: 'string', description: en ? 'Note body, Markdown. Display math: exclusive-line $$ or ```math. Inline: $...$. Do not write YAML tags just to label the note.' : '笔记正文，Markdown。块级公式用独占行 $$ 或 ```math，行内用 $...$。不要为了打标签而写 YAML frontmatter。' },
             status: { type: 'string', enum: ['note', 'inbox'], description: en ? 'note=notes, inbox=inbox; default note' : 'note=正式笔记，inbox=收集箱；默认 note' },
             tags: { type: 'array', items: { type: 'string' }, description: en ? 'Only if the user named tags; omit otherwise. Do not invent tags.' : '仅当用户明确指定标签时传入；未指定则省略，不要自行归纳' },
           },
@@ -132,7 +132,7 @@ function getWriteToolDefinitions(lang: AiLang): ToolDefinition[] {
           type: 'object',
           properties: {
             doc_id: { type: 'string', description: en ? 'Target document ID (from retrieval results or the conversation)' : '目标文档 ID（从检索结果或之前的对话中获取）' },
-            content: { type: 'string', description: en ? 'Content to append, Markdown format' : '要追加的内容，Markdown 格式' },
+            content: { type: 'string', description: en ? 'Content to append, Markdown format. Display math: exclusive-line $$ or ```math.' : '要追加的内容，Markdown 格式。块级公式用独占行 $$ 或 ```math。' },
             heading: { type: 'string', description: en ? 'Optional heading to insert before the content, e.g. "## Addendum"' : '追加内容前先插入的标题（可选），如"## 补充"' },
           },
           required: ['doc_id', 'content'],

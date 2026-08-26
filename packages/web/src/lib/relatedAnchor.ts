@@ -1,4 +1,4 @@
-import type { Block } from '@notefast/core'
+import { findFencedCodeSpans, type Block } from '@notefast/core'
 
 export interface MarkdownBlockSpan {
   from: number
@@ -19,14 +19,15 @@ export function flattenBodyBlocks(root: Block): Block[] {
 
 /**
  * 把编辑器 markdown 切成与解析器大致同序的块区间，用来把光标映射到已保存块。
- * 不追求与 parseMarkdownToBlocks 逐字等价，常见段落 / 标题 / 列表 / 代码块即可。
+ * 不追求与 parseMarkdownToBlocks 逐字等价；围栏范围与 core mapper 共用 mdast（含 ~~~ / $$）。
  */
 export function scanMarkdownBlocks(markdown: string): MarkdownBlockSpan[] {
   const text = markdown.replace(/\r\n/g, '\n')
-  const lines = text.split('\n')
+  const fences = findFencedCodeSpans(text)
   const spans: MarkdownBlockSpan[] = []
   let pos = 0
   const rows: Array<{ line: string; from: number; to: number }> = []
+  const lines = text.split('\n')
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!
     const from = pos
@@ -35,33 +36,17 @@ export function scanMarkdownBlocks(markdown: string): MarkdownBlockSpan[] {
     pos = to + (i < lines.length - 1 ? 1 : 0)
   }
 
-  let i = 0
-  let inCode = false
-  let codeFrom = 0
-  const codeLines: string[] = []
+  const fenceAt = (offset: number) => fences.find((s) => offset >= s.from && offset < s.to)
 
+  let i = 0
   const advance = () => { i += 1 }
 
   while (i < rows.length) {
     const row = rows[i]!
-    const trimmedStart = row.line.trimStart()
-
-    if (trimmedStart.startsWith('```')) {
-      if (inCode) {
-        spans.push({ from: codeFrom, to: row.to, content: codeLines.join('\n') })
-        codeLines.length = 0
-        inCode = false
-      } else {
-        inCode = true
-        codeFrom = row.from
-        codeLines.length = 0
-      }
-      advance()
-      continue
-    }
-    if (inCode) {
-      codeLines.push(row.line)
-      advance()
+    const fence = fenceAt(row.from)
+    if (fence) {
+      spans.push({ from: fence.from, to: fence.to, content: fence.value })
+      while (i < rows.length && rows[i]!.from < fence.to) i += 1
       continue
     }
 
@@ -99,7 +84,7 @@ export function scanMarkdownBlocks(markdown: string): MarkdownBlockSpan[] {
       advance()
       while (i < rows.length) {
         const next = rows[i]!
-        if (!/^>/.test(next.line) || next.line.trim() === '') break
+        if (fenceAt(next.from) || !/^>/.test(next.line) || next.line.trim() === '') break
         buf.push(next.line.replace(/^>\s?/, ''))
         to = next.to
         advance()
@@ -116,7 +101,7 @@ export function scanMarkdownBlocks(markdown: string): MarkdownBlockSpan[] {
       const next = rows[i]!
       if (
         next.line.trim() === ''
-        || next.line.trimStart().startsWith('```')
+        || fenceAt(next.from)
         || /^#{1,6}\s/.test(next.line)
         || /^(\s*)([-*+]|\d+\.)\s+/.test(next.line)
         || /^>/.test(next.line)
@@ -128,10 +113,6 @@ export function scanMarkdownBlocks(markdown: string): MarkdownBlockSpan[] {
     spans.push({ from, to, content: buf.join('\n').trim() })
   }
 
-  if (inCode) {
-    const last = rows[rows.length - 1]
-    spans.push({ from: codeFrom, to: last?.to ?? codeFrom, content: codeLines.join('\n') })
-  }
   return spans
 }
 

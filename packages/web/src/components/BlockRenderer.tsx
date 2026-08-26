@@ -350,7 +350,7 @@ function CodeBlock({ block }: { block: Block }) {
   if (normalized === 'mermaid') {
     return <MermaidDiagram code={block.content || ''} />
   }
-  // 块级公式：```math 围栏（latex/katex/tex 为常见别名），复用 code_block 零存储改动
+  // 块级公式：```math / 独占行 $$（latex/katex/tex 为常见别名），复用 code_block
   if (normalized === 'math' || normalized === 'latex' || normalized === 'katex' || normalized === 'tex') {
     return <MathBlock code={block.content || ''} />
   }

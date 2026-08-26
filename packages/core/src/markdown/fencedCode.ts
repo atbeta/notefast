@@ -1,9 +1,11 @@
 /**
  * 从 mdast 抽出围栏代码块的源码区间。
- * 与 `parseMarkdownToBlocksMdast` 同一套识别：认 `~~~`、按围栏长度匹配、未闭合延伸到文末。
- * 编辑器预览用区间；未闭合仍返回，由调用方决定是否装饰（输入中途不宜把后文整片吃进预览）。
+ * 与 `parseMarkdownToBlocksMdast` 同一套识别：认 `~~~`、按围栏长度匹配、未闭合延伸到文末；
+ * 另合并已闭合的独占行 `$$`（language=math）。未闭合 `$$` 不延伸到文末，避免输入中途吞后文。
+ * 编辑器预览用区间；未闭合反引号/波浪围栏仍返回，由调用方决定是否装饰。
  */
 
+import { findExclusiveDollarMathSpans } from './displayMath'
 import { fromNoteFastMarkdown } from './fromMarkdown'
 
 export interface FencedCodeSpan {
@@ -28,12 +30,20 @@ type MdNode = {
   }
 }
 
-export function findFencedCodeSpans(markdown: string): FencedCodeSpan[] {
+/** 仅 mdast 反引号 / 波浪围栏，不含 `$$`。给独占行公式扫描提供 occupied。 */
+export function findMdastFencedCodeSpans(markdown: string): FencedCodeSpan[] {
   if (markdown === '') return []
   const tree = fromNoteFastMarkdown(markdown) as MdNode
   const out: FencedCodeSpan[] = []
   walk(tree.children, markdown, out)
   return out
+}
+
+export function findFencedCodeSpans(markdown: string): FencedCodeSpan[] {
+  const mdast = findMdastFencedCodeSpans(markdown)
+  const dollars = findExclusiveDollarMathSpans(markdown, mdast)
+  if (dollars.length === 0) return mdast
+  return [...mdast, ...dollars].sort((a, b) => a.from - b.from)
 }
 
 function walk(nodes: MdNode[] | undefined, markdown: string, out: FencedCodeSpan[]): void {

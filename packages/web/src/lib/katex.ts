@@ -41,6 +41,6 @@ export async function renderMathToHtml(tex: string, displayMode: boolean): Promi
  * 行内公式 $...$ 匹配（Pandoc 规则，无捕获组）：
  * - 开 $ 后不能是空格、闭 $ 前不能是空格（`$ 100 $` 不匹配）
  * - 闭 $ 后不能紧跟数字（`$5-$10`、`$x$2` 等货币/编号场景不匹配）
- * 不跨行、不匹配 $$（块级公式用 ```math 围栏）
+ * 不跨行、不匹配 $$（块级公式用 ```math 或独占行 $$）
  */
 export const INLINE_MATH_SRC = String.raw`\$(?:[^\s$](?:[^$\n]*[^\s$])?)\$(?!\d)`

@@ -5,11 +5,11 @@ import type { SemanticNode } from '../../markdown/semantics'
 
 const ROOT = join(import.meta.dir, 'fixtures')
 
-export function fixturePath(kind: 'success' | 'failure', fileName: string): string {
+export function fixturePath(kind: 'success' | 'failure' | 'extension', fileName: string): string {
   return join(ROOT, kind, fileName)
 }
 
-export function readFixtureFile(kind: 'success' | 'failure', fileName: string): string {
+export function readFixtureFile(kind: 'success' | 'failure' | 'extension', fileName: string): string {
   return readFileSync(fixturePath(kind, fileName), 'utf8')
 }
 

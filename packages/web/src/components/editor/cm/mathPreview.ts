@@ -9,8 +9,8 @@ import { fencedCodeSpansIn } from './fencedCode'
 const MATH_FENCE_LANGS = new Set(['math', 'latex', 'katex', 'tex'])
 
 /**
- * 块级公式内联预览：```math / ~~~math（别名 latex/katex/tex）围栏在光标不在块内时
- * 渲染为 KaTeX；光标进入块内回退源码。围栏范围与 core mapper 共用 mdast 识别。
+ * 块级公式内联预览：```math / ~~~math（别名 latex/katex/tex）与已闭合独占行 $$
+ * 在光标不在块内时渲染为 KaTeX；光标进入块内回退源码。围栏范围与 core mapper 共用。
  * KaTeX 经 lib/katex 懒加载（首个公式才拉库 + CSS），本模块只静态引入异步入口，
  * 编辑器静态依赖链不含 katex。
  */

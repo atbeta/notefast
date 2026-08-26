@@ -4,7 +4,7 @@ import { renderMathToHtml } from '../lib/katex'
 import { CopyButton } from './ui'
 
 /**
- * 块级公式（```math 围栏）：懒渲染 KaTeX；失败时展示错误 + 源码回退。
+ * 块级公式（```math 或独占行 $$）：懒渲染 KaTeX；失败时展示错误 + 源码回退。
  * 外壳结构与 MermaidDiagram 对齐（语言标签 + 复制源码）。
  */
 export default function MathBlock({ code }: { code: string }) {

@@ -78,6 +78,28 @@ describe('findMathBlocks', () => {
     const blocks = scan(['```math', '```'].join('\n'))
     expect(blocks).toHaveLength(0)
   })
+
+  test('闭合独占行 $$ 与 ```math 同等识别', () => {
+    const doc = ['$$', 'E = mc^2', '$$'].join('\n')
+    const blocks = scan(doc)
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].from).toBe(0)
+    expect(blocks[0].to).toBe(doc.length)
+    expect(blocks[0].src).toBe('E = mc^2')
+  })
+
+  test('未闭合 $$ 不识别', () => {
+    expect(scan(['$$', 'E=mc^2'].join('\n'))).toHaveLength(0)
+  })
+
+  test('单行 $$x^2$$ 不识别为块级公式', () => {
+    expect(scan('$$x^2$$')).toHaveLength(0)
+  })
+
+  test('代码围栏内部的 $$ 不识别', () => {
+    const blocks = scan(['```md', '$$', 'E=mc^2', '$$', '```'].join('\n'))
+    expect(blocks).toHaveLength(0)
+  })
 })
 
 describe('mathPreview 装饰', () => {

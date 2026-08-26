@@ -290,7 +290,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
       inputSchema: {
         notebook_id: z.string().optional().describe('笔记本 ID，默认使用默认笔记本'),
         title: z.string().describe('文档标题'),
-        markdown: z.string().describe('Markdown 内容（短文）。不要为了打标签而写 YAML frontmatter。'),
+        markdown: z.string().describe('Markdown 内容（短文）。不要为了打标签而写 YAML frontmatter。块级公式用独占行 $$ 或 ```math；行内用 $...$。'),
         status: z.enum(['note', 'inbox']).optional().describe('inbox=收集箱；缺省 note'),
         tags: z.array(z.string().min(1).max(64)).max(64).optional().describe('仅当用户明确指定标签时传入；未指定则省略，不要自行归纳'),
       },
