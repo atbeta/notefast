@@ -18,7 +18,7 @@ import importRouter from '../api/import'
 import exportArchive from '../api/exportArchive'
 import { buildZipStore, parseZip } from '../lib/zipStore'
 import { buildFullArchiveExport } from '../services/docExport'
-import { importArchiveZip } from '../services/zipImport'
+import { folderTagFromZipPath, importArchiveZip } from '../services/zipImport'
 
 let testDir: string
 let app: Hono
@@ -91,6 +91,19 @@ async function createDoc(title: string, markdown: string): Promise<string> {
   const body = await res.json() as { id: string }
   expect(res.status).toBe(201)
   return body.id
+}
+
+function docTagsByTitle(title: string): string[] {
+  const row = getDb().query(
+    "SELECT tags FROM blocks WHERE type = 'document' AND content = ?",
+  ).get(title) as { tags: string } | undefined
+  if (!row?.tags) return []
+  try {
+    const parsed = JSON.parse(row.tags) as unknown
+    return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string') : []
+  } catch {
+    return []
+  }
 }
 
 async function setDocTags(id: string, tags: string[]): Promise<void> {
@@ -214,6 +227,18 @@ describe('buildFullArchiveExport', () => {
   })
 })
 
+describe('folderTagFromZipPath', () => {
+  test('根文件无 tag；只取第一层；untagged/media/__MACOSX 跳过', () => {
+    expect(folderTagFromZipPath('a.md')).toBeNull()
+    expect(folderTagFromZipPath('work/a.md')).toBe('work')
+    expect(folderTagFromZipPath('work/projects/a.md')).toBe('work')
+    expect(folderTagFromZipPath('untagged/a.md')).toBeNull()
+    expect(folderTagFromZipPath('UNTAGGED/a.md')).toBeNull()
+    expect(folderTagFromZipPath('media/a.md')).toBeNull()
+    expect(folderTagFromZipPath('__MACOSX/._a.md')).toBeNull()
+  })
+})
+
 describe('importArchiveZip', () => {
   test('自家档导入：按 manifest docId 精确还原、media 回写 asset:', async () => {
     const { meta } = saveAsset(PNG_BYTES, 'image/png')
@@ -242,6 +267,20 @@ describe('importArchiveZip', () => {
     expect(readAsset(meta.id)).not.toBeNull()
   })
 
+  test('自家档导入标签来自 frontmatter，不因目录再打一遍', async () => {
+    const id = await createDoc('归档标签', '正文')
+    await setDocTags(id, ['work', 'ai'])
+    const exported = buildFullArchiveExport()
+    const db = getDb()
+    db.query('DELETE FROM assets').run()
+    db.query('DELETE FROM blocks').run()
+    db.exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
+
+    const result = importArchiveZip(db, { notebookId, bytes: exported.body })
+    expect(result.imported).toBe(1)
+    expect(docTagsByTitle('归档标签')).toEqual(['work', 'ai'])
+  })
+
   test('自家档重复导入幂等（同一 docId 跳过）', async () => {
     const { meta } = saveAsset(PNG_BYTES, 'image/png')
     await createDoc('幂等文档', `![图](asset:${meta.id})`)
@@ -265,6 +304,33 @@ describe('importArchiveZip', () => {
     const titles = getDb().query("SELECT content FROM blocks WHERE type = 'document' ORDER BY created_at").all() as Array<{ content: string }>
     expect(titles.map((t) => t.content)).toContain('笔记一')
     expect(titles.map((t) => t.content)).toContain('笔记二')
+    expect(docTagsByTitle('笔记一')).toEqual([])
+    expect(docTagsByTitle('笔记二')).toEqual(['子目录'])
+  })
+
+  test('通用 zip 只取第一层目录为 tag；untagged/media/__MACOSX 跳过', () => {
+    const zip = buildZipStore([
+      { name: 'work/projects/深层.md', data: new TextEncoder().encode('# 深层\n\n正文') },
+      { name: 'untagged/无标.md', data: new TextEncoder().encode('# 无标\n\n正文') },
+      { name: 'media/说明.md', data: new TextEncoder().encode('# 媒体旁\n\n正文') },
+      { name: '__MACOSX/垃圾.md', data: new TextEncoder().encode('# 垃圾\n\n正文') },
+    ])
+    importArchiveZip(getDb(), { notebookId, bytes: zip })
+    expect(docTagsByTitle('深层')).toEqual(['work'])
+    expect(docTagsByTitle('无标')).toEqual([])
+    expect(docTagsByTitle('媒体旁')).toEqual([])
+    expect(docTagsByTitle('垃圾')).toEqual([])
+  })
+
+  test('通用 zip 已有 YAML tags 时不覆盖，不用目录当 tag', () => {
+    const zip = buildZipStore([
+      {
+        name: 'folder/带标.md',
+        data: new TextEncoder().encode('---\ntags:\n  - yaml-tag\n---\n\n# 带标\n\n正文'),
+      },
+    ])
+    importArchiveZip(getDb(), { notebookId, bytes: zip })
+    expect(docTagsByTitle('带标')).toEqual(['yaml-tag'])
   })
 
   test('GBK 文件名 zip（Windows 中文打包）：标题从文件名正确推断，不产生乱码', () => {
@@ -289,6 +355,8 @@ describe('importArchiveZip', () => {
     expect(result.failed).toBe(0)
     const txtTitle = getDb().query("SELECT content FROM blocks WHERE type = 'document' AND content = '说明'").get() as { content: string } | undefined
     expect(txtTitle).toBeDefined()
+    expect(docTagsByTitle('说明')).toEqual(['notes'])
+    expect(docTagsByTitle('其他')).toEqual(['notes'])
   })
 
   test('通用 md zip 的相对路径图片（images/foo.png）收编为 asset: 并重写引用', async () => {

@@ -4,14 +4,16 @@
  * 自家档（含 notefast-archive.manifest.json）：
  * - 按 manifest 的 docId 还原文档（幂等：已存在则跳过），media 内容寻址入 AssetStore
  * - markdown 中 media/<sha><ext> 改写回 asset:<sha>
- * 通用 zip：每个 .md 为一个新文档（标题从首个 H1 / 文件名推断）。
+ * 通用 zip：每个 .md 为一个新文档（标题从首个 H1 / 文件名推断）；
+ * 无 YAML tags 时第一层目录作为 tag（untagged/media/__MACOSX 除外）。
  */
 
+import { stripDocFrontmatter, normalizeTagList } from '@notefast/core'
 import { createHash } from 'node:crypto'
 import type { getDb } from '../db'
 import { ingestLocalImageRefs, saveAsset } from '../assets/store'
 import { mimeForExt } from '../sync/archiveMedia'
-import { ARCHIVE_MANIFEST_NAME, isArchiveManifest, type ArchiveManifest } from '../sync/archive'
+import { ARCHIVE_MANIFEST_NAME, ARCHIVE_UNTAGGED_DIR, isArchiveManifest, type ArchiveManifest } from '../sync/archive'
 import { parseZip } from '../lib/zipStore'
 import { insertDocFromMarkdown, type InsertDocFromMarkdownResult } from './docImport'
 import { normalizeMarkdownFileContent, resolveImportTitle } from './docFileImport'
@@ -22,6 +24,24 @@ type Db = ReturnType<typeof getDb>
 export const MAX_ARCHIVE_IMPORT_BYTES = 500 * 1024 * 1024
 
 const MEDIA_REF_RE = /media\/([0-9a-f]{64})(\.[a-z0-9]+)?/gi
+
+const SKIP_FOLDER_TAGS = new Set([
+  ARCHIVE_UNTAGGED_DIR.toLowerCase(),
+  'media',
+  '__macosx',
+])
+
+/**
+ * 通用 zip：第一层目录当作 tag。根文件、untagged/media/__MACOSX 不打。
+ * 自家档（有 manifest）不要走这里——标签以 YAML frontmatter 为准。
+ */
+export function folderTagFromZipPath(entryName: string): string | null {
+  const parts = entryName.split(/[/\\]/).filter((s) => s && s !== '.')
+  if (parts.length < 2) return null
+  const first = parts[0]!
+  if (SKIP_FOLDER_TAGS.has(first.toLowerCase())) return null
+  return first
+}
 
 /** zip 内相对路径：先按 md 所在目录解析（含 ..），再退回 zip 根 */
 function resolveZipRel(mdName: string, relPath: string, byName: Map<string, Uint8Array>): Buffer | null {
@@ -115,6 +135,9 @@ export function importArchiveZip(
     const mf = manifestByFilename.get(entry.name) ?? manifestByFilename.get(filename)
     const docId = mf?.docId
     const title = mf?.title ?? resolveImportTitle({ filename, markdown })
+    const folderTag = !manifest ? folderTagFromZipPath(entry.name) : null
+    const hasFmTags = Boolean(stripDocFrontmatter(markdown).meta?.tags?.length)
+    const tags = folderTag && !hasFmTags ? normalizeTagList([folderTag]) : undefined
 
     // 自家档 + docId 已存在（含软删除）→ 幂等跳过（manifest 的 docId 是稳定还原锚）
     if (docId && db.query('SELECT id FROM blocks WHERE id = ?').get(docId)) {
@@ -129,6 +152,7 @@ export function importArchiveZip(
         markdown,
         rejectEmpty: true,
         ...(docId ? { docId } : {}),
+        ...(tags?.length ? { tags } : {}),
       })
       result.imported++
       result.importedDocs.push({ docId: res.docId, blockIds: res.blockIds })
