@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.81.0](https://github.com/atbeta/notefast/compare/v0.80.0...v0.81.0) (2026-08-26)
+
+
+### Features
+
+* **ai:** skip invented tags and let agents pin views ([fd5ce7a](https://github.com/atbeta/notefast/commit/fd5ce7aa06479247d57a873a7a77936106d35cc4))
+* **archive:** nest markdown copies under the first tag ([cfa0553](https://github.com/atbeta/notefast/commit/cfa05531c9e95af09d9a6d202d79cfa0b5299f16))
+* **core:** parse exclusive-line $$ as display math ([e86f710](https://github.com/atbeta/notefast/commit/e86f7103332b5aa5d5afb56812f948ff50f796f7))
+* **import:** tag generic zip notes from the first folder ([18823ce](https://github.com/atbeta/notefast/commit/18823ce1e19c22fcbe34acdeff91382061820161))
+* **web:** show the data dir and a one-way markdown shadow ([d9dfe22](https://github.com/atbeta/notefast/commit/d9dfe2225a2309d2079d494a707474d5efa585c4))
+
+
+### Bug Fixes
+
+* **ai:** stop dropping in-progress document edits ([c3c156d](https://github.com/atbeta/notefast/commit/c3c156d039b6794e869d394814f517baac63fb09))
+* **web:** drop the 7-day-updated smart view ([8b26109](https://github.com/atbeta/notefast/commit/8b261094977571c5087db128c928a76eaeda6d76))
+* **web:** show sync status as an icon only ([fc504bb](https://github.com/atbeta/notefast/commit/fc504bbe8b77a41bd91329bf011a4b660bf6cee9))
+* **web:** walk prev/next docs in list order ([3afd399](https://github.com/atbeta/notefast/commit/3afd3992c020a20fbdc51dd28f3f182ad71648f9))
+
+
+### Performance Improvements
+
+* **server:** defer markdown shadow full sync off startup ([a1a4af0](https://github.com/atbeta/notefast/commit/a1a4af055f0ae3af9693f0950e72b3d19347e230))
+
 ## [0.80.0](https://github.com/atbeta/notefast/compare/v0.79.0...v0.80.0) (2026-08-26)
 
 
