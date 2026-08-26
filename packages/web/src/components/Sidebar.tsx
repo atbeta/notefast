@@ -15,7 +15,6 @@ import {
   Tag,
   Star,
   X,
-  Clock,
   Hourglass,
   EyeOff,
   Waypoints,
@@ -482,14 +481,6 @@ export default function Sidebar({
           <SidebarSectionLabel label={t('sidebar.smartViews')} collapsible open={smartOpen} onToggle={toggleSmart} />
           {smartOpen && (
             <div className="flex flex-col gap-0.5">
-              <Link
-                to="/?updated_within=7d"
-                onClick={closeAfterNav}
-                className={location.search.includes('updated_within=7d') ? 'sidebar-link-active' : 'sidebar-link'}
-              >
-                <Clock className="w-4 h-4" strokeWidth={1.75} />
-                {t('sidebar.recent7Days')}
-              </Link>
               <Link
                 to="/?stale_within=90d"
                 onClick={closeAfterNav}
