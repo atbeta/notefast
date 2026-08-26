@@ -14,6 +14,11 @@ export const id = '019_assets_filename'
 export const description = 'assets gain original filename column / local-file locating'
 
 export function up(db: Database): void {
-  db.exec(`ALTER TABLE assets ADD COLUMN filename TEXT`)
+  // SQLite 无 ADD COLUMN IF NOT EXISTS；列已存在时（旧引擎抹掉迁移记录、或
+  // 上一轮事务只提交了 DDL）不能让启动崩溃。
+  const columns = db.query(`PRAGMA table_info(assets)`).all() as Array<{ name: string }>
+  if (!columns.some((c) => c.name === 'filename')) {
+    db.exec(`ALTER TABLE assets ADD COLUMN filename TEXT`)
+  }
   db.exec(`CREATE INDEX IF NOT EXISTS idx_assets_filename ON assets(filename)`)
 }

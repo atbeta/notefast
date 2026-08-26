@@ -10,5 +10,8 @@ import type { Database } from 'bun:sqlite'
 export const id = '010_asset_upload_attempted_at'
 export const description = 'assets 表加 upload_attempted_at（最近上传尝试时间）'
 export function up(db: Database): void {
-  db.exec('ALTER TABLE assets ADD COLUMN upload_attempted_at TEXT')
+  const columns = db.query(`PRAGMA table_info(assets)`).all() as Array<{ name: string }>
+  if (!columns.some((c) => c.name === 'upload_attempted_at')) {
+    db.exec('ALTER TABLE assets ADD COLUMN upload_attempted_at TEXT')
+  }
 }

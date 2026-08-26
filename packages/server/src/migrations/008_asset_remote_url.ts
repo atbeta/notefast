@@ -9,5 +9,8 @@ import type { Database } from 'bun:sqlite'
 export const id = '008_asset_remote_url'
 export const description = 'assets 表加 remote_url（图床外链，302 用）'
 export function up(db: Database): void {
-  db.exec('ALTER TABLE assets ADD COLUMN remote_url TEXT')
+  const columns = db.query(`PRAGMA table_info(assets)`).all() as Array<{ name: string }>
+  if (!columns.some((c) => c.name === 'remote_url')) {
+    db.exec('ALTER TABLE assets ADD COLUMN remote_url TEXT')
+  }
 }

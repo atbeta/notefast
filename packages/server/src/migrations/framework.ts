@@ -32,6 +32,20 @@ interface Migration {
 /** 唯一基线迁移。历史 002-010 已合并到此。 */
 const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012, m013, m014, m015, m016, m017, m018, m019, m020, m021, m022]
 
+/**
+ * squash 进 001_initial 的旧 id。只删这些，禁止「不在本二进制里的 id 一律删」——
+ * 旧版引擎碰上已跑过新迁移的库时会抹掉记录，再升级就会重复 ADD COLUMN 崩掉。
+ */
+const SQUASHED_MIGRATION_IDS = new Set([
+  '003_properties_columns',
+  '004_entity_changes',
+  '006_content_hash',
+  '007_api_tokens',
+  '008_soft_delete',
+  '009_pinned_views',
+  '010_tag_cleanup',
+])
+
 export function runMigrations(db: Database): { applied: string[]; skipped: string[] } {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -40,12 +54,7 @@ export function runMigrations(db: Database): { applied: string[]; skipped: strin
       applied_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `)
-  /** 清理已合并到基线的历史条目（001-010），保留后续迁移记录不被误删 */
-  const knownIds = new Set(MIGRATIONS.map((m) => m.id))
-  const historicalDeleted = (db.query('SELECT id FROM schema_migrations').all() as Array<{ id: string }>)
-    .filter((r) => !knownIds.has(r.id))
-    .map((r) => r.id)
-  for (const id of historicalDeleted) {
+  for (const id of SQUASHED_MIGRATION_IDS) {
     db.query('DELETE FROM schema_migrations WHERE id = ?').run(id)
   }
 

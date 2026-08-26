@@ -10,5 +10,8 @@ import type { Database } from 'bun:sqlite'
 export const id = '009_asset_upload_error'
 export const description = 'assets 表加 upload_error（图床上传失败原因）'
 export function up(db: Database): void {
-  db.exec('ALTER TABLE assets ADD COLUMN upload_error TEXT')
+  const columns = db.query(`PRAGMA table_info(assets)`).all() as Array<{ name: string }>
+  if (!columns.some((c) => c.name === 'upload_error')) {
+    db.exec('ALTER TABLE assets ADD COLUMN upload_error TEXT')
+  }
 }
