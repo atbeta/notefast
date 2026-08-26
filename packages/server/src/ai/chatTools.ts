@@ -144,8 +144,8 @@ function getWriteToolDefinitions(lang: AiLang): ToolDefinition[] {
       function: {
         name: 'notefast_update_block',
         description: en
-          ? 'Update the content of an existing block. Get block_id from citation.block_id in the retrieval results. Call when the user says "change that part" or "rewrite it as XX".'
-          : '更新已有 block 的内容。block_id 从检索结果的 citation.block_id 获取。当用户要求"修改那段""改成 XX"时调用。',
+          ? 'Update the content of an existing block. Get block_id from citation.block_id in the retrieval results. Call when the user says "change that part" or "rewrite it as XX". To edit several blocks, call this multiple times in one round.'
+          : '更新已有 block 的内容。block_id 从检索结果的 citation.block_id 获取。当用户要求"修改那段""改成 XX"时调用。要改多处时，一轮里多次调用，不要改一处就停。',
         parameters: {
           type: 'object',
           properties: {

@@ -14,7 +14,7 @@
  * 流程：
  *  1. hybridSearch() 拿 citations（embedding 不可用时降级到 FTS5）
  *  2. buildChatPrompt() 组装 prompt（含 tool 定义）
- *  3. agent loop（最多 N 轮）：
+ *  3. agent loop（最多 N 轮工具；用尽后纯文字收口）：
  *     a. runtime.streamChatWithTools() → 流式 content/reasoning + 可选 tool_calls
  *     b. 若有 tool_calls：执行 search_more → 结果回填 prompt → 下一轮
  *     c. 否则 → 答案已在流中发出
@@ -86,7 +86,7 @@ export interface RunChatOptions {
   maxTokens?: number
   /** 是否启用 agent loop（tool-call）；默认 true（若模型支持）。false 时降级为一次性检索 */
   enableTools?: boolean
-  /** agent loop 最大轮数，默认 3 */
+  /** agent loop 最多执行几轮工具，默认 8；用尽后改纯文字收口，不再丢未执行的 tool_call */
   maxToolRounds?: number
   /** 助手语言：zh / en（默认 zh） */
   lang?: AiLang
@@ -99,7 +99,9 @@ function fixHint(lang: AiLang): string {
     ? 'Configure a Chat model in the Web UI /settings page (API Key + Base URL + model name)'
     : '请在 Web UI /settings 页面配置 Chat 模型（API Key + Base URL + 模型名）'
 }
-const DEFAULT_MAX_TOOL_ROUNDS = 3
+const DEFAULT_MAX_TOOL_ROUNDS = 8
+/** 聊天默认输出预算：写工具的 arguments（整段 block）容易超过 2000 */
+const DEFAULT_CHAT_MAX_TOKENS = 4096
 
 /**
  * 执行 LLM 请求的工具调用。
@@ -456,6 +458,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
   const toolTrace: ToolTraceEntry[] = []
   const enableTools = opts.enableTools !== false
   const maxRounds = opts.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS
+  const chatMaxTokens = opts.maxTokens ?? DEFAULT_CHAT_MAX_TOKENS
 
   // ② 拼装 prompt（含 tool 定义）
   const promptMessages = buildChatPrompt({
@@ -474,165 +477,16 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
     let workingMessages = promptMessages.slice()
     let finalCitations = initialReport.citations
     let finalRetrieval = initialReport.retrieval
+    // 还剩几次「带工具的 LLM 轮」；用尽后只出文字，避免再要一轮写入却被静默丢掉
+    let toolsLeft = enableTools ? maxRounds : 0
 
-    for (let round = 0; round <= maxRounds; round++) {
-      if (enableTools) {
-        let toolCalls: ToolCall[] = []
-        let streamFailed = false
-        let streamError: unknown = null
-        // 本轮是否已向客户端发出正文 token：已发出时降级路径不能再全量重发，
-        // 否则客户端会拼出「半截答案 + 完整新答案」
-        let sentTokens = false
-        const llmStart = Date.now()
-        try {
-          const gen = emitStreamChunks(
-            runtime.streamChatWithTools(workingMessages, {
-              temperature: opts.temperature ?? 0.3,
-              maxTokens: opts.maxTokens ?? 2000,
-              tools: getAllToolDefinitions(lang),
-              signal: opts.signal,
-            }),
-          )
-          let next = await gen.next()
-          while (!next.done) {
-            if (next.value.type === 'token') sentTokens = true
-            yield next.value
-            next = await gen.next()
-          }
-          toolCalls = next.value
-          console.info(JSON.stringify({
-            event: 'llm_call',
-            round,
-            mode: 'stream_tools',
-            tool_calls: toolCalls.length,
-            duration_ms: Date.now() - llmStart,
-          }))
-        } catch (e) {
-          console.error('[chat] streamChatWithTools failed, falling back:', e)
-          streamFailed = true
-          streamError = e
-        }
-
-        if (streamFailed) {
-          let recovered = false
-          if (typeof runtime.chatWithTools === 'function') {
-            try {
-              const result = await runtime.chatWithTools(workingMessages, {
-                temperature: opts.temperature ?? 0.3,
-                maxTokens: opts.maxTokens ?? 2000,
-                tools: getAllToolDefinitions(lang),
-                signal: opts.signal,
-              })
-              if (result && result.tool_calls.length > 0 && round < maxRounds) {
-                toolCalls = result.tool_calls
-                recovered = true
-              } else if (result && !sentTokens) {
-                // 整包重发仅限「本轮还没发出任何 token」；已流过半截则落入下方错误收尾
-                yield* emitCompleteAnswer(result.content || '', result.reasoning)
-                break
-              }
-            } catch (e2) {
-              console.error('[chat] chatWithTools fallback failed:', e2)
-            }
-          }
-          if (!recovered && toolCalls.length === 0) {
-            let answered = false
-            if (!sentTokens) {
-              // 未发出过 token：最后尝试纯流式重发完整答案
-              try {
-                for await (const ev of emitStreamChunks(
-                  runtime.streamChat(workingMessages, {
-                    temperature: opts.temperature ?? 0.3,
-                    maxTokens: opts.maxTokens ?? 2000,
-                    signal: opts.signal,
-                  }),
-                )) {
-                  if (ev.type === 'token') sentTokens = true
-                  yield ev
-                }
-                answered = true
-              } catch (e2) {
-                streamError = e2
-              }
-            }
-            if (!answered) {
-              // 半截答案已发出（不再全量重发防拼接）或全部降级失败：错误收尾。
-              // done 不在此发送——统一由循环出口后的单次 done 收尾，避免双发
-              const msg = streamError instanceof Error ? streamError.message : String(streamError)
-              yield {
-                type: 'error',
-                error: {
-                  code: 'llm_error',
-                  message: `流式回答失败: ${msg}`,
-                },
-              }
-            }
-            break
-          }
-        }
-
-        if (toolCalls.length > 0 && round < maxRounds) {
-          workingMessages.push({
-            role: 'assistant',
-            content: '',
-            tool_calls: toolCalls.map((tc) => ({
-              id: tc.id,
-              type: 'function' as const,
-              function: { name: tc.name, arguments: JSON.stringify(tc.args) },
-            })),
-          })
-
-          for (const tc of toolCalls) {
-            // 写工具直接执行（executeToolCall 内部路由到 executeWriteTool），
-            // 不再发 write_proposal 等待用户确认——文档有 revision 历史，写错可回退。
-            const exec = await executeToolCall(tc.name, tc.args, lastUserText, {
-              notebookId: opts.notebookId,
-              ctxDocId: opts.contextDocId,
-              since: opts.since,
-              until: opts.until,
-              minScore: opts.minScore,
-              lang,
-            })
-            toolTrace.push({
-              tool: tc.name,
-              args: tc.args,
-              result_count: exec.resultCount,
-              result_text: exec.content,
-            })
-            yield {
-              type: 'tool',
-              tool: tc.name,
-              args: tc.args,
-              resultCount: exec.resultCount,
-            }
-            workingMessages.push({
-              role: 'tool',
-              tool_call_id: tc.id,
-              content: exec.content,
-            })
-
-            // 搜索工具的命中结果更新 citations（用于最终返回）
-            if (tc.name === 'notefast_search_more') {
-              try {
-                const parsed = JSON.parse(exec.content)
-                if (parsed.citations?.length > 0) {
-                  finalCitations = parsed.citations
-                  finalRetrieval = parsed.retrieval ?? finalRetrieval
-                }
-              } catch { /* ignore parse failure */ }
-            }
-          }
-          continue
-        }
-
-        // 无 tool call：答案已在流中发出
-        break
-      } else {
-        // 不启用 tools：纯流式
+    for (let round = 0; round < maxRounds + 2; round++) {
+      const allowTools = toolsLeft > 0
+      if (!allowTools) {
         for await (const ev of emitStreamChunks(
           runtime.streamChat(workingMessages, {
             temperature: opts.temperature ?? 0.3,
-            maxTokens: opts.maxTokens ?? 2000,
+            maxTokens: chatMaxTokens,
             signal: opts.signal,
           }),
         )) {
@@ -640,6 +494,159 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
         }
         break
       }
+
+      let toolCalls: ToolCall[] = []
+      let streamFailed = false
+      let streamError: unknown = null
+      // 本轮是否已向客户端发出正文 token：已发出时降级路径不能再全量重发，
+      // 否则客户端会拼出「半截答案 + 完整新答案」
+      let sentTokens = false
+      const llmStart = Date.now()
+      try {
+        const gen = emitStreamChunks(
+          runtime.streamChatWithTools(workingMessages, {
+            temperature: opts.temperature ?? 0.3,
+            maxTokens: chatMaxTokens,
+            tools: getAllToolDefinitions(lang),
+            signal: opts.signal,
+          }),
+        )
+        let next = await gen.next()
+        while (!next.done) {
+          if (next.value.type === 'token') sentTokens = true
+          yield next.value
+          next = await gen.next()
+        }
+        toolCalls = next.value
+        console.info(JSON.stringify({
+          event: 'llm_call',
+          round,
+          mode: 'stream_tools',
+          tool_calls: toolCalls.length,
+          tools_left: toolsLeft,
+          duration_ms: Date.now() - llmStart,
+        }))
+      } catch (e) {
+        console.error('[chat] streamChatWithTools failed, falling back:', e)
+        streamFailed = true
+        streamError = e
+      }
+
+      if (streamFailed) {
+        let recovered = false
+        if (typeof runtime.chatWithTools === 'function') {
+          try {
+            const result = await runtime.chatWithTools(workingMessages, {
+              temperature: opts.temperature ?? 0.3,
+              maxTokens: chatMaxTokens,
+              tools: getAllToolDefinitions(lang),
+              signal: opts.signal,
+            })
+            if (result && result.tool_calls.length > 0) {
+              toolCalls = result.tool_calls
+              recovered = true
+            } else if (result && !sentTokens) {
+              // 整包重发仅限「本轮还没发出任何 token」；已流过半截则落入下方错误收尾
+              yield* emitCompleteAnswer(result.content || '', result.reasoning)
+              break
+            }
+          } catch (e2) {
+            console.error('[chat] chatWithTools fallback failed:', e2)
+          }
+        }
+        if (!recovered && toolCalls.length === 0) {
+          let answered = false
+          if (!sentTokens) {
+            // 未发出过 token：最后尝试纯流式重发完整答案
+            try {
+              for await (const ev of emitStreamChunks(
+                runtime.streamChat(workingMessages, {
+                  temperature: opts.temperature ?? 0.3,
+                  maxTokens: chatMaxTokens,
+                  signal: opts.signal,
+                }),
+              )) {
+                if (ev.type === 'token') sentTokens = true
+                yield ev
+              }
+              answered = true
+            } catch (e2) {
+              streamError = e2
+            }
+          }
+          if (!answered) {
+            // 半截答案已发出（不再全量重发防拼接）或全部降级失败：错误收尾。
+            // done 不在此发送——统一由循环出口后的单次 done 收尾，避免双发
+            const msg = streamError instanceof Error ? streamError.message : String(streamError)
+            yield {
+              type: 'error',
+              error: {
+                code: 'llm_error',
+                message: `流式回答失败: ${msg}`,
+              },
+            }
+          }
+          break
+        }
+      }
+
+      if (toolCalls.length > 0) {
+        workingMessages.push({
+          role: 'assistant',
+          content: '',
+          tool_calls: toolCalls.map((tc) => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: { name: tc.name, arguments: JSON.stringify(tc.args) },
+          })),
+        })
+
+        for (const tc of toolCalls) {
+          // 写工具直接执行（executeToolCall 内部路由到 executeWriteTool），
+          // 不再发 write_proposal 等待用户确认——文档有 revision 历史，写错可回退。
+          const exec = await executeToolCall(tc.name, tc.args, lastUserText, {
+            notebookId: opts.notebookId,
+            ctxDocId: opts.contextDocId,
+            since: opts.since,
+            until: opts.until,
+            minScore: opts.minScore,
+            lang,
+          })
+          toolTrace.push({
+            tool: tc.name,
+            args: tc.args,
+            result_count: exec.resultCount,
+            result_text: exec.content,
+          })
+          yield {
+            type: 'tool',
+            tool: tc.name,
+            args: tc.args,
+            resultCount: exec.resultCount,
+          }
+          workingMessages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: exec.content,
+          })
+
+          // 搜索工具的命中结果更新 citations（用于最终返回）
+          if (tc.name === 'notefast_search_more') {
+            try {
+              const parsed = JSON.parse(exec.content)
+              if (parsed.citations?.length > 0) {
+                finalCitations = parsed.citations
+                finalRetrieval = parsed.retrieval ?? finalRetrieval
+              }
+            } catch { /* ignore parse failure */ }
+          }
+        }
+        toolsLeft--
+        continue
+      }
+
+      // 无 tool call：答案已在流中发出
+      break
     }
 
     yield {

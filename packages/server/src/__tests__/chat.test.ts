@@ -361,6 +361,76 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
     expect(callCount).toBeGreaterThanOrEqual(2)
   })
 
+  test('agent loop: 工具轮用尽后收口请求不再带 tools（避免要写却丢弃）', async () => {
+    applyNewConfig(
+      {
+        version: 1,
+        chat: {
+          id: 'x',
+          label: 'x',
+          preset: 'custom',
+          baseUrl: 'http://mock',
+          apiKey: '',
+          embeddingModel: '',
+          chatModel: 'fake-chat',
+          timeoutMs: 5000,
+          extraHeaders: {},
+        },
+        embedding: null,
+        autoIndex: false,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+
+    let callCount = 0
+    let secondHadTools: boolean | null = null
+    const encoder = new TextEncoder()
+    const sseResponse = (chunks: string[]) =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            for (const ch of chunks) c.enqueue(encoder.encode(ch))
+            c.close()
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )
+
+    const fetcher: typeof fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      callCount++
+      const body = JSON.parse(String(init?.body ?? '{}')) as { tools?: unknown[] }
+      if (callCount === 1) {
+        expect(Array.isArray(body.tools) && body.tools.length > 0).toBe(true)
+        return sseResponse([
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"notefast_search_more","arguments":""}}]}}]}\n\n',
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"query\\":\\"x\\"}"}}]}}]}\n\n',
+          'data: [DONE]\n\n',
+        ]) as unknown as Response
+      }
+      secondHadTools = Array.isArray(body.tools) && body.tools.length > 0
+      return sseResponse([
+        'data: {"choices":[{"delta":{"content":"改完了"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ]) as unknown as Response
+    }) as unknown as typeof fetch
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl(withQueryUnderstandingStub(fetcher))
+
+    const events: string[] = []
+    for await (const ev of runChat({
+      messages: [{ role: 'user', content: '改文档' }],
+      maxToolRounds: 1,
+    })) {
+      events.push(ev.type)
+    }
+    expect(events).toContain('tool')
+    expect(events[events.length - 1]).toBe('done')
+    expect(callCount).toBeGreaterThanOrEqual(2)
+    expect(secondHadTools === false).toBe(true)
+  })
+
+
   test('流式 reasoning 事件与 think 标签拆分', async () => {
     applyNewConfig(
       {
