@@ -239,7 +239,11 @@ final class AppModel: ObservableObject {
     }
 
     func revealDataDir() {
-        let dir = Self.dataDir()
+        Self.openDataDir()
+    }
+
+    static func openDataDir() {
+        let dir = dataDir()
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         NSWorkspace.shared.open(dir)
     }

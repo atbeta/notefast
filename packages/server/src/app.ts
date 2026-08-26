@@ -74,6 +74,8 @@ import { initAppLogs } from './services/appLogs'
 import storageLocations from './api/storageLocations'
 import sharePublic from './api/sharePublic'
 import { initDocEvents } from './services/docEvents'
+import { initInstancePaths, initShadowMarkdown, stopShadowMarkdown } from './services/shadowMarkdown'
+import instanceRouter from './api/instance'
 import { startEntityDescribe } from './ai/entityDescribe'
 
 export interface NoteFastServer {
@@ -105,6 +107,7 @@ function isLoopbackRequest(c: Context): boolean {
 
 export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   const dataDir = opts.dataDir || process.env.DATA_DIR || './data'
+  initInstancePaths(dataDir)
 
   let started = false
   let notebookId = ''
@@ -263,6 +266,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   app.route('/api/v1/pinned-views', pinnedViews)
   app.route('/api/v1/preferences', preferences)
   app.route('/api/v1/status', statusRouter)
+  app.route('/api/v1/instance', instanceRouter)
   app.route('/api/v1/term-dict', termDict)
   app.route('/api/v1/mcp', mcpRouter)
   app.route('/api/v1/events', eventsRouter)
@@ -299,6 +303,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     initDocEvents(pluginSystem)
     await initVectorStore()
     initAssetStore(dataDir)
+    initShadowMarkdown(dataDir)
     // 图床上传配置：init 后注入 assets 存储层（异步上传命令契约）
     setImageUploadConfig(initImageUploadConfig(dataDir))
     initStorageLocations(dataDir)
@@ -354,6 +359,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   const stop = async (): Promise<void> => {
     if (!started) return
     started = false
+    try { stopShadowMarkdown() } catch { /* ignore */ }
     if (exportStarted) { /* autoExport 无 stop API；进程退出时自然清理 */ }
     try { stopBackupManager() } catch { /* ignore */ }
     try { closeDb() } catch { /* ignore */ }

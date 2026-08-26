@@ -7,7 +7,7 @@
       "ai": "AI 能力与模型",
       "termdict": "实体词典",
       "images": "图床与图片",
-      "backup": "灾备与归档",
+      "backup": "备份与归档",
       "tokens": "API 与外部接入",
       "security": "账户安全",
       "maintenance": "维护",
@@ -48,6 +48,23 @@
       "download": "前往下载",
       "checkFailed": "检查失败，请稍后再试或直接打开",
       "manualHint": "检查更新仅在你点击时访问 GitHub；启动与日常使用不会主动联网查版本。"
+    },
+    "localData": {
+      "title": "本机数据",
+      "helpTip": "SQLite、图片和 Markdown 影子副本都在这个目录里。影子是单向副本，改 .md 不会写回笔记。",
+      "pathLabel": "数据目录",
+      "pathHintNative": "原生客户端里这个路径就在本机；可用下面的按钮在文件管理器中打开。",
+      "pathHintServer": "这是服务器上的目录，不是你这台电脑上的路径。",
+      "copyPath": "复制路径",
+      "revealFinder": "在访达中显示",
+      "revealExplorer": "在资源管理器中显示",
+      "revealFolder": "打开数据目录",
+      "shadowTitle": "Markdown 影子副本",
+      "shadowHint": "笔记变更时自动写成 Markdown，按首标签分目录。单向副本，改这些 .md 不会写回笔记；权威仍是 SQLite。图片指向同一套 media/，不另存一份。",
+      "shadowOn": "已开启",
+      "shadowOff": "已关闭",
+      "loadFailed": "无法读取数据目录",
+      "saveFailed": "无法保存"
     },
     "language": {
       "title": "界面语言",

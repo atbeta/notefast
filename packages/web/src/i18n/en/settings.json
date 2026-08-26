@@ -49,6 +49,23 @@
       "checkFailed": "Check failed. Try again later or open",
       "manualHint": "Update checks only run when you click; the app does not phone home on launch."
     },
+    "localData": {
+      "title": "Local data",
+      "helpTip": "SQLite, images, and the Markdown shadow copy live in this directory. The shadow is one-way: editing those .md files does not write back.",
+      "pathLabel": "Data directory",
+      "pathHintNative": "In the desktop app this path is on this computer. Use the button below to reveal it in the file manager.",
+      "pathHintServer": "This is a path on the server, not on this computer.",
+      "copyPath": "Copy path",
+      "revealFinder": "Show in Finder",
+      "revealExplorer": "Show in Explorer",
+      "revealFolder": "Open data folder",
+      "shadowTitle": "Markdown shadow copy",
+      "shadowHint": "Notes are written to Markdown as they change, grouped by first tag. One-way copy: editing these .md files does not write back; SQLite remains the source of truth. Images point at the existing media/ store and are not duplicated.",
+      "shadowOn": "On",
+      "shadowOff": "Off",
+      "loadFailed": "Could not read the data directory",
+      "saveFailed": "Could not save"
+    },
     "language": {
       "title": "Interface language",
       "system": "Follow browser",

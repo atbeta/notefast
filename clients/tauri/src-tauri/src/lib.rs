@@ -33,6 +33,40 @@ fn ui_theme_pref(app: AppHandle) -> Option<String> {
         .and_then(|dir| ui_theme::read_theme_pref(&dir))
 }
 
+/// 在资源管理器中打开数据目录（设置页「本机数据」）。
+#[tauri::command]
+fn reveal_data_dir(app: AppHandle) -> Result<(), String> {
+    let dir = default_data_dir(&app)?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("无法创建数据目录 {}: {e}", dir.display()))?;
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(dir.as_os_str())
+            .spawn()
+            .map_err(|e| format!("无法打开资源管理器: {e}"))?;
+        return Ok(());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(dir.as_os_str())
+            .spawn()
+            .map_err(|e| format!("无法打开访达: {e}"))?;
+        return Ok(());
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(dir.as_os_str())
+            .spawn()
+            .map_err(|e| format!("无法打开文件管理器: {e}"))?;
+        return Ok(());
+    }
+    #[allow(unreachable_code)]
+    Err("当前平台不支持打开数据目录".into())
+}
+
 /// 启动内嵌 engine 并返回入口信息；已运行则直接返回既有实例（幂等）。
 /// 阻塞握手放线程池执行，避免卡住主线程/UI。
 #[tauri::command]
@@ -178,7 +212,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             engine_start,
             has_pending_open_files,
-            ui_theme_pref
+            ui_theme_pref,
+            reveal_data_dir
         ])
         .setup(move |app| {
             // 启动闪屏：conf 里 visible=false。light/dark 用 ui-preferences；

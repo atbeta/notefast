@@ -94,6 +94,10 @@ struct DocWebView: NSViewRepresentable {
                 Task { @MainActor in
                     message.webView?.window?.zoom(nil)
                 }
+            case "revealDataDir":
+                Task { @MainActor in
+                    AppModel.openDataDir()
+                }
             default:
                 break
             }
