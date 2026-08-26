@@ -37,6 +37,12 @@ export interface InsertDocFromMarkdownOptions {
   rejectEmpty?: boolean
   /** 初始标签（已 normalize） */
   tags?: string[]
+  /**
+   * 是否从 YAML frontmatter 读取 tags。导入便携档默认 true。
+   * MCP / 内置助手创建笔记应 false：模型常在 frontmatter 里自行发明一串标签。
+   * 显式传入的 opts.tags 始终生效。
+   */
+  applyFrontmatterTags?: boolean
   /** 指定文档根 id（导入自家导出档时复用 manifest 中的 docId，实现幂等还原） */
   docId?: string
   /**
@@ -82,7 +88,7 @@ export function insertDocFromMarkdown(
   opts: InsertDocFromMarkdownOptions,
 ): InsertDocFromMarkdownResult {
   // 便携导出的 frontmatter：正文剥离由 parseMarkdownToBlocks 完成；
-  // 若调用方未显式传 tags，则采用 frontmatter 中的 tags（不按 notefast_id 覆盖既有文档）
+  // 导入默认读 frontmatter tags；AI 创建笔记应 applyFrontmatterTags: false。
   const stripped = stripDocFrontmatter(opts.markdown)
   const rawInputs = parseMarkdownToBlocksForSave(stripped.body, opts.notebookId)
   if (opts.rejectEmpty && rawInputs.length === 0) {
@@ -94,9 +100,10 @@ export function insertDocFromMarkdown(
   const docStatus = opts.status === 'inbox' ? 'inbox' : 'note'
   const docId = opts.docId ?? crypto.randomUUID()
   const now = nowTimestamp()
-  const tagsFromFm = stripped.meta?.tags?.length
-    ? normalizeTagList(stripped.meta.tags)
-    : []
+  const tagsFromFm =
+    opts.applyFrontmatterTags === false || !stripped.meta?.tags?.length
+      ? []
+      : normalizeTagList(stripped.meta.tags)
   const resolvedTags = opts.tags?.length ? opts.tags : tagsFromFm
 
   let blockIds: string[] = []

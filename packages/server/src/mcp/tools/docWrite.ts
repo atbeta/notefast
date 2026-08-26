@@ -19,7 +19,7 @@ import {
   readTags,
   rowToBlock,
 } from '@notefast/core'
-import { insertDocFromMarkdown } from '../../services/docImport'
+import { insertDocFromMarkdown, normalizeDocTags } from '../../services/docImport'
 import {
   createDocFromMarkdownFile,
   DocFileImportError,
@@ -286,15 +286,16 @@ export function registerDocWriteTools(ctx: ToolContext): void {
     {
       annotations: { readOnlyHint: false, destructiveHint: false },
       description:
-        '从短 Markdown 字符串创建文档（适合几段以内）。长文/本地文件请用 notefast_stage_markdown + notefast_create_doc_from_file，避免正文经模型转写导致换行丢失。',
+        '从短 Markdown 字符串创建文档（适合几段以内）。长文/本地文件请用 notefast_stage_markdown + notefast_create_doc_from_file，避免正文经模型转写导致换行丢失。用户未指定标签时不要打标签，也不要在正文里写 YAML tags 来绕过。',
       inputSchema: {
         notebook_id: z.string().optional().describe('笔记本 ID，默认使用默认笔记本'),
         title: z.string().describe('文档标题'),
-        markdown: z.string().describe('Markdown 内容（短文）'),
+        markdown: z.string().describe('Markdown 内容（短文）。不要为了打标签而写 YAML frontmatter。'),
         status: z.enum(['note', 'inbox']).optional().describe('inbox=收集箱；缺省 note'),
+        tags: z.array(z.string().min(1).max(64)).max(64).optional().describe('仅当用户明确指定标签时传入；未指定则省略，不要自行归纳'),
       },
     },
-    async ({ notebook_id, title, markdown, status }) => {
+    async ({ notebook_id, title, markdown, status, tags }) => {
       const nid = notebook_id || notebookId
       const nbErr = validateNotebook(db, nid)
       if (nbErr) return nbErr
@@ -304,6 +305,8 @@ export function registerDocWriteTools(ctx: ToolContext): void {
         title,
         markdown,
         status,
+        tags: tags?.length ? normalizeDocTags(tags) : undefined,
+        applyFrontmatterTags: false,
       })
 
       // Hook 触发（fire-and-forget）：先 doc，再批量子块；索引进度走 scheduleDocIndex
@@ -373,7 +376,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
         filename: z.string().optional().describe('原文件名（用于推断标题，如 notes/foo.md）'),
         title: z.string().optional().describe('文档标题；缺省用 filename 或首个 H1'),
         status: z.enum(['note', 'inbox']).optional().describe('inbox=收集箱；缺省 note'),
-        tags: z.array(z.string().min(1).max(64)).max(64).optional().describe('初始标签'),
+        tags: z.array(z.string().min(1).max(64)).max(64).optional().describe('用户明确指定的初始标签。导入带 YAML 的文件时可省略（会读 frontmatter）。为新写内容不要自行发明标签。'),
       },
     },
     async ({ notebook_id, content, upload_id, filename, title, status, tags }) => {
@@ -500,7 +503,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
     'notefast_set_doc_tags',
     {
       annotations: { readOnlyHint: false, destructiveHint: false },
-      description: '设置文档标签（全量替换）',
+      description: '设置文档标签（全量替换）。仅在用户要求打标签或改标签时调用；创建笔记后不要主动归纳标签。',
       inputSchema: {
         doc_id: z.string().describe('文档 ID'),
         tags: z.array(z.string()).describe('标签列表（全量替换）'),

@@ -87,6 +87,8 @@ describe('MCP 只读 scope 的工具层门禁', () => {
       ['notefast_create_doc', { title: 't', markdown: 'm' }],
       ['notefast_stage_markdown', { chunk: 'x' }],
       ['notefast_set_doc_tags', { doc_id: 'x', tags: [] }],
+      ['notefast_pin_view', { name: '工作', tags: ['work'] }],
+      ['notefast_unpin_view', { id: 'x' }],
       ['notefast_delete_doc', { doc_id: 'x' }],
       ['notefast_delete_block', { block_id: 'x' }],
       ['notefast_move_block', { block_id: 'x', new_parent_id: null }],
@@ -111,6 +113,8 @@ describe('MCP 只读 scope 的工具层门禁', () => {
     expect(listDocs.result.isError).toBeFalsy()
     const listTags = await callTool('notefast_list_tags', {})
     expect(listTags.result.isError).toBeFalsy()
+    const listPinned = await callTool('notefast_list_pinned_views', {})
+    expect(listPinned.result.isError).toBeFalsy()
     const listDeleted = await callTool('notefast_list_deleted', {})
     expect(listDeleted.result.isError).toBeFalsy()
     // 新只读工具同样放行（目标不存在走到 handler 的 not_found，证明没被门禁拦）
@@ -147,7 +151,7 @@ describe('MCP 只读 scope 的工具层门禁', () => {
 
     const msg = list.body[0] as { result: { tools: Array<{ name: string; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean } }> } }
     const tools = msg.result.tools
-    expect(tools.length).toBe(32)
+    expect(tools.length).toBe(35)
     // 每个工具都有 readOnlyHint 标注
     for (const t of tools) {
       expect(typeof t.annotations?.readOnlyHint).toBe('boolean')
@@ -165,6 +169,10 @@ describe('MCP 只读 scope 的工具层门禁', () => {
     expect(byName.get('notefast_delete_ref')!.readOnlyHint).toBe(false)
     expect(byName.get('notefast_delete_block')!.readOnlyHint).toBe(false)
     expect(byName.get('notefast_delete_block')!.destructiveHint).toBe(true)
+    expect(byName.get('notefast_list_pinned_views')!.readOnlyHint).toBe(true)
+    expect(byName.get('notefast_pin_view')!.readOnlyHint).toBe(false)
+    expect(byName.get('notefast_unpin_view')!.readOnlyHint).toBe(false)
+    expect(byName.get('notefast_unpin_view')!.destructiveHint).toBe(true)
   })
 })
 

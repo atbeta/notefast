@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from './useAPI'
 import { currentLocale } from '../lib/time'
+import { subscribePinnedViewsChanges } from './useDocEvents'
 
 const MAX_VIEWS = 50
 
@@ -33,7 +34,8 @@ export function sortPinnedViewsByName(views: PinnedView[]): PinnedView[] {
 
 /**
  * 跨组件同步总线：home 页「固定」与 Sidebar 列表各持一个 hook 实例，
- * pin/unpin 后广播一次，让所有实例重新拉取，避免侧边栏停留旧数据。
+ * pin/unpin 后广播一次，让所有实例重新拉取。
+ * MCP / 其它标签页的变更走同一条 /events SSE（subscribePinnedViewsChanges）。
  */
 const bus = new EventTarget()
 const CHANGED = 'changed'
@@ -53,7 +55,11 @@ export function usePinnedViews() {
     refresh()
     const onChanged = () => refresh()
     bus.addEventListener(CHANGED, onChanged)
-    return () => bus.removeEventListener(CHANGED, onChanged)
+    const unsubSse = subscribePinnedViewsChanges(onChanged)
+    return () => {
+      bus.removeEventListener(CHANGED, onChanged)
+      unsubSse()
+    }
   }, [refresh])
 
   const pin = useCallback(async (name: string, query: string) => {

@@ -1,5 +1,5 @@
 /**
- * Chat 工具层（定义 + 写工具执行）——从 ai/chat.ts 拆出（纯搬家，无行为改动）。
+ * Chat 工具层（定义 + 写工具执行）——从 ai/chat.ts 拆出。
  *
  * 定义：暴露给 LLM 的 tool schema（描述随 lang 本地化）；检索工具的执行
  * （executeToolCall）仍留在 chat.ts——它依赖 chat 的检索上下文。
@@ -14,7 +14,13 @@ import type { ToolResult } from './chat'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { getDb } from '../db'
 import { getBlockById, getBlocksByIds, getDocById, recordDocSnapshot, updateBlock, fetchDocBlocks } from '../store/blocks'
-import { insertDocFromMarkdown, appendMarkdownToDoc } from '../services/docImport'
+import { insertDocFromMarkdown, appendMarkdownToDoc, normalizeDocTags } from '../services/docImport'
+import {
+  createPinnedView,
+  deletePinnedView,
+  PinnedViewError,
+  pinViewInputFromUnknown,
+} from '../services/pinnedViews'
 import { fireAfterCreate, fireAfterCreateMany, fireAfterUpdate, fireDocAfterCreate } from '../services/hooks'
 import { scheduleSyncNow } from '../sync/protocolManager'
 import { scheduleDocIndex } from './indexJobs'
@@ -101,14 +107,15 @@ function getWriteToolDefinitions(lang: AiLang): ToolDefinition[] {
       function: {
         name: 'notefast_create_note',
         description: en
-          ? 'Create a new note in the knowledge base. The title must be concise (5-20 characters), the body in Markdown. Call when the user says "note this down", "save this", or "create a note".'
-          : '在知识库中创建一篇新笔记。标题必须简洁（5-20字），内容用 Markdown。当用户要求"记下来""保存这段""新建笔记"时调用。',
+          ? 'Create a new note in the knowledge base. The title must be concise (5-20 characters), the body in Markdown. Call when the user says "note this down", "save this", or "create a note". Do not add tags unless the user named them.'
+          : '在知识库中创建一篇新笔记。标题必须简洁（5-20字），内容用 Markdown。当用户要求"记下来""保存这段""新建笔记"时调用。用户未指定标签时不要打标签。',
         parameters: {
           type: 'object',
           properties: {
             title: { type: 'string', description: en ? 'Note title, 5-20 characters' : '笔记标题，5-20字' },
-            markdown: { type: 'string', description: en ? 'Note body, Markdown format' : '笔记正文，Markdown 格式' },
+            markdown: { type: 'string', description: en ? 'Note body, Markdown. Do not write YAML tags just to label the note.' : '笔记正文，Markdown 格式。不要为了打标签而写 YAML frontmatter。' },
             status: { type: 'string', enum: ['note', 'inbox'], description: en ? 'note=notes, inbox=inbox; default note' : 'note=正式笔记，inbox=收集箱；默认 note' },
+            tags: { type: 'array', items: { type: 'string' }, description: en ? 'Only if the user named tags; omit otherwise. Do not invent tags.' : '仅当用户明确指定标签时传入；未指定则省略，不要自行归纳' },
           },
           required: ['title', 'markdown'],
         },
@@ -152,9 +159,72 @@ function getWriteToolDefinitions(lang: AiLang): ToolDefinition[] {
   ]
 }
 
+function getPinnedViewToolDefinitions(lang: AiLang): ToolDefinition[] {
+  const en = lang === 'en'
+  return [
+    {
+      type: 'function',
+      function: {
+        name: 'notefast_list_pinned_views',
+        description: en
+          ? 'List sidebar pinned views (name + filter query). Call before creating a pin to avoid duplicates.'
+          : '列出侧栏固定视图（名称 + 筛选 query）。新建固定视图前先看是否已有相同筛选。',
+        parameters: { type: 'object', properties: {} },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'notefast_pin_view',
+        description: en
+          ? 'Pin a filter to the sidebar as a pinned view. Call when the user says "pin this filter" or "add a work-tag view". Do not invent filters the user did not mention.'
+          : '把一组筛选固定到侧栏「固定视图」。用户说「固定这个筛选」「加一个 work 标签的视图」时调用。不要发明用户没提过的筛选。',
+        parameters: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: en ? 'Sidebar label, e.g. "Work" or "01-工作"' : '侧栏显示名，如「工作」或「01-工作」' },
+            query: { type: 'string', description: en ? 'Raw filter string such as tags=work; wins over structured fields if set' : '筛选串，如 tags=work；与结构化字段二选一，query 优先' },
+            tags: { type: 'array', items: { type: 'string' }, description: en ? 'Filter by these tags (compiled to tags=a,b)' : '按这些标签筛选（编译为 tags=a,b）' },
+            tag_match: { type: 'string', enum: ['all', 'any'], description: en ? 'all=must have every tag (default); any=any of the tags' : '多标签：all=同时包含（默认），any=包含任一' },
+            untagged: { type: 'boolean', description: en ? 'Only documents with no tags' : '仅未打标签的文档' },
+            stale_within: { type: 'string', enum: ['30d', '90d'] },
+            updated_within: { type: 'string', enum: ['24h', '7d', '30d'] },
+            created_within: { type: 'string', enum: ['24h', '7d', '30d'] },
+            ai_exclude: { type: 'boolean', description: en ? 'Only documents hidden from AI' : '仅对 AI 隐藏的文档' },
+            status: { type: 'string', enum: ['inbox', 'archived', 'all'] },
+          },
+          required: ['name'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'notefast_unpin_view',
+        description: en
+          ? 'Remove a pinned view. Get id from notefast_list_pinned_views.'
+          : '取消固定视图。id 来自 notefast_list_pinned_views。',
+        parameters: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: en ? 'Pinned view ID' : '固定视图 ID' },
+          },
+          required: ['id'],
+        },
+      },
+    },
+  ]
+}
+
 export function getAllToolDefinitions(lang: AiLang): ToolDefinition[] {
   const en = lang === 'en'
-  const tools: ToolDefinition[] = [getSearchToolDefinition(lang), getListDocsToolDefinition(lang), getReadDocToolDefinition(lang), ...getWriteToolDefinitions(lang)]
+  const tools: ToolDefinition[] = [
+    getSearchToolDefinition(lang),
+    getListDocsToolDefinition(lang),
+    getReadDocToolDefinition(lang),
+    ...getWriteToolDefinitions(lang),
+    ...getPinnedViewToolDefinitions(lang),
+  ]
   if (hasRuntime() && getRuntime().webSearchKey()) {
     tools.push({
       type: 'function',
@@ -182,7 +252,13 @@ export function getAllToolDefinitions(lang: AiLang): ToolDefinition[] {
  * 不再返回「写入提案」等用户确认——文档有 block_revisions / doc_snapshots 历史，
  * 写错可随时回退（POST /blocks/:id/revisions/:rev/restore），确认卡片流程已废弃。
  */
-export const WRITE_TOOLS = new Set(['notefast_create_note', 'notefast_append_to_doc', 'notefast_update_block'])
+export const WRITE_TOOLS = new Set([
+  'notefast_create_note',
+  'notefast_append_to_doc',
+  'notefast_update_block',
+  'notefast_pin_view',
+  'notefast_unpin_view',
+])
 
 /** 写工具上下文（agent loop 与 write-confirm 兼容端点共用） */
 export interface WriteToolContext {
@@ -203,6 +279,7 @@ export async function executeWriteTool(name: string, args: Record<string, unknow
       return { content: JSON.stringify({ error: 'title 和 markdown 不能为空' }), resultCount: 0 }
     }
     const status = args.status === 'inbox' ? 'inbox' : 'note'
+    const rawTags = Array.isArray(args.tags) ? args.tags.filter((t): t is string => typeof t === 'string') : []
     const db = getDb()
     const notebookId = ctx.notebookId || guessNotebookId(db)
     try {
@@ -211,6 +288,8 @@ export async function executeWriteTool(name: string, args: Record<string, unknow
         title,
         markdown,
         status,
+        tags: rawTags.length ? normalizeDocTags(rawTags) : undefined,
+        applyFrontmatterTags: false,
       })
       // 与 MCP notefast_create_doc 对齐：索引作业 + afterCreate hooks（doc 先、子块批量），
       // 否则聊天创建的笔记跳过自动索引与 doc 变更广播
@@ -354,6 +433,31 @@ export async function executeWriteTool(name: string, args: Record<string, unknow
       }),
       resultCount: 1,
     }
+  }
+
+  if (name === 'notefast_pin_view') {
+    try {
+      const { view, created } = createPinnedView(pinViewInputFromUnknown(args))
+      return {
+        content: JSON.stringify({ success: true, ...view, created }),
+        resultCount: 1,
+      }
+    } catch (e) {
+      const msg = e instanceof PinnedViewError ? e.message : (e instanceof Error ? e.message : String(e))
+      return { content: JSON.stringify({ error: msg }), resultCount: 0 }
+    }
+  }
+
+  if (name === 'notefast_unpin_view') {
+    const id = typeof args.id === 'string' ? args.id.trim() : ''
+    if (!id) {
+      return { content: JSON.stringify({ error: 'id 不能为空' }), resultCount: 0 }
+    }
+    const ok = deletePinnedView(id)
+    if (!ok) {
+      return { content: JSON.stringify({ error: `固定视图 ${id} 不存在` }), resultCount: 0 }
+    }
+    return { content: JSON.stringify({ success: true, deleted: true, id }), resultCount: 1 }
   }
 
   return { content: JSON.stringify({ error: `未知写工具 ${name}` }), resultCount: 0 }

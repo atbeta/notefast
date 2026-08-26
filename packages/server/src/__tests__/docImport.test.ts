@@ -321,3 +321,45 @@ describe('POST /import/markdown 打磨（notebook_id 可选 + tags normalize）'
     expect(readTags(getBlockById(getDb(), docId2)!)).toEqual(['json-tag'])
   })
 })
+
+describe('insertDocFromMarkdown 的 frontmatter tags', () => {
+  const yamlMarkdown = [
+    '---',
+    'tags:',
+    '  - invented',
+    '  - extra',
+    '---',
+    '',
+    '一段正文',
+  ].join('\n')
+
+  test('导入默认读取 YAML tags', () => {
+    const { docId } = insertDocFromMarkdown(getDb(), {
+      notebookId,
+      title: '导入带标',
+      markdown: yamlMarkdown,
+    })
+    expect(readTags(getBlockById(getDb(), docId)!)).toEqual(['invented', 'extra'])
+  })
+
+  test('applyFrontmatterTags: false 忽略 YAML tags', () => {
+    const { docId } = insertDocFromMarkdown(getDb(), {
+      notebookId,
+      title: 'AI 创建',
+      markdown: yamlMarkdown,
+      applyFrontmatterTags: false,
+    })
+    expect(readTags(getBlockById(getDb(), docId)!)).toEqual([])
+  })
+
+  test('显式 tags 覆盖 YAML，即使关闭 frontmatter', () => {
+    const { docId } = insertDocFromMarkdown(getDb(), {
+      notebookId,
+      title: '用户指定',
+      markdown: yamlMarkdown,
+      tags: ['work'],
+      applyFrontmatterTags: false,
+    })
+    expect(readTags(getBlockById(getDb(), docId)!)).toEqual(['work'])
+  })
+})

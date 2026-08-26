@@ -844,4 +844,46 @@ describe('executeWriteTool — AI 写入在文档历史中可识别（actor=ai�
     ).get(docId) as { actor: string } | undefined
     expect(snap?.actor).toBe('ai')
   })
+
+  test('create_note：YAML tags 不入库；显式 tags 才打标', async () => {
+    const { executeWriteTool } = await import('../ai/chat')
+    const { getDb } = await import('../db')
+    const { getBlockById } = await import('../store/blocks')
+    const { readTags } = await import('@notefast/core')
+    const yaml = '---\ntags:\n  - invented\n---\n\n正文'
+
+    const noTags = await executeWriteTool(
+      'notefast_create_note',
+      { title: '无指定', markdown: yaml },
+      {},
+    )
+    expect(noTags.resultCount).toBe(1)
+    const noId = (JSON.parse(noTags.content) as { doc_id: string }).doc_id
+    expect(readTags(getBlockById(getDb(), noId)!)).toEqual([])
+
+    const withTags = await executeWriteTool(
+      'notefast_create_note',
+      { title: '指定', markdown: yaml, tags: ['work'] },
+      {},
+    )
+    expect(withTags.resultCount).toBe(1)
+    const withId = (JSON.parse(withTags.content) as { doc_id: string }).doc_id
+    expect(readTags(getBlockById(getDb(), withId)!)).toEqual(['work'])
+  })
+
+  test('pin_view / unpin_view', async () => {
+    const { executeWriteTool } = await import('../ai/chat')
+    const pin = await executeWriteTool('notefast_pin_view', { name: '工作', tags: ['work'] }, {})
+    expect(pin.resultCount).toBe(1)
+    const parsed = JSON.parse(pin.content) as { id: string; query: string; created: boolean }
+    expect(parsed.query).toBe('tags=work')
+    expect(parsed.created).toBe(true)
+
+    const dup = await executeWriteTool('notefast_pin_view', { name: '工作2', query: 'tags=work' }, {})
+    expect(dup.resultCount).toBe(1)
+    expect((JSON.parse(dup.content) as { created: boolean }).created).toBe(false)
+
+    const un = await executeWriteTool('notefast_unpin_view', { id: parsed.id }, {})
+    expect(un.resultCount).toBe(1)
+  })
 })

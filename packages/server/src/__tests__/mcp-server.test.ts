@@ -111,7 +111,7 @@ describe('createSession', () => {
     const msg = list.body[0] as Record<string, unknown>
     expect(msg.result).toBeDefined()
     const tools = (msg.result as Record<string, unknown>).tools as { name: string }[]
-    expect(tools.length).toBe(32)
+    expect(tools.length).toBe(35)
 
     const toolNames = tools.map((t) => t.name)
     expect(toolNames).toContain('notefast_search')
@@ -141,6 +141,9 @@ describe('createSession', () => {
     expect(toolNames).toContain('notefast_list_revisions')
     expect(toolNames).toContain('notefast_create_ref')
     expect(toolNames).toContain('notefast_delete_ref')
+    expect(toolNames).toContain('notefast_list_pinned_views')
+    expect(toolNames).toContain('notefast_pin_view')
+    expect(toolNames).toContain('notefast_unpin_view')
     // 三态审核工具已随「高置信直接建链」模型下线
     expect(toolNames).not.toContain('notefast_autolink_suggestions')
     expect(toolNames).not.toContain('notefast_autolink_apply')
@@ -878,5 +881,97 @@ describe('notefast_delete_doc（软删除，回收站可恢复）', () => {
     const { getDb } = await import('../db')
     const row = getDb().query('SELECT doc_id FROM shares WHERE doc_id = ?').get(docId)
     expect(row).toBeNull()
+  })
+})
+
+describe('MCP create_doc 不从 YAML 发明标签', () => {
+  async function callTool(name: string, args: Record<string, unknown>) {
+    const { getDb } = await import('../db')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { transport } = await createSession(nb.id)
+    const init = await mcpRequest(transport, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    await mcpRequest(transport, 'notifications/initialized', undefined, undefined, init.sessionId)
+    const call = await mcpRequest(transport, 'tools/call', { name, arguments: args }, 2, init.sessionId)
+    await transport.close()
+    const msg = call.body[0] as Record<string, unknown>
+    const result = msg.result as { isError?: boolean; content: Array<{ text: string }> }
+    return { result, payload: JSON.parse(result.content[0]!.text) as Record<string, unknown> }
+  }
+
+  const yamlMd = '---\ntags:\n  - invented\n  - extra\n---\n\n正文'
+
+  test('markdown 含 YAML tags、未传 tags → 入库无标签', async () => {
+    const { result, payload } = await callTool('notefast_create_doc', {
+      title: '无指定标签',
+      markdown: yamlMd,
+    })
+    expect(result.isError).toBeFalsy()
+    const { getDb } = await import('../db')
+    const { getBlockById } = await import('../store/blocks')
+    const { readTags } = await import('@notefast/core')
+    expect(readTags(getBlockById(getDb(), payload.doc_id as string)!)).toEqual([])
+  })
+
+  test('显式 tags 参数生效', async () => {
+    const { result, payload } = await callTool('notefast_create_doc', {
+      title: '指定标签',
+      markdown: yamlMd,
+      tags: ['work'],
+    })
+    expect(result.isError).toBeFalsy()
+    const { getDb } = await import('../db')
+    const { getBlockById } = await import('../store/blocks')
+    const { readTags } = await import('@notefast/core')
+    expect(readTags(getBlockById(getDb(), payload.doc_id as string)!)).toEqual(['work'])
+  })
+})
+
+describe('MCP 固定视图', () => {
+  async function callTool(name: string, args: Record<string, unknown>) {
+    const { getDb } = await import('../db')
+    const nb = getDb().query('SELECT id FROM notebooks LIMIT 1').get() as { id: string }
+    const { transport } = await createSession(nb.id)
+    const init = await mcpRequest(transport, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' },
+    }, 1)
+    await mcpRequest(transport, 'notifications/initialized', undefined, undefined, init.sessionId)
+    const call = await mcpRequest(transport, 'tools/call', { name, arguments: args }, 2, init.sessionId)
+    await transport.close()
+    const msg = call.body[0] as Record<string, unknown>
+    const result = msg.result as { isError?: boolean; content: Array<{ text: string }> }
+    return { result, payload: JSON.parse(result.content[0]!.text) as Record<string, unknown> }
+  }
+
+  test('pin → list → unpin', async () => {
+    const pin = await callTool('notefast_pin_view', { name: '工作', tags: ['work'] })
+    expect(pin.result.isError).toBeFalsy()
+    expect(pin.payload.query).toBe('tags=work')
+    expect(pin.payload.created).toBe(true)
+    const id = pin.payload.id as string
+
+    const listed = await callTool('notefast_list_pinned_views', {})
+    expect(listed.result.isError).toBeFalsy()
+    const views = listed.payload.views as Array<{ id: string; query: string }>
+    expect(views.some((v) => v.id === id && v.query === 'tags=work')).toBe(true)
+
+    const un = await callTool('notefast_unpin_view', { id })
+    expect(un.result.isError).toBeFalsy()
+    expect(un.payload.deleted).toBe(true)
+
+    const missing = await callTool('notefast_unpin_view', { id: 'no-such-view' })
+    expect(missing.result.isError).toBe(true)
+    expect((missing.payload.error as { code: string }).code).toBe('not_found')
+  })
+
+  test('无筛选 → invalid_params', async () => {
+    const { result, payload } = await callTool('notefast_pin_view', { name: '空' })
+    expect(result.isError).toBe(true)
+    expect((payload.error as { code: string }).code).toBe('invalid_params')
   })
 })

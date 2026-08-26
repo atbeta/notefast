@@ -1,9 +1,10 @@
 /**
- * GET /api/v1/events — 文档变更 SSE 订阅端点
+ * GET /api/v1/events — 应用变更 SSE 订阅端点
  *
  * 事件：
- * - event: doc  → data: { doc_id, kind: created|updated|deleted, at }
- * - event: ping → 心跳（25s），防反向代理空闲断连
+ * - event: doc           → data: { doc_id, kind: created|updated|deleted, at }
+ * - event: pinned_views  → data: { at }（侧栏固定视图增删改，客户端 refetch 列表）
+ * - event: ping          → 心跳（25s），防反向代理空闲断连
  *
  * 鉴权走全局 authMiddleware（Basic / Bearer / 会话 cookie 均可）。
  * Web 端用 fetch 流式读取（EventSource 无法带 Authorization 头）。
@@ -12,6 +13,7 @@
 import { Hono } from 'hono'
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming'
 import { subscribeDocChanges } from '../services/docEvents'
+import { subscribePinnedViewsChanges } from '../services/pinnedViews'
 
 const HEARTBEAT_MS = 25_000
 
@@ -32,8 +34,14 @@ events.get('/', (c) => {
   return streamSSE(c, async (sse) => {
     activeStreams.add(sse)
     try {
-      const unsubscribe = subscribeDocChanges((ev) => {
+      const unsubscribeDoc = subscribeDocChanges((ev) => {
         sse.writeSSE({ event: 'doc', data: JSON.stringify(ev) }).catch(() => {})
+      })
+      const unsubscribePinned = subscribePinnedViewsChanges(() => {
+        sse.writeSSE({
+          event: 'pinned_views',
+          data: JSON.stringify({ at: new Date().toISOString() }),
+        }).catch(() => {})
       })
       const heartbeat = setInterval(() => {
         sse.writeSSE({ event: 'ping', data: '{}' }).catch(() => {})
@@ -43,7 +51,8 @@ events.get('/', (c) => {
       await new Promise<void>((resolve) => {
         sse.onAbort(() => {
           clearInterval(heartbeat)
-          unsubscribe()
+          unsubscribeDoc()
+          unsubscribePinned()
           resolve()
         })
       })

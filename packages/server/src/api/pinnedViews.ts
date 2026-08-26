@@ -1,7 +1,19 @@
+/**
+ * REST：固定视图（侧栏「固定视图」）
+ *
+ * 业务在 services/pinnedViews.ts，与 MCP 共用。
+ */
+
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { getDb } from '../db'
+import {
+  createPinnedView,
+  deletePinnedView,
+  listPinnedViews,
+  PinnedViewError,
+  updatePinnedView,
+} from '../services/pinnedViews'
 
 const pinnedViews = new Hono()
 
@@ -15,42 +27,42 @@ const renameSchema = z.object({
   query: z.string().min(1).max(500).optional(),
 })
 
+function errorStatus(code: PinnedViewError['code']): 400 | 404 {
+  return code === 'not_found' ? 404 : 400
+}
+
 pinnedViews.get('/', (c) => {
-  const db = getDb()
-  const rows = db.query('SELECT id, name, query, created_at FROM pinned_views ORDER BY created_at DESC').all() as Array<{
-    id: string; name: string; query: string; created_at: string
-  }>
-  return c.json(rows)
+  return c.json(listPinnedViews())
 })
 
 pinnedViews.post('/', zValidator('json', pinSchema), (c) => {
-  const db = getDb()
   const { name, query } = c.req.valid('json')
-
-  const existing = db.query('SELECT id FROM pinned_views WHERE query = ?').get(query)
-  if (existing) return c.json({ id: (existing as { id: string }).id }, 200)
-
-  const id = crypto.randomUUID()
-  db.query('INSERT INTO pinned_views (id, name, query) VALUES (?, ?, ?)').run(id, name, query)
-  return c.json({ id, name, query }, 201)
+  try {
+    const { view, created } = createPinnedView({ name, query })
+    return c.json({ id: view.id, name: view.name, query: view.query }, created ? 201 : 200)
+  } catch (e) {
+    if (e instanceof PinnedViewError) {
+      return c.json({ error: e.code, message: e.message }, errorStatus(e.code))
+    }
+    throw e
+  }
 })
 
 pinnedViews.delete('/:id', (c) => {
-  const db = getDb()
-  const id = c.req.param('id')
-  db.query('DELETE FROM pinned_views WHERE id = ?').run(id)
+  deletePinnedView(c.req.param('id'))
   return c.json({ deleted: true })
 })
 
 pinnedViews.patch('/:id', zValidator('json', renameSchema), (c) => {
-  const db = getDb()
-  const id = c.req.param('id')
-  const row = db.query('SELECT id FROM pinned_views WHERE id = ?').get(id) as { id: string } | undefined
-  if (!row) return c.json({ error: 'not_found' }, 404)
-  const { name, query } = c.req.valid('json')
-  if (name !== undefined) db.query('UPDATE pinned_views SET name = ? WHERE id = ?').run(name, id)
-  if (query !== undefined) db.query('UPDATE pinned_views SET query = ? WHERE id = ?').run(query, id)
-  return c.json({ id, updated: true })
+  try {
+    const view = updatePinnedView(c.req.param('id'), c.req.valid('json'))
+    return c.json({ id: view.id, updated: true })
+  } catch (e) {
+    if (e instanceof PinnedViewError) {
+      return c.json({ error: e.code, message: e.message }, errorStatus(e.code))
+    }
+    throw e
+  }
 })
 
 export default pinnedViews

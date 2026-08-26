@@ -657,7 +657,13 @@ ai.post('/chat', zValidator('json', chatSchema), async (c) => {
 // 本端点保留兼容旧客户端 / 外部调用，语义一致：校验后走同一写路径。
 
 const writeConfirmSchema = z.object({
-  tool: z.enum(['notefast_create_note', 'notefast_append_to_doc', 'notefast_update_block']),
+  tool: z.enum([
+    'notefast_create_note',
+    'notefast_append_to_doc',
+    'notefast_update_block',
+    'notefast_pin_view',
+    'notefast_unpin_view',
+  ]),
   args: z.record(z.string(), z.unknown()),
 })
 

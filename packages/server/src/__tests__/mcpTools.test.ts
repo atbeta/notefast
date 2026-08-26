@@ -35,7 +35,15 @@ describe('MCP 工具清单（GET /api/v1/mcp/tools）', () => {
     const tools = await fetchTools()
     expect(tools.length).toBeGreaterThan(10)
     expect(tools.every((t) => t.name.startsWith('notefast_') && typeof t.description === 'string')).toBe(true)
-    for (const name of ['notefast_search', 'notefast_get_doc', 'notefast_create_doc', 'notefast_chat', 'notefast_semantic_search']) {
+    for (const name of [
+      'notefast_search',
+      'notefast_get_doc',
+      'notefast_create_doc',
+      'notefast_chat',
+      'notefast_semantic_search',
+      'notefast_pin_view',
+      'notefast_list_pinned_views',
+    ]) {
       expect(tools.some((t) => t.name === name)).toBe(true)
     }
   })

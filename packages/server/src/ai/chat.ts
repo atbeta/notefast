@@ -31,6 +31,7 @@ import {
   listDocRows,
 } from '../store/blocks'
 import { hybridSearch, type HybridSearchReport } from './hybridSearch'
+import { listPinnedViews } from '../services/pinnedViews'
 import { buildChatPrompt } from './prompt'
 import type { AiLang } from './locale'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
@@ -102,7 +103,7 @@ const DEFAULT_MAX_TOOL_ROUNDS = 3
 
 /**
  * 执行 LLM 请求的工具调用。
- * 读工具：search_more / list_docs / read_doc / web_search；写工具走 executeWriteTool。
+ * 读工具：search_more / list_docs / read_doc / list_pinned_views / web_search；写工具走 executeWriteTool。
  */
 async function executeToolCall(
   name: string,
@@ -273,6 +274,11 @@ async function executeToolCall(
       }),
       resultCount: 1,
     }
+  }
+
+  if (name === 'notefast_list_pinned_views') {
+    const views = listPinnedViews()
+    return { content: JSON.stringify({ views }), resultCount: views.length }
   }
 
   if (name === 'notefast_web_search') {

@@ -10,8 +10,8 @@
  *                list_deleted / create_ref / delete_ref
  * - aiChat.ts    AI：semantic_search / suggest_title / chat / get_config
  * - autoLink.ts  AutoLink：run（高置信直接建链，无审核队列）
- * - share.ts     分享：share_doc / get_share / unshare_doc（语义对齐 REST，
- *                ai_exclude 文档一律 forbidden，无 confirm 通道）
+ * - share.ts     分享：share_doc / get_share / unshare_doc
+ * - pinnedViews.ts 固定视图：list_pinned_views / pin_view / unpin_view
  *
  * 调用方（mcp/server.ts）只依赖本文件的 registerMcpTools，签名不变。
  */
@@ -25,6 +25,7 @@ import { registerAiChatTools } from './tools/aiChat'
 import { registerAutoLinkTools } from './tools/autoLink'
 import { registerEntityTools } from './tools/entityTools'
 import { registerShareTools } from './tools/share'
+import { registerPinnedViewTools } from './tools/pinnedViews'
 
 export function registerMcpTools(server: McpServer, notebookId: string, getScopes: () => string[] = () => ['admin']): void {
   // 清单只填一次：并发 session 不得 reset 全局数组，否则 GET /mcp/tools 会被清空
@@ -43,4 +44,5 @@ export function registerMcpTools(server: McpServer, notebookId: string, getScope
   registerAutoLinkTools(ctx)
   registerEntityTools(ctx)
   registerShareTools(ctx)
+  registerPinnedViewTools(ctx)
 }
