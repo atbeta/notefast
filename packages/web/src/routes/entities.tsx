@@ -72,8 +72,8 @@ export default function EntitiesPage() {
   const entities = error ? [] : (data?.entities ?? [])
   const searching = query.trim() !== debouncedQuery
 
-  // 词典建议候选：由加载时的一次 POST auto-merge 响应携带（合并端点合一，
-  // 服务端不再为此重复全表近义计算；GET /duplicates 仅保留 API 兼容）
+  // 词典建议候选：加载时由 POST auto-merge 响应携带首批；合并后
+  // 经 GET /duplicates（无副作用）续批，不用离开页面重进
   const [suggests, setSuggests] = useState<SuggestGroup[]>([])
 
   // 拼写变体自动合并（一次性，页面加载时执行；有副作用故为 POST 而非 GET）
@@ -113,12 +113,18 @@ export default function EntitiesPage() {
     if (merged > 0) {
       toast.success({ title: t('entities.merged', { n: merged }) })
       refetch()
-      // 建议由加载时 POST auto-merge 响应携带（无 GET 可重拉）：本地移除已并掉的组
+      // 合并后直接推下一批建议（GET /duplicates 无副作用），不用离开页面重进；
+      // 拉取失败回落本地过滤（至少把已并掉的组摘掉）
       const done = new Set<string>()
       for (const g of groups) {
         for (const e of g.entities) done.add(e.id)
       }
-      setSuggests((prev) => prev.filter((g) => !g.entities.some((e) => done.has(e.id))))
+      api
+        .get<{ suggest_groups?: SuggestGroup[] }>('/entities/duplicates')
+        .then((r) => setSuggests(r.suggest_groups ?? []))
+        .catch(() => {
+          setSuggests((prev) => prev.filter((g) => !g.entities.some((e) => done.has(e.id))))
+        })
     } else {
       toast.error({ title: t('entities.mergeFailed') })
     }
