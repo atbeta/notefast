@@ -13,9 +13,10 @@
  */
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { readTags } from '@notefast/core'
 import { isSyncConfigured, syncPush } from '../sync/manager'
-import { sanitizeFilename } from '../sync/archive'
+import { archiveRelPath } from '../sync/archive'
 import { getDb } from '../db'
 import { listDocRows } from '../store/blocks'
 import { portableDocMarkdown } from './portableMarkdown'
@@ -52,7 +53,7 @@ export interface LegacyExportResult {
 }
 
 /**
- * AUTO_EXPORT_DIR 兜底导出：全部文档各写一个 `<slug>.md`，返回逐文档结果。
+ * AUTO_EXPORT_DIR 兜底导出：与归档同构，各写 `<tag|untagged>/<slug>--<id>.md`。
  * 单篇失败不中断，记 error 条目（exported 计数含失败篇，与旧端点语义一致）。
  */
 export function legacyExportMarkdown(dir: string): LegacyExportResult {
@@ -63,10 +64,11 @@ export function legacyExportMarkdown(dir: string): LegacyExportResult {
   for (const doc of docs) {
     try {
       const markdown = portableDocMarkdown(doc)
-      const slug = sanitizeFilename(doc.content || 'untitled', 120)
-      const filename = `${slug}.md`
-      writeFileSync(join(dir, filename), markdown, 'utf-8')
-      results.push({ id: doc.id, title: doc.content, file: filename })
+      const rel = archiveRelPath(doc.content || 'untitled', doc.id, readTags(doc))
+      const dest = join(dir, rel)
+      mkdirSync(dirname(dest), { recursive: true })
+      writeFileSync(dest, markdown, 'utf-8')
+      results.push({ id: doc.id, title: doc.content, file: rel })
     } catch (e) {
       results.push({ id: doc.id, title: doc.content, file: '', error: String(e) })
     }

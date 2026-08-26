@@ -93,6 +93,15 @@ async function createDoc(title: string, markdown: string): Promise<string> {
   return body.id
 }
 
+async function setDocTags(id: string, tags: string[]): Promise<void> {
+  const res = await app.fetch(new Request(`http://localhost/api/v1/docs/${id}/tags`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tags }),
+  }))
+  expect(res.status).toBe(200)
+}
+
 describe('parseZip', () => {
   test('解析 buildZipStore 产出的 STORE zip', () => {
     const buf = buildZipStore([
@@ -157,14 +166,14 @@ describe('buildFullArchiveExport', () => {
     const entries = parseZip(file.body)
     const names = entries.map((e) => e.name)
     expect(names).toContain('notefast-archive.manifest.json')
-    expect(names.some((n) => n.includes(docA.replace(/-/g, '').slice(0, 12)))).toBe(true)
-    expect(names.some((n) => n.includes(docB.replace(/-/g, '').slice(0, 12)))).toBe(true)
+    expect(names.some((n) => n.startsWith('untagged/') && n.includes(docA.replace(/-/g, '').slice(0, 12)))).toBe(true)
+    expect(names.some((n) => n.startsWith('untagged/') && n.includes(docB.replace(/-/g, '').slice(0, 12)))).toBe(true)
     expect(names).toContain(`media/${meta.id}.png`)
 
-    // md 内容：asset: 已改写为 media/ 相对路径，不再残留 asset:
+    // md 内容：asset: 已改写为 ../media/ 相对路径，不再残留 asset:
     const docAEntry = entries.find((e) => e.name.endsWith('.md') && e.name.includes(docA.replace(/-/g, '').slice(0, 12)))!
     const mdText = new TextDecoder().decode(docAEntry.data)
-    expect(mdText).toContain(`media/${meta.id}.png`)
+    expect(mdText).toContain(`../media/${meta.id}.png`)
     expect(mdText).not.toContain('asset:')
 
     // manifest 结构与文档一一对应
@@ -173,6 +182,25 @@ describe('buildFullArchiveExport', () => {
     expect(manifest.kind).toBe('markdown-archive')
     expect(manifest.files.length).toBe(2)
     expect(manifest.media).toContain(`media/${meta.id}.png`)
+  })
+
+  test('有标签进首标签目录，无标签进 untagged/', async () => {
+    const tagged = await createDoc('工作笔记', '正文')
+    const untagged = await createDoc('未分类', '正文')
+    await setDocTags(tagged, ['work', 'ai'])
+
+    const entries = parseZip(buildFullArchiveExport().body)
+    const names = entries.filter((e) => e.name.endsWith('.md')).map((e) => e.name)
+    const shortTagged = tagged.replace(/-/g, '').slice(0, 12)
+    const shortUntagged = untagged.replace(/-/g, '').slice(0, 12)
+    expect(names.some((n) => n.startsWith(`work/`) && n.includes(shortTagged))).toBe(true)
+    expect(names.some((n) => n.startsWith('untagged/') && n.includes(shortUntagged))).toBe(true)
+    expect(names.some((n) => n.startsWith('ai/'))).toBe(false)
+
+    const manifestEntry = entries.find((e) => e.name === 'notefast-archive.manifest.json')!
+    const manifest = JSON.parse(new TextDecoder().decode(manifestEntry.data)) as { files: Array<{ docId: string; filename: string }> }
+    expect(manifest.files.find((f) => f.docId === tagged)?.filename.startsWith('work/')).toBe(true)
+    expect(manifest.files.find((f) => f.docId === untagged)?.filename.startsWith('untagged/')).toBe(true)
   })
 
   test('GET /api/v1/export/archive 返回 zip', async () => {

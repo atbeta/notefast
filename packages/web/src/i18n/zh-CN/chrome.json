@@ -11,7 +11,8 @@
   "tagEditor": {
     "addTag": "加标签",
     "removeTag": "移除标签 {{tag}}",
-    "pickTag": "选择或创建标签"
+    "pickTag": "选择或创建标签",
+    "archiveFolderHint": "Markdown 归档以此标签为目录"
   },
   "tagPicker": {
     "title": "选择标签",

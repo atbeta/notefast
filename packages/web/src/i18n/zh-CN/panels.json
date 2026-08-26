@@ -60,7 +60,7 @@
     "saveFailed": "保存失败",
     "probeFailed": "探测远端失败",
     "title": "Markdown 归档",
-    "helpTip": "把文档连同引用的图片导出为 Markdown 副本（.md + media/），便于迁移与便携阅读。仅手动触发。frontmatter 会带上标签与内部 ID（tags / notefast_id）。",
+    "helpTip": "把文档连同引用的图片导出为 Markdown 副本（.md + media/），便于迁移与便携阅读。仅手动触发。frontmatter 会带上标签与内部 ID（tags / notefast_id）。文件按首标签分一层目录，无标签进 untagged/。",
     "enabledWith": "已启用 · {{adapter}}",
     "adapterLocalfs": "本地目录",
     "adapterS3": "S3 连接",

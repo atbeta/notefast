@@ -8,6 +8,7 @@ import { currentLocale } from '../lib/time'
 import PageHeader from '../components/PageHeader'
 import SubNavTabs from '../components/SubNavTabs'
 import TagPickerPopover from '../components/TagPickerPopover'
+import { ArchiveFolderCue } from '../components/TagEditor'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
 import { Button, Textarea, Tooltip, useToast } from '../components/ui'
 import { classifyImportDrop, missingLocalImagesForImport } from '../lib/importDrop'
@@ -300,11 +301,12 @@ export default function NewDocPage() {
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <Tag className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" strokeWidth={1.75} />
-              {tags.map((tag) => (
+              {tags.map((tag, i) => (
                 <span
                   key={tag}
                   className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-xs bg-muted/60 text-foreground/85"
                 >
+                  {i === 0 && <ArchiveFolderCue />}
                   <span className="font-mono">{tag}</span>
                   <button
                     type="button"
@@ -330,7 +332,7 @@ export default function NewDocPage() {
                   anchorRef={tagTriggerRef}
                   existing={tags}
                   onPick={(tag) => {
-                    setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag].sort()))
+                    setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]))
                   }}
                   onClose={() => setPickerOpen(false)}
                 />

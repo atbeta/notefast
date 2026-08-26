@@ -8,15 +8,29 @@
  */
 
 import { useState, useRef } from 'react'
-import { Tag as TagIcon, X, Plus, Loader2 } from 'lucide-react'
+import { Tag as TagIcon, X, Plus, Loader2, Folder } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useTranslation } from 'react-i18next'
 import TagPickerPopover from './TagPickerPopover'
+import { Tooltip } from './ui'
 
 export interface TagEditorProps {
   docId: string
   tags: string[]
   onChange: (next: string[]) => void
+}
+
+/** 首枚标签 = Markdown 归档目录；只放小图标，不占文案空间 */
+export function ArchiveFolderCue() {
+  const { t } = useTranslation()
+  const hint = t('tagEditor.archiveFolderHint')
+  return (
+    <Tooltip label={hint}>
+      <span className="inline-flex" aria-label={hint}>
+        <Folder className="w-2.5 h-2.5 text-muted-foreground/55" strokeWidth={1.75} aria-hidden />
+      </span>
+    </Tooltip>
+  )
 }
 
 export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
@@ -39,7 +53,7 @@ export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
 
   const handleAdd = async (tag: string) => {
     if (!tag || tags.includes(tag)) return
-    await persist([...tags, tag].sort())
+    await persist([...tags, tag])
   }
 
   const handleRemove = async (tag: string) => {
@@ -50,11 +64,12 @@ export default function TagEditor({ docId, tags, onChange }: TagEditorProps) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <TagIcon className="w-3.5 h-3.5 text-muted-foreground/50 mr-0.5" strokeWidth={1.75} />
-      {tags.map((tag) => (
+      {tags.map((tag, i) => (
         <span
           key={tag}
           className="group/chip inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-xs bg-muted/60 hover:bg-muted text-foreground/85 hover:text-foreground transition-colors"
         >
+          {i === 0 && <ArchiveFolderCue />}
           <span className="font-mono">{tag}</span>
           <button
             type="button"

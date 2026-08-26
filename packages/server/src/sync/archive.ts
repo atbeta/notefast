@@ -4,6 +4,9 @@
 
 export const ARCHIVE_MANIFEST_NAME = 'notefast-archive.manifest.json'
 
+/** 无标签文档在归档树里的目录名（稳定英文，不随 UI locale 变） */
+export const ARCHIVE_UNTAGGED_DIR = 'untagged'
+
 export interface ArchiveManifest {
   app: 'notefast'
   kind: 'markdown-archive'
@@ -37,6 +40,22 @@ export function archiveFilename(title: string, docId: string): string {
   const slug = sanitizeFilename(title || 'untitled')
   const shortId = docId.replace(/-/g, '').slice(0, 12)
   return `${slug}--${shortId}.md`
+}
+
+/**
+ * 归档一层目录：首标签（插入序）sanitize 后作目录名；无标签 → untagged。
+ * 标签里的 / \ 先换成连字符，避免意外嵌套。
+ */
+export function archiveDirName(tags: readonly string[]): string {
+  const first = tags[0]?.trim()
+  if (!first) return ARCHIVE_UNTAGGED_DIR
+  const slug = sanitizeFilename(first.replace(/[\\/]/g, '-'), 64)
+  return slug || ARCHIVE_UNTAGGED_DIR
+}
+
+/** 归档相对路径：<目录>/<slug>--<id>.md */
+export function archiveRelPath(title: string, docId: string, tags: readonly string[]): string {
+  return `${archiveDirName(tags)}/${archiveFilename(title, docId)}`
 }
 
 export function buildArchiveManifest(opts: {

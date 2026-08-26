@@ -57,15 +57,20 @@ export function normalizeTag(input: string): Tag | null {
 }
 
 /**
- * 归一化 + 去重 + 排序 tag 列表（用于持久化）
+ * 归一化 + 去重 tag 列表（用于持久化）。
+ * 保留首次出现顺序：第一枚是 Markdown 归档目录，不再按字母重排。
  */
 export function normalizeTagList(tags: readonly string[]): Tag[] {
   const seen = new Set<Tag>()
+  const out: Tag[] = []
   for (const t of tags) {
     const n = normalizeTag(t)
-    if (n) seen.add(n)
+    if (n && !seen.has(n)) {
+      seen.add(n)
+      out.push(n)
+    }
   }
-  return Array.from(seen).sort()
+  return out
 }
 
 /**

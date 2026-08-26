@@ -23,13 +23,22 @@ import { pushArchiveViaStore } from './archivePush'
 
 function countMdFiles(dir: string): number {
   if (!existsSync(dir)) return 0
-  const names = readdirSync(dir)
   let n = 0
-  for (const n2 of names) {
-    if (!n2.endsWith('.md')) continue
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name)
     try {
-      const s = statSync(join(dir, n2))
-      if (s.isFile()) n++
+      const s = statSync(p)
+      if (s.isFile()) {
+        if (name.endsWith('.md')) n++
+      } else if (s.isDirectory() && name !== 'media') {
+        for (const f of readdirSync(p)) {
+          try {
+            if (f.endsWith('.md') && statSync(join(p, f)).isFile()) n++
+          } catch {
+            /* ignore */
+          }
+        }
+      }
     } catch {
       /* ignore */
     }

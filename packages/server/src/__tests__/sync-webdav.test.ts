@@ -154,7 +154,7 @@ describe('WebDAV Adapter — 单元（stub client）', () => {
     expect(r.pushed).toBe(2)
     const puts = stub.requests.filter((r) => r.method === 'PUT' && r.url.endsWith('.md'))
     expect(puts.length).toBe(2)
-    expect(puts[0]!.url).toContain('/dav/notes/Hello--')
+    expect(puts[0]!.url).toContain('/dav/notes/untagged/Hello--')
     expect(puts[0]!.url).toContain(id.replace(/-/g, '').slice(0, 12))
     expect(stub.requests.some((r) => r.url.includes(ARCHIVE_MANIFEST_NAME))).toBe(true)
   })
@@ -162,14 +162,14 @@ describe('WebDAV Adapter — 单元（stub client）', () => {
   test('prefix 与 endpoint 末尾 slash 兼容', async () => {
     seedDocWithBlocks({ docTitle: 'X', blocks: [] })
     const cases: Array<{ endpoint: string; prefix?: string; expectMkcol: string[] }> = [
-      { endpoint: 'https://a.example/dav', prefix: 'n', expectMkcol: ['/dav/n/'] },
-      { endpoint: 'https://a.example/dav/', prefix: '/n/', expectMkcol: ['/dav/n/'] },
+      { endpoint: 'https://a.example/dav', prefix: 'n', expectMkcol: ['/dav/n/', '/dav/n/untagged/'] },
+      { endpoint: 'https://a.example/dav/', prefix: '/n/', expectMkcol: ['/dav/n/', '/dav/n/untagged/'] },
       {
         endpoint: 'https://a.example/remote.php/webdav',
         prefix: 'sub/dir',
-        expectMkcol: ['/remote.php/webdav/sub/', '/remote.php/webdav/sub/dir/'],
+        expectMkcol: ['/remote.php/webdav/sub/', '/remote.php/webdav/sub/dir/', '/remote.php/webdav/sub/dir/untagged/'],
       },
-      { endpoint: 'https://a.example/remote.php/webdav/', expectMkcol: [] },
+      { endpoint: 'https://a.example/remote.php/webdav/', expectMkcol: ['/remote.php/webdav/untagged/'] },
     ]
     for (const c of cases) {
       const stub = createStubClient()

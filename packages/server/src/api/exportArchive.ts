@@ -1,5 +1,5 @@
 /**
- * 整库导出：自包含 zip（<slug>--<docId>.md + media/ + manifest），
+ * 整库导出：自包含 zip（<tag|untagged>/<slug>--<docId>.md + media/ + manifest），
  * 与 Markdown 归档同构，可被自家导入器精确还原。
  */
 

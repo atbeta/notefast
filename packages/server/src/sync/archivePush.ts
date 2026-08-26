@@ -8,13 +8,14 @@
  */
 
 import type { PushOptions, SyncResult } from '@notefast/core'
+import { readTags } from '@notefast/core'
 import { getDb } from '../db'
 import { listDocRows } from '../store/blocks'
 import { portableDocMarkdown } from '../services/portableMarkdown'
 import { readAssetBytes } from '../assets/store'
 import {
   ARCHIVE_MANIFEST_NAME,
-  archiveFilename,
+  archiveRelPath,
   buildArchiveManifest,
   isArchiveManifest,
   staleArchiveKeys,
@@ -69,7 +70,7 @@ export async function pushArchiveViaStore(
     try {
       const markdown = portableDocMarkdown(doc)
       for (const [sha, rel] of collectArchiveMediaRefs(markdown)) mediaRefs.set(sha, rel)
-      const filename = archiveFilename(doc.content || 'untitled', doc.id)
+      const filename = archiveRelPath(doc.content || 'untitled', doc.id, readTags(doc))
       pending.push({ docId: doc.id, key: `${keyPrefix}${filename}`, filename, title: doc.content || 'untitled', markdown })
     } catch (e) {
       result.errors.push(`${doc.id}: ${e instanceof Error ? e.message : String(e)}`)
@@ -95,7 +96,7 @@ export async function pushArchiveViaStore(
   // 重写 asset: 引用为相对路径后上传文档
   for (const p of pending) {
     try {
-      const markdown = rewriteAssetRefs(p.markdown, mediaRefs)
+      const markdown = rewriteAssetRefs(p.markdown, mediaRefs, true)
       await store.putObject(p.key, markdown, 'text/markdown; charset=utf-8')
       files.push({ docId: p.docId, title: p.title, filename: p.filename, key: p.key })
       result.pushed++

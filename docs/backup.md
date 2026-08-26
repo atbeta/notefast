@@ -65,8 +65,8 @@ Web **不提供**一键覆盖恢复。
 
 设置页「Markdown 归档」可选单一目标：LocalFS / S3 / WebDAV。
 
-- 文件名：`<标题 slug>--<docId前缀>.md`
-- 清单：`notefast-archive.manifest.json`（用于清理已删除/改名文档的陈旧文件）
+- 路径：`<首标签|untagged>/<标题 slug>--<docId前缀>.md`（一层目录；首标签取插入顺序）
+- 清单：`notefast-archive.manifest.json`（用于清理已删除/改名/换目录文档的陈旧文件）
 - 定时任务状态写入 `lastRunAt` / `lastError` / `lastResult`
 
 ## 验收清单

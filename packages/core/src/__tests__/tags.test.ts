@@ -52,8 +52,8 @@ describe('docMatchesTags', () => {
 })
 
 describe('parseTagsQueryParam', () => {
-  test('合并 tags 与 tag，去重排序', () => {
-    expect(parseTagsQueryParam('Work, AI', 'life')).toEqual(['ai', 'life', 'work'])
+  test('合并 tags 与 tag，去重并保留出现顺序', () => {
+    expect(parseTagsQueryParam('Work, AI', 'life')).toEqual(['work', 'ai', 'life'])
   })
 
   test('兼容仅 tag', () => {
@@ -93,13 +93,14 @@ describe('ai_exclude 显式列', () => {
   })
 
   test('writeTags 序列化', () => {
-    expect(writeTags(['B', 'a'])).toBe('["a","b"]')
+    expect(writeTags(['B', 'a'])).toBe('["b","a"]')
     expect(writeTags([])).toBe('[]')
   })
 })
 
 describe('normalizeTagList', () => {
-  test('去重排序', () => {
-    expect(normalizeTagList(['B', 'a', 'B'])).toEqual(['a', 'b'])
+  test('去重并保留首次出现顺序', () => {
+    expect(normalizeTagList(['B', 'a', 'B'])).toEqual(['b', 'a'])
+    expect(normalizeTagList(['work', 'ai', 'work'])).toEqual(['work', 'ai'])
   })
 })

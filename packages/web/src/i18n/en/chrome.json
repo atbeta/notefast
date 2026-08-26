@@ -11,7 +11,8 @@
   "tagEditor": {
     "addTag": "Add tag",
     "removeTag": "Remove tag {{tag}}",
-    "pickTag": "Pick or create tag"
+    "pickTag": "Pick or create tag",
+    "archiveFolderHint": "Markdown archive uses this tag as the folder"
   },
   "tagPicker": {
     "title": "Pick tag",

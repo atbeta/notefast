@@ -82,7 +82,7 @@ beforeEach(() => {
   if (existsSync(exportDir)) {
     for (const f of readdirSync(exportDir)) {
       try {
-        rmSync(join(exportDir, f), { force: true })
+        rmSync(join(exportDir, f), { recursive: true, force: true })
       } catch {
         /* ignore */
       }
@@ -104,10 +104,10 @@ describe('LocalFS Adapter — 单元', () => {
     seedDocWithBlocks({ docTitle: 'Hello World', blocks: [{ content: '段落 1' }] })
     const r = await adapter.push()
     expect(r.pushed).toBe(1)
-    const files = readdirSync(exportDir).filter((f) => f.endsWith('.md'))
+    const files = readdirSync(join(exportDir, 'untagged')).filter((f) => f.endsWith('.md'))
     expect(files.length).toBe(1)
     expect(files[0]!).toContain('Hello-World--')
-    const content = readFileSync(join(exportDir, files[0]!), 'utf-8')
+    const content = readFileSync(join(exportDir, 'untagged', files[0]!), 'utf-8')
     expect(content).toContain('Hello World')
   })
 
@@ -161,11 +161,11 @@ describe('LocalFS Adapter — 单元', () => {
     const r = await adapter.push()
     expect(r.pushed).toBe(1)
 
-    const md = readdirSync(exportDir).find((f) => f.endsWith('.md'))
-    const content = readFileSync(join(exportDir, md!), 'utf-8')
-    // asset: 内部引用被重写为 media/ 相对路径
+    const md = readdirSync(join(exportDir, 'untagged')).find((f) => f.endsWith('.md'))
+    const content = readFileSync(join(exportDir, 'untagged', md!), 'utf-8')
+    // asset: 内部引用被重写为 ../media/ 相对路径（文档在一层子目录下）
     expect(content).not.toContain(`asset:${meta.id}`)
-    expect(content).toContain('media/')
+    expect(content).toContain('../media/')
     // media 文件落地
     const mediaFiles = readdirSync(join(exportDir, 'media'))
     expect(mediaFiles.length).toBe(1)
@@ -219,7 +219,7 @@ describe('Sync Manager — 配置持久化与热重载', () => {
     // 再跑一次，确保新 dir 生效
     const r = await syncPush()
     expect(r.pushed).toBe(1)
-    const md = readdirSync(newDir).filter((f) => f.endsWith('.md') && f.startsWith('reload--'))
+    const md = readdirSync(join(newDir, 'untagged')).filter((f) => f.endsWith('.md') && f.startsWith('reload--'))
     expect(md.length).toBe(1)
   })
 

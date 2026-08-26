@@ -23,6 +23,27 @@ export const MAX_ARCHIVE_IMPORT_BYTES = 500 * 1024 * 1024
 
 const MEDIA_REF_RE = /media\/([0-9a-f]{64})(\.[a-z0-9]+)?/gi
 
+/** zip 内相对路径：先按 md 所在目录解析（含 ..），再退回 zip 根 */
+function resolveZipRel(mdName: string, relPath: string, byName: Map<string, Uint8Array>): Buffer | null {
+  const dir = mdName.includes('/') ? mdName.slice(0, mdName.lastIndexOf('/') + 1) : ''
+  const candidates = [normalizeZipPath(dir + relPath), normalizeZipPath(relPath)]
+  for (const key of candidates) {
+    const data = byName.get(key)
+    if (data && data.length > 0) return Buffer.from(data)
+  }
+  return null
+}
+
+function normalizeZipPath(p: string): string {
+  const parts: string[] = []
+  for (const seg of p.split(/[/\\]/)) {
+    if (!seg || seg === '.') continue
+    if (seg === '..') parts.pop()
+    else parts.push(seg)
+  }
+  return parts.join('/')
+}
+
 export interface ZipImportResult {
   imported: number
   skipped: number
@@ -78,22 +99,11 @@ export function importArchiveZip(
 
   const mdEntries = entries.filter((e) => /\.(md|markdown|mdown|mkd|txt)$/i.test(e.name) && e.name !== ARCHIVE_MANIFEST_NAME)
 
-  /** zip 内相对路径图片的读取器：先按 md 所在目录解析，再退回 zip 根（Obsidian 习惯根目录放附件） */
-  const zipReader = (mdName: string) => (relPath: string): Buffer | null => {
-    const dir = mdName.includes('/') ? mdName.slice(0, mdName.lastIndexOf('/') + 1) : ''
-    const candidates = [dir + relPath, relPath]
-    for (const key of candidates) {
-      const data = byName.get(key)
-      if (data && data.length > 0) return Buffer.from(data)
-    }
-    return null
-  }
-
   for (const entry of mdEntries) {
     const filename = entry.name.split('/').pop() ?? entry.name
     let markdown = normalizeMarkdownFileContent(new TextDecoder().decode(entry.data))
     // 通用 zip：md 里相对路径图片（images/foo.png）按 zip entries 收编 → asset:<sha>
-    const ingested = ingestLocalImageRefs(markdown, zipReader(entry.name))
+    const ingested = ingestLocalImageRefs(markdown, (rel) => resolveZipRel(entry.name, rel, byName))
     markdown = rewriteMedia(ingested.markdown)
     if (ingested.unresolved.length > 0) {
       console.warn(`[zip-import] ${entry.name}: ${ingested.unresolved.length} 张图片未在 zip 内找到，保留原引用`)
