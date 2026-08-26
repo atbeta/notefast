@@ -110,7 +110,6 @@
       "label": "Zoom",
       "current": "Zoom {{pct}}%"
     },
-    "zoomReset": "Reset to 100%",
     "readingDisplay": {
       "label": "Reading display",
       "width": "Line width",

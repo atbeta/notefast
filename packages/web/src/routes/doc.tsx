@@ -1525,7 +1525,7 @@ function DemoModeButton() {
                 type="button"
                 role="menuitemradio"
                 aria-checked={active}
-                aria-label={i === 0 ? t('doc.zoomReset') : `${pct}%`}
+                aria-label={`${pct}%`}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 text-base text-left text-foreground hover:bg-accent transition-colors"
                 onClick={() => {
                   setDemoZoomIndex(i)
@@ -1537,9 +1537,6 @@ function DemoModeButton() {
                   aria-hidden
                 />
                 <span className="font-mono tabular-nums">{pct}%</span>
-                {i === 0 && (
-                  <span className="ml-auto text-xs text-muted-foreground">{t('doc.zoomReset')}</span>
-                )}
               </button>
             )
           })}
