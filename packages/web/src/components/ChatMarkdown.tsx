@@ -2,6 +2,7 @@ import { createElement, memo, cloneElement, type ReactNode, Children, isValidEle
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
+import remarkBreaks from 'remark-breaks'
 import { classifyChatMath } from '../lib/chatMath'
 import { splitCiteParts } from '../lib/chatCites'
 import MermaidDiagram from './MermaidDiagram'
@@ -17,6 +18,12 @@ interface ChatMarkdownProps {
   className?: string
   /** 正文 [n] 渲染为上标的上限（与当前回答 citations.length 对齐）；0 则不转换 */
   maxCite?: number
+  /**
+   * 软换行（单个 \n）渲染为 <br>（remark-breaks）。
+   * 分享页开启（与阅读态 BlockRenderer 行为对齐）；AI 聊天气泡不开启——
+   * 模型输出按严格 CommonMark 处理，硬折行的段内 \n 不应显示为换行。
+   */
+  breaks?: boolean
 }
 
 function citeNodes(text: string, maxCite: number): ReactNode {
@@ -47,7 +54,7 @@ function mapCited(node: ReactNode, maxCite: number): ReactNode {
 }
 
 /** 聊天气泡内的 Markdown 渲染（GFM + 代码高亮 + Mermaid + KaTeX 公式） */
-function ChatMarkdown({ content, className = '', maxCite = 0 }: ChatMarkdownProps) {
+function ChatMarkdown({ content, className = '', maxCite = 0, breaks = false }: ChatMarkdownProps) {
   if (!content) return null
   const cited = (Tag: 'p' | 'li' | 'td' | 'th' | 'h1' | 'h2' | 'h3' | 'h4' | 'blockquote') =>
     function CitedEl({ children, ...props }: { children?: ReactNode }) {
@@ -56,7 +63,7 @@ function ChatMarkdown({ content, className = '', maxCite = 0 }: ChatMarkdownProp
   return (
     <div className={`chat-prose ${className}`}>
       <Markdown
-        remarkPlugins={[remarkGfm, remarkMath]}
+        remarkPlugins={breaks ? [remarkGfm, remarkMath, remarkBreaks] : [remarkGfm, remarkMath]}
         components={{
           p: cited('p'),
           li: cited('li'),
