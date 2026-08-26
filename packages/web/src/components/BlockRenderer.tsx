@@ -7,7 +7,7 @@ import MermaidDiagram from './MermaidDiagram'
 import MathBlock, { MathInline } from './MathBlock'
 import { CodeFenceView } from './CodeFenceView'
 import { INLINE_MATH_SRC } from '../lib/katex'
-import BlockSurface, { BlockHandle, RelatedAnchorCtx } from './BlockSurface'
+import BlockSurface, { BlockHandle, RelatedAnchorCtx, PresentationCtx } from './BlockSurface'
 import { Tooltip } from './ui'
 import { api } from '../hooks/useAPI'
 import { useImageUploadEnabled } from '../hooks/useImageUploadEnabled'
@@ -25,6 +25,13 @@ interface BlockRendererProps {
   depth?: number
     /** 右栏「相关」锚点：阅读态点选时轻微高亮该块 */
   relatedBlockId?: string | null
+  /**
+   * 公开展示模式（分享页）：隐藏块菜单 handle / 图床上传徽章，
+   * asset: 图片经 assetUrl 解析（缺省回落鉴权 API 路径）。
+   */
+  presentation?: boolean
+  /** presentation 下的 asset URL 解析（分享页传 /share/:token/assets/:sha） */
+  assetUrl?: (sha: string) => string
 }
 
 // ───────────────────────── 图片图床同步状态（hover 徽章）─────────────────────────
@@ -44,12 +51,13 @@ const ImageZoomCtx = createContext<((src: string, alt?: string) => void) | null>
  * 文档内 asset 图床状态查询 + 单图触发上传。
  * 状态一次性批量查询（blocks 变化时重查）；上传后单图更新，不发全量刷新。
  */
-function useAssetSync(block: Block): AssetSyncValue {
+function useAssetSync(block: Block, disabled = false): AssetSyncValue {
   const { t } = useTranslation()
   const [statusMap, setStatusMap] = useState<Record<string, { remote: boolean; error: string | null }>>({})
   const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
+    if (disabled) return // 公开展示模式：不查状态、不出上传徽章
     const ids = new Set<string>()
     const walk = (b: Block): void => {
       for (const m of b.content.matchAll(/asset:([0-9a-f]{64})/g)) ids.add(m[1]!)
@@ -64,7 +72,7 @@ function useAssetSync(block: Block): AssetSyncValue {
     api.get<Record<string, { remote: boolean; error: string | null }>>(`/assets/status?ids=${idList.join(',')}`)
       .then(setStatusMap)
       .catch(() => {})
-  }, [block])
+  }, [block, disabled])
 
   const upload = async (id: string): Promise<void> => {
     setUploadingIds((prev) => new Set(prev).add(id))
@@ -111,22 +119,25 @@ function ZoomableImg(props: React.ImgHTMLAttributes<HTMLImageElement>) {
 function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: string }) {
   const { t } = useTranslation()
   const ctx = useContext(AssetSyncCtx)
+  const presentation = useContext(PresentationCtx)
   const zoom = useContext(ImageZoomCtx)
   const imageUpload = useImageUploadEnabled()
   const st = ctx?.statusMap[assetId]
   const uploading = ctx?.uploadingIds.has(assetId)
   const failed = !st?.remote && Boolean(st?.error)
+  // 公开展示模式：URL 经公开端点解析，且永远不出上传/同步徽章
+  const resolvedSrc = presentation ? presentation.assetUrl(assetId) : src
   // 未配图床时不露出上传/重试（点了必 400）；已外链仍显示「已同步」
   const showUploadActions = imageUpload.enabled
-  const showBadge = uploading || st?.remote || (showUploadActions && !st?.remote)
+  const showBadge = !presentation && (uploading || st?.remote || (showUploadActions && !st?.remote))
   return (
     <span className="relative inline-block group/asset">
       <Tooltip label={t('block.previewImage')}>
         <img
-          src={src}
+          src={resolvedSrc}
           alt={alt}
           loading="lazy"
-          onClick={() => zoom?.(src, alt)}
+          onClick={() => zoom?.(resolvedSrc, alt)}
           className="my-3 max-w-full rounded-md border border-border/50 cursor-zoom-in"
         />
       </Tooltip>
@@ -420,6 +431,7 @@ function ListItemView({ block, depth = 0 }: { block: Block; depth?: number }) {
   const nestedItems = block.children.filter((c) => c.type === 'list_item')
   const otherChildren = block.children.filter((c) => c.type !== 'list_item')
   const relatedSelected = useContext(RelatedAnchorCtx) === block.id
+  const presentation = useContext(PresentationCtx) !== null
   return (
     <li
       id={block.id}
@@ -430,8 +442,9 @@ function ListItemView({ block, depth = 0 }: { block: Block; depth?: number }) {
       }${relatedSelected ? ' rounded-md ring-1 ring-primary/20 bg-primary/[0.04]' : ''}`}
     >
       {/* 列表项不经过 BlockSurface（ul > li 语义），handle 直接挂 li。仅顶层渲染：
-          嵌套项缩进后 handle 会压到正文，且复制/问 AI 由父项菜单（含子块）覆盖 */}
-      {depth === 0 && <BlockHandle block={block} className="-left-[48px] top-0.5" />}
+          嵌套项缩进后 handle 会压到正文，且复制/问 AI 由父项菜单（含子块）覆盖。
+          公开展示模式不出 handle */}
+      {depth === 0 && !presentation && <BlockHandle block={block} className="-left-[48px] top-0.5" />}
       {isTask && (
         <span
           className={`mr-2 inline-flex h-3.5 w-3.5 translate-y-[2px] items-center justify-center rounded-md border transition-colors ${
@@ -555,9 +568,9 @@ const BlockNode = memo(function BlockNode({ block }: BlockNodeProps) {
   return <BlockSurface block={block}>{node}</BlockSurface>
 })
 
-export default function BlockRenderer({ block, depth = 0, relatedBlockId = null }: BlockRendererProps) {
+export default function BlockRenderer({ block, depth = 0, relatedBlockId = null, presentation = false, assetUrl }: BlockRendererProps) {
   const { t } = useTranslation()
-  const assetSync = useAssetSync(block)
+  const assetSync = useAssetSync(block, presentation)
   // 图片放大查看：当前打开的 lightbox src（null = 关闭）
   const [zoomSrc, setZoomSrc] = useState<{ src: string; alt?: string } | null>(null)
   const openZoom = useCallback((src: string, alt?: string) => setZoomSrc({ src, alt }), [])
@@ -570,6 +583,9 @@ export default function BlockRenderer({ block, depth = 0, relatedBlockId = null 
   return (
     <RelatedAnchorCtx.Provider value={relatedBlockId}>
     <AssetSyncCtx.Provider value={assetSync}>
+      <PresentationCtx.Provider
+        value={presentation ? { assetUrl: assetUrl ?? ((sha) => `/api/v1/assets/${sha}`) } : null}
+      >
       <ImageZoomCtx.Provider value={openZoom}>
         {block.type === 'document' ? (
           <article className="reading-prose">
@@ -588,6 +604,7 @@ export default function BlockRenderer({ block, depth = 0, relatedBlockId = null 
           />
         )}
       </ImageZoomCtx.Provider>
+      </PresentationCtx.Provider>
     </AssetSyncCtx.Provider>
     </RelatedAnchorCtx.Provider>
   )

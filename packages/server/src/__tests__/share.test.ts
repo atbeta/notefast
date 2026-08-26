@@ -81,6 +81,22 @@ describe('分享管理 API（/api/v1/docs/:id/share）', () => {
 })
 
 describe('分享公开端点（/share/:token，无鉴权）', () => {
+  test('公开树剥掉 properties.source（导入来源不外泄），渲染字段保留', async () => {
+    const docId = await createDoc('带来源文档', '正文一段')
+    // 手工给根块与子块注入 source（模拟导入溯源属性）
+    const db = getDb()
+    db.query(`UPDATE blocks SET properties = json_set(properties, '$.source', json_object('provider','webhook','external_id','https://internal.example.com/secret')) WHERE root_id = ?`).run(docId)
+    const { body: share } = await api('PUT', `/api/v1/docs/${docId}/share`)
+
+    const pub = await api('GET', `/share/${share.token}`)
+    expect(pub.status).toBe(200)
+    const treeJson = JSON.stringify(pub.body.doc)
+    expect(treeJson).not.toContain('internal.example.com')
+    expect(treeJson).not.toContain('"source"')
+    // 渲染所需字段仍在（子块 content 保留）
+    expect(pub.body.doc.children.some((b: { content: string }) => b.content === '正文一段')).toBe(true)
+  })
+
   test('开启后公开可取 title + markdown；关闭后 404；重开新 token、旧链接 404', async () => {
     const docId = await createDoc('公开阅读', '第一段\n\n第二段')
     const { body: share1 } = await api('PUT', `/api/v1/docs/${docId}/share`)
@@ -91,6 +107,9 @@ describe('分享公开端点（/share/:token，无鉴权）', () => {
     expect(pub.body.markdown).toContain('第一段')
     expect(pub.body.markdown).toContain('第二段')
     expect(pub.body.shared_at).toBeTruthy()
+    // block 树随响应下发（分享页 BlockRenderer 渲染的数据源）
+    expect(pub.body.doc?.type).toBe('document')
+    expect(pub.body.doc?.children?.length).toBeGreaterThanOrEqual(1)
 
     // 关闭 → 立即 404
     await api('DELETE', `/api/v1/docs/${docId}/share`)

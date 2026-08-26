@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { FileWarning, Globe } from 'lucide-react'
+import type { Block } from '@notefast/core'
 import ChatMarkdown from '../components/ChatMarkdown'
+import BlockRenderer from '../components/BlockRenderer'
 import { currentLocale } from '../lib/time'
 
 /**
@@ -10,12 +12,15 @@ import { currentLocale } from '../lib/time'
  *
  * 数据走无鉴权公开端点 GET /share/:token（不走 api 客户端，避免注入
  * Authorization 与 401 跳登录逻辑）；无效/已关闭链接展示统一 404 页。
- * 正文中的 asset:<sha256> 引用重写为公开图片端点路径。
+ * 正文用与登录后相同的 BlockRenderer（presentation 公开展示模式）渲染，
+ * asset:<sha256> 图片经公开图片端点 / 图床外链解析。
  */
 
 interface SharedDoc {
   title: string
   markdown: string
+  /** block 树（阅读观感对齐的渲染数据源；旧服务端无此字段时回落 ChatMarkdown） */
+  doc?: Block | null
   updated_at: string
   shared_at: string
   /** 图床外链映射：asset sha → 图床 URL（有外链的图片分享页直接引用） */
@@ -78,13 +83,14 @@ export default function SharePage() {
   }
 
   const { doc } = state
-  // 图床外链优先：已上传图床的图片直接用图床 URL；否则走公开分享图片端点
-  const markdown = stripLeadingTitleHeading(doc.markdown, doc.title)
-    .replace(/asset:([0-9a-f]{64})/g, (_full, id: string) => doc.asset_remote?.[id] || `/share/${token}/assets/${id}`)
   const updatedAt = new Date(doc.updated_at.replace(' ', 'T') + 'Z')
   const dateText = Number.isFinite(updatedAt.getTime())
     ? updatedAt.toLocaleDateString(currentLocale(), { year: 'numeric', month: 'long', day: 'numeric' })
     : ''
+  // asset 图片解析：图床外链优先，否则走公开分享图片端点
+  const assetUrl = (sha: string) => doc.asset_remote?.[sha] || `/share/${token}/assets/${sha}`
+  // block 树根即文档根（BlockRenderer 对 document 类型只渲染 children，不渲染标题）
+  const treeRoot = doc.doc ?? null
 
   return (
     <div className="min-h-screen bg-background">
@@ -104,7 +110,16 @@ export default function SharePage() {
             <p className="mt-2 text-sm text-muted-foreground/80">{t('share.updatedAt', { time: dateText })}</p>
           )}
         </header>
-        <ChatMarkdown content={markdown} />
+        {treeRoot ? (
+          <BlockRenderer block={treeRoot} presentation assetUrl={assetUrl} />
+        ) : (
+          // 旧服务端无 doc 字段的回落（滚动升级窗口）
+          <ChatMarkdown
+            content={stripLeadingTitleHeading(doc.markdown, doc.title)
+              .replace(/asset:([0-9a-f]{64})/g, (_full, id: string) => assetUrl(id))}
+            breaks
+          />
+        )}
         <footer className="mt-16 pt-6 border-t border-border/60 text-center">
           <span className="text-sm text-muted-foreground/70">{t('share.byNoteFast')}</span>
         </footer>

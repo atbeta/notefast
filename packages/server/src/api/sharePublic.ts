@@ -16,7 +16,7 @@
 
 import { Hono } from 'hono'
 import { readFileSync } from 'node:fs'
-import { buildBlockTree, blocksToMarkdown } from '@notefast/core'
+import { buildBlockTree, blocksToMarkdown, type Block } from '@notefast/core'
 import { getDb } from '../db'
 import { fetchDocBlocks } from '../store/blocks'
 import { getShareByToken } from '../store/shares'
@@ -24,6 +24,12 @@ import { getChangesAnchor, contentRevisionToken } from '../store/changeFeed'
 import { extractAssetRefs, getAssetRemoteUrl, readAsset } from '../assets/store'
 
 const sharePublic = new Hono()
+
+/** 公开面的树净化：剥掉 properties.source（导入来源可能是内网/私密 URL），保留渲染所需字段 */
+function sanitizeForPublic(block: Block): Block {
+  const { source: _source, ...restProps } = block.properties ?? {}
+  return { ...block, properties: restProps, children: (block.children ?? []).map(sanitizeForPublic) }
+}
 
 /** token → 有效分享的行；无效一律走 404（调用方统一文案） */
 function resolveShare(token: string) {
@@ -83,6 +89,8 @@ sharePublic.get('/:token', (c) => {
   return c.json({
     title: docRow.content,
     markdown: blocksToMarkdown(tree),
+    // block 树：分享页用与登录后相同的 BlockRenderer 渲染（阅读观感对齐）
+    doc: tree[0] ? sanitizeForPublic(tree[0]) : null,
     updated_at: docRow.updated_at,
     shared_at: share.created_at,
     asset_remote: assetRemote,
