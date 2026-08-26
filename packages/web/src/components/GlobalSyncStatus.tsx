@@ -7,8 +7,9 @@ import { Tooltip } from './ui'
 import { formatIsoDateTime } from '../lib/time'
 
 /**
- * 全局同步状态胶囊（固定在窗口右下角，类比未来客户端的底部状态栏）。
+ * 全局同步状态（固定在窗口右下角的图标按钮，类比客户端底部状态栏）。
  * 展示优先级：同步中 > 同步失败 > 有待同步 > 已同步；点击进入「备份与同步」设置。
+ * 文案只放 tooltip / aria-label，避免和阅读态回顶按钮抢右下角。
  *
  * 位置：文档页右侧有 rail（大纲/实体/历史），lg 屏让出 rail 宽 + 边距，锚到主栏右下；
  * rail 收起为 w-9 / 展开为 w-72；非文档页贴窗口右下角。
@@ -28,19 +29,19 @@ export default function GlobalSyncStatus() {
   let tooltip: string
 
   if (status.running) {
-    icon = <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" strokeWidth={1.75} />
+    icon = <Loader2 className="w-4 h-4 animate-spin text-primary" strokeWidth={1.75} />
     label = t('syncStatus.syncing')
     tooltip = t('syncStatus.syncingTooltip')
   } else if (status.lastError) {
-    icon = <AlertCircle className="w-3.5 h-3.5 text-destructive" strokeWidth={1.75} />
+    icon = <AlertCircle className="w-4 h-4 text-destructive" strokeWidth={1.75} />
     label = t('syncStatus.syncFailed')
     tooltip = t('syncStatus.syncFailedWithError', { error: status.lastError })
   } else if ((status.pendingChanges ?? 0) > 0) {
-    icon = <Cloud className="w-3.5 h-3.5 text-warning" strokeWidth={1.75} />
+    icon = <Cloud className="w-4 h-4 text-warning" strokeWidth={1.75} />
     label = t('syncStatus.pendingChanges', { n: status.pendingChanges })
     tooltip = t('syncStatus.hasPendingChanges')
   } else {
-    icon = <CheckCircle2 className="w-3.5 h-3.5 text-success" strokeWidth={1.75} />
+    icon = <CheckCircle2 className="w-4 h-4 text-success" strokeWidth={1.75} />
     label = status.lastSuccessAt ? t('syncStatus.synced') : t('syncStatus.pending')
     tooltip = status.lastSuccessAt
       ? t('syncStatus.syncedAt', { time: formatIsoDateTime(status.lastSuccessAt) })
@@ -58,11 +59,10 @@ export default function GlobalSyncStatus() {
       <button
         type="button"
         onClick={() => navigate('/settings/backup')}
-        className={`fixed bottom-3 right-3 z-panel flex items-center gap-1.5 h-7 pl-2 pr-2.5 rounded-full border border-border/60 bg-card/90 backdrop-blur text-xs text-muted-foreground shadow-card hover:border-border hover:text-foreground transition-colors ${positionClass}`}
+        className={`fixed bottom-3 right-3 z-panel inline-flex items-center justify-center w-8 h-8 rounded-full border border-border/60 bg-card/90 backdrop-blur text-muted-foreground shadow-card hover:border-border hover:text-foreground transition-colors ${positionClass}`}
         aria-label={t('syncStatus.statusLabel', { status: label })}
       >
         {icon}
-        <span>{label}</span>
       </button>
     </Tooltip>
   )

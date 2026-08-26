@@ -5,6 +5,7 @@
  * - 回顶：scrollTop 超过阈值后出现
  * - 到底：距底部超过阈值后出现（长文档才有意义，短文档两个都不出）
  * 阈值判定在滚动与内容高度变化（ResizeObserver）时更新，rAF 合帧。
+ * bottom-16 给窗口右下角的同步状态图标留出空隙，避免两套圆钮叠在一起。
  */
 import { useEffect, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -49,7 +50,7 @@ export default function ScrollEdgeButtons({ containerRef }: { containerRef: RefO
     'w-8 h-8 inline-flex items-center justify-center rounded-full border border-border bg-card/95 text-muted-foreground hover:text-foreground hover:bg-accent shadow-floating backdrop-blur-sm transition-colors animate-fade-in'
 
   return (
-    <div className="absolute bottom-6 right-6 z-sticky flex flex-col gap-2 print:hidden">
+    <div className="absolute bottom-16 right-6 z-sticky flex flex-col gap-2 print:hidden">
       {showUp && (
         <Tooltip label={t('doc.scrollToTop')}>
           <button

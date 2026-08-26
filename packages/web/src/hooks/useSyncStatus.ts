@@ -6,7 +6,7 @@ import { nativeNotify } from '../lib/nativeNotify'
 /**
  * 同步协议状态（GET /sync/protocol）单例轮询 hook
  * （与 useAiCapabilities 同模式：模块级 store + useSyncExternalStore）。
- * 全局同步胶囊 GlobalSyncStatus 与设置面板共用，首个订阅者启动轮询、
+ * 全局同步状态图标 GlobalSyncStatus 与设置面板共用，首个订阅者启动轮询、
  * 全部退订停止——避免每个组件各自建 5s 定时器。
  *
  * 失败转场（无错 → 有错）经 nativeNotify 推一条 macOS 系统通知；
