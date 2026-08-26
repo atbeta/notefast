@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.80.0](https://github.com/atbeta/notefast/compare/v0.79.0...v0.80.0) (2026-08-26)
+
+
+### Features
+
+* **web:** fetch next entity-merge suggestion batch in place ([358cd3e](https://github.com/atbeta/notefast/commit/358cd3e56acb933cb9caeafd02cd27a3af40693a))
+* **web:** floating back-to-top / jump-to-bottom in reading view ([c9eeb75](https://github.com/atbeta/notefast/commit/c9eeb75ca1a5149e56159f17a63272befc884db9))
+* **web:** render the share page with BlockRenderer ([f797de7](https://github.com/atbeta/notefast/commit/f797de7fbe569e180ee47d207a2169301ff2ea7d))
+
+
+### Bug Fixes
+
+* **web:** drop redundant reset-to-100% label in zoom menu ([11613a4](https://github.com/atbeta/notefast/commit/11613a40841212a126e23c247b7f5a1756355727))
+* **web:** render soft breaks on the share page ([b8a0595](https://github.com/atbeta/notefast/commit/b8a059504adf973a0059b7ec379e63637fac8cb6))
+
 ## [0.79.0](https://github.com/atbeta/notefast/compare/v0.78.0...v0.79.0) (2026-08-25)
 
 
