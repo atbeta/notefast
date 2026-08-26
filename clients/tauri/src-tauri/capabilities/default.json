@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "NoteFast 主窗口默认能力（invoke engine_start 为自定义命令，不在 ACL 内）。remote 授权 engine 域（127.0.0.1 随机端口）调用窗口控制 IPC——壳跳转到 engine 的 web-dist 后拖拽/按钮/状态同步都走这里",
+  "description": "NoteFast 主窗口默认能力。remote 授权 engine 域（127.0.0.1）调用窗口控制、另存为、以及 opener 打开数据目录。",
   "windows": ["main"],
   "remote": {
     "urls": ["http://127.0.0.1:*"]
@@ -17,6 +17,7 @@
     "core:webview:allow-set-webview-background-color",
     "dialog:allow-save",
     { "identifier": "fs:write-files", "allow": [{ "path": "**" }] },
-    "opener:default"
+    "opener:default",
+    "opener:allow-open-path"
   ]
 }

@@ -95,7 +95,14 @@ export default function LocalDataPanel() {
                   variant="secondary"
                   size="sm"
                   icon={<FolderOpen className="w-4 h-4" strokeWidth={1.75} />}
-                  onClick={() => nativeRevealDataDir()}
+                  onClick={() => {
+                    void nativeRevealDataDir(data?.data_dir).catch((e) => {
+                      toast.error({
+                        title: t('settings.localData.revealFailed'),
+                        description: e instanceof Error ? e.message : String(e),
+                      })
+                    })
+                  }}
                 >
                   {t(`settings.localData.${revealLabelKey()}`)}
                 </Button>

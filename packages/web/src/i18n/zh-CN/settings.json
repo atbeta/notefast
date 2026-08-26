@@ -64,7 +64,8 @@
       "shadowOn": "已开启",
       "shadowOff": "已关闭",
       "loadFailed": "无法读取数据目录",
-      "saveFailed": "无法保存"
+      "saveFailed": "无法保存",
+      "revealFailed": "无法打开文件管理器"
     },
     "language": {
       "title": "界面语言",

@@ -64,7 +64,8 @@
       "shadowOn": "On",
       "shadowOff": "Off",
       "loadFailed": "Could not read the data directory",
-      "saveFailed": "Could not save"
+      "saveFailed": "Could not save",
+      "revealFailed": "Could not open the file manager"
     },
     "language": {
       "title": "Interface language",
