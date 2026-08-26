@@ -110,6 +110,8 @@
       "label": "缩放",
       "current": "缩放 {{pct}}%"
     },
+    "scrollToTop": "回到顶部",
+    "scrollToBottom": "跳到底部",
     "readingDisplay": {
       "label": "阅读显示",
       "width": "行宽",

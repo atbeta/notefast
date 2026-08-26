@@ -28,6 +28,7 @@ import {
 import { api, request, ApiError } from '../hooks/useAPI'
 import { useDocChanges } from '../hooks/useDocEvents'
 import BlockRenderer from '../components/BlockRenderer'
+import ScrollEdgeButtons from '../components/ScrollEdgeButtons'
 import MarkdownEditor from '../components/MarkdownEditor'
 import TagEditor from '../components/TagEditor'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -892,7 +893,9 @@ useEffect(() => {
           </div>
         </PageHeader>
 
-        {/* Scrollable Document Body — scrollbar-gutter 预留滚动条位，切换文档时内容不横移 */}
+        {/* Scrollable Document Body — scrollbar-gutter 预留滚动条位，切换文档时内容不横移。
+            外层 relative 包装：供回顶/到底浮动按钮定位（不随内容滚走） */}
+        <div className="relative flex-1 min-h-0 flex flex-col print:h-auto print:block">
         <div
           ref={scrollRef}
           className="flex-1 overflow-y-auto [scrollbar-gutter:stable] print:overflow-visible print:h-auto"
@@ -1152,6 +1155,9 @@ useEffect(() => {
            </div>
            </div>
           </div>
+        </div>
+        {/* 阅读态浮动回顶/到底（滚动超过阈值出现；编辑态不需要——CM 自带滚动） */}
+        {!isEditing && <ScrollEdgeButtons containerRef={scrollRef} />}
         </div>
       </div>
 

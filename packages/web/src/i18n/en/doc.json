@@ -110,6 +110,8 @@
       "label": "Zoom",
       "current": "Zoom {{pct}}%"
     },
+    "scrollToTop": "Back to top",
+    "scrollToBottom": "Jump to bottom",
     "readingDisplay": {
       "label": "Reading display",
       "width": "Line width",
