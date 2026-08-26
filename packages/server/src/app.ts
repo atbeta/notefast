@@ -303,7 +303,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     initDocEvents(pluginSystem)
     await initVectorStore()
     initAssetStore(dataDir)
-    initShadowMarkdown(dataDir)
+    initShadowMarkdown(dataDir) // 订阅立刻挂上；全量投影后台跑，不挡 listen
     // 图床上传配置：init 后注入 assets 存储层（异步上传命令契约）
     setImageUploadConfig(initImageUploadConfig(dataDir))
     initStorageLocations(dataDir)

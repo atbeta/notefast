@@ -61,6 +61,9 @@ const store = createJsonConfigStore<ShadowConfig>({
 
 let dataDirAbs = ''
 let unsub: (() => void) | null = null
+let fullSyncTimer: ReturnType<typeof setTimeout> | null = null
+let fullSyncRunning = false
+let fullSyncQueued = false
 
 export function initInstancePaths(dir: string): void {
   dataDirAbs = resolve(dir)
@@ -95,18 +98,55 @@ export function initShadowMarkdown(dir: string): void {
       console.warn('[shadowMarkdown]', e instanceof Error ? e.message : e)
     }
   })
-  if (store.get().enabled) {
-    try {
-      fullSyncShadow()
-    } catch (e) {
-      console.warn('[shadowMarkdown] fullSync', e instanceof Error ? e.message : e)
-    }
-  }
+  // 全量投影放到 listen / NF_READY 之后，避免大库卡住启动
+  if (store.get().enabled) scheduleFullSyncShadow()
 }
 
 export function stopShadowMarkdown(): void {
+  cancelScheduledFullSync()
   unsub?.()
   unsub = null
+}
+
+function cancelScheduledFullSync(): void {
+  if (fullSyncTimer) {
+    clearTimeout(fullSyncTimer)
+    fullSyncTimer = null
+  }
+  fullSyncQueued = false
+}
+
+function scheduleFullSyncShadow(): void {
+  if (!store.get().enabled) return
+  if (fullSyncRunning) {
+    fullSyncQueued = true
+    return
+  }
+  if (fullSyncTimer) return
+  fullSyncTimer = setTimeout(() => {
+    fullSyncTimer = null
+    runScheduledFullSync()
+  }, 0)
+  ;(fullSyncTimer as unknown as { unref?: () => void }).unref?.()
+}
+
+function runScheduledFullSync(): void {
+  if (fullSyncRunning) {
+    fullSyncQueued = true
+    return
+  }
+  fullSyncRunning = true
+  try {
+    fullSyncShadow()
+  } catch (e) {
+    console.warn('[shadowMarkdown] fullSync', e instanceof Error ? e.message : e)
+  } finally {
+    fullSyncRunning = false
+    if (fullSyncQueued) {
+      fullSyncQueued = false
+      scheduleFullSyncShadow()
+    }
+  }
 }
 
 export function applyShadowConfig(incoming: { enabled?: boolean }): ShadowConfig {
@@ -116,12 +156,10 @@ export function applyShadowConfig(incoming: { enabled?: boolean }): ShadowConfig
   }
   const wasEnabled = store.get().enabled
   store.set(next)
-  if (next.enabled && !wasEnabled) {
-    try {
-      fullSyncShadow()
-    } catch (e) {
-      console.warn('[shadowMarkdown] fullSync', e instanceof Error ? e.message : e)
-    }
+  if (!next.enabled) {
+    cancelScheduledFullSync()
+  } else if (!wasEnabled) {
+    scheduleFullSyncShadow()
   }
   return next
 }
@@ -195,8 +233,14 @@ function unlinkRel(rel: string): void {
 function persistDocFile(doc: BlockRow): string {
   const rel = archiveRelPath(doc.content || 'untitled', doc.id, readTags(doc))
   const dest = join(getMarkdownDirAbs(), rel)
+  const content = rewriteShadowAssetRefs(portableDocMarkdown(doc))
   mkdirSync(dirname(dest), { recursive: true })
-  writeFileSync(dest, rewriteShadowAssetRefs(portableDocMarkdown(doc)), 'utf-8')
+  try {
+    if (existsSync(dest) && readFileSync(dest, 'utf-8') === content) return rel
+  } catch {
+    /* 读失败则重写 */
+  }
+  writeFileSync(dest, content, 'utf-8')
   return rel
 }
 
@@ -206,6 +250,7 @@ export function writeShadowDoc(doc: BlockRow): void {
   const manifest = loadManifest()
   const prev = manifest.files.find((f) => f.docId === doc.id)
   if (prev && prev.filename !== rel) unlinkRel(prev.filename)
+  if (prev?.filename === rel) return
   const files = manifest.files.filter((f) => f.docId !== doc.id)
   files.push({ docId: doc.id, filename: rel })
   saveManifest({ ...manifest, files })

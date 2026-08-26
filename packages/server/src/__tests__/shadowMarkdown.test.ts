@@ -4,7 +4,7 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
@@ -33,6 +33,8 @@ let app: Hono
 
 const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4])
 const waitFlush = () => new Promise((r) => setTimeout(r, FLUSH_MS + 150))
+/** 后台 fullSync 用 setTimeout(0)，给事件循环一拍再断言 */
+const waitDeferredFullSync = () => new Promise((r) => setTimeout(r, 50))
 
 function markdownRoot(): string {
   return join(testDir, 'markdown')
@@ -168,6 +170,47 @@ describe('fullSyncShadow / 默认开启', () => {
     expect(existsSync(join(markdownRoot(), dropRel))).toBe(false)
     const keepRel = archiveRelPath('保留', keepId, [])
     expect(existsSync(join(markdownRoot(), keepRel))).toBe(true)
+  })
+
+  test('init 立即返回，现有文档稍后才写出', async () => {
+    const id = createDoc('后台同步', '正文')
+    const rel = archiveRelPath('后台同步', id, [])
+    rmSync(markdownRoot(), { recursive: true, force: true })
+    _resetShadowMarkdownForTests()
+    initShadowMarkdown(testDir)
+    expect(existsSync(join(markdownRoot(), rel))).toBe(false)
+    await waitDeferredFullSync()
+    expect(existsSync(join(markdownRoot(), rel))).toBe(true)
+  })
+
+  test('重新打开影子不阻塞 applyShadowConfig', async () => {
+    applyShadowConfig({ enabled: false })
+    const id = createDoc('重开', '正文')
+    const rel = archiveRelPath('重开', id, [])
+    applyShadowConfig({ enabled: true })
+    expect(existsSync(join(markdownRoot(), rel))).toBe(false)
+    await waitDeferredFullSync()
+    expect(existsSync(join(markdownRoot(), rel))).toBe(true)
+  })
+
+  test('stop 取消尚未执行的全量同步', async () => {
+    const id = createDoc('取消', '正文')
+    const rel = archiveRelPath('取消', id, [])
+    rmSync(markdownRoot(), { recursive: true, force: true })
+    _resetShadowMarkdownForTests()
+    initShadowMarkdown(testDir)
+    stopShadowMarkdown()
+    await waitDeferredFullSync()
+    expect(existsSync(join(markdownRoot(), rel))).toBe(false)
+  })
+
+  test('内容未变时 fullSync 不重写文件', () => {
+    const id = createDoc('稳定', '正文')
+    fullSyncShadow()
+    const dest = join(markdownRoot(), archiveRelPath('稳定', id, []))
+    const mtime1 = statSync(dest).mtimeMs
+    fullSyncShadow()
+    expect(statSync(dest).mtimeMs).toBe(mtime1)
   })
 })
 
