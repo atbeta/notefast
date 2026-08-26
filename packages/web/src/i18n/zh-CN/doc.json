@@ -13,7 +13,7 @@
     "navForward": "前进：{{title}}",
     "navNoBack": "没有上一页",
     "navNoForward": "没有下一页",
-    "neighborNav": "按创建顺序翻页",
+    "neighborNav": "按列表顺序翻页",
     "prevDocLabel": "上一篇",
     "nextDocLabel": "下一篇",
     "prevDoc": "上一篇：{{title}}",

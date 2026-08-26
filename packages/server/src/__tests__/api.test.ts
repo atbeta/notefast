@@ -218,36 +218,35 @@ describe('Documents API', () => {
     expect((after.body as Array<{ id: string }>).map((d) => d.id)).toContain(outdated.id)
   })
 
-  test('GET /api/v1/docs/:id/neighbors 按创建顺序返回上一篇/下一篇', async () => {
-    // 共享 DB（本文件其他测试已建文档，且 created_at 可能同毫秒）——
-    // 不假设「全局只有 3 篇 / 本篇创建的是全局首末篇」，
-    // 断言相对创建顺序语义 + 404，首尾 null 由单跑场景覆盖。
+  test('GET /api/v1/docs/:id/neighbors 与文档列表顺序一致', async () => {
     const { body: first } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '邻居甲' })
     const { body: middle } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '邻居乙' })
     const { body: last } = await api('POST', '/api/v1/docs', { notebook_id: notebookId, title: '邻居丙' })
 
+    const listed = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}`)
+    expect(listed.status).toBe(200)
+    const ids = (listed.body as Array<{ id: string }>).map((d) => d.id)
+    const idx = (id: string) => ids.indexOf(id)
+    const neighborOf = (id: string) => ({
+      prev: idx(id) > 0 ? ids[idx(id) - 1] : null,
+      next: idx(id) >= 0 && idx(id) < ids.length - 1 ? ids[idx(id) + 1] : null,
+    })
+
     const mid = await api('GET', `/api/v1/docs/${middle.id}/neighbors`)
     expect(mid.status).toBe(200)
-    expect(mid.body.prev?.id).toBeTruthy()
-    expect(mid.body.next?.id).toBeTruthy()
+    expect(mid.body.prev?.id ?? null).toBe(neighborOf(middle.id).prev)
+    expect(mid.body.next?.id ?? null).toBe(neighborOf(middle.id).next)
 
-    // 创建顺序语义：prev.created_at <= middle.created_at <= next.created_at
-    const all = await api('GET', `/api/v1/docs/list?notebook_id=${notebookId}&status=all`)
-    const byId = new Map<string, string>((all.body as Array<{ id: string; created_at: string }>).map((d) => [d.id, d.created_at]))
-    const midAt = Date.parse(byId.get(middle.id) ?? '') || 0
-    const prevAt = Date.parse(byId.get(mid.body.prev.id as string) ?? '') || 0
-    const nextAt = Date.parse(byId.get(mid.body.next.id as string) ?? '') || 0
-    expect(prevAt).toBeLessThanOrEqual(midAt)
-    expect(nextAt).toBeGreaterThanOrEqual(midAt)
-
-    // 本篇创建的三篇中：first 的 next 至少存在（无论是否全局首篇）
-    const head = await api('GET', `/api/v1/docs/${first.id}/neighbors`)
+    const head = await api('GET', `/api/v1/docs/${last.id}/neighbors`)
     expect(head.status).toBe(200)
-    // last 的 prev 至少存在
-    const tail = await api('GET', `/api/v1/docs/${last.id}/neighbors`)
-    expect(tail.status).toBe(200)
+    expect(head.body.prev?.id ?? null).toBe(neighborOf(last.id).prev)
+    expect(head.body.next?.id ?? null).toBe(neighborOf(last.id).next)
 
-    // 不存在的文档 → 404
+    const tail = await api('GET', `/api/v1/docs/${first.id}/neighbors`)
+    expect(tail.status).toBe(200)
+    expect(tail.body.prev?.id ?? null).toBe(neighborOf(first.id).prev)
+    expect(tail.body.next?.id ?? null).toBe(neighborOf(first.id).next)
+
     const missing = await api('GET', '/api/v1/docs/00000000-0000-4000-8000-000000000000/neighbors')
     expect(missing.status).toBe(404)
   })

@@ -356,7 +356,7 @@ useEffect(() => {
     if (title) setCurrentLabel(title)
   }, [doc?.content, setCurrentLabel])
 
-  // 上一篇/下一篇（按创建顺序）——正文末尾翻页用，不是顶栏返回
+  // 上一篇/下一篇（与文档列表同序）——正文末尾翻页用，不是顶栏返回
   const [neighbors, setNeighbors] = useState<{ prev: DocNeighbor | null; next: DocNeighbor | null }>({ prev: null, next: null })
   useEffect(() => {
     if (!id) {

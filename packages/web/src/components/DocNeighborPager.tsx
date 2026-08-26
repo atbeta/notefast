@@ -6,7 +6,7 @@ export interface DocNeighbor {
   title: string
 }
 
-/** 正文末尾：按创建顺序的上一篇 / 下一篇（带标题，避免理解成「返回」） */
+/** 正文末尾：与文档列表同序的上一篇 / 下一篇（带标题，避免理解成「返回」） */
 export default function DocNeighborPager({
   prev,
   next,

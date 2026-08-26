@@ -15,7 +15,7 @@ import { JsonVectorStore } from '../ai/vectorStore'
  * - last_used_at 写库节流（60s 窗口内同一 token 只写一次）
  * - 资源库引用集合缓存：seq 锚点 / 内容修订计数双令牌失效
  * - listBacklinks 文档根分支默认上限
- * - getDocNeighbors 同毫秒 rowid 决胜语义（真实入库序）
+ * - getDocNeighbors 同毫秒 rowid 决胜语义（与列表 updated_at DESC 同序）
  * - 向量 deleteMany 一次维护计数（JSON 后端）
  */
 
@@ -132,8 +132,8 @@ describe('listBacklinks 文档根默认上限', () => {
   })
 })
 
-describe('getDocNeighbors 同毫秒 rowid 决胜', () => {
-  test('created_at 相同时按入库序（rowid）返回前后篇', () => {
+describe('getDocNeighbors 与列表同序', () => {
+  test('updated_at 相同时按 rowid DESC（列表决胜）返回前后篇', () => {
     const db = getDb()
     const sameMs = '2026-01-01 00:00:00.000'
     const ids: string[] = []
@@ -144,19 +144,41 @@ describe('getDocNeighbors 同毫秒 rowid 决胜', () => {
         id, notebook_id: notebookId, parent_id: null, root_id: id,
         type: 'document', content: `邻居${i}`, sort: 0, level: 0, now: sameMs,
       })
-      db.query('UPDATE blocks SET created_at = ? WHERE id = ?').run(sameMs, id)
+      db.query('UPDATE blocks SET created_at = ?, updated_at = ? WHERE id = ?').run(sameMs, sameMs, id)
     }
-    // 中间篇：prev/next 均存在且为入库序相邻
+    // 列表序 updated_at DESC, rowid DESC：入库越晚越靠上。
+    // nb-0 … nb-4 依次入库 → 列表自上而下 nb-4, nb-3, nb-2, nb-1, nb-0
     const mid = getDocNeighbors(db, 'nb-2')
-    expect(mid.prev?.id).toBe('nb-1')
-    expect(mid.next?.id).toBe('nb-3')
-    // 首篇：prev null；末篇：next null（同毫秒组内）
-    const head = getDocNeighbors(db, 'nb-0')
+    expect(mid.prev?.id).toBe('nb-3')
+    expect(mid.next?.id).toBe('nb-1')
+    const head = getDocNeighbors(db, 'nb-4')
     expect(head.prev).toBeNull()
-    expect(head.next?.id).toBe('nb-1')
-    const tail = getDocNeighbors(db, 'nb-4')
+    expect(head.next?.id).toBe('nb-3')
+    const tail = getDocNeighbors(db, 'nb-0')
     expect(tail.next).toBeNull()
-    expect(tail.prev?.id).toBe('nb-3')
+    expect(tail.prev?.id).toBe('nb-1')
+  })
+
+  test('正式笔记不与收集箱互为邻居', () => {
+    const db = getDb()
+    insertBlock(db, {
+      id: 'nb-note-a', notebook_id: notebookId, parent_id: null, root_id: 'nb-note-a',
+      type: 'document', content: '笔记甲', sort: 0, level: 0, now: '2026-01-02 00:00:00.000',
+    })
+    insertBlock(db, {
+      id: 'nb-inbox', notebook_id: notebookId, parent_id: null, root_id: 'nb-inbox',
+      type: 'document', content: '收集', status: 'inbox', sort: 0, level: 0, now: '2026-01-02 00:00:01.000',
+    })
+    insertBlock(db, {
+      id: 'nb-note-b', notebook_id: notebookId, parent_id: null, root_id: 'nb-note-b',
+      type: 'document', content: '笔记乙', sort: 0, level: 0, now: '2026-01-02 00:00:02.000',
+    })
+    const a = getDocNeighbors(db, 'nb-note-a')
+    expect(a.prev?.id).toBe('nb-note-b')
+    expect(a.next).toBeNull()
+    const inbox = getDocNeighbors(db, 'nb-inbox')
+    expect(inbox.prev).toBeNull()
+    expect(inbox.next).toBeNull()
   })
 })
 

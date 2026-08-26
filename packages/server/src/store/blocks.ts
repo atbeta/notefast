@@ -79,47 +79,55 @@ export interface DocNeighbors {
   next: DocNeighbor | null
 }
 
+/** 与 listDocRows(status=note|inbox|archived) 同一套生命周期谓词 */
+function docStatusPredicate(status: string): string {
+  if (status === 'inbox') return "status = 'inbox'"
+  if (status === 'archived') return "status = 'archived'"
+  return "status NOT IN ('inbox', 'archived')"
+}
+
 /**
- * 文档顺序导航邻居：按 created_at ASC（rowid 决胜 = 真实入库序）排序的未删除
- * 文档中，当前文档的前一篇 / 后一篇（Obsidian 式「上一篇/下一篇」）。
+ * 文档顺序导航邻居：与「所有文档」列表同序（updated_at DESC，rowid 决胜），
+ * 且只在同一生命周期集合内翻页（note / inbox / archived 互不跨集）。
  *
- * 每侧两段查询（先同毫秒 rowid 决胜组内找，再严格更早/更晚的 created_at 范围），
- * 全部走 idx_blocks_doc_created 索引（原实现全表扫描排序，块量大时线性退化；
- * rowid 不可建索引，决胜仅在同毫秒的极小碰撞组内微排序）。
+ * 上一篇 = 列表中更靠上（更新更近）；下一篇 = 更靠下（更新更早）。
+ * 每侧两段查询（先同毫秒 rowid 决胜组内找，再严格更近/更早的 updated_at 范围），
+ * 走 idx_blocks_doc_updated（rowid 不可建索引，决胜仅在同毫秒碰撞组内微排序）。
  * 文档不存在或仅此一篇 → 两侧 null。
  */
 export function getDocNeighbors(db: Db, id: string): DocNeighbors {
   const cur = db
     .query(
-      `SELECT created_at, rowid FROM blocks
+      `SELECT updated_at, rowid, status FROM blocks
        WHERE id = ? AND type = 'document' AND is_deleted = 0`,
     )
-    .get(id) as { created_at: string; rowid: number } | undefined
+    .get(id) as { updated_at: string; rowid: number; status: string } | undefined
   if (!cur) return { prev: null, next: null }
 
-  const docCond = `type = 'document' AND is_deleted = 0`
+  const docCond = `type = 'document' AND is_deleted = 0 AND ${docStatusPredicate(cur.status)}`
+  // 列表序 ORDER BY updated_at DESC, rowid DESC：上一篇 = 更新更近（键更大）
   const prev =
     (db.query(
       `SELECT id, content FROM blocks
-       WHERE ${docCond} AND created_at = ? AND rowid < ?
-       ORDER BY rowid DESC LIMIT 1`,
-    ).get(cur.created_at, cur.rowid) as { id: string; content: string } | undefined)
+       WHERE ${docCond} AND updated_at = ? AND rowid > ?
+       ORDER BY rowid ASC LIMIT 1`,
+    ).get(cur.updated_at, cur.rowid) as { id: string; content: string } | undefined)
     ?? (db.query(
       `SELECT id, content FROM blocks
-       WHERE ${docCond} AND created_at < ?
-       ORDER BY created_at DESC, rowid DESC LIMIT 1`,
-    ).get(cur.created_at) as { id: string; content: string } | undefined)
+       WHERE ${docCond} AND updated_at > ?
+       ORDER BY updated_at ASC, rowid ASC LIMIT 1`,
+    ).get(cur.updated_at) as { id: string; content: string } | undefined)
   const next =
     (db.query(
       `SELECT id, content FROM blocks
-       WHERE ${docCond} AND created_at = ? AND rowid > ?
-       ORDER BY rowid ASC LIMIT 1`,
-    ).get(cur.created_at, cur.rowid) as { id: string; content: string } | undefined)
+       WHERE ${docCond} AND updated_at = ? AND rowid < ?
+       ORDER BY rowid DESC LIMIT 1`,
+    ).get(cur.updated_at, cur.rowid) as { id: string; content: string } | undefined)
     ?? (db.query(
       `SELECT id, content FROM blocks
-       WHERE ${docCond} AND created_at > ?
-       ORDER BY created_at ASC, rowid ASC LIMIT 1`,
-    ).get(cur.created_at) as { id: string; content: string } | undefined)
+       WHERE ${docCond} AND updated_at < ?
+       ORDER BY updated_at DESC, rowid DESC LIMIT 1`,
+    ).get(cur.updated_at) as { id: string; content: string } | undefined)
 
   return {
     prev: prev ? { id: prev.id, title: prev.content } : null,

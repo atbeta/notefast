@@ -13,7 +13,7 @@
     "navForward": "Forward: {{title}}",
     "navNoBack": "No previous page",
     "navNoForward": "No next page",
-    "neighborNav": "Documents by creation order",
+    "neighborNav": "Documents in list order",
     "prevDocLabel": "Previous",
     "nextDocLabel": "Next",
     "prevDoc": "Previous: {{title}}",
