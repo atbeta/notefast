@@ -373,7 +373,8 @@ export default function NewDocPage() {
                 <Upload className="w-5 h-5" strokeWidth={1.75} />
               </div>
               <p className="text-sm font-medium text-foreground mb-1">{t('newDoc.dropHint')}</p>
-              <p className="text-xs text-muted-foreground">{t('newDoc.dropHintSub')}</p>
+              <p className="text-xs text-muted-foreground mt-2">{t('newDoc.dropHintSub')}</p>
+              <p className="text-xs text-muted-foreground">{t('newDoc.dropHintZip')}</p>
               <input
                 type="file"
                 accept=".md,.markdown,text/markdown,.txt,text/plain,.zip,application/zip,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
