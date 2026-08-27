@@ -244,7 +244,7 @@ export default function Layout({ children, contentClassName }: { children: React
             </div>
           </div>
           <main
-            className={`flex-1 flex flex-col min-h-0 relative transition-[padding] duration-300 ${aiChatOpen ? (aiChatExpanded ? 'md:pr-[600px]' : 'md:pr-[400px]') : ''}`}
+            className={`flex-1 flex flex-col min-h-0 relative transition-[padding] duration-300 print:pr-0 ${aiChatOpen ? (aiChatExpanded ? 'md:pr-[600px]' : 'md:pr-[400px]') : ''}`}
           >
             {/* 服务不可达总览条：探测成功会自动消失，无需手动清除 */}
             <ServerOfflineBanner />

@@ -52,7 +52,7 @@ export function ServerOfflineBanner() {
   return (
     <div
       role="alert"
-      className="w-full bg-destructive/8 border-b border-destructive/20 px-4 py-2 text-sm text-destructive flex items-center gap-3"
+      className="w-full bg-destructive/8 border-b border-destructive/20 px-4 py-2 text-sm text-destructive flex items-center gap-3 print:hidden"
     >
       <WifiOff className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
       <span className="flex-1 min-w-0 truncate">

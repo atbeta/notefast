@@ -1,5 +1,5 @@
 /**
- * 文档页顶栏溢出菜单：导出 / 关联图谱 / 删除。
+ * 文档页顶栏溢出菜单：导出 Markdown / 导出 PDF / 关联图谱 / 删除。
  * 阅读现场（编辑、缩放、加宽、演示）和会变的分享状态留在外面。
  */
 
@@ -7,7 +7,7 @@ import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Download, Loader2, MoreHorizontal, Network, Trash2 } from 'lucide-react'
+import { FileDown, FileText, Loader2, MoreHorizontal, Network, Trash2 } from 'lucide-react'
 import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
 import { Tooltip } from './ui'
 
@@ -21,6 +21,7 @@ interface DocHeaderMoreProps {
   /** 收集箱条目删除走「丢弃」措辞（与列表侧 DocActionsMenu 一致） */
   isInbox?: boolean
   onExport: () => void
+  onExportPdf: () => void
   onDelete: () => void
 }
 
@@ -30,6 +31,7 @@ export default function DocHeaderMore({
   disabled,
   isInbox,
   onExport,
+  onExportPdf,
   onDelete,
 }: DocHeaderMoreProps) {
   const { t } = useTranslation()
@@ -46,7 +48,7 @@ export default function DocHeaderMore({
     if (!el) return
     const r = el.getBoundingClientRect()
     const panelW = 200
-    const approxH = 140
+    const approxH = 180
     const pad = 8
     const openUp = r.bottom + approxH > window.innerHeight - pad && r.top > approxH
     let left = r.right - panelW
@@ -125,8 +127,21 @@ export default function DocHeaderMore({
           >
             {exporting
               ? <Loader2 className={`${iconCls} animate-spin`} strokeWidth={1.75} />
-              : <Download className={iconCls} strokeWidth={1.75} />}
+              : <FileText className={iconCls} strokeWidth={1.75} />}
             <span>{t('doc.exportDoc')}</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={disabled}
+            onClick={() => {
+              close()
+              onExportPdf()
+            }}
+            className={itemCls}
+          >
+            <FileDown className={iconCls} strokeWidth={1.75} />
+            <span>{t('doc.exportPdf')}</span>
           </button>
           <Link
             role="menuitem"

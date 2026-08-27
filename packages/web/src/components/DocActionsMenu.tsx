@@ -13,10 +13,11 @@ import {
   Archive,
   ArchiveRestore,
   ArrowUpRight,
-  Download,
   Eye,
   EyeOff,
   ExternalLink,
+  FileDown,
+  FileText,
   MoreHorizontal,
   Pencil,
   Share2,
@@ -32,6 +33,7 @@ import ConfirmDialog from './ConfirmDialog'
 import ShareDialog from './ShareDialog'
 import { Tooltip, useToast } from './ui'
 import { docActionIdsFor, isReadingDoc, resolveDocLifecycle, type DocActionId } from '../lib/docActions'
+import { docExportPdfPath } from '../lib/printDoc'
 import { removeVisit } from '../lib/recentVisits'
 
 export type DocActionsSurface = 'list' | 'sidebar' | 'inbox' | 'archived'
@@ -101,7 +103,7 @@ export default function DocActionsMenu({
     if (!el) return
     const r = el.getBoundingClientRect()
     const panelW = 200
-    const approxH = 280
+    const approxH = 312
     const pad = 8
     const openUp = r.bottom + approxH > window.innerHeight - pad && r.top > approxH
     let left = r.right - panelW
@@ -326,9 +328,18 @@ export default function DocActionsMenu({
     export: {
       id: 'export',
       label: t('docActions.export'),
-      icon: <Download className={iconCls} strokeWidth={iconStroke} />,
+      icon: <FileText className={iconCls} strokeWidth={iconStroke} />,
       onSelect: () => { void handleExport() },
       disabled: busy,
+    },
+    'export-pdf': {
+      id: 'export-pdf',
+      label: t('docActions.exportPdf'),
+      icon: <FileDown className={iconCls} strokeWidth={iconStroke} />,
+      onSelect: () => {
+        close()
+        navigate(docExportPdfPath(doc.id))
+      },
     },
     'ai-exclude': {
       id: 'ai-exclude',

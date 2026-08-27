@@ -1184,15 +1184,21 @@ html.native-shell[data-shell='macos'] {
   --shell-traffic-top-collapsed: 28px;
 }
 
-/* 打印 / 存储为 PDF：只留阅读正文（macOS 菜单「打印…」走 WKWebView.printOperation） */
+/* 打印 / 导出 PDF：只留阅读正文（菜单「导出 PDF」走 window.print；macOS ⌘⇧P 仍走 WKWebView.printOperation） */
 @media print {
   html, body, #root {
     height: auto !important;
     overflow: visible !important;
     background: #fff !important;
+    color: #171717 !important;
   }
   .demo-zoom {
     zoom: 1 !important;
+  }
+  /* 标题在阅读页是可编辑 input；打印时当文档大标题，不要网页表单感 */
+  .input-underline {
+    color: #171717 !important;
+    caret-color: transparent;
   }
   ::highlight(nf-find),
   ::highlight(nf-find-current) {

@@ -101,7 +101,7 @@ final class WebNavigator {
         webView?.pageZoom = min(Self.maxZoom, max(Self.minZoom, zoom))
     }
 
-    // MARK: - 打印（⌘P）
+    // MARK: - 导出 PDF（菜单 ⌘⇧P；⌘P 留给编辑器预览）
 
     func printPage() {
         webView?.printOperation(with: .shared).run()

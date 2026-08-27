@@ -13,6 +13,7 @@ export type DocActionId =
   | 'archive'
   | 'share'
   | 'export'
+  | 'export-pdf'
   | 'ai-exclude'
   | 'delete'
 
@@ -36,8 +37,8 @@ export function docActionIdsFor(kind: DocLifecycle): DocActionId[] {
     case 'inbox':
       return ['open-tab', 'rename', 'promote', 'delete']
     case 'archived':
-      return ['open-tab', 'rename', 'restore', 'export', 'delete']
+      return ['open-tab', 'rename', 'restore', 'export', 'export-pdf', 'delete']
     default:
-      return ['open-tab', 'rename', 'archive', 'share', 'export', 'ai-exclude', 'delete']
+      return ['open-tab', 'rename', 'archive', 'share', 'export', 'export-pdf', 'ai-exclude', 'delete']
   }
 }

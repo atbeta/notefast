@@ -32,16 +32,17 @@ describe('docActionIdsFor', () => {
   })
 
   test('归档：恢复 + 导出，不含归档/分享/AI', () => {
-    expect(docActionIdsFor('archived')).toEqual(['open-tab', 'rename', 'restore', 'export', 'delete'])
+    expect(docActionIdsFor('archived')).toEqual(['open-tab', 'rename', 'restore', 'export', 'export-pdf', 'delete'])
   })
 
-  test('笔记：归档/分享/导出/AI/删除', () => {
+  test('笔记：归档/分享/导出 Markdown 与 PDF/AI/删除', () => {
     expect(docActionIdsFor('note')).toEqual([
       'open-tab',
       'rename',
       'archive',
       'share',
       'export',
+      'export-pdf',
       'ai-exclude',
       'delete',
     ])

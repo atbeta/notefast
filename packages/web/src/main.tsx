@@ -10,12 +10,15 @@ import '@fontsource-variable/jetbrains-mono'
 import './index.css'
 import { initNativeShell } from './lib/nativeShell'
 import { initNoAutofill } from './lib/noAutofill'
+import { installPrintDocumentHooks } from './lib/printDoc'
 import { install as installErrorReporter } from './lib/errorReporter'
 import { handleGlobalKeyDown, collectBlockingOverlays } from './lib/globalShortcuts'
 import ErrorBoundary from './components/ErrorBoundary'
 
 // 原生壳适配（右键菜单屏蔽等）：浏览器形态内部自动跳过
 initNativeShell()
+// 打印 / 导出 PDF：强制浅色纸面，避免暗色主题把网页壳色印进文件
+installPrintDocumentHooks()
 // 全局禁用输入历史记忆（密码框豁免）——桌面壳里浏览器式历史下拉很违和
 initNoAutofill()
 // 客户端错误埋点（componentDidCatch / window.onerror / unhandledrejection）→ POST /api/v1/client-errors

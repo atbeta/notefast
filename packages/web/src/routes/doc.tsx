@@ -66,6 +66,7 @@ import { useEditorDraft } from '../hooks/useEditorDraft'
 import { EmptyState, InlineError, ListRowsSkeleton, Tooltip, useToast } from '../components/ui'
 import { isEnterEditShortcut } from '../lib/globalShortcuts'
 import { deliverExport, fetchDocExportFile } from '../lib/download'
+import { hasExportPdfParam, printReadingDocAsPdf, stripExportPdfParam } from '../lib/printDoc'
 import { recordVisit } from '../lib/recentVisits'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
 import { useRegisterShortcutPage } from '../hooks/useShortcutScope'
@@ -219,6 +220,19 @@ export default function DocPage() {
     } finally {
       setExporting(false)
     }
+  }
+
+  const handleExportPdf = () => {
+    const title = (doc?.content || t('doc.untitledDocument')).trim()
+    const fire = () => printReadingDocAsPdf(title)
+    if (isEditing) {
+      setEditingDocId(null)
+      requestAnimationFrame(() => {
+        requestAnimationFrame(fire)
+      })
+      return
+    }
+    fire()
   }
   // 阅读态草稿探测：进入文档 / 退出编辑 / 保存刷新后重估（草稿由编辑器的
   // 自动暂存产生，阅读态此前完全无感——看不到「这篇还有未保存内容」）
@@ -463,6 +477,25 @@ useEffect(() => {
       return next
     }, { replace: true })
   }, [searchParams, setSearchParams])
+
+  // 列表「导出 PDF」深链：等正文就绪后打开打印对话框，并剥掉 query 以免刷新再弹一次
+  const pdfExportOnceRef = useRef(false)
+  useEffect(() => {
+    if (!hasExportPdfParam(searchParams)) {
+      pdfExportOnceRef.current = false
+      return
+    }
+    if (loading || !doc) return
+    if (pdfExportOnceRef.current) return
+    pdfExportOnceRef.current = true
+    setSearchParams((prev) => stripExportPdfParam(prev), { replace: true })
+    setEditingDocId(null)
+    const title = (doc.content || t('doc.untitledDocument')).trim()
+    // 剥 query 会再跑本 effect；不要在 cleanup 里取消 rAF，否则打印永远不会弹出
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => printReadingDocAsPdf(title))
+    })
+  }, [loading, doc, searchParams, setSearchParams, t])
 
   useEffect(() => {
     if (doc) {
@@ -936,6 +969,7 @@ useEffect(() => {
                 disabled={loading}
                 isInbox={docStatus === 'inbox'}
                 onExport={() => void handleExport()}
+                onExportPdf={handleExportPdf}
                 onDelete={() => setShowDelete(true)}
               />
             )}
@@ -986,7 +1020,7 @@ useEffect(() => {
               </div>
             )}
             {!isEditing && draftInfo && (
-              <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+              <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground print:hidden">
                 <PencilLine className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
                 <span className="flex-1">
                   {draftInfo.updatedAt > 0
@@ -1010,7 +1044,7 @@ useEffect(() => {
               </div>
             )}
             {docStatus === 'inbox' && (
-              <div className="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+              <div className="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground print:hidden">
                 <Inbox className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
                 <span className="flex-1 min-w-[12rem]">{t('doc.inboxDescription')}</span>
                 <button
@@ -1027,7 +1061,7 @@ useEffect(() => {
               </div>
             )}
             {docStatus === 'archived' && (
-              <div className="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+              <div className="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground print:hidden">
                 <Archive className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
                 <span className="flex-1 min-w-[12rem]">{t('doc.archivedDescription')}</span>
                 <button
@@ -1068,7 +1102,7 @@ useEffect(() => {
                   type="button"
                   onClick={handleSuggestTitle}
                   disabled={generatingTitle || aiExclude || !ai.chat}
-                  className="absolute right-1 sm:-right-8 top-3 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-50 p-1.5 text-muted-foreground hover:text-foreground transition-[color,opacity] rounded-md disabled:opacity-30"
+                  className="absolute right-1 sm:-right-8 top-3 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-50 p-1.5 text-muted-foreground hover:text-foreground transition-[color,opacity] rounded-md disabled:opacity-30 print:hidden"
                   aria-label={aiExclude ? t('doc.aiHiddenNoTitle') : t('doc.generateTitleAi')}
                 >
                   {generatingTitle ? (
@@ -1083,7 +1117,7 @@ useEffect(() => {
 
             {/* Meta row — 阅读态展示，融入标题与正文之间 */}
             {!isEditing && (
-              <div className="mt-2 mb-8 text-sm text-muted-foreground/70 tabular-nums select-none">
+              <div className="mt-2 mb-8 text-sm text-muted-foreground/70 tabular-nums select-none print:hidden">
                 {wordCount.toLocaleString(currentLocale())} {t('doc.charCount')}
                 {createdAt && (
                   <>
@@ -1107,8 +1141,8 @@ useEffect(() => {
             )}
             {/* 演示模式控制已移至右上角（仅阅读态） */}
 
-            {/* Tags；笔记才露出归档 / 对 AI 隐藏（收集箱、归档走各自横幅） */}
-            <div className="flex flex-wrap items-center justify-between gap-3 mt-4 mb-6">
+            {/* Tags；笔记才露出归档 / 对 AI 隐藏（收集箱、归档走各自横幅）。打印只留标题+正文 */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mt-4 mb-6 print:hidden">
               {id && <TagEditor docId={id} tags={tags} onChange={setTags} />}
               <div className="flex items-center gap-3 shrink-0">
                 {docStatus === 'note' && (
@@ -1139,7 +1173,7 @@ useEffect(() => {
             </div>
 
             {aiExclude && (
-              <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground/80 leading-relaxed">
+              <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground/80 leading-relaxed print:hidden">
                 <span className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-foreground/80">
                   <EyeOff className="w-3 h-3 shrink-0" strokeWidth={1.75} />
                   {t('doc.aiExcluded')}
@@ -1175,7 +1209,7 @@ useEffect(() => {
               <div className="relative">
                 {isEmpty && (
                   <EmptyState
-                    className="select-none"
+                    className="select-none print:hidden"
                     icon={<SquarePen className="w-5 h-5" />}
                     title={t('doc.emptyDocument')}
                     description={t('doc.emptyDocumentHint')}
@@ -1184,7 +1218,7 @@ useEffect(() => {
 
                 {/* Mobile outline — 折叠目录置于正文前，方便快速导航 */}
                 {!isEditing && flatHeadings.length > 0 && (
-                  <div className="lg:hidden mb-6">
+                  <div className="lg:hidden mb-6 print:hidden">
                     <button
                       type="button"
                       onClick={() => setTocOpen((v) => !v)}
