@@ -19,7 +19,10 @@ import { Tooltip } from './ui'
 export default function TitleBar() {
   const { t } = useTranslation()
   const [maximized, setMaximized] = useState(false)
-  const [win, setWin] = useState<TauriWindow | undefined>()
+  // 同步取窗口：刷新后若等 useEffect，首帧会空白（无边框窗等于没标题栏）
+  const [win, setWin] = useState<TauriWindow | undefined>(() =>
+    isTauriShell() ? getTauriWindow() : undefined,
+  )
 
   useEffect(() => {
     if (!isTauriShell()) return
