@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Block, SearchResult } from '@notefast/core'
-import { collapseSearchHitsByDoc, paletteDocTitle, searchHitDocPath } from '../searchHits'
+import { collapseSearchHitsByDoc, paletteDocTitle, searchHitDocPath, parseDocScrollHash } from '../searchHits'
 
 function hit(partial: { id: string; root_id: string; content: string; snippet: string; doc_title?: string; rank?: number }): SearchResult {
   const block = {
@@ -85,5 +85,18 @@ describe('searchHitDocPath', () => {
       content: '标题',
       snippet: '标题',
     }))).toBe('/doc/doc-a')
+  })
+})
+
+describe('parseDocScrollHash', () => {
+  test('空 hash 不定位', () => {
+    expect(parseDocScrollHash('')).toBeNull()
+    expect(parseDocScrollHash('#')).toBeNull()
+  })
+
+  test('#block-<id> 与 #<id> 都得到块 id', () => {
+    expect(parseDocScrollHash('#block-p1')).toBe('p1')
+    expect(parseDocScrollHash('block-p1')).toBe('p1')
+    expect(parseDocScrollHash('#heading-a')).toBe('heading-a')
   })
 })

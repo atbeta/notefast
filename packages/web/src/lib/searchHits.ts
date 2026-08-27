@@ -29,6 +29,16 @@ export function searchHitDocPath(hit: SearchResult): string {
   return `/doc/${docId}#block-${hit.block.id}`
 }
 
+/**
+ * 文档页定位锚：`#block-<id>`（搜索/引用）或 `#<id>`（大纲）。
+ * 有锚时不要先 restore 阅读滚动再跳转，否则会上下晃。
+ */
+export function parseDocScrollHash(hash: string): string | null {
+  const raw = hash.startsWith('#') ? hash.slice(1) : hash
+  if (!raw) return null
+  return raw.startsWith('block-') ? raw.slice(6) : raw
+}
+
 /** 面板主行用文档标题，不要用子块 snippet 冒充篇名 */
 export function paletteDocTitle(hit: SearchResult, untitled: string): string {
   const fromApi = hit.doc_title?.trim()

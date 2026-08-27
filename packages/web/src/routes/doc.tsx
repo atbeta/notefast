@@ -46,6 +46,7 @@ import { readDocRailWidth, writeDocRailWidth, type DocRailWidth } from '../hooks
 
 import { openDocChangeAction } from '../lib/openDocChange'
 import { resolveRelatedBlockId } from '../lib/relatedAnchor'
+import { parseDocScrollHash } from '../lib/searchHits'
 import { scrollToElement, scrollLandingTop, SCROLL_TOP_GAP } from '../lib/scroll'
 import { readDocScroll, writeDocScroll } from '../lib/docScroll'
 import DocFindBar from '../components/DocFindBar'
@@ -179,6 +180,11 @@ export default function DocPage() {
     }
     if (!id || !doc || doc.id !== id) return
     if (restoredScrollForIdRef.current === id) return
+    // 搜索/引用带锚：restore 会先滚到旧位置，200ms 补 restore 还会把 hash 跳转打回去
+    if (parseDocScrollHash(location.hash)) {
+      restoredScrollForIdRef.current = id
+      return
+    }
     const el = scrollRef.current
     if (!el) return
     const top = readDocScroll(id) ?? 0
@@ -188,7 +194,7 @@ export default function DocPage() {
       if (scrollRef.current) scrollRef.current.scrollTop = top
     }, 200)
     return () => window.clearTimeout(timer)
-  }, [id, doc?.id, isEditing])
+  }, [id, doc?.id, isEditing, location.hash])
 
   useEffect(() => {
     return () => {
@@ -547,17 +553,14 @@ useEffect(() => {
     }
   }, [doc])
 
-  // 引用/反链/大纲跳转：文档加载后按 hash 滚动到目标块。
-  // 兼容两种形式：引用链接的 #block-<id> 与大纲/heading 锚的 #<id>。
-  // SPA 导航时内容分多拍到达（旧文档保留 → 新数据替换），
-  // 单次滚动会落在过期布局上（且并发平滑动画会互相截停）——
-  // 瞬时跳 + 两次位置校验补跳。依赖 doc.id 而非 doc 对象，避免阅读中 SSE 刷新把人拽回锚点。
-  useEffect(() => {
+  // 引用/反链/大纲/搜索跳转：文档加载后按 hash 滚到目标块。
+  // 兼容 #block-<id> 与 #<id>。useLayoutEffect 赶在首帧 paint 前落地，
+  // 避免先 restore/露出旧位置再跳（会上下晃）。内容分多拍到达时再瞬时补跳。
+  useLayoutEffect(() => {
     if (!doc || doc.id !== id) return
-    const raw = location.hash.slice(1)
-    if (!raw) return
-    const targetId = raw.startsWith('block-') ? raw.slice(6) : raw
-    if (targetId && targetId !== doc.id) setRelatedBlockId(targetId)
+    const targetId = parseDocScrollHash(location.hash)
+    if (!targetId) return
+    if (targetId !== doc.id) setRelatedBlockId(targetId)
     // 跨路由进场时 RouteTransition 的离场叠影（.animate-page-leave）里可能并行挂载着
     // 同一路由的另一个实例，含相同 block id 的幽灵节点；getElementById 按文档序会命中幽灵——查找时显式排除
     const findTarget = (): HTMLElement | null => {
@@ -573,16 +576,14 @@ useEffect(() => {
     const inPlace = () => {
       const el = findTarget()
       if (!el) return false
-      // 落点基准与 scrollToElement 一致（滚动容器上沿 + gap，实测）
       return Math.abs(el.getBoundingClientRect().top - scrollLandingTop(el)) < 24
     }
+    jump()
     const timers = [
-      window.setTimeout(jump, 60),
       window.setTimeout(() => { if (!inPlace()) jump() }, 400),
       window.setTimeout(() => {
         if (inPlace()) return
         if (findTarget()) jump()
-        // 锚点失效（回答生成后文档被编辑/删除，或过期引用）：明确告知而非沉默停在顶部
         else toast.info({ title: t('doc.blockNotFound'), description: t('doc.blockNotFoundDescription') })
       }, 900),
     ]
