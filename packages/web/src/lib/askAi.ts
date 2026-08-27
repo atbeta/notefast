@@ -11,8 +11,17 @@ export const ASK_AI_EVENT = 'notefast:ask-ai'
 export interface AskAiDetail {
   /** 块 Markdown 引用（发送端已截断） */
   quote: string
+  /** 阅读态块 ID；有则预填，供 update_block 对准眼前这段 */
+  blockId?: string
 }
 
 export function dispatchAskAi(detail: AskAiDetail): void {
   window.dispatchEvent(new CustomEvent<AskAiDetail>(ASK_AI_EVENT, { detail }))
+}
+
+/** 预填草稿：前缀必须在首行（用量统计依赖）；blockId 行可选。 */
+export function formatAskAiDraft(prefix: string, quote: string, blockIdLine?: string): string {
+  const quoted = quote.split('\n').map((l) => `> ${l}`).join('\n')
+  const id = blockIdLine ? `${blockIdLine}\n` : ''
+  return `${prefix}\n${id}${quoted}\n\n`
 }

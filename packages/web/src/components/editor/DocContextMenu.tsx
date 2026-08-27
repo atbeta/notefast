@@ -136,11 +136,12 @@ export function useDocContextMenu({
   )
 
   const dispatchAskAiWithQuote = useCallback(
-    (quote: string) => {
+    (quote: string, blockId?: string | null) => {
       close()
       if (!quote) return
       dispatchAskAi({
         quote: quote.length > QUOTE_MAX ? `${quote.slice(0, QUOTE_MAX)}…` : quote,
+        ...(blockId ? { blockId } : {}),
       })
     },
     [close],
@@ -193,7 +194,7 @@ export function useDocContextMenu({
             ? t('contextMenu.askAiAboutSelection')
             : t('block.askAi'),
           icon: <Sparkles className={ICON_CLS} strokeWidth={1.75} />,
-          onSelect: () => dispatchAskAiWithQuote(askQuote),
+          onSelect: () => dispatchAskAiWithQuote(askQuote, block?.id),
         })
       }
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { resolveAiLang } from '../ai/locale'
-import { buildChatPrompt } from '../ai/prompt'
+import { buildChatPrompt, toCurrentDocBlockRefs } from '../ai/prompt'
 import { listSkills } from '../ai/skills'
 import { suggestTitle, messageText } from '@notefast/core'
 import type { LLMProvider } from '@notefast/core'
@@ -89,5 +89,34 @@ describe('检索结果注入 prompt 携带 ID', () => {
     expect(sys).toContain('用户当前查看文档：《排版验证》')
     expect(sys).toContain('本轮未做全库检索')
     expect(sys).not.toContain('未找到相关内容')
+  })
+
+  test('当前文档注入 doc_id 与可写块表', () => {
+    const msgs = buildChatPrompt({
+      messages: [{ role: 'user', content: '把第二段改短一点' }],
+      citations: [],
+      currentDocId: 'doc-1',
+      currentDocTitle: '排版验证',
+      currentDocContent: '正文一段',
+      currentDocBlocks: [
+        { id: 'b-title', type: 'document', preview: '排版验证' },
+        { id: 'b-p1', type: 'paragraph', preview: '悬挂标点与行首齐平' },
+      ],
+      lang: 'zh',
+    })
+    const sys = String(msgs[0]?.content ?? '')
+    expect(sys).toContain('doc_id: doc-1')
+    expect(sys).toContain('block_id: b-p1')
+    expect(sys).toContain('悬挂标点与行首齐平')
+    expect(sys).toContain('可写块')
+  })
+
+  test('toCurrentDocBlockRefs 跳过空正文块、保留文档根', () => {
+    const refs = toCurrentDocBlockRefs([
+      { id: 'd', type: 'document', content: '标题' },
+      { id: 'empty', type: 'paragraph', content: '  ' },
+      { id: 'p', type: 'paragraph', content: '有字' },
+    ])
+    expect(refs.map((r) => r.id)).toEqual(['d', 'p'])
   })
 })

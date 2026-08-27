@@ -104,7 +104,10 @@ export function BlockHandle({ block, className }: BlockHandleProps) {
     close()
     const quote = blocksToMarkdown([block]).trim()
     if (!quote) return
-    dispatchAskAi({ quote: quote.length > QUOTE_MAX ? `${quote.slice(0, QUOTE_MAX)}…` : quote })
+    dispatchAskAi({
+      quote: quote.length > QUOTE_MAX ? `${quote.slice(0, QUOTE_MAX)}…` : quote,
+      blockId: block.id,
+    })
   }
 
   const items = [

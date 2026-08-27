@@ -20,7 +20,7 @@
  *     c. 否则 → 答案已在流中发出
  */
 
-import type { ChatMessage, ToolCall } from '@notefast/core'
+import type { ChatMessage, ToolCall, Block } from '@notefast/core'
 import { ThinkStreamParser, splitThinkContent, readDocStatus, readTags, parseStaleWithin, parseUpdatedWithin, messageText, buildBlockTree, blocksToMarkdown } from '@notefast/core'
 import type { Citation } from './hybridSearch'
 import { getDb } from '../db'
@@ -32,7 +32,7 @@ import {
 } from '../store/blocks'
 import { hybridSearch, type HybridSearchReport } from './hybridSearch'
 import { listPinnedViews } from '../services/pinnedViews'
-import { buildChatPrompt } from './prompt'
+import { buildChatPrompt, toCurrentDocBlockRefs } from './prompt'
 import type { AiLang } from './locale'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import { loadAiExcludedDocIds } from './aiExcludeQuery'
@@ -456,12 +456,14 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
 
   const currentDocTitle = opts.contextDocId ? lookupDocTitle(opts.contextDocId) : undefined
   let currentDocContent: string | undefined
+  let currentDocBlocks: ReturnType<typeof toCurrentDocBlockRefs> | undefined
   if (opts.contextDocId) {
     try {
       const docRows = fetchDocBlocks(getDb(), opts.contextDocId)
       if (docRows.length > 0) {
         const tree = buildBlockTree(docRows)
         currentDocContent = blocksToMarkdown(tree)
+        currentDocBlocks = toCurrentDocBlockRefs(flattenDocBlocks(tree))
       }
     } catch { /* 加载失败不计较 */ }
   }
@@ -474,8 +476,10 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
   const promptMessages = buildChatPrompt({
     messages: opts.messages,
     citations: initialReport.citations,
+    currentDocId: opts.contextDocId,
     currentDocTitle,
     currentDocContent,
+    currentDocBlocks,
     lang,
     skipRetrieval: opts.skipRetrieval,
     tools: enableTools ? getAllToolDefinitions(lang) : undefined,
@@ -689,6 +693,18 @@ function lookupDocTitle(docId: string): string | undefined {
   } catch {
     return undefined
   }
+}
+
+function flattenDocBlocks(blocks: Block[]): Array<{ id: string; type: string; content: string }> {
+  const out: Array<{ id: string; type: string; content: string }> = []
+  const walk = (nodes: Block[]) => {
+    for (const n of nodes) {
+      out.push({ id: n.id, type: n.type, content: n.content })
+      if (n.children.length > 0) walk(n.children)
+    }
+  }
+  walk(blocks)
+  return out
 }
 
 /**

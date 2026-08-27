@@ -126,12 +126,12 @@ function getWriteToolDefinitions(lang: AiLang): ToolDefinition[] {
       function: {
         name: 'notefast_append_to_doc',
         description: en
-          ? 'Append a section to the end of an existing document. Get doc_id from block.doc_id in the retrieval results. Call when the user says "add this to note XX" or "append to document XX".'
-          : '向已有文档末尾追加一段内容。doc_id 从检索结果中的 block.doc_id 获取。当用户要求"加到那篇笔记里""补充到 XX 文档"时调用。',
+          ? 'Append a section to the end of an existing document. If the user is viewing a document, use that doc_id from the current-document section. Otherwise get doc_id from block.doc_id in the retrieval results. Call when the user says "add this to note XX" or "append to document XX".'
+          : '向已有文档末尾追加一段内容。用户正在查看某篇时用当前文档的 doc_id；否则从检索结果中的 block.doc_id 获取。当用户要求"加到那篇笔记里""补充到 XX 文档"时调用。',
         parameters: {
           type: 'object',
           properties: {
-            doc_id: { type: 'string', description: en ? 'Target document ID (from retrieval results or the conversation)' : '目标文档 ID（从检索结果或之前的对话中获取）' },
+            doc_id: { type: 'string', description: en ? 'Target document ID (current document, retrieval results, or the conversation)' : '目标文档 ID（当前查看文档、检索结果或之前的对话）' },
             content: { type: 'string', description: en ? 'Content to append, Markdown format. Display math: exclusive-line $$ or ```math.' : '要追加的内容，Markdown 格式。块级公式用独占行 $$ 或 ```math。' },
             heading: { type: 'string', description: en ? 'Optional heading to insert before the content, e.g. "## Addendum"' : '追加内容前先插入的标题（可选），如"## 补充"' },
           },
@@ -144,12 +144,12 @@ function getWriteToolDefinitions(lang: AiLang): ToolDefinition[] {
       function: {
         name: 'notefast_update_block',
         description: en
-          ? 'Update the content of an existing block. Get block_id from citation.block_id in the retrieval results. Call when the user says "change that part" or "rewrite it as XX". To edit several blocks, call this multiple times in one round.'
-          : '更新已有 block 的内容。block_id 从检索结果的 citation.block_id 获取。当用户要求"修改那段""改成 XX"时调用。要改多处时，一轮里多次调用，不要改一处就停。',
+          ? 'Update the content of an existing block. Prefer block_id from the current document writable-block table, or from citation.block_id in retrieval results. Call when the user says "change that part" or "rewrite it as XX". To edit several blocks, call this multiple times in one round.'
+          : '更新已有 block 的内容。优先用当前文档可写块表的 block_id，否则用检索结果的 citation.block_id。当用户要求"修改那段""改成 XX"时调用。要改多处时，一轮里多次调用，不要改一处就停。',
         parameters: {
           type: 'object',
           properties: {
-            block_id: { type: 'string', description: en ? 'Target block ID (from citation.block_id in the retrieval results)' : '目标 block ID（从检索结果的 citation.block_id 获取）' },
+            block_id: { type: 'string', description: en ? 'Target block ID (writable-block table or citation.block_id)' : '目标 block ID（当前文档可写块表或检索结果的 citation.block_id）' },
             content: { type: 'string', description: en ? 'New content, Markdown format' : '新内容，Markdown 格式' },
           },
           required: ['block_id', 'content'],

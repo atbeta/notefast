@@ -2,6 +2,7 @@
   "chat": {
     "visionFallbackText": "请描述这张图片的内容",
     "askAboutPrefix": "关于这段内容：",
+    "askAboutBlockId": "目标 block_id: {{id}}",
     "tool": "工具",
     "callingTool": "正在调用 {{tool}}…",
     "llmError": "LLM 错误",

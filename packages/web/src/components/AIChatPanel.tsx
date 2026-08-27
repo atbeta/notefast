@@ -29,7 +29,7 @@ import { useAiCapabilities, refreshAiCapabilitiesSilent } from '../hooks/useAiCa
 import { streamSSE, type SSEError } from '../lib/streaming'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { isTauriShell, getShell } from '../hooks/useShell'
-import { ASK_AI_EVENT, type AskAiDetail } from '../lib/askAi'
+import { ASK_AI_EVENT, formatAskAiDraft, type AskAiDetail } from '../lib/askAi'
 import ChatMarkdown from './ChatMarkdown'
 import { LightboxImg } from './ImageLightbox'
 import CitationSources, { type Citation, type CitationGroup, type RetrievalInfo } from './CitationSources'
@@ -260,8 +260,10 @@ export default function AIChatPanel({
     const onAsk = (e: Event) => {
       const detail = (e as CustomEvent<AskAiDetail>).detail
       if (!detail?.quote) return
-      const quoted = detail.quote.split('\n').map((l) => `> ${l}`).join('\n')
-      setInput(`${t('chat.askAboutPrefix')}\n${quoted}\n\n`)
+      const blockIdLine = detail.blockId
+        ? t('chat.askAboutBlockId', { id: detail.blockId })
+        : undefined
+      setInput(formatAskAiDraft(t('chat.askAboutPrefix'), detail.quote, blockIdLine))
       window.setTimeout(() => inputRef.current?.focus(), 60)
     }
     window.addEventListener(ASK_AI_EVENT, onAsk)
