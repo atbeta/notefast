@@ -1,4 +1,7 @@
-/** 当前界面快捷键清单（只用于展示，不负责监听） */
+/** 当前界面快捷键清单（只用于展示，不负责监听）
+ *
+ * 全局搜索（⌘K 命令面板）与文档内查找（⌘F）都放在全局段：
+ * 二者语义不同，且 ⌘F 若只挂「本页」则非文档页清单会漏掉它。 */
 
 export type ShortcutPage = 'none' | 'doc-reading' | 'doc-editing'
 
@@ -15,6 +18,7 @@ export interface ShortcutGroups {
 
 const GLOBAL: ShortcutItem[] = [
   { id: 'search', keys: ['mod', 'K'], labelKey: 'shortcuts.search' },
+  { id: 'find', keys: ['mod', 'F'], labelKey: 'shortcuts.find' },
   { id: 'new', keys: ['mod', 'N'], labelKey: 'shortcuts.newDoc' },
   { id: 'ai', keys: ['mod', 'J'], labelKey: 'shortcuts.aiChat' },
   { id: 'sidebar', keys: ['mod', '\\'], labelKey: 'shortcuts.sidebar' },
@@ -26,13 +30,11 @@ const GLOBAL: ShortcutItem[] = [
 
 const DOC_READING: ShortcutItem[] = [
   { id: 'enterEdit', keys: ['mod', 'E'], labelKey: 'shortcuts.enterEdit' },
-  { id: 'find', keys: ['mod', 'F'], labelKey: 'shortcuts.find' },
 ]
 
 const DOC_EDITING_BASE: ShortcutItem[] = [
   { id: 'save', keys: ['mod', 'S'], labelKey: 'shortcuts.save' },
   { id: 'preview', keys: ['mod', 'P'], labelKey: 'shortcuts.preview' },
-  { id: 'find', keys: ['mod', 'F'], labelKey: 'shortcuts.find' },
   { id: 'bold', keys: ['mod', 'B'], labelKey: 'shortcuts.bold' },
   { id: 'italic', keys: ['mod', 'I'], labelKey: 'shortcuts.italic' },
   { id: 'inlineCode', keys: ['mod', 'E'], labelKey: 'shortcuts.inlineCode' },
