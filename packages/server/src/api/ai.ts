@@ -53,7 +53,7 @@ import { getDocById, fetchDocBlockIds } from '../store/blocks'
 import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
 import { loadAiExcludedDocIds } from '../ai/aiExcludeQuery'
 import { runChat, runChatSync, executeWriteTool } from '../ai/chat'
-import { listSkills } from '../ai/skills'
+import { listSkills, parseSkillScope } from '../ai/skills'
 import { streamWrite } from '../ai/writeStream'
 import { getDb } from '../db'
 import { runFtsQuery } from '../dbQueries'
@@ -370,9 +370,11 @@ ai.post('/diagnose', async (c) => {
 
 // ───────────────────── skills / search / index ─────────────────────
 
-/** GET /ai/skills — 内置技能列表（聊天面板快捷入口；prompt 已插值当天日期） */
+/** GET /ai/skills — 聊天预置问题；?scope=doc 当前文档 / scope=all（默认）整库 */
 ai.get('/skills', (c) => {
-  return c.json({ skills: listSkills(resolveAiLang(c.req.header('accept-language'))) })
+  const lang = resolveAiLang(c.req.header('accept-language'))
+  const scope = parseSkillScope(c.req.query('scope'))
+  return c.json({ skills: listSkills(lang, scope) })
 })
 
 ai.get('/search', async (c) => {

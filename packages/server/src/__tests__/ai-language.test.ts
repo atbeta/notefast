@@ -22,11 +22,13 @@ describe('AI 语言跟随 UI', () => {
     expect(en[0]!.content).not.toContain('你是')
   })
 
-  test('listSkills lang=en 返回英文名称', () => {
-    expect(listSkills('en')[0]!.name).toBe('Triage inbox')
-    expect(listSkills('zh')[0]!.name).toBe('整理收集箱')
-    expect(listSkills('en')[0]!.prompt).toContain('{{today}}'.replace('{{today}}', '')) // prompt 已插值 today
-    expect(listSkills('en')[0]!.prompt).not.toContain('{{today}}')
+  test('listSkills 按语言与 scope 返回短预置', () => {
+    expect(listSkills('zh', 'all')[0]!.name).toBe('回顾近期笔记')
+    expect(listSkills('en', 'all')[0]!.name).toBe('Review recent notes')
+    expect(listSkills('zh', 'doc')[0]!.name).toBe('总结当前文档')
+    expect(listSkills('en', 'doc')[0]!.name).toBe('Summarize current document')
+    expect(listSkills('zh', 'all').map((s) => s.id)).toEqual(['recent-notes', 'inbox-overview'])
+    expect(listSkills('zh', 'doc').map((s) => s.id)).toEqual(['summarize-doc', 'related-notes'])
   })
 
   test('suggestTitle lang=en 用英文系统提示', async () => {

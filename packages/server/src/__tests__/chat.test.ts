@@ -566,7 +566,7 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
   })
 
   /**
-   * notefast_list_docs：skills（整理收集箱/归档建议/周期回顾）依赖的列表工具。
+   * notefast_list_docs：列表工具（收集箱 / 最近更新等预置会点名它）。
    * 验证 status 过滤生效且结果回填进下一轮 LLM 请求。
    */
   test('agent loop: notefast_list_docs 按 status 过滤并回填结果', async () => {
@@ -653,7 +653,7 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
 
   /**
    * 非法 status（模型漏枚举约束，如传中文）必须显式报错而非静默返回空列表——
-   * 空列表会让模型误判「收集箱为空」（skill「整理收集箱」误报空的根因）。
+   * 空列表会让模型误判「收集箱为空」。
    */
   test('agent loop: notefast_list_docs 非法 status 返回纠错提示', async () => {
     applyNewConfig(

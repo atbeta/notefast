@@ -100,33 +100,13 @@ describe('GET /api/v1/ai/status', () => {
 })
 
 describe('内置技能 API', () => {
-  test('GET /ai/skills 返回注册表且 prompt 已插值日期', async () => {
-    const { status, body } = await api('GET', '/api/v1/ai/skills')
-    expect(status).toBe(200)
-    expect(Array.isArray(body.skills)).toBe(true)
-    expect(body.skills.length).toBeGreaterThanOrEqual(3)
-    const ids = body.skills.map((s: { id: string }) => s.id)
-    expect(ids).toContain('inbox-triage')
-    expect(ids).toContain('archive-suggest')
-    expect(ids).toContain('weekly-review')
-    for (const s of body.skills as Array<{ prompt: string }>) {
-      expect(s.prompt).not.toContain('{{today}}')
-      expect(s.prompt).not.toContain('{{week_start}}')
-    }
-    const today = new Date().toISOString().slice(0, 10)
-    const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    const skills = body.skills as Array<{ id: string; prompt: string }>
-    const inbox = skills.find((s) => s.id === 'inbox-triage')!
-    expect(inbox.prompt).toContain('status="inbox"')
-    expect(inbox.prompt).toContain('notefast_read_doc')
-    const archive = skills.find((s) => s.id === 'archive-suggest')!
-    expect(archive.prompt).toContain('stale_within="30d"')
-    expect(archive.prompt).toContain('notefast_read_doc')
-    const weekly = skills.find((s) => s.id === 'weekly-review')!
-    expect(weekly.prompt).toContain(today)
-    expect(weekly.prompt).toContain(weekStart)
-    expect(weekly.prompt).toContain('updated_within="7d"')
-    expect(weekly.prompt).toContain('notefast_read_doc')
+  test('GET /ai/skills 默认整库预置；scope=doc 换当前文档预置', async () => {
+    const all = await api('GET', '/api/v1/ai/skills')
+    expect(all.status).toBe(200)
+    expect(all.body.skills.map((s: { id: string }) => s.id)).toEqual(['recent-notes', 'inbox-overview'])
+    const doc = await api('GET', '/api/v1/ai/skills?scope=doc')
+    expect(doc.status).toBe(200)
+    expect(doc.body.skills.map((s: { id: string }) => s.id)).toEqual(['summarize-doc', 'related-notes'])
   })
 })
 

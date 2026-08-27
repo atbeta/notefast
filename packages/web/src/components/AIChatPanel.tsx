@@ -14,9 +14,10 @@ import {
   Brain,
   Binary,
   ArrowUpDown,
+  FileText,
+  Link2,
+  Clock,
   Inbox,
-  Archive,
-  CalendarDays,
   ImagePlus,
   Mic,
   MicOff,
@@ -45,8 +46,9 @@ interface AiSkill {
 
 const SKILL_ICONS: Record<string, typeof Inbox> = {
   inbox: Inbox,
-  archive: Archive,
-  calendar: CalendarDays,
+  clock: Clock,
+  'file-text': FileText,
+  link: Link2,
 }
 
 /** Web Speech API 的最小类型（lib.dom 不含 webkitSpeechRecognition，自行收窄） */
@@ -222,15 +224,16 @@ export default function AIChatPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, capabilities.ready, capabilities.chat])
 
-  // 内置技能（整理收集箱 / 归档建议 / 周期回顾）：点击填入输入框，用户可改再发
+  // 预置问题随是否打开文档切换（scope=doc / all）
   useEffect(() => {
     if (!isOpen) return
     let cancelled = false
-    request<{ skills: AiSkill[] }>('/ai/skills')
+    const scope = contextDocId ? 'doc' : 'all'
+    request<{ skills: AiSkill[] }>(`/ai/skills?scope=${scope}`)
       .then((r) => { if (!cancelled) setSkills(r.skills) })
-      .catch(() => {})
+      .catch(() => { if (!cancelled) setSkills([]) })
     return () => { cancelled = true }
-  }, [isOpen])
+  }, [isOpen, contextDocId])
 
   /** 打开时自动聚焦输入框：避免键入落到背景文档编辑器，并解决首键丢失。
    *  delay 让 slide-in 动画开始后再聚焦。仅在 isOpen 翻转时跑一次（附件后加不重跑）。 */
@@ -340,14 +343,14 @@ export default function AIChatPanel({
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const sendChat = async (preset?: string) => {
     const hasImages = attachments.length > 0
-    if ((!input.trim() && !hasImages) || loading) return
+    const raw = (preset ?? input).trim()
+    if ((!raw && !hasImages) || loading) return
     if (listening) recognitionRef.current?.stop()
 
     // 纯图片消息给一段兜底文本：服务端检索与校验都需要非空文本
-    const userMessage = input.trim() || t('chat.visionFallbackText')
+    const userMessage = raw || t('chat.visionFallbackText')
     const sentAttachments = attachments
     setInput('')
     setAttachments([])
@@ -476,8 +479,13 @@ export default function AIChatPanel({
     abortRef.current = null
   }
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    void sendChat()
+  }
+
   const handleStop = () => {
-    // 只触发中断，loading / abortRef 的清理由 handleSubmit 收尾统一做。
+    // 只触发中断，loading / abortRef 的清理由 sendChat 收尾统一做。
     // 若在此抢先 setLoading(false)，用户可在旧轮次收尾前发出新消息：
     // 旧收尾的 flushAssistant 会把过期 assistant 追加到新 user 消息之后、
     // 并把 abortRef 置空，导致新一轮「停止」失效。
@@ -617,11 +625,9 @@ export default function AIChatPanel({
                     <button
                       key={s.id}
                       type="button"
-                      onClick={() => {
-                        setInput(s.prompt)
-                        inputRef.current?.focus()
-                      }}
-                      className="flex items-start gap-2.5 text-left rounded-lg border border-border/70 bg-card px-3 py-2.5 hover:border-primary/35 hover:bg-primary-softer transition-colors group"
+                      onClick={() => { void sendChat(s.prompt) }}
+                      disabled={loading}
+                      className="flex items-start gap-2.5 text-left rounded-lg border border-border/70 bg-card px-3 py-2.5 hover:border-primary/35 hover:bg-primary-softer transition-colors group disabled:opacity-50"
                     >
                       <span className="mt-0.5 w-7 h-7 rounded-md bg-primary-soft text-primary grid place-items-center shrink-0 group-hover:bg-primary/15">
                         <SkillIcon className="w-3.5 h-3.5" strokeWidth={1.75} />
@@ -756,11 +762,9 @@ export default function AIChatPanel({
                 <Tooltip key={s.id} label={s.description}>
                   <button
                     type="button"
-                    onClick={() => {
-                      setInput(s.prompt)
-                      inputRef.current?.focus()
-                    }}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-primary/20 bg-primary-softer text-xs text-primary hover:border-primary/40 hover:bg-primary-soft transition-colors whitespace-nowrap shrink-0"
+                    onClick={() => { void sendChat(s.prompt) }}
+                    disabled={loading}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-primary/20 bg-primary-softer text-xs text-primary hover:border-primary/40 hover:bg-primary-soft transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
                   >
                     <SkillIcon className="w-3 h-3" strokeWidth={1.75} />
                     {s.name}
