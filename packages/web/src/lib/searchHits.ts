@@ -7,7 +7,7 @@ export const PALETTE_SEARCH_OVERFETCH = 32
 
 /**
  * 词法命中按文档去重，保留每篇第一次出现（相关度已排好）。
- * 命令面板 / 归档搜索都是「打开哪一篇」，不是定位到哪个 block。
+ * 命令面板仍是一篇一行，但保留最佳 block，打开时落到该块。
  */
 export function collapseSearchHitsByDoc(hits: SearchResult[], limit: number): SearchResult[] {
   const seen = new Set<string>()
@@ -20,6 +20,13 @@ export function collapseSearchHitsByDoc(hits: SearchResult[], limit: number): Se
     if (out.length >= limit) break
   }
   return out
+}
+
+/** 打开命中文档：子块带 #block- 锚（阅读态已有 hash 滚动）；标题命中只开篇。 */
+export function searchHitDocPath(hit: SearchResult): string {
+  const docId = hit.block.root_id || hit.block.id
+  if (!hit.block.id || hit.block.id === docId) return `/doc/${docId}`
+  return `/doc/${docId}#block-${hit.block.id}`
 }
 
 /** 面板主行用文档标题，不要用子块 snippet 冒充篇名 */

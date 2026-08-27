@@ -23,6 +23,7 @@ import { EmptyState, Kbd, ShortcutKeys } from './ui'
 import {
   collapseSearchHitsByDoc,
   paletteDocTitle,
+  searchHitDocPath,
   PALETTE_DOC_LIMIT,
   PALETTE_SEARCH_OVERFETCH,
 } from '../lib/searchHits'
@@ -174,7 +175,7 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
       hint: isTitleHit ? undefined : r.snippet,
       section: 'document' as const,
       keywords: [r.snippet.toLowerCase(), title.toLowerCase()],
-      action: () => { onClose(); navigate('/doc/' + docId) },
+      action: () => { onClose(); navigate(searchHitDocPath(r)) },
     }
   }), [results, navigate, onClose, untitled])
 

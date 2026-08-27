@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Block, SearchResult } from '@notefast/core'
-import { collapseSearchHitsByDoc, paletteDocTitle } from '../searchHits'
+import { collapseSearchHitsByDoc, paletteDocTitle, searchHitDocPath } from '../searchHits'
 
 function hit(partial: { id: string; root_id: string; content: string; snippet: string; doc_title?: string; rank?: number }): SearchResult {
   const block = {
@@ -59,5 +59,31 @@ describe('paletteDocTitle', () => {
       snippet: '根标题',
     })
     expect(paletteDocTitle(h, '无标题')).toBe('根标题')
+  })
+})
+
+describe('searchHitDocPath', () => {
+  test('子块命中带 #block- 锚，标题命中只开篇', () => {
+    expect(searchHitDocPath(hit({
+      id: 'p1',
+      root_id: 'doc-a',
+      content: '正文',
+      snippet: '正文',
+    }))).toBe('/doc/doc-a#block-p1')
+    expect(searchHitDocPath(hit({
+      id: 'doc-a',
+      root_id: 'doc-a',
+      content: '标题',
+      snippet: '标题',
+    }))).toBe('/doc/doc-a')
+  })
+
+  test('文档根 root_id 为空时仍只开篇', () => {
+    expect(searchHitDocPath(hit({
+      id: 'doc-a',
+      root_id: '',
+      content: '标题',
+      snippet: '标题',
+    }))).toBe('/doc/doc-a')
   })
 })
