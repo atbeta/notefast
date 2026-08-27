@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.82.0](https://github.com/atbeta/notefast/compare/v0.81.2...v0.82.0) (2026-08-27)
+
+
+### Features
+
+* **ai:** inject writable block ids so chat can edit the open doc ([c353aab](https://github.com/atbeta/notefast/commit/c353aab4af6f92264a3bac73b5b12c413eefdef1))
+* **ai:** keep index status visible and controllable ([64d41a4](https://github.com/atbeta/notefast/commit/64d41a4dfb8a41dca266e798e2c2a2b7c514d4c9))
+* **ai:** swap chat presets for current-doc vs library questions ([2e69068](https://github.com/atbeta/notefast/commit/2e690689422ecdb32eeaba836b0934d5436abf22))
+* **web:** add first-class PDF export beside Markdown ([fdb62dd](https://github.com/atbeta/notefast/commit/fdb62ddf376823148862ba63fef1d0592910e768))
+* **web:** open palette search hits at the matching block ([8516d2b](https://github.com/atbeta/notefast/commit/8516d2ba9d309b61bcc5f636ce160b473b85868a))
+
+
+### Bug Fixes
+
+* **ai:** skip first-round RAG for summarize and list presets ([a04d231](https://github.com/atbeta/notefast/commit/a04d2318917ceb8763771ffa34582353674c1d90))
+* **import:** convert docx via HTML and accept zip-contained Word files ([1d17ae1](https://github.com/atbeta/notefast/commit/1d17ae1197d2eac4f4c38ffd3d2aa573189f8416))
+* **web:** align settings header shortcut and AI icons ([0849e49](https://github.com/atbeta/notefast/commit/0849e4931bd9ca4748c4d2a7a811f8b4c5fd49cb))
+* **web:** clarify import drop-zone copy for zip and folder tags ([6d25b5f](https://github.com/atbeta/notefast/commit/6d25b5f1133f07b12e7a31bb60d2267571a10db6))
+* **web:** keep custom title bar after Windows webview reload ([79c836c](https://github.com/atbeta/notefast/commit/79c836c7043d696951a089590e3e734d2be7b848))
+* **web:** land search jumps on the hash without bouncing ([70dc0b5](https://github.com/atbeta/notefast/commit/70dc0b5997223ac5ad56982bae457ff01b99c8a9))
+* **web:** list find separately from global search ([3fdcf3e](https://github.com/atbeta/notefast/commit/3fdcf3eeedc31a9186597e585aa416353f2b6c46))
+
 ## [0.81.2](https://github.com/atbeta/notefast/compare/v0.81.1...v0.81.2) (2026-08-27)
 
 
