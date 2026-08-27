@@ -21,6 +21,8 @@ import {
 } from '../services/markdownStage'
 import { fetchDocBlocks } from '../store/blocks'
 import { buildBlockTree, blocksToMarkdown } from '@notefast/core'
+import { makeMinimalDocx } from './helpers/minimalDocx'
+import { convertDocxToMarkdown } from '../services/docxImport'
 
 let testDir: string
 let app: Hono
@@ -64,6 +66,7 @@ describe('normalizeMarkdownFileContent', () => {
 describe('title helpers', () => {
   test('filename → 标题', () => {
     expect(titleFromFilename('notes/hello-world.md')).toBe('hello-world')
+    expect(titleFromFilename('报告.docx')).toBe('报告')
   })
   test('resolve 优先显式 title', () => {
     expect(resolveImportTitle({
@@ -141,38 +144,13 @@ describe('POST /import/file', () => {
 })
 
 describe('POST /import/docx', () => {
-  /** 用 jszip（mammoth 依赖，已随安装）构造最小 docx：真实 Heading1 + 段落 */
-  async function makeDocx(): Promise<ArrayBuffer> {
-    const JSZip = (await import('jszip')).default
-    const zip = new JSZip()
-    zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-</Types>`)
-    zip.folder('_rels')!.file('.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-</Relationships>`)
-    zip.folder('word')!.file('document.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Word 标题</w:t></w:r></w:p>
-    <w:p><w:r><w:t>Word 正文内容</w:t></w:r></w:p>
-    <w:sectPr/>
-  </w:body>
-</w:document>`)
-    return new Uint8Array(await zip.generateAsync({ type: 'uint8array' })).buffer as ArrayBuffer
-  }
-
   test('docx → markdown 入库（mammoth 转换）', async () => {
     const { initAssetStore } = await import('../assets/store')
     initAssetStore(testDir)
-    const docx = await makeDocx()
+    const docx = await makeMinimalDocx()
     const form = new FormData()
     form.set('notebook_id', notebookId)
-    form.set('file', new File([docx], 'word-doc.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }))
+    form.set('file', new File([new Uint8Array(docx)], 'word-doc.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }))
     const res = await app.fetch(new Request('http://localhost/api/v1/import/docx', {
       method: 'POST',
       body: form,
@@ -183,6 +161,17 @@ describe('POST /import/docx', () => {
     const content = rows.map((r) => r.content).join('\n')
     expect(content).toContain('Word 标题')
     expect(content).toContain('Word 正文内容')
+  })
+
+  test('标题 TOC 书签不残留 <a id> / XML', async () => {
+    const { initAssetStore } = await import('../assets/store')
+    initAssetStore(testDir)
+    const docx = await makeMinimalDocx({ heading: '第一章 概述', headingBookmark: '_Toc123456' })
+    const converted = await convertDocxToMarkdown(Buffer.from(docx))
+    expect(converted.markdown).toContain('第一章 概述')
+    expect(converted.markdown).not.toContain('<a')
+    expect(converted.markdown).not.toContain('_Toc123456')
+    expect(converted.markdown).not.toMatch(/<w:/)
   })
 
   test('非 docx 内容返回 400', async () => {

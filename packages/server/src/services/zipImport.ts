@@ -1,10 +1,10 @@
 /**
- * 导入 zip 存档（自家导出档 / 通用 md zip）
+ * 导入 zip 存档（自家导出档 / 通用 md zip / zip 内 docx）
  *
  * 自家档（含 notefast-archive.manifest.json）：
  * - 按 manifest 的 docId 还原文档（幂等：已存在则跳过），media 内容寻址入 AssetStore
  * - markdown 中 media/<sha><ext> 改写回 asset:<sha>
- * 通用 zip：每个 .md 为一个新文档（标题从首个 H1 / 文件名推断）；
+ * 通用 zip：每个 .md/.txt/.docx 为一个新文档（标题从首个 H1 / 文件名推断）；
  * 无 YAML tags 时第一层目录作为 tag（untagged/media/__MACOSX 除外）。
  */
 
@@ -17,6 +17,7 @@ import { ARCHIVE_MANIFEST_NAME, ARCHIVE_UNTAGGED_DIR, isArchiveManifest, type Ar
 import { parseZip } from '../lib/zipStore'
 import { insertDocFromMarkdown, type InsertDocFromMarkdownResult } from './docImport'
 import { normalizeMarkdownFileContent, resolveImportTitle } from './docFileImport'
+import { convertDocxToMarkdown } from './docxImport'
 
 type Db = ReturnType<typeof getDb>
 
@@ -64,6 +65,16 @@ function normalizeZipPath(p: string): string {
   return parts.join('/')
 }
 
+const MD_ENTRY_RE = /\.(md|markdown|mdown|mkd|txt)$/i
+const DOCX_ENTRY_RE = /\.docx$/i
+
+function isJunkZipPath(name: string): boolean {
+  const lower = name.replace(/\\/g, '/').toLowerCase()
+  if (lower.includes('__macosx/')) return true
+  const base = name.split(/[/\\]/).pop() ?? name
+  return base.startsWith('~$')
+}
+
 export interface ZipImportResult {
   imported: number
   skipped: number
@@ -74,10 +85,10 @@ export interface ZipImportResult {
   importedDocs: Array<{ docId: string; blockIds: string[] }>
 }
 
-export function importArchiveZip(
+export async function importArchiveZip(
   db: Db,
   opts: { notebookId: string; bytes: Uint8Array },
-): ZipImportResult {
+): Promise<ZipImportResult> {
   const entries = parseZip(opts.bytes)
   const byName = new Map<string, Uint8Array>()
   for (const e of entries) byName.set(e.name, e.data)
@@ -117,32 +128,36 @@ export function importArchiveZip(
       importedShas.has(sha.toLowerCase()) ? `asset:${sha.toLowerCase()}` : full,
     )
 
-  const mdEntries = entries.filter((e) => /\.(md|markdown|mdown|mkd|txt)$/i.test(e.name) && e.name !== ARCHIVE_MANIFEST_NAME)
+  const mdEntries = entries.filter((e) =>
+    MD_ENTRY_RE.test(e.name) && e.name !== ARCHIVE_MANIFEST_NAME,
+  )
+  const docxEntries = entries.filter((e) => DOCX_ENTRY_RE.test(e.name) && !isJunkZipPath(e.name))
 
-  for (const entry of mdEntries) {
-    const filename = entry.name.split('/').pop() ?? entry.name
-    let markdown = normalizeMarkdownFileContent(new TextDecoder().decode(entry.data))
-    // 通用 zip：md 里相对路径图片（images/foo.png）按 zip entries 收编 → asset:<sha>
-    const ingested = ingestLocalImageRefs(markdown, (rel) => resolveZipRel(entry.name, rel, byName))
+  const ingestOne = (
+    filename: string,
+    entryName: string,
+    markdownIn: string,
+  ): void => {
+    let markdown = markdownIn
+    const ingested = ingestLocalImageRefs(markdown, (rel) => resolveZipRel(entryName, rel, byName))
     markdown = rewriteMedia(ingested.markdown)
     if (ingested.unresolved.length > 0) {
-      console.warn(`[zip-import] ${entry.name}: ${ingested.unresolved.length} 张图片未在 zip 内找到，保留原引用`)
+      console.warn(`[zip-import] ${entryName}: ${ingested.unresolved.length} 张图片未在 zip 内找到，保留原引用`)
     }
     if (!markdown.trim()) {
       result.skipped++
-      continue
+      return
     }
-    const mf = manifestByFilename.get(entry.name) ?? manifestByFilename.get(filename)
+    const mf = manifestByFilename.get(entryName) ?? manifestByFilename.get(filename)
     const docId = mf?.docId
     const title = mf?.title ?? resolveImportTitle({ filename, markdown })
-    const folderTag = !manifest ? folderTagFromZipPath(entry.name) : null
+    const folderTag = !manifest ? folderTagFromZipPath(entryName) : null
     const hasFmTags = Boolean(stripDocFrontmatter(markdown).meta?.tags?.length)
     const tags = folderTag && !hasFmTags ? normalizeTagList([folderTag]) : undefined
 
-    // 自家档 + docId 已存在（含软删除）→ 幂等跳过（manifest 的 docId 是稳定还原锚）
     if (docId && db.query('SELECT id FROM blocks WHERE id = ?').get(docId)) {
       result.skipped++
-      continue
+      return
     }
 
     try {
@@ -156,6 +171,23 @@ export function importArchiveZip(
       })
       result.imported++
       result.importedDocs.push({ docId: res.docId, blockIds: res.blockIds })
+    } catch (e) {
+      result.failed++
+      result.errors.push(`${filename}: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
+  for (const entry of mdEntries) {
+    const filename = entry.name.split('/').pop() ?? entry.name
+    ingestOne(filename, entry.name, normalizeMarkdownFileContent(new TextDecoder().decode(entry.data)))
+  }
+
+  for (const entry of docxEntries) {
+    const filename = entry.name.split('/').pop() ?? entry.name
+    try {
+      const converted = await convertDocxToMarkdown(Buffer.from(entry.data))
+      result.mediaImported += converted.mediaImported
+      ingestOne(filename, entry.name, normalizeMarkdownFileContent(converted.markdown))
     } catch (e) {
       result.failed++
       result.errors.push(`${filename}: ${e instanceof Error ? e.message : String(e)}`)

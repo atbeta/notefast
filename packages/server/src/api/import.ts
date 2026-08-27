@@ -1,7 +1,6 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { createHash } from 'node:crypto'
-import mammoth from 'mammoth'
 import { importMarkdownSchema, rowToBlock, readDocStatus, readTags } from '@notefast/core'
 import { getDb } from '../db'
 import { findDocIdBySource, getBlockById, getBlocksByIds, updateBlock } from '../store/blocks'
@@ -18,7 +17,7 @@ import {
 } from '../services/docFileImport'
 import { MAX_MARKDOWN_IMPORT_BYTES } from '../services/markdownStage'
 import { MAX_ARCHIVE_IMPORT_BYTES, importArchiveZip } from '../services/zipImport'
-import { saveImportedImage } from '../services/importedImage'
+import { convertDocxToMarkdown, DocxConvertError } from '../services/docxImport'
 import { scheduleDocIndex } from '../ai/indexJobs'
 
 const importRouter = new Hono()
@@ -323,7 +322,7 @@ function resolveNotebookId(raw: unknown): string | null {
 }
 
 /**
- * 导入 zip 存档：自家导出档（manifest 精确还原）或通用 md zip。
+ * 导入 zip 存档：自家导出档（manifest 精确还原）或通用 md/txt/docx zip。
  * 入库后为新文档触发索引与 hooks（autolink / 实体抽取等）。
  */
 importRouter.post('/zip', async (c) => {
@@ -349,9 +348,9 @@ importRouter.post('/zip', async (c) => {
     return c.json({ error: 'bad_request', message: '未找到可用的笔记本' }, 400)
   }
 
-  let result: ReturnType<typeof importArchiveZip>
+  let result: Awaited<ReturnType<typeof importArchiveZip>>
   try {
-    result = importArchiveZip(getDb(), { notebookId, bytes: new Uint8Array(buf) })
+    result = await importArchiveZip(getDb(), { notebookId, bytes: new Uint8Array(buf) })
   } catch (e) {
     return c.json({ error: 'bad_request', message: e instanceof Error ? e.message : String(e) }, 400)
   }
@@ -380,7 +379,7 @@ importRouter.post('/zip', async (c) => {
 })
 
 /**
- * Web /new 导入 tab 的 .docx 支持：mammoth 转 Markdown 后复用
+ * Web /new 导入 tab 的 .docx 支持：mammoth HTML → Markdown 后复用
  * createDocFromMarkdownFile 入库（标题/正文/列表/表格还原；内嵌图片提取为
  * asset:<sha>）。仅共享导入界面（浏览器 + 客户端内嵌 Web）使用，原生壳层
  * 双击打开不支持 docx（shell 文件关联只注册 md/txt）。
@@ -408,36 +407,18 @@ importRouter.post('/docx', async (c) => {
     return c.json({ error: 'bad_request', message: '未找到可用的笔记本' }, 400)
   }
 
-  // 提取 docx 内嵌图片：mammoth 的 imgElement 回调拿 buffer，转成 asset:<sha>
-  const assetSrcs = new Map<string, string>()
-  const converter = mammoth.images.imgElement(async (image: { contentType: string; readAsBuffer: () => Promise<Buffer> }) => {
-    const data = await image.readAsBuffer()
-    const src = saveImportedImage(data, image.contentType || '')
-    if (!src) return { src: '' }
-    assetSrcs.set(src, src)
-    return { src }
-  })
-
-  let markdown: string
+  let converted: Awaited<ReturnType<typeof convertDocxToMarkdown>>
   try {
-    // convertToMarkdown 运行时存在但上游 .d.ts 漏声明，经 any 访问（声明合并对 export= 模块无效）
-    const mammothAny = mammoth as unknown as {
-      convertToMarkdown: (input: { buffer: Buffer }, options: { convertImage: unknown }) => Promise<{ value: string }>
-    }
-    const result = await mammothAny.convertToMarkdown(
-      { buffer: buf },
-      { convertImage: converter },
-    )
-    markdown = result.value
+    converted = await convertDocxToMarkdown(buf)
   } catch (e) {
     console.warn('[import/docx] 解析失败:', e instanceof Error ? e.message : e)
-    return c.json({ error: 'bad_request', message: 'docx 解析失败' }, 400)
+    const message = e instanceof DocxConvertError && e.message === 'docx 未提取到文本内容'
+      ? e.message
+      : 'docx 解析失败'
+    return c.json({ error: 'bad_request', message }, 400)
   }
 
-  const content = normalizeMarkdownFileContent(markdown)
-  if (!content.trim()) {
-    return c.json({ error: 'bad_request', message: 'docx 未提取到文本内容' }, 400)
-  }
+  const content = normalizeMarkdownFileContent(converted.markdown)
 
   const title = typeof body['title'] === 'string' && body['title'].trim()
     ? body['title'].trim()
@@ -459,7 +440,7 @@ importRouter.post('/docx', async (c) => {
     })
     return c.json({
       ...respondCreated(result, content, { status }),
-      ...(assetSrcs.size > 0 ? { media_imported: assetSrcs.size } : {}),
+      ...(converted.mediaImported > 0 ? { media_imported: converted.mediaImported } : {}),
     }, 201)
   } catch (e) {
     if (e instanceof DocFileImportError) {

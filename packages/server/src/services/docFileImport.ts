@@ -50,7 +50,7 @@ export function titleFromFilename(filename: string | undefined | null): string |
   if (!filename) return null
   const base = filename.split(/[/\\]/).pop()?.trim() || ''
   if (!base) return null
-  const noExt = base.replace(/\.(md|markdown|txt)$/i, '').trim()
+  const noExt = base.replace(/\.(md|markdown|mdown|mkd|txt|docx)$/i, '').trim()
   return noExt || null
 }
 

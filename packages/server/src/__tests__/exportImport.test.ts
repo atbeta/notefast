@@ -19,6 +19,7 @@ import exportArchive from '../api/exportArchive'
 import { buildZipStore, parseZip } from '../lib/zipStore'
 import { buildFullArchiveExport } from '../services/docExport'
 import { folderTagFromZipPath, importArchiveZip } from '../services/zipImport'
+import { makeMinimalDocx } from './helpers/minimalDocx'
 
 let testDir: string
 let app: Hono
@@ -251,7 +252,7 @@ describe('importArchiveZip', () => {
     db.query('DELETE FROM blocks').run()
     db.exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
 
-    const result = importArchiveZip(db, { notebookId, bytes: exported.body })
+    const result = await importArchiveZip(db, { notebookId, bytes: exported.body })
     expect(result.imported).toBe(1)
     expect(result.skipped).toBe(0)
     expect(result.failed).toBe(0)
@@ -276,7 +277,7 @@ describe('importArchiveZip', () => {
     db.query('DELETE FROM blocks').run()
     db.exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
 
-    const result = importArchiveZip(db, { notebookId, bytes: exported.body })
+    const result = await importArchiveZip(db, { notebookId, bytes: exported.body })
     expect(result.imported).toBe(1)
     expect(docTagsByTitle('归档标签')).toEqual(['work', 'ai'])
   })
@@ -287,7 +288,7 @@ describe('importArchiveZip', () => {
     const exported = buildFullArchiveExport()
 
     // 同一库直接再导一次 → 全部跳过
-    const result = importArchiveZip(getDb(), { notebookId, bytes: exported.body })
+    const result = await importArchiveZip(getDb(), { notebookId, bytes: exported.body })
     expect(result.imported).toBe(0)
     expect(result.skipped).toBe(1)
     expect(result.failed).toBe(0)
@@ -298,7 +299,7 @@ describe('importArchiveZip', () => {
       { name: '笔记一.md', data: new TextEncoder().encode('# 笔记一\n\n内容甲') },
       { name: '子目录/笔记二.md', data: new TextEncoder().encode('# 笔记二\n\n内容乙') },
     ])
-    const result = importArchiveZip(getDb(), { notebookId, bytes: zip })
+    const result = await importArchiveZip(getDb(), { notebookId, bytes: zip })
     expect(result.imported).toBe(2)
     expect(result.skipped).toBe(0)
     const titles = getDb().query("SELECT content FROM blocks WHERE type = 'document' ORDER BY created_at").all() as Array<{ content: string }>
@@ -308,37 +309,37 @@ describe('importArchiveZip', () => {
     expect(docTagsByTitle('笔记二')).toEqual(['子目录'])
   })
 
-  test('通用 zip 只取第一层目录为 tag；untagged/media/__MACOSX 跳过', () => {
+  test('通用 zip 只取第一层目录为 tag；untagged/media/__MACOSX 跳过', async () => {
     const zip = buildZipStore([
       { name: 'work/projects/深层.md', data: new TextEncoder().encode('# 深层\n\n正文') },
       { name: 'untagged/无标.md', data: new TextEncoder().encode('# 无标\n\n正文') },
       { name: 'media/说明.md', data: new TextEncoder().encode('# 媒体旁\n\n正文') },
       { name: '__MACOSX/垃圾.md', data: new TextEncoder().encode('# 垃圾\n\n正文') },
     ])
-    importArchiveZip(getDb(), { notebookId, bytes: zip })
+    await importArchiveZip(getDb(), { notebookId, bytes: zip })
     expect(docTagsByTitle('深层')).toEqual(['work'])
     expect(docTagsByTitle('无标')).toEqual([])
     expect(docTagsByTitle('媒体旁')).toEqual([])
     expect(docTagsByTitle('垃圾')).toEqual([])
   })
 
-  test('通用 zip 已有 YAML tags 时不覆盖，不用目录当 tag', () => {
+  test('通用 zip 已有 YAML tags 时不覆盖，不用目录当 tag', async () => {
     const zip = buildZipStore([
       {
         name: 'folder/带标.md',
         data: new TextEncoder().encode('---\ntags:\n  - yaml-tag\n---\n\n# 带标\n\n正文'),
       },
     ])
-    importArchiveZip(getDb(), { notebookId, bytes: zip })
+    await importArchiveZip(getDb(), { notebookId, bytes: zip })
     expect(docTagsByTitle('带标')).toEqual(['yaml-tag'])
   })
 
-  test('GBK 文件名 zip（Windows 中文打包）：标题从文件名正确推断，不产生乱码', () => {
+  test('GBK 文件名 zip（Windows 中文打包）：标题从文件名正确推断，不产生乱码', async () => {
     // 无 manifest + 内容无 H1 → 标题 fallback 到文件名；文件名是 GBK 字节。
     // 修复前文件名乱码 → 标题「���Աʼ�」。
     const gbk = [0xce, 0xd2, 0xb5, 0xc4, 0xb1, 0xca, 0xbc, 0xc7, 0x2e, 0x6d, 0x64] // 我的笔记.md GBK
     const zip = buildRawNameZip(Uint8Array.from(gbk), new TextEncoder().encode('第一段内容'), 0)
-    const result = importArchiveZip(getDb(), { notebookId, bytes: zip })
+    const result = await importArchiveZip(getDb(), { notebookId, bytes: zip })
     expect(result.imported).toBe(1)
     expect(result.failed).toBe(0)
     const title = getDb().query("SELECT content FROM blocks WHERE type = 'document' AND content = '我的笔记'").get() as { content: string } | undefined
@@ -350,13 +351,32 @@ describe('importArchiveZip', () => {
       { name: 'notes/说明.txt', data: new TextEncoder().encode('这是纯文本内容\n\n第二段') },
       { name: 'notes/其他.md', data: new TextEncoder().encode('# 其他\n\n正文') },
     ])
-    const result = importArchiveZip(getDb(), { notebookId, bytes: zip })
+    const result = await importArchiveZip(getDb(), { notebookId, bytes: zip })
     expect(result.imported).toBe(2)
     expect(result.failed).toBe(0)
     const txtTitle = getDb().query("SELECT content FROM blocks WHERE type = 'document' AND content = '说明'").get() as { content: string } | undefined
     expect(txtTitle).toBeDefined()
     expect(docTagsByTitle('说明')).toEqual(['notes'])
     expect(docTagsByTitle('其他')).toEqual(['notes'])
+  })
+
+  test('通用 zip 内的 .docx 一并导入，忽略 __MACOSX 与 Word 临时文件', async () => {
+    const docx = await makeMinimalDocx({ heading: '压缩包里的 Word', body: 'docx 正文' })
+    const zip = buildZipStore([
+      { name: 'notes/说明.md', data: new TextEncoder().encode('# 说明\n\nmd 正文') },
+      { name: 'notes/报告.docx', data: docx },
+      { name: '__MACOSX/._报告.docx', data: docx },
+      { name: 'notes/~$草稿.docx', data: docx },
+    ])
+    const result = await importArchiveZip(getDb(), { notebookId, bytes: zip })
+    expect(result.imported).toBe(2)
+    expect(result.failed).toBe(0)
+    expect(docTagsByTitle('说明')).toEqual(['notes'])
+    expect(docTagsByTitle('压缩包里的 Word')).toEqual(['notes'])
+    const bodyRows = getDb().query(
+      "SELECT content FROM blocks WHERE root_id IN (SELECT id FROM blocks WHERE type = 'document' AND content = '压缩包里的 Word') AND type != 'document' AND is_deleted = 0",
+    ).all() as Array<{ content: string }>
+    expect(bodyRows.map((r) => r.content).join('\n')).toContain('docx 正文')
   })
 
   test('通用 md zip 的相对路径图片（images/foo.png）收编为 asset: 并重写引用', async () => {
@@ -367,7 +387,7 @@ describe('importArchiveZip', () => {
       },
       { name: 'images/foo.png', data: new Uint8Array(PNG_BYTES) },
     ])
-    const result = importArchiveZip(getDb(), { notebookId, bytes: zip })
+    const result = await importArchiveZip(getDb(), { notebookId, bytes: zip })
     expect(result.imported).toBe(1)
 
     // 文档内容：images/foo.png → asset:<sha>；missing.png 保留原引用
@@ -463,8 +483,8 @@ describe('importArchiveZip', () => {
     expect(child.map((r) => r.content).join('\n')).toContain('foo.png')
   })
 
-  test('损坏的 zip → 抛错（调用方映射 400）', () => {
-    expect(() => importArchiveZip(getDb(), { notebookId, bytes: new Uint8Array([0x50, 0x4b, 0x00, 0x01]) })).toThrow()
+  test('损坏的 zip → 抛错（调用方映射 400）', async () => {
+    await expect(importArchiveZip(getDb(), { notebookId, bytes: new Uint8Array([0x50, 0x4b, 0x00, 0x01]) })).rejects.toThrow()
   })
 
   test('POST /api/v1/import/zip 走 multipart 导入', async () => {
