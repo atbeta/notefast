@@ -31,11 +31,11 @@ export default function SettingsLayout() {
   return (
     <div className="w-full max-w-5xl mx-auto px-4 sm:px-8 py-8 sm:py-10 animate-fade-in pb-32">
       <header className="space-y-3 mb-6 sm:mb-8">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <h1 className="text-h1 font-bold tracking-[-0.02em] text-foreground">
             {t('settings.title')}
           </h1>
-          <AiChatHeaderSlot triggerClassName="mt-1.5" />
+          <AiChatHeaderSlot />
         </div>
         <p className="text-base text-muted-foreground leading-relaxed">
           {t('settings.description')}
