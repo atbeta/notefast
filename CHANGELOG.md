@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.81.2](https://github.com/atbeta/notefast/compare/v0.81.1...v0.81.2) (2026-08-27)
+
+
+### Bug Fixes
+
+* **tauri:** grant path scope for opener open-path ([135e383](https://github.com/atbeta/notefast/commit/135e38397e7899d5be01ee1e1e655586c24d7ab6))
+
 ## [0.81.1](https://github.com/atbeta/notefast/compare/v0.81.0...v0.81.1) (2026-08-26)
 
 
