@@ -12,7 +12,7 @@
  *   event: error     → 出错
  *
  * 流程：
- *  1. hybridSearch() 拿 citations（embedding 不可用时降级到 FTS5）
+ *  1. hybridSearch() 拿 citations（embedding 不可用时降级到 FTS5）；skipRetrieval 时跳过
  *  2. buildChatPrompt() 组装 prompt（含 tool 定义）
  *  3. agent loop（最多 N 轮工具；用尽后纯文字收口）：
  *     a. runtime.streamChatWithTools() → 流式 content/reasoning + 可选 tool_calls
@@ -92,6 +92,21 @@ export interface RunChatOptions {
   lang?: AiLang
   /** 客户端断连信号：贯穿到上游 LLM 请求，断连即取消（省 token） */
   signal?: AbortSignal
+  /** 跳过首轮 hybridSearch（总结当前文档 / 列表预置）；模型仍可主动 search_more */
+  skipRetrieval?: boolean
+}
+
+function emptyHybridReport(): HybridSearchReport {
+  return {
+    citations: [],
+    retrieval: {
+      fts_hits: 0,
+      semantic_hits: 0,
+      reranked: false,
+      score_kind: 'rrf',
+      timing: { understand_ms: 0, fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
+    },
+  }
 }
 
 function fixHint(lang: AiLang): string {
@@ -410,38 +425,33 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
     return
   }
 
-  // ① 初次检索
+  // ① 初次检索（预置总结 / 列表类跳过，避免把技能长句当 query 误伤全库）
   let initialReport: HybridSearchReport
-  try {
-    initialReport = await hybridSearch({
-      query: lastUserText,
-      contextDocId: opts.contextDocId,
-      notebookId: opts.notebookId,
-      since: opts.since,
-      until: opts.until,
-      topK: opts.topK,
-      ftsLimit: opts.ftsLimit,
-      semanticLimit: opts.semanticLimit,
-      rerankWindow: opts.rerankWindow,
-      minScore: opts.minScore,
-      // RAG 场景放宽多样性上限：同文档连续段落对回答有价值
-      maxPerDoc: 3,
-      // 首检索默认开查询理解：延迟摊进 chat 等待，失败则降级普通检索
-      understandQuery: true,
-      understandLang: lang,
-    })
-  } catch (e) {
-    initialReport = {
-      citations: [],
-      retrieval: {
-        fts_hits: 0,
-        semantic_hits: 0,
-        reranked: false,
-        score_kind: 'rrf',
-        timing: { understand_ms: 0, fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
-      },
+  if (opts.skipRetrieval) {
+    initialReport = emptyHybridReport()
+  } else {
+    try {
+      initialReport = await hybridSearch({
+        query: lastUserText,
+        contextDocId: opts.contextDocId,
+        notebookId: opts.notebookId,
+        since: opts.since,
+        until: opts.until,
+        topK: opts.topK,
+        ftsLimit: opts.ftsLimit,
+        semanticLimit: opts.semanticLimit,
+        rerankWindow: opts.rerankWindow,
+        minScore: opts.minScore,
+        // RAG 场景放宽多样性上限：同文档连续段落对回答有价值
+        maxPerDoc: 3,
+        // 首检索默认开查询理解：延迟摊进 chat 等待，失败则降级普通检索
+        understandQuery: true,
+        understandLang: lang,
+      })
+    } catch (e) {
+      initialReport = emptyHybridReport()
+      console.error('[chat] retrieval failed:', e)
     }
-    console.error('[chat] retrieval failed:', e)
   }
 
   const currentDocTitle = opts.contextDocId ? lookupDocTitle(opts.contextDocId) : undefined
@@ -467,6 +477,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
     currentDocTitle,
     currentDocContent,
     lang,
+    skipRetrieval: opts.skipRetrieval,
     tools: enableTools ? getAllToolDefinitions(lang) : undefined,
   })
 
@@ -695,13 +706,7 @@ export async function runChatSync(opts: RunChatOptions): Promise<{
   let answer = ''
   let reasoning = ''
   let citations: Citation[] = []
-  let retrieval: HybridSearchReport['retrieval'] = {
-    fts_hits: 0,
-    semantic_hits: 0,
-    reranked: false,
-    score_kind: 'rrf',
-    timing: { understand_ms: 0, fts_ms: 0, embed_query_ms: 0, semantic_ms: 0, rerank_ms: 0, total_ms: 0 },
-  }
+  let retrieval: HybridSearchReport['retrieval'] = emptyHybridReport().retrieval
   let toolTrace: ToolTraceEntry[] = []
 
   for await (const ev of runChat(opts)) {

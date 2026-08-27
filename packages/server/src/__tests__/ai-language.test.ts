@@ -29,6 +29,8 @@ describe('AI 语言跟随 UI', () => {
     expect(listSkills('en', 'doc')[0]!.name).toBe('Summarize current document')
     expect(listSkills('zh', 'all').map((s) => s.id)).toEqual(['recent-notes', 'inbox-overview'])
     expect(listSkills('zh', 'doc').map((s) => s.id)).toEqual(['summarize-doc', 'related-notes'])
+    expect(listSkills('zh', 'doc').map((s) => s.retrieval)).toEqual(['none', 'library'])
+    expect(listSkills('zh', 'all').every((s) => s.retrieval === 'none')).toBe(true)
   })
 
   test('suggestTitle lang=en 用英文系统提示', async () => {
@@ -72,5 +74,20 @@ describe('检索结果注入 prompt 携带 ID', () => {
       expect(sys).toContain('doc_id: d-456')
       expect(sys).toContain('block_id: b-123')
     }
+  })
+
+  test('skipRetrieval + 当前文档 不写「未找到相关内容」', () => {
+    const msgs = buildChatPrompt({
+      messages: [{ role: 'user', content: '总结' }],
+      citations: [],
+      currentDocTitle: '排版验证',
+      currentDocContent: '正文一段',
+      skipRetrieval: true,
+      lang: 'zh',
+    })
+    const sys = String(msgs[0]?.content ?? '')
+    expect(sys).toContain('用户当前查看文档：《排版验证》')
+    expect(sys).toContain('本轮未做全库检索')
+    expect(sys).not.toContain('未找到相关内容')
   })
 })

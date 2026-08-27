@@ -42,6 +42,7 @@ interface AiSkill {
   description: string
   icon: string
   prompt: string
+  retrieval?: 'none' | 'library'
 }
 
 const SKILL_ICONS: Record<string, typeof Inbox> = {
@@ -343,7 +344,7 @@ export default function AIChatPanel({
     }
   }
 
-  const sendChat = async (preset?: string) => {
+  const sendChat = async (preset?: string, opts?: { skipRetrieval?: boolean }) => {
     const hasImages = attachments.length > 0
     const raw = (preset ?? input).trim()
     if ((!raw && !hasImages) || loading) return
@@ -398,6 +399,7 @@ export default function AIChatPanel({
           messages: outgoing,
           context_doc_id: contextDocId,
           top_k: 5,
+          ...(opts?.skipRetrieval ? { skip_retrieval: true } : {}),
         },
         {
           onEvent: (eventName, data) => {
@@ -625,7 +627,7 @@ export default function AIChatPanel({
                     <button
                       key={s.id}
                       type="button"
-                      onClick={() => { void sendChat(s.prompt) }}
+                      onClick={() => { void sendChat(s.prompt, { skipRetrieval: s.retrieval === 'none' }) }}
                       disabled={loading}
                       className="flex items-start gap-2.5 text-left rounded-lg border border-border/70 bg-card px-3 py-2.5 hover:border-primary/35 hover:bg-primary-softer transition-colors group disabled:opacity-50"
                     >
@@ -762,7 +764,7 @@ export default function AIChatPanel({
                 <Tooltip key={s.id} label={s.description}>
                   <button
                     type="button"
-                    onClick={() => { void sendChat(s.prompt) }}
+                    onClick={() => { void sendChat(s.prompt, { skipRetrieval: s.retrieval === 'none' }) }}
                     disabled={loading}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-primary/20 bg-primary-softer text-xs text-primary hover:border-primary/40 hover:bg-primary-soft transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
                   >

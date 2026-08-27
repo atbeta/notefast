@@ -104,9 +104,11 @@ describe('内置技能 API', () => {
     const all = await api('GET', '/api/v1/ai/skills')
     expect(all.status).toBe(200)
     expect(all.body.skills.map((s: { id: string }) => s.id)).toEqual(['recent-notes', 'inbox-overview'])
+    expect(all.body.skills.every((s: { retrieval: string }) => s.retrieval === 'none')).toBe(true)
     const doc = await api('GET', '/api/v1/ai/skills?scope=doc')
     expect(doc.status).toBe(200)
     expect(doc.body.skills.map((s: { id: string }) => s.id)).toEqual(['summarize-doc', 'related-notes'])
+    expect(doc.body.skills.map((s: { retrieval: string }) => s.retrieval)).toEqual(['none', 'library'])
   })
 })
 

@@ -277,6 +277,78 @@ describe('POST /api/v1/ai/chat — 流式正常路径', () => {
     expect((done!.data as { citations: unknown[] }).citations.length).toBeGreaterThan(0)
   })
 
+  test('skip_retrieval 跳过首轮 RAG，citations 为空', async () => {
+    applyNewConfig(
+      {
+        version: 1,
+        chat: {
+          id: 'x',
+          label: 'x',
+          preset: 'custom',
+          baseUrl: 'http://mock',
+          apiKey: '',
+          embeddingModel: '',
+          chatModel: 'fake-chat',
+          timeoutMs: 5000,
+          extraHeaders: {},
+        },
+        embedding: null,
+        autoIndex: false,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+
+    const { getDb } = await import('../db')
+    const db = getDb()
+    const nb = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const docId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
+    ).run(docId, nb, docId, '排版验证', now, now)
+    const blockId = crypto.randomUUID()
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'paragraph', ?, 0, 1, ?, ?)`,
+    ).run(blockId, nb, docId, docId, '请总结当前正在查看的文档 检索 全文', now, now)
+
+    const encoder = new TextEncoder()
+    const fetcher = (async () =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            c.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"ok"}}]}\n\n'))
+            c.enqueue(encoder.encode('data: [DONE]\n\n'))
+            c.close()
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      )) as unknown as typeof fetch
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl(withQueryUnderstandingStub(fetcher))
+
+    const res = await app.fetch(
+      new Request('http://localhost/api/v1/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: '请总结当前正在查看的文档。以注入的正文为准。' }],
+          skip_retrieval: true,
+        }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    const events = await consumeSSE(res)
+    const retrieval = events.find((e) => e.event === 'retrieval')
+    expect(retrieval).toBeDefined()
+    expect((retrieval!.data as { citations: unknown[] }).citations).toEqual([])
+    const done = events.find((e) => e.event === 'done')
+    expect((done!.data as { citations: unknown[] }).citations).toEqual([])
+  })
+
   test('runChat() 未配置时返回 error 事件', async () => {
     _setRuntimeForTests(null)
     initAiRuntime(pluginSystem, testDir)

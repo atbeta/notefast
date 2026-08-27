@@ -27,6 +27,8 @@ export interface ChatPromptInput {
   tools?: ToolDefinition[]
   /** 助手语言：zh / en（默认 zh） */
   lang?: AiLang
+  /** 首轮跳过全库检索时，空 citations 不要写成「笔记里没找到」 */
+  skipRetrieval?: boolean
 }
 
 const SYSTEM_PROMPT_ZH = `你是 NoteFast 的 AI 助手，正在与用户讨论他的个人知识库。
@@ -64,13 +66,11 @@ Rules:
 13. When the user asks to pin a filter, add a sidebar pinned view (e.g. "pin the work tag"), or pin untagged notes, call notefast_pin_view. Do not invent filters the user did not mention; list existing views with notefast_list_pinned_views first if needed. Unpin with notefast_unpin_view.`
 
 export function buildChatPrompt(input: ChatPromptInput): ChatMessage[] {
-  const { messages, citations, currentDocTitle, currentDocContent, tools, lang = 'zh' } = input
+  const { messages, citations, currentDocTitle, currentDocContent, tools, lang = 'zh', skipRetrieval } = input
   const maxTurns = input.maxHistoryTurns ?? 6
   const system = lang === 'en' ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT_ZH
 
-  const systemContent = citations.length > 0
-    ? `${system}\n\n${buildContextBlock(citations, currentDocTitle, currentDocContent, lang)}`
-    : `${system}\n\n${buildContextBlock([], currentDocTitle, currentDocContent, lang)}`
+  const systemContent = `${system}\n\n${buildContextBlock(citations, currentDocTitle, currentDocContent, lang, skipRetrieval)}`
 
   let withTools = systemContent
   if (tools && tools.length > 0) {
@@ -82,7 +82,13 @@ export function buildChatPrompt(input: ChatPromptInput): ChatMessage[] {
   return [{ role: 'system', content: withTools }, ...history]
 }
 
-function buildContextBlock(citations: Citation[], currentDocTitle?: string, currentDocContent?: string, lang: AiLang = 'zh'): string {
+function buildContextBlock(
+  citations: Citation[],
+  currentDocTitle?: string,
+  currentDocContent?: string,
+  lang: AiLang = 'zh',
+  skipRetrieval = false,
+): string {
   const en = lang === 'en'
   let docBlock = ''
   if (currentDocTitle || currentDocContent) {
@@ -101,6 +107,16 @@ function buildContextBlock(citations: Citation[], currentDocTitle?: string, curr
     }
   }
   if (citations.length === 0) {
+    if (skipRetrieval && (currentDocTitle || currentDocContent)) {
+      return en
+        ? `${docBlock}(No library search this round. Answer from the current document above. If the body was truncated, call notefast_read_doc. Do not call notefast_search_more unless the user asks about other notes.)`
+        : `${docBlock}（本轮未做全库检索。请根据上方当前文档作答；若正文被截断可调用 notefast_read_doc。用户没有问及其他笔记时，不要调用 notefast_search_more。）`
+    }
+    if (skipRetrieval) {
+      return en
+        ? `${docBlock}(No library search this round. Use tools such as notefast_list_docs as the user requested. Do not invent document titles.)`
+        : `${docBlock}（本轮未做全库检索。请按用户要求调用 notefast_list_docs 等工具，不要编造文档标题。）`
+    }
     return en
       ? `${docBlock}(No relevant notes were retrieved this time. Tell the user directly that nothing relevant was found — do not fabricate or guess. If the question is a listing query like "what documents are there" or "list all", consider calling notefast_list_docs to fetch the document list.)`
       : `${docBlock}(本次未检索到相关笔记。请直接告知用户未找到相关内容，不要编造或猜测。若用户的问题涉及"有哪些""列出所有"等列表性查询，建议调用 notefast_list_docs 获取文档列表。)`

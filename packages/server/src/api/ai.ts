@@ -626,6 +626,8 @@ const chatSchema = z.object({
   temperature: z.number().min(0).max(2).optional(),
   max_tokens: z.number().int().min(16).max(8000).optional(),
   stream: z.boolean().optional(),
+  /** 跳过首轮全库检索（聊天预置：总结当前文档 / 列表类） */
+  skip_retrieval: z.boolean().optional(),
 })
 
 ai.post('/chat', zValidator('json', chatSchema), async (c) => {
@@ -652,6 +654,7 @@ ai.post('/chat', zValidator('json', chatSchema), async (c) => {
           rerankWindow: body.rerank_window,
           temperature: body.temperature,
           maxTokens: body.max_tokens,
+          skipRetrieval: body.skip_retrieval === true,
           lang: resolveAiLang(c.req.header('accept-language')),
           // 客户端断连 → 上游 LLM 请求随之取消（省 token；AbortError 静默）
           signal: c.req.raw.signal,
@@ -697,6 +700,7 @@ ai.post('/chat', zValidator('json', chatSchema), async (c) => {
       rerankWindow: body.rerank_window,
       temperature: body.temperature,
       maxTokens: body.max_tokens,
+      skipRetrieval: body.skip_retrieval === true,
       signal: c.req.raw.signal,
     })
     return c.json(result)
