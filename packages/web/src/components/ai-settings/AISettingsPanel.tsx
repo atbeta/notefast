@@ -12,6 +12,9 @@ import {
   Globe,
   TriangleAlert,
   X,
+  Pause,
+  Play,
+  Waypoints,
 } from 'lucide-react'
 import {
   KEY_MASK,
@@ -90,11 +93,20 @@ type IndexJobSummary = {
     error: string | null
   }>
   indexedBlocks: number
+  paused?: boolean
+}
+
+type IndexCoverage = {
+  notes: number
+  ready: number
+  partial: number
+  unindexed: number
 }
 
 type AIStatus = RuntimeStatus & {
   vectorStore?: VectorStoreStatus
   indexJobs?: IndexJobSummary
+  indexCoverage?: IndexCoverage | null
   fix_hint?: string
 }
 
@@ -141,6 +153,7 @@ export default function AISettingsPanel() {
   const [testing, setTesting] = useState(false)
   const [diagnose, setDiagnose] = useState<AiDiagnoseResult | null>(null)
   const [rebuilding, setRebuilding] = useState(false)
+  const [fillingGaps, setFillingGaps] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [entityRebuild, setEntityRebuild] = useState<EntityRebuildStatus | null>(null)
   // 「未保存修改」检测：savedSnapshot 记录最近一次保存/刷新时的表单状态，
@@ -228,13 +241,13 @@ export default function AISettingsPanel() {
   useEffect(() => {
     const vs = status?.vectorStore
     const jobs = status?.indexJobs
-    const busy = (vs?.status === 'rebuilding') || Boolean(jobs?.running || (jobs?.pending ?? 0) > 0)
+    const busy = (vs?.status === 'rebuilding') || Boolean(jobs?.paused || jobs?.running || (jobs?.pending ?? 0) > 0)
     if (!busy) return
     const t = setInterval(() => {
       void refresh()
     }, vs?.status === 'rebuilding' ? 800 : 1500)
     return () => clearInterval(t)
-  }, [status?.vectorStore?.status, status?.indexJobs?.running, status?.indexJobs?.pending, refresh])
+  }, [status?.vectorStore?.status, status?.indexJobs?.running, status?.indexJobs?.pending, status?.indexJobs?.paused, refresh])
 
   // 实体重建进度轮询
   useEffect(() => {
@@ -283,6 +296,48 @@ export default function AISettingsPanel() {
       })
     } finally {
       setRebuilding(false)
+    }
+  }
+
+  const handleFillIndexGaps = async () => {
+    if (fillingGaps) return
+    setFillingGaps(true)
+    try {
+      const res = await api.post<{ queued: number }>('/ai/index/gaps', {})
+      if (res.queued > 0) toast.info({ title: t('aiSettings.fillIndexGapsQueued', { n: res.queued }) })
+      else toast.info({ title: t('aiSettings.fillIndexGapsNone') })
+      await refresh()
+    } catch (e) {
+      toast.error({
+        title: t('aiSettings.fillIndexGapsFailed'),
+        description: e instanceof Error ? e.message : String(e),
+      })
+    } finally {
+      setFillingGaps(false)
+    }
+  }
+
+  const handlePauseIndexQueue = async () => {
+    try {
+      await api.post('/ai/index/jobs/pause', {})
+      await refresh()
+    } catch (e) {
+      toast.error({
+        title: t('aiSettings.pauseIndexQueue'),
+        description: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  const handleResumeIndexQueue = async () => {
+    try {
+      await api.post('/ai/index/jobs/resume', {})
+      await refresh()
+    } catch (e) {
+      toast.error({
+        title: t('aiSettings.resumeIndexQueue'),
+        description: e instanceof Error ? e.message : String(e),
+      })
     }
   }
 
@@ -649,6 +704,18 @@ export default function AISettingsPanel() {
                 {t('aiSettings.vectorCount', { n: status.vectorStore.count.toLocaleString(currentLocale()), backend: status.vectorStore.backend })}
               </span>
             </div>
+            {status.indexCoverage && status.indexCoverage.notes > 0 && (
+              <p className="text-muted-foreground">
+                {t('aiSettings.indexCoverage', {
+                  ready: status.indexCoverage.ready,
+                  total: status.indexCoverage.notes,
+                })}
+                {status.indexCoverage.unindexed > 0 &&
+                  t('aiSettings.indexCoverageUnindexed', { n: status.indexCoverage.unindexed })}
+                {status.indexCoverage.partial > 0 &&
+                  t('aiSettings.indexCoveragePartial', { n: status.indexCoverage.partial })}
+              </p>
+            )}
             {status.vectorStore.status === 'stale' && (
               <p className="text-warning">
                 {t('aiSettings.vectorStaleWarning')}
@@ -672,10 +739,13 @@ export default function AISettingsPanel() {
               const jobs = status.indexJobs
               if (!jobs) return null
               const busy = jobs.running > 0 || jobs.pending > 0
+              const paused = Boolean(jobs.paused)
               const active = jobs.active
               return (
                 <div className="pt-1.5 border-t border-border/60 space-y-1.5">
-                  {busy ? (
+                  {paused ? (
+                    <p className="text-sm text-muted-foreground">{t('aiSettings.indexJobPaused')}</p>
+                  ) : busy ? (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
                       {active ? (
@@ -720,6 +790,17 @@ export default function AISettingsPanel() {
                 )}
                 {t('aiSettings.rebuildIndex')}
               </button>
+              {status.indexCoverage && status.indexCoverage.unindexed + status.indexCoverage.partial > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void handleFillIndexGaps()}
+                  disabled={!capabilities?.embedding || fillingGaps || status.vectorStore.status === 'rebuilding'}
+                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-border hover:bg-accent disabled:opacity-50"
+                >
+                  {fillingGaps && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {t('aiSettings.fillIndexGaps')}
+                </button>
+              )}
               {status.vectorStore.status === 'rebuilding' && (
                 <button
                   type="button"
@@ -730,74 +811,109 @@ export default function AISettingsPanel() {
                   {t('aiSettings.cancelRebuild')}
                 </button>
               )}
-              <Tooltip label={t('aiSettings.entityRebuildCostHint')}>
+              {status.indexJobs?.paused ? (
                 <button
                   type="button"
-                  onClick={() => void handleRebuildEntities()}
-                  disabled={!capabilities?.chat || entityRebuild?.running === true}
-                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-border hover:bg-accent disabled:opacity-50"
+                  onClick={() => void handleResumeIndexQueue()}
+                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-border hover:bg-accent"
                 >
-                  {entityRebuild?.running && <Loader2 className="w-3 h-3 animate-spin" />}
-                  {t('aiSettings.rebuildEntities')}
+                  <Play className="w-3 h-3" strokeWidth={1.75} />
+                  {t('aiSettings.resumeIndexQueue')}
                 </button>
-              </Tooltip>
-              {entityRebuild?.running && (
+              ) : (status.indexJobs?.running ?? 0) + (status.indexJobs?.pending ?? 0) > 0 ? (
                 <button
                   type="button"
-                  onClick={() => void handleCancelEntityRebuild()}
-                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-destructive/40 text-destructive hover:bg-destructive/10"
+                  onClick={() => void handlePauseIndexQueue()}
+                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-border hover:bg-accent"
                 >
-                  <X className="w-3 h-3" />
-                  {t('aiSettings.cancelRebuild')}
+                  <Pause className="w-3 h-3" strokeWidth={1.75} />
+                  {t('aiSettings.pauseIndexQueue')}
                 </button>
-              )}
+              ) : null}
             </div>
-            {entityRebuild?.indexState && !entityRebuild.running && (
-              <p className="text-xs text-muted-foreground">
-                {entityRebuild.indexState.status === 'empty' && (
-                  <span className="inline-flex items-center gap-1.5 text-warning">
-                    <TriangleAlert className="w-3.5 h-3.5" />
-                    {t('aiSettings.entityIndexEmpty')}
-                  </span>
-                )}
-                {entityRebuild.indexState.status === 'ready' && (
-                  t('aiSettings.entityIndexReady', {
-                    entities: entityRebuild.indexState.entityCount,
-                    blocks: entityRebuild.indexState.analyzedBlocks,
-                  })
-                )}
-                {entityRebuild.indexState.status === 'failed' && (
-                  <span className="text-destructive">
-                    {t('aiSettings.entityIndexFailed')}
-                    {entityRebuild.indexState.error ? ` · ${entityRebuild.indexState.error}` : ''}
-                  </span>
-                )}
-                {entityRebuild.indexState.status === 'rebuilding' && t('aiSettings.entityIndexRebuilding')}
-              </p>
-            )}
-            {(entityRebuild?.running || (entityRebuild && (entityRebuild.total > 0 || entityRebuild.errors > 0))) && (
-              <p className="tabular-nums text-muted-foreground break-words">
-                {entityRebuild.running && entityRebuild.total === 0
-                  ? t('aiSettings.entityRebuildScanning')
-                  : t('aiSettings.entityRebuildProgress', {
-                      done: entityRebuild.done,
-                      total: entityRebuild.total,
-                    })}
-                {(entityRebuild.skipped ?? 0) > 0 &&
-                  t('aiSettings.entityRebuildSkipped', { n: entityRebuild.skipped })}
-                {entityRebuild.eta_ms != null && entityRebuild.eta_ms > 0 && entityRebuild.running && (
-                  t('aiSettings.entityRebuildEta', { minutes: Math.max(1, Math.ceil(entityRebuild.eta_ms / 60000)) })
-                )}
-                {entityRebuild.errors > 0 && t('aiSettings.entityRebuildErrors', { n: entityRebuild.errors })}
-                {entityRebuild.last_error && (
-                  <span className="text-destructive">
-                    {' '}· {entityRebuild.last_error}
-                  </span>
-                )}
-              </p>
-            )}
           </div>
         )}
+      </SettingsCard>
+
+      <SettingsCard
+        icon={<Waypoints className="w-4 h-4" />}
+        title={t('aiSettings.entityGraph')}
+        helpTip={t('aiSettings.entityGraphTip')}
+        statusBadge={<StatusBadge active={entityRebuild?.indexState?.status === 'ready'} />}
+      >
+        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2.5 space-y-2 text-sm">
+          {entityRebuild?.indexState && !entityRebuild.running && (
+            <p className="text-muted-foreground">
+              {entityRebuild.indexState.status === 'empty' && (
+                <span className="inline-flex items-center gap-1.5 text-warning">
+                  <TriangleAlert className="w-3.5 h-3.5" />
+                  {t('aiSettings.entityIndexEmpty')}
+                </span>
+              )}
+              {entityRebuild.indexState.status === 'ready' &&
+                t('aiSettings.entityIndexReady', {
+                  entities: entityRebuild.indexState.entityCount,
+                  blocks: entityRebuild.indexState.analyzedBlocks,
+                })}
+              {entityRebuild.indexState.status === 'failed' && (
+                <span className="text-destructive">
+                  {t('aiSettings.entityIndexFailed')}
+                  {entityRebuild.indexState.error ? ` · ${entityRebuild.indexState.error}` : ''}
+                </span>
+              )}
+              {entityRebuild.indexState.status === 'rebuilding' && t('aiSettings.entityIndexRebuilding')}
+            </p>
+          )}
+          {(entityRebuild?.running || (entityRebuild && (entityRebuild.total > 0 || entityRebuild.errors > 0))) && (
+            <p className="tabular-nums text-muted-foreground break-words">
+              {entityRebuild.running && entityRebuild.total === 0
+                ? t('aiSettings.entityRebuildScanning')
+                : t('aiSettings.entityRebuildProgress', {
+                    done: entityRebuild.done,
+                    total: entityRebuild.total,
+                  })}
+              {(entityRebuild.skipped ?? 0) > 0 &&
+                t('aiSettings.entityRebuildSkipped', { n: entityRebuild.skipped })}
+              {entityRebuild.eta_ms != null && entityRebuild.eta_ms > 0 && entityRebuild.running && (
+                t('aiSettings.entityRebuildEta', { minutes: Math.max(1, Math.ceil(entityRebuild.eta_ms / 60000)) })
+              )}
+              {entityRebuild.errors > 0 && t('aiSettings.entityRebuildErrors', { n: entityRebuild.errors })}
+              {entityRebuild.last_error && (
+                <span className="text-destructive">
+                  {' '}· {entityRebuild.last_error}
+                </span>
+              )}
+            </p>
+          )}
+          {!entityRebuild?.indexState && !entityRebuild?.running && (
+            <p className="text-muted-foreground">
+              {capabilities?.chat ? t('aiSettings.entityIndexEmpty') : t('aiSettings.requiresChat')}
+            </p>
+          )}
+          <div className="flex gap-2 pt-0.5">
+            <Tooltip label={t('aiSettings.entityRebuildCostHint')}>
+              <button
+                type="button"
+                onClick={() => void handleRebuildEntities()}
+                disabled={!capabilities?.chat || entityRebuild?.running === true}
+                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-border hover:bg-accent disabled:opacity-50"
+              >
+                {entityRebuild?.running && <Loader2 className="w-3 h-3 animate-spin" />}
+                {t('aiSettings.rebuildEntities')}
+              </button>
+            </Tooltip>
+            {entityRebuild?.running && (
+              <button
+                type="button"
+                onClick={() => void handleCancelEntityRebuild()}
+                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-destructive/40 text-destructive hover:bg-destructive/10"
+              >
+                <X className="w-3 h-3" />
+                {t('aiSettings.cancelRebuild')}
+              </button>
+            )}
+          </div>
+        </div>
       </SettingsCard>
 
       {/* Section 5: AutoLink */}

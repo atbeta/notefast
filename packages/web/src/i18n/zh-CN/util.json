@@ -4,7 +4,9 @@
     "ready": "索引完成 · {{total}} 块 · {{elapsed}}s",
     "partial": "索引部分完成 · {{done}}/{{total}} 成功 · {{errors}} 失败 · {{elapsed}}s",
     "failed": "索引失败：{{error}}",
-    "progress": "正在向量化 {{processed}}/{{total}}（{{pct}}%）{{eta}}"
+    "progress": "正在向量化 {{processed}}/{{total}}（{{pct}}%）{{eta}}",
+    "queued": "排队等待索引 · {{total}} 块",
+    "paused": "索引已暂停 · {{processed}}/{{total}}（{{pct}}%）"
   },
   "imageUploader": {
     "uploadFailed": "图片上传失败"

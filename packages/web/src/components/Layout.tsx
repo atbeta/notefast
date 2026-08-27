@@ -12,6 +12,7 @@ import AIChatPanel from './AIChatPanel'
 import GlobalSyncStatus from './GlobalSyncStatus'
 import TitleBar from './TitleBar'
 import { ServerOfflineBanner } from './ServerHealthBar'
+import { IndexQueueBanner } from './IndexQueueBanner'
 import { ShortcutScopeProvider } from '../hooks/useShortcutScope'
 import { useTheme } from '../hooks/useTheme'
 import { prefetchTagCatalog } from '../hooks/useTagCatalog'
@@ -247,6 +248,7 @@ export default function Layout({ children, contentClassName }: { children: React
           >
             {/* 服务不可达总览条：探测成功会自动消失，无需手动清除 */}
             <ServerOfflineBanner />
+            <IndexQueueBanner />
             {/* 统一滚动容器：文档页内部自管滚动（h-full 正好一屏），其余页面由此容器滚动 */}
             <div className={`${contentClassName ?? 'w-full h-full'} flex flex-col overflow-y-auto print:overflow-visible print:h-auto`}>
               <AiChatCtlContext.Provider value={{ open: aiChatOpen, toggle: toggleAiChat }}>

@@ -85,6 +85,14 @@
     "restore": "还原",
     "closeWindow": "关闭"
   },
+  "indexQueue": {
+    "indexing": "正在索引 · 排队 {{pending}} 篇",
+    "indexingActive": "正在索引 {{done}}/{{total}} 块 · 排队 {{pending}} 篇",
+    "paused": "索引已暂停 · 排队 {{pending}} 篇",
+    "pause": "暂停",
+    "resume": "继续",
+    "openSettings": "索引设置"
+  },
   "command": {
     "newDoc": "新建文档",
     "newDocHint": "创建一个新的 Markdown 文档",

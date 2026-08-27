@@ -55,7 +55,13 @@ import { usePopoverDismiss } from '../hooks/usePopoverDismiss'
 import { useDemoMode, DEMO_ZOOMS, setDemoZoomIndex, toggleDemoMode } from '../hooks/useDemoMode'
 import { useDocReadingWidth, writeDocReadingWidth, DOC_READING_WIDTH_REM } from '../hooks/useDocReadingWidth'
 import { formatRelative, relativeTime, currentLocale } from '../lib/time'
-import { formatIndexProgress, pollIndexJob, type IndexJob } from '../hooks/useIndexJob'
+import {
+  formatIndexProgress,
+  pollDocIndex,
+  startDocIndex,
+  isIndexJobActive,
+  type DocIndexState,
+} from '../hooks/useIndexJob'
 import { useEditorDraft } from '../hooks/useEditorDraft'
 import { EmptyState, InlineError, ListRowsSkeleton, Tooltip, useToast } from '../components/ui'
 import { isEnterEditShortcut } from '../lib/globalShortcuts'
@@ -234,7 +240,9 @@ export default function DocPage() {
   const [docStatus, setDocStatus] = useState<'note' | 'inbox' | 'archived'>('note')
   const [statusSaving, setStatusSaving] = useState(false)
   const [auxLoading, setAuxLoading] = useState(false)
-  const [indexJob, setIndexJob] = useState<IndexJob | null>(null)
+  const [indexState, setIndexState] = useState<DocIndexState | null>(null)
+  const [indexRetrying, setIndexRetrying] = useState(false)
+  const [indexWatchKey, setIndexWatchKey] = useState(0)
   const [showSkeleton, setShowSkeleton] = useState(false)
   /** 桌面右栏：大纲 / 链接 / 实体 / 相关 / 历史；切换文档时保持 Tab（相关 Tab 会重拉） */
   const [railTab, setRailTab] = useState<'outline' | 'backlinks' | 'entities' | 'related' | 'history'>('outline')
@@ -276,15 +284,13 @@ export default function DocPage() {
   useEffect(() => {
     setTocOpen(false)
     setRelatedBlockId(null)
+    setIndexState(null)
   }, [id])
-  // 恢复 AI 可见触发的索引轮询（切换文档/重复点击时中止上一轮）
-  const indexJobAcRef = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const articleRef = useRef<HTMLElement>(null)
   const prevScrollIdRef = useRef<string | undefined>(undefined)
   /** 阅读态已按 id restore 过则跳过（避免 SSE 刷新把 scrollTop 打回存档） */
   const restoredScrollForIdRef = useRef<string | null>(null)
-  useEffect(() => () => indexJobAcRef.current?.abort(), [])
 
 useEffect(() => {
     if (!id) return
@@ -417,36 +423,46 @@ useEffect(() => {
     }
   }, [id, railTab, doc?.id, relatedBlockId])
 
-  // 创建/导入后的向量化进度（?index_job=）
+  // 文档索引状态：按 docId 恢复（不依赖 ?index_job=）。作业进行中持续轮询，无短超时。
   useEffect(() => {
-    const jobId = searchParams.get('index_job')
-    if (!jobId) {
-      setIndexJob(null)
+    if (!id) {
+      setIndexState(null)
       return
     }
     const ac = new AbortController()
-    void pollIndexJob(jobId, {
+    let sawActive = false
+    void pollDocIndex(id, {
       signal: ac.signal,
-      onUpdate: setIndexJob,
+      onUpdate: (s) => {
+        if (ac.signal.aborted) return
+        setIndexState(s)
+        if (isIndexJobActive(s.job)) sawActive = true
+      },
     }).then((final) => {
       if (ac.signal.aborted) return
-      setIndexJob(final)
-      if (final.state === 'ready') {
-        toast.success({ title: formatIndexProgress(final) })
-      } else if (final.state === 'partial') {
-        toast.warning({ title: formatIndexProgress(final) })
-      } else if (final.state === 'failed') {
-        toast.error({ title: formatIndexProgress(final) })
-      }
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev)
-        next.delete('index_job')
-        return next
-      }, { replace: true })
-      setIndexJob(null)
-    }).catch(() => {})
+      setIndexState(final)
+      if (!sawActive) return
+      const job = final.job
+      if (!job) return
+      if (job.state === 'ready') toast.success({ title: formatIndexProgress(job) })
+      else if (job.state === 'partial') toast.warning({ title: formatIndexProgress(job) })
+      else if (job.state === 'failed') toast.error({ title: formatIndexProgress(job) })
+    }).catch((e: unknown) => {
+      if (e instanceof DOMException && e.name === 'AbortError') return
+      if (e instanceof Error && e.name === 'AbortError') return
+    })
     return () => ac.abort()
-  }, [id, searchParams, setSearchParams, toast])
+  }, [id, docStatus, aiExclude, indexWatchKey, toast])
+
+  // 导入落地带的 ?index_job= 仅作一次性提示，状态改走上面的 docId 轮询
+  useEffect(() => {
+    if (!searchParams.has('index_job')) return
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('index_job')
+      return next
+    }, { replace: true })
+  }, [searchParams, setSearchParams])
 
   useEffect(() => {
     if (doc) {
@@ -678,28 +694,30 @@ useEffect(() => {
     setAiExcludeSaving(true)
     try {
       const next = !aiExclude
-      const res = await api.patch<{ effect?: { index_job?: IndexJob } }>(`/docs/${id}/ai-exclude`, { ai_exclude: next })
+      await api.patch(`/docs/${id}/ai-exclude`, { ai_exclude: next })
       setAiExclude(next)
       setRefreshKey((k) => k + 1)
-      // 恢复可见：向量重建已在服务端异步调度，前端复用创建/导入的进度条 + 完成 toast
-      const jobId = res.effect?.index_job?.id
-      if (!next && jobId) {
-        indexJobAcRef.current?.abort()
-        const ac = new AbortController()
-        indexJobAcRef.current = ac
-        void pollIndexJob(jobId, {
-          signal: ac.signal,
-          onUpdate: (j) => { if (!ac.signal.aborted) setIndexJob(j) },
-        }).then((final) => {
-          if (ac.signal.aborted) return
-          setIndexJob(null)
-          if (final.state === 'ready') toast.success({ title: formatIndexProgress(final) })
-          else if (final.state === 'partial') toast.warning({ title: formatIndexProgress(final) })
-          else if (final.state === 'failed') toast.error({ title: formatIndexProgress(final) })
-        }).catch(() => {})
-      }
+      setIndexWatchKey((k) => k + 1)
+      // 恢复可见：服务端已异步调度整篇索引，文档页按 docId 恢复进度
     } catch { /* silent */ }
     finally { setAiExcludeSaving(false) }
+  }
+
+  const handleRetryIndex = async () => {
+    if (!id || indexRetrying) return
+    setIndexRetrying(true)
+    try {
+      const state = await startDocIndex(id)
+      setIndexState(state)
+      setIndexWatchKey((k) => k + 1)
+    } catch (e) {
+      toast.error({
+        title: t('doc.indexRetryFailed'),
+        description: e instanceof Error ? e.message : undefined,
+      })
+    } finally {
+      setIndexRetrying(false)
+    }
   }
 
   const handlePromoteFromInbox = async () => {
@@ -778,6 +796,37 @@ useEffect(() => {
   const createdAt = doc ? formatRelative(doc.created_at, 'long') : ''
   const wordCount = useMemo(() => (doc ? countWords(doc) : 0), [doc])
   const isEmpty = wordCount === 0
+
+  const indexSkip = indexState?.skip_reason
+  const indexHidden =
+    indexSkip === 'inbox' || indexSkip === 'archived' || indexSkip === 'ai_exclude' || indexSkip === 'no_embedding'
+  const indexJob = indexState?.job ?? null
+  const indexActive = isIndexJobActive(indexJob)
+  const indexGap = Boolean(indexState && indexState.eligible > 0 && indexState.indexed < indexState.eligible)
+  const indexBannerKind: 'progress' | 'failed' | 'unindexed' | 'partial' | null = indexHidden
+    ? null
+    : indexActive
+      ? 'progress'
+      : indexJob?.state === 'failed'
+        ? 'failed'
+        : indexGap
+          ? (indexState && indexState.indexed > 0 ? 'partial' : 'unindexed')
+          : indexJob?.state === 'partial'
+            ? 'partial'
+            : null
+  const indexBannerText =
+    indexBannerKind === 'progress' && indexJob
+      ? formatIndexProgress(indexJob, { paused: indexState?.queue.paused })
+      : indexBannerKind === 'failed'
+        ? (indexJob ? formatIndexProgress(indexJob) : t('doc.indexFailed'))
+        : indexBannerKind === 'partial'
+          ? t('doc.indexPartial', { indexed: indexState?.indexed ?? 0, eligible: indexState?.eligible ?? 0 })
+          : indexBannerKind === 'unindexed'
+            ? t('doc.indexUnindexed')
+            : null
+  const showIndexRetry = indexBannerKind === 'failed' || indexBannerKind === 'unindexed' || indexBannerKind === 'partial'
+  const showIndexReadyMeta =
+    !isEditing && !indexHidden && !indexBannerKind && Boolean(indexState && indexState.eligible > 0 && indexState.indexed >= indexState.eligible)
   // 阅读态文档区自定义右键菜单；为空文档 / 编辑态不下文阔（空文档只出猜不打是，复用
   // BlockRenderer 下的 data-block-id 查回 Block 做 md 序列化）
   const ctxMenu = useDocContextMenu({ rootBlock: doc, disabled: isEditing || isEmpty })
@@ -913,13 +962,27 @@ useEffect(() => {
               className="mx-auto max-w-[var(--reading-max-w)]"
               style={{ '--reading-max-w': `${readingMaxW}rem` } as CSSProperties}
             >
-            {indexJob && (indexJob.state === 'pending' || indexJob.state === 'running') && (
-              <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" strokeWidth={1.75} />
-                <span className="flex-1">{formatIndexProgress(indexJob)}</span>
-                <span className="tabular-nums text-xs">
-                  {(indexJob.elapsed_ms / 1000).toFixed(1)}s
-                </span>
+            {indexBannerKind && indexBannerText && (
+              <div className="mb-6 flex items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm text-muted-foreground print:hidden">
+                {indexBannerKind === 'progress' && (
+                  <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" strokeWidth={1.75} />
+                )}
+                <span className="flex-1">{indexBannerText}</span>
+                {indexBannerKind === 'progress' && indexJob && (
+                  <span className="tabular-nums text-xs">
+                    {(indexJob.elapsed_ms / 1000).toFixed(1)}s
+                  </span>
+                )}
+                {showIndexRetry && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRetryIndex()}
+                    disabled={indexRetrying}
+                    className="font-medium text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+                  >
+                    {t('doc.indexRetry')}
+                  </button>
+                )}
               </div>
             )}
             {!isEditing && draftInfo && (
@@ -1032,6 +1095,12 @@ useEffect(() => {
                   <>
                     <span className="mx-2 text-border-strong">·</span>
                     {t('doc.updatedAtLabel', { time: updatedAt })}
+                  </>
+                )}
+                {showIndexReadyMeta && (
+                  <>
+                    <span className="mx-2 text-border-strong">·</span>
+                    {t('doc.indexReady')}
                   </>
                 )}
               </div>

@@ -123,6 +123,12 @@
     "findNone": "No results",
     "findPrev": "Previous",
     "findNext": "Next",
-    "findClose": "Close find"
+    "findClose": "Close find",
+    "indexUnindexed": "Not indexed",
+    "indexPartial": "Partially indexed {{indexed}}/{{eligible}}",
+    "indexReady": "Indexed",
+    "indexFailed": "Indexing failed",
+    "indexRetry": "Index now",
+    "indexRetryFailed": "Could not start indexing"
   }
 }

@@ -85,6 +85,14 @@
     "restore": "Restore",
     "closeWindow": "Close"
   },
+  "indexQueue": {
+    "indexing": "Indexing · {{pending}} queued",
+    "indexingActive": "Indexing {{done}}/{{total}} blocks · {{pending}} queued",
+    "paused": "Indexing paused · {{pending}} queued",
+    "pause": "Pause",
+    "resume": "Resume",
+    "openSettings": "Indexing settings"
+  },
   "command": {
     "newDoc": "New document",
     "newDocHint": "Create a new Markdown document",

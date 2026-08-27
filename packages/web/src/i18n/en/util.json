@@ -4,7 +4,9 @@
     "ready": "Indexing complete · {{total}} blocks · {{elapsed}}s",
     "partial": "Indexing partially complete · {{done}}/{{total}} ok · {{errors}} failed · {{elapsed}}s",
     "failed": "Indexing failed: {{error}}",
-    "progress": "Vectorizing {{processed}}/{{total}} ({{pct}}%){{eta}}"
+    "progress": "Vectorizing {{processed}}/{{total}} ({{pct}}%){{eta}}",
+    "queued": "Queued for indexing · {{total}} blocks",
+    "paused": "Indexing paused · {{processed}}/{{total}} ({{pct}}%)"
   },
   "imageUploader": {
     "uploadFailed": "Image upload failed"

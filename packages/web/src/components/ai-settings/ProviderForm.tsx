@@ -93,17 +93,6 @@ export function ProviderForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
         <div className="md:col-span-2">
           <InlineField
-            label="API Key"
-            description={t('aiSettings.keepUnchanged')}
-            value={value.apiKey === KEY_MASK ? '' : value.apiKey}
-            onChange={(v) => onChange({ ...value, apiKey: v === '' && value.apiKey === KEY_MASK ? KEY_MASK : v })}
-            placeholder={value.apiKey === KEY_MASK ? t('aiSettings.savedKey') : 'sk-...'}
-            type="password"
-            mono
-          />
-        </div>
-        <div className="md:col-span-2">
-          <InlineField
             label="Base URL"
             value={value.baseUrl}
             onChange={(v) => onChange({ ...value, baseUrl: v })}
@@ -134,6 +123,17 @@ export function ProviderForm({
               className="text-sm"
             />
           </FieldRow>
+        </div>
+        <div className="md:col-span-2">
+          <InlineField
+            label="API Key"
+            description={t('aiSettings.keepUnchanged')}
+            value={value.apiKey === KEY_MASK ? '' : value.apiKey}
+            onChange={(v) => onChange({ ...value, apiKey: v === '' && value.apiKey === KEY_MASK ? KEY_MASK : v })}
+            placeholder={value.apiKey === KEY_MASK ? t('aiSettings.savedKey') : 'sk-...'}
+            type="password"
+            mono
+          />
         </div>
         <InlineField
           label={t('providerForm.timeout')}

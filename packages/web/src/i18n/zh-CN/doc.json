@@ -123,6 +123,12 @@
     "findNone": "无结果",
     "findPrev": "上一处",
     "findNext": "下一处",
-    "findClose": "关闭查找"
+    "findClose": "关闭查找",
+    "indexUnindexed": "未索引",
+    "indexPartial": "部分索引 {{indexed}}/{{eligible}}",
+    "indexReady": "已索引",
+    "indexFailed": "索引失败",
+    "indexRetry": "立即索引",
+    "indexRetryFailed": "无法开始索引"
   }
 }

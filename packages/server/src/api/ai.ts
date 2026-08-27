@@ -47,7 +47,9 @@ import { startVectorRebuild, cancelVectorRebuild } from '../ai/vectorRebuild'
 import { getRebuildProgress } from '../ai/rebuildProgress'
 import { startEntityRebuild, getEntityRebuildProgress, getEntityIndexState, cancelEntityRebuild } from '../ai/entityRebuild'
 import { resolveAiLang } from '../ai/locale'
-import { getIndexJob, getIndexJobSummary, getLatestIndexJobForDoc } from '../ai/indexJobs'
+import { getIndexJob, getIndexJobSummary, getLatestIndexJobForDoc, pauseIndexQueue, resumeIndexQueue, scheduleDocIndex } from '../ai/indexJobs'
+import { getDocIndexState, getNotebookIndexCoverage, listGapDocIds } from '../ai/docIndexState'
+import { getDocById, fetchDocBlockIds } from '../store/blocks'
 import { hybridSearch as hybridSearchFn } from '../ai/hybridSearch'
 import { loadAiExcludedDocIds } from '../ai/aiExcludeQuery'
 import { runChat, runChatSync, executeWriteTool } from '../ai/chat'
@@ -68,12 +70,13 @@ ai.get('/status', async (c) => {
   const vectorStore = rebuild ? { ...base, rebuild } : base
   // 增量索引作业汇总：语义索引面板据此展示 zip 导入等后台向量化进度
   const indexJobs = getIndexJobSummary()
+  const indexCoverage = getNotebookIndexCoverage()
   if (!runtimeSafe()) {
-    return c.json({ enabled: false, embedding: { configured: false, ok: false }, chat: { configured: false, ok: false }, usage: emptyUsage(), config: emptyConfig(), vectorStore, indexJobs, fix_hint: FIX_HINT })
+    return c.json({ enabled: false, embedding: { configured: false, ok: false }, chat: { configured: false, ok: false }, usage: emptyUsage(), config: emptyConfig(), vectorStore, indexJobs, indexCoverage, fix_hint: FIX_HINT })
   }
   const r = getRuntime()
   const s = r.status()
-  return c.json({ ...s, vectorStore, indexJobs, fix_hint: s.enabled ? undefined : FIX_HINT })
+  return c.json({ ...s, vectorStore, indexJobs, indexCoverage, fix_hint: s.enabled ? undefined : FIX_HINT })
 })
 
 // ───────────────────── config ─────────────────────
@@ -472,6 +475,56 @@ ai.get('/index/status', async (c) => {
   const status = await getVectorStore().status()
   const rebuild = getRebuildProgress()
   return c.json(rebuild ? { ...status, rebuild } : status)
+})
+
+ai.get('/index/coverage', (c) => {
+  const coverage = getNotebookIndexCoverage()
+  if (!coverage) return c.json({ error: 'not_configured', message: 'Embedding 未配置', fix_hint: FIX_HINT }, 400)
+  return c.json(coverage)
+})
+
+ai.post('/index/gaps', (c) => {
+  if (!runtimeSafe() || !getRuntime().hasEmbedding()) {
+    return c.json({ error: 'not_configured', message: 'Embedding 未配置', fix_hint: FIX_HINT }, 400)
+  }
+  const db = getDb()
+  const ids = listGapDocIds()
+  let queued = 0
+  for (const docId of ids) {
+    const job = scheduleDocIndex(docId, fetchDocBlockIds(db, docId), { ignoreAutoIndex: true })
+    if (job) queued++
+  }
+  return c.json({ queued, coverage: getNotebookIndexCoverage(), indexJobs: getIndexJobSummary() }, queued > 0 ? 202 : 200)
+})
+
+ai.get('/index/jobs/summary', (c) => c.json(getIndexJobSummary()))
+
+ai.post('/index/jobs/pause', (c) => {
+  pauseIndexQueue()
+  return c.json(getIndexJobSummary())
+})
+
+ai.post('/index/jobs/resume', (c) => {
+  resumeIndexQueue()
+  return c.json(getIndexJobSummary())
+})
+
+ai.get('/index/docs/:docId', (c) => {
+  const state = getDocIndexState(c.req.param('docId'))
+  if (!state) return c.json({ error: 'not_found', message: '文档不存在' }, 404)
+  return c.json(state)
+})
+
+ai.post('/index/docs/:docId', (c) => {
+  const docId = c.req.param('docId')
+  const row = getDocById(getDb(), docId)
+  if (!row) return c.json({ error: 'not_found', message: '文档不存在' }, 404)
+  if (!runtimeSafe() || !getRuntime().hasEmbedding()) {
+    return c.json({ error: 'not_configured', message: 'Embedding 未配置', fix_hint: FIX_HINT }, 400)
+  }
+  const job = scheduleDocIndex(docId, fetchDocBlockIds(getDb(), docId), { ignoreAutoIndex: true })
+  if (!job) return c.json({ error: 'not_configured', message: '无法调度索引作业', fix_hint: FIX_HINT }, 400)
+  return c.json({ index_job: job, ...getDocIndexState(docId) }, 202)
 })
 
 ai.get('/index/jobs/:jobId', (c) => {

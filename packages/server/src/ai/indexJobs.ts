@@ -37,6 +37,10 @@ const MAX_FINISHED_JOBS = 100
 const jobs = new Map<string, IndexJob>()
 const queue: string[] = []
 let activeCount = 0
+/** 全局暂停：不启动新作业；正在跑的作业在当前批次结束后退回队列头部 */
+let queuePaused = false
+
+type InternalJob = IndexJob & { _blockIds?: string[]; _offset?: number }
 
 /** 淘汰最老的终态作业（Map 迭代按插入序 = 创建序） */
 function pruneFinishedJobs(): void {
@@ -88,12 +92,21 @@ function finalizeState(job: IndexJob): void {
   }
 }
 
+function yieldForPause(job: InternalJob, jobId: string, offset: number): boolean {
+  if (!queuePaused) return false
+  job._offset = offset
+  job.state = 'pending'
+  recomputeTiming(job)
+  if (!queue.includes(jobId)) queue.unshift(jobId)
+  return true
+}
+
 async function runJob(jobId: string): Promise<void> {
-  const job = jobs.get(jobId)
+  const job = jobs.get(jobId) as InternalJob | undefined
   if (!job) return
 
   job.state = 'running'
-  job.started_at = nowIso()
+  if (!job.started_at) job.started_at = nowIso()
   recomputeTiming(job)
 
   if (!hasRuntime() || !getRuntime().hasEmbedding()) {
@@ -104,17 +117,23 @@ async function runJob(jobId: string): Promise<void> {
     return
   }
 
-  const blockIds = (job as IndexJob & { _blockIds?: string[] })._blockIds ?? []
+  const blockIds = job._blockIds ?? []
+  let paused = false
   try {
-    for (let offset = 0; offset < blockIds.length; offset += BATCH) {
+    for (let offset = job._offset ?? 0; offset < blockIds.length; offset += BATCH) {
       // 被更新的作业 supersede 后 state 已置 failed：直接终止循环，
       // 不调 finalizeState（避免把 failed 覆盖成 ready/partial）
       if (job.state !== 'running') return
+      if (yieldForPause(job, jobId, offset)) {
+        paused = true
+        return
+      }
       const batch = blockIds.slice(offset, offset + BATCH)
       const result = await indexBlockBatch(batch)
       job.done += result.indexed
       job.skipped += result.skipped
       job.errors += result.errors
+      job._offset = offset + BATCH
       recomputeTiming(job)
       if (offset + BATCH < blockIds.length && BATCH_GAP_MS > 0) {
         await new Promise((r) => setTimeout(r, BATCH_GAP_MS))
@@ -127,12 +146,15 @@ async function runJob(jobId: string): Promise<void> {
     job.finished_at = nowIso()
     recomputeTiming(job)
   } finally {
-    // 清掉内部 blockIds，避免 job 快照无限膨胀
-    delete (job as IndexJob & { _blockIds?: string[] })._blockIds
+    if (!paused) {
+      delete job._blockIds
+      delete job._offset
+    }
   }
 }
 
 function pump(): void {
+  if (queuePaused) return
   while (activeCount < MAX_CONCURRENT_JOBS && queue.length > 0) {
     const id = queue.shift()!
     const job = jobs.get(id)
@@ -145,18 +167,41 @@ function pump(): void {
   }
 }
 
+export function isIndexQueuePaused(): boolean {
+  return queuePaused
+}
+
+/** 暂停队列。正在跑的作业在当前批次结束后退回队首。 */
+export function pauseIndexQueue(): void {
+  queuePaused = true
+}
+
+/** 继续队列。 */
+export function resumeIndexQueue(): void {
+  if (!queuePaused) {
+    pump()
+    return
+  }
+  queuePaused = false
+  pump()
+}
+
 /**
  * 为文档调度索引作业。若 embedding 未启用则返回 null。
  * blockIds 为空时立即 ready。
  */
-export function scheduleDocIndex(docId: string, blockIds: string[]): IndexJob | null {
+export function scheduleDocIndex(
+  docId: string,
+  blockIds: string[],
+  opts?: { ignoreAutoIndex?: boolean },
+): IndexJob | null {
   if (!hasRuntime() || !getRuntime().hasEmbedding()) return null
   const cfg = getRuntime().status().config
-  if (!cfg.autoIndex) return null
+  if (!opts?.ignoreAutoIndex && !cfg.autoIndex) return null
 
   const ids = [...new Set(blockIds.filter(Boolean))]
   const jobId = crypto.randomUUID()
-  const job: IndexJob & { _blockIds: string[] } = {
+  const job: InternalJob = {
     id: jobId,
     doc_id: docId,
     total_blocks: ids.length,
@@ -170,6 +215,7 @@ export function scheduleDocIndex(docId: string, blockIds: string[]): IndexJob | 
     eta_ms: ids.length === 0 ? 0 : null,
     error: null,
     _blockIds: ids,
+    _offset: 0,
   }
   jobs.set(jobId, job)
   pruneFinishedJobs()
@@ -238,6 +284,8 @@ export interface IndexJobSummary {
   recent: IndexJob[]
   /** 会话内累计已索引块数 */
   indexedBlocks: number
+  /** 全局暂停：排队作业不启动 */
+  paused: boolean
 }
 
 /**
@@ -270,7 +318,16 @@ export function getIndexJobSummary(): IndexJobSummary {
     }
   }
   recent.sort((a, b) => (b.finished_at ?? '').localeCompare(a.finished_at ?? ''))
-  return { pending, running, ready, failed, active, recent: recent.slice(0, 5), indexedBlocks }
+  return {
+    pending,
+    running,
+    ready,
+    failed,
+    active,
+    recent: recent.slice(0, 5),
+    indexedBlocks,
+    paused: queuePaused,
+  }
 }
 
 /** 测试用：清空作业表 */
@@ -278,4 +335,5 @@ export function _resetIndexJobsForTests(): void {
   jobs.clear()
   queue.length = 0
   activeCount = 0
+  queuePaused = false
 }
