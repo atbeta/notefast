@@ -24,7 +24,6 @@ import { createWebSessionToken, revokeWebSessionTokens } from './services/apiTok
 import { initDb, closeDb, getDb } from './db'
 import { authMiddleware, SESSION_COOKIE, sessionTokenValue } from './middleware/auth'
 import { createRateLimit } from './middleware/rateLimit'
-import { emitAppEvent } from './events'
 import { handleMcpRequest } from './mcp/server'
 import { registerMcpTools } from './mcp/tools'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -159,16 +158,9 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   app.use('/api/v1/ai/write', relaxSseIdleTimeout)
 
   // ───────────────────── 基础路由 ─────────────────────
+  // 探活必须无副作用：Docker HEALTHCHECK 每 15s 打一次，成功请求不得写 app_logs。
   app.get('/health', async (c) => {
     const status = await getVectorStore().status()
-    emitAppEvent({
-      source: 'web',
-      actor: 'system',
-      action: 'health.check',
-      outcome: 'success',
-      durationMs: undefined,
-      target: undefined,
-    })
     return c.json({ status: 'ok', time: new Date().toISOString(), vectorStore: status })
   })
 

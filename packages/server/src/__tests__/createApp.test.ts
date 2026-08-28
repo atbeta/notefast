@@ -2,6 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { createApp } from '../app'
+import { getDb } from '../db'
 
 /**
  * Server 库化入口（createApp）：
@@ -51,6 +52,18 @@ describe('createApp', () => {
     const again = await srv.start()
     expect(again.notebookId).toBe(started.notebookId)
 
+    await srv.stop()
+  })
+
+  test('/health 成功探活不写 app_logs', async () => {
+    const srv = createApp({ dataDir: testDir })
+    await srv.start()
+    const count = () =>
+      (getDb().query('SELECT count(*) AS c FROM app_logs').get() as { c: number }).c
+    const before = count()
+    const health = await srv.app.fetch(new Request('http://localhost/health'))
+    expect(health.status).toBe(200)
+    expect(count()).toBe(before)
     await srv.stop()
   })
 
