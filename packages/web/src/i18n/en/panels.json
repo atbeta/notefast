@@ -60,7 +60,7 @@
     "saveFailed": "Failed to save",
     "probeFailed": "Failed to probe remote",
     "title": "Markdown archive",
-    "helpTip": "Exports documents together with their referenced images as Markdown copies (.md + media/), for migration and portable reading. Manual only — frontmatter carries tags and the internal ID (tags / notefast_id). Files go under the first tag as a folder, or untagged/ if none.",
+    "helpTip": "Exports documents together with their referenced images as Markdown copies (.md + media/), for migration and portable reading. Manual only — frontmatter carries tags, created/modified times, and the internal ID (tags / created / modified / notefast_id). Files go under the first tag as a folder, or untagged/ if none.",
     "enabledWith": "Enabled · {{adapter}}",
     "adapterLocalfs": "Local folder",
     "adapterS3": "S3 connection",

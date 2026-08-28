@@ -268,6 +268,27 @@ describe('importArchiveZip', () => {
     expect(readAsset(meta.id)).not.toBeNull()
   })
 
+  test('自家档导入保留文档 created_at / updated_at', async () => {
+    const id = await createDoc('时间往返', '很久以前写的')
+    const created = '2023-04-05 06:07:08.009'
+    const modified = '2023-11-12 13:14:15.016'
+    getDb().query('UPDATE blocks SET created_at = ?, updated_at = ? WHERE id = ?').run(created, modified, id)
+
+    const exported = buildFullArchiveExport()
+    const db = getDb()
+    db.query('DELETE FROM assets').run()
+    db.query('DELETE FROM blocks').run()
+    db.exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
+
+    const result = await importArchiveZip(db, { notebookId, bytes: exported.body })
+    expect(result.imported).toBe(1)
+    const row = db.query('SELECT created_at, updated_at FROM blocks WHERE id = ?').get(id) as
+      | { created_at: string; updated_at: string }
+      | undefined
+    expect(row?.created_at).toBe(created)
+    expect(row?.updated_at).toBe(modified)
+  })
+
   test('自家档导入标签来自 frontmatter，不因目录再打一遍', async () => {
     const id = await createDoc('归档标签', '正文')
     await setDocTags(id, ['work', 'ai'])

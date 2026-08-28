@@ -87,6 +87,21 @@ export interface StrippedFrontmatter {
 }
 
 /**
+ * 把 YAML 里的 created / modified 收成 DB 时间串（`YYYY-MM-DD HH:MM:SS.sss`，UTC）。
+ * 接受自家导出格式、ISO（T / 可选 Z）、以及只有日期的写法；无法识别则返回 null。
+ */
+export function parseImportedTimestamp(raw: string | undefined): string | null {
+  if (!raw) return null
+  const s = raw.trim()
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}:\d{2})(\.\d{1,3})?)?Z?$/)
+  if (!m) return null
+  const date = m[1]!
+  const time = m[2] ?? '00:00:00'
+  const frac = `.${((m[3] ?? '.000').slice(1) + '000').slice(0, 3)}`
+  return `${date} ${time}${frac}`
+}
+
+/**
  * 剥离文首 NoteFast / 兼容 YAML frontmatter。
  * 仅当全文以 `---` 行开头时处理；解析失败则原样返回（避免误伤正文里的 ---）。
  */

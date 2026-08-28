@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   docFrontmatterFromRow,
   formatDocFrontmatter,
+  parseImportedTimestamp,
   stripDocFrontmatter,
   withDocFrontmatter,
 } from '../frontmatter'
@@ -19,6 +20,10 @@ describe('frontmatter export projection', () => {
     expect(fm).toContain('  - ai')
     expect(fm).toContain('  - rag')
     expect(fm).toContain('notefast_id: doc-abc')
+    expect(fm).toContain('created:')
+    expect(fm).toContain('2025-01-15 10:00:00.000')
+    expect(fm).toContain('modified:')
+    expect(fm).toContain('2025-01-20 12:00:00.000')
     expect(fm.endsWith('---\n\n') || fm.endsWith('---\n')).toBe(true)
   })
 
@@ -61,14 +66,24 @@ describe('frontmatter export projection', () => {
     const body = '# Hi\n\npara\n'
     const full = withDocFrontmatter(body, {
       tags: ['a', 'b'],
-      created: '2025-01-01',
-      modified: '2025-01-02',
+      created: '2025-01-01 10:00:00.000',
+      modified: '2025-01-02 12:00:00.000',
       notefast_id: 'nid',
     })
     const stripped = stripDocFrontmatter(full)
     expect(stripped.meta?.tags).toEqual(['a', 'b'])
     expect(stripped.meta?.notefast_id).toBe('nid')
+    expect(stripped.meta?.created).toBe('2025-01-01 10:00:00.000')
+    expect(stripped.meta?.modified).toBe('2025-01-02 12:00:00.000')
     expect(stripped.body).toBe(body)
+  })
+
+  test('parseImportedTimestamp 收成 DB 时间串', () => {
+    expect(parseImportedTimestamp('2025-01-15 10:00:00.000')).toBe('2025-01-15 10:00:00.000')
+    expect(parseImportedTimestamp('2025-01-15T10:00:00.000Z')).toBe('2025-01-15 10:00:00.000')
+    expect(parseImportedTimestamp('2025-01-15')).toBe('2025-01-15 00:00:00.000')
+    expect(parseImportedTimestamp('yesterday')).toBeNull()
+    expect(parseImportedTimestamp(undefined)).toBeNull()
   })
 
   test('无 frontmatter 原样返回', () => {

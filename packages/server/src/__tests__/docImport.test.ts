@@ -363,3 +363,60 @@ describe('insertDocFromMarkdown 的 frontmatter tags', () => {
     expect(readTags(getBlockById(getDb(), docId)!)).toEqual(['work'])
   })
 })
+
+describe('insertDocFromMarkdown 的 frontmatter 时间', () => {
+  const datedMarkdown = [
+    '---',
+    'tags: []',
+    'created: "2024-03-01 08:15:00.000"',
+    'modified: "2024-06-10 19:30:00.500"',
+    'notefast_id: ignore-me',
+    '---',
+    '',
+    '一段旧笔记',
+  ].join('\n')
+
+  test('导入把 created / modified 写回文档根', () => {
+    const { docId } = insertDocFromMarkdown(getDb(), {
+      notebookId,
+      title: '旧笔记',
+      markdown: datedMarkdown,
+    })
+    const row = getBlockById(getDb(), docId)!
+    expect(row.created_at).toBe('2024-03-01 08:15:00.000')
+    expect(row.updated_at).toBe('2024-06-10 19:30:00.500')
+  })
+
+  test('applyFrontmatterTags: false 不采用 YAML 时间', () => {
+    const before = Date.now()
+    const { docId } = insertDocFromMarkdown(getDb(), {
+      notebookId,
+      title: 'AI 创建带时间',
+      markdown: datedMarkdown,
+      applyFrontmatterTags: false,
+    })
+    const row = getBlockById(getDb(), docId)!
+    expect(row.created_at).not.toBe('2024-03-01 08:15:00.000')
+    expect(row.updated_at).not.toBe('2024-06-10 19:30:00.500')
+    expect(new Date(row.created_at.replace(' ', 'T') + 'Z').getTime()).toBeGreaterThanOrEqual(before - 1000)
+  })
+
+  test('无法识别的时间戳回退为现在', () => {
+    const { docId } = insertDocFromMarkdown(getDb(), {
+      notebookId,
+      title: '坏时间',
+      markdown: [
+        '---',
+        'created: yesterday',
+        'modified: soon',
+        '---',
+        '',
+        '正文',
+      ].join('\n'),
+    })
+    const row = getBlockById(getDb(), docId)!
+    expect(row.created_at).not.toBe('yesterday')
+    expect(row.updated_at).not.toBe('soon')
+    expect(row.created_at).toMatch(/^\d{4}-\d{2}-\d{2} /)
+  })
+})

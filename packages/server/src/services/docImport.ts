@@ -14,7 +14,7 @@
  * - 子块 level 按父链深度计算（文档根 = 0，顶层子块 = 1，逐层 +1）
  */
 
-import { normalizeTagList, stripDocFrontmatter, stripTitleHeading } from '@notefast/core'
+import { normalizeTagList, parseImportedTimestamp, stripDocFrontmatter, stripTitleHeading } from '@notefast/core'
 import { parseMarkdownToBlocksForSave } from './markdownParse'
 import type { CreateBlockInput } from '@notefast/core'
 import type { getDb } from '../db'
@@ -88,7 +88,7 @@ export function insertDocFromMarkdown(
   opts: InsertDocFromMarkdownOptions,
 ): InsertDocFromMarkdownResult {
   // 便携导出的 frontmatter：正文剥离由 parseMarkdownToBlocks 完成；
-  // 导入默认读 frontmatter tags；AI 创建笔记应 applyFrontmatterTags: false。
+  // 导入默认读 tags 与 created/modified；AI 创建笔记应 applyFrontmatterTags: false。
   const stripped = stripDocFrontmatter(opts.markdown)
   const rawInputs = parseMarkdownToBlocksForSave(stripped.body, opts.notebookId)
   if (opts.rejectEmpty && rawInputs.length === 0) {
@@ -100,11 +100,14 @@ export function insertDocFromMarkdown(
   const docStatus = opts.status === 'inbox' ? 'inbox' : 'note'
   const docId = opts.docId ?? crypto.randomUUID()
   const now = nowTimestamp()
+  const applyFm = opts.applyFrontmatterTags !== false
   const tagsFromFm =
-    opts.applyFrontmatterTags === false || !stripped.meta?.tags?.length
+    !applyFm || !stripped.meta?.tags?.length
       ? []
       : normalizeTagList(stripped.meta.tags)
   const resolvedTags = opts.tags?.length ? opts.tags : tagsFromFm
+  const createdAt = applyFm ? parseImportedTimestamp(stripped.meta?.created) : null
+  const updatedAt = applyFm ? parseImportedTimestamp(stripped.meta?.modified) : null
 
   let blockIds: string[] = []
   db.transaction(() => {
@@ -127,6 +130,8 @@ export function insertDocFromMarkdown(
       sort: 0,
       level: 0,
       now,
+      ...(createdAt ? { created_at: createdAt } : {}),
+      ...(updatedAt ? { updated_at: updatedAt } : {}),
     })
 
     blockIds = insertChildBlocks(db, {

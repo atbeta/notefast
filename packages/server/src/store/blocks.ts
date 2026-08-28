@@ -491,6 +491,10 @@ export interface NewBlockRow {
   sort: number
   level: number
   now: string
+  /** 导入便携档时覆盖 created_at（缺省 = now） */
+  created_at?: string
+  /** 导入便携档时覆盖 updated_at（缺省 = now） */
+  updated_at?: string
   /**
    * 插入后是否冒泡 bump 文档根 updated_at（默认 true）。
    * 批量路径（insertChildBlocks）传 false，由调用方末尾统一 touch 一次，
@@ -521,8 +525,8 @@ export function insertBlock(db: Db, row: NewBlockRow): void {
     row.ai_exclude ?? 0,
     row.sort,
     row.level,
-    row.now,
-    row.now,
+    row.created_at ?? row.now,
+    row.updated_at ?? row.now,
   )
   // 子块插入冒泡到文档根（根块自身 id === root_id，天然跳过）
   if (row.touchRoot !== false && row.id !== row.root_id) {
