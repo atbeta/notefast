@@ -42,8 +42,10 @@ ENV NODE_ENV=production
 ENV PORT=3140
 ENV DATA_DIR=/app/data
 ENV WEB_DIST=/app/web-dist
-ENV AUTO_EXPORT_DIR=/app/export
 ENV SQLITE_VEC_PATH=/app/server-dist/native/vec0.so
+
+# 不默认 AUTO_EXPORT_DIR：未配 sync 时该路径会每小时全量重写 Markdown。
+# 需要兜底导出时显式传入，例如 AUTO_EXPORT_DIR=/app/export。
 
 RUN mkdir -p /app/data /app/export && chown -R bun:bun /app
 USER bun

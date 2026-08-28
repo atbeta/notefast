@@ -8,7 +8,8 @@ services:
       - AUTH_PASSWORD=${AUTH_PASSWORD:-}
       - API_TOKEN=${API_TOKEN:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3140}
-      - AUTO_EXPORT_DIR=${AUTO_EXPORT_DIR:-/app/export}
+      # 仅显式设置时启用 hourly 全量 Markdown 导出；默认关闭以免大库周期性卡顿
+      - AUTO_EXPORT_DIR=${AUTO_EXPORT_DIR:-}
       - AI_PROVIDER=${AI_PROVIDER:-}
       - AI_API_KEY=${AI_API_KEY:-}
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-}

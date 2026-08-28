@@ -6,7 +6,8 @@
  * - 否则保留一个兜底的 setInterval，循环调用 legacyExportOnce() 写 Markdown
  *
  * 真正的"按 interval 同步"逻辑由 sync/manager.ts 的 autoSyncTimer 负责，
- * 这里仅在环境变量 AUTO_EXPORT_DIR 仍被设置但用户尚未配 sync 时回退。
+ * 这里仅在**显式**设置 AUTO_EXPORT_DIR 且尚未配 sync 时回退。
+ * Docker 镜像默认不设该变量，避免每小时全量重写卡住 1 CPU / 512 MB 实例。
  *
  * legacyExportMarkdown 同时是 GET /api/v1/sync/export/markdown（api/sync.ts）
  * 的实现——全库一次性兜底导出只保留这一份。
