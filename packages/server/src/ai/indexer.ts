@@ -66,14 +66,19 @@ function loadExistingContentHashes(blockIds: string[]): Map<string, Set<string>>
     .query("SELECT active_backend, active_generation FROM vector_store_state WHERE id = 'default'")
     .get() as { active_backend: string; active_generation: string | null } | undefined
   if (state?.active_backend === 'sqlite-vec' && state.active_generation) {
-    const meta = db.query(
-      `SELECT block_id, content_hash FROM vector_entries
-       WHERE generation = ? AND block_id IN (${ph})`,
-    ).all(state.active_generation, ...(blockIds as [string, ...string[]])) as Array<{
-      block_id: string
-      content_hash: string
-    }>
-    for (const row of meta) add(row.block_id, row.content_hash)
+    const genFp = db.query(
+      'SELECT model_fingerprint FROM vector_generations WHERE id = ?',
+    ).get(state.active_generation) as { model_fingerprint: string } | undefined
+    if (genFp?.model_fingerprint === fingerprint) {
+      const meta = db.query(
+        `SELECT block_id, content_hash FROM vector_entries
+         WHERE generation = ? AND block_id IN (${ph})`,
+      ).all(state.active_generation, ...(blockIds as [string, ...string[]])) as Array<{
+        block_id: string
+        content_hash: string
+      }>
+      for (const row of meta) add(row.block_id, row.content_hash)
+    }
   }
   return hashes
 }

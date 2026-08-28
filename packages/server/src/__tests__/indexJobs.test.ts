@@ -10,6 +10,7 @@ import { createPluginSystem, type ProviderDefinition } from '@notefast/core'
 import { initDb, closeDb, getDb } from '../db'
 import { initAiRuntime, applyNewConfig, _setRuntimeForTests, getRuntime } from '../services/aiRuntime'
 import { initVectorStore } from '../ai/indexer'
+import { embeddingFingerprint } from '../ai/vectorStore'
 import {
   scheduleDocIndex,
   getIndexJob,
@@ -105,6 +106,15 @@ beforeEach(() => {
   _resetIndexJobsForTests()
   getDb().query('DELETE FROM blocks').run()
   getDb().query('DELETE FROM block_vectors').run()
+  getDb().query('DELETE FROM vector_entries').run()
+  getDb().query('DELETE FROM vector_generations').run()
+  getDb().query(
+    `UPDATE vector_store_state
+     SET active_backend = 'json', status = 'stale', model_fingerprint = NULL,
+         dimension = NULL, active_generation = NULL, staging_generation = NULL,
+         indexed_count = 0, error = NULL
+     WHERE id = 'default'`,
+  ).run()
   configure(true)
 })
 
@@ -168,6 +178,59 @@ describe('getDocIndexState', () => {
     }
     expect(after.unindexed).toBe(0)
     expect(after.ready).toBe(2)
+  })
+
+  test('sqlite-vec 为权威时按 generation 计覆盖率，忽略过期 block_vectors', () => {
+    const { docId, blockId } = seedDoc('换模型后', '重建过的正文')
+    const fp = embeddingFingerprint(EMBEDDING)
+    const db = getDb()
+    const gen = 'coverage-gen'
+    db.query(
+      `INSERT INTO vector_generations (id, table_name, model_fingerprint, dimension, status)
+       VALUES (?, 'vec_blocks_coverage', ?, 3, 'active')`,
+    ).run(gen, fp)
+    db.query(
+      `INSERT INTO vector_entries
+         (generation, block_id, content_hash, notebook_id, root_id, block_updated_at)
+       VALUES (?, ?, 'h', ?, ?, datetime('now'))`,
+    ).run(gen, blockId, notebookId, docId)
+    db.query(
+      `UPDATE vector_store_state
+       SET active_backend = 'sqlite-vec', active_generation = ?, model_fingerprint = ?
+       WHERE id = 'default'`,
+    ).run(gen, fp)
+    db.query(
+      `INSERT INTO block_vectors (block_id, embedding, dim, embedding_model, index_version)
+       VALUES (?, X'00000000', 3, 'old-fingerprint', 2)`,
+    ).run(blockId)
+
+    expect(getDocIndexState(docId)?.indexed).toBe(1)
+    const cov = getNotebookIndexCoverage()!
+    expect(cov.ready).toBe(1)
+    expect(cov.unindexed).toBe(0)
+  })
+
+  test('sqlite-vec generation 指纹与当前模型不一致时仍算未索引', () => {
+    const { docId, blockId } = seedDoc('旧模型', '还是旧向量')
+    const db = getDb()
+    const gen = 'stale-gen'
+    db.query(
+      `INSERT INTO vector_generations (id, table_name, model_fingerprint, dimension, status)
+       VALUES (?, 'vec_blocks_stale', 'old-fingerprint', 3, 'active')`,
+    ).run(gen)
+    db.query(
+      `INSERT INTO vector_entries
+         (generation, block_id, content_hash, notebook_id, root_id, block_updated_at)
+       VALUES (?, ?, 'h', ?, ?, datetime('now'))`,
+    ).run(gen, blockId, notebookId, docId)
+    db.query(
+      `UPDATE vector_store_state
+       SET active_backend = 'sqlite-vec', active_generation = ?, model_fingerprint = 'old-fingerprint'
+       WHERE id = 'default'`,
+    ).run(gen)
+
+    expect(getDocIndexState(docId)?.indexed).toBe(0)
+    expect(getNotebookIndexCoverage()?.unindexed).toBe(1)
   })
 })
 
