@@ -7,7 +7,7 @@
  * - 中文 + ASCII 混合查询
  * - AND 零结果 → OR 降级 / strictOnly 不降级
  * - 标题通道（titleOnly 只查文档根块）
- * - ASCII 行为不回归（FTS 命中保持、子串命中）
+ * - ASCII 行为不回归（FTS 命中保持且优先、子串命中）
  * - LIKE 通配符注入（% / _ 按字面匹配）
  * - hybridSearch 集成（中文 fts_hits > 0、标题词进 top5）
  */
@@ -232,10 +232,12 @@ describe('lexicalSearch — 中文召回（LIKE 路）', () => {
 })
 
 describe('lexicalSearch — ASCII 不回归', () => {
-  test('原 FTS 能命中的 ASCII 查询仍命中', () => {
+  test('原 FTS 能命中的 ASCII 查询仍命中，且优先走 FTS', () => {
     const { id } = seedBlock({ content: 'Tauri window close handler pattern' })
     const hits = lexicalSearch('Tauri close', { limit: 10 })
-    expect(hits.some((h) => h.id === id)).toBe(true)
+    const hit = hits.find((h) => h.id === id)
+    expect(hit).toBeDefined()
+    expect(hit!.matched_by).toBe('fts')
   })
 
   test('ERR_CONNECTION_RESET 子串命中', () => {

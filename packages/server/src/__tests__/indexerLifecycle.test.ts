@@ -22,9 +22,9 @@ import {
   _setRuntimeForTests,
   getRuntime,
 } from '../services/aiRuntime'
-import { initVectorStore, indexBlock, indexBlockBatch, indexAllBlocks } from '../ai/indexer'
+import { initVectorStore, indexBlock, indexBlockBatch, indexAllBlocks, upsertVector, currentEmbeddingFingerprint } from '../ai/indexer'
 import { runVectorRebuild } from '../ai/vectorRebuild'
-import { JsonVectorStore, setVectorStore } from '../ai/vectorStore'
+import { JsonVectorStore, setVectorStore, getVectorStore, contentHash } from '../ai/vectorStore'
 import { getLatestIndexJobForDoc, _resetIndexJobsForTests } from '../ai/indexJobs'
 
 let testDir: string
@@ -463,5 +463,50 @@ describe('inbox 导入不调度索引作业', () => {
     const noteBody = (await noteRes.json()) as { doc: { id: string }; index_job?: { id: string } }
     expect(noteBody.index_job).toBeTruthy()
     expect(getLatestIndexJobForDoc(noteBody.doc.id)?.id).toBe(noteBody.index_job!.id)
+  })
+})
+
+describe('空库首次 embedding 默认 sqlite-vec', () => {
+  test('block_vectors 为空时 indexBlock 切到 sqlite-vec', async () => {
+    await initVectorStore()
+    const docId = crypto.randomUUID()
+    const blockId = crypto.randomUUID()
+    seedDoc({
+      docId,
+      title: '空库',
+      blocks: [{ id: blockId, parentId: docId, content: '第一篇要建向量的笔记' }],
+    })
+    expect(await indexBlock(blockId)).toBe('indexed')
+    expect(getVectorStore().backend).toBe('sqlite-vec')
+    const state = getDb()
+      .query("SELECT active_backend FROM vector_store_state WHERE id = 'default'")
+      .get() as { active_backend: string }
+    expect(state.active_backend).toBe('sqlite-vec')
+  })
+
+  test('已有 JSON 向量时不自动切换', async () => {
+    const docId = crypto.randomUUID()
+    const blockId = crypto.randomUUID()
+    seedDoc({
+      docId,
+      title: '存量 JSON',
+      blocks: [{ id: blockId, parentId: docId, content: '旧 JSON 索引留下的向量' }],
+    })
+    const fp = currentEmbeddingFingerprint()!
+    const json = new JsonVectorStore()
+    setVectorStore(json)
+    await json.upsert({
+      blockId,
+      vector: new Float64Array([0.1, 0.2, 0.3]),
+      modelFingerprint: fp,
+      contentHash: contentHash('旧 JSON 索引留下的向量'),
+      sourceContentHash: contentHash('旧 JSON 索引留下的向量'),
+    })
+    await upsertVector(blockId, new Float64Array([0.1, 0.2, 0.3]), '旧 JSON 索引留下的向量')
+    expect(getVectorStore().backend).toBe('json')
+    const state = getDb()
+      .query("SELECT active_backend FROM vector_store_state WHERE id = 'default'")
+      .get() as { active_backend: string }
+    expect(state.active_backend).toBe('json')
   })
 })

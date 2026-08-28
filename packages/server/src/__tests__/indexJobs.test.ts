@@ -10,7 +10,7 @@ import { createPluginSystem, type ProviderDefinition } from '@notefast/core'
 import { initDb, closeDb, getDb } from '../db'
 import { initAiRuntime, applyNewConfig, _setRuntimeForTests, getRuntime } from '../services/aiRuntime'
 import { initVectorStore } from '../ai/indexer'
-import { embeddingFingerprint } from '../ai/vectorStore'
+import { embeddingFingerprint, JsonVectorStore, setVectorStore } from '../ai/vectorStore'
 import {
   scheduleDocIndex,
   getIndexJob,
@@ -115,6 +115,7 @@ beforeEach(() => {
          indexed_count = 0, error = NULL
      WHERE id = 'default'`,
   ).run()
+  setVectorStore(new JsonVectorStore())
   configure(true)
 })
 

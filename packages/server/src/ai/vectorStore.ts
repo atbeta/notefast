@@ -358,13 +358,20 @@ export class JsonVectorStore implements VectorStore {
 }
 
 let activeStore: VectorStore = new JsonVectorStore()
+/** 测试里手工钉 JSON 时禁止空库自动切 sqlite-vec */
+let jsonPinnedAgainstVec = false
+
+export function setVectorStore(store: VectorStore, opts?: { allowSqliteVecPrefer?: boolean }): void {
+  activeStore = store
+  jsonPinnedAgainstVec = store.backend === 'json' && !opts?.allowSqliteVecPrefer
+}
+
+export function isJsonPinnedAgainstVec(): boolean {
+  return jsonPinnedAgainstVec
+}
 
 export function getVectorStore(): VectorStore {
   return activeStore
-}
-
-export function setVectorStore(store: VectorStore): void {
-  activeStore = store
 }
 
 export function markVectorStoreStaleIfModelChanged(modelFingerprint: string | null): void {

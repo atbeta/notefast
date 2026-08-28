@@ -22,6 +22,7 @@ import {
 } from '../services/aiRuntime'
 import { hybridSearch } from '../ai/hybridSearch'
 import { upsertVector, initVectorStore } from '../ai/indexer'
+import { JsonVectorStore, setVectorStore } from '../ai/vectorStore'
 import { insertRef } from '../store/refs'
 import { upsertEntity, addMention } from '../store/entities'
 
@@ -57,6 +58,7 @@ beforeEach(() => {
          dimension = NULL, indexed_count = 0, error = NULL
      WHERE id = 'default'`,
   ).run()
+  setVectorStore(new JsonVectorStore())
   getDb().exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
 })
 
@@ -552,7 +554,6 @@ describe('删除文档 — 子块向量清理（回归：只 fire 文档根漏�
     })
 
     // 给文档根 + 所有子块写入向量
-    await initVectorStore()
     for (const bid of [docId, ...blockIds]) {
       await upsertVector(bid, new Float64Array([0.1, 0.2, 0.3]), `索引文本 ${bid}`)
     }
@@ -571,7 +572,6 @@ describe('删除文档 — 子块向量清理（回归：只 fire 文档根漏�
     const nb = crypto.randomUUID()
     getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
     const { id, docId } = seedBlock({ notebookId: nb, content: '单块删除测试' })
-    await initVectorStore()
     await upsertVector(id, new Float64Array([0.5, 0.5, 0.5]), `索引文本 ${id}`)
     await upsertVector(docId, new Float64Array([0.9, 0.9, 0.9]), `索引文本 ${docId}`)
 

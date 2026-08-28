@@ -2,6 +2,7 @@
  * 向量索引编排
  *
  * 负责 embedding 批处理；存储与检索委托 VectorStore（json / sqlite-vec）。
+ * 空库首次写入且 vec0 可加载时切 sqlite-vec；已有 JSON 索引不自动迁移。
  * Plugin hook 由 services/aiRuntime.ts 负责挂载和卸载。
  * content_hash 未变时跳过重新 embed；大文档索引走 indexJobs 批处理限流。
  */
@@ -16,6 +17,7 @@ import {
   embeddingFingerprint,
   getVectorStore,
   setVectorStore,
+  isJsonPinnedAgainstVec,
   VECTOR_INDEX_VERSION,
 } from './vectorStore'
 import { SqliteVecVectorStore } from './vectorStoreVec'
@@ -270,12 +272,55 @@ export async function initVectorStore(): Promise<void> {
     ? new SqliteVecVectorStore()
     : new JsonVectorStore()
   await store.init()
-  setVectorStore(store)
+  setVectorStore(store, { allowSqliteVecPrefer: true })
 }
 
 export function currentEmbeddingFingerprint(): string | null {
   const provider = getRuntime().embeddingProviderDef()
   return provider ? embeddingFingerprint(provider) : null
+}
+
+let preferVecInflight: Promise<void> | null = null
+
+/**
+ * 空库首次写入向量时切 sqlite-vec。JSON 后端 search 会把全部 embedding 拉进 JS
+ * 算余弦；已有 JSON 索引不自动迁移（用户点重建）。vec0 加载失败则保持 JSON。
+ */
+async function preferSqliteVecIfEmpty(dimension: number, fingerprint: string): Promise<void> {
+  if (getVectorStore().backend !== 'json' || isJsonPinnedAgainstVec()) return
+  if (!preferVecInflight) {
+    preferVecInflight = (async () => {
+      if (getVectorStore().backend !== 'json' || isJsonPinnedAgainstVec()) return
+      const db = getDb()
+      const state = db.query(
+        `SELECT active_backend, status, indexed_count
+         FROM vector_store_state WHERE id = 'default'`,
+      ).get() as { active_backend: string; status: string; indexed_count: number } | undefined
+      if (!state || state.active_backend !== 'json' || state.status === 'rebuilding') return
+      if (state.indexed_count > 0) return
+      const jsonCount = (db.query('SELECT COUNT(*) AS c FROM block_vectors').get() as { c: number }).c
+      if (jsonCount > 0) return
+
+      try {
+        const vec = new SqliteVecVectorStore()
+        await vec.init()
+        const generation = crypto.randomUUID()
+        await vec.createGeneration(generation, fingerprint, dimension)
+        await vec.activateGeneration(generation)
+        setVectorStore(vec)
+      } catch (e) {
+        console.warn(
+          '[ai-indexer] sqlite-vec 不可用，继续使用 JSON 向量后端:',
+          e instanceof Error ? e.message : e,
+        )
+      }
+    })()
+  }
+  try {
+    await preferVecInflight
+  } finally {
+    preferVecInflight = null
+  }
 }
 
 export async function upsertVector(
@@ -292,6 +337,7 @@ export async function upsertVector(
   // 双 hash：content_hash = 索引文本 hash（freshness 判定）；
   // source_content_hash = block.content 原文 hash（并发写保护）
   const sourceContent = row?.content ?? indexedText
+  await preferSqliteVecIfEmpty(vector.length, fingerprint)
   await getVectorStore().upsert({
     blockId,
     vector,

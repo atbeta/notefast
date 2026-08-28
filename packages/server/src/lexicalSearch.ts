@@ -12,7 +12,8 @@
  *     含纯 CJK 组时先用 block_cjk_grams bigram 交集缩小候选，再 LIKE 校验
  *     （bigram AND ≠ 子串，必须校验；trigram tokenizer 因 2 字死区不可用）。
  *   - LIKE 降级路：严格路零结果且 strictOnly=false 时，term OR + 命中数排序
- *   - 合并：LIKE 路在前（CJK 召回主力），FTS 路按 bm25 顺序补充未出现的 id
+ *   - 合并：纯 ASCII（展开后仍无 CJK）FTS 优先，满额则跳过全表 LIKE；
+ *     含 CJK 时 LIKE 在前（中文召回主力），FTS 按 bm25 补充未出现的 id
  *   - 实体词典（term-dict）：term 命中词典别名/标准名 → 组内 OR 展开
  *     （查 wafer 命中「晶圆」文档）；组间沿用 AND/OR 语义，展开不变宽召回语义
  *
@@ -255,6 +256,97 @@ function expandGroup(seeds: string[]): TermGroup {
   return { variants }
 }
 
+function groupsAreAsciiOnly(groups: TermGroup[]): boolean {
+  return groups.every((g) => g.variants.every((v) => !CJK_RE.test(v)))
+}
+
+function collectLikeHits(
+  groups: TermGroup[],
+  opts: LexicalSearchOptions,
+  sentence: string,
+): LexicalHit[] {
+  let likeRows = runLikePath(groups, opts, false, sentence)
+  let orFallback = false
+  // 单组时 AND ≡ OR，再扫一遍纯浪费
+  if (likeRows.length === 0 && !opts.strictOnly && groups.length > 1) {
+    likeRows = runLikePath(groups, opts, true, sentence)
+    orFallback = likeRows.length > 0
+  }
+  const likeMatchedBy: LexicalHit['matched_by'] = opts.titleOnly
+    ? 'title'
+    : orFallback
+      ? 'like_or'
+      : 'like_and'
+  return likeRows.map((r) => ({
+    id: r.id,
+    content: r.content,
+    root_id: r.root_id,
+    doc_title: r.doc_title ?? '',
+    type: r.type,
+    rank_score: 0,
+    matched_by: likeMatchedBy,
+  }))
+}
+
+function collectFtsHits(
+  groups: TermGroup[],
+  opts: LexicalSearchOptions,
+  enableFts: boolean,
+): LexicalHit[] {
+  if (!enableFts) return []
+  // 组内 OR（"wafer" OR "晶圆"），组间 AND；转义规则与 buildFtsQuery 一致
+  const match = groups
+    .map((g) => {
+      const quoted = g.variants
+        .map((v) => `"${v.replace(/['"*()]/g, ' ').trim()}"`)
+        .filter((v) => v.length > 2)
+      if (quoted.length === 0) return ''
+      return quoted.length === 1 ? quoted[0] : `(${quoted.join(' OR ')})`
+    })
+    .filter(Boolean)
+    .join(' AND ')
+  if (!match) return []
+  const extraWhere = [...(opts.extraWhere ?? [])]
+  if (opts.titleOnly) extraWhere.push(`AND b.type = 'document'`)
+  try {
+    const rows = runFtsQuery<FtsRow>(getDb(), {
+      match,
+      notebookId: opts.notebookId,
+      since: opts.since,
+      until: opts.until,
+      limit: opts.limit,
+      select: `b.id, b.type, b.content, b.root_id,
+               (SELECT content FROM blocks WHERE id = b.root_id) as doc_title, rank`,
+      extraWhere: extraWhere.length > 0 ? extraWhere : undefined,
+      extraParams: opts.extraParams,
+    })
+    return rows.map((r) => ({
+      id: r.id,
+      content: r.content,
+      root_id: r.root_id,
+      doc_title: r.doc_title ?? '',
+      type: r.type,
+      rank_score: 0,
+      matched_by: 'fts' as const,
+    }))
+  } catch (e) {
+    // FTS 表达式异常不拖垮 LIKE 路（原 autoLink 的降级语义上移到这里）
+    console.error('[lexicalSearch] FTS path failed:', e)
+    return []
+  }
+}
+
+function mergeUnique(primary: LexicalHit[], secondary: LexicalHit[]): LexicalHit[] {
+  const seen = new Set(primary.map((h) => h.id))
+  return [...primary, ...secondary.filter((h) => !seen.has(h.id))]
+}
+
+function rankHits(hits: LexicalHit[], limit: number): LexicalHit[] {
+  const merged = hits.slice(0, limit)
+  const n = merged.length
+  return merged.map((h, i) => ({ ...h, rank_score: n <= 1 ? 1 : 1 - i / n }))
+}
+
 export function lexicalSearch(query: string, opts: LexicalSearchOptions): LexicalHit[] {
   if (opts.limit <= 0) return []
 
@@ -294,78 +386,18 @@ export function lexicalSearch(query: string, opts: LexicalSearchOptions): Lexica
     sentence = terms.join(' ')
   }
 
-  // ── LIKE 路（所有 term，含 ASCII——SQLite LIKE 对 ASCII 不区分大小写）──
-  let likeRows = runLikePath(groups, opts, false, sentence)
-  let orFallback = false
-  // 单组时 AND ≡ OR，再扫一遍纯浪费
-  if (likeRows.length === 0 && !opts.strictOnly && groups.length > 1) {
-    likeRows = runLikePath(groups, opts, true, sentence)
-    orFallback = likeRows.length > 0
-  }
-  const likeMatchedBy: LexicalHit['matched_by'] = opts.titleOnly
-    ? 'title'
-    : orFallback
-      ? 'like_or'
-      : 'like_and'
-  const likeHits: LexicalHit[] = likeRows.map((r) => ({
-    id: r.id,
-    content: r.content,
-    root_id: r.root_id,
-    doc_title: r.doc_title ?? '',
-    type: r.type,
-    rank_score: 0, // 合并后统一合成
-    matched_by: likeMatchedBy,
-  }))
+  const enableFts = asciiProbe.some((t) => !CJK_RE.test(t))
 
-  // ── FTS 路（含 ASCII 原词的查询才跑；匹配用全组——CJK 组以引号短语形式进
-  // MATCH 提供 AND 约束，避免「wafer 光刻」只查 wafer 变体而漏掉光刻约束）──
-  let ftsHits: LexicalHit[] = []
-  if (asciiProbe.some((t) => !CJK_RE.test(t))) {
-    // 组内 OR（"wafer" OR "晶圆"），组间 AND；转义规则与 buildFtsQuery 一致
-    const match = groups
-      .map((g) => {
-        const quoted = g.variants
-          .map((v) => `"${v.replace(/['"*()]/g, ' ').trim()}"`)
-          .filter((v) => v.length > 2)
-        if (quoted.length === 0) return ''
-        return quoted.length === 1 ? quoted[0] : `(${quoted.join(' OR ')})`
-      })
-      .filter(Boolean)
-      .join(' AND ')
-    if (match) {
-      const extraWhere = [...(opts.extraWhere ?? [])]
-      if (opts.titleOnly) extraWhere.push(`AND b.type = 'document'`)
-      try {
-        const rows = runFtsQuery<FtsRow>(getDb(), {
-          match,
-          notebookId: opts.notebookId,
-          since: opts.since,
-          until: opts.until,
-          limit: opts.limit,
-          select: `b.id, b.type, b.content, b.root_id,
-                   (SELECT content FROM blocks WHERE id = b.root_id) as doc_title, rank`,
-          extraWhere: extraWhere.length > 0 ? extraWhere : undefined,
-          extraParams: opts.extraParams,
-        })
-        ftsHits = rows.map((r) => ({
-          id: r.id,
-          content: r.content,
-          root_id: r.root_id,
-          doc_title: r.doc_title ?? '',
-          type: r.type,
-          rank_score: 0,
-          matched_by: 'fts' as const,
-        }))
-      } catch (e) {
-        // FTS 表达式异常不拖垮 LIKE 路（原 autoLink 的降级语义上移到这里）
-        console.error('[lexicalSearch] FTS path failed:', e)
-      }
-    }
+  // 纯 ASCII：FTS（bm25）优先；满额则跳过全表 LIKE。含 CJK（含词典展开出的
+  // 中文别名）仍 LIKE 在前，避免「wafer→晶圆」只靠 FTS 漏掉中文文档。
+  if (groupsAreAsciiOnly(groups)) {
+    const ftsHits = collectFtsHits(groups, opts, enableFts)
+    if (ftsHits.length >= opts.limit) return rankHits(ftsHits, opts.limit)
+    const likeHits = collectLikeHits(groups, opts, sentence)
+    return rankHits(mergeUnique(ftsHits, likeHits), opts.limit)
   }
 
-  // ── 合并：LIKE 路在前，FTS 路按 bm25 顺序补充未出现的 id ──
-  const seen = new Set(likeHits.map((h) => h.id))
-  const merged = [...likeHits, ...ftsHits.filter((h) => !seen.has(h.id))].slice(0, opts.limit)
-  const n = merged.length
-  return merged.map((h, i) => ({ ...h, rank_score: n <= 1 ? 1 : 1 - i / n }))
+  const likeHits = collectLikeHits(groups, opts, sentence)
+  const ftsHits = collectFtsHits(groups, opts, enableFts)
+  return rankHits(mergeUnique(likeHits, ftsHits), opts.limit)
 }
