@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.83.0](https://github.com/atbeta/notefast/compare/v0.82.0...v0.83.0) (2026-08-28)
+
+
+### Features
+
+* **import:** restore created and modified from markdown frontmatter ([b8089d1](https://github.com/atbeta/notefast/commit/b8089d1c448fa01154e047dfbce2eae187d5eeba))
+* **import:** tag generic zip paths with every folder level ([be07eef](https://github.com/atbeta/notefast/commit/be07eefe3a6e3a5978a7ab37bd753b724d56a5d0))
+* **server:** keep stable block ids when saving markdown ([42a7bc1](https://github.com/atbeta/notefast/commit/42a7bc17510aa4c9955093ce84aa11ee5520409b))
+
+
+### Bug Fixes
+
+* **ai:** count index coverage from the active vector store ([7be6254](https://github.com/atbeta/notefast/commit/7be625420dfee52fd0db83350111f2b191e2fd6f))
+* **docker:** do not enable hourly Markdown auto-export by default ([42ad1a1](https://github.com/atbeta/notefast/commit/42ad1a1f7ca173064e3ad8dc21237207aca39658))
+* **server:** keep GET /health free of database writes ([1c71167](https://github.com/atbeta/notefast/commit/1c7116707043209992d1e2c238fc14ebbca80b15))
+* **web:** swap import and export archive button icons ([bd82de8](https://github.com/atbeta/notefast/commit/bd82de8042cdd69e8138f65115ce8dcdbb937ba7))
+
+
+### Performance Improvements
+
+* **editor:** coalesce markdown saves and skip the tree on autosave ([bd46258](https://github.com/atbeta/notefast/commit/bd46258f0f564c71fdce95fe63402a485ba35899))
+* **server:** cache hashed Vite assets as immutable ([995f15c](https://github.com/atbeta/notefast/commit/995f15cf2b4dbc0f2c036f1577d9611c93893ae5))
+* **server:** prefer FTS for ASCII search and sqlite-vec on first embed ([ec473da](https://github.com/atbeta/notefast/commit/ec473daaaea344bd5551601fa7569deb6f12e364))
+* **web:** lazy-load editor, AI chat, and command palette ([7812837](https://github.com/atbeta/notefast/commit/7812837ff34987ae25d7d8a8b13619e8b18be0f3))
+
 ## [0.82.0](https://github.com/atbeta/notefast/compare/v0.81.2...v0.82.0) (2026-08-27)
 
 
