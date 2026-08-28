@@ -23,6 +23,7 @@
     "enterEdit": "Enter edit mode",
     "editSaveHint": "Edits are auto-saved to the knowledge base; {{shortcut}} saves and returns to reading",
     "editing": "Editing",
+    "loadingEditor": "Loading editor…",
     "viewGraph": "View note graph",
     "alreadyShared": "Publicly shared",
     "shareDoc": "Share document",

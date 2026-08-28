@@ -16,6 +16,7 @@ export default function AiChatTrigger() {
       <button
         type="button"
         onClick={toggle}
+        onMouseEnter={() => { void import('./AIChatPanel') }}
         className={`hidden md:inline-flex btn-icon-ghost shrink-0 transition-colors ${
           open
             ? 'text-primary bg-primary-soft hover:bg-primary-soft'

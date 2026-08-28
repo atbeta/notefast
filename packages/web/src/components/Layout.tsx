@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, createContext, useContext } from 'react'
+import { useState, useCallback, useEffect, createContext, useContext, lazy, Suspense } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Menu, Search, Sparkles } from 'lucide-react'
@@ -7,8 +7,6 @@ import { useRecordNavHistory } from '../hooks/useNavHistory'
 import { navHistorySnapshot } from '../lib/navHistory'
 import { isTauriShell } from '../hooks/useShell'
 import Sidebar from './Sidebar'
-import CommandPalette from './CommandPalette'
-import AIChatPanel from './AIChatPanel'
 import GlobalSyncStatus from './GlobalSyncStatus'
 import TitleBar from './TitleBar'
 import { ServerOfflineBanner } from './ServerHealthBar'
@@ -20,6 +18,11 @@ import { ASK_AI_EVENT } from '../lib/askAi'
 import { useDemoMode } from '../hooks/useDemoMode'
 import { isWindowZoomDoubleClickTarget, nativeToggleWindowZoom } from '../lib/nativeWindow'
 import { installNativeNavigate } from '../lib/nativeNavigate'
+
+const CommandPalette = lazy(() => import('./CommandPalette'))
+const AIChatPanel = lazy(() => import('./AIChatPanel'))
+const prefetchCommandPalette = () => { void import('./CommandPalette') }
+const prefetchAIChatPanel = () => { void import('./AIChatPanel') }
 
 /** AI 聊天面板控制 — 开合状态 + toggle（内容顶栏常驻入口 / 文档右栏避让共用） */
 type AiChatCtl = { open: boolean; toggle: () => void }
@@ -34,9 +37,12 @@ export default function Layout({ children, contentClassName }: { children: React
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  /** 首次打开后再挂载，避免首屏打进 CodeMirror 以外的 AI / ⌘K 大包 */
+  const [paletteMounted, setPaletteMounted] = useState(false)
   /** 深链 palette_search 的预填 query（关闭面板时清空，下次 ⌘K 回到空查询） */
   const [palettePrefill, setPalettePrefill] = useState('')
   const [aiChatOpen, setAiChatOpen] = useState(false)
+  const [aiChatMounted, setAiChatMounted] = useState(false)
   const [aiChatExpanded, setAiChatExpanded] = useState(false)
 
   const toggleAiChatExpand = useCallback(() => setAiChatExpanded((v) => !v), [])
@@ -61,6 +67,7 @@ export default function Layout({ children, contentClassName }: { children: React
   }, [])
 
   const openPalette = useCallback(() => {
+    setPaletteMounted(true)
     setPaletteOpen(true)
     setMobileOpen(false)
   }, [])
@@ -71,7 +78,10 @@ export default function Layout({ children, contentClassName }: { children: React
   }, [])
 
   const closeAiChat = useCallback(() => setAiChatOpen(false), [])
-  const toggleAiChat = useCallback(() => setAiChatOpen((v) => !v), [])
+  const toggleAiChat = useCallback(() => {
+    setAiChatMounted(true)
+    setAiChatOpen((v) => !v)
+  }, [])
 
   const closeMobile = useCallback(() => setMobileOpen(false), [])
 
@@ -84,7 +94,10 @@ export default function Layout({ children, contentClassName }: { children: React
 
   // 阅读态块菜单「问 AI 关于这一段」→ 打开聊天面板；草稿预填由 AIChatPanel 自行监听
   useEffect(() => {
-    const open = () => setAiChatOpen(true)
+    const open = () => {
+      setAiChatMounted(true)
+      setAiChatOpen(true)
+    }
     window.addEventListener(ASK_AI_EVENT, open)
     return () => window.removeEventListener(ASK_AI_EVENT, open)
   }, [])
@@ -96,6 +109,7 @@ export default function Layout({ children, contentClassName }: { children: React
     const q = params.get('palette_search')
     if (!q) return
     setPalettePrefill(q)
+    setPaletteMounted(true)
     setPaletteOpen(true)
     params.delete('palette_search')
     const search = params.toString()
@@ -125,6 +139,7 @@ export default function Layout({ children, contentClassName }: { children: React
         if (paletteOpen) { e.preventDefault(); setPaletteOpen(false); return }
         if (isEditing(document.activeElement)) return
         e.preventDefault()
+        setPaletteMounted(true)
         setPaletteOpen(true)
         return
       }
@@ -134,6 +149,7 @@ export default function Layout({ children, contentClassName }: { children: React
         // 给浏览器默认行为（打开下载）。例外：命令面板打开时不抢（模态上下文优先）。
         if (paletteOpen) return
         e.preventDefault()
+        setAiChatMounted(true)
         setAiChatOpen(!aiChatOpen)
         return
       }
@@ -227,7 +243,8 @@ export default function Layout({ children, contentClassName }: { children: React
             <span className="font-semibold text-sm">NoteFast</span>
             <div className="ml-auto flex items-center gap-1">
               <button
-                onClick={() => setAiChatOpen(!aiChatOpen)}
+                onClick={toggleAiChat}
+                onMouseEnter={prefetchAIChatPanel}
                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
                 aria-label={t('layout.openAiChat')}
               >
@@ -236,6 +253,7 @@ export default function Layout({ children, contentClassName }: { children: React
               <button
                 type="button"
                 onClick={openPalette}
+                onMouseEnter={prefetchCommandPalette}
                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
                 aria-label={t('layout.search')}
               >
@@ -258,24 +276,32 @@ export default function Layout({ children, contentClassName }: { children: React
           </main>
         </div>
 
-        {/* AI Chat 面板 */}
+        {/* AI Chat 面板：首次打开才挂载，关闭后保持以保留会话 */}
         <div className="print:hidden">
-        <AIChatPanel
-          isOpen={aiChatOpen}
-          onClose={closeAiChat}
-          contextDocId={currentDocId}
-          expanded={aiChatExpanded}
-          onToggleExpand={toggleAiChatExpand}
-        />
+        {aiChatMounted && (
+          <Suspense fallback={null}>
+            <AIChatPanel
+              isOpen={aiChatOpen}
+              onClose={closeAiChat}
+              contextDocId={currentDocId}
+              expanded={aiChatExpanded}
+              onToggleExpand={toggleAiChatExpand}
+            />
+          </Suspense>
+        )}
         </div>
 
-        <CommandPalette
-          open={paletteOpen}
-          onClose={closePalette}
-          onToggleAiChat={toggleAiChat}
-          aiChatOpen={aiChatOpen}
-          initialQuery={palettePrefill}
-        />
+        {paletteMounted && (
+          <Suspense fallback={null}>
+            <CommandPalette
+              open={paletteOpen}
+              onClose={closePalette}
+              onToggleAiChat={toggleAiChat}
+              aiChatOpen={aiChatOpen}
+              initialQuery={palettePrefill}
+            />
+          </Suspense>
+        )}
       </div>
     </div>
     </ShortcutScopeProvider>

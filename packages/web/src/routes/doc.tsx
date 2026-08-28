@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, type CSSProperties, type MouseEvent } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, lazy, Suspense, type CSSProperties, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -29,7 +29,6 @@ import { api, request, ApiError } from '../hooks/useAPI'
 import { useDocChanges } from '../hooks/useDocEvents'
 import BlockRenderer from '../components/BlockRenderer'
 import ScrollEdgeButtons from '../components/ScrollEdgeButtons'
-import MarkdownEditor from '../components/MarkdownEditor'
 import TagEditor from '../components/TagEditor'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { useDocContextMenu } from '../components/editor/DocContextMenu'
@@ -71,6 +70,9 @@ import { hasExportPdfParam, printReadingDocAsPdf, stripExportPdfParam } from '..
 import { recordVisit } from '../lib/recentVisits'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
 import { useRegisterShortcutPage } from '../hooks/useShortcutScope'
+
+const MarkdownEditor = lazy(() => import('../components/MarkdownEditor'))
+const prefetchMarkdownEditor = () => { void import('../components/MarkdownEditor') }
 
 interface Backlink {
   id: number
@@ -927,6 +929,7 @@ useEffect(() => {
                 <button
                   type="button"
                   onClick={handleStartEdit}
+                  onMouseEnter={prefetchMarkdownEditor}
                   className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent"
                   aria-label={t('doc.enterEdit')}
                 >
@@ -1031,6 +1034,7 @@ useEffect(() => {
                 <button
                   type="button"
                   onClick={handleStartEdit}
+                  onMouseEnter={prefetchMarkdownEditor}
                   className="font-medium text-primary hover:text-primary/80 transition-colors"
                 >
                   {t('doc.continueEdit')}
@@ -1192,17 +1196,26 @@ useEffect(() => {
             )}
             {/* Editor — 与阅读态同宽，融入文档流 */}
             {id && isEditing && (
-              <MarkdownEditor
-                key={handleEditorMountKey}
-                docId={id}
-                title={doc.content}
-                onSaved={handleEditSaved}
-                onAutoSaved={reloadHistoryIfOpen}
-                onDocUpdated={handleDocTreeUpdated}
-                onCaret={handleEditorCaret}
-                autoEdit={true}
-                onActiveChange={handleEditorActiveChange}
-              />
+              <Suspense
+                fallback={
+                  <div className="flex items-center gap-2 py-8 text-muted-foreground" role="status" aria-live="polite">
+                    <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.75} />
+                    <span className="text-sm">{t('doc.loadingEditor')}</span>
+                  </div>
+                }
+              >
+                <MarkdownEditor
+                  key={handleEditorMountKey}
+                  docId={id}
+                  title={doc.content}
+                  onSaved={handleEditSaved}
+                  onAutoSaved={reloadHistoryIfOpen}
+                  onDocUpdated={handleDocTreeUpdated}
+                  onCaret={handleEditorCaret}
+                  autoEdit={true}
+                  onActiveChange={handleEditorActiveChange}
+                />
+              </Suspense>
             )}
 
             {/* Content */}

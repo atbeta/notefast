@@ -383,6 +383,7 @@ export default function Sidebar({
         <button
           type="button"
           onClick={onOpenPalette}
+          onMouseEnter={() => { void import('./CommandPalette') }}
           className="group min-w-0 flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background text-muted-foreground hover:text-foreground hover:border-foreground/15 transition-colors text-base"
           aria-label={t('sidebar.openPalette')}
         >

@@ -23,6 +23,7 @@
     "enterEdit": "进入编辑",
     "editSaveHint": "编辑内容会自动保存到知识库，{{shortcut}} 保存并返回阅读",
     "editing": "编辑中",
+    "loadingEditor": "正在加载编辑器…",
     "viewGraph": "查看笔记关联图谱",
     "alreadyShared": "已公开分享",
     "shareDoc": "分享文档",
