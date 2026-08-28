@@ -534,6 +534,26 @@ export function insertBlock(db: Db, row: NewBlockRow): void {
   }
 }
 
+/** 整篇 diff 保存：就地改子块的内容与树位置，不记块级 revision、不逐条冒泡根。 */
+export function overwriteChildBlock(
+  db: Db,
+  row: {
+    id: string
+    parent_id: string
+    type: string
+    content: string
+    properties: string
+    sort: number
+    level: number
+  },
+): void {
+  db.query(
+    `UPDATE blocks SET parent_id = ?, type = ?, content = ?, properties = ?, sort = ?, level = ?,
+     updated_at = ${SQL_NOW}
+     WHERE id = ? AND is_deleted = 0`,
+  ).run(row.parent_id, row.type, row.content, row.properties, row.sort, row.level, row.id)
+}
+
 /**
  * 子块变更冒泡：把文档根 block 的 updated_at 顶到当前时间。
  *
@@ -692,8 +712,8 @@ export function getBlockRevision(db: Db, blockId: string, rev: number): BlockRev
 export const MAX_DOC_SNAPSHOTS = 50
 
 /** 记录整篇文档「保存前快照」：旧整篇（标题 + 全部子块）合并为一条 Markdown 存 doc_snapshots。
- * 供整篇替换入口（PUT /docs/:id/markdown 等）在事务内调用 —— 块级 updateBlock 管单块修订，
- * 整篇替换会删旧子块 + 插新子块（绕过它），需在此显式快照才能保留整篇历史。 */
+ * 供整篇保存入口（PUT /docs/:id/markdown 等）在事务内调用。子块现在按 diff 就地更新，
+ * 但自动保存仍不写块级 revision，整篇可回退依赖这条快照。 */
 export function recordDocSnapshot(
   db: Db,
   docId: string,

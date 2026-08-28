@@ -23,12 +23,12 @@ import {
   listDocRevisions,
   recordDocSnapshot,
   getDocSnapshot,
-  nowTimestamp,
 } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
 import { deleteShare, deleteSharesByDocIds, listSharedDocIdsFor } from '../store/shares'
-import { insertDocFromMarkdown, insertChildBlocks, normalizeDocTags } from '../services/docImport'
+import { insertDocFromMarkdown, normalizeDocTags } from '../services/docImport'
+import { syncMarkdownChildren } from '../services/markdownChildSync'
 import { parseMarkdownToBlocksForSave } from '../services/markdownParse'
 import { fireAfterCreate, fireAfterUpdate, fireAfterCreateMany, fireAfterDeleteMany, fireDocAfterCreate, fireDocAfterStatusChange, fireDocAfterTagChange, fireDocAfterDelete, auditDocAction } from '../services/hooks'
 import { extractAssetRefs, findMissingAssets } from '../assets/store'
@@ -404,46 +404,46 @@ function applyMarkdownReplace(
   const newTitle = title || docRow.content
   const inputs = stripTitleHeading(rawInputs, newTitle)
 
-  // 整篇替换会删旧子块 + 插新子块（绕过块级 updateBlock 的 revision）。
-  // 只有「版本点」保存（checkpoint=true，切走/手动）才记整篇快照；
-  // 自动保存（checkpoint=false）不记——避免每 3 秒一条 snapshot 刷屏历史。
+  // 按指纹对齐旧子块：只改动的块换内容，id 保持稳定（搜索 hash / 引用 / 向量不再整篇作废）。
+  // checkpoint=true（切走/手动）才记整篇快照；自动保存不记，避免历史刷屏。
   const shouldSnapshot = checkpoint
   const oldMarkdown = shouldSnapshot
     ? blocksToMarkdown(buildBlockTree(fetchDocBlocks(db, id)))
     : ''
 
-  // 收集旧子块 ID（事务外保留引用，事务后触发 afterDelete）
-  const oldChildRows = fetchSubtreeBlocks(db, id)
-  const oldChildIds = oldChildRows.map((r) => r.id)
-  // 收集新插入的 block rows（事务后 SELECT 拿到最终时间戳）
+  // 整篇保存按指纹对齐子块（markdownChildSync）；自动保存仍不写块级 revision，
+  // 可回退依赖这条快照。
+  const oldChildRows = fetchDocBlocks(db, id).filter((r) => r.id !== id)
   const insertedIds: string[] = []
+  const deletedIds: string[] = []
+  const updatedIds: string[] = []
 
   db.transaction(() => {
+    db.run('PRAGMA defer_foreign_keys = ON')
     if (shouldSnapshot) recordDocSnapshot(db, id, oldMarkdown, actor)
-    deleteRefsTouchingBlocks(db, oldChildIds)
-    deleteMentionsTouchingBlocks(db, oldChildIds)
-    softDeleteBlocks(db, oldChildIds)
 
     // 标题变更不单独记 revision（整篇快照已含旧标题，见 recordDocSnapshot 上方注释）
     updateBlock(db, id, { content: newTitle, noRevision: true })
 
-    // 与 insertDocFromMarkdown / appendMarkdownToDoc 共用插入逻辑：
-    // properties（headingLevel/language 等）与嵌套 level 不再丢失
-    insertedIds.push(
-      ...insertChildBlocks(db, {
-        notebookId: docRow.notebook_id,
-        rootId: id,
-        inputs,
-        sortOffset: 0,
-        now: nowTimestamp(),
-      }),
-    )
+    const sync = syncMarkdownChildren(db, {
+      notebookId: docRow.notebook_id,
+      rootId: id,
+      inputs,
+      oldChildren: oldChildRows,
+    })
+    insertedIds.push(...sync.insertedIds)
+    deletedIds.push(...sync.deletedIds)
+    updatedIds.push(...sync.updatedIds)
+    deleteRefsTouchingBlocks(db, deletedIds)
+    deleteMentionsTouchingBlocks(db, deletedIds)
   })()
 
-  // Hook 触发（fire-and-forget）：删旧 → 文档级索引作业 → 增新 hooks → 更 doc
-  fireAfterDeleteMany(oldChildIds)
-  const indexJob = scheduleDocIndex(id, insertedIds)
+  fireAfterDeleteMany(deletedIds)
+  const indexJob = scheduleDocIndex(id, [...insertedIds, ...updatedIds])
   fireAfterCreateMany(getBlocksByIds(db, insertedIds).map(rowToBlock))
+  for (const row of getBlocksByIds(db, updatedIds)) {
+    fireAfterUpdate(rowToBlock(row))
+  }
   const updatedDocRow = getBlockById(db, id)!
   fireAfterUpdate(rowToBlock(updatedDocRow))
   // 编辑器整篇保存：去抖自动同步（fire-and-forget，未配置时静默跳过）

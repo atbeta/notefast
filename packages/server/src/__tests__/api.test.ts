@@ -505,6 +505,31 @@ const x = 1
     expect(fetched.children.some((c: { content: string }) => c.content === '改过的正文')).toBe(true)
   })
 
+  test('PUT /api/v1/docs/:id/markdown 改一段时其余 block id 不变', async () => {
+    const { body: created } = await api('POST', '/api/v1/docs', {
+      notebook_id: notebookId,
+      title: '稳定 id',
+      markdown: '第一段\n\n第二段\n\n第三段',
+    })
+    const { body: before } = await api('GET', `/api/v1/docs/${created.id}`)
+    const idsBefore = (before.children as Array<{ id: string; content: string }>).map((c) => c.id)
+    expect(idsBefore.length).toBe(3)
+
+    const { status } = await api('PUT', `/api/v1/docs/${created.id}/markdown`, {
+      markdown: '第一段\n\n第二段改了\n\n第三段',
+    })
+    expect(status).toBe(200)
+    const { body: after } = await api('GET', `/api/v1/docs/${created.id}`)
+    const kids = after.children as Array<{ id: string; content: string }>
+    expect(kids.map((c) => c.id)).toEqual(idsBefore)
+    expect(kids[1]!.content).toBe('第二段改了')
+
+    const { body: again } = await api('PUT', `/api/v1/docs/${created.id}/markdown`, {
+      markdown: '第一段\n\n第二段改了\n\n第三段',
+    })
+    expect(again.doc.children.map((c: { id: string }) => c.id)).toEqual(idsBefore)
+  })
+
   test('PUT /api/v1/docs/:id/markdown 空内容合法（删空重来）', async () => {
     const { body: doc } = await api('POST', '/api/v1/docs', {
       notebook_id: notebookId,
