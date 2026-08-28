@@ -18,7 +18,7 @@ import importRouter from '../api/import'
 import exportArchive from '../api/exportArchive'
 import { buildZipStore, parseZip } from '../lib/zipStore'
 import { buildFullArchiveExport } from '../services/docExport'
-import { folderTagFromZipPath, importArchiveZip } from '../services/zipImport'
+import { folderTagsFromZipPath, importArchiveZip } from '../services/zipImport'
 import { makeMinimalDocx } from './helpers/minimalDocx'
 
 let testDir: string
@@ -228,15 +228,16 @@ describe('buildFullArchiveExport', () => {
   })
 })
 
-describe('folderTagFromZipPath', () => {
-  test('根文件无 tag；只取第一层；untagged/media/__MACOSX 跳过', () => {
-    expect(folderTagFromZipPath('a.md')).toBeNull()
-    expect(folderTagFromZipPath('work/a.md')).toBe('work')
-    expect(folderTagFromZipPath('work/projects/a.md')).toBe('work')
-    expect(folderTagFromZipPath('untagged/a.md')).toBeNull()
-    expect(folderTagFromZipPath('UNTAGGED/a.md')).toBeNull()
-    expect(folderTagFromZipPath('media/a.md')).toBeNull()
-    expect(folderTagFromZipPath('__MACOSX/._a.md')).toBeNull()
+describe('folderTagsFromZipPath', () => {
+  test('根文件无 tag；每一层目录都作为 tag；untagged/media/__MACOSX 跳过', () => {
+    expect(folderTagsFromZipPath('a.md')).toEqual([])
+    expect(folderTagsFromZipPath('work/a.md')).toEqual(['work'])
+    expect(folderTagsFromZipPath('work/projects/a.md')).toEqual(['work', 'projects'])
+    expect(folderTagsFromZipPath('work/projects/notes/a.md')).toEqual(['work', 'projects', 'notes'])
+    expect(folderTagsFromZipPath('untagged/a.md')).toEqual([])
+    expect(folderTagsFromZipPath('UNTAGGED/a.md')).toEqual([])
+    expect(folderTagsFromZipPath('media/a.md')).toEqual([])
+    expect(folderTagsFromZipPath('__MACOSX/._a.md')).toEqual([])
   })
 })
 
@@ -330,7 +331,7 @@ describe('importArchiveZip', () => {
     expect(docTagsByTitle('笔记二')).toEqual(['子目录'])
   })
 
-  test('通用 zip 只取第一层目录为 tag；untagged/media/__MACOSX 跳过', async () => {
+  test('通用 zip 每一层目录都作为 tag；untagged/media/__MACOSX 跳过', async () => {
     const zip = buildZipStore([
       { name: 'work/projects/深层.md', data: new TextEncoder().encode('# 深层\n\n正文') },
       { name: 'untagged/无标.md', data: new TextEncoder().encode('# 无标\n\n正文') },
@@ -338,7 +339,7 @@ describe('importArchiveZip', () => {
       { name: '__MACOSX/垃圾.md', data: new TextEncoder().encode('# 垃圾\n\n正文') },
     ])
     await importArchiveZip(getDb(), { notebookId, bytes: zip })
-    expect(docTagsByTitle('深层')).toEqual(['work'])
+    expect(docTagsByTitle('深层')).toEqual(['work', 'projects'])
     expect(docTagsByTitle('无标')).toEqual([])
     expect(docTagsByTitle('媒体旁')).toEqual([])
     expect(docTagsByTitle('垃圾')).toEqual([])

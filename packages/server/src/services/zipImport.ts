@@ -5,7 +5,7 @@
  * - 按 manifest 的 docId 还原文档（幂等：已存在则跳过），media 内容寻址入 AssetStore
  * - markdown 中 media/<sha><ext> 改写回 asset:<sha>
  * 通用 zip：每个 .md/.txt/.docx 为一个新文档（标题从首个 H1 / 文件名推断）；
- * 无 YAML tags 时第一层目录作为 tag（untagged/media/__MACOSX 除外）。
+ * 无 YAML tags 时每一层目录作为 tag（untagged/media/__MACOSX 除外）。
  */
 
 import { stripDocFrontmatter, normalizeTagList } from '@notefast/core'
@@ -33,15 +33,15 @@ const SKIP_FOLDER_TAGS = new Set([
 ])
 
 /**
- * 通用 zip：第一层目录当作 tag。根文件、untagged/media/__MACOSX 不打。
+ * 通用 zip：每一层目录当作 tag（外→内）。根文件、以及首段为 untagged/media/__MACOSX 的路径不打。
  * 自家档（有 manifest）不要走这里——标签以 YAML frontmatter 为准。
  */
-export function folderTagFromZipPath(entryName: string): string | null {
+export function folderTagsFromZipPath(entryName: string): string[] {
   const parts = entryName.split(/[/\\]/).filter((s) => s && s !== '.')
-  if (parts.length < 2) return null
-  const first = parts[0]!
-  if (SKIP_FOLDER_TAGS.has(first.toLowerCase())) return null
-  return first
+  if (parts.length < 2) return []
+  const dirs = parts.slice(0, -1)
+  if (SKIP_FOLDER_TAGS.has(dirs[0]!.toLowerCase())) return []
+  return dirs.filter((dir) => !SKIP_FOLDER_TAGS.has(dir.toLowerCase()))
 }
 
 /** zip 内相对路径：先按 md 所在目录解析（含 ..），再退回 zip 根 */
@@ -151,9 +151,9 @@ export async function importArchiveZip(
     const mf = manifestByFilename.get(entryName) ?? manifestByFilename.get(filename)
     const docId = mf?.docId
     const title = mf?.title ?? resolveImportTitle({ filename, markdown })
-    const folderTag = !manifest ? folderTagFromZipPath(entryName) : null
+    const folderTags = !manifest ? folderTagsFromZipPath(entryName) : []
     const hasFmTags = Boolean(stripDocFrontmatter(markdown).meta?.tags?.length)
-    const tags = folderTag && !hasFmTags ? normalizeTagList([folderTag]) : undefined
+    const tags = folderTags.length && !hasFmTags ? normalizeTagList(folderTags) : undefined
 
     if (docId && db.query('SELECT id FROM blocks WHERE id = ?').get(docId)) {
       result.skipped++
