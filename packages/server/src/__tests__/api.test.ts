@@ -489,6 +489,22 @@ const x = 1
     expect(fetchedCode.properties.language).toBe('js')
   })
 
+  test('PUT /api/v1/docs/:id/markdown?omit_tree=1 不返回整棵树', async () => {
+    const { body: doc } = await api('POST', '/api/v1/docs', {
+      notebook_id: notebookId,
+      title: '瘦响应',
+      markdown: '一段正文',
+    })
+    const { status, body } = await api('PUT', `/api/v1/docs/${doc.id}/markdown?omit_tree=1`, {
+      markdown: '改过的正文',
+    })
+    expect(status).toBe(200)
+    expect(body.doc).toBeUndefined()
+    expect(typeof body.updated_at).toBe('string')
+    const { body: fetched } = await api('GET', `/api/v1/docs/${doc.id}`)
+    expect(fetched.children.some((c: { content: string }) => c.content === '改过的正文')).toBe(true)
+  })
+
   test('PUT /api/v1/docs/:id/markdown 空内容合法（删空重来）', async () => {
     const { body: doc } = await api('POST', '/api/v1/docs', {
       notebook_id: notebookId,

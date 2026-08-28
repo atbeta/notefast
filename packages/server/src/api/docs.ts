@@ -392,6 +392,7 @@ function applyMarkdownReplace(
   title: string | undefined,
   actor: string,
   checkpoint = false,
+  includeTree = true,
 ): { ok: true; body: Record<string, unknown> } | { ok: false; error: string } {
   const docRow = getDocById(db, id)
   if (!docRow) {
@@ -448,13 +449,14 @@ function applyMarkdownReplace(
   // 编辑器整篇保存：去抖自动同步（fire-and-forget，未配置时静默跳过）
   scheduleSyncNow()
 
-  const tree = buildBlockTree(fetchDocBlocks(db, id))
+  // 编辑器自动保存用 omit_tree=1 跳过整棵树（可到数 MB）；默认仍返回树，保持 API 形状。
+  const tree = includeTree ? buildBlockTree(fetchDocBlocks(db, id)) : []
   // asset 引用对账：悬空引用告警（不阻断保存）
   const missingAssets = findMissingAssets(extractAssetRefs(markdown))
   return {
     ok: true,
     body: {
-      doc: tree.length > 0 ? tree[0] : null,
+      ...(includeTree ? { doc: tree.length > 0 ? tree[0] : null } : {}),
       updated_at: updatedDocRow.updated_at,
       ...(indexJob ? { index_job: indexJob } : {}),
       ...(missingAssets.length > 0 ? { missing_assets: missingAssets } : {}),
@@ -464,7 +466,16 @@ function applyMarkdownReplace(
 
 docs.put('/:id/markdown', zValidator('json', updateDocMarkdownSchema), (c) => {
   const { markdown, title, checkpoint } = c.req.valid('json')
-  const result = applyMarkdownReplace(getDb(), c.req.param('id'), markdown, title, 'editor', checkpoint)
+  const includeTree = c.req.query('omit_tree') !== '1'
+  const result = applyMarkdownReplace(
+    getDb(),
+    c.req.param('id'),
+    markdown,
+    title,
+    'editor',
+    checkpoint,
+    includeTree,
+  )
   return result.ok ? c.json(result.body) : c.json({ error: 'not_found', message: result.error }, 404)
 })
 

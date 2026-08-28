@@ -26,6 +26,7 @@ import CodeMirrorEditor from './editor/CodeMirrorEditor'
 import type { CodeMirrorEditorHandle } from './editor/CodeMirrorEditor'
 import SelectionBubble from './editor/SelectionBubble'
 import type { SelectionAnchor } from './editor/cm/selectionReport'
+import { autoSaveDelayMs, createCoalescedSave } from '../lib/coalescedSave'
 import { useAiWriting } from '../ai/useAiWriting'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
 
@@ -143,7 +144,11 @@ function EditorInline({
     try {
       // checkpoint=false（自动保存）→ 不记整篇快照，避免历史刷屏；
       // checkpoint=true（手动/切走/Ctrl+S）→ 记版本点，可回退
-      const r = await api.put<{ doc?: Block; updated_at?: string }>(`/docs/${docId}/markdown`, { markdown, checkpoint })
+      // omit_tree：自动保存不必把整棵块树放进响应（大文档可到数 MB）
+      const r = await api.put<{ doc?: Block; updated_at?: string }>(
+        `/docs/${docId}/markdown?omit_tree=1`,
+        { markdown, checkpoint },
+      )
       lastSavedContentRef.current = markdown
       if (r.updated_at) serverUpdatedAtRef.current = r.updated_at
       if (r.doc && typeof r.doc === 'object' && r.doc.id) onDocUpdated?.(r.doc)
@@ -158,11 +163,21 @@ function EditorInline({
     }
   }, [docId, draft, onAutoSaved, onDocUpdated])
 
+  const doSaveRef = useRef(doSave)
+  doSaveRef.current = doSave
+  const saveQueueRef = useRef<ReturnType<typeof createCoalescedSave> | null>(null)
+  if (!saveQueueRef.current) {
+    saveQueueRef.current = createCoalescedSave((markdown, checkpoint) => {
+      setAutoSaveStatus('saving')
+      return doSaveRef.current(markdown, checkpoint)
+    })
+  }
+  const saveQueue = saveQueueRef.current
+
   const triggerAutoSave = useCallback((markdown: string, checkpoint?: boolean) => {
-    if (markdown === lastSavedContentRef.current) return
-    setAutoSaveStatus('saving')
-    doSave(markdown, checkpoint ?? false)
-  }, [doSave])
+    if (markdown === lastSavedContentRef.current && !checkpoint) return
+    saveQueue.schedule(markdown, checkpoint ?? false)
+  }, [saveQueue])
 
   useEffect(() => {
     let cancelled = false
@@ -234,7 +249,7 @@ function EditorInline({
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
     autoSaveTimerRef.current = setTimeout(() => {
       triggerAutoSave(content)
-    }, 3000)
+    }, autoSaveDelayMs(content))
 
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
@@ -261,8 +276,8 @@ function EditorInline({
   const handleSave = useCallback(async () => {
     if (saving) return
     setSaving(true)
-    // 手动保存：记版本点（checkpoint=true）
-    const ok = await doSave(content, true)
+    // 手动保存：记版本点（checkpoint=true）；等在途自动保存结束再冲刷，避免并行整篇替换
+    const ok = await saveQueue.flush(content, true)
     if (ok) {
       setInitialContent(content)
       onSaved()
@@ -274,7 +289,7 @@ function EditorInline({
       })
       setSaving(false)
     }
-  }, [saving, content, doSave, onSaved, onClose, toast, t])
+  }, [saving, content, saveQueue, onSaved, onClose, toast, t])
 
   const handleCancel = useCallback(() => {
     if (content !== lastSavedContentRef.current) {
