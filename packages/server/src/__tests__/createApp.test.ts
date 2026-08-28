@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createApp } from '../app'
 import { getDb } from '../db'
@@ -79,5 +79,30 @@ describe('createApp', () => {
     const srv2 = createApp({ dataDir: join(testDir, 'nested') })
     expect(srv).not.toBe(srv2)
     expect(srv.app).not.toBe(srv2.app)
+  })
+
+  test('Vite /assets/* 带 immutable 缓存；index.html 仍 no-store', async () => {
+    const webDist = join(testDir, 'web-dist')
+    mkdirSync(join(webDist, 'assets'), { recursive: true })
+    writeFileSync(join(webDist, 'index.html'), '<!doctype html><html><body>ok</body></html>')
+    writeFileSync(join(webDist, 'assets', 'index-abc123.js'), 'console.log(1)\n')
+    const prev = process.env.WEB_DIST
+    process.env.WEB_DIST = webDist
+    const srv = createApp({ dataDir: testDir })
+    await srv.start()
+    try {
+      const asset = await srv.app.fetch(new Request('http://localhost/assets/index-abc123.js'))
+      expect(asset.status).toBe(200)
+      expect(asset.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable')
+      const index = await srv.app.fetch(new Request('http://localhost/'))
+      expect(index.status).toBe(200)
+      expect(index.headers.get('Cache-Control')).toBe('no-store')
+      const missing = await srv.app.fetch(new Request('http://localhost/assets/missing-xyz.js'))
+      expect(missing.headers.get('Cache-Control')).toBe('no-store')
+    } finally {
+      await srv.stop()
+      if (prev === undefined) delete process.env.WEB_DIST
+      else process.env.WEB_DIST = prev
+    }
   })
 })

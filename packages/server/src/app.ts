@@ -332,6 +332,14 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
         return c.html(html)
       }
       app.get('/', serveIndex)
+      // Vite 产物 /assets/* 带内容哈希，可长期缓存；未命中文件不设头，避免 SPA 回退的 index.html 被当成 immutable。
+      app.use('/assets/*', async (c, next) => {
+        const rel = c.req.path.replace(/^\/+/, '')
+        if (!rel.includes('..') && existsSync(join(webDist, rel))) {
+          c.header('Cache-Control', 'public, max-age=31536000, immutable')
+        }
+        return next()
+      })
       app.use('/*', serveStatic({ root: webDist }))
       app.get('/*', serveIndex)
     }
