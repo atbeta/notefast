@@ -387,7 +387,7 @@ export default function SyncPanel() {
             disabled={busyImport}
             onClick={() => { void handleExportArchive() }}
           >
-            <Download className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
+            <Upload className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
             {t('sync.exportArchive')}
           </Button>
           <Button
@@ -398,7 +398,7 @@ export default function SyncPanel() {
               if (!busyImport) importRef.current?.click()
             }}
           >
-            <Upload className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
+            <Download className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
             {t('sync.importArchive')}
           </Button>
           <input
