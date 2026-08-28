@@ -8,7 +8,10 @@ import { join } from 'node:path'
 import { readTags } from '@notefast/core'
 import { initDb, closeDb, getDb } from '../db'
 import { countDocRows, listDocRows } from '../store/blocks'
-import { seedWelcomeDocIfNeeded } from '../services/welcomeSeed'
+import {
+  seedWelcomeDocIfNeeded,
+  WELCOME_MARKDOWN,
+} from '../services/welcomeSeed'
 
 let testDir: string
 let notebookId: string
@@ -32,6 +35,10 @@ describe('seedWelcomeDocIfNeeded', () => {
     expect(docs).toHaveLength(1)
     expect(docs[0]!.content).toBe('开始使用')
     expect(readTags(docs[0]!)).toEqual(['guide'])
+    for (const heading of ['写与读', '用标签组织', '搜索', '配置 AI', '导入、备份、外部接入']) {
+      expect(WELCOME_MARKDOWN).toContain(`## ${heading}`)
+    }
+    expect(WELCOME_MARKDOWN.length).toBeGreaterThan(800)
   })
 
   test('已有库不种', () => {
