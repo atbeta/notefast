@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
-import { initAssetStore, readAsset, collectOrphanAssets, ORPHAN_GRACE_MS, setImageUploadConfig, saveAsset, maybeUploadToRemote, getAssetRemoteUrl, uploadSingleAsset } from '../assets/store'
+import { initAssetStore, readAsset, collectOrphanAssets, ORPHAN_GRACE_MS, setImageUploadConfig, saveAsset, maybeUploadToRemote, getAssetRemoteUrl, uploadSingleAsset, sanitizeAssetFilename } from '../assets/store'
 import { initImageUploadConfig, applyImageUploadConfig, getImageUploadConfig } from '../services/imageUploadConfig'
 import { authMiddleware, sessionTokenValue, SESSION_COOKIE } from '../middleware/auth'
 import assetsRouter from '../api/assets'
@@ -88,7 +88,40 @@ describe('AssetStore — 上传与去重', () => {
     const body = await res.json() as { items: Array<{ id: string; filename: string | null; local_path: string }> }
     const item = body.items.find((x) => x.id === id)
     expect(item?.filename).toBe('示例图片.png')
-    expect(item?.local_path).toBe(`media/${id}`)
+    expect(item?.local_path).toBe(join(testDir, 'media', id))
+  })
+
+  test('相对路径 / .. 文件名落库只留 basename；local_path 为绝对路径', async () => {
+    const buf = Buffer.from('path-sanitize-img')
+    const { status } = await upload(buf, 'image/png', '../photos/foo.png')
+    expect(status).toBe(201)
+    const id = createHash('sha256').update(buf).digest('hex')
+    expect(readAsset(id)?.meta.filename).toBe('foo.png')
+
+    const res = await app.fetch(new Request('http://localhost/api/v1/assets', { method: 'GET' }))
+    const body = await res.json() as { items: Array<{ id: string; filename: string | null; local_path: string }> }
+    const item = body.items.find((x) => x.id === id)
+    expect(item?.filename).toBe('foo.png')
+    expect(item?.local_path).toBe(join(testDir, 'media', id))
+  })
+
+  test('listAssets 对存量脏 filename 消毒后再返回', async () => {
+    const { meta } = saveAsset(Buffer.from('legacy-dirty-name'), 'image/png', 'ok.png')
+    getDb().query('UPDATE assets SET filename = ? WHERE id = ?').run('../a.png', meta.id)
+    const res = await app.fetch(new Request('http://localhost/api/v1/assets', { method: 'GET' }))
+    const body = await res.json() as { items: Array<{ id: string; filename: string | null }> }
+    const item = body.items.find((x) => x.id === meta.id)
+    expect(item?.filename).toBe('a.png')
+  })
+
+  test('sanitizeAssetFilename：只留 basename，丢掉 .. / . / 空', () => {
+    expect(sanitizeAssetFilename('../photos/foo.png')).toBe('foo.png')
+    expect(sanitizeAssetFilename('foo.png')).toBe('foo.png')
+    expect(sanitizeAssetFilename('C:\\foo\\bar.png')).toBe('bar.png')
+    expect(sanitizeAssetFilename('..')).toBeNull()
+    expect(sanitizeAssetFilename('.')).toBeNull()
+    expect(sanitizeAssetFilename('')).toBeNull()
+    expect(sanitizeAssetFilename(null)).toBeNull()
   })
 
   test('不带文件名上传 → filename 为 null', async () => {

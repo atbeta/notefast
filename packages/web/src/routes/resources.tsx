@@ -412,7 +412,7 @@ export default function ResourcesPage() {
                   </div>
                   {/* 文件名 + 复制本地路径：让用户知道这图是哪个文件、在哪能找到 */}
                   <div className="flex items-center gap-1 min-w-0 pt-0.5">
-                    <Tooltip label={item.filename || item.local_path} className="min-w-0 max-w-full">
+                    <Tooltip label={item.local_path} className="min-w-0 max-w-full">
                       <span className="block w-full truncate text-2xs text-muted-foreground/80">
                         {item.filename || item.id.slice(0, 8)}
                       </span>
@@ -421,7 +421,7 @@ export default function ResourcesPage() {
                       text={item.local_path}
                       className="ml-auto shrink-0 p-0.5 rounded-md text-muted-foreground/60 hover:text-primary transition-colors disabled:opacity-50"
                       ariaLabel={t('resources.copyPath')}
-                      title={t('resources.copyPath')}
+                      title={item.local_path}
                     />
                   </div>
                 </div>

@@ -30,8 +30,19 @@ export const ORPHAN_GRACE_MS = 7 * 24 * 60 * 60 * 1000
 let mediaDir = ''
 
 export function initAssetStore(dataDir: string): void {
-  mediaDir = join(dataDir, MEDIA_DIR_NAME)
+  mediaDir = resolve(dataDir, MEDIA_DIR_NAME)
   if (!existsSync(mediaDir)) mkdirSync(mediaDir, { recursive: true })
+}
+
+/**
+ * 资源页展示 / 落库用的文件名：只留 basename。
+ * Markdown 导入会把 `../images/foo.png` 这类相对引用整段传进来，不能当「本地路径」展示。
+ */
+export function sanitizeAssetFilename(filename: string | null | undefined): string | null {
+  if (!filename) return null
+  const base = filename.replace(/\\/g, '/').split('/').filter(Boolean).pop()?.trim() ?? ''
+  if (!base || base === '.' || base === '..') return null
+  return base
 }
 
 /** media 目录路径（initAssetStore 后可用）；未初始化时返回 null */
@@ -60,6 +71,7 @@ export function setImageUploadConfig(cfg: ImageUploadConfig | null): void {
 /** 保存图片（幂等去重）；返回元数据。dedup=true 表示命中已有内容未重复写盘 */
 export function saveAsset(buf: Buffer, mime: string, filename?: string | null): { meta: AssetMeta; dedup: boolean } {
   const id = createHash('sha256').update(buf).digest('hex')
+  const safeName = sanitizeAssetFilename(filename)
   const db = getDb()
   const existing = db.query('SELECT id, mime, size, created_at, filename FROM assets WHERE id = ?').get(id) as AssetMeta | undefined
   if (existing && existsSync(join(mediaDir, id))) {
@@ -68,13 +80,13 @@ export function saveAsset(buf: Buffer, mime: string, filename?: string | null): 
   writeFileSync(join(mediaDir, id), buf)
   const now = new Date().toISOString()
   // 内容寻址去重：同图再次写入时补 filename（首次没带、这次带了）
-  if (existing && !existing.filename && filename) {
-    db.query('UPDATE assets SET filename = ? WHERE id = ?').run(filename, id)
-    return { meta: { ...existing, filename }, dedup: true }
+  if (existing && !existing.filename && safeName) {
+    db.query('UPDATE assets SET filename = ? WHERE id = ?').run(safeName, id)
+    return { meta: { ...existing, filename: safeName }, dedup: true }
   }
   db.query('INSERT OR REPLACE INTO assets (id, mime, size, created_at, filename) VALUES (?, ?, ?, ?, ?)')
-    .run(id, mime, buf.length, now, filename ?? null)
-  return { meta: { id, mime, size: buf.length, created_at: now, filename: filename ?? null }, dedup: false }
+    .run(id, mime, buf.length, now, safeName)
+  return { meta: { id, mime, size: buf.length, created_at: now, filename: safeName }, dedup: false }
 }
 
 /** 读取元数据 + 磁盘路径；不存在返回 null（磁盘文件缺失视为不存在，并清掉元数据行） */
@@ -395,7 +407,7 @@ export interface AssetListItem {
   created_at: string
   /** 原始文件名（可空：存量/无法获取；前端回退显示哈希短前缀） */
   filename: string | null
-  /** 本地文件路径（相对 data 目录，如 media/<id>；供「复制路径」/定位用） */
+  /** 磁盘绝对路径（data/media/<id>）；供「复制路径」/定位用 */
   local_path: string
   /** 是否已挂图床外链 */
   remote: boolean
@@ -445,8 +457,8 @@ export function listAssets(opts: { limit?: number; offset?: number } = {}): {
         mime: r.mime,
         size: r.size,
         created_at: r.created_at,
-        filename: r.filename,
-        local_path: `media/${r.id}`,
+        filename: sanitizeAssetFilename(r.filename),
+        local_path: join(mediaDir, r.id),
         remote: Boolean(r.remote_url),
         remote_url: r.remote_url,
         referenced: Boolean(refs && refs.length > 0),
