@@ -55,7 +55,7 @@
     "retrievalDetail": "检索详情",
     "rerankedWith": "精排 {{model}}",
     "hybridSearch": "hybrid search",
-    "recall": " · 召回 关键词 {{fts}} + 语义 {{sem}}",
+    "recall": " · 召回 关键词 {{fts}} · 语义邻居 {{sem}}/{{limit}}",
     "totalTime": " · 总耗时 {{ms}}ms",
     "ftsTime": " · FTS {{ms}}ms",
     "embedTime": " · 嵌入 {{ms}}ms",

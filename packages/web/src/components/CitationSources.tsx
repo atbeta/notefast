@@ -18,6 +18,8 @@ export interface Citation {
 export interface RetrievalInfo {
   fts_hits: number
   semantic_hits: number
+  /** 语义路邻居上限；诊断用，满额不代表「命中了这么多」 */
+  semantic_limit?: number
   reranked: boolean
   model?: string
   timing?: {
@@ -96,7 +98,11 @@ export default function CitationSources({
             ? t('chat.rerankedWith', { model: retrieval.model || 'reranker' })
             : t('chat.hybridSearch')}
           {(retrieval.fts_hits > 0 || retrieval.semantic_hits > 0) &&
-            t('chat.recall', { fts: retrieval.fts_hits, sem: retrieval.semantic_hits })}
+            t('chat.recall', {
+              fts: retrieval.fts_hits,
+              sem: retrieval.semantic_hits,
+              limit: retrieval.semantic_limit ?? 20,
+            })}
           {retrieval.timing && (
             <>
               {t('chat.totalTime', { ms: retrieval.timing.total_ms })}

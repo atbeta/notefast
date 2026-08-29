@@ -107,7 +107,7 @@
     "switchToDark": "Switch to dark",
     "toggleThemeHint": "Switch the app theme",
     "dialogLabel": "Command palette",
-    "placeholder": "Search documents, commands or files…",
+    "placeholder": "Search documents or commands…",
     "searching": "Searching…",
     "noResults": "No matching results",
     "hint": "Try searching for a document name or running a command",

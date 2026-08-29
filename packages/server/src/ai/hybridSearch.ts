@@ -98,6 +98,13 @@ export interface SearchOptions {
    * 三段查询 + ROW  + UNION 体量大，但提供的语义已被 FTS/标题覆盖。
    */
   skipGraphContext?: boolean
+  /**
+   * 聊天引用精度门：进 citations 必须有词法/标题/实体票，或语义 cosine
+   * 达到 cite 门槛（默认 0.55）。允许 0 条，不靠语义邻居凑满 topK。
+   * ≤2 字且含 CJK 的查询同时跳过语义路（「中二」这类短词邻域太脏）。
+   * 默认关：MCP / eval / 相关面板保持宽召回。
+   */
+  precisionGate?: boolean
 }
 
 export interface Citation {
@@ -140,6 +147,10 @@ export interface HybridSearchReport {
     model?: string
     /** 被 minScore 门槛过滤掉的引用数（0 = 没有过滤） */
     discarded_low_score?: number
+    /** 语义路请求的邻居上限（诊断：满额多为 k-NN 配额，不是「命中了这么多」） */
+    semantic_limit?: number
+    /** 被精度门丢掉的融合候选数（未开门时省略） */
+    discarded_precision?: number
     /** 查询理解状态（未请求时省略） */
     query_understanding?: QueryUnderstandingStatus
     /** 分阶段耗时（NoteFast：可量化） */
@@ -163,10 +174,23 @@ const DEFAULT_MAX_PER_DOC = 2
  * 从源头切断 RAG 引用噪声，而不是等上层 topK 硬塞。
  */
 const DEFAULT_SEMANTIC_MIN_COSINE = 0.3
+/** 精度门：纯语义候选进引用的 cosine 下限（高于召回层 0.3） */
+const DEFAULT_PRECISION_SEMANTIC_COSINE = 0.55
 
 function semanticMinCosine(): number {
   const raw = parseFloat(process.env.SEMANTIC_MIN_COSINE ?? '')
   return Number.isFinite(raw) && raw >= 0 && raw <= 1 ? raw : DEFAULT_SEMANTIC_MIN_COSINE
+}
+
+function precisionSemanticCosine(): number {
+  const raw = parseFloat(process.env.SEMANTIC_CITE_MIN_COSINE ?? '')
+  return Number.isFinite(raw) && raw >= 0 && raw <= 1 ? raw : DEFAULT_PRECISION_SEMANTIC_COSINE
+}
+
+/** ≤2 字且含汉字：短查询语义邻域噪声极大，精度门开启时跳过语义路 */
+export function isShortCjkQuery(query: string): boolean {
+  const compact = query.replace(/\s+/g, '').trim()
+  return compact.length > 0 && compact.length <= 2 && /[一-鿿]/.test(compact)
 }
 
 /**
@@ -214,7 +238,10 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
     }
   })()
 
-  const semanticPromise = opts.skipSemantic
+  const skipSemantic = opts.skipSemantic === true
+    || (opts.precisionGate === true && isShortCjkQuery(opts.query))
+
+  const semanticPromise = skipSemantic
     ? Promise.resolve({ hits: [] as SemanticRawHit[], embed_query_ms: 0, semantic_ms: 0 })
     : runSemantic(channelQuery, opts.notebookId, semanticLimit, opts.since, opts.until, {
         includeInbox,
@@ -322,7 +349,16 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
 
   // 多样性约束：每 doc 先取 ≤maxPerDoc 条，不足 topK 再从溢出按分补齐（先选后截）
   const diversified = applyDocDiversity(ranked, opts.maxPerDoc ?? DEFAULT_MAX_PER_DOC)
-  const citations0 = diversified.slice(0, topK).map((c) => toCitation(c, opts.query))
+  // 精度门在截断前：合格集里再取 topK，避免先切满再砍导致少给好结果
+  let discardedPrecision = 0
+  const qualified = opts.precisionGate
+    ? diversified.filter((c) => {
+      const keep = passesPrecisionGate(c)
+      if (!keep) discardedPrecision += 1
+      return keep
+    })
+    : diversified
+  const citations0 = qualified.slice(0, topK).map((c) => toCitation(c, opts.query))
 
   // minScore 相关性门槛：低分引用直接丢弃，避免「强制 topK」造成的引用噪声
   const minScore = opts.minScore ?? 0
@@ -350,6 +386,8 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
     reranked: Boolean(reranked),
     returned: citations.length,
     discarded_low_score: discardedLowScore,
+    discarded_precision: opts.precisionGate ? discardedPrecision : undefined,
+    semantic_limit: semanticLimit,
     query_understanding: quStatus,
     ...timing,
     duration_ms: timing.total_ms,
@@ -365,6 +403,8 @@ export async function hybridSearch(opts: SearchOptions): Promise<HybridSearchRep
       score_kind: reranked ? 'rerank' : 'rrf',
       model: reranked ? getRuntime().rerankerConfig()?.model : undefined,
       discarded_low_score: discardedLowScore,
+      semantic_limit: semanticLimit,
+      ...(opts.precisionGate ? { discarded_precision: discardedPrecision } : {}),
       ...(quStatus ? { query_understanding: quStatus } : {}),
       timing,
     },
@@ -468,6 +508,14 @@ async function runSemantic(
 
 // ───────────────────── RRF 融合 ─────────────────────
 
+interface ChannelFlags {
+  lexical: boolean
+  title: boolean
+  entity: boolean
+  graph: boolean
+  semantic: boolean
+}
+
 interface FusedCandidate {
   block_id: string
   doc_id: string
@@ -480,51 +528,56 @@ interface FusedCandidate {
   rrf_score: number
   /** rerank 用的归一化文本 */
   rerank_text: string
+  channels: ChannelFlags
+  /** 语义路 cosine；未走语义则为 null */
+  semanticCosine: number | null
+}
+
+function emptyChannels(): ChannelFlags {
+  return { lexical: false, title: false, entity: false, graph: false, semantic: false }
+}
+
+function addRrfHit(
+  map: Map<string, Omit<FusedCandidate, 'rrf_score'>>,
+  hit: FtsHit,
+  channel: keyof Pick<ChannelFlags, 'lexical' | 'title' | 'entity' | 'graph'>,
+): void {
+  if (!hit.rrf_rank) return
+  const rrf = 1 / (RRF_K + hit.rrf_rank)
+  const existing = map.get(hit.block_id)
+  if (existing) {
+    existing.score += rrf
+    existing.channels[channel] = true
+    return
+  }
+  map.set(hit.block_id, {
+    block_id: hit.block_id,
+    doc_id: hit.doc_id,
+    doc_title: hit.doc_title,
+    type: hit.type,
+    content: hit.content,
+    score: rrf,
+    rerank_text: rerankText(hit.doc_title, hit.content),
+    channels: { ...emptyChannels(), [channel]: true },
+    semanticCosine: null,
+  })
 }
 
 function rrfMerge(fts: FtsHit[], semantic: SemanticRawHit[], title: FtsHit[] = [], entity: FtsHit[] = [], context: FtsHit[] = []): FusedCandidate[] {
   const map = new Map<string, Omit<FusedCandidate, 'rrf_score'>>()
 
-  for (const f of fts) {
-    if (!f.rrf_rank) continue
-    const rrf = 1 / (RRF_K + f.rrf_rank)
-    map.set(f.block_id, {
-      block_id: f.block_id,
-      doc_id: f.doc_id,
-      doc_title: f.doc_title,
-      type: f.type,
-      content: f.content,
-      score: rrf,
-      rerank_text: rerankText(f.doc_title, f.content),
-    })
-  }
-  // 标题/实体/图谱上下文通道：与 fts 同构，已存在的 block_id 累加 RRF 票
-  // （标题命中同时也在主 LIKE 路里；实体命中补充词法/语义都够不到的提及块；
-  //   上下文通道补充「与当前文档相关」的块）
-  for (const t of [...title, ...entity, ...context]) {
-    if (!t.rrf_rank) continue
-    const rrf = 1 / (RRF_K + t.rrf_rank)
-    const existing = map.get(t.block_id)
-    if (existing) {
-      existing.score += rrf
-    } else {
-      map.set(t.block_id, {
-        block_id: t.block_id,
-        doc_id: t.doc_id,
-        doc_title: t.doc_title,
-        type: t.type,
-        content: t.content,
-        score: rrf,
-        rerank_text: rerankText(t.doc_title, t.content),
-      })
-    }
-  }
+  for (const f of fts) addRrfHit(map, f, 'lexical')
+  for (const t of title) addRrfHit(map, t, 'title')
+  for (const e of entity) addRrfHit(map, e, 'entity')
+  for (const g of context) addRrfHit(map, g, 'graph')
   for (const s of semantic) {
     if (!s.rrf_rank) continue
     const rrf = 1 / (RRF_K + s.rrf_rank)
     const existing = map.get(s.block_id)
     if (existing) {
       existing.score += rrf
+      existing.channels.semantic = true
+      existing.semanticCosine = Math.max(existing.semanticCosine ?? 0, s.score)
     } else {
       map.set(s.block_id, {
         block_id: s.block_id,
@@ -534,12 +587,20 @@ function rrfMerge(fts: FtsHit[], semantic: SemanticRawHit[], title: FtsHit[] = [
         content: s.content,
         score: rrf,
         rerank_text: s.rerank_text ?? rerankText(s.doc_title, s.content),
+        channels: { ...emptyChannels(), semantic: true },
+        semanticCosine: s.score,
       })
     }
   }
   // 排序后返回；rrf_score 记录融合分（rerank 改写 score 后仍保留）
   const merged = Array.from(map.values()).sort((a, b) => b.score - a.score)
   return merged.map((c) => ({ ...c, rrf_score: c.score }))
+}
+
+/** 词法/标题/实体任一票，或纯语义且 cosine 够高 */
+function passesPrecisionGate(c: FusedCandidate): boolean {
+  if (c.channels.lexical || c.channels.title || c.channels.entity) return true
+  return c.channels.semantic && (c.semanticCosine ?? 0) >= precisionSemanticCosine()
 }
 
 // ───────────────────── Rerank（可选）─────────────────────

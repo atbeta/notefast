@@ -55,7 +55,7 @@
     "retrievalDetail": "Retrieval details",
     "rerankedWith": "Reranked with {{model}}",
     "hybridSearch": "hybrid search",
-    "recall": " · recall keywords {{fts}} + semantic {{sem}}",
+    "recall": " · recall keywords {{fts}} · semantic neighbors {{sem}}/{{limit}}",
     "totalTime": " · total {{ms}}ms",
     "ftsTime": " · FTS {{ms}}ms",
     "embedTime": " · embed {{ms}}ms",

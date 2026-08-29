@@ -415,6 +415,7 @@ export default function AIChatPanel({
               setRetrieval({
                 fts_hits: payload.retrieval?.fts_hits ?? 0,
                 semantic_hits: payload.retrieval?.semantic_hits ?? 0,
+                semantic_limit: payload.retrieval?.semantic_limit,
                 reranked: payload.retrieval?.reranked ?? false,
                 model: payload.retrieval?.model,
                 timing: payload.retrieval?.timing,
@@ -436,6 +437,7 @@ export default function AIChatPanel({
                 setRetrieval({
                   fts_hits: payload.retrieval.fts_hits ?? 0,
                   semantic_hits: payload.retrieval.semantic_hits ?? 0,
+                  semantic_limit: payload.retrieval.semantic_limit,
                   reranked: payload.retrieval.reranked ?? false,
                   model: payload.retrieval.model,
                   timing: payload.retrieval.timing,

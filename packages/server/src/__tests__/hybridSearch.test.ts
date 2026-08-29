@@ -20,7 +20,7 @@ import {
   applyNewConfig,
   _setRuntimeForTests,
 } from '../services/aiRuntime'
-import { hybridSearch } from '../ai/hybridSearch'
+import { hybridSearch, isShortCjkQuery } from '../ai/hybridSearch'
 import { upsertVector, initVectorStore } from '../ai/indexer'
 import { JsonVectorStore, setVectorStore } from '../ai/vectorStore'
 import { insertRef } from '../store/refs'
@@ -278,6 +278,93 @@ describe('hybridSearch — 语义召回 cosine 下限（Bug 6）', () => {
     expect(report.retrieval.semantic_hits).toBe(1)
     expect(report.citations.length).toBe(1)
     expect(report.citations[0]!.block_id).toBe('hi-cos')
+  })
+})
+
+describe('hybridSearch — precisionGate', () => {
+  beforeEach(() => {
+    applyNewConfig(
+      {
+        version: 1,
+        chat: null,
+        embedding: {
+          id: 'x-emb',
+          label: 'x',
+          preset: 'custom',
+          baseUrl: 'http://mock-emb',
+          apiKey: '',
+          embeddingModel: 'fake-emb',
+          chatModel: '',
+          timeoutMs: 5000,
+          extraHeaders: {},
+        },
+        autoIndex: false,
+        reranker: null,
+      },
+      pluginSystem,
+    )
+  })
+
+  test('isShortCjkQuery：2 字中文为短查询，ASCII 不是', () => {
+    expect(isShortCjkQuery('中二')).toBe(true)
+    expect(isShortCjkQuery('备份')).toBe(true)
+    expect(isShortCjkQuery('RAG')).toBe(false)
+    expect(isShortCjkQuery('备份策略')).toBe(false)
+  })
+
+  test('纯语义低 cosine 不进引用；词法命中保留', async () => {
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl((async () =>
+      new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }), { status: 200 })) as unknown as typeof fetch)
+
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const lexical = seedBlock({ id: 'gate-lex', notebookId: nb, content: 'Tauri window close handler' })
+    const junk = seedBlock({ id: 'gate-junk', notebookId: nb, content: 'alpha beta gamma' })
+    await upsertVector(lexical.id, new Float64Array([0.4, Math.sqrt(1 - 0.16)]))
+    await upsertVector(junk.id, new Float64Array([0.4, Math.sqrt(1 - 0.16)]))
+
+    const open = await hybridSearch({ query: 'Tauri', topK: 10 })
+    expect(open.citations.some((c) => c.block_id === 'gate-junk')).toBe(true)
+
+    const gated = await hybridSearch({ query: 'Tauri', topK: 10, precisionGate: true })
+    expect(gated.citations.some((c) => c.block_id === 'gate-lex')).toBe(true)
+    expect(gated.citations.some((c) => c.block_id === 'gate-junk')).toBe(false)
+    expect(gated.retrieval.discarded_precision).toBeGreaterThan(0)
+  })
+
+  test('纯语义高 cosine 仍可进引用（换说法）', async () => {
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl((async () =>
+      new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }), { status: 200 })) as unknown as typeof fetch)
+
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const para = seedBlock({ id: 'gate-hi', notebookId: nb, content: 'alpha beta gamma' })
+    await upsertVector(para.id, new Float64Array([1, 0]))
+
+    const report = await hybridSearch({ query: 'zztop', topK: 10, precisionGate: true })
+    expect(report.retrieval.fts_hits).toBe(0)
+    expect(report.citations.length).toBe(1)
+    expect(report.citations[0]!.block_id).toBe('gate-hi')
+  })
+
+  test('≤2 字中文跳过语义路，无词法则 0 引用', async () => {
+    const { getRuntime } = await import('../services/aiRuntime')
+    getRuntime().setFetchImpl((async () =>
+      new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }), { status: 200 })) as unknown as typeof fetch)
+
+    const nb = crypto.randomUUID()
+    getDb().query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    const junk = seedBlock({ id: 'gate-cjk', notebookId: nb, content: '测试 2 视觉验证' })
+    await upsertVector(junk.id, new Float64Array([1, 0]))
+
+    const ungated = await hybridSearch({ query: '中二', topK: 10 })
+    expect(ungated.retrieval.semantic_hits).toBeGreaterThan(0)
+
+    const gated = await hybridSearch({ query: '中二', topK: 10, precisionGate: true })
+    expect(gated.retrieval.semantic_hits).toBe(0)
+    expect(gated.citations.length).toBe(0)
   })
 })
 

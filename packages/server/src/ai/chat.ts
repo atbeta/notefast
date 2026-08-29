@@ -171,6 +171,7 @@ async function executeToolCall(
       includeArchived: args.include_archived === true,
       // RAG 场景放宽多样性上限：同文档连续段落对回答有价值
       maxPerDoc: 3,
+      precisionGate: true,
     })
     return {
       content: JSON.stringify({
@@ -447,6 +448,7 @@ export async function* runChat(opts: RunChatOptions): AsyncGenerator<ChatEvent> 
         // 首检索默认开查询理解：延迟摊进 chat 等待，失败则降级普通检索
         understandQuery: true,
         understandLang: lang,
+        precisionGate: true,
       })
     } catch (e) {
       initialReport = emptyHybridReport()
