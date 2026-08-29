@@ -125,7 +125,7 @@ export default function ResourcesPage() {
     return () => { cancelled = true }
   }, [previewId])
 
-  /** 单图触发上传：成功刷新列表，失败 toast 显示原因（含未启用自动上传） */
+  /** 单图触发上传：成功刷新列表，失败 toast 显示原因（含命令未配置） */
   async function handleUpload(item: AssetListItem) {
     if (uploadingIds.has(item.id)) return
     setUploadingIds((prev) => new Set(prev).add(item.id))

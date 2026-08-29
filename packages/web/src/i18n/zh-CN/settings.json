@@ -85,11 +85,11 @@
       "systemHint": "随 OS 自动切换"
     },
     "imageUpload": {
-      "description": "图片始终先本地存储；开启「自动上传」后，上传图片时异步调用外部命令（PicGo / upgit / picfast CLI / 任意脚本）传到图床，失败自动回退本地，不影响编辑。",
-      "modeOff": "不处理（默认）",
-      "modeOffHint": "图片仅本地存储，与现状一致",
+      "description": "图片始终先本地存储。图床命令可单独配置：关闭自动上传时仍能在资源页或图片上手动上传；开启后粘贴时会异步传到图床，失败仍留本地。",
+      "modeOff": "仅手动上传",
+      "modeOffHint": "粘贴/导入只存本地；可在资源页或图片上点上传",
       "modeAuto": "自动上传图床",
-      "modeAutoHint": "本地存储 + 异步上传，失败回退本地",
+      "modeAutoHint": "粘贴时异步传到图床，失败仍留本地",
       "command": "上传命令",
       "commandHint": "可执行名（PATH 内）或绝对路径；图片路径会自动追加在参数最后",
       "args": "参数（空格分隔）",

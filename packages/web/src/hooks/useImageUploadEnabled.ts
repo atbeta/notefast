@@ -1,15 +1,16 @@
 /**
- * 图床上传是否可用（mode=auto 且命令非空）
+ * 图床手动上传是否可用（命令非空，与是否自动上传无关）
  *
  * 与 useAiCapabilities 同形：单例 + useSyncExternalStore。
- * 未配置时资源页 / 阅读态不应露出「上传到图床」入口（点了必 400）。
+ * 未配置命令时资源页 / 阅读态不应露出「上传到图床」入口（点了必 400）。
  */
 
 import { useSyncExternalStore } from 'react'
+import { hasImageUploadCommand } from '@notefast/core'
 import { api } from './useAPI'
 
 export type ImageUploadEnabledSnapshot = {
-  /** 可触发实际上传（设置页已开自动上传且填了命令） */
+  /** 可触发手动上传（设置页已填图床命令） */
   enabled: boolean
   /** 首探完成（失败也算 ready，按未启用处理） */
   ready: boolean
@@ -25,9 +26,9 @@ function emit(): void {
   listeners.forEach((l) => l())
 }
 
-/** 与服务端 uploadSingleAsset / upload-missing 门槛对齐 */
+/** 与服务端 uploadSingleAsset / upload-missing 门槛对齐（只看命令） */
 export function isImageUploadConfigured(cfg: { mode?: string; command?: string }): boolean {
-  return cfg.mode === 'auto' && Boolean(cfg.command?.trim())
+  return hasImageUploadCommand(cfg)
 }
 
 async function fetchConfig(): Promise<void> {

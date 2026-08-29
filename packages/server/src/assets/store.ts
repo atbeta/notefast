@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { getDb } from '../db'
 import { getChangesAnchor, contentRevisionToken } from '../store/changeFeed'
-import type { ImageUploadConfig } from '@notefast/core'
+import { hasImageUploadCommand, isImageUploadAuto, type ImageUploadConfig } from '@notefast/core'
 import { extForMime, mimeForExt } from '../sync/archiveMedia'
 
 export const ASSET_REF_PREFIX = 'asset:'
@@ -127,12 +127,12 @@ export function getAssetUploadStatus(ids: string[]): Record<string, { remote: bo
 
 /**
  * 单图触发上传（同步等待结果，供 hover 徽章点击用）。
- * 返回结果并写回 assets 表；未启用自动上传 / 命令为空时返回错误。
+ * 返回结果并写回 assets 表；图床命令未配置时返回错误（与是否自动上传无关）。
  */
 export async function uploadSingleAsset(id: string): Promise<UploadCommandOutcome> {
   const cfg = uploadConfig
-  if (!cfg || cfg.mode !== 'auto' || !cfg.command.trim()) {
-    return { ok: false, error: '未启用自动上传或命令为空（设置 → 图床与图片）' }
+  if (!hasImageUploadCommand(cfg)) {
+    return { ok: false, error: '图床命令未配置（设置 → 图床与图片）' }
   }
   const srcPath = join(mediaDir, id)
   if (!existsSync(srcPath)) {
@@ -150,7 +150,7 @@ export async function uploadSingleAsset(id: string): Promise<UploadCommandOutcom
  */
 export function maybeUploadToRemote(id: string): void {
   const cfg = uploadConfig
-  if (!cfg || cfg.mode !== 'auto' || !cfg.command.trim()) return
+  if (!isImageUploadAuto(cfg)) return
   const srcPath = join(mediaDir, id)
   if (!existsSync(srcPath)) return
   void (async () => {
@@ -217,7 +217,7 @@ export function getUploadBatchStatus(): UploadBatchStatus {
 export function uploadMissingAssets(): { queued: number; running: boolean } {
   if (batchStatus.running) return { queued: 0, running: true }
   const cfg = uploadConfig
-  if (!cfg || cfg.mode !== 'auto' || !cfg.command.trim()) return { queued: 0, running: false }
+  if (!hasImageUploadCommand(cfg)) return { queued: 0, running: false }
   const ids = (getDb().query('SELECT id FROM assets WHERE remote_url IS NULL').all() as Array<{ id: string }>)
     .map((r) => r.id)
   if (ids.length === 0) return { queued: 0, running: false }

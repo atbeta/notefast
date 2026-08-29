@@ -32,7 +32,7 @@ import {
   uploadSingleAsset,
   findReferencingDocs,
 } from '../assets/store'
-import { imageUploadConfigSchema, type ImageUploadConfigInput } from '@notefast/core'
+import { hasImageUploadCommand, imageUploadConfigSchema, type ImageUploadConfigInput } from '@notefast/core'
 import {
   applyImageUploadConfig,
   getImageUploadPublicConfig,
@@ -115,8 +115,8 @@ assets.put('/upload-config', zValidator('json', imageUploadConfigSchema), async 
  */
 assets.post('/upload-config/test', async (c) => {
   const cfg = getImageUploadConfig()
-  if (cfg.mode !== 'auto' || !cfg.command.trim()) {
-    return c.json({ ok: false, error: '未启用自动上传或命令为空' }, 400)
+  if (!hasImageUploadCommand(cfg)) {
+    return c.json({ ok: false, error: '图床命令未配置' }, 400)
   }
   // 1×1 红色 PNG
   const png = Buffer.from(
@@ -142,12 +142,12 @@ assets.post('/upload-config/test', async (c) => {
 
 /**
  * 存量图片补传：remote_url IS NULL 的全部 assets 串行上传（后台队列）。
- * 未启用自动上传 → 400；已在跑 → 返回 running。
+ * 图床命令未配置 → 400；已在跑 → 返回 running。与是否自动上传无关。
  */
 assets.post('/upload-missing', async (c) => {
   const cfg = getImageUploadConfig()
-  if (cfg.mode !== 'auto' || !cfg.command.trim()) {
-    return c.json({ error: 'bad_request', message: '未启用自动上传或命令为空' }, 400)
+  if (!hasImageUploadCommand(cfg)) {
+    return c.json({ error: 'bad_request', message: '图床命令未配置' }, 400)
   }
   return c.json(uploadMissingAssets())
 })

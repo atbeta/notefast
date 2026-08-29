@@ -85,11 +85,11 @@
       "systemHint": "Automatically switch with OS"
     },
     "imageUpload": {
-      "description": "Images are always stored locally first. With “Auto-upload”, each upload also asynchronously invokes an external command (PicGo / upgit / picfast CLI / any script) to push the image to a hosting service; failures fall back to local storage without affecting editing.",
-      "modeOff": "Do nothing (default)",
-      "modeOffHint": "Local-only storage, same as today",
+      "description": "Images are always stored locally first. Configure the hosting command independently of auto-upload: with auto-upload off you can still upload from the library or an image. With it on, pasting also uploads asynchronously; failures stay local.",
+      "modeOff": "Manual only",
+      "modeOffHint": "Paste and import stay local; upload from the library or an image when you want",
       "modeAuto": "Auto-upload to image host",
-      "modeAutoHint": "Local storage + async upload, falls back on failure",
+      "modeAutoHint": "Also uploads asynchronously on paste; failures stay local",
       "command": "Upload command",
       "commandHint": "Executable name (on PATH) or absolute path; the image path is appended as the last argument",
       "args": "Arguments (space-separated)",

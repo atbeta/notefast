@@ -2,6 +2,8 @@ import { describe, test, expect } from 'bun:test'
 import {
   DEFAULT_IMAGE_UPLOAD_TIMEOUT_MS,
   emptyImageUploadConfig,
+  hasImageUploadCommand,
+  isImageUploadAuto,
   mergeImageUploadConfig,
 } from '../imageUpload'
 
@@ -49,5 +51,14 @@ describe('imageUpload config', () => {
     expect(next.command).toBe('picgo')
     expect(next.args).toEqual(['-c', 'x'])
     expect(next.timeoutMs).toBe(5000)
+  })
+
+  test('hasImageUploadCommand 只看命令；isImageUploadAuto 还要 mode=auto', () => {
+    expect(hasImageUploadCommand({ command: 'picfast' })).toBe(true)
+    expect(hasImageUploadCommand({ command: '  ' })).toBe(false)
+    expect(hasImageUploadCommand(null)).toBe(false)
+    expect(isImageUploadAuto({ mode: 'off', command: 'picfast' })).toBe(false)
+    expect(isImageUploadAuto({ mode: 'auto', command: 'picfast' })).toBe(true)
+    expect(isImageUploadAuto({ mode: 'auto', command: '' })).toBe(false)
   })
 })

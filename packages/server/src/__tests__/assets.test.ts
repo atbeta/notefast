@@ -574,7 +574,7 @@ describe('AssetStore — 图床命令容错与错误可见性', () => {
     expect(cfg.last_error?.message ?? null).toBe(err)
   })
 
-  test('测试端点：命令可用返回 URL；未启用自动上传 → 400', async () => {
+  test('测试端点：命令可用返回 URL；mode=off 仍可测；命令为空 → 400', async () => {
     // API 层读 services 配置（applyImageUploadConfig），store 层用于上传路径——两层同步设置
     applyImageUploadConfig({
       mode: 'auto',
@@ -592,7 +592,12 @@ describe('AssetStore — 图床命令容错与错误可见性', () => {
     applyImageUploadConfig({ mode: 'off' })
     setImageUploadConfig(getImageUploadConfig())
     const offRes = await app.fetch(new Request('http://localhost/api/v1/assets/upload-config/test', { method: 'POST' }))
-    expect(offRes.status).toBe(400)
+    expect(offRes.status).toBe(200)
+
+    applyImageUploadConfig({ mode: 'off', command: '' })
+    setImageUploadConfig(getImageUploadConfig())
+    const emptyRes = await app.fetch(new Request('http://localhost/api/v1/assets/upload-config/test', { method: 'POST' }))
+    expect(emptyRes.status).toBe(400)
   })
 
   afterAll(() => {
@@ -605,7 +610,7 @@ describe('AssetStore — 存量图片批量补传', () => {
     const { getDb } = await import('../db')
     const db = getDb()
     applyImageUploadConfig({
-      mode: 'auto',
+      mode: 'off',
       command: process.execPath,
       args: ['-e', 'console.log("https://img.example.test/batch.png")'],
       timeoutMs: 5_000,
@@ -636,8 +641,8 @@ describe('AssetStore — 存量图片批量补传', () => {
     expect(rowA.remote_url).toBe('https://img.example.test/batch.png')
   })
 
-  test('未启用自动上传 → 400；重复触发返回 running', async () => {
-    applyImageUploadConfig({ mode: 'off' })
+  test('图床命令为空 → 400；重复触发返回 running', async () => {
+    applyImageUploadConfig({ mode: 'off', command: '' })
     setImageUploadConfig(getImageUploadConfig())
     const off = await app.fetch(new Request('http://localhost/api/v1/assets/upload-missing', { method: 'POST' }))
     expect(off.status).toBe(400)
@@ -733,15 +738,16 @@ describe('AssetStore — 单图状态与单图上传', () => {
     expect(body.deadbeef).toBeUndefined()
   })
 
-  test('POST /assets/:id/upload 同步上传单图；未启用自动上传 → 400', async () => {
+  test('POST /assets/:id/upload 同步上传单图；mode=off 仍可手动传；命令为空 → 400', async () => {
     applyImageUploadConfig({
-      mode: 'auto',
+      mode: 'off',
       command: process.execPath,
       args: ['-e', 'console.log("https://img.example.test/single2.png")'],
       timeoutMs: 5_000,
     })
     setImageUploadConfig(getImageUploadConfig())
     const { meta } = saveAsset(Buffer.from([8, 8, 8, 8]), 'image/png')
+    expect(getAssetRemoteUrl(meta.id)).toBeNull()
 
     const ok = await app.fetch(new Request(`http://localhost/api/v1/assets/${meta.id}/upload`, { method: 'POST' }))
     expect(ok.status).toBe(200)
@@ -750,10 +756,10 @@ describe('AssetStore — 单图状态与单图上传', () => {
     expect(body.url).toBe('https://img.example.test/single2.png')
     expect(getAssetRemoteUrl(meta.id)).toBe('https://img.example.test/single2.png')
 
-    applyImageUploadConfig({ mode: 'off' })
+    applyImageUploadConfig({ mode: 'off', command: '' })
     setImageUploadConfig(getImageUploadConfig())
-    const off = await app.fetch(new Request(`http://localhost/api/v1/assets/${meta.id}/upload`, { method: 'POST' }))
-    expect(off.status).toBe(400)
+    const empty = await app.fetch(new Request(`http://localhost/api/v1/assets/${meta.id}/upload`, { method: 'POST' }))
+    expect(empty.status).toBe(400)
   })
 
   afterAll(() => {

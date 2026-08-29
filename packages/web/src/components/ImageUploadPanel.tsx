@@ -26,8 +26,8 @@ interface UploadTestResult {
 /**
  * 图床上传设置（Typora 式命令契约）
  *
- * 图片始终先本地存储（内容寻址）；mode=auto 时异步 spawn 外部命令
- * （PicGo / upgit / picfast CLI / 任意脚本）传到图床，失败静默降级本地。
+ * 图片始终先本地存储（内容寻址）。命令配置与自动上传拆开：
+ * 填了命令即可测试 / 手动上传；mode=auto 时粘贴再异步 spawn 外部命令。
  * 命令契约：command [args...] <图片路径> → stdout 每行一个 http(s) URL。
  */
 export default function ImageUploadPanel() {
@@ -80,7 +80,7 @@ export default function ImageUploadPanel() {
   }
 
   const handleTest = async () => {
-    if (mode !== 'auto' || !command.trim()) return
+    if (!command.trim()) return
     setTesting(true)
     setTestResult(null)
     try {
@@ -103,7 +103,7 @@ export default function ImageUploadPanel() {
         {t('settings.imageUpload.description')}
       </p>
 
-      {/* 模式选择：不处理 / 自动上传（选中样式与 SyncPanel 双卡片选择器对齐） */}
+      {/* 自动上传开关：命令区始终可见，与是否自动上传无关 */}
       <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
@@ -131,104 +131,100 @@ export default function ImageUploadPanel() {
         </button>
       </div>
 
-      {mode === 'auto' && (
-        <div className="space-y-3 rounded-lg border border-border bg-muted/25 p-3.5">
+      <div className="space-y-3 rounded-lg border border-border bg-muted/25 p-3.5">
+        <div>
+          <label htmlFor="iu-command" className="text-sm font-medium text-muted-foreground block mb-1">
+            {t('settings.imageUpload.command')}
+          </label>
+          <Input
+            id="iu-command"
+            value={command}
+            onChange={(e) => setCommand(e.target.value)}
+            placeholder="picgo upload / picfast upload / /path/to/script"
+            mono
+            spellCheck={false}
+          />
+          <p className="text-xs text-muted-foreground/70 mt-1">{t('settings.imageUpload.commandHint')}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label htmlFor="iu-command" className="text-sm font-medium text-muted-foreground block mb-1">
-              {t('settings.imageUpload.command')}
+            <label htmlFor="iu-args" className="text-sm font-medium text-muted-foreground block mb-1">
+              {t('settings.imageUpload.args')}
             </label>
             <Input
-              id="iu-command"
-              value={command}
-              onChange={(e) => setCommand(e.target.value)}
-              placeholder="picgo upload / picfast upload / /path/to/script"
+              id="iu-args"
+              value={argsText}
+              onChange={(e) => setArgsText(e.target.value)}
+              placeholder="-c /path/to/config"
               mono
               spellCheck={false}
             />
-            <p className="text-xs text-muted-foreground/70 mt-1">{t('settings.imageUpload.commandHint')}</p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="iu-args" className="text-sm font-medium text-muted-foreground block mb-1">
-                {t('settings.imageUpload.args')}
-              </label>
-              <Input
-                id="iu-args"
-                value={argsText}
-                onChange={(e) => setArgsText(e.target.value)}
-                placeholder="-c /path/to/config"
-                mono
-                spellCheck={false}
-              />
-            </div>
-            <div>
-              <label htmlFor="iu-timeout" className="text-sm font-medium text-muted-foreground block mb-1">
-                {t('settings.imageUpload.timeout')}
-              </label>
-              <Input
-                id="iu-timeout"
-                type="number"
-                min={1}
-                max={300}
-                value={timeoutSec}
-                onChange={(e) => setTimeoutSec(Number(e.target.value) || 30)}
-                mono
-              />
-            </div>
+          <div>
+            <label htmlFor="iu-timeout" className="text-sm font-medium text-muted-foreground block mb-1">
+              {t('settings.imageUpload.timeout')}
+            </label>
+            <Input
+              id="iu-timeout"
+              type="number"
+              min={1}
+              max={300}
+              value={timeoutSec}
+              onChange={(e) => setTimeoutSec(Number(e.target.value) || 30)}
+              mono
+            />
           </div>
-          <p className="text-xs text-muted-foreground/70 leading-relaxed">
-            {t('settings.imageUpload.contractHint')}
-          </p>
-
-          {lastError && (
-            <div className="rounded-md border border-destructive/30 bg-destructive/8 px-3 py-2">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-xs font-medium text-destructive mb-0.5">{t('settings.imageUpload.lastError')}</p>
-                <button
-                  type="button"
-                  onClick={() => setLastError(null)}
-                  className="text-muted-foreground/60 hover:text-foreground transition-colors shrink-0"
-                  aria-label={t('common.close')}
-                >
-                  <X className="w-3.5 h-3.5" strokeWidth={1.75} />
-                </button>
-              </div>
-              <p className="text-xs text-destructive/90 break-all leading-relaxed">{lastError.message}</p>
-              <p className="text-2xs text-muted-foreground/70 mt-0.5">{new Date(lastError.at).toLocaleString()}</p>
-            </div>
-          )}
-
-          {testResult && (
-            <div className={`rounded-md border px-3 py-2 text-xs leading-relaxed ${
-              testResult.ok ? 'border-success/30 bg-success-soft text-success' : 'border-destructive/30 bg-destructive-soft text-destructive/90'
-            }`}>
-              {testResult.ok && testResult.url ? (
-                <p>{t('settings.imageUpload.testOk', { url: testResult.url })}</p>
-              ) : (
-                <>
-                  <p className="font-medium">{t('settings.imageUpload.testFailed')}</p>
-                  {testResult.error && <p className="break-all mt-0.5">{testResult.error}</p>}
-                  {testResult.stderr && <pre className="whitespace-pre-wrap break-all mt-1 text-2xs opacity-90 max-h-24 overflow-y-auto">{testResult.stderr}</pre>}
-                  {testResult.stdout && <pre className="whitespace-pre-wrap break-all mt-1 text-2xs opacity-80 max-h-24 overflow-y-auto">{testResult.stdout}</pre>}
-                  {testResult.exit_code != null && <p className="mt-0.5 opacity-80">{t('settings.imageUpload.exitCode', { code: testResult.exit_code })}</p>}
-                </>
-              )}
-            </div>
-          )}
         </div>
-      )}
+        <p className="text-xs text-muted-foreground/70 leading-relaxed">
+          {t('settings.imageUpload.contractHint')}
+        </p>
+
+        {lastError && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/8 px-3 py-2">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-xs font-medium text-destructive mb-0.5">{t('settings.imageUpload.lastError')}</p>
+              <button
+                type="button"
+                onClick={() => setLastError(null)}
+                className="text-muted-foreground/60 hover:text-foreground transition-colors shrink-0"
+                aria-label={t('common.close')}
+              >
+                <X className="w-3.5 h-3.5" strokeWidth={1.75} />
+              </button>
+            </div>
+            <p className="text-xs text-destructive/90 break-all leading-relaxed">{lastError.message}</p>
+            <p className="text-2xs text-muted-foreground/70 mt-0.5">{new Date(lastError.at).toLocaleString()}</p>
+          </div>
+        )}
+
+        {testResult && (
+          <div className={`rounded-md border px-3 py-2 text-xs leading-relaxed ${
+            testResult.ok ? 'border-success/30 bg-success-soft text-success' : 'border-destructive/30 bg-destructive-soft text-destructive/90'
+          }`}>
+            {testResult.ok && testResult.url ? (
+              <p>{t('settings.imageUpload.testOk', { url: testResult.url })}</p>
+            ) : (
+              <>
+                <p className="font-medium">{t('settings.imageUpload.testFailed')}</p>
+                {testResult.error && <p className="break-all mt-0.5">{testResult.error}</p>}
+                {testResult.stderr && <pre className="whitespace-pre-wrap break-all mt-1 text-2xs opacity-90 max-h-24 overflow-y-auto">{testResult.stderr}</pre>}
+                {testResult.stdout && <pre className="whitespace-pre-wrap break-all mt-1 text-2xs opacity-80 max-h-24 overflow-y-auto">{testResult.stdout}</pre>}
+                {testResult.exit_code != null && <p className="mt-0.5 opacity-80">{t('settings.imageUpload.exitCode', { code: testResult.exit_code })}</p>}
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center justify-end gap-2">
-        {mode === 'auto' && (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => void handleTest()}
-            disabled={testing || !command.trim()}
-          >
-            {testing ? t('common.loading') : t('settings.imageUpload.test')}
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => void handleTest()}
+          disabled={testing || !command.trim()}
+        >
+          {testing ? t('common.loading') : t('settings.imageUpload.test')}
+        </Button>
         <Button
           type="button"
           onClick={() => void handleSave()}
