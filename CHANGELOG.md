@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.84.0](https://github.com/atbeta/notefast/compare/v0.83.0...v0.84.0) (2026-08-29)
+
+
+### Features
+
+* **assets:** allow manual image-host upload without auto mode ([ad62223](https://github.com/atbeta/notefast/commit/ad62223e7272556d3dba689c593616f5e82c92a3))
+
+
+### Bug Fixes
+
+* **ai:** drop ungrounded chat citations from semantic neighbors ([32068d2](https://github.com/atbeta/notefast/commit/32068d2cae975cbde0a996e10edca221ae6834a8))
+* **assets:** show basename and absolute media path ([acad601](https://github.com/atbeta/notefast/commit/acad60103b349f053c46803e424ba84d4a99c2c5))
+
+
+### Performance Improvements
+
+* **import:** keep the event loop alive during archive import ([8549695](https://github.com/atbeta/notefast/commit/8549695b330030dbb373f71f43e83be1b2e0f48d))
+
 ## [0.83.0](https://github.com/atbeta/notefast/compare/v0.82.0...v0.83.0) (2026-08-28)
 
 
