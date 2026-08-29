@@ -3,7 +3,7 @@ import { zValidator } from '@hono/zod-validator'
 import { createHash } from 'node:crypto'
 import { importMarkdownSchema, rowToBlock, readDocStatus, readTags } from '@notefast/core'
 import { getDb } from '../db'
-import { findDocIdBySource, getBlockById, getBlocksByIds, updateBlock } from '../store/blocks'
+import { findDocIdBySource, getBlockById, getBlocksByIds, getLiveDocById, updateBlock } from '../store/blocks'
 import { fireAfterCreate, fireAfterCreateMany, fireDocAfterCreate } from '../services/hooks'
 import { emitAppEvent } from '../events'
 import { scheduleSyncNow } from '../sync/protocolManager'
@@ -16,7 +16,15 @@ import {
   normalizeMarkdownFileContent,
 } from '../services/docFileImport'
 import { MAX_MARKDOWN_IMPORT_BYTES } from '../services/markdownStage'
-import { MAX_ARCHIVE_IMPORT_BYTES, importArchiveZip } from '../services/zipImport'
+import {
+  MAX_ARCHIVE_IMPORT_BYTES,
+  finishZipImport,
+  getZipImportStatus,
+  importArchiveZip,
+  patchZipImportStatus,
+  tryBeginZipImport,
+} from '../services/zipImport'
+import { pauseShadowWrites, resumeShadowWrites, writeShadowDoc } from '../services/shadowMarkdown'
 import { convertDocxToMarkdown, DocxConvertError } from '../services/docxImport'
 import { scheduleDocIndex } from '../ai/indexJobs'
 
@@ -321,9 +329,12 @@ function resolveNotebookId(raw: unknown): string | null {
   return row?.id ?? null
 }
 
+/** 存档导入进度（内存态）；前端在 POST /zip 进行中轮询，避免长时间无反馈 */
+importRouter.get('/zip-status', (c) => c.json(getZipImportStatus()))
+
 /**
  * 导入 zip 存档：自家导出档（manifest 精确还原）或通用 md/txt/docx zip。
- * 入库后为新文档触发索引与 hooks（autolink / 实体抽取等）。
+ * 响应形状不变。导入循环会让出事件循环，并更新 GET /zip-status。
  */
 importRouter.post('/zip', async (c) => {
   const body = await c.req.parseBody({ all: true })
@@ -348,26 +359,54 @@ importRouter.post('/zip', async (c) => {
     return c.json({ error: 'bad_request', message: '未找到可用的笔记本' }, 400)
   }
 
-  let result: Awaited<ReturnType<typeof importArchiveZip>>
-  try {
-    result = await importArchiveZip(getDb(), { notebookId, bytes: new Uint8Array(buf) })
-  } catch (e) {
-    return c.json({ error: 'bad_request', message: e instanceof Error ? e.message : String(e) }, 400)
+  if (!tryBeginZipImport()) {
+    return c.json({ error: 'import_busy', message: '已有存档导入正在进行' }, 409)
   }
 
-  // 新文档触发索引与 hooks（fire-and-forget，量级与单篇导入一致）
+  pauseShadowWrites()
+  let result: Awaited<ReturnType<typeof importArchiveZip>>
+  try {
+    try {
+      result = await importArchiveZip(getDb(), { notebookId, bytes: new Uint8Array(buf) })
+    } catch (e) {
+      finishZipImport({ error: e instanceof Error ? e.message : String(e) })
+      return c.json({ error: 'bad_request', message: e instanceof Error ? e.message : String(e) }, 400)
+    }
+
+    // 文档级 hook + 整篇索引；不逐子块 afterCreate（AutoLink 风暴会再卡一轮事件循环）
+    patchZipImportStatus({ phase: 'hooks' })
+    const db = getDb()
+    for (let i = 0; i < result.importedDocs.length; i++) {
+      const doc = result.importedDocs[i]!
+      const docRow = getBlockById(db, doc.docId)
+      if (!docRow) continue
+      scheduleDocIndex(doc.docId, doc.blockIds)
+      fireAfterCreate(rowToBlock(docRow))
+      fireDocAfterCreate({
+        doc: rowToBlock(docRow),
+        meta: { status: 'note', tags: readTags(docRow), source: 'import' },
+      })
+      if (i % 4 === 0) await Bun.sleep(0)
+    }
+  } finally {
+    resumeShadowWrites()
+  }
   const db = getDb()
-  for (const doc of result.importedDocs) {
-    const docRow = getBlockById(db, doc.docId)
-    if (!docRow) continue
-    scheduleDocIndex(doc.docId, doc.blockIds)
-    fireAfterCreateMany(getBlocksByIds(db, doc.blockIds).map(rowToBlock))
-    fireDocAfterCreate({
-      doc: rowToBlock(docRow),
-      meta: { status: 'note', tags: readTags(docRow), source: 'import' },
-    })
+  for (let i = 0; i < result.importedDocs.length; i++) {
+    const live = getLiveDocById(db, result.importedDocs[i]!.docId)
+    if (live) writeShadowDoc(live)
+    if (i % 8 === 0) await Bun.sleep(0)
   }
   if (result.importedDocs.length > 0) scheduleSyncNow()
+
+  finishZipImport({
+    imported: result.imported,
+    skipped: result.skipped,
+    failed: result.failed,
+    media_imported: result.mediaImported,
+    done_docs: result.imported + result.skipped + result.failed,
+    error: null,
+  })
 
   return c.json({
     imported: result.imported,

@@ -66,6 +66,8 @@ interface ToastApi {
     msgs: { loading: string; success: string | ToastInput; error: string | ((e: unknown) => string | ToastInput) },
   ) => Promise<T>
   dismiss: (id: string) => void
+  /** 更新已有 toast（如 loading 标题改成进度） */
+  update: (id: string, patch: Partial<ToastInput & { variant: ToastVariant }>) => void
   /** 全清空 */
   clear: () => void
 }
@@ -188,6 +190,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         }
       },
       dismiss,
+      update,
       clear: () => {
         setToasts([])
         timersRef.current.forEach(clearTimeout)

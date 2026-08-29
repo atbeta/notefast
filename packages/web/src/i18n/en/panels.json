@@ -100,6 +100,9 @@
     "exportSavedTo": "Archive saved to {{path}}",
     "exportFailed": "Export failed",
     "importing": "Importing archive…",
+    "importingProgress": "Importing archive… {{done}}/{{total}}",
+    "importingMedia": "Importing images… {{n}}",
+    "importingHooks": "Finishing up…",
     "importDone": "Import complete: {{imported}} new, {{skipped}} skipped, {{failed}} failed",
     "importFailed": "Import failed"
   },

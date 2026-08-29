@@ -18,7 +18,7 @@ import importRouter from '../api/import'
 import exportArchive from '../api/exportArchive'
 import { buildZipStore, parseZip } from '../lib/zipStore'
 import { buildFullArchiveExport } from '../services/docExport'
-import { folderTagsFromZipPath, importArchiveZip } from '../services/zipImport'
+import { folderTagsFromZipPath, importArchiveZip, tryBeginZipImport, _resetZipImportStatusForTests } from '../services/zipImport'
 import { makeMinimalDocx } from './helpers/minimalDocx'
 
 let testDir: string
@@ -81,6 +81,7 @@ beforeEach(() => {
   db.query('DELETE FROM assets').run()
   db.query('DELETE FROM blocks').run()
   db.exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
+  _resetZipImportStatusForTests()
 })
 
 async function createDoc(title: string, markdown: string): Promise<string> {
@@ -117,12 +118,12 @@ async function setDocTags(id: string, tags: string[]): Promise<void> {
 }
 
 describe('parseZip', () => {
-  test('解析 buildZipStore 产出的 STORE zip', () => {
+  test('解析 buildZipStore 产出的 STORE zip', async () => {
     const buf = buildZipStore([
       { name: 'a.md', data: new TextEncoder().encode('# A') },
       { name: 'media/x.png', data: new Uint8Array(PNG_BYTES) },
     ])
-    const entries = parseZip(new Uint8Array(buf))
+    const entries = await parseZip(new Uint8Array(buf))
     expect(entries.length).toBe(2)
     expect(entries[0]!.name).toBe('a.md')
     expect(new TextDecoder().decode(entries[0]!.data)).toBe('# A')
@@ -130,17 +131,17 @@ describe('parseZip', () => {
     expect(Buffer.from(entries[1]!.data).equals(PNG_BYTES)).toBe(true)
   })
 
-  test('解析 DEFLATE 压缩条目', () => {
+  test('解析 DEFLATE 压缩条目', async () => {
     const data = new TextEncoder().encode('deflated content 压缩内容')
     const deflated = Bun.deflateSync(data)
     const entry = deflateZipEntry('note.md', deflated, data)
-    const entries = parseZip(new Uint8Array(entry))
+    const entries = await parseZip(new Uint8Array(entry))
     expect(entries.length).toBe(1)
     expect(entries[0]!.name).toBe('note.md')
     expect(new TextDecoder().decode(entries[0]!.data)).toBe(new TextDecoder().decode(data))
   })
 
-  test('Windows 中文 zip：GBK 文件名（无 UTF-8 flag）正确解码，不再乱码', () => {
+  test('Windows 中文 zip：GBK 文件名（无 UTF-8 flag）正确解码，不再乱码', async () => {
     // 模拟 WinRAR/7-Zip/Windows 自带压缩：文件名是 GBK 字节且 general flag 无 bit 11。
     // 旧实现统一 UTF-8 解码 → 「测试笔记」变「���Աʼ�」。修复后先严格 UTF-8（失败）
     // 回退 GBK（Bun 原生支持），ASCII 子集不受影响。
@@ -148,23 +149,23 @@ describe('parseZip', () => {
     const content = new TextEncoder().encode('# 测试标题\n内容')
     const zip = buildRawNameZip(Uint8Array.from(gbk), content, 0 /* 不置 UTF-8 bit */)
 
-    const entries = parseZip(zip)
+    const entries = await parseZip(zip)
     expect(entries.length).toBe(1)
     expect(entries[0]!.name).toBe('测试笔记.md')
     expect(new TextDecoder().decode(entries[0]!.data)).toBe('# 测试标题\n内容')
   })
 
-  test('未置 UTF-8 flag 但内容恰为合法 UTF-8 字节：仍按 UTF-8 解码（严格回退不误伤）', () => {
+  test('未置 UTF-8 flag 但内容恰为合法 UTF-8 字节：仍按 UTF-8 解码（严格回退不误伤）', async () => {
     // 某些工具（macOS 压缩、部分在线工具）不置 bit 11 但存了 UTF-8 字节；
     // decodeLegacyName 先严格 UTF-8 成功即用，不会错误地丢给 GBK。
     const utf8 = new TextEncoder().encode('中文名.md')
     const zip = buildRawNameZip(utf8, new TextEncoder().encode('正文'), 0)
-    const entries = parseZip(zip)
+    const entries = await parseZip(zip)
     expect(entries[0]!.name).toBe('中文名.md')
   })
 
-  test('空/非 zip 输入抛错', () => {
-    expect(() => parseZip(new Uint8Array([1, 2, 3]))).toThrow()
+  test('空/非 zip 输入抛错', async () => {
+    await expect(parseZip(new Uint8Array([1, 2, 3]))).rejects.toThrow()
   })
 })
 
@@ -177,7 +178,7 @@ describe('buildFullArchiveExport', () => {
     const file = buildFullArchiveExport()
     expect(file.filename).toMatch(/^notefast-export-.*\.zip$/)
 
-    const entries = parseZip(file.body)
+    const entries = await parseZip(file.body)
     const names = entries.map((e) => e.name)
     expect(names).toContain('notefast-archive.manifest.json')
     expect(names.some((n) => n.startsWith('untagged/') && n.includes(docA.replace(/-/g, '').slice(0, 12)))).toBe(true)
@@ -203,7 +204,7 @@ describe('buildFullArchiveExport', () => {
     const untagged = await createDoc('未分类', '正文')
     await setDocTags(tagged, ['work', 'ai'])
 
-    const entries = parseZip(buildFullArchiveExport().body)
+    const entries = await parseZip(buildFullArchiveExport().body)
     const names = entries.filter((e) => e.name.endsWith('.md')).map((e) => e.name)
     const shortTagged = tagged.replace(/-/g, '').slice(0, 12)
     const shortUntagged = untagged.replace(/-/g, '').slice(0, 12)
@@ -224,7 +225,7 @@ describe('buildFullArchiveExport', () => {
     expect(res.headers.get('Content-Type')).toBe('application/zip')
     expect(res.headers.get('Content-Disposition')).toContain('attachment')
     const body = await res.arrayBuffer()
-    expect(parseZip(new Uint8Array(body)).length).toBeGreaterThan(0)
+    expect((await parseZip(new Uint8Array(body))).length).toBeGreaterThan(0)
   })
 })
 
@@ -525,6 +526,62 @@ describe('importArchiveZip', () => {
     const body = await res.json() as { imported: number; skipped: number }
     expect(body.imported).toBe(1)
     expect(body.skipped).toBe(0)
+  })
+
+  test('GET /import/zip-status：导入完成后 phase=done，计数与 POST 一致', async () => {
+    await createDoc('进度文档', '正文')
+    const exported = buildFullArchiveExport()
+    getDb().query('DELETE FROM blocks').run()
+    getDb().exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
+
+    const form = new FormData()
+    form.append('file', new File([new Uint8Array(exported.body)], 'export.zip'))
+    form.append('notebook_id', notebookId)
+    const res = await app.fetch(new Request('http://localhost/api/v1/import/zip', { method: 'POST', body: form }))
+    expect(res.status).toBe(200)
+    const body = await res.json() as { imported: number; skipped: number; failed: number; media_imported: number }
+
+    const statusRes = await app.fetch(new Request('http://localhost/api/v1/import/zip-status'))
+    expect(statusRes.status).toBe(200)
+    const status = await statusRes.json() as {
+      running: boolean
+      phase: string
+      imported: number
+      skipped: number
+      failed: number
+      media_imported: number
+    }
+    expect(status.running).toBe(false)
+    expect(status.phase).toBe('done')
+    expect(status.imported).toBe(body.imported)
+    expect(status.skipped).toBe(body.skipped)
+    expect(status.failed).toBe(body.failed)
+    expect(status.media_imported).toBe(body.media_imported)
+  })
+
+  test('已有导入在跑 → POST /import/zip 返回 409 import_busy', async () => {
+    expect(tryBeginZipImport()).toBe(true)
+    const form = new FormData()
+    form.append('file', new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04])], 'x.zip'))
+    form.append('notebook_id', notebookId)
+    const res = await app.fetch(new Request('http://localhost/api/v1/import/zip', { method: 'POST', body: form }))
+    expect(res.status).toBe(409)
+    const body = await res.json() as { error: string }
+    expect(body.error).toBe('import_busy')
+  })
+
+  test('importArchiveZip onProgress 覆盖 parsing / docs 阶段', async () => {
+    const zip = buildZipStore([{ name: 'a.md', data: new TextEncoder().encode('# A\n\n正文') }])
+    const phases: string[] = []
+    const result = await importArchiveZip(getDb(), {
+      notebookId,
+      bytes: new Uint8Array(zip),
+      onProgress: (p) => { phases.push(p.phase) },
+    })
+    expect(result.imported).toBe(1)
+    expect(phases).toContain('parsing')
+    expect(phases).toContain('docs')
+    expect(phases.at(-1)).toBe('docs')
   })
 })
 

@@ -9,6 +9,7 @@ import { useStorageLocations } from '../hooks/useStorageLocations'
 import { ActionButton, Button, Tooltip, useToast, Toggle } from './ui'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
 import { formatIsoDateTime } from '../lib/time'
+import { useZipImportProgress, zipImportProgressLabel } from '../hooks/useZipImportProgress'
 
 interface SyncRuntimeStatus {
   configured: boolean
@@ -117,6 +118,8 @@ export default function SyncPanel() {
   const importRef = useRef<HTMLInputElement>(null)
   const [busyExport, setBusyExport] = useState(false)
   const [busyImport, setBusyImport] = useState(false)
+  const importToastId = useRef<string | null>(null)
+  const zipProgress = useZipImportProgress(busyImport)
   const handleExportArchive = async () => {
     setBusyExport(true)
     try {
@@ -143,11 +146,24 @@ export default function SyncPanel() {
     }
   }
 
+  useEffect(() => {
+    if (!busyImport || !importToastId.current) return
+    toast.update(importToastId.current, {
+      title: zipImportProgressLabel(t, zipProgress, {
+        idle: 'sync.importing',
+        progress: 'sync.importingProgress',
+        media: 'sync.importingMedia',
+        hooks: 'sync.importingHooks',
+      }),
+    })
+  }, [busyImport, zipProgress, t, toast])
+
   const handleImportArchiveFile = async (file: File) => {
     setBusyImport(true)
     const form = new FormData()
     form.append('file', file)
     const id = toast.loading({ title: t('sync.importing') })
+    importToastId.current = id
     try {
       const res = await fetchWithAuth('/import/zip', { method: 'POST', body: form })
       if (!res.ok) {
@@ -161,6 +177,7 @@ export default function SyncPanel() {
       toast.dismiss(id)
       toast.error({ title: t('sync.importFailed'), description: e instanceof Error ? e.message : String(e) })
     } finally {
+      importToastId.current = null
       setBusyImport(false)
     }
   }

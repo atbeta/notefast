@@ -12,6 +12,7 @@ import { ArchiveFolderCue } from '../components/TagEditor'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
 import { Button, Textarea, Tooltip, useToast } from '../components/ui'
 import { classifyImportDrop, missingLocalImagesForImport } from '../lib/importDrop'
+import { useZipImportProgress, zipImportProgressLabel } from '../hooks/useZipImportProgress'
 
 export default function NewDocPage() {
   const { t } = useTranslation()
@@ -28,6 +29,7 @@ export default function NewDocPage() {
   const [activeTab, setActiveTab] = useState<'create' | 'import'>('create')
   const [generating, setGenerating] = useState(false)
   const [zipImporting, setZipImporting] = useState(false)
+  const zipProgress = useZipImportProgress(zipImporting)
   const [docxImporting, setDocxImporting] = useState(false)
   const [zipResult, setZipResult] = useState<{
     imported: number
@@ -388,9 +390,14 @@ export default function NewDocPage() {
           )}
 
           {zipImporting && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center tabular-nums">
               <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              {t('newDoc.zipImporting')}
+              {zipImportProgressLabel(t, zipProgress, {
+                idle: 'newDoc.zipImporting',
+                progress: 'newDoc.zipImportingProgress',
+                media: 'newDoc.zipImportingMedia',
+                hooks: 'newDoc.zipImportingHooks',
+              })}
             </div>
           )}
 

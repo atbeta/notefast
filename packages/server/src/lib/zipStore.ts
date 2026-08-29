@@ -147,7 +147,10 @@ function decodeLegacyName(bytes: Uint8Array): string {
   }
 }
 
-export function parseZip(bytes: Uint8Array): ZipEntry[] {
+/** 解压循环每隔这么多条目让出事件循环，避免大 zip 饿死健康探测 / SSE */
+const PARSE_YIELD_EVERY = 8
+
+export async function parseZip(bytes: Uint8Array): Promise<ZipEntry[]> {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
 
   // EOCD：从尾部往前找签名（容忍末尾 comment）
@@ -204,6 +207,7 @@ export function parseZip(bytes: Uint8Array): ZipEntry[] {
       throw new Error(`不支持的 zip 压缩方式: ${method}（${name}）`)
     }
     entries.push({ name, data })
+    if (entries.length % PARSE_YIELD_EVERY === 0) await Bun.sleep(0)
   }
   return entries
 }

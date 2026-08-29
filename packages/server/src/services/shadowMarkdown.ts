@@ -64,6 +64,8 @@ let unsub: (() => void) | null = null
 let fullSyncTimer: ReturnType<typeof setTimeout> | null = null
 let fullSyncRunning = false
 let fullSyncQueued = false
+/** 批量导入期间暂停逐篇写盘，结束后由调用方补写新增文档 */
+let shadowWritePause = 0
 
 export function initInstancePaths(dir: string): void {
   dataDirAbs = resolve(dir)
@@ -86,6 +88,7 @@ export function initShadowMarkdown(dir: string): void {
   initInstancePaths(dir)
   store.init(dir)
   unsub = subscribeDocChanges((ev) => {
+    if (shadowWritePause > 0) return
     if (!store.get().enabled) return
     try {
       if (ev.kind === 'deleted') {
@@ -244,6 +247,15 @@ function persistDocFile(doc: BlockRow): string {
   return rel
 }
 
+/** 批量导入：暂停影子副本的逐篇写盘（可嵌套） */
+export function pauseShadowWrites(): void {
+  shadowWritePause++
+}
+
+export function resumeShadowWrites(): void {
+  if (shadowWritePause > 0) shadowWritePause--
+}
+
 export function writeShadowDoc(doc: BlockRow): void {
   if (!store.get().enabled) return
   const rel = persistDocFile(doc)
@@ -285,4 +297,5 @@ export function _resetShadowMarkdownForTests(): void {
   stopShadowMarkdown()
   store._resetForTests()
   dataDirAbs = ''
+  shadowWritePause = 0
 }

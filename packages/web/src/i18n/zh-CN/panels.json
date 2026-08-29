@@ -100,6 +100,9 @@
     "exportSavedTo": "存档已导出到 {{path}}",
     "exportFailed": "导出失败",
     "importing": "正在导入存档…",
+    "importingProgress": "正在导入存档… {{done}}/{{total}}",
+    "importingMedia": "正在导入图片… {{n}}",
+    "importingHooks": "正在收尾…",
     "importDone": "导入完成：新增 {{imported}}，跳过 {{skipped}}，失败 {{failed}}",
     "importFailed": "导入失败"
   },

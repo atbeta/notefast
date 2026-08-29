@@ -24,6 +24,9 @@ type Db = ReturnType<typeof getDb>
 /** zip 上传上限（含 media，体量远大于单文件 markdown 的 5MB 限制） */
 export const MAX_ARCHIVE_IMPORT_BYTES = 500 * 1024 * 1024
 
+/** 每处理这么多条目让出事件循环，避免饿死健康探测 / SSE 心跳 */
+const IMPORT_YIELD_EVERY = 4
+
 const MEDIA_REF_RE = /media\/([0-9a-f]{64})(\.[a-z0-9]+)?/gi
 
 const SKIP_FOLDER_TAGS = new Set([
@@ -85,11 +88,107 @@ export interface ZipImportResult {
   importedDocs: Array<{ docId: string; blockIds: string[] }>
 }
 
+export type ZipImportPhase = 'idle' | 'parsing' | 'media' | 'docs' | 'hooks' | 'done'
+
+export interface ZipImportProgress {
+  phase: Exclude<ZipImportPhase, 'idle' | 'done'>
+  totalDocs: number
+  doneDocs: number
+  mediaImported: number
+  imported: number
+  skipped: number
+  failed: number
+}
+
+export interface ZipImportJobStatus {
+  running: boolean
+  phase: ZipImportPhase
+  total_docs: number
+  done_docs: number
+  imported: number
+  skipped: number
+  failed: number
+  media_imported: number
+  error: string | null
+}
+
+function idleZipImportStatus(): ZipImportJobStatus {
+  return {
+    running: false,
+    phase: 'idle',
+    total_docs: 0,
+    done_docs: 0,
+    imported: 0,
+    skipped: 0,
+    failed: 0,
+    media_imported: 0,
+    error: null,
+  }
+}
+
+let jobStatus: ZipImportJobStatus = idleZipImportStatus()
+
+export function getZipImportStatus(): ZipImportJobStatus {
+  return { ...jobStatus }
+}
+
+/** 占用导入槽；已在跑则返回 false */
+export function tryBeginZipImport(): boolean {
+  if (jobStatus.running) return false
+  jobStatus = { ...idleZipImportStatus(), running: true, phase: 'parsing' }
+  return true
+}
+
+export function patchZipImportStatus(patch: Partial<ZipImportJobStatus>): void {
+  jobStatus = { ...jobStatus, ...patch }
+}
+
+export function finishZipImport(patch: Partial<ZipImportJobStatus> = {}): void {
+  jobStatus = {
+    ...jobStatus,
+    ...patch,
+    running: false,
+    phase: 'done',
+  }
+}
+
+export function _resetZipImportStatusForTests(): void {
+  jobStatus = idleZipImportStatus()
+}
+
+function reportProgress(onProgress: ((p: ZipImportProgress) => void) | undefined, p: ZipImportProgress): void {
+  onProgress?.(p)
+  if (!jobStatus.running) return
+  jobStatus = {
+    ...jobStatus,
+    phase: p.phase,
+    total_docs: p.totalDocs,
+    done_docs: p.doneDocs,
+    imported: p.imported,
+    skipped: p.skipped,
+    failed: p.failed,
+    media_imported: p.mediaImported,
+  }
+}
+
 export async function importArchiveZip(
   db: Db,
-  opts: { notebookId: string; bytes: Uint8Array },
+  opts: {
+    notebookId: string
+    bytes: Uint8Array
+    onProgress?: (p: ZipImportProgress) => void
+  },
 ): Promise<ZipImportResult> {
-  const entries = parseZip(opts.bytes)
+  reportProgress(opts.onProgress, {
+    phase: 'parsing',
+    totalDocs: 0,
+    doneDocs: 0,
+    mediaImported: 0,
+    imported: 0,
+    skipped: 0,
+    failed: 0,
+  })
+  const entries = await parseZip(opts.bytes)
   const byName = new Map<string, Uint8Array>()
   for (const e of entries) byName.set(e.name, e.data)
 
@@ -107,9 +206,25 @@ export async function importArchiveZip(
     manifest?.files.map((f) => [f.filename, f]) ?? [],
   )
 
+  const mdEntries = entries.filter((e) =>
+    MD_ENTRY_RE.test(e.name) && e.name !== ARCHIVE_MANIFEST_NAME,
+  )
+  const docxEntries = entries.filter((e) => DOCX_ENTRY_RE.test(e.name) && !isJunkZipPath(e.name))
+  const totalDocs = mdEntries.length + docxEntries.length
+
   // 1) media：media/<sha><ext> 内容寻址入 AssetStore（sha 与内容不符则跳过，不产生悬空 asset:）
   const importedShas = new Set<string>()
   let mediaImported = 0
+  let mediaSeen = 0
+  reportProgress(opts.onProgress, {
+    phase: 'media',
+    totalDocs,
+    doneDocs: 0,
+    mediaImported: 0,
+    imported: 0,
+    skipped: 0,
+    failed: 0,
+  })
   for (const [name, data] of byName) {
     const m = /^media\/([0-9a-f]{64})\.([a-z0-9]+)$/i.exec(name)
     if (!m) continue
@@ -119,6 +234,17 @@ export async function importArchiveZip(
     saveAsset(Buffer.from(data), mimeForExt(m[2]!), m[0]!.split('/').pop()!)
     importedShas.add(sha)
     mediaImported++
+    mediaSeen++
+    if (mediaSeen % IMPORT_YIELD_EVERY === 0) await Bun.sleep(0)
+    reportProgress(opts.onProgress, {
+      phase: 'media',
+      totalDocs,
+      doneDocs: 0,
+      mediaImported,
+      imported: 0,
+      skipped: 0,
+      failed: 0,
+    })
   }
 
   // 2) 文档
@@ -127,11 +253,6 @@ export async function importArchiveZip(
     markdown.replace(MEDIA_REF_RE, (full, sha: string) =>
       importedShas.has(sha.toLowerCase()) ? `asset:${sha.toLowerCase()}` : full,
     )
-
-  const mdEntries = entries.filter((e) =>
-    MD_ENTRY_RE.test(e.name) && e.name !== ARCHIVE_MANIFEST_NAME,
-  )
-  const docxEntries = entries.filter((e) => DOCX_ENTRY_RE.test(e.name) && !isJunkZipPath(e.name))
 
   const ingestOne = (
     filename: string,
@@ -177,9 +298,24 @@ export async function importArchiveZip(
     }
   }
 
+  const afterDoc = async (): Promise<void> => {
+    const doneDocs = result.imported + result.skipped + result.failed
+    reportProgress(opts.onProgress, {
+      phase: 'docs',
+      totalDocs,
+      doneDocs,
+      mediaImported: result.mediaImported,
+      imported: result.imported,
+      skipped: result.skipped,
+      failed: result.failed,
+    })
+    if (doneDocs % IMPORT_YIELD_EVERY === 0) await Bun.sleep(0)
+  }
+
   for (const entry of mdEntries) {
     const filename = entry.name.split('/').pop() ?? entry.name
     ingestOne(filename, entry.name, normalizeMarkdownFileContent(new TextDecoder().decode(entry.data)))
+    await afterDoc()
   }
 
   for (const entry of docxEntries) {
@@ -192,6 +328,7 @@ export async function importArchiveZip(
       result.failed++
       result.errors.push(`${filename}: ${e instanceof Error ? e.message : String(e)}`)
     }
+    await afterDoc()
   }
 
   return result

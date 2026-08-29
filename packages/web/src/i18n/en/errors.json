@@ -26,6 +26,7 @@
     "already_rebuilding": "Rebuild already in progress",
     "ai_not_configured": "AI not configured",
     "ai_exclude_share_needs_confirm": "This document is hidden from AI — sharing it needs confirmation",
-    "in_use": "Still in use and cannot be deleted"
+    "in_use": "Still in use and cannot be deleted",
+    "import_busy": "An archive import is already running"
   }
 }
