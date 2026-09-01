@@ -244,14 +244,20 @@ export default function DocActionsMenu({
   const handleDelete = async () => {
     setBusy(true)
     try {
-      await api.del(`/docs/${doc.id}`)
+      // 收集箱「放弃」= 物理删除（?permanent=1）：不进回收站、不可撤销，
+      // 图片引用即刻释放；正式文档保持软删 + Undo toast 恢复入口
+      await api.del(isInbox ? `/docs/${doc.id}?permanent=1` : `/docs/${doc.id}`)
       setShowDelete(false)
       removeVisit(doc.id)
       if (isReadingDoc(pathname, doc.id)) navigate('/')
       afterMutation()
+      if (isInbox) {
+        toast.success({ title: t('docActions.discarded'), durationMs: 6000 })
+        return
+      }
       // 软删除 + restore 端点：Undo toast 是 Web 上唯一的恢复入口
       toast.success({
-        title: isInbox ? t('docActions.discarded') : t('docActions.deleted'),
+        title: t('docActions.deleted'),
         durationMs: 6000,
         action: {
           label: t('docActions.undo'),

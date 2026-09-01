@@ -165,7 +165,7 @@
     "menuLabel": "文档操作",
     "confirmDiscardTitle": "丢弃收集项",
     "confirmDeleteTitle": "删除文档",
-    "confirmDiscardMsg": "确定丢弃「{{title}}」吗？丢弃后可在右下角提示中撤销。",
+    "confirmDiscardMsg": "确定丢弃「{{title}}」吗？收集箱内容将彻底删除，不可恢复。",
     "confirmDeleteMsg": "确定要删除「{{title}}」吗？删除后可在右下角提示中撤销。",
     "discarding": "丢弃中…",
     "deleting": "删除中…",

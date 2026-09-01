@@ -165,7 +165,7 @@
     "menuLabel": "Document actions",
     "confirmDiscardTitle": "Discard inbox item",
     "confirmDeleteTitle": "Delete document",
-    "confirmDiscardMsg": "Discard “{{title}}”? You can undo it from the toast at the bottom-right.",
+    "confirmDiscardMsg": "Discard “{{title}}”? It will be permanently deleted and cannot be restored.",
     "confirmDeleteMsg": "Delete “{{title}}”? You can undo it from the toast at the bottom-right.",
     "discarding": "Discarding…",
     "deleting": "Deleting…",

@@ -20,6 +20,8 @@ import {
   msToSqliteTime,
   updateBlock,
   softDeleteBlocks,
+  hardDeleteBlocks,
+  deleteBlockRevisions,
   listDocRevisions,
   recordDocSnapshot,
   getDocSnapshot,
@@ -360,6 +362,31 @@ docs.delete('/:id', (c) => {
 
   const childIds = fetchSubtreeBlocks(db, id)
   const allIds = [id, ...childIds.map((r) => r.id)]
+
+  // 收集箱「放弃」（?permanent=1）：直接物理删除——不进回收站、不可恢复，
+  // 图片引用即刻释放（资源页「清理未引用」立即可清，不等回收站清空）。
+  // hardDelete 的 AFTER DELETE 触发器会发布 erased 行，删除照常同步到其他设备。
+  // 仅收集箱文档允许：正式文档必须走「软删 → 回收站 → 永久删除」两步
+  //（tombstone 先行，对同步 LWW 与误删恢复都更稳）。
+  if (c.req.query('permanent') === '1') {
+    if (readDocStatus(docRow) !== 'inbox') {
+      return c.json({ error: 'bad_request', message: '仅收集箱文档支持 permanent 放弃' }, 400)
+    }
+    db.transaction(() => {
+      deleteRefsTouchingBlocks(db, allIds)
+      deleteMentionsTouchingBlocks(db, allIds)
+      deleteSharesByDocIds(db, [id])
+      db.query('DELETE FROM doc_snapshots WHERE doc_id = ?').run(id)
+      deleteBlockRevisions(db, allIds)
+      hardDeleteBlocks(db, allIds)
+    })()
+    // 与软删路径同一批后处理：批量向量清除 + 逐块 afterDelete（docEvents/autoLink 等）
+    void deleteVectorMany(allIds)
+    fireAfterDeleteMany(allIds)
+    fireDocAfterDelete({ doc: rowToBlock(docRow) })
+    auditDocAction('doc.discarded', id, { block_count: allIds.length })
+    return c.json({ deleted: true, count: allIds.length, permanent: true })
+  }
 
   db.transaction(() => {
     deleteRefsTouchingBlocks(db, allIds)

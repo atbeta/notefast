@@ -784,12 +784,18 @@ useEffect(() => {
     if (!id) return
     setDeleting(true)
     try {
-      await api.del('/docs/' + id)
+      // 收集箱「放弃」= 物理删除：不进回收站、不可撤销（与列表侧语义一致）；
+      // 正式文档保持软删 + Undo toast 恢复入口
+      const isInboxDiscard = docStatus === 'inbox'
+      await api.del(isInboxDiscard ? `/docs/${id}?permanent=1` : '/docs/' + id)
       navigate('/')
+      if (isInboxDiscard) {
+        toast.success({ title: t('docActions.discarded'), durationMs: 6000 })
+        return
+      }
       // 软删除 + restore 端点：Undo toast 是 Web 上唯一的恢复入口
-      // 收集箱条目沿用列表侧「丢弃」措辞，语义一致
       toast.success({
-        title: docStatus === 'inbox' ? t('docActions.discarded') : t('doc.deleted'),
+        title: t('doc.deleted'),
         durationMs: 6000,
         action: {
           label: t('doc.undo'),

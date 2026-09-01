@@ -343,6 +343,84 @@ describe('回收站（GET /docs/trash + restore）', () => {
   })
 })
 
+describe('收集箱放弃（DELETE /docs/:id?permanent=1）', () => {
+  async function createInboxDoc(title: string, markdown = '收集素材正文'): Promise<string> {
+    const res = await app.request('/docs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, markdown, notebook_id: notebookId, status: 'inbox' }),
+    })
+    expect(res.status).toBe(201)
+    return ((await res.json()) as { id: string }).id
+  }
+
+  test('放弃 = 物理删除：不进回收站、不可恢复、块与修订全清、触发 afterDelete', async () => {
+    const docId = await createInboxDoc('放弃我', '## 素材\n\n正文')
+    const child = getDb()
+      .query("SELECT id FROM blocks WHERE root_id = ? AND type != 'document' LIMIT 1")
+      .get(docId) as { id: string }
+
+    tapAll()
+    try {
+      const res = await app.request(`/docs/${docId}?permanent=1`, { method: 'DELETE' })
+      expect(res.status).toBe(200)
+      expect(((await res.json()) as { permanent: boolean }).permanent).toBe(true)
+
+      const ev = events.find((e) => e.hook === 'afterDelete')
+      expect(ev).toBeDefined()
+      expect(ev!.payload.doc.id).toBe(docId)
+
+      const blocks = getDb()
+        .query('SELECT count(*) as c FROM blocks WHERE root_id = ? OR id = ?')
+        .get(docId, docId) as { c: number }
+      expect(blocks.c).toBe(0)
+      const revs = getDb().query('SELECT count(*) as c FROM block_revisions WHERE block_id = ?').get(child.id) as { c: number }
+      expect(revs.c).toBe(0)
+
+      const trash = await app.request('/docs/trash')
+      expect(((await trash.json()) as Array<{ id: string }>).some((d) => d.id === docId)).toBe(false)
+      const restore = await app.request(`/blocks/${docId}/restore`, { method: 'POST' })
+      expect(restore.status).toBe(404)
+    } finally {
+      untapAll()
+    }
+  })
+
+  test('放弃释放图片引用：asset 引用随物理删除从内容扫描消失，GC 立即可清', async () => {
+    const assetId = 'a'.repeat(64)
+    const docId = await createInboxDoc('带图素材', `![x](asset:${assetId})`)
+
+    const before = getDb()
+      .query('SELECT count(*) as c FROM blocks WHERE content LIKE ?')
+      .get(`%${assetId}%`) as { c: number }
+    expect(before.c).toBeGreaterThan(0)
+
+    await app.request(`/docs/${docId}?permanent=1`, { method: 'DELETE' })
+
+    const after = getDb()
+      .query('SELECT count(*) as c FROM blocks WHERE content LIKE ?')
+      .get(`%${assetId}%`) as { c: number }
+    expect(after.c).toBe(0)
+  })
+
+  test('放弃向同步馈送发布 erased 行（其他设备按 id 删除）', async () => {
+    const docId = await createInboxDoc('同步放弃')
+    await app.request(`/docs/${docId}?permanent=1`, { method: 'DELETE' })
+    const erased = getDb()
+      .query('SELECT count(*) as c FROM entity_changes WHERE entity_id = ? AND is_erased = 1')
+      .get(docId) as { c: number }
+    expect(erased.c).toBeGreaterThan(0)
+  })
+
+  test('正式文档 permanent=1 → 400 且不删（须走软删进回收站）', async () => {
+    const docId = await createDoc('正式文档')
+    const res = await app.request(`/docs/${docId}?permanent=1`, { method: 'DELETE' })
+    expect(res.status).toBe(400)
+    const still = getDb().query('SELECT count(*) as c FROM blocks WHERE id = ?').get(docId) as { c: number }
+    expect(still.c).toBe(1)
+  })
+})
+
 describe('侧栏计数（GET /docs/counts）', () => {
   interface Counts { inbox: number; archived: number; trash: number; untagged: number; ai_exclude: number }
 
