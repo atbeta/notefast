@@ -1,8 +1,9 @@
 import { useEffect, useState, type ImgHTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { X } from 'lucide-react'
+import { Check, Copy, X } from 'lucide-react'
 import MediaZoomView from './MediaZoomView'
+import { Tooltip, useToast } from './ui'
 
 interface ImageLightboxProps {
   onClose: () => void
@@ -36,7 +37,28 @@ export default function ImageLightbox({
   measureKey,
 }: ImageLightboxProps) {
   const { t } = useTranslation()
+  const toast = useToast()
   const label = alt || t('block.previewImage')
+  const [copied, setCopied] = useState(false)
+
+  /**
+   * 复制图片到剪贴板（原生壳 WKWebView 无右键菜单，阅读页图片此前无法复制）。
+   * fetch 同源地址（assets API 带 cookie 鉴权 / 公开页走公开端点）拿 blob 写
+   * ClipboardItem；失败（权限/不支持）toast 提示而不是静默。
+   */
+  const copyImage = async () => {
+    if (!src) return
+    try {
+      const res = await fetch(src)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })])
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      toast.error({ title: t('lightbox.copyImageFailed') })
+    }
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -75,6 +97,25 @@ export default function ImageLightbox({
           <div className="min-w-0 flex-1">{headerStart}</div>
           <div className="flex items-center gap-1.5 shrink-0">
             {headerActions}
+            {src && !children && (
+              <Tooltip label={copied ? t('lightbox.copyImageDone') : t('lightbox.copyImage')}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void copyImage()
+                  }}
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+                  aria-label={copied ? t('lightbox.copyImageDone') : t('lightbox.copyImage')}
+                >
+                  {copied ? (
+                    <Check className="w-4 h-4" strokeWidth={1.75} />
+                  ) : (
+                    <Copy className="w-4 h-4" strokeWidth={1.75} />
+                  )}
+                </button>
+              </Tooltip>
+            )}
             <button
               type="button"
               onClick={(e) => {

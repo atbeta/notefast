@@ -60,6 +60,9 @@
   },
   "lightbox": {
     "zoomReset": "Reset",
-    "zoomHint": "{{mod}} + scroll to zoom, drag to pan"
+    "zoomHint": "{{mod}} + scroll to zoom, drag to pan",
+    "copyImage": "Copy image",
+    "copyImageDone": "Copied",
+    "copyImageFailed": "Failed to copy, please retry"
   }
 }

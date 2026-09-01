@@ -60,6 +60,9 @@
   },
   "lightbox": {
     "zoomReset": "重置",
-    "zoomHint": "{{mod}} + 滚轮缩放，拖动平移"
+    "zoomHint": "{{mod}} + 滚轮缩放，拖动平移",
+    "copyImage": "复制图片",
+    "copyImageDone": "已复制",
+    "copyImageFailed": "复制失败，请重试"
   }
 }
