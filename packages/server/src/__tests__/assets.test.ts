@@ -6,6 +6,7 @@
  * - 读取（mime、immutable 缓存、404）
  * - 引用对账（/check 与 import 的 missing_assets）
  * - 孤儿回收（引用扫描推导 + 宽限期）
+ * - 软删文档引用的展示口径（列表 referenced 与 GC/DELETE 保护对齐）
  * - 显式删除（未引用可删；引用中 409）
  * - 会话 cookie 鉴权（<img> 场景，仅放行读）
  */
@@ -208,6 +209,53 @@ describe('AssetStore — 引用来源（refs）', () => {
     const body2 = await listed.json() as { items: Array<{ referenced: boolean; ref_count: number }> }
     expect(body2.items[0]!.referenced).toBe(true)
     expect(body2.items[0]!.ref_count).toBe(2)
+  })
+
+  test('软删文档引用：列表仍显示 referenced:true 且 GC 不删（与保护口径对齐）；清空回收站后可清', async () => {
+    const { body } = await upload()
+    const id = body.id as string
+    const db = getDb()
+    const now = new Date().toISOString()
+    const nb = crypto.randomUUID()
+    db.query('INSERT INTO notebooks (id, name) VALUES (?, ?)').run(nb, 'T')
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, 'document', ?, 0, 0, ?, ?)`,
+    ).run('d-trash', nb, 'd-trash', '待删文档', now, now)
+    db.query(
+      `INSERT INTO blocks (id, notebook_id, parent_id, root_id, type, content, sort, level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'paragraph', ?, 0, 1, ?, ?)`,
+    ).run('p-trash', nb, 'd-trash', 'd-trash', `见 ![](asset:${id})`, now, now)
+
+    // 文档进回收站（软删）：图片仍被引用——恢复文档后必须仍可用
+    db.query('UPDATE blocks SET is_deleted = 1 WHERE root_id = ?').run('d-trash')
+
+    // 列表口径与 GC/DELETE 保护对齐：显示「使用中」，不再误标「未引用」
+    const listed = await app.fetch(new Request('http://localhost/api/v1/assets'))
+    const listBody = await listed.json() as { items: Array<{ id: string; referenced: boolean; ref_count: number }> }
+    const item = listBody.items.find((x) => x.id === id)
+    expect(item?.referenced).toBe(true)
+    expect(item?.ref_count).toBe(1)
+
+    // 来源列表含回收站文档（解释为何不可删）
+    const refsRes = await app.fetch(new Request(`http://localhost/api/v1/assets/${id}/refs`))
+    const refsBody = await refsRes.json() as { docs: Array<{ doc_id: string }> }
+    expect(refsBody.docs.some((d) => d.doc_id === 'd-trash')).toBe(true)
+
+    // 一键清理（grace_ms=0）不删回收站仍引用的图片
+    await new Promise((r) => setTimeout(r, 5))
+    const gcRes = await app.fetch(new Request('http://localhost/api/v1/assets/gc', { method: 'POST', body: JSON.stringify({ grace_ms: 0 }) }))
+    const gcBody = await gcRes.json() as { ids: string[] }
+    expect(gcBody.ids).not.toContain(id)
+    expect(readAsset(id)).not.toBeNull()
+
+    // 清空回收站（物理删除文档块）→ 引用消失，GC 可清
+    db.query('DELETE FROM blocks WHERE root_id = ?').run('d-trash')
+    await new Promise((r) => setTimeout(r, 5))
+    const gcRes2 = await app.fetch(new Request('http://localhost/api/v1/assets/gc', { method: 'POST', body: JSON.stringify({ grace_ms: 0 }) }))
+    const gcBody2 = await gcRes2.json() as { ids: string[] }
+    expect(gcBody2.ids).toContain(id)
+    expect(readAsset(id)).toBeNull()
   })
 
   test('GET /assets/:id/refs 返回引用文档列表（doc_id + title）；未引用返回空', async () => {

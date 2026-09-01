@@ -362,8 +362,10 @@ function assetRefMapKey(db: ReturnType<typeof getDb>): string {
 }
 
 /**
- * 全库扫描：返回 asset id → 引用它的文档列表（排除软删除文档）。
- * 一次 SQL 拉含 asset: 的块，按 root_id 聚合到文档根取 title。
+ * 全库扫描：返回 asset id → 引用它的文档列表（含软删文档——与
+ * collectReferencedAssetIds / GC / DELETE 保护同口径：回收站文档仍引用
+ * 的图片显示「使用中」，一键清理不动它；用户清空回收站后再清即可释放，
+ * 恢复回收站文档时图片仍可用）。按 root_id 聚合到文档根取 title。
  * 与 collectReferencedAssetIds 共用变更流锚点缓存，无写时零成本复用。
  */
 function collectAssetRefMap(): Map<string, Array<{ doc_id: string; title: string }>> {
@@ -374,8 +376,8 @@ function collectAssetRefMap(): Map<string, Array<{ doc_id: string; title: string
     .query(
       `SELECT b.root_id, b.content, d.content AS doc_title
        FROM blocks b
-       JOIN blocks d ON d.id = b.root_id AND d.type = 'document' AND d.is_deleted = 0
-       WHERE b.content LIKE '%asset:%' AND b.is_deleted = 0`,
+       JOIN blocks d ON d.id = b.root_id AND d.type = 'document'
+       WHERE b.content LIKE '%asset:%'`,
     )
     .all() as Array<{ root_id: string; content: string; doc_title: string }>
   const map = new Map<string, Array<{ doc_id: string; title: string }>>()
@@ -413,15 +415,16 @@ export interface AssetListItem {
   remote: boolean
   /** 图床外链地址（remote 时非空；供资源页悬浮展示/复制） */
   remote_url: string | null
-  /** 是否被任意未删除文档引用 */
+  /** 是否被任意块引用（含软删文档；与 GC/DELETE 保护同口径，恢复回收站文档图片仍可用） */
   referenced: boolean
-  /** 引用该图片的文档数（>1 说明多篇复用同一张图） */
+  /** 引用该图片的文档数（含软删文档；>1 说明多篇复用同一张图） */
   ref_count: number
 }
 
 /**
  * 资源库列表（按创建时间倒序）。
- * referenced / ref_count 来自内容扫描，不建关联表。
+ * referenced 取 collectReferencedAssetIds（GC/删除保护同口径，含软删引用）；
+ * ref_count / 来源列表取 collectAssetRefMap。引用关系不建关联表，均来自内容扫描。
  */
 export function listAssets(opts: { limit?: number; offset?: number } = {}): {
   items: AssetListItem[]
@@ -448,6 +451,8 @@ export function listAssets(opts: { limit?: number; offset?: number } = {}): {
     filename: string | null
   }>
   const refMap = rows.length > 0 ? collectAssetRefMap() : null
+  // boolean 用 GC 真值集合（不依赖 document 根可连接，与 DELETE /assets/:id 保护完全同口径）
+  const referencedIds = rows.length > 0 ? collectReferencedAssetIds() : null
   return {
     total,
     items: rows.map((r) => {
@@ -461,7 +466,7 @@ export function listAssets(opts: { limit?: number; offset?: number } = {}): {
         local_path: join(mediaDir, r.id),
         remote: Boolean(r.remote_url),
         remote_url: r.remote_url,
-        referenced: Boolean(refs && refs.length > 0),
+        referenced: referencedIds?.has(r.id) ?? false,
         ref_count: refs?.length ?? 0,
       }
     }),
