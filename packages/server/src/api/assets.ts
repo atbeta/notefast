@@ -32,7 +32,7 @@ import {
   uploadSingleAsset,
   findReferencingDocs,
 } from '../assets/store'
-import { hasImageUploadCommand, imageUploadConfigSchema, type ImageUploadConfigInput } from '@notefast/core'
+import { hasImageUploadCommand, imageUploadConfigSchema, emptyImageUploadConfig, mergeImageUploadConfig, type ImageUploadConfigInput } from '@notefast/core'
 import {
   applyImageUploadConfig,
   getImageUploadPublicConfig,
@@ -112,9 +112,18 @@ assets.put('/upload-config', zValidator('json', imageUploadConfigSchema), async 
 /**
  * 测试图床命令：用 1×1 PNG 跑一次命令，返回完整诊断（stdout/stderr/exit code）。
  * 解决「静默降级看不见报错」：用户保存配置后先点测试，立即知道命令能不能跑。
+ *
+ * 请求体可选携带「表单草稿」（与 PUT 同一 schema，全 optional）：
+ * 有 command 时测试草稿而非已保存配置——未保存的更改直接可测，保存不再是
+ * 测试的前置条件；无体（旧客户端）回落已保存配置，行为不变。
  */
 assets.post('/upload-config/test', async (c) => {
-  const cfg = getImageUploadConfig()
+  let cfg = getImageUploadConfig()
+  const body = await c.req.json().catch(() => null)
+  const parsed = imageUploadConfigSchema.safeParse(body)
+  if (parsed.success && hasImageUploadCommand(parsed.data)) {
+    cfg = mergeImageUploadConfig(parsed.data, cfg ?? emptyImageUploadConfig())
+  }
   if (!hasImageUploadCommand(cfg)) {
     return c.json({ ok: false, error: '图床命令未配置' }, 400)
   }

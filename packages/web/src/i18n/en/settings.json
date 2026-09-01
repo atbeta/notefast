@@ -98,6 +98,7 @@
       "saved": "Image hosting config saved",
       "saveFailed": "Failed to save",
       "test": "Test command",
+      "testDraftNote": "This test uses the current configuration in the form above (including unsaved changes)",
       "testOk": "✓ Command works, returned: {{url}}",
       "testFailed": "Command failed:",
       "exitCode": "Exit code: {{code}}",

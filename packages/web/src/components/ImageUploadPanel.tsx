@@ -42,6 +42,11 @@ export default function ImageUploadPanel() {
   const [testResult, setTestResult] = useState<UploadTestResult | null>(null)
   const [lastError, setLastError] = useState<{ at: string; message: string } | null>(null)
   const [loaded, setLoaded] = useState(false)
+  /** 最近一次加载/保存成功时的表单快照：与当前值比对得出「未保存更改」状态 */
+  const [savedKey, setSavedKey] = useState('')
+
+  const formKey = JSON.stringify([mode, command, argsText, timeoutSec])
+  const dirty = loaded && formKey !== savedKey
 
   useEffect(() => {
     api.get<ImageUploadConfig>('/assets/upload-config')
@@ -51,6 +56,8 @@ export default function ImageUploadPanel() {
         setArgsText(cfg.args.join(' '))
         setTimeoutSec(Math.round(cfg.timeoutMs / 1000))
         setLastError(cfg.last_error ?? null)
+        // 快照须在 setState 之后按同一来源计算：直接拼刚写入的值，避免闭包滞后
+        setSavedKey(JSON.stringify([cfg.mode, cfg.command, cfg.args.join(' '), Math.round(cfg.timeoutMs / 1000)]))
       })
       .catch(() => { /* 配置不可读时保持默认 */ })
       .finally(() => setLoaded(true))
@@ -58,6 +65,14 @@ export default function ImageUploadPanel() {
 
   const handleSave = async () => {
     setSaving(true)
+    // 发送时的表单值快照：成功后以此为「已保存」基准（保存期间继续编辑不回退 dirty）。
+    // 按服务端 merge 规则归一化（命令 trim、args 空白归并），避免保存后 dirty 误报
+    const sentKey = JSON.stringify([
+      mode,
+      command.trim(),
+      argsText.split(/\s+/).filter(Boolean).join(' '),
+      timeoutSec,
+    ])
     try {
       await api.put('/assets/upload-config', {
         mode,
@@ -65,6 +80,7 @@ export default function ImageUploadPanel() {
         args: argsText.split(/\s+/).filter(Boolean),
         timeoutMs: timeoutSec * 1000,
       })
+      setSavedKey(sentKey)
       toast.success({ title: t('settings.imageUpload.saved') })
       refreshImageUploadEnabled()
       // 保存后刷新最近失败状态（语义：按最近上传尝试判定）
@@ -84,7 +100,14 @@ export default function ImageUploadPanel() {
     setTesting(true)
     setTestResult(null)
     try {
-      const res = await api.post<UploadTestResult>('/assets/upload-config/test', {})
+      // 测试的是表单当前值（含未保存的更改），服务端按草稿跑命令——
+      // 保存不再是测试的前置条件
+      const res = await api.post<UploadTestResult>('/assets/upload-config/test', {
+        mode,
+        command,
+        args: argsText.split(/\s+/).filter(Boolean),
+        timeoutMs: timeoutSec * 1000,
+      })
       setTestResult(res)
     } catch (e) {
       setTestResult({ ok: false, error: e instanceof Error ? e.message : String(e) })
@@ -201,6 +224,9 @@ export default function ImageUploadPanel() {
           <div className={`rounded-md border px-3 py-2 text-xs leading-relaxed ${
             testResult.ok ? 'border-success/30 bg-success-soft text-success' : 'border-destructive/30 bg-destructive-soft text-destructive/90'
           }`}>
+            {dirty && (
+              <p className="text-2xs opacity-70 mb-1">{t('settings.imageUpload.testDraftNote')}</p>
+            )}
             {testResult.ok && testResult.url ? (
               <p>{t('settings.imageUpload.testOk', { url: testResult.url })}</p>
             ) : (
@@ -228,10 +254,10 @@ export default function ImageUploadPanel() {
         <Button
           type="button"
           onClick={() => void handleSave()}
-          disabled={saving}
+          disabled={saving || !dirty}
           icon={<ImageIcon className="w-3.5 h-3.5" strokeWidth={1.75} />}
         >
-          {saving ? t('common.saving') : t('common.save')}
+          {saving ? t('common.saving') : dirty ? t('common.save') : t('settings.imageUpload.saved')}
         </Button>
       </div>
     </div>

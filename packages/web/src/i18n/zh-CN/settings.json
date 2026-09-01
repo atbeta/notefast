@@ -98,6 +98,7 @@
       "saved": "图床配置已保存",
       "saveFailed": "保存失败",
       "test": "测试命令",
+      "testDraftNote": "本次测试使用上方表单中的当前配置（含尚未保存的更改）",
       "testOk": "✓ 命令可用，返回：{{url}}",
       "testFailed": "命令执行失败：",
       "exitCode": "退出码：{{code}}",

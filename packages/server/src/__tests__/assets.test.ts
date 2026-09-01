@@ -648,6 +648,31 @@ describe('AssetStore — 图床命令容错与错误可见性', () => {
     expect(emptyRes.status).toBe(400)
   })
 
+  test('测试端点：请求体携带草稿命令时测草稿而非已保存配置（未保存可直接测）', async () => {
+    // 已保存配置为空命令（模拟「输入了但还没保存」之前的磁盘态）
+    applyImageUploadConfig({ mode: 'off', command: '' })
+    setImageUploadConfig(getImageUploadConfig())
+
+    // 无体回落已保存配置 → 仍 400（旧客户端行为不变）
+    const fallbackRes = await app.fetch(new Request('http://localhost/api/v1/assets/upload-config/test', { method: 'POST' }))
+    expect(fallbackRes.status).toBe(400)
+
+    // 带草稿 body → 用草稿跑命令，不受已保存配置影响
+    const draftRes = await app.fetch(new Request('http://localhost/api/v1/assets/upload-config/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        command: process.execPath,
+        args: ['-e', 'console.log("https://img.example.test/draft.png")'],
+        timeoutMs: 5_000,
+      }),
+    }))
+    expect(draftRes.status).toBe(200)
+    const draft = await draftRes.json() as { ok: boolean; url: string | null }
+    expect(draft.ok).toBe(true)
+    expect(draft.url).toBe('https://img.example.test/draft.png')
+  })
+
   afterAll(() => {
     setImageUploadConfig(null)
   })
