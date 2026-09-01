@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.85.0](https://github.com/atbeta/notefast/compare/v0.84.0...v0.85.0) (2026-09-01)
+
+
+### Features
+
+* **assets:** test upload command against the form draft ([bd5ec49](https://github.com/atbeta/notefast/commit/bd5ec49ed17c219fdc7f5b3a6a1e80591358fe14))
+* **web:** copy images to clipboard from the lightbox ([f8cac04](https://github.com/atbeta/notefast/commit/f8cac0444a630fcd521d7fd1018d85ab7b56fc5a))
+
+
+### Bug Fixes
+
+* **assets:** show trash-doc references as in-use to match GC guard ([3989986](https://github.com/atbeta/notefast/commit/398998638c1b8d27fe2ffa34bf764aea756fcdac))
+* **server:** permanently discard inbox docs instead of sending to trash ([2a8acb3](https://github.com/atbeta/notefast/commit/2a8acb32f8eac75cffca0d4ab695ee46e5a32177))
+
 ## [0.84.0](https://github.com/atbeta/notefast/compare/v0.83.0...v0.84.0) (2026-08-29)
 
 
