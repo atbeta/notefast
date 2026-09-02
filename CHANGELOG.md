@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.86.0](https://github.com/atbeta/notefast/compare/v0.85.0...v0.86.0) (2026-09-02)
+
+
+### Features
+
+* **web:** image edit popover with replace/library/view actions ([81b6189](https://github.com/atbeta/notefast/commit/81b6189e95a7c0cd7a1c080421d9e9c036f8ccbb))
+* **web:** show AI title generator only while editing ([f0b8890](https://github.com/atbeta/notefast/commit/f0b8890a1973b28a513051df425f200030cf4165))
+* **web:** tooltip on mermaid expand button ([885939f](https://github.com/atbeta/notefast/commit/885939f5c4563c25f12cffa171b574294965a327))
+* **web:** view mermaid diagrams full size from the editor ([f03a2e6](https://github.com/atbeta/notefast/commit/f03a2e68a2b0b58dbbe330a93efb06837fab4ab1))
+
+
+### Bug Fixes
+
+* **clients:** disable WebView2 general autofill on Windows ([ef77a50](https://github.com/atbeta/notefast/commit/ef77a50dda05ddae8155f393f5a86184d0039030))
+* **web:** unify document header icon cluster ([9028cf9](https://github.com/atbeta/notefast/commit/9028cf92288b1d9051d3c6e9dc3bc14e89336bcd))
+* **web:** use engine-appropriate autocomplete token ([c5f1a13](https://github.com/atbeta/notefast/commit/c5f1a13a59d4415e407ad43dd3cee3917987e5bd))
+
 ## [0.85.0](https://github.com/atbeta/notefast/compare/v0.84.0...v0.85.0) (2026-09-01)
 
 
