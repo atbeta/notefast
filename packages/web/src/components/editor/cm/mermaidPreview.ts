@@ -4,6 +4,7 @@ import { Decoration, EditorView, WidgetType } from '@codemirror/view'
 import type { DecorationSet } from '@codemirror/view'
 import i18next from '../../../i18n'
 import { nextMermaidId, renderMermaidSvg } from '../../../lib/mermaid'
+import { dispatchViewMermaid } from '../../../lib/editMermaid'
 import { fencedCodeSpansIn } from './fencedCode'
 
 /**
@@ -24,6 +25,8 @@ function currentTheme(): 'light' | 'dark' {
 class MermaidWidget extends WidgetType {
   private cancelRender: (() => void) | null = null
   private themeObserver: MutationObserver | null = null
+  /** 渲染完成的 SVG，供展开按钮打开灯箱 */
+  private svg: string | null = null
 
   constructor(
     readonly src: string,
@@ -44,6 +47,20 @@ class MermaidWidget extends WidgetType {
     status.textContent = i18next.t('mermaid.loading')
     wrap.appendChild(status)
 
+    // 展开按钮：hover 显示，点击打开灯箱查看原图（stopPropagation 防触发下方源码回退）
+    const expandBtn = document.createElement('button')
+    expandBtn.type = 'button'
+    expandBtn.className = 'cm-mermaid-expand'
+    expandBtn.setAttribute('aria-label', i18next.t('mermaid.zoom'))
+    expandBtn.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>'
+    expandBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (this.svg) dispatchViewMermaid({ svg: this.svg, label: 'mermaid' })
+    })
+    wrap.appendChild(expandBtn)
+
     // 异步渲染 + cancelled 标志防竞态（widget 销毁 / 主题切换重渲染后旧回调不再写 DOM）
     let cancelled = false
     this.cancelRender = () => {
@@ -55,8 +72,10 @@ class MermaidWidget extends WidgetType {
       renderMermaidSvg(this.src, currentTheme(), nextMermaidId())
         .then((svg) => {
           if (cancelled) return
+          this.svg = svg
           // securityLevel: strict（见 lib/mermaid.ts），同阅读态 MermaidDiagram 的注入姿势
           wrap.innerHTML = svg
+          wrap.appendChild(expandBtn)
         })
         .catch((err: unknown) => {
           if (cancelled) return
@@ -76,11 +95,13 @@ class MermaidWidget extends WidgetType {
 
     // 主题切换重渲染（math 无此需求：KaTeX 继承文字色；mermaid SVG 按主题着色）
     this.themeObserver = new MutationObserver(() => {
+      this.svg = null
       wrap.textContent = ''
       const s = document.createElement('div')
       s.className = 'cm-mermaid-preview-status'
       s.textContent = i18next.t('mermaid.loading')
       wrap.appendChild(s)
+      wrap.appendChild(expandBtn)
       render()
     })
     this.themeObserver.observe(document.documentElement, {

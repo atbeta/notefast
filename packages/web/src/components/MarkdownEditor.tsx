@@ -25,6 +25,7 @@ import EditorFooter from './editor/EditorFooter'
 import CodeMirrorEditor from './editor/CodeMirrorEditor'
 import type { CodeMirrorEditorHandle } from './editor/CodeMirrorEditor'
 import ImageEditPopover from './editor/ImageEditPopover'
+import MermaidViewer from './editor/MermaidViewer'
 import SelectionBubble from './editor/SelectionBubble'
 import type { SelectionAnchor } from './editor/cm/selectionReport'
 import { autoSaveDelayMs, createCoalescedSave } from '../lib/coalescedSave'
@@ -664,6 +665,8 @@ function EditorInline({
                 onReplace={handleReplaceImage}
                 onEditSource={handleEditImageSource}
               />
+              {/* Mermaid 预览展开按钮 → 灯箱查看原图 */}
+              <MermaidViewer />
               {/* 图片拖入反馈：拖拽文件进入区域时铺底高亮，提示“松开即上传”。
                   CM 的 domEventHandlers 仍然处理 drop、CodeMirrorFocus 里调 uploadImage。 */}
               {imageDragOver && (

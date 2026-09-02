@@ -1098,6 +1098,7 @@ html.theme-fading *::after {
 
 /* Mermaid 围栏块内联预览（```mermaid；光标在块内回退源码；主题切换 widget 内重渲染），容器对齐阅读态 MermaidDiagram */
 .cm-mermaid-preview {
+  position: relative;
   margin: 6px 0;
   padding: 12px 16px;
   overflow-x: auto;
@@ -1110,6 +1111,29 @@ html.theme-fading *::after {
   max-width: 100%;
   height: auto;
   display: inline-block;
+}
+.cm-mermaid-expand {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: rgb(var(--muted-foreground));
+  background: rgb(var(--background) / 0.9);
+  border: 1px solid rgb(var(--border));
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+}
+.cm-mermaid-preview:hover .cm-mermaid-expand {
+  opacity: 1;
+}
+.cm-mermaid-expand:hover {
+  color: rgb(var(--foreground));
 }
 .cm-mermaid-preview-status {
   font-size: 13px;
