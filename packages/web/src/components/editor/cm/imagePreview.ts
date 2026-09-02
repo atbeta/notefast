@@ -2,6 +2,7 @@ import { StateField } from '@codemirror/state'
 import type { EditorState, Extension, Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType } from '@codemirror/view'
 import type { DecorationSet } from '@codemirror/view'
+import { dispatchEditImage } from '../../../lib/editImage'
 
 // 整行只有一个图片语法时命中：![alt](src) 或 ![alt](src "title")
 export const IMAGE_LINE_RE = /^\s*!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)\s*$/
@@ -14,17 +15,25 @@ function resolveSrc(raw: string): string {
 class ImageWidget extends WidgetType {
   constructor(
     readonly src: string,
+    readonly rawSrc: string,
     readonly alt: string,
     readonly lineFrom: number,
+    readonly lineTo: number,
   ) {
     super()
   }
 
   eq(other: ImageWidget): boolean {
-    return other.src === this.src && other.alt === this.alt && other.lineFrom === this.lineFrom
+    return (
+      other.src === this.src
+      && other.rawSrc === this.rawSrc
+      && other.alt === this.alt
+      && other.lineFrom === this.lineFrom
+      && other.lineTo === this.lineTo
+    )
   }
 
-  toDOM(view: EditorView): HTMLElement {
+  toDOM(_view: EditorView): HTMLElement {
     const wrap = document.createElement('div')
     wrap.className = 'cm-image-preview'
     const img = document.createElement('img')
@@ -38,12 +47,20 @@ class ImageWidget extends WidgetType {
       caption.textContent = this.alt
       wrap.appendChild(caption)
     }
-    // 点击图片把光标移到该行，便于回到源码编辑（stopPropagation 防 CM 指针选区把光标映射回块外）
+    // 点击图片弹出操作菜单（替换/资源库/查看原图），不再把光标移到该行——
+    // 光标落行会让预览收起露出 asset:<hash> 源码，对用户没有编辑价值。
+    // stopPropagation 防 CM 指针选区把光标映射回块外。
     wrap.addEventListener('mousedown', (e) => {
       e.preventDefault()
       e.stopPropagation()
-      view.dispatch({ selection: { anchor: this.lineFrom } })
-      view.focus()
+      const rect = wrap.getBoundingClientRect()
+      dispatchEditImage({
+        from: this.lineFrom,
+        to: this.lineTo,
+        rawSrc: this.rawSrc,
+        alt: this.alt,
+        rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+      })
     })
     return wrap
   }
@@ -57,6 +74,7 @@ interface ImageLine {
   from: number
   to: number
   src: string
+  rawSrc: string
   alt: string
 }
 
@@ -68,7 +86,7 @@ function findImageLines(state: EditorState): ImageLine[] {
     if (!m) continue
     const src = resolveSrc(m[2])
     if (src.startsWith('data:')) continue
-    lines.push({ from: line.from, to: line.to, src, alt: m[1] })
+    lines.push({ from: line.from, to: line.to, src, rawSrc: m[2], alt: m[1] })
   }
   return lines
 }
@@ -80,7 +98,7 @@ function buildDecorations(state: EditorState, images: ImageLine[]): DecorationSe
     if (sel.from <= img.to && sel.to >= img.from) continue
     ranges.push(
       Decoration.replace({
-        widget: new ImageWidget(img.src, img.alt, img.from),
+        widget: new ImageWidget(img.src, img.rawSrc, img.alt, img.from, img.to),
         block: true,
       }).range(img.from, img.to),
     )

@@ -40,6 +40,10 @@ export interface CodeMirrorEditorHandle {
   getCursorSplit: () => { prefix: string; suffix: string }
   /** 改写流式原地替换：把 [from, to) 渐进替换为 text（选区气泡用） */
   replaceRange: (from: number, to: number, text: string) => void
+  /** 替换图片行 markdown：光标不动（避免预览收起露出 asset:<hash> 源码） */
+  replaceImageLine: (from: number, to: number, text: string) => void
+  /** 光标移到指定位置并聚焦（图片「编辑源码」用，预览会收起露出源码） */
+  moveCursorTo: (pos: number) => void
   /** 插入空 GFM 表并打开网格编辑 */
   insertTable: () => void
 }
@@ -205,6 +209,21 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
             scrollIntoView: true,
             userEvent: 'input',
           })
+        },
+        replaceImageLine: (from, to, text) => {
+          const view = viewRef.current
+          if (!view) return
+          const docLength = view.state.doc.length
+          const f = Math.max(0, Math.min(from, docLength))
+          const t = Math.max(0, Math.min(to, docLength))
+          // 不传 selection：光标保持原位，图片预览不收起
+          view.dispatch({ changes: { from: f, to: t, insert: text }, userEvent: 'input' })
+        },
+        moveCursorTo: (pos) => {
+          const view = viewRef.current
+          if (!view) return
+          view.dispatch({ selection: { anchor: clampPos(view, pos) }, scrollIntoView: true })
+          view.focus()
         },
         insertTable: () => {
           const view = viewRef.current

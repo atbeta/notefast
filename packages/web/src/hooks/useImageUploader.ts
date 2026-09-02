@@ -29,65 +29,79 @@ export function useImageUploader({ insertAtCursor }: UseImageUploaderOpts) {
   })
   const toast = useToast()
 
+  /** 上传单个图片文件，返回 asset:<sha256> 引用；失败抛错（调用方决定提示/落点）。 */
+  const uploadFile = useCallback(async (file: File): Promise<string> => {
+    if (!file.type.startsWith('image/')) throw new Error('Not an image')
+    setUpload({ uploading: true, progress: 0 })
+
+    const token = getStoredToken()
+    const headers: Record<string, string> = { 'Content-Type': file.type }
+    // 原始文件名（URL 编码，防中文/特殊字符）：后端起出存 assets.filename，资源页可读
+    const encodedName = encodeURIComponent(file.name || '')
+    if (encodedName) headers['X-File-Name'] = encodedName
+    if (token) headers.Authorization = `Bearer ${token}`
+
+    try {
+      const result = await new Promise<{ ref: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', '/api/v1/assets')
+        for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v)
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable && e.total > 0) {
+            const pct = Math.min(99, Math.round((e.loaded / e.total) * 100))
+            setUpload({ uploading: true, progress: pct })
+          }
+        }
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(xhr.responseText) as { ref: string })
+            } catch {
+              reject(new Error('Invalid response'))
+            }
+          } else {
+            let msg = xhr.statusText
+            try {
+              const body = JSON.parse(xhr.responseText) as { message?: string }
+              if (body?.message) msg = body.message
+            } catch { /* ignore parse error */ }
+            reject(new Error(msg || `HTTP ${xhr.status}`))
+          }
+        }
+        xhr.onerror = () => reject(new Error('Network error'))
+        xhr.onabort = () => reject(new Error('Aborted'))
+        xhr.send(file)
+      })
+
+      setUpload({ uploading: false, progress: 100 })
+      // 100% 一帧后归零，让下一次上传能从 0 开始显示（避免按钮残留进度）
+      setTimeout(() => setUpload((s) => (s.progress === 100 ? { uploading: false, progress: 0 } : s)), 600)
+      return result.ref
+    } catch (e) {
+      setUpload({ uploading: false, progress: 0 })
+      throw e
+    }
+  }, [])
+
   const uploadImage = useCallback(
     async (file: File) => {
-      if (!file.type.startsWith('image/') || uploading) return
-      setUpload({ uploading: true, progress: 0 })
-
-      const token = getStoredToken()
-      const headers: Record<string, string> = { 'Content-Type': file.type }
-      // 原始文件名（URL 编码，防中文/特殊字符）：后端起出存 assets.filename，资源页可读
-      const encodedName = encodeURIComponent(file.name || '')
-      if (encodedName) headers['X-File-Name'] = encodedName
-      if (token) headers.Authorization = `Bearer ${token}`
-
+      if (uploading) return
       try {
-        const result = await new Promise<{ ref: string }>((resolve, reject) => {
-          const xhr = new XMLHttpRequest()
-          xhr.open('POST', '/api/v1/assets')
-          for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v)
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable && e.total > 0) {
-              const pct = Math.min(99, Math.round((e.loaded / e.total) * 100))
-              setUpload({ uploading: true, progress: pct })
-            }
-          }
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              try {
-                resolve(JSON.parse(xhr.responseText) as { ref: string })
-              } catch {
-                reject(new Error('Invalid response'))
-              }
-            } else {
-              let msg = xhr.statusText
-              try {
-                const body = JSON.parse(xhr.responseText) as { message?: string }
-                if (body?.message) msg = body.message
-              } catch { /* ignore parse error */ }
-              reject(new Error(msg || `HTTP ${xhr.status}`))
-            }
-          }
-          xhr.onerror = () => reject(new Error('Network error'))
-          xhr.onabort = () => reject(new Error('Aborted'))
-          xhr.send(file)
-        })
-
+        const ref = await uploadFile(file)
         const alt = file.name.replace(/\.[a-z0-9]+$/i, '') || 'image'
-        insertAtCursor(`\n![${alt}](${result.ref})\n`)
-        setUpload({ uploading: false, progress: 100 })
-        // 100% 一帧后归零，让下一次上传能从 0 开始显示（避免按钮残留进度）
-        setTimeout(() => setUpload((s) => (s.progress === 100 ? { uploading: false, progress: 0 } : s)), 600)
+        insertAtCursor(`\n![${alt}](${ref})\n`)
       } catch (e) {
         toast.error({
           title: i18next.t('imageUploader.uploadFailed'),
           description: e instanceof Error ? e.message : String(e),
         })
-        setUpload({ uploading: false, progress: 0 })
       }
     },
-    [uploading, insertAtCursor, toast],
+    [uploading, uploadFile, insertAtCursor, toast],
   )
 
-  return useMemo(() => ({ uploading, progress, uploadImage }), [uploading, progress, uploadImage])
+  return useMemo(
+    () => ({ uploading, progress, uploadImage, uploadFile }),
+    [uploading, progress, uploadImage, uploadFile],
+  )
 }

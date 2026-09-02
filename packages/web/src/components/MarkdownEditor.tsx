@@ -24,6 +24,7 @@ import { useDocContextMenu } from './editor/DocContextMenu'
 import EditorFooter from './editor/EditorFooter'
 import CodeMirrorEditor from './editor/CodeMirrorEditor'
 import type { CodeMirrorEditorHandle } from './editor/CodeMirrorEditor'
+import ImageEditPopover from './editor/ImageEditPopover'
 import SelectionBubble from './editor/SelectionBubble'
 import type { SelectionAnchor } from './editor/cm/selectionReport'
 import { autoSaveDelayMs, createCoalescedSave } from '../lib/coalescedSave'
@@ -318,6 +319,16 @@ function EditorInline({
   }, [draft])
 
   const imageUploader = useImageUploader({ insertAtCursor })
+
+  // 图片替换：保留原 alt，只换 src；光标不动（replaceImageLine 不传 selection）
+  const handleReplaceImage = useCallback((from: number, to: number, ref: string, alt: string) => {
+    editorRef.current?.replaceImageLine(from, to, `![${alt}](${ref})`)
+  }, [])
+
+  // 图片「编辑源码」：光标移到图片行，预览收起露出 markdown
+  const handleEditImageSource = useCallback((from: number) => {
+    editorRef.current?.moveCursorTo(from)
+  }, [])
 
   // ⌘P 必须在 window capture 拦下：浏览器/系统打印会抢 bubble 阶段；
   // 预览态会卸掉 CM，编辑态焦点也可能在工具栏，不能只绑编辑器 keymap。
@@ -646,6 +657,12 @@ function EditorInline({
                 onCaret={onCaret}
                 autoFocus
                 placeholder={t('mdEditor.placeholder')}
+              />
+              {/* 点击图片预览 → 替换/资源库/查看原图 */}
+              <ImageEditPopover
+                onUploadFile={imageUploader.uploadFile}
+                onReplace={handleReplaceImage}
+                onEditSource={handleEditImageSource}
               />
               {/* 图片拖入反馈：拖拽文件进入区域时铺底高亮，提示“松开即上传”。
                   CM 的 domEventHandlers 仍然处理 drop、CodeMirrorFocus 里调 uploadImage。 */}
