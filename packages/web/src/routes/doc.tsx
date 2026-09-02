@@ -22,8 +22,8 @@ import {
   PanelLeftOpen,
   Minimize2,
   Maximize2,
-  Presentation,
-  ALargeSmall,
+  MonitorPlay,
+  Scaling,
 } from 'lucide-react'
 import { api, request, ApiError } from '../hooks/useAPI'
 import { useDocChanges } from '../hooks/useDocEvents'
@@ -936,7 +936,7 @@ useEffect(() => {
                   type="button"
                   onClick={handleStartEdit}
                   onMouseEnter={prefetchMarkdownEditor}
-                  className="btn-icon-ghost text-muted-foreground hover:text-foreground hover:bg-accent"
+                  className="inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-accent"
                   aria-label={t('doc.enterEdit')}
                 >
                   <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
@@ -1578,8 +1578,8 @@ function ErrorState({ message }: { message: string }) {
   )
 }
 /** 阅读显示（缩放 + 行宽）与演示（右上角，仅阅读态）：
- *  - 显示：ALargeSmall → 一个弹层收口缩放 5 档与标准/宽版行宽；不改 zoom 语义
- *  - Presentation = 演示模式开关（隐藏侧栏/窗口标题栏，纯展示态） */
+ *  - 显示：Scaling → 一个弹层收口缩放 5 档与标准/宽版行宽；不改 zoom 语义
+ *  - MonitorPlay = 演示模式开关（隐藏侧栏/窗口标题栏，纯展示态） */
 function DemoModeButton() {
   const { t } = useTranslation()
   const demo = useDemoMode()
@@ -1615,7 +1615,7 @@ function DemoModeButton() {
 
   return (
     <div
-      className="flex items-center gap-1"
+      className="flex items-center gap-2"
       role="group"
       aria-label={t('doc.readingDisplay.label')}
     >
@@ -1633,7 +1633,7 @@ function DemoModeButton() {
               : 'text-muted-foreground hover:text-foreground hover:bg-accent'
           }`}
         >
-          <ALargeSmall className="w-3.5 h-3.5" strokeWidth={1.75} />
+          <Scaling className="w-3.5 h-3.5" strokeWidth={1.75} />
         </button>
       </Tooltip>
       {displayOpen && displayPos && createPortal(
@@ -1698,7 +1698,6 @@ function DemoModeButton() {
         </div>,
         document.body,
       )}
-      <div className="w-px h-4 bg-border/60 mx-0.5" />
       <Tooltip label={demo.active ? t('doc.demoMode.exit') : t('doc.demoMode.enter')}>
         <button
           type="button"
@@ -1711,7 +1710,7 @@ function DemoModeButton() {
               : 'text-muted-foreground hover:text-foreground hover:bg-accent'
           }`}
         >
-          <Presentation className="w-3.5 h-3.5" strokeWidth={1.75} />
+          <MonitorPlay className="w-3.5 h-3.5" strokeWidth={1.75} />
         </button>
       </Tooltip>
     </div>
