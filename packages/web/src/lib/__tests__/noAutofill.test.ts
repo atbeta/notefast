@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { NO_AUTOFILL_TOKEN, applyNoAutofill, resolveNoAutofillToken } from '../noAutofill'
+import {
+  NO_AUTOFILL_TOKEN,
+  applyNoAutofill,
+  resolveEngineToken,
+  resolveNoAutofillToken,
+} from '../noAutofill'
 
 /** 无 DOM 环境的最小 Element 替身（applyNoAutofill 只依赖 tagName + get/setAttribute） */
 function fakeEl(tagName: string, attrs: Record<string, string> = {}) {
@@ -16,8 +21,25 @@ function fakeEl(tagName: string, attrs: Record<string, string> = {}) {
   return el as unknown as HTMLInputElement & { attrs: Record<string, string> }
 }
 
+describe('resolveEngineToken', () => {
+  test('Blink（Chrome/Edge/WebView2）→ 非标准 token', () => {
+    expect(resolveEngineToken('Mozilla/5.0 (Macintosh) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36')).toBe('nope')
+    expect(resolveEngineToken('Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0')).toBe('nope')
+    expect(resolveEngineToken('Mozilla/5.0 (X11; Linux) AppleWebKit/537.36 (KHTML, like Gecko) Chromium/126.0.0.0 Safari/537.36')).toBe('nope')
+  })
+
+  test('WebKit（Safari/WKWebView）→ 标准 off（非 "off" 值会被当 On）', () => {
+    expect(resolveEngineToken('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15')).toBe('off')
+  })
+
+  test('Firefox / 未知 UA → off', () => {
+    expect(resolveEngineToken('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:126.0) Gecko/20100101 Firefox/126.0')).toBe('off')
+    expect(resolveEngineToken('')).toBe('off')
+  })
+})
+
 describe('resolveNoAutofillToken', () => {
-  test('普通文本框 → 非标准 token（Blink 忽略 off）', () => {
+  test('普通文本框 → 当前引擎 token', () => {
     expect(resolveNoAutofillToken('text', null)).toBe(NO_AUTOFILL_TOKEN)
     expect(resolveNoAutofillToken(null, null)).toBe(NO_AUTOFILL_TOKEN)
     expect(resolveNoAutofillToken('text', 'off')).toBe(NO_AUTOFILL_TOKEN)

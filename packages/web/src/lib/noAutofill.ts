@@ -4,16 +4,28 @@
  * 原因：桌面壳（Tauri / WKWebView）里保留浏览器风格的输入历史很违和
  * （标题、搜索、设置项都会弹历史下拉）。Web 形态同样禁用，行为一致。
  *
- * Blink（Chrome / Edge / 多数 WebView）常忽略 autocomplete="off"，改用
- * 非标准 token（"nope"）才能挡住「以前的输入」下拉；Firefox/Safari 对
- * 未知 token 也按关闭处理。
+ * 引擎差异（关键）：
+ * - Blink（Chrome / Edge / WebView2）常忽略 autocomplete="off"，需非标准
+ *   token（"nope"）才能挡住「以前的输入」下拉。
+ * - WebKit（Safari / WKWebView）恰好相反：autofill 解析把任何非 "off" 值
+ *   都当作 On（HTMLInputElement::attributeChanged），"nope" 会被当成开启
+ *   → 仍弹历史下拉。必须用标准 "off"。
+ * - Firefox 尊重 "off"。
  *
  * 豁免：type="password"，以及显式 current-password / new-password / username
  * （AuthPrompt 密码管理器需要保留）。
  */
 
-/** Blink 忽略 "off"；非标准值才能关掉历史建议 */
-export const NO_AUTOFILL_TOKEN = 'nope'
+/** 按渲染引擎选择能真正关掉历史建议的 autocomplete 值 */
+export function resolveEngineToken(ua?: string): string {
+  const agent = ua ?? (typeof navigator !== 'undefined' ? navigator.userAgent : '')
+  // Blink 忽略 "off"；WebKit 忽略非 "off"。其余引擎（Firefox 等）尊重 "off"
+  if (/Chrome|Chromium|Edg\//.test(agent)) return 'nope'
+  return 'off'
+}
+
+/** 当前引擎下应写入的 autocomplete 值 */
+export const NO_AUTOFILL_TOKEN = resolveEngineToken()
 
 const SELECTOR = 'input:not([type="password"]), textarea'
 const KEEP_RE = /^(current-password|new-password|username)$/i
