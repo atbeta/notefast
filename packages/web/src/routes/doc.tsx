@@ -1106,8 +1106,8 @@ useEffect(() => {
                 className="input-underline font-bold text-foreground"
                 placeholder={t('doc.untitledDocument')}
               />
-              {/* 未配置 Chat 时不展示：避免「可点但静默失败」；ai_exclude 仍显示禁用态 */}
-              {(ai.chat || aiExclude) && (
+              {/* 仅编辑态展示；未配置 Chat 时不展示：避免「可点但静默失败」；ai_exclude 仍显示禁用态 */}
+              {isEditing && (ai.chat || aiExclude) && (
               <Tooltip label={aiExclude ? t('doc.aiHiddenNoTitle') : t('doc.generateTitleAi')}>
                 <button
                   type="button"
