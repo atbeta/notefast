@@ -1135,6 +1135,28 @@ html.theme-fading *::after {
 .cm-mermaid-expand:hover {
   color: rgb(var(--foreground));
 }
+.cm-mermaid-expand::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 8px);
+  transform: translateY(-50%);
+  white-space: nowrap;
+  border-radius: 6px;
+  background: rgb(var(--ink));
+  color: rgb(var(--ink-foreground));
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: var(--shadow-floating);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 2;
+}
+.cm-mermaid-expand:hover::after {
+  opacity: 1;
+}
 .cm-mermaid-preview-status {
   font-size: 13px;
   color: rgb(var(--muted-foreground) / 0.6);
