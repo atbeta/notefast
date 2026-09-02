@@ -21,6 +21,11 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-opener = "2"
 
+# Windows WebView2 设置层：关掉通用自动填充（Suggestions 无视 autocomplete 属性）
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38"
+windows-core = "0.61"
+
 [profile.release]
 codegen-units = 1
 lto = true

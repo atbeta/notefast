@@ -184,6 +184,23 @@ pub fn run() {
             // 启动闪屏：conf 里 visible=false。light/dark 用 ui-preferences；
             // 未设或 system 才跟 OS。色值对齐 ui/index.html 的 --bg。
             if let Some(win) = app.get_webview_window("main") {
+                // Windows WebView2 的「Suggestions」自动填充无视 autocomplete 属性，
+                // 标题/搜索框仍弹历史下拉。在 WebView2 设置层全局关掉通用自动填充
+                // （IsGeneralAutofillEnabled=false），web 侧 autocomplete 标记只兜底其余引擎。
+                #[cfg(windows)]
+                let _ = win.with_webview(|webview| {
+                    unsafe {
+                        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings4;
+                        use windows_core::Interface;
+                        if let Ok(core) = webview.controller().CoreWebView2() {
+                            if let Ok(settings) = core.Settings() {
+                                if let Ok(settings4) = settings.cast::<ICoreWebView2Settings4>() {
+                                    let _ = settings4.SetIsGeneralAutofillEnabled(false);
+                                }
+                            }
+                        }
+                    }
+                });
                 let system_dark = !matches!(win.theme(), Ok(tauri::Theme::Light));
                 let choice = default_data_dir(app.handle())
                     .ok()

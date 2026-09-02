@@ -2028,7 +2028,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "notefast-tauri"
-version = "0.81.1"
+version = "0.85.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2038,6 +2038,8 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "webview2-com",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
