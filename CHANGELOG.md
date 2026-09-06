@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.86.1](https://github.com/atbeta/notefast/compare/v0.86.0...v0.86.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* **web:** honor escaped pipes when rendering GFM tables ([84bd428](https://github.com/atbeta/notefast/commit/84bd428d3b5a1347619728251b8349e77a6d3558))
+
 ## [0.86.0](https://github.com/atbeta/notefast/compare/v0.85.0...v0.86.0) (2026-09-02)
 
 
