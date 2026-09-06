@@ -11,6 +11,7 @@ import {
   padTable,
   blankTable,
   tableInsertAffixes,
+  isTableDelimiter,
 } from '../tableModel'
 
 describe('parseTable / serializeTable', () => {
@@ -41,6 +42,23 @@ describe('parseTable / serializeTable', () => {
     const md = serializeTable(table)
     expect(md).toContain('a \\| b')
     expect(parseTable(md.split('\n')).header).toEqual(['a | b', 'c'])
+  })
+
+  test('类型联合 number \\| string 保持单格四列表', () => {
+    const table = parseTable([
+      '| prop | 类型 | 默认 | 说明 |',
+      '| --- | --- | --- | --- |',
+      '| `minSize` | `number \\| string` | `0` | 最小尺寸 |',
+    ])
+    expect(table.header).toHaveLength(4)
+    expect(table.body[0]).toEqual(['`minSize`', '`number | string`', '`0`', '最小尺寸'])
+  })
+
+  test('分隔行判定切列也认 \\|（避免误拆）', () => {
+    expect(isTableDelimiter('| --- | --- |')).toBe(true)
+    expect(isTableDelimiter('| :--- | ---: |')).toBe(true)
+    // 含未转义 | 的伪分隔行仍按列切；转义 | 不会多出非法单元格
+    expect(isTableDelimiter('| --- \\| --- |')).toBe(false)
   })
 
   test('参差行列按表头列数补齐空单元格', () => {

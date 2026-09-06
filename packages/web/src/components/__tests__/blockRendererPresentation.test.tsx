@@ -66,3 +66,24 @@ describe('BlockRenderer presentation 模式', () => {
     expect(html).not.toContain('/share/tok/assets/')
   })
 })
+
+describe('BlockRenderer 表格 \\| 转义', () => {
+  test('单元格内 \\| 不增列，阅读态与 GFM 一致', () => {
+    const content = [
+      '| prop | 类型 | 默认 |',
+      '| --- | --- | --- |',
+      '| `minSize` | `number \\| string` | `0` |',
+    ].join('\n')
+    const html = renderToStaticMarkup(
+      createElement(BlockRenderer, {
+        block: doc([leaf(BlockType.Table, content)]),
+        presentation: true,
+      }),
+    )
+    // 4 列表头（含闭合）→ 一行 3 个 th；体行 3 个 td，不被 \| 拆成 4+
+    expect(html.match(/<th\b/g)?.length).toBe(3)
+    expect(html.match(/<td\b/g)?.length).toBe(3)
+    expect(html).toContain('number | string')
+    expect(html).not.toContain('number \\')
+  })
+})

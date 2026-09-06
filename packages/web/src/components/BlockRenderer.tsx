@@ -13,6 +13,7 @@ import { api } from '../hooks/useAPI'
 import { useImageUploadEnabled } from '../hooks/useImageUploadEnabled'
 import ImageLightbox from './ImageLightbox'
 import { resolveMarkdownHref } from '../lib/markdownHref'
+import { parseTable, type TableAlign } from './editor/cm/tableModel'
 import i18next from '../i18n'
 
 interface BlockNodeProps {
@@ -362,16 +363,10 @@ function HighlightedCodeBlock({ block, lang }: { block: Block; lang: string }) {
 }
 
 // ───────────────────────── Table ─────────────────────────
+// 切列与编辑器 tableModel 共用（认 \|），避免阅读态把类型联合等字面 | 拆成多余列。
 
-type Align = 'left' | 'center' | 'right'
-
-function parseTableRow(line: string): string[] {
-  return line
-    .trim()
-    .replace(/^\|/, '')
-    .replace(/\|$/, '')
-    .split('|')
-    .map((c) => c.trim())
+function cssTableAlign(align: TableAlign | undefined): 'left' | 'center' | 'right' {
+  return align === 'center' || align === 'right' ? align : 'left'
 }
 
 function TableBlock({ block }: { block: Block }) {
@@ -379,11 +374,7 @@ function TableBlock({ block }: { block: Block }) {
   if (rows.length < 2) {
     return <p className="text-muted-foreground">{block.content}</p>
   }
-  const header = parseTableRow(rows[0])
-  const aligns: Align[] = parseTableRow(rows[1]).map((c) =>
-    c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : 'left',
-  )
-  const body = rows.slice(2).map(parseTableRow)
+  const { header, aligns, body } = parseTable(rows)
 
   return (
     <div id={block.id} className="scroll-mt-20 my-5 overflow-x-auto rounded-lg border border-border">
@@ -393,7 +384,7 @@ function TableBlock({ block }: { block: Block }) {
             {header.map((h, i) => (
               <th
                 key={i}
-                style={{ textAlign: aligns[i] || 'left' }}
+                style={{ textAlign: cssTableAlign(aligns[i]) }}
                 className="px-3 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap"
               >
                 {renderInline(h, `th${i}`)}
@@ -407,7 +398,7 @@ function TableBlock({ block }: { block: Block }) {
               {r.map((c, ci) => (
                 <td
                   key={ci}
-                  style={{ textAlign: aligns[ci] || 'left' }}
+                  style={{ textAlign: cssTableAlign(aligns[ci]) }}
                   className="px-3 py-2 border-b border-border/50 text-foreground/90"
                 >
                   {renderInline(c, `td${ri}-${ci}`)}

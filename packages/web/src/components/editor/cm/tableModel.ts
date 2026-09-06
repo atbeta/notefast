@@ -1,8 +1,8 @@
 /**
  * GFM 管道表格的解析 / 序列化 / 网格变更。
  *
- * 供编辑器预览 widget 与外挂表格对话框共用。不进 core：阅读态仍走 markdown.ts 整段管道文本，
- * 这里只服务「人类改格子 → 写回 Markdown」这一条路径。
+ * 供阅读态 BlockRenderer、编辑器预览 widget、外挂表格对话框共用切列逻辑。
+ * core/markdown.ts 只识别整段管道文本并原样存 block.content；单元格切分在此完成。
  *
  * 单元格内 `|` 以 `\|` 转义（GFM 惯例）；对齐保留 none / left / center / right。
  */
@@ -21,16 +21,17 @@ export function isTableRow(text: string): boolean {
   return t.length > 0 && t.includes('|')
 }
 
-/** 表格分隔行：| --- | :--- | ---: | :---: | 形态 */
+/** 表格分隔行：| --- | :--- | ---: | :---: | 形态（切列认 \|，与 splitRow 一致） */
 export function isTableDelimiter(text: string): boolean {
   const t = text.trim()
   if (!t.includes('-')) return false
-  const cells = t.replace(/^\|/, '').replace(/\|$/, '').split('|')
+  const cells = splitRow(t)
   if (cells.length === 0) return false
-  return cells.every((c) => /^:?-+:?$/.test(c.trim()))
+  return cells.every((c) => /^:?-+:?$/.test(c))
 }
 
-function splitRow(line: string): string[] {
+/** 按 | 切列；`\|` 视为字面管道，不增列 */
+export function splitRow(line: string): string[] {
   const t = line.trim().replace(/^\|/, '').replace(/\|$/, '')
   const cells: string[] = []
   let cur = ''
