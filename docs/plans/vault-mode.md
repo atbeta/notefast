@@ -41,6 +41,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | **完成**（V-301 ✅ V-302 ✅ V-303 ✅ V-304 ✅） |
 | M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | **完成**（V-401 ✅ V-402 ✅ V-403 ✅ V-404 ✅） |
 | M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | **完成**（V-501 ✅ V-502 ✅ V-503 ✅ V-504 ✅ v0.90.0 已发布） |
+| M7 统一 | vault-first：部署一致性 + parity 前置（RFC 0005） | U-1 … U-7 | 进行中 |
 
 依赖关系：V-201 → V-202 → V-203 → V-204；V-203 依赖 V-304（解析器要能无损识别 Obsidian 语法，否则区间对不上）；V-301/302 可与 M2 并行；V-303 独立；M4 依赖 M2 完成；M5 最后。
 
@@ -329,6 +330,24 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 **实测（LocalFS 后端）**：1000 文件首次 push 147ms / pull 161ms；10k 文件 push 1.50s / pull 1.47s；幂等复跑 6–45ms。
 
 **与 db 模式协议同步的关系**：vault notebook 上 `scheduleSyncNow()` 直接短路，`POST /api/v1/sync/run|pull` 返回 409 `vault_mode_uses_file_sync`（实测断言在 `vaultFileSyncRuntime.test.ts`）。
+
+---
+
+## M7 vault-first 统一（RFC 0005）
+
+用户 2026-09-09 拍板：方向是「vault 成为默认心智模型、db 冻结为 legacy」，并且**同一套代码在不同部署方式（桌面壳 / Docker / 裸 bun）下行为必须一致**。原则：模式差异只能由引擎表达，不能由部署方式表达。
+
+| 任务 | 内容 | 状态 |
+|---|---|---|
+| U-1 | 可见性：只读模式端点（模式 / vault 根 / 索引目录 / 实际 watcher 模式）+ 设置页常显「数据来源」，db 模式不再整项隐藏 | 待开始 |
+| U-2 | watcher 自动探测：启动时探测原生事件，失败降级轮询；实际模式进 `/vault/status`；`VAULT_USE_POLLING` 保留强制覆盖 | 待开始 |
+| U-3 | 索引位置统一：vault 模式一律派生 `<父目录>/<sha256 前12位>`；Docker 用 `NOTEFAST_APP_SUPPORT_DIR=/app/data`；检测到旧 `/app/data/index.sqlite` 时沿用并告警 | 待开始 |
+| U-4 | 部署默认对齐：`docker-compose.yml` / example 默认启用 vault（db 变体留注释）+ README / `docs/vault-migration.md` 同步 | 待开始 |
+| U-5 | 修订历史：vault 也记 `doc_snapshots`（存 `DATA_DIR`、键用 `rel_path`、内容 sha256 去重、每篇 50 条），**恢复走写回** | 待开始 |
+| U-6 | 分享身份：`shares` 改 `rel_path` + 内容校验，文件缺失返回 410；迁移既有数据 | 待开始 |
+| U-7 | 对账性能：修 `syncVaultWikilinks` 的 O(n²)，目标 10k 文件 < 60s，并给 50k 不崩的证据 | 待开始 |
+
+U-1 … U-4 是部署一致性；U-5 … U-7 是统一的前置 parity（U-7 可与其余并行）。
 
 ---
 
