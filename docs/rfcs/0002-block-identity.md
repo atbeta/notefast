@@ -110,7 +110,7 @@ grace 窗口默认 `max(1000ms, stabilityMs × 3)`；窗口内文件在原路径
 
 对账与 watcher 队列、写回共用一把串行锁；事件在对账期间排队，不会交错。
 
-## 引用解析（V-301 已落地；锚点 V-302 待做）
+## 引用解析（已落地）
 
 `[[Note]]`、`[[Note#Heading]]`、`[[Note#^abc123]]` 在 ingest 时解析为 `block_refs` 行，按最严到最宽降级：
 
@@ -119,7 +119,7 @@ grace 窗口默认 `max(1000ms, stabilityMs × 3)`；窗口内文件在原路径
 3. 文件名按 Obsidian「最短唯一路径」规则命中 `vault_files.rel_path`
 4. 失败 → 不建 ref，记 `vault_unresolved_links` 供 UI 显示，不抛错
 
-现状：无锚点引用已按 3 → 4 落地（`vault/wikilinks.ts`，`ref_type='wikilink'`，目标为文档根 id）；带锚点的引用暂时记 unresolved，等 V-302 落地后再升级为块级引用。`vault_unresolved_links(notebook_id, source_block_id, target_name, anchor)` 随源块重写，目标文件出现 / 改名 / 从回收站恢复时按 `target_name` 反查补建。
+实现见 `vault/wikilinks.ts`（`ref_type='wikilink'`）。无锚点引用指向文档根 id（改名 / 移动天然保持）；带锚点引用优先指向命中块，锚点暂时找不到则退化为文档级引用并记 unresolved，目标文档补上 heading / 块 id 后自动升级。`vault_unresolved_links(notebook_id, source_block_id, target_name, anchor)` 随源块重写，目标文件出现 / 改名 / 从回收站恢复时按 `target_name` 反查补建。
 
 ## 验证标准
 

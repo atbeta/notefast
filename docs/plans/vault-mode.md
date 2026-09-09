@@ -38,7 +38,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 |---|---|---|---|
 | M1 基础 | 文件 → 索引闭环 + 整篇写回 | — | 完成（`c4f9e2c` `b14d6c5`） |
 | M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **完成**（V-201 ✅ V-202 ✅ V-203 ✅ V-204 ✅ V-205 ✅） |
-| M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | V-301 ✅ V-304 ✅ |
+| M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | V-301 ✅ V-302 ✅ V-304 ✅ |
 | M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | V-401 ✅ |
 | M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | |
 
@@ -153,6 +153,11 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **要点**：heading slug 比较用 Obsidian 规则（保留大小写与空格的模糊匹配：trim + 折叠空白 + 忽略大小写）；块 id 正则 `\^[A-Za-z0-9-]+$`；降级顺序见 RFC 0002 §引用解析
 - **验收**：测试——三种锚点各一例；`^id` 经 ingest → 写回 往返字节不变（与 V-203 联动）
 - **依赖**：V-301、V-304 · **估算**：1.5 人天
+- **状态**：完成（`c6f3303`）
+  - 核心：`parseMdast` 把块尾 ` ^id`（空格 + `^` + 字母数字连字符）剥离进 `properties.obsidian_block_id`，`blocksToMarkdown` 序列化时还原（段落 / 列表项；非该写法不动，如 `a^2`、行尾 `^`）
+  - 解析：`[[Note#Heading]]` 按 slug 比较（trim + 折叠空白 + 忽略大小写，命中多个取第一个）；`[[Note#^abc123]]` 按 `obsidian_block_id` 命中块
+  - 降级：文档解析到但锚点没命中 → 建文档级引用 + 记 unresolved；目标文档后来补上同名 heading 时，`resolveUnresolvedForDoc` 把引用升级为块级
+  - 测试：`core/obsidianRoundtrip.test.ts`（块 id 剥离 / 还原 / 非 id 写法）；`vault.test.ts` 3 例（两类锚点 + 锚点后补 + 块 id 经写回逐字节不变）
 
 ### V-303 vault 内图片直出
 
