@@ -38,7 +38,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 |---|---|---|---|
 | M1 基础 | 文件 → 索引闭环 + 整篇写回 | — | 完成（`c4f9e2c` `b14d6c5`） |
 | M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **完成**（V-201 ✅ V-202 ✅ V-203 ✅ V-204 ✅ V-205 ✅） |
-| M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | |
+| M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | V-304 ✅ |
 | M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | |
 | M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | |
 
@@ -167,6 +167,12 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **要点**：callout 保持为 blockquote 块并保留 `[!type]` 首行；`%%` 注释保持为段落原文（不渲染由 web 层处理）；`$$…$$` 作为独立块；`![[x]]` 保持为段落原文（V-303 渲染时处理）；每种语法加 `blocksToMarkdown(parse(x)) === normalize(x)` 往返测试
 - **验收**：往返测试全绿；`vault.test.ts` 用 V-203 fixture 断言块数与顺序
 - **依赖**：无 · **估算**：1.5 人天
+- **状态**：完成（`5a634a9`）
+  - **修掉一处数据丢失**：含列表 / 代码 / 表格 / 嵌套引用的 blockquote（Obsidian callout 的常见形态）此前只保留段落，其余子节点被静默丢弃 → 这类引用改为整段存原文（`properties.markdownFallback`），序列化直接回写
+  - 空引用行序列化为 `>`（此前是 `> ` 带尾随空格），Obsidian 文件可逐字节往返
+  - 逐字节往返已覆盖：callout（含折叠 / 列表 / 代码 / 表格 / 嵌套）、`%%` 注释（行内 / 整段 / 多行）、`^id`（段落 / 标题 / 列表项）、`![[embed]]`（整块 / 带尺寸 / 列表内）、dataview 围栏、行内 `$x$`
+  - 唯一保留的归一化：独占行 `$$…$$` → ```math 围栏（设计如此，块仍是独立 code 块）；强调符号 `_x_` → `*x*` 仍在「被编辑块」上发生
+  - 测试：`core/__tests__/obsidianRoundtrip.test.ts`（24 例）；`vault.test.ts` 增加 fixture 块数 / 顺序 / 属性断言与「含列表 callout 改相邻块」保真用例
 
 ---
 

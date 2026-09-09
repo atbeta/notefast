@@ -84,9 +84,9 @@ disk_sha === next_sha             → 内容已一致 → 不写
 整篇序列化会把用户的 Markdown 规范化：
 
 - 空行数、列表缩进、强调符号（`*` vs `_`）等排版被统一
-- 非 CommonMark 的 Obsidian 私有语法（callout `> [!note]`、`%%注释%%`、`^block-id`、`![[embed]]`、dataview 查询块）被 mdast 当普通段落 / 引用块处理，写回后可能改写
+- ~~非 CommonMark 的 Obsidian 私有语法（callout `> [!note]`、`%%注释%%`、`^block-id`、`![[embed]]`、dataview 查询块）被 mdast 当普通段落 / 引用块处理，写回后可能改写~~ → 已收敛：这类语法逐字节往返（`core/__tests__/obsidianRoundtrip.test.ts`）；含列表 / 代码 / 嵌套引用的 blockquote 改为整段存原文，不再丢子节点。剩余归一化只在**被编辑的块**上发生（`$$` → ```math 围栏、`_x_` → `*x*`）
 - ~~用户手写的 frontmatter 只保留 `tags`，其余字段丢失~~ → 阶段 B 已修复：`vault_files.frontmatter_raw` 行级透传
-- ~~未被编辑的块也被重新序列化~~ → 阶段 C 已修复：未改动块复用磁盘字节；**被编辑的那个块**仍会被归一化（V-304 负责收敛）
+- ~~未被编辑的块也被重新序列化~~ → 阶段 C 已修复：未改动块复用磁盘字节
 
 对 Obsidian 用户而言「工具重排了我的文件」是零容忍事项，所以 B/C 是发布门禁。
 
