@@ -32,4 +32,7 @@ clients/
 - 壳层只消费稳定 REST 子集（docs / blocks / search / sync protocol），不碰实验性端点
 - `packages/server/src/native/bootstrap.ts` 的 stdout 是机器握手通道：
   启动成功后写 `NF_READY <json>`（port/version/notebookId），客户端扫描前缀解析
+- vault 模式：壳只传 `--vault-path`（或 `VAULT_PATH`）与 `--app-support-dir`，
+  `DATA_DIR` 由引擎按 `sha256(canonical vault path)` 前 12 位派生到应用支持目录
+  （一个 vault 一个索引，RFC 0001 D4）；壳不复制这条规则，只记住「最近打开的 vault」路径
 - 构建：`clients/apple/scripts/assemble-app.sh`（engine 产物 + swift build + 组装 .app + 签名）
