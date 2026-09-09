@@ -80,10 +80,10 @@ describe('Obsidian 语法往返：注释 / 块 id / 嵌入 / 数学', () => {
   test('块 id 剥离进 properties，序列化还原到行尾', () => {
     const blocks = parseMarkdownToBlocks('一段话 ^abc123\n\n- 列表项 ^l1\n', 'nb')
     expect(blocks[0]!.content).toBe('一段话')
-    expect(blocks[0]!.properties.obsidian_block_id).toBe('abc123')
+    expect(blocks[0]!.properties?.obsidian_block_id).toBe('abc123')
     expect(blocks[1]!.content).toBe('列表项')
-    expect(blocks[1]!.properties.obsidian_block_id).toBe('l1')
+    expect(blocks[1]!.properties?.obsidian_block_id).toBe('l1')
     // 不是块 id 的写法不动（必须空格 + ^ + 字母数字连字符结尾）
-    expect(parseMarkdownToBlocks('公式 a^2 与 b ^ 结尾\n', 'nb')[0]!.properties.obsidian_block_id).toBeUndefined()
+    expect(parseMarkdownToBlocks('公式 a^2 与 b ^ 结尾\n', 'nb')[0]!.properties?.obsidian_block_id).toBeUndefined()
   })
 })
