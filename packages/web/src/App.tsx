@@ -18,6 +18,7 @@ const SettingsAI = lazy(() => import('./routes/settings/AI'))
 const SettingsTermDict = lazy(() => import('./routes/settings/TermDict'))
 const SettingsImages = lazy(() => import('./routes/settings/Images'))
 const SettingsBackup = lazy(() => import('./routes/settings/Backup'))
+const SettingsVault = lazy(() => import('./routes/settings/Vault'))
 const SettingsTokens = lazy(() => import('./routes/settings/Tokens'))
 const SettingsSecurity = lazy(() => import('./routes/settings/Security'))
 const SettingsMaintenance = lazy(() => import('./routes/settings/Maintenance'))
@@ -171,6 +172,14 @@ export default function App() {
                 element={
                   <Suspense fallback={<RouteLoadingShell />}>
                     <SettingsBackup />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="vault"
+                element={
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <SettingsVault />
                   </Suspense>
                 }
               />

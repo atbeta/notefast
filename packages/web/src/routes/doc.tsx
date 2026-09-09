@@ -38,6 +38,7 @@ import DocVisitNav from '../components/DocVisitNav'
 import DocNeighborPager, { type DocNeighbor } from '../components/DocNeighborPager'
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
 import DocHeaderMore from '../components/DocHeaderMore'
+import DocVaultPath from '../components/DocVaultPath'
 import { useAiChatOpen } from '../components/Layout'
 import { useNavHistory } from '../hooks/useNavHistory'
 import { readDocRailCollapsed, writeDocRailCollapsed } from '../hooks/useDocRailCollapsed'
@@ -68,6 +69,7 @@ import { isEnterEditShortcut } from '../lib/globalShortcuts'
 import { deliverExport, fetchDocExportFile } from '../lib/download'
 import { hasExportPdfParam, printReadingDocAsPdf, stripExportPdfParam } from '../lib/printDoc'
 import { recordVisit } from '../lib/recentVisits'
+import { vaultPathOf } from '../lib/vault'
 import { useAiCapabilities } from '../hooks/useAiCapabilities'
 import { useRegisterShortcutPage } from '../hooks/useShortcutScope'
 
@@ -910,6 +912,9 @@ useEffect(() => {
 
   if (!doc) return <ErrorState message={error || t('doc.docNotFound')} />
 
+  // vault 文档才有来源文件路径（V-401 的 vault_path）；db notebook 为 null
+  const vaultPath = vaultPathOf(doc)
+
   return (
     <div className="flex flex-col lg:flex-row h-full print:h-auto print:block">
       {/* Main Content Area */}
@@ -1125,6 +1130,9 @@ useEffect(() => {
               </Tooltip>
               )}
             </div>
+
+            {/* 来源文件（vault 文档）：路径 + 复制 */}
+            <DocVaultPath path={vaultPath} />
 
             {/* Meta row — 阅读态展示，融入标题与正文之间 */}
             {!isEditing && (

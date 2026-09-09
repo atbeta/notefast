@@ -131,6 +131,8 @@
     "indexReady": "Indexed",
     "indexFailed": "Indexing failed",
     "indexRetry": "Index now",
-    "indexRetryFailed": "Could not start indexing"
+    "indexRetryFailed": "Could not start indexing",
+    "vaultPathLabel": "Source file",
+    "copyVaultPath": "Copy file path"
   }
 }

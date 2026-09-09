@@ -131,6 +131,8 @@
     "indexReady": "已索引",
     "indexFailed": "索引失败",
     "indexRetry": "立即索引",
-    "indexRetryFailed": "无法开始索引"
+    "indexRetryFailed": "无法开始索引",
+    "vaultPathLabel": "来源文件",
+    "copyVaultPath": "复制文件路径"
   }
 }
