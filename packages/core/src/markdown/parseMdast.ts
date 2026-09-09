@@ -80,14 +80,29 @@ export function parseMarkdownToBlocksWithSpans(
   const out: CreateBlockInput[] = []
   const spans: Array<BlockSpan | null> = []
 
-  const spanOf = (node: MdNode): BlockSpan | null => {
+  /** 节点覆盖的原始 body 行区间（行号在 doc 与 body 间一一对应，见上方注释） */
+  const lineRangeOf = (node: MdNode): { startLine: number; endLine: number } | null => {
     const s = node.position?.start.offset
     const e = node.position?.end.offset
     if (s == null || e == null || e <= s) return null
     const startLine = lineIndexAt(docLineStarts, s)
     const endLine = lineIndexAt(docLineStarts, e - 1)
     if (startLine == null || endLine == null || endLine >= bodyLines.length) return null
+    return { startLine, endLine }
+  }
+
+  const spanOf = (node: MdNode): BlockSpan | null => {
+    const range = lineRangeOf(node)
+    if (!range) return null
+    const { startLine, endLine } = range
     return { start: bodyLineStarts[startLine]!, end: bodyLineStarts[endLine]! + bodyLines[endLine]!.length }
+  }
+
+  /** 节点的原始源码（取 body 行，`$$` 等改写不会污染它） */
+  const rawSourceOf = (node: MdNode): string => {
+    const range = lineRangeOf(node)
+    if (!range) return node.value ?? ''
+    return bodyLines.slice(range.startLine, range.endLine + 1).join('\n')
   }
 
   const push = (input: CreateBlockInput, node: MdNode | null): void => {
@@ -113,7 +128,19 @@ export function parseMarkdownToBlocksWithSpans(
         }
         case 'blockquote': {
           const id = crypto.randomUUID()
-          push(makeInput(id, notebookId, parentId, BlockType.Quote, quoteContent(node), {}), node)
+          // 简单引用（只含段落 / 内联 HTML）走结构化模型：content 存去掉 `> ` 的正文。
+          // 含列表 / 代码 / 表格 / 嵌套引用（Obsidian callout 的常见形态）时改存**原文**：
+          // 非段落子节点无法塞进 content 且顺序会被打乱，早先实现直接把它们丢掉了。
+          const complex = (node.children ?? []).some((c) => c.type !== 'paragraph' && c.type !== 'html')
+          push(
+            complex
+              ? makeInput(id, notebookId, parentId, BlockType.Quote, rawSourceOf(node), {
+                  markdownFallback: true,
+                  markdownNodeType: 'blockquote',
+                })
+              : makeInput(id, notebookId, parentId, BlockType.Quote, quoteContent(node), {}),
+            node,
+          )
           break
         }
         case 'code': {

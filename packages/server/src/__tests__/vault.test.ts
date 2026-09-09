@@ -684,6 +684,29 @@ describe('vault block patch', () => {
 
     const spansBefore = listVaultBlockSpans(getDb(), r.docId!)
     expect(spansBefore.length).toBeGreaterThan(5)
+
+    // 解析无损联动（V-304）：块数与顺序，callout / 注释 / ^id / 嵌入 / $$ / 嵌套列表都在
+    const tops = topLevelBlocks(getDb(), r.docId!)
+    expect(tops.map((b) => b.type)).toEqual([
+      'paragraph',
+      'quote',
+      'paragraph',
+      'list_item',
+      'code',
+      'paragraph',
+      'paragraph',
+    ])
+    expect(tops.map((b) => b.content)).toEqual([
+      '第一段 *斜体* 与 *斜体*',
+      '[!note] 提醒\n细节一\n\n细节二',
+      '%%私密注释%%',
+      '列表项 A',
+      'E = mc^2',
+      '尾段 ^abc123',
+      '![[img.png]]',
+    ])
+    expect(tops[3]!.children.map((c) => c.content)).toEqual(['嵌套 B'])
+    expect(tops[4]!.properties.language).toBe('math')
     const before = FIXTURE
     const prefix = bodyPrefix(before)
     const tail = topLevelBlocks(getDb(), r.docId!).find((b) => b.content.startsWith('尾段'))!
@@ -849,6 +872,24 @@ describe('vault block patch', () => {
     }
     expect(readFileSync(join(vaultDir, 'oob.md'), 'utf8')).toContain('第三段（改）')
     expect(fullWriteCount()).toBe(fullBefore + 1)
+  })
+
+  test('含列表的 callout：改相邻块时整段逐字节保留', async () => {
+    const md = '> [!tip] 提示\n> - 项一\n> - 项二\n\n尾段\n'
+    writeVault('complex.md', md)
+    const r = await ingestVaultFile(ctx, 'complex.md')
+    const tail = topLevelBlocks(getDb(), r.docId!).find((b) => b.content === '尾段')!
+
+    updateBlock(getDb(), tail.id, { content: '尾段（改）', actor: 'mcp' })
+    const wb = startVaultWriteback(ctx)
+    try {
+      expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'written' })
+    } finally {
+      wb.stop()
+    }
+    expect(readFileSync(join(vaultDir, 'complex.md'), 'utf8')).toBe(
+      '> [!tip] 提示\n> - 项一\n> - 项二\n\n尾段（改）\n',
+    )
   })
 
   test('整篇退回后含嵌套列表的文档无法重建区间 → 继续安全退回，不产生重复块', async () => {

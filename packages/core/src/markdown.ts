@@ -423,12 +423,19 @@ export function blocksToMarkdown(blocks: Block[]): string {
         }
 
         case BlockType.Quote: {
-          const prefix = '> '
-          const contentLines = block.content.split('\n')
-          for (const l of contentLines) {
-            lines.push(`${prefix}${l}`)
+          // 复杂引用（含列表 / 代码 / 嵌套引用）以原文保存，前缀已在 content 里，直接回写
+          if (block.properties.markdownFallback) {
+            for (const l of block.content.split('\n')) lines.push(l)
+            break
           }
+          // 空行写成单独的 `>`（不补尾随空格，保持与 Obsidian 原文一致）
+          for (const l of block.content.split('\n')) lines.push(l ? `> ${l}` : '>')
+          const mark = lines.length
           traverse(block.children, depth, true)
+          for (let i = mark; i < lines.length; i++) {
+            const l = lines[i]
+            lines[i] = l ? `> ${l}` : '>'
+          }
           break
         }
 
