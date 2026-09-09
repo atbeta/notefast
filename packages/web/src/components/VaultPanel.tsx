@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { FolderTree, Loader2, RefreshCw, TriangleAlert } from 'lucide-react'
 import { Button, CopyButton } from './ui'
 import { SettingsCard, SettingsSection, StatusBadge } from './settings/ui'
+import { formatIsoDateTime } from '../lib/time'
 import { isVaultEnabled, recentConflictPaths, type VaultStatus } from '../lib/vault'
 
 export interface VaultPanelProps {
@@ -86,6 +87,11 @@ export default function VaultPanel({ status, rebuilding = false, onRebuild }: Va
               ? t('settings.vault.watcherActive')
               : t('settings.vault.watcherInactive')}
           </p>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {status.next_reconcile_at
+              ? t('settings.vault.nextReconcile', { at: formatIsoDateTime(status.next_reconcile_at) })
+              : t('settings.vault.nextReconcileOff')}
+          </p>
 
           {/* 最近一次对账 + 重建 */}
           <div className="rounded-md border border-border/50 bg-background/60 p-4 space-y-3">
@@ -120,6 +126,7 @@ export default function VaultPanel({ status, rebuilding = false, onRebuild }: Va
                   <Stat label={t('settings.vault.restored')} value={stats.restored} />
                   <Stat label={t('settings.vault.moved')} value={stats.moved} />
                   <Stat label={t('settings.vault.deleted')} value={stats.deleted} />
+                  <Stat label={t('settings.vault.statSkipped')} value={stats.stat_skipped ?? 0} />
                   <Stat label={t('settings.vault.duration')} value={`${stats.durationMs} ms`} />
                 </dl>
                 {stats.errors.length > 0 && (

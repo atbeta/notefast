@@ -14,6 +14,8 @@ export interface VaultReconcileStats {
   restored: number
   moved: number
   deleted: number
+  /** 轻量对账里「size + mtime 未变、跳过读盘」的文件数 */
+  stat_skipped?: number
   errors: Array<{ relPath: string; error: string }>
   durationMs: number
 }
@@ -31,6 +33,8 @@ export interface VaultStatus {
   files?: number
   last_reconcile?: VaultReconcileStats | null
   conflicts?: { count: number; paths: string[] }
+  /** 下一次定时轻量对账时间（ISO）；未开启定时对账时为 null */
+  next_reconcile_at?: string | null
 }
 
 /**

@@ -10,6 +10,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import VaultPanel from '../VaultPanel'
 import DocVaultPath from '../DocVaultPath'
+import { formatIsoDateTime } from '../../lib/time'
 import type { VaultStatus } from '../../lib/vault'
 
 const BASE: VaultStatus = {
@@ -92,6 +93,30 @@ describe('VaultPanel 冲突列表', () => {
     })
     expect(html).toContain('broken/note.md')
     expect(html).toContain('EACCES')
+  })
+})
+
+describe('VaultPanel 定时对账', () => {
+  test('有 next_reconcile_at：渲染格式化后的时间', () => {
+    const iso = '2030-01-02T03:04:05.000Z'
+    const html = render({ ...BASE, next_reconcile_at: iso })
+    // 只断言格式化结果出现，不依赖具体 locale 文案
+    expect(html).toContain(formatIsoDateTime(iso))
+    expect(html).not.toContain(iso)
+  })
+
+  test('未开启定时对账：不出现任何时间', () => {
+    const html = render({ ...BASE, next_reconcile_at: null })
+    expect(html).not.toContain('2030')
+  })
+
+  test('stat_skipped 计入统计（缺省按 0，不报错）', () => {
+    const html = render({
+      ...BASE,
+      last_reconcile: { ...BASE.last_reconcile!, stat_skipped: 9 },
+    })
+    expect(html).toContain('9')
+    expect(render(BASE)).toContain('42 ms')
   })
 })
 
