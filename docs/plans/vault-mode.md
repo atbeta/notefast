@@ -279,6 +279,18 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **目标**：`next` → `main` `--ff-only`，release-please 出版本
 - **要点**：门禁 = M2 全绿 + V-501 达标 + V-502 完成；CHANGELOG 由 conventional commits 生成；`bump-minor-pre-major` 下 `feat!` 只升 minor
 - **依赖**：以上全部
+- **状态**：**待人工执行**（准备度已核验，见下）
+  - 代码侧门禁已满足：M2 / M3 / M4（除 V-403 见其状态）全部落地；`bun lint` / `bun run typecheck` / `bun test` 全绿
+  - `next` 是 `origin/main` 的后代（`git merge-base --is-ancestor origin/main next` 通过）→ 可直接 `--ff-only` 合回，无需 rebase
+  - release-please 配置就位：`.github/release-please-config.json` 已含 `"bump-minor-pre-major": true`，版本文件覆盖根 / 三个包 / Tauri 两处；manifest 当前 `0.86.1`
+  - **人工步骤**（需要有写权限的账号 + `RELEASE_PLEASE_TOKEN`）：
+    ```bash
+    git checkout main && git pull --ff-only
+    git merge --ff-only next
+    git push origin main          # 触发 release-please 开 release PR
+    # 合并 release PR → 打 tag → 触发 macos-release / windows-release / docker-publish
+    ```
+  - 发布前人工复核：V-501 的 10k 文件对账耗时是否达标（见其状态）；V-403 两平台手工验证（见其状态）
 
 ---
 
