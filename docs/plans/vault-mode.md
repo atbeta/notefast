@@ -37,7 +37,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | 里程碑 | 目标 | 任务 | 状态 |
 |---|---|---|---|
 | M1 基础 | 文件 → 索引闭环 + 整篇写回 | — | 完成（`c4f9e2c` `b14d6c5`） |
-| M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **发布门禁**（V-201 ✅ V-202 ✅ V-203 ✅ V-204 ✅） |
+| M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **完成**（V-201 ✅ V-202 ✅ V-203 ✅ V-204 ✅ V-205 ✅） |
 | M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | |
 | M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | |
 | M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | |
@@ -46,7 +46,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 
 ---
 
-## M2 写回保真（RFC 0003 B–D）
+## M2 写回保真（RFC 0003 B–D）—— 已全部完成，发布门禁解除
 
 ### V-201 frontmatter 透传
 
@@ -121,6 +121,9 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **要点**：vault 文档保存不记 `doc_snapshots`（RFC 0001 D6；用 `getNotebookVaultBinding` 判定）；`scheduleSyncNow` 对 vault notebook 静默
 - **验收**：测试——ingest → 经 Hono `app.request` PUT 新 markdown → `handle(ev)` 写回 → 文件内容符合 → 再 ingest 为 `unchanged`；`doc_snapshots` 无新行
 - **依赖**：V-203 · **估算**：0.5 人天
+- **状态**：完成（`475c8fc`）
+  - `applyMarkdownReplace` 按 `getNotebookVaultBinding(...).kind === 'vault'` 判定（不是看环境变量：同一进程可换 `DATA_DIR`）：vault 文档跳过 `recordDocSnapshot` 与 `scheduleSyncNow`
+  - 保存本身已发 doc 级事件（`fireAfterUpdate`），写回照常触发
 
 ---
 
