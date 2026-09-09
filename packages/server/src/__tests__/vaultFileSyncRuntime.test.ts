@@ -11,12 +11,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
-import { initStorageLocations } from '../storage/locations'
+import { createStorageLocation, initStorageLocations } from '../storage/locations'
 import { initProtocolManager, setProtocolSyncSuppressed, syncNow } from '../sync/protocolManager'
 import { createLocalFsObjectStore } from '../storage/webdavStore'
 import { DEFAULT_VAULT_IGNORE, type VaultConfig } from '../vault/config'
 import { createVaultRouter, createVaultRuntime, type VaultRuntime } from '../vault'
-import { detectForeignSyncHints } from '../vault/fileSyncRuntime'
+import { detectForeignSyncHints, resolveVaultSyncTarget } from '../vault/fileSyncRuntime'
 import { disableVaultFileSyncConfig, initVaultFileSyncConfig } from '../vault/fileSyncConfig'
 import { ensureVaultSyncMeta, pushVaultFiles, type FileSyncDeps } from '../vault/fileSync'
 import * as m027 from '../migrations/027_vault_sync_state'
@@ -190,6 +190,23 @@ describe('vault 文件同步运行时', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+
+  test('目标解析：localDir 优先、缺连接报错、S3 连接可构造 store', () => {
+    const base = { version: 1 as const, enabled: true, locationId: null, localDir: '', prefix: 'p/', intervalSeconds: 0, vaultId: null }
+    const local = resolveVaultSyncTarget({ ...base, localDir: storeDir })
+    expect('target' in local && local.target).toBe(`local:${storeDir}`)
+    expect(resolveVaultSyncTarget({ ...base, locationId: 'nope' })).toMatchObject({ error: expect.stringContaining('不存在') })
+
+    // createStorageLocation 自己生成 id（入参 id 被忽略）
+    const created = createStorageLocation({
+      id: '',
+      name: 'sync test',
+      kind: 's3',
+      s3: { bucket: 'bkt', region: 'us-east-1', accessKeyId: 'k', secretAccessKey: 's' },
+    })
+    const s3 = resolveVaultSyncTarget({ ...base, locationId: created.id })
+    expect('target' in s3 && s3.target).toBe('s3://bkt/p/')
   })
 
   test('vault 模式停用协议同步：syncNow 抛专用错误码', async () => {

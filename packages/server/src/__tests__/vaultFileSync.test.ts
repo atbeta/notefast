@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createLocalFsObjectStore } from '../storage/webdavStore'
 import { DEFAULT_VAULT_IGNORE } from '../vault/config'
-import { ensureVaultSyncMeta, pullVaultFiles, pushVaultFiles, readRemoteEntries, type FileSyncDeps } from '../vault/fileSync'
+import { ensureVaultSyncMeta, isSyncableRelPath, pullVaultFiles, pushVaultFiles, readRemoteEntries, type FileSyncDeps } from '../vault/fileSync'
 import * as m027 from '../migrations/027_vault_sync_state'
 
 const PREFIX = 'sync/'
@@ -167,6 +167,15 @@ describe('vault 文件同步：push / pull', () => {
     await expect(
       ensureVaultSyncMeta(createLocalFsObjectStore(storeDir), PREFIX, crypto.randomUUID()),
     ).rejects.toThrow(/vault_id/)
+  })
+
+  test('可同步路径判定：.md 与资源白名单，其余跳过', () => {
+    expect(isSyncableRelPath('a.md')).toBe(true)
+    expect(isSyncableRelPath('dir/图片.PNG')).toBe(true)
+    expect(isSyncableRelPath('x.pdf')).toBe(true)
+    expect(isSyncableRelPath('note.txt')).toBe(false)
+    expect(isSyncableRelPath('script.ts')).toBe(false)
+    expect(isSyncableRelPath('noext')).toBe(false)
   })
 
   test('清单合并：两端各自的分片按 updated_at 取新', async () => {
