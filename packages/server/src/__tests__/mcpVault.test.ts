@@ -160,4 +160,17 @@ describe('MCP vault 工具', () => {
     expect(res.payload).toMatchObject({ vault_path: path })
     expect((res.payload as { doc: { content: string } }).doc.content).toBe('来源')
   })
+
+  test('vault 图片引用保持相对路径原样（V-303 由 Web 侧解析）', async () => {
+    const path = 'notes/图.md'
+    mkdirSync(join(vaultDir, 'notes'), { recursive: true })
+    writeFileSync(join(vaultDir, path), '![图](assets/x.png)\n\n![[y.png]]\n')
+    await runtime.ingest(path)
+    const docId = getVaultFileByPath(getDb(), notebookId, path)!.doc_id
+
+    const res = await callTool('notefast_get_doc', { doc_id: docId })
+    const doc = (res.payload as { doc: { children: Array<{ content: string }> } }).doc
+    expect(doc.children[0]!.content).toBe('![图](assets/x.png)')
+    expect(doc.children[1]!.content).toBe('![[y.png]]')
+  })
 })

@@ -39,6 +39,7 @@ import DocNeighborPager, { type DocNeighbor } from '../components/DocNeighborPag
 import ShareDialog, { fetchDocShared } from '../components/ShareDialog'
 import DocHeaderMore from '../components/DocHeaderMore'
 import DocVaultPath from '../components/DocVaultPath'
+import { VaultDocProvider } from '../components/VaultDocContext'
 import { useAiChatOpen } from '../components/Layout'
 import { useNavHistory } from '../hooks/useNavHistory'
 import { readDocRailCollapsed, writeDocRailCollapsed } from '../hooks/useDocRailCollapsed'
@@ -1275,7 +1276,10 @@ useEffect(() => {
                   onKeyDown={ctxMenu.onKeyDown}
                   onClick={handleRelatedBlockClick}
                 >
-                  <BlockRenderer block={doc} relatedBlockId={relatedBlockId} />
+                  {/* vault 文档：正文里的相对图片路径按来源文件所在目录解析（V-303） */}
+                  <VaultDocProvider vaultPath={vaultPath}>
+                    <BlockRenderer block={doc} relatedBlockId={relatedBlockId} />
+                  </VaultDocProvider>
                   {ctxMenu.menu}
                 </article>
                </div>

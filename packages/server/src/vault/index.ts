@@ -9,15 +9,18 @@
  */
 
 import { Hono } from 'hono'
+import { readFile, readdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { getDb } from '../db'
 import { bindNotebookToVault, getNotebookVaultBinding, listVaultFiles } from '../store/vaultFiles'
 import { listVaultWritebackConflicts } from '../services/appLogs'
 import type { VaultConfig } from './config'
 import { createSerialLock } from './lock'
 import { ingestVaultFile, reconcileVault, type IngestResult, type ReconcileStats, type VaultContext } from './ingest'
-import { VaultPathError } from './paths'
+import { isIgnoredRelPath, toVaultAbsPath, VaultPathError, toVaultRelPath } from './paths'
 import { startVaultWatcher, type VaultWatcher } from './watcher'
 import { startVaultWriteback, type VaultWriteback } from './writeback'
+import { sha256Hex } from './writer'
 
 export type { VaultConfig } from './config'
 export { loadVaultConfigFromEnv } from './config'
@@ -164,9 +167,55 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
   return runtime
 }
 
+/** 可直出的资源类型白名单（正文 .md 不走这里） */
+const VAULT_ASSET_MIME: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  pdf: 'application/pdf',
+}
+
+export function vaultAssetMime(relPath: string): string | null {
+  const ext = relPath.split('.').pop()?.toLowerCase() ?? ''
+  return VAULT_ASSET_MIME[ext] ?? null
+}
+
+/**
+ * `![[x.png]]` 只有文件名：全 vault 找唯一同名资源。
+ * 同名多个 → null（多义不猜，让用户写相对路径）。
+ */
+async function findVaultAssetByBasename(config: VaultConfig, basename: string): Promise<string | null> {
+  const target = basename.toLowerCase()
+  const matches: string[] = []
+  const walk = async (absDir: string, relDir: string, depth: number): Promise<void> => {
+    if (depth > 8 || matches.length > 1) return
+    let entries
+    try {
+      entries = await readdir(absDir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (matches.length > 1) return
+      const rel = relDir ? `${relDir}/${entry.name}` : entry.name
+      if (isIgnoredRelPath(rel, config.ignore)) continue
+      if (entry.isSymbolicLink()) continue
+      if (entry.isDirectory()) {
+        await walk(join(absDir, entry.name), rel, depth + 1)
+      } else if (entry.isFile() && entry.name.toLowerCase() === target) {
+        matches.push(rel)
+      }
+    }
+  }
+  await walk(config.root, '', 0)
+  return matches.length === 1 ? matches[0]! : null
+}
+
 /** /api/v1/vault 路由；runtime 为 null 时只回 enabled:false */
-export function createVaultRouter(getRuntime: () => VaultRuntime | null): Hono {
-  const router = new Hono()
+export function createVaultRouter(getRuntime: () => VaultRuntime | null): Hono {  const router = new Hono()
 
   router.get('/status', (c) => {
     const rt = getRuntime()
@@ -210,6 +259,49 @@ export function createVaultRouter(getRuntime: () => VaultRuntime | null): Hono {
       if (e instanceof VaultPathError) return c.json({ error: 'bad_request', message: e.message }, 400)
       throw e
     }
+  })
+
+  /**
+   * vault 内静态资源直出（RFC 0001 D6、计划 V-303）：图片 / PDF 不进 data/media，
+   * 按文件在 vault 里的真实位置提供。不服务 `.md`（正文只走文档 API）。
+   *
+   * `![[x.png]]` 这种只有文件名的引用按 Obsidian 规则回退到「全 vault 唯一 basename」，
+   * 多义则 404（不猜）。
+   */
+  router.get('/raw/*', async (c) => {
+    const rt = getRuntime()
+    if (!rt) return c.json({ error: 'vault_disabled', message: '未启用 vault mode' }, 404)
+
+    const rawRel = c.req.path.slice(c.req.path.indexOf('/raw/') + '/raw/'.length)
+    let relPath: string
+    try {
+      relPath = toVaultRelPath(rt.ctx.config.root, decodeURIComponent(rawRel))
+    } catch {
+      return c.json({ error: 'bad_request', message: '路径越界' }, 400)
+    }
+    const mime = vaultAssetMime(relPath)
+    if (!mime) return c.json({ error: 'not_found', message: '不是可直出的资源类型' }, 404)
+
+    let abs = toVaultAbsPath(rt.ctx.config.root, relPath)
+    let bytes = await readFile(abs).catch(() => null)
+    if (!bytes && !relPath.includes('/')) {
+      const found = await findVaultAssetByBasename(rt.ctx.config, relPath)
+      if (found) {
+        relPath = found
+        abs = toVaultAbsPath(rt.ctx.config.root, relPath)
+        bytes = await readFile(abs).catch(() => null)
+      }
+    }
+    if (!bytes) return c.json({ error: 'not_found', message: `文件不存在: ${relPath}` }, 404)
+
+    const etag = `"${sha256Hex(bytes)}"`
+    const headers = {
+      'Content-Type': mime,
+      'Cache-Control': 'private, max-age=60',
+      ETag: etag,
+    }
+    if (c.req.header('if-none-match') === etag) return c.body(null, 304, headers)
+    return c.body(bytes, 200, headers)
   })
 
   return router

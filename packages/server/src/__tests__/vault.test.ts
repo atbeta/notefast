@@ -1257,6 +1257,63 @@ describe('vault wikilinks', () => {
   })
 })
 
+// ───────────────────── 静态资源直出（V-303） ─────────────────────
+
+describe('vault raw assets', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
+  function rawApp(): Hono {
+    const runtime = createVaultRuntime({ db: getDb(), notebookId, config: makeConfig(vaultDir) })
+    const app = new Hono()
+    app.route('/api/v1/vault', createVaultRouter(() => runtime))
+    return app
+  }
+
+  test('守卫：越界 400、.md 与未知扩展名 404', async () => {
+    const app = rawApp()
+    expect((await app.request('/api/v1/vault/raw/..%2Fescape.png')).status).toBe(400)
+    expect((await app.request('/api/v1/vault/raw/note.md')).status).toBe(404)
+    expect((await app.request('/api/v1/vault/raw/app.exe')).status).toBe(404)
+  })
+
+  test('直出图片：Content-Type / Cache-Control / ETag，命中 304', async () => {
+    mkdirSync(join(vaultDir, 'assets'), { recursive: true })
+    writeFileSync(join(vaultDir, 'assets', 'pic.png'), PNG)
+    const app = rawApp()
+
+    const res = await app.request('/api/v1/vault/raw/assets/pic.png')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('image/png')
+    expect(res.headers.get('cache-control')).toBe('private, max-age=60')
+    const etag = res.headers.get('etag')!
+    expect(etag).toMatch(/^"[0-9a-f]{64}"$/)
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(PNG)
+
+    const cached = await app.request('/api/v1/vault/raw/assets/pic.png', { headers: { 'If-None-Match': etag } })
+    expect(cached.status).toBe(304)
+  })
+
+  test('`![[x.png]]` 只有文件名 → 全 vault 唯一 basename 回退；多义 404', async () => {
+    mkdirSync(join(vaultDir, 'a'), { recursive: true })
+    writeFileSync(join(vaultDir, 'a', 'unique.png'), PNG)
+    const app = rawApp()
+    expect((await app.request('/api/v1/vault/raw/unique.png')).status).toBe(200)
+
+    // 同名两份 → 不猜
+    mkdirSync(join(vaultDir, 'b'), { recursive: true })
+    mkdirSync(join(vaultDir, 'c'), { recursive: true })
+    writeFileSync(join(vaultDir, 'b', 'dup.png'), PNG)
+    writeFileSync(join(vaultDir, 'c', 'dup.png'), PNG)
+    expect((await app.request('/api/v1/vault/raw/dup.png')).status).toBe(404)
+  })
+
+  test('未启用 vault → 404', async () => {
+    const app = new Hono()
+    app.route('/api/v1/vault', createVaultRouter(() => null))
+    expect((await app.request('/api/v1/vault/raw/a.png')).status).toBe(404)
+  })
+})
+
 // ───────────────────── runtime + routes ─────────────────────
 
 describe('vault runtime & routes', () => {

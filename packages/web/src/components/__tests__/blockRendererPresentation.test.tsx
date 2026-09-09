@@ -10,6 +10,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import BlockRenderer from '../BlockRenderer'
 import { ToastProvider } from '../ui'
+import { VaultDocProvider } from '../VaultDocContext'
 import { BlockType, type Block } from '@notefast/core'
 
 let sort = 0
@@ -64,6 +65,46 @@ describe('BlockRenderer presentation 模式', () => {
     )
     expect(html).toContain(`/api/v1/assets/${SHA}`)
     expect(html).not.toContain('/share/tok/assets/')
+  })
+})
+
+describe('BlockRenderer vault 图片（V-303）', () => {
+  function render(block: Block, vaultPath: string | null) {
+    return renderToStaticMarkup(
+      <VaultDocProvider vaultPath={vaultPath}>
+        <ToastProvider>
+          <BlockRenderer block={block} />
+        </ToastProvider>
+      </VaultDocProvider>,
+    )
+  }
+
+  test('vault 文档：相对路径按来源文件所在目录解析为 raw API', () => {
+    const html = render(leaf(BlockType.Paragraph, '![图](assets/x.png)'), 'notes/sub/doc.md')
+    expect(html).toContain('/api/v1/vault/raw/notes/sub/assets/x.png')
+  })
+
+  test('db notebook（无 Provider）：相对路径原样，不接管', () => {
+    const html = render(leaf(BlockType.Paragraph, '![图](assets/x.png)'), null)
+    expect(html).toContain('src="assets/x.png"')
+    expect(html).not.toContain('/api/v1/vault/raw/')
+  })
+
+  test('asset: 引用不受 vault 影响', () => {
+    const html = render(leaf(BlockType.Paragraph, `![图](asset:${SHA})`), 'doc.md')
+    expect(html).toContain(`/api/v1/assets/${SHA}`)
+    expect(html).not.toContain('/api/v1/vault/raw/')
+  })
+
+  test('![[x.png]]：vault 文档渲染为图片，非资源嵌入保留原文', () => {
+    const vault = render(leaf(BlockType.Paragraph, '![[x.png]] 与 ![[某篇笔记]]'), 'doc.md')
+    expect(vault).toContain('/api/v1/vault/raw/x.png')
+    expect(vault).toContain('![[某篇笔记]]')
+    expect(vault).not.toContain('![[x.png]]')
+
+    const plain = render(leaf(BlockType.Paragraph, '![[x.png]]'), null)
+    expect(plain).toContain('![[x.png]]')
+    expect(plain).not.toContain('/api/v1/vault/raw/')
   })
 })
 

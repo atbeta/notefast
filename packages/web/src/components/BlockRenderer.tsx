@@ -13,6 +13,8 @@ import { api } from '../hooks/useAPI'
 import { useImageUploadEnabled } from '../hooks/useImageUploadEnabled'
 import ImageLightbox from './ImageLightbox'
 import { resolveMarkdownHref } from '../lib/markdownHref'
+import { resolveVaultAssetSrc, resolveVaultEmbedSrc } from '../lib/vault'
+import { useVaultPath } from './VaultDocContext'
 import { parseTable, type TableAlign } from './editor/cm/tableModel'
 import i18next from '../i18n'
 
@@ -194,9 +196,44 @@ const INLINE_RE = new RegExp(
     String.raw`(~~[^~\n]+~~)`,
     String.raw`(\[[^\]]+\]\([^)\s]+\))`,
     String.raw`(https?:\/\/[^\s<>()"]+)`,
+    // Obsidian 嵌入 ![[x.png]]：放在最后，同一起点只有它能整体匹配（前几组都要求 ]( 或 [text](...)
+    String.raw`(!\[\[[^\]\n]+\]\])`,
   ].join('|'),
   'g',
 )
+
+/** 阅读态图片：vault 文档里相对路径解析到 /api/v1/vault/raw/*（V-303），其余原样 */
+function MarkdownImg({ rawSrc, alt }: { rawSrc: string; alt: string }) {
+  const vaultPath = useVaultPath()
+  const src = resolveVaultAssetSrc(rawSrc, vaultPath) ?? rawSrc
+  return (
+    <ZoomableImg
+      src={src}
+      alt={alt}
+      loading="lazy"
+      className="my-3 max-w-full rounded-md border border-border/50"
+    />
+  )
+}
+
+/**
+ * `![[x.png]]`（Obsidian 嵌入）：vault 文档里按全 vault 唯一 basename 解析为图片；
+ * 非 vault 文档或非资源扩展名（如 `![[某篇笔记]]`）保留原文。
+ */
+function VaultEmbed({ raw }: { raw: string }) {
+  const vaultPath = useVaultPath()
+  const name = raw.slice(3, -2)
+  const src = resolveVaultEmbedSrc(name, vaultPath)
+  if (!src) return <>{raw}</>
+  return (
+    <ZoomableImg
+      src={src}
+      alt={name}
+      loading="lazy"
+      className="my-3 max-w-full rounded-md border border-border/50"
+    />
+  )
+}
 
 /** 裸 URL 尾部的标点不应吃进来（如「见 https://a.com/x, 」） */
 function trimUrlTail(url: string): string {
@@ -243,16 +280,7 @@ export function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
           <AssetImage key={`${keyPrefix}-${k++}`} assetId={id} src={`/api/v1/assets/${id}`} alt={im[1]} />,
         )
       } else {
-        const src = rawSrc
-        nodes.push(
-          <ZoomableImg
-            key={`${keyPrefix}-${k++}`}
-            src={src}
-            alt={im[1]}
-            loading="lazy"
-            className="my-3 max-w-full rounded-md border border-border/50"
-          />,
-        )
+        nodes.push(<MarkdownImg key={`${keyPrefix}-${k++}`} rawSrc={rawSrc} alt={im[1]!} />)
       }
     } else if (m[2]) {
       nodes.push(<code key={`${keyPrefix}-${k++}`}>{m[2].slice(1, -1)}</code>)
@@ -281,6 +309,8 @@ export function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
         </MarkdownHref>,
       )
       if (tail) pushText(tail)
+    } else if (m[9]) {
+      nodes.push(<VaultEmbed key={`${keyPrefix}-${k++}`} raw={m[9]} />)
     }
     last = idx + m[0].length
   }

@@ -62,3 +62,68 @@ export function vaultPathOf(doc: unknown): string | null {
   const raw = (doc as { vault_path?: unknown }).vault_path
   return typeof raw === 'string' && raw.trim() ? raw : null
 }
+
+// ───────────────────── vault 内资源路径解析（V-303） ─────────────────────
+
+/** 可直出的资源扩展名（与服务端 `VAULT_ASSET_MIME` 对齐） */
+const VAULT_ASSET_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'pdf'])
+
+/** 去掉 Obsidian 别名（`|`）与锚点（`#`）后的资源名 */
+function embedName(raw: string): string {
+  return raw.trim().split('|')[0]!.split('#')[0]!.trim()
+}
+
+/** 是否是可直出的 vault 资源名（按扩展名判断） */
+export function isVaultAssetName(name: string): boolean {
+  const clean = embedName(name)
+  if (!clean.includes('.')) return false
+  return VAULT_ASSET_EXT.has(clean.split('.').pop()!.toLowerCase())
+}
+
+/** 以 `baseDir` 为基准拼接相对路径，处理 `.` / `..`；越出 vault 根返回 null */
+function joinRelPath(baseDir: string, rel: string): string | null {
+  const parts = [...(baseDir ? baseDir.split('/') : []), ...rel.split('/')]
+  const out: string[] = []
+  for (const part of parts) {
+    if (!part || part === '.') continue
+    if (part === '..') {
+      if (out.length === 0) return null
+      out.pop()
+      continue
+    }
+    out.push(part)
+  }
+  return out.length > 0 ? out.join('/') : null
+}
+
+function rawUrl(relPath: string): string {
+  return `/api/v1/vault/raw/${relPath.split('/').map(encodeURIComponent).join('/')}`
+}
+
+/**
+ * Markdown 图片的相对路径 → vault raw API。
+ * - 只在 vault 文档里生效（没有 `vaultPath` 时返回 null，调用方保留原 src）
+ * - 绝对路径 / 协议 URL / `asset:` 引用一律不接管（db notebook 语义不变）
+ * - 基准是**文档所在目录**：`notes/sub/doc.md` 里的 `assets/x.png` → `notes/sub/assets/x.png`
+ * - 越界（`../../`）或非资源扩展名返回 null
+ */
+export function resolveVaultAssetSrc(rawSrc: string, vaultPath: string | null | undefined): string | null {
+  if (!vaultPath) return null
+  const src = rawSrc.trim()
+  if (!src || src.startsWith('/') || /^[a-z][a-z0-9+.-]*:/i.test(src)) return null
+  if (!isVaultAssetName(src)) return null
+  const dir = vaultPath.includes('/') ? vaultPath.slice(0, vaultPath.lastIndexOf('/')) : ''
+  const rel = joinRelPath(dir, src)
+  return rel ? rawUrl(rel) : null
+}
+
+/**
+ * Obsidian 嵌入 `![[x.png]]` → vault raw API。
+ * 只给文件名，服务端按「全 vault 唯一 basename」回退（Obsidian 规则）。
+ */
+export function resolveVaultEmbedSrc(raw: string, vaultPath: string | null | undefined): string | null {
+  if (!vaultPath) return null
+  const name = embedName(raw)
+  if (!name || !isVaultAssetName(name)) return null
+  return rawUrl(name)
+}
