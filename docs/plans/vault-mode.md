@@ -293,6 +293,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **依赖**：以上全部
 - **状态**：**已发布 v0.90.0**（2026-09-09）
   - 发布记录：`next` → `main` `--ff-only`（`c1c9558` → `c4d5e32`，59 commits）；空提交带 `Release-As: 0.90.0` footer 强制跳版（默认只会算出 0.87.0，跳掉 0.87–0.89）；release PR #138 落地后 tag `v0.90.0` 指向 `0308f95`，GitHub Release 同分钟发布，macos-release / windows-release / docker-publish 由 tag 触发
+  - 三条流水线全部成功：DMG（公证 + staple）+ ZIP、`NoteFast_0.90.0_x64-setup.exe` + portable zip 已挂 Release；镜像 `xbeta/notefast:0.90.0`（cosign 签名 + Trivy 扫描）本地实拉实跑，`/health` ok、`/api/v1/version` = `0.90.0`、`/app/server-dist/native/vec0.so` 在位、`/api/v1/vault/status` 在 db notebook 上返回 `{"enabled":false}`
   - `Cargo.lock` 里 `notefast-tauri` 的版本 release-please 不管（它只改 `Cargo.toml`），本次在 release PR 分支上补了 `chore(tauri): sync Cargo.lock version with Cargo.toml` 再合入（0.86.1 那次是发布后另补的 `1efee2f`）
   - 代码侧门禁已满足：M2 / M3 / M4 / M5 其余任务全部落地；`bun lint` 3/3 · `bun run typecheck` 3/3 · `bun test` **1651 pass / 0 fail**（根目录全量）；`swift test` 29/0、`cargo test` 10/0 亦通过
   - V-501 达标：1000 文件 8.6–9.4s（<30s）、10k 258.6–279.8s（<5min，最差余量 6.7%）、变更→可搜 317–376ms（<500ms）
