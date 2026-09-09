@@ -39,7 +39,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | M1 基础 | 文件 → 索引闭环 + 整篇写回 | — | 完成（`c4f9e2c` `b14d6c5`） |
 | M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **完成**（V-201 ✅ V-202 ✅ V-203 ✅ V-204 ✅ V-205 ✅） |
 | M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | **完成**（V-301 ✅ V-302 ✅ V-303 ✅ V-304 ✅） |
-| M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | V-401 ✅ V-402 ✅ V-404 ✅ |
+| M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | **完成**（V-401 ✅ V-402 ✅ V-403 ✅ V-404 ✅） |
 | M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | V-503 ✅ |
 
 依赖关系：V-201 → V-202 → V-203 → V-204；V-203 依赖 V-304（解析器要能无损识别 Obsidian 语法，否则区间对不上）；V-301/302 可与 M2 并行；V-303 独立；M4 依赖 M2 完成；M5 最后。
@@ -225,6 +225,13 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **要点**：壳传 `VAULT_PATH`；`DATA_DIR` 按 `sha256(vault_path)` 前 12 位落在应用支持目录（一个 vault 一个索引，RFC 0001 D4）；最近 vault 列表存壳侧；引擎不改业务
 - **验收**：`nativeBootstrap.test.ts` 增加 env 透传断言；手工验证两平台
 - **依赖**：V-401 · **估算**：2 人天
+- **状态**：完成（`2b59810`）
+  - 引擎：新增 `--vault-path`（env `VAULT_PATH`）与 `--app-support-dir`；vault 模式且未显式给 `--data-dir` 时 `DATA_DIR = <应用支持目录>/<sha256(canonical vault path) 前 12 位>`（`realpathSync.native` 规范化 → 同一文件夹不同写法同 hash）；显式 `--data-dir` 优先；`NF_READY` 加法带出 `vaultPath` / `dataDir`，握手与 stdout/stderr 契约不变
+  - macOS 壳：`Vault` 菜单（⌘⇧O 选择文件夹 / 最近 5 条 / 退出 vault 模式），`RecentVaults` 存 UserDefaults
+  - Windows 壳：`vault_recent` / `vault_pick_and_open` / `vault_open` 命令 + 启动页入口 + `--vault-picker` 兜底；最近列表存壳数据目录 `recent-vaults.json`
+  - **验证**：`nativeBootstrap.test.ts` 20 例（新增 10）；server 整包 885 pass；`swift test` 29/0（独立复跑确认）；`cargo test` 10/0；`bun run build:engine` 后用编译产物实跑 `--vault-path` → 派生目录 hash 与 `shasum` 一致
+  - **未验证（人工）**：两壳 GUI 未启动（本环境无窗口会话）；Windows 目标交叉编译卡在环境缺 `llvm-rc`（非代码问题），`tauri dev/build`、NSIS 打包未跑
+  - **待议**：两平台都不自动重开上次 vault（规格只要求记住最近列表；自动恢复需壳侧再加 `active_vault` 偏好）
 
 ### V-404 定时轻量对账 + 自愈
 
