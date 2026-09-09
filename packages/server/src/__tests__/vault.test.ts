@@ -14,7 +14,11 @@ import { fetchDocBlocks, getDeletedBlockById, getLiveDocById, updateBlock } from
 import { insertRef, findRefByPair } from '../store/refs'
 import { getVaultFileByDocId, getVaultFileByPath, getNotebookVaultBinding, listVaultFiles } from '../store/vaultFiles'
 import { insertDocFromMarkdown } from '../services/docImport'
-import { readTags } from '@notefast/core'
+import { readTags, readDocStatus } from '@notefast/core'
+import { readDocAiExclude } from '../ai/aiExcludeQuery'
+import { writeDocAiExclude } from '../ai/aiExclude'
+import { subscribeDocChanges, FLUSH_MS, type DocChangeEvent } from '../services/docEvents'
+import docsRouter from '../api/docs'
 import type { VaultConfig } from '../vault/config'
 import { DEFAULT_VAULT_IGNORE, loadVaultConfigFromEnv } from '../vault/config'
 import { isIgnoredRelPath, normalizeRelPath, titleFromRelPath, toVaultRelPath, VaultPathError } from '../vault/paths'
@@ -504,6 +508,114 @@ describe('vault writeback', () => {
       expect(getVaultFileByDocId(getDb(), docId)!.deleted_at).not.toBeNull()
     } finally {
       wb.stop()
+    }
+  })
+})
+
+// ───────────────────── 元数据双向（V-202） ─────────────────────
+
+describe('vault metadata', () => {
+  const ev = (docId: string): DocChangeEvent => ({ doc_id: docId, kind: 'updated', at: new Date().toISOString() })
+
+  test('文件声明 notefast_ai_exclude / notefast_status → ingest 生效；改回缺省 → 复位', async () => {
+    writeVault('meta.md', '---\nnotefast_ai_exclude: true\nnotefast_status: inbox\n---\nbody\n')
+    const r = await ingestVaultFile(ctx, 'meta.md')
+    expect(readDocAiExclude(r.docId!)).toBe(true)
+    expect(readDocStatus(getLiveDocById(getDb(), r.docId!)!)).toBe('inbox')
+
+    writeVault('meta.md', '---\nnotefast_ai_exclude: false\nnotefast_status: note\n---\nbody\n')
+    expect((await ingestVaultFile(ctx, 'meta.md')).action).toBe('updated')
+    expect(readDocAiExclude(r.docId!)).toBe(false)
+    expect(readDocStatus(getLiveDocById(getDb(), r.docId!)!)).toBe('note')
+  })
+
+  test('NoteFast 侧切 ai_exclude / status → 写回文件；切回缺省 → 键被删除', async () => {
+    writeVault('flip.md', 'body\n')
+    const r = await ingestVaultFile(ctx, 'flip.md')
+    const wb = startVaultWriteback(ctx)
+    try {
+      // ai_exclude 走 touchUpdatedAt:false：updated_at 不变，只有 meta_hash 能识别出真实变更
+      writeDocAiExclude(r.docId!, true)
+      expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'written' })
+      expect(readFileSync(join(vaultDir, 'flip.md'), 'utf8')).toBe('---\nnotefast_ai_exclude: true\n---\nbody\n')
+
+      updateBlock(getDb(), r.docId!, { status: 'inbox' })
+      expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'written' })
+      expect(readFileSync(join(vaultDir, 'flip.md'), 'utf8')).toBe(
+        '---\nnotefast_ai_exclude: true\nnotefast_status: inbox\n---\nbody\n',
+      )
+
+      // 两键都切回缺省 → 键被删除，文件回到无 frontmatter
+      writeDocAiExclude(r.docId!, false)
+      updateBlock(getDb(), r.docId!, { status: 'note' })
+      expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'written' })
+      expect(readFileSync(join(vaultDir, 'flip.md'), 'utf8')).toBe('body\n')
+    } finally {
+      wb.stop()
+    }
+  })
+
+  test('只改标签（touchUpdatedAt:false）也会写回；写回后纯回声不再写盘', async () => {
+    writeVault('tag.md', 'body\n')
+    const r = await ingestVaultFile(ctx, 'tag.md')
+    const wb = startVaultWriteback(ctx)
+    try {
+      updateBlock(getDb(), r.docId!, { tags: JSON.stringify(['dev']), touchUpdatedAt: false })
+      expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'written' })
+      expect(readFileSync(join(vaultDir, 'tag.md'), 'utf8')).toBe('---\ntags:\n  - dev\n---\nbody\n')
+      expect(await wb.handle(ev(r.docId!))).toEqual({ kind: 'skipped', reason: 'echo' })
+    } finally {
+      wb.stop()
+    }
+  })
+
+  test('纯回声：文件里带元数据的文档 ingest 后立刻 handle → skipped/echo', async () => {
+    writeVault('echo2.md', '---\nnotefast_ai_exclude: true\n---\nbody\n')
+    const r = await ingestVaultFile(ctx, 'echo2.md')
+    const wb = startVaultWriteback(ctx)
+    try {
+      expect(await wb.handle(ev(r.docId!))).toEqual({ kind: 'skipped', reason: 'echo' })
+    } finally {
+      wb.stop()
+    }
+  })
+
+  test('归档文档：文件没写该键时不降级为 note，写回也不写该键', async () => {
+    writeVault('arch.md', 'body\n')
+    const r = await ingestVaultFile(ctx, 'arch.md')
+    updateBlock(getDb(), r.docId!, { status: 'archived' })
+
+    writeVault('arch.md', 'body edited\n')
+    expect((await ingestVaultFile(ctx, 'arch.md')).action).toBe('updated')
+    expect(readDocStatus(getLiveDocById(getDb(), r.docId!)!)).toBe('archived')
+
+    const row = getVaultFileByPath(getDb(), notebookId, 'arch.md')!
+    expect(serializeVaultDoc(ctx, getLiveDocById(getDb(), r.docId!)!, row)).toBe('body edited\n')
+  })
+
+  test('PATCH /docs/:id/ai_exclude 发 doc 级事件（vault 写回据此触发）', async () => {
+    const app = new Hono()
+    app.route('/api/v1/docs', docsRouter)
+    writeVault('evt.md', 'body\n')
+    const r = await ingestVaultFile(ctx, 'evt.md')
+    // 先让 ingest 的 created 事件 flush 掉，再订阅，避免把上一步的事件混进来
+    await new Promise((res) => setTimeout(res, FLUSH_MS + 50))
+
+    const seen: DocChangeEvent[] = []
+    const unsub = subscribeDocChanges((e) => {
+      if (e.doc_id === r.docId) seen.push(e)
+    })
+    try {
+      const res = await app.request(`/api/v1/docs/${r.docId}/ai-exclude`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ai_exclude: true }),
+      })
+      expect(res.status).toBe(200)
+      await waitFor(() => seen.length > 0, 2000)
+      expect(seen[0]!.kind).toBe('updated')
+    } finally {
+      unsub()
     }
   })
 })

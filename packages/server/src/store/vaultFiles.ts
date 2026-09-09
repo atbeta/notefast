@@ -37,6 +37,7 @@ export interface UpsertVaultFileInput {
   mtime_ms: number
   doc_updated_at: string
   frontmatter_raw: string | null
+  meta_hash: string | null
 }
 
 export function getVaultFileByPath(db: Db, notebookId: string, relPath: string): VaultFileRow | null {
@@ -73,8 +74,8 @@ export function listVaultFiles(db: Db, notebookId: string, opts: { includeDelete
 
 export function upsertVaultFile(db: Db, input: UpsertVaultFileInput): void {
   db.query(
-    `INSERT INTO vault_files (notebook_id, rel_path, doc_id, content_sha256, size, mtime_ms, ingested_at, doc_updated_at, deleted_at, frontmatter_raw)
-     VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?, NULL, ?)
+    `INSERT INTO vault_files (notebook_id, rel_path, doc_id, content_sha256, size, mtime_ms, ingested_at, doc_updated_at, deleted_at, frontmatter_raw, meta_hash)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?, NULL, ?, ?)
      ON CONFLICT(notebook_id, rel_path) DO UPDATE SET
        doc_id = excluded.doc_id,
        content_sha256 = excluded.content_sha256,
@@ -83,7 +84,8 @@ export function upsertVaultFile(db: Db, input: UpsertVaultFileInput): void {
        ingested_at = excluded.ingested_at,
        doc_updated_at = excluded.doc_updated_at,
        deleted_at = NULL,
-       frontmatter_raw = excluded.frontmatter_raw`,
+       frontmatter_raw = excluded.frontmatter_raw,
+       meta_hash = excluded.meta_hash`,
   ).run(
     input.notebook_id,
     input.rel_path,
@@ -93,6 +95,7 @@ export function upsertVaultFile(db: Db, input: UpsertVaultFileInput): void {
     input.mtime_ms,
     input.doc_updated_at,
     input.frontmatter_raw,
+    input.meta_hash,
   )
 }
 
@@ -121,17 +124,28 @@ export function touchVaultFileAfterWrite(
   db: Db,
   notebookId: string,
   relPath: string,
-  patch: { content_sha256: string; size: number; mtime_ms: number; doc_updated_at: string; frontmatter_raw?: string | null },
+  patch: {
+    content_sha256: string
+    size: number
+    mtime_ms: number
+    doc_updated_at: string
+    frontmatter_raw?: string | null
+    meta_hash?: string | null
+  },
 ): void {
   const args: (string | number | null)[] = [patch.content_sha256, patch.size, patch.mtime_ms, patch.doc_updated_at]
-  let fmRawSql = ''
+  let extraSql = ''
   if (patch.frontmatter_raw !== undefined) {
-    fmRawSql = ', frontmatter_raw = ?'
+    extraSql += ', frontmatter_raw = ?'
     args.push(patch.frontmatter_raw)
+  }
+  if (patch.meta_hash !== undefined) {
+    extraSql += ', meta_hash = ?'
+    args.push(patch.meta_hash)
   }
   args.push(notebookId, relPath)
   db.query(
-    `UPDATE vault_files SET content_sha256 = ?, size = ?, mtime_ms = ?, doc_updated_at = ?, ingested_at = datetime('now')${fmRawSql}
+    `UPDATE vault_files SET content_sha256 = ?, size = ?, mtime_ms = ?, doc_updated_at = ?, ingested_at = datetime('now')${extraSql}
      WHERE notebook_id = ? AND rel_path = ?`,
   ).run(...args)
 }

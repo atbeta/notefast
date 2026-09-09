@@ -11,7 +11,7 @@
  */
 
 import type { getDb } from '../db'
-import { readTags, rowToBlock, normalizeTagList, stripDocFrontmatter, stripTitleHeading } from '@notefast/core'
+import { readTags, rowToBlock, normalizeTagList, readAiExclude, readDocStatus, stripDocFrontmatter, stripTitleHeading } from '@notefast/core'
 import type { BlockRow } from '@notefast/core'
 import {
   fetchDocBlocks,
@@ -49,10 +49,13 @@ import {
   fireAfterUpdate,
   fireDocAfterCreate,
   fireDocAfterDelete,
+  fireDocAfterStatusChange,
 } from '../services/hooks'
 import { scheduleDocIndex } from '../ai/indexJobs'
 import { deleteVectorMany } from '../ai/indexer'
+import { applyAiExcludeChange, writeDocAiExclude } from '../ai/aiExclude'
 import { readVaultFile } from './writer'
+import { desiredStatusFromFile, vaultMetaHash } from './meta'
 import { isIgnoredRelPath, isMarkdownPath, titleFromRelPath, toVaultAbsPath, toVaultRelPath } from './paths'
 import type { VaultConfig } from './config'
 import type { SerialLock } from './lock'
@@ -106,6 +109,43 @@ function docRowAny(db: Db, docId: string): DocState | null {
   if (live) return { row: live, deleted: false }
   const gone = getDeletedBlockById(db, docId)
   return gone ? { row: gone, deleted: true } : null
+}
+
+/**
+ * 把文件里声明的 NoteFast 元数据（`notefast_ai_exclude` / `notefast_status`）落到文档。
+ *
+ * 必须在 ingest 的 `db.transaction()` **提交之后**调用：ai_exclude 变更要动向量库、
+ * status 变更要发文档级钩子，都不是事务内的纯 SQL（见计划「待议」）。
+ * 返回是否改动过文档行（调用方据此重取 row，再算 meta_hash）。
+ */
+async function applyFileMetaToDoc(
+  ctx: VaultContext,
+  doc: BlockRow,
+  fromFile: { aiExclude?: boolean; status?: 'inbox' | 'note' },
+): Promise<boolean> {
+  const { db } = ctx
+  let changed = false
+
+  const oldStatus = readDocStatus(doc)
+  const wantStatus = desiredStatusFromFile(fromFile.status, oldStatus)
+  if (wantStatus !== oldStatus) {
+    updateBlock(db, doc.id, { status: wantStatus, actor: 'vault' })
+    fireDocAfterStatusChange({
+      doc: rowToBlock(getBlockById(db, doc.id)!),
+      before: { status: oldStatus },
+      meta: { status: wantStatus, source: 'vault' },
+    })
+    changed = true
+  }
+
+  const oldExclude = readAiExclude(doc)
+  const wantExclude = fromFile.aiExclude === true
+  if (wantExclude !== oldExclude) {
+    writeDocAiExclude(doc.id, wantExclude)
+    await applyAiExcludeChange(doc.id, oldExclude, wantExclude)
+    changed = true
+  }
+  return changed
 }
 
 // ───────────────────── 单文件 ingest ─────────────────────
@@ -162,17 +202,25 @@ export async function ingestVaultFile(ctx: VaultContext, pathInput: string): Pro
   const title = titleFromRelPath(relPath)
   const stripped = stripDocFrontmatter(file.content)
   const fmTags = stripped.meta?.tags?.length ? normalizeTagList(stripped.meta.tags) : []
+  // 文件是权威：声明的 NoteFast 元数据（RFC 0001 D8）
+  const fmAiExclude = stripped.meta?.notefast_ai_exclude
+  const fmStatus = stripped.meta?.notefast_status
 
   if (!target) {
     const created = insertDocFromMarkdown(db, {
       notebookId,
       title,
       markdown: file.content,
-      status: 'note',
+      status: fmStatus === 'inbox' ? 'inbox' : 'note',
       applyFrontmatterTags: true,
       rejectEmpty: false,
     })
-    const docRow = getBlockById(db, created.docId)!
+    let docRow = getBlockById(db, created.docId)!
+    // 新建文档此刻还没有向量：直接写列，无需走 applyAiExcludeChange 的 purge
+    if (fmAiExclude === true) {
+      writeDocAiExclude(created.docId, true)
+      docRow = getBlockById(db, created.docId)!
+    }
     upsertVaultFile(db, {
       notebook_id: notebookId,
       rel_path: relPath,
@@ -182,12 +230,13 @@ export async function ingestVaultFile(ctx: VaultContext, pathInput: string): Pro
       mtime_ms: file.mtimeMs,
       doc_updated_at: docRow.updated_at,
       frontmatter_raw: stripped.raw,
+      meta_hash: vaultMetaHash(docRow),
     })
     fireAfterCreate(rowToBlock(docRow))
     fireAfterCreateMany(getBlocksByIds(db, created.blockIds).map(rowToBlock))
     fireDocAfterCreate({
       doc: rowToBlock(docRow),
-      meta: { status: 'note', tags: readTags(docRow), source: 'vault' },
+      meta: { status: readDocStatus(docRow), tags: readTags(docRow), source: 'vault' },
     })
     scheduleDocIndex(created.docId, created.blockIds)
     auditVault('doc.vault_ingested', created.docId, { rel_path: relPath, block_count: created.blockIds.length })
@@ -228,7 +277,10 @@ export async function ingestVaultFile(ctx: VaultContext, pathInput: string): Pro
     deleteMentionsTouchingBlocks(db, deletedIds)
   })()
 
-  const docAfter = getBlockById(db, docId)!
+  let docAfter = getBlockById(db, docId)!
+  // 文件声明的 ai_exclude / status：事务提交后应用（向量与钩子副作用不能进事务）
+  await applyFileMetaToDoc(ctx, docAfter, { aiExclude: fmAiExclude, status: fmStatus })
+  docAfter = getBlockById(db, docId)!
   upsertVaultFile(db, {
     notebook_id: notebookId,
     rel_path: relPath,
@@ -238,6 +290,7 @@ export async function ingestVaultFile(ctx: VaultContext, pathInput: string): Pro
     mtime_ms: file.mtimeMs,
     doc_updated_at: docAfter.updated_at,
     frontmatter_raw: stripped.raw,
+    meta_hash: vaultMetaHash(docAfter),
   })
 
   fireAfterDeleteMany(deletedIds)
@@ -328,6 +381,8 @@ export function moveVaultFilePath(ctx: VaultContext, fromInput: string, toInput:
     mtime_ms: row.mtime_ms,
     doc_updated_at: after.updated_at,
     frontmatter_raw: row.frontmatter_raw,
+    // 原样沿用旧指纹：移动不改变元数据，若用当前值重算会把「尚未写回文件」的元数据变更抹掉
+    meta_hash: row.meta_hash,
   })
   if (doc.content !== title) fireAfterUpdate(rowToBlock(after))
   auditVault('doc.vault_moved', doc.id, { from, to })

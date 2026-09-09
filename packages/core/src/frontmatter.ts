@@ -79,11 +79,22 @@ export function withDocFrontmatter(bodyMarkdown: string, meta: DocFrontmatterMet
   return formatDocFrontmatter(meta) + body.replace(/^\n+/, '')
 }
 
+/**
+ * 从 frontmatter 读到的字段。
+ * 导出投影（tags / created / modified / notefast_id）+ vault 写回用的 NoteFast 元数据键。
+ */
+export interface ParsedFrontmatterMeta extends Partial<DocFrontmatterMeta> {
+  /** `notefast_ai_exclude: true`；缺省 / 无法识别时不出现（调用方按 false 处理） */
+  notefast_ai_exclude?: boolean
+  /** `notefast_status: inbox`；缺省 / 无法识别时不出现（调用方按 note 处理） */
+  notefast_status?: 'inbox' | 'note'
+}
+
 export interface StrippedFrontmatter {
   /** 去掉 frontmatter 后的正文 */
   body: string
   /** 解析到的字段；无 frontmatter 时为 null */
-  meta: Partial<DocFrontmatterMeta> | null
+  meta: ParsedFrontmatterMeta | null
   /** frontmatter 原文（不含首尾 `---`），供 vault 写回做行级透传；无 frontmatter 时为 null */
   raw: string | null
 }
@@ -134,11 +145,13 @@ export function stripDocFrontmatter(markdown: string): StrippedFrontmatter {
  * 极简 YAML 子集解析（仅我们写出的字段）。
  * 不引入 js-yaml；失败返回 null。
  */
-function parseSimpleFrontmatter(yamlText: string): Partial<DocFrontmatterMeta> | null {
-  const meta: Partial<DocFrontmatterMeta> = {}
+function parseSimpleFrontmatter(yamlText: string): ParsedFrontmatterMeta | null {
+  const meta: ParsedFrontmatterMeta = {}
   const lines = yamlText.split('\n')
   let i = 0
   let sawAny = false
+  /** 出现过「不像 YAML」的非空行（散文）：整段视为正文，不做 frontmatter 剥离 */
+  let sawProse = false
 
   while (i < lines.length) {
     const line = lines[i]!
@@ -201,11 +214,35 @@ function parseSimpleFrontmatter(yamlText: string): Partial<DocFrontmatterMeta> |
       continue
     }
 
-    // 未知键：跳过一行（兼容未来字段），不整段失败
+    const aiExclude = trimmed.match(/^notefast_ai_exclude\s*:\s*(.*)$/)
+    if (aiExclude) {
+      const v = unquoteYaml(aiExclude[1]!.trim()).toLowerCase()
+      if (v === 'true' || v === 'false') meta.notefast_ai_exclude = v === 'true'
+      sawAny = true
+      i++
+      continue
+    }
+
+    const status = trimmed.match(/^notefast_status\s*:\s*(.*)$/)
+    if (status) {
+      const v = unquoteYaml(status[1]!.trim()).toLowerCase()
+      if (v === 'inbox' || v === 'note') meta.notefast_status = v
+      sawAny = true
+      i++
+      continue
+    }
+
+    // 未知键：像 YAML（`key:` / `key: value`，或缩进续行）就照常跳过并计入 sawAny ——
+    // 否则「只有用户自定义字段」的 frontmatter 会被判为无 frontmatter，
+    // 整段 YAML 被当成正文入库（vault 写回再把它写回正文，越写越脏）。
+    // 不像 YAML 的行记为散文：只要出现一行散文，整段就按正文处理，
+    // 避免把以 `---` 分隔线开头的普通 Markdown 误判成 frontmatter。
+    if (/^[A-Za-z_][\w.-]*\s*:(\s|$)/.test(trimmed) || /^\s+\S/.test(line)) sawAny = true
+    else sawProse = true
     i++
   }
 
-  return sawAny ? meta : null
+  return sawAny && !sawProse ? meta : null
 }
 
 function unquoteYaml(raw: string): string {

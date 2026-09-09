@@ -121,6 +121,40 @@ describe('frontmatter export projection', () => {
     expect(stripDocFrontmatter('---\ntags: []\n---\nx\n').meta?.tags).toEqual([])
     expect(stripDocFrontmatter('---\ntags: [a, , b]\n---\nx\n').meta?.tags).toEqual(['a', 'b'])
   })
+
+  test('只有用户自定义字段的 frontmatter 也会被剥离（不再整段当正文）', () => {
+    const md = '---\naliases:\n  - NF\ncssclasses: [wide]\ndescription: |\n  两行\n  说明\n---\nbody\n'
+    const r = stripDocFrontmatter(md)
+    expect(r.meta).toEqual({})
+    expect(r.raw).toBe('aliases:\n  - NF\ncssclasses: [wide]\ndescription: |\n  两行\n  说明\n')
+    expect(r.body).toBe('body\n')
+  })
+
+  test('以 --- 开头的普通正文不被误判成 frontmatter', () => {
+    const md = '---\n\n这是正文第一段\n\n---\n\n后面还有内容\n'
+    const r = stripDocFrontmatter(md)
+    expect(r.meta).toBeNull()
+    expect(r.body).toBe(md)
+
+    // 带冒号的散文同样不算（避免「Note: ...」被当成 YAML 键）
+    const prose = '---\nNote: 这是正文\n后面还有散文\n---\nx\n'
+    expect(stripDocFrontmatter(prose).meta).toBeNull()
+    expect(stripDocFrontmatter(prose).body).toBe(prose)
+  })
+
+  test('notefast_ai_exclude / notefast_status 解析（非法值忽略但仍是 frontmatter）', () => {
+    const read = (yaml: string) => stripDocFrontmatter(`---\n${yaml}\n---\nx\n`)
+    expect(read('notefast_ai_exclude: true').meta?.notefast_ai_exclude).toBe(true)
+    expect(read('notefast_ai_exclude: false').meta?.notefast_ai_exclude).toBe(false)
+    expect(read('notefast_ai_exclude: "true"').meta?.notefast_ai_exclude).toBe(true)
+    expect(read('notefast_status: inbox').meta?.notefast_status).toBe('inbox')
+    expect(read('notefast_status: note').meta?.notefast_status).toBe('note')
+
+    const bad = read('notefast_status: archived')
+    expect(bad.meta?.notefast_status).toBeUndefined()
+    expect(bad.body).toBe('x\n')
+    expect(read('notefast_ai_exclude: yes').meta?.notefast_ai_exclude).toBeUndefined()
+  })
 })
 
 describe('patchFrontmatter（vault 写回行级透传，RFC 0003 阶段 B）', () => {

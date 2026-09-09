@@ -13,7 +13,7 @@
 
 import { existsSync, mkdirSync, renameSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { blocksToMarkdown, buildBlockTree, patchFrontmatter, readTags, type BlockRow } from '@notefast/core'
+import { blocksToMarkdown, buildBlockTree, patchFrontmatter, type BlockRow } from '@notefast/core'
 import { fetchDocBlocks, getBlockById, getLiveDocById } from '../store/blocks'
 import {
   getVaultFileByDocId,
@@ -25,6 +25,7 @@ import {
 import { subscribeDocChanges, type DocChangeEvent } from '../services/docEvents'
 import { auditVault } from './audit'
 import type { VaultContext } from './ingest'
+import { readVaultDocMeta, vaultMetaHash } from './meta'
 import { toVaultAbsPath } from './paths'
 import { VaultConflictError, writeVaultFileAtomic } from './writer'
 
@@ -42,7 +43,11 @@ export interface VaultWriteback {
   handle: (ev: DocChangeEvent) => Promise<WritebackOutcome>
 }
 
-/** 文档 → vault 正文：不写 `# title`（标题即文件名），frontmatter 只增删改 tags，其余字段透传（RFC 0003 阶段 B） */
+/**
+ * 文档 → vault 正文：不写 `# title`（标题即文件名）。
+ * frontmatter 由 `patchFrontmatter` 行级透传：只增删改 tags / notefast_ai_exclude /
+ * notefast_status 三键，用户手写的其余字段逐字节保留（RFC 0003 阶段 B）。
+ */
 export function serializeVaultDocParts(
   ctx: VaultContext,
   doc: BlockRow,
@@ -51,8 +56,13 @@ export function serializeVaultDocParts(
   const tree = buildBlockTree(fetchDocBlocks(ctx.db, doc.id))
   const root = tree[0]
   const body = root ? blocksToMarkdown(root.children ?? []) : ''
-  const tags = readTags(doc)
-  const frontmatterRaw = patchFrontmatter(row?.frontmatter_raw ?? null, { tags })
+  const meta = readVaultDocMeta(doc)
+  const frontmatterRaw = patchFrontmatter(row?.frontmatter_raw ?? null, {
+    tags: meta.tags,
+    // 缺省值（ai_exclude=false、status=note）不写键，已有键则删掉
+    notefast_ai_exclude: meta.aiExclude,
+    notefast_status: meta.status === 'inbox' ? 'inbox' : 'note',
+  })
   const fm = frontmatterRaw ? `---\n${frontmatterRaw}\n---\n` : ''
   const content = fm + body.replace(/^\n+/, '').replace(/\n*$/, '\n')
   return { content, frontmatterRaw }
@@ -100,7 +110,10 @@ export function startVaultWriteback(
     if (doc.notebook_id !== notebookId) return { kind: 'skipped', reason: 'not_vault_doc' }
 
     const row = getVaultFileByDocId(db, doc.id)
-    if (row && !row.deleted_at && row.doc_updated_at === doc.updated_at) {
+    const metaHash = vaultMetaHash(doc)
+    // 回声判定 = 时间戳相同 **且** 元数据指纹相同。
+    // 只看时间戳会漏掉 tags / ai_exclude 这类 touchUpdatedAt:false 的变更（RFC 0003 §回声抑制）
+    if (row && !row.deleted_at && row.doc_updated_at === doc.updated_at && row.meta_hash === metaHash) {
       return { kind: 'skipped', reason: 'echo' }
     }
 
@@ -131,6 +144,7 @@ export function startVaultWriteback(
         mtime_ms: written.mtimeMs,
         doc_updated_at: doc.updated_at,
         frontmatter_raw: frontmatterRaw || null,
+        meta_hash: metaHash,
       })
     } else {
       upsertVaultFile(db, {
@@ -142,6 +156,7 @@ export function startVaultWriteback(
         mtime_ms: written.mtimeMs,
         doc_updated_at: doc.updated_at,
         frontmatter_raw: frontmatterRaw || null,
+        meta_hash: metaHash,
       })
     }
     if (written.unchanged && row) return { kind: 'skipped', reason: 'unchanged' }

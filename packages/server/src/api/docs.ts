@@ -44,6 +44,7 @@ import { registerShareRoutes } from './docShare'
 import { registerTrashRoutes } from './docTrash'
 import { listRelatedDocs } from '../services/docRelated'
 import { scheduleSyncNow } from '../sync/protocolManager'
+import { publishDocChange } from '../services/docEvents'
 
 const docs = new Hono()
 
@@ -288,6 +289,10 @@ docs.patch('/:id/tags', async (c) => {
   const updated = provider.setDocTags(docRow, newTags)
   updateBlock(db, id, { tags: updated.tags, touchUpdatedAt: false })
 
+  // 元数据变更（touchUpdatedAt:false）不会触发 block 级 afterUpdate，这里显式发一条
+  // doc 级事件：SSE 订阅者与 vault 写回都靠它感知（否则改标签永远写不回文件）
+  publishDocChange(id, 'updated')
+
   // 标签进入索引文本上下文：保存后整篇重索引（hasFreshVector 跳过未变块；
   // autoIndex 关闭或 embedding 未配时 scheduleDocIndex 返回 null，无需特判）；
   // 调度只需 id 列表，不再为拿 id 拉全文档字段
@@ -340,6 +345,9 @@ docs.patch('/:id/ai-exclude', async (c) => {
   if (!updated) {
     return c.json({ error: 'not_found', message: `文档 ${id} 不存在` }, 404)
   }
+
+  // 同 tags：ai_exclude 用 touchUpdatedAt:false 写列，需显式发 doc 级事件给 SSE / vault 写回
+  publishDocChange(id, 'updated')
 
   const effect = await applyAiExcludeChange(id, oldExclude, parsed.data.ai_exclude)
 
