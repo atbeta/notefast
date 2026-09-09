@@ -13,7 +13,7 @@ import {
   isBackupManifest,
   type BackupManifest,
   type BackupRestorePoint,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { initDb, closeDb, getDb } from '../db'
 import { initAssetStore } from '../assets/store'
 import backupRouter from '../api/backup'
@@ -30,7 +30,7 @@ import { createBackupStore, type BackupStore } from '../backup/s3Store'
 import { createS3ObjectStore, type ObjectStore } from '../storage/objectStore'
 import { initStorageLocations, createStorageLocation, _resetStorageLocationsForTests } from '../storage/locations'
 import { durableReplaceFile } from '../backup/durableFs'
-import { assertSchemaCompatible, CURRENT_SCHEMA_VERSION } from '@notefast/core'
+import { assertSchemaCompatible, CURRENT_SCHEMA_VERSION } from '@notefast-next/core'
 
 let testDir: string
 let app: Hono

@@ -7,7 +7,7 @@
  * 写 / purge / reindex 等副作用仍在 aiExclude.ts。
  */
 
-import { readAiExclude, type BlockRow } from '@notefast/core'
+import { readAiExclude, type BlockRow } from '@notefast-next/core'
 import { getDb } from '../db'
 import { getBlockById, getBlocksByIds, getDocById } from '../store/blocks'
 

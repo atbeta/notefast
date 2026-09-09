@@ -45,7 +45,7 @@ import {
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Copy, Link2, Sparkles } from 'lucide-react'
-import { blocksToMarkdown, type Block } from '@notefast/core'
+import { blocksToMarkdown, type Block } from '@notefast-next/core'
 import { dispatchAskAi } from '../../lib/askAi'
 import { useToast } from '../ui'
 import { useAiCapabilities } from '../../hooks/useAiCapabilities'

@@ -14,7 +14,7 @@
  */
 
 import { getDb } from '../db'
-import { fullToHalfWidth } from '@notefast/core'
+import { fullToHalfWidth } from '@notefast-next/core'
 import { resolveDictTerm } from '../termDict'
 import { normalizeEntityName, resolveAlias } from '../store/entities'
 

@@ -3,7 +3,7 @@
  * 作业表会 prune / 随进程消失，覆盖率用来在回来时仍能看出「未索引 / 部分 / 已索引」。
  */
 
-import { readAiExclude, readDocStatus } from '@notefast/core'
+import { readAiExclude, readDocStatus } from '@notefast-next/core'
 import { getDb } from '../db'
 import { getDocById } from '../store/blocks'
 import { VECTOR_INDEX_VERSION } from './vectorStore'

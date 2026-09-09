@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { resolveAiLang } from '../ai/locale'
 import { buildChatPrompt, toCurrentDocBlockRefs } from '../ai/prompt'
 import { listSkills } from '../ai/skills'
-import { suggestTitle, messageText } from '@notefast/core'
-import type { LLMProvider } from '@notefast/core'
+import { suggestTitle, messageText } from '@notefast-next/core'
+import type { LLMProvider } from '@notefast-next/core'
 
 describe('AI 语言跟随 UI', () => {
   test('resolveAiLang 解析 Accept-Language', () => {

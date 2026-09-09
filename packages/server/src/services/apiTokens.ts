@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { getDb } from '../db'
 import { computeContentHash } from './contentHash'
-import { safeLogWarn } from '@notefast/core'
+import { safeLogWarn } from '@notefast-next/core'
 
 export interface ApiTokenRecord {
   token_id: string

@@ -12,7 +12,7 @@
  */
 
 import { z } from 'zod'
-import { fullToHalfWidth, parseLlmJson, type ChatMessage } from '@notefast/core'
+import { fullToHalfWidth, parseLlmJson, type ChatMessage } from '@notefast-next/core'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 import type { LexicalTermGroup } from '../lexicalSearch'
 

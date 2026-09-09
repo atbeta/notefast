@@ -12,7 +12,7 @@ import {
   type SyncResult,
   type PushOptions,
   type WebDavLocationConfig,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import {
   createWebDavHttpClient,
   createWebDavObjectStore,

@@ -36,7 +36,7 @@ import {
   RECENT_VISITS_MAX,
 } from '../lib/recentVisits'
 import { isWindowZoomDoubleClickTarget, nativeToggleWindowZoom } from '../lib/nativeWindow'
-import type { DocSummary } from '@notefast/core'
+import type { DocSummary } from '@notefast-next/core'
 import DocActionsMenu from './DocActionsMenu'
 import { Tooltip, ShortcutKeys } from './ui'
 

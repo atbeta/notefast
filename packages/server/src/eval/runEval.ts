@@ -2,7 +2,7 @@
  * 检索评测运行器（bun 脚本，非测试）
  *
  * 用法：
- *   bun --filter @notefast/server eval --mock \
+ *   bun --filter @notefast-next/server eval --mock \
  *     --corpus packages/server/src/eval/fixtures/corpus.json \
  *     --queries packages/server/src/eval/fixtures/queries.json
  *

@@ -32,7 +32,7 @@ import {
   type StorageLocation,
   type SyncDevice,
   type SyncProtocolConfigInput,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { getStorageLocation } from '../storage/locations'
 import {
   publishChanges,

@@ -15,7 +15,7 @@ import {
   type SyncResult,
   type PushOptions,
   type LocalFsAdapterConfig,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { getDb } from '../db'
 import { countDocRows } from '../store/blocks'
 import { createLocalFsObjectStore } from '../storage/webdavStore'

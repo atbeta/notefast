@@ -26,7 +26,7 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { fullToHalfWidth } from '@notefast/core'
+import { fullToHalfWidth } from '@notefast-next/core'
 import { getDb } from './db'
 import { addAlias, findEntityByName, mergeEntities, normalizeEntityName, upsertEntity } from './store/entities'
 

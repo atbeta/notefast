@@ -4,7 +4,7 @@
  * 同一路径有缓存时先画出旧数据再后台刷新，避免骨架屏把「已看过的列表」闪没。
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { DocSummary } from '@notefast/core'
+import type { DocSummary } from '@notefast-next/core'
 import { getJsonWithCursor } from './useAPI'
 
 export const DOC_LIST_PAGE_SIZE = 80

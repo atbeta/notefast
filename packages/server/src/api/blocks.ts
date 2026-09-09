@@ -8,7 +8,7 @@ import {
   rowToBlock,
   buildBlockTree,
   readAiExclude,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { getDb } from '../db'
 import {
   fetchSubtreeBlocks,
@@ -359,7 +359,7 @@ blocks.post(
   },
 )
 
-function limitDepth(blocks: import('@notefast/core').Block[], maxDepth: number, current: number): import('@notefast/core').Block[] {
+function limitDepth(blocks: import('@notefast-next/core').Block[], maxDepth: number, current: number): import('@notefast-next/core').Block[] {
   if (current >= maxDepth) {
     return blocks.map((b) => ({ ...b, children: [] }))
   }

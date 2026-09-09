@@ -1,4 +1,4 @@
-import type { ProviderDefinition, RerankerDefinition } from '@notefast/core'
+import type { ProviderDefinition, RerankerDefinition } from '@notefast-next/core'
 import i18next from '../../i18n'
 import { ApiError } from '../../hooks/useAPI'
 

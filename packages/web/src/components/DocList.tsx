@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
-import type { DocSummary } from '@notefast/core'
+import type { DocSummary } from '@notefast-next/core'
 import { Link } from 'react-router-dom'
 import { FileText, Check, X, EyeOff, Globe } from 'lucide-react'
 import { api } from '../hooks/useAPI'

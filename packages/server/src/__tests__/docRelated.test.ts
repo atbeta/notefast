@@ -11,7 +11,7 @@ import docs from '../api/docs'
 import { initVectorStore } from '../ai/indexer'
 import { VECTOR_INDEX_VERSION } from '../ai/vectorStore'
 import { buildRelatedQuery, listRelatedDocs } from '../services/docRelated'
-import { writeTags, type BlockRow } from '@notefast/core'
+import { writeTags, type BlockRow } from '@notefast-next/core'
 
 let testDir: string
 let app: Hono

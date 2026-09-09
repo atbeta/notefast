@@ -8,7 +8,7 @@ import {
   publicBackupView,
   type BackupConfigInput,
   type BackupPersistedConfig,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { createJsonConfigStore } from '../services/jsonConfig'
 
 const store = createJsonConfigStore<BackupPersistedConfig>({

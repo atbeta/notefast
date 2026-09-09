@@ -14,7 +14,7 @@ import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
 import docs from '../api/docs'
 import blocks from '../api/blocks'
-import { createPluginSystem } from '@notefast/core'
+import { createPluginSystem } from '@notefast-next/core'
 import {
   initAiRuntime,
   applyNewConfig,

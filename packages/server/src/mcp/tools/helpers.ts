@@ -17,7 +17,7 @@ import {
   type Block,
   type BlockRow,
   type TagMatchMode,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { getDb } from '../../db'
 import {
   isBlockAiExcluded,

@@ -11,7 +11,7 @@
  * 并 re-export 查询函数以保持既有 import 路径可用。
  */
 
-import { type BlockRow } from '@notefast/core'
+import { type BlockRow } from '@notefast-next/core'
 import { getDb } from '../db'
 import { getBlockById, getDocById, updateBlock } from '../store/blocks'
 import { deleteMentionsTouchingBlocks } from '../store/entities'

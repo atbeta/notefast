@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { initDb, closeDb } from '../db'
-import { createPluginSystem, defaultAutoLinkConfig } from '@notefast/core'
+import { createPluginSystem, defaultAutoLinkConfig } from '@notefast-next/core'
 import {
   initAiRuntime,
   applyNewConfig,

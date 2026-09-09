@@ -11,7 +11,7 @@ import {
   blocksToMarkdown,
   highlightSnippet,
   rowToBlock,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { getDb } from '../../db'
 import { lexicalSearch } from '../../lexicalSearch'
 import {

@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { createHash } from 'node:crypto'
-import { importMarkdownSchema, rowToBlock, readDocStatus, readTags } from '@notefast/core'
+import { importMarkdownSchema, rowToBlock, readDocStatus, readTags } from '@notefast-next/core'
 import { getDb } from '../db'
 import { findDocIdBySource, getBlockById, getBlocksByIds, getLiveDocById, updateBlock } from '../store/blocks'
 import { fireAfterCreate, fireAfterCreateMany, fireDocAfterCreate } from '../services/hooks'

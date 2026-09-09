@@ -1,4 +1,4 @@
-import type { Block, DocumentEventPayload } from '@notefast/core'
+import type { Block, DocumentEventPayload } from '@notefast-next/core'
 import { getPluginSystem } from './aiRuntime'
 import { emitAppEvent } from '../events'
 import { scheduleSyncNow } from '../sync/protocolManager'
@@ -67,7 +67,7 @@ export function fireAfterCreateMany(blocks: Block[]): void {
 // 与 note.*（block 粒度）区分：doc.* 是「一个文档一个动作」的扩展挂点，
 // 第三方监听归档/分享/标签/删除等文档级语义，无需自行聚合 block 事件。
 
-function fireDoc<K extends keyof import('@notefast/core').PluginSystem['doc']>(
+function fireDoc<K extends keyof import('@notefast-next/core').PluginSystem['doc']>(
   hook: K,
   payload: DocumentEventPayload,
 ): void {

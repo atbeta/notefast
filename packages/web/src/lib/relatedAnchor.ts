@@ -1,4 +1,4 @@
-import { findFencedCodeSpans, type Block } from '@notefast/core'
+import { findFencedCodeSpans, type Block } from '@notefast-next/core'
 
 export interface MarkdownBlockSpan {
   from: number

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { Block, SearchResult } from '@notefast/core'
+import type { Block, SearchResult } from '@notefast-next/core'
 import { collapseSearchHitsByDoc, paletteDocTitle, searchHitDocPath, parseDocScrollHash } from '../searchHits'
 
 function hit(partial: { id: string; root_id: string; content: string; snippet: string; doc_title?: string; rank?: number }): SearchResult {

@@ -124,7 +124,7 @@ describe('aiExclude helpers', () => {
 
 describe('恢复可见 → 异步索引作业', () => {
   test('不在调用内逐块 embed：立即返回 index_job，后台完成重建', async () => {
-    const { createPluginSystem } = await import('@notefast/core')
+    const { createPluginSystem } = await import('@notefast-next/core')
     const { initAiRuntime, applyNewConfig, _setRuntimeForTests, getRuntime } = await import('../services/aiRuntime')
     const { initVectorStore } = await import('../ai/indexer')
     const { getIndexJob, _resetIndexJobsForTests } = await import('../ai/indexJobs')

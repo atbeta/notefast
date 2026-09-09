@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { initDb, closeDb, getDb } from '../db'
-import { createPluginSystem } from '@notefast/core'
+import { createPluginSystem } from '@notefast-next/core'
 import {
   initAiRuntime,
   applyNewConfig,
@@ -991,7 +991,7 @@ describe('executeWriteTool — AI 写入在文档历史中可识别（actor=ai�
     const { executeWriteTool } = await import('../ai/chat')
     const { getDb } = await import('../db')
     const { getBlockById } = await import('../store/blocks')
-    const { readTags } = await import('@notefast/core')
+    const { readTags } = await import('@notefast-next/core')
     const yaml = '---\ntags:\n  - invented\n---\n\n正文'
 
     const noTags = await executeWriteTool(

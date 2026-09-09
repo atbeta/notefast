@@ -18,7 +18,7 @@ import { z } from 'zod'
 import {
   type SyncPersistedConfig,
   type SyncAdapterConfig,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import {
   applySyncConfig,
   getSyncPublicConfig,

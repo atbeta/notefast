@@ -2,7 +2,7 @@
  * 整篇 Markdown 保存：按指纹对齐旧子块，只 insert/update/delete 差值，保留稳定 id。
  */
 
-import type { BlockRow, CreateBlockInput } from '@notefast/core'
+import type { BlockRow, CreateBlockInput } from '@notefast-next/core'
 import type { getDb } from '../db'
 import {
   insertBlock,

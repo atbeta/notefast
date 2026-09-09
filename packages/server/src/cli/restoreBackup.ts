@@ -2,7 +2,7 @@
  * 停服务恢复 CLI
  *
  * 用法：
- *   bun --filter @notefast/server backup:restore -- \
+ *   bun --filter @notefast-next/server backup:restore -- \
  *     --data-dir ./data --object-key nf/snapshots/....db --yes
  *
  * 必须先停止 NoteFast 服务再执行。本 CLI 不做「库是否占用」探测：
@@ -19,7 +19,7 @@ import {
   isBackupManifest,
   type BackupManifest,
   type BackupPersistedConfig,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { Database } from 'bun:sqlite'
 import { createBackupStore } from '../backup/s3Store'
 import { durableReplaceFile } from '../backup/durableFs'

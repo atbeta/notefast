@@ -18,7 +18,7 @@ import { createContext, useCallback, useContext, useId, useLayoutEffect, useRef,
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Copy, Link2, MoreVertical, Sparkles } from 'lucide-react'
-import { blocksToMarkdown, type Block } from '@notefast/core'
+import { blocksToMarkdown, type Block } from '@notefast-next/core'
 import { dispatchAskAi } from '../lib/askAi'
 import { useToast } from './ui'
 import { getAiCapabilitiesSnapshot } from '../hooks/useAiCapabilities'

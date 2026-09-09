@@ -3,7 +3,7 @@
  */
 
 import type { Text } from '@codemirror/state'
-import { findFencedCodeSpans, type FencedCodeSpan } from '@notefast/core'
+import { findFencedCodeSpans, type FencedCodeSpan } from '@notefast-next/core'
 
 const cache = new WeakMap<Text, FencedCodeSpan[]>()
 

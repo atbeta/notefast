@@ -21,8 +21,8 @@ import {
   emptyConfig,
   type AiConfig,
   type Block,
-} from '@notefast/core'
-import type { PluginSystem } from '@notefast/core'
+} from '@notefast-next/core'
+import type { PluginSystem } from '@notefast-next/core'
 import { getDb } from '../db'
 import { fetchDocBlocks, getDocById } from '../store/blocks'
 import { indexBlock } from '../ai/indexer'

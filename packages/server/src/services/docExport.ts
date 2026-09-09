@@ -8,7 +8,7 @@ import { getDb } from '../db'
 import { getDocById, listDocRows } from '../store/blocks'
 import { extForMime, archiveMediaKey } from '../sync/archiveMedia'
 import { buildZipStore, type ZipEntry } from '../lib/zipStore'
-import { readTags } from '@notefast/core'
+import { readTags } from '@notefast-next/core'
 import { sanitizeFilename, archiveRelPath, buildArchiveManifest, ARCHIVE_MANIFEST_NAME, type ArchiveManifest } from '../sync/archive'
 import { portableDocMarkdown } from './portableMarkdown'
 

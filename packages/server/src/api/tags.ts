@@ -16,8 +16,8 @@
  */
 
 import { Hono } from 'hono'
-import type { TagInfo } from '@notefast/core'
-import { getTagProvider } from '@notefast/core'
+import type { TagInfo } from '@notefast-next/core'
+import { getTagProvider } from '@notefast-next/core'
 import { getDb } from '../db'
 import { listDocTagCounts } from '../store/blocks'
 

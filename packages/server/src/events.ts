@@ -1,5 +1,5 @@
-import type { AppEvent } from '@notefast/core'
-import { safeLogInfo, safeLogWarn } from '@notefast/core'
+import type { AppEvent } from '@notefast-next/core'
+import { safeLogInfo, safeLogWarn } from '@notefast-next/core'
 import { logAppEvent } from './services/appLogs'
 
 export function emitAppEvent(partial: Omit<AppEvent, 'ts'>): void {

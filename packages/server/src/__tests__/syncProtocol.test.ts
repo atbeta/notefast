@@ -21,7 +21,7 @@ import { createS3ObjectStore } from '../storage/objectStore'
 import {
   CHANGES_PER_SEGMENT,
   SYNC_S3_DIR,
-} from '@notefast/core'
+} from '@notefast-next/core'
 
 /**
  * 同步协议 v2（方案 A 数据面，多写端对等拓扑）：

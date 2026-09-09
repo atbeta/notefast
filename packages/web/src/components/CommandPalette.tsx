@@ -16,7 +16,7 @@ import {
   ArrowDown,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import type { SearchResult } from '@notefast/core'
+import type { SearchResult } from '@notefast-next/core'
 import { request } from '../hooks/useAPI'
 import { useTheme } from '../hooks/useTheme'
 import { EmptyState, Kbd, ShortcutKeys } from './ui'

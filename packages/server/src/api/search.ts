@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
-import { highlightSnippet, rowToBlock } from '@notefast/core'
-import type { BlockRow, SearchResult } from '@notefast/core'
+import { highlightSnippet, rowToBlock } from '@notefast-next/core'
+import type { BlockRow, SearchResult } from '@notefast-next/core'
 import { getDb } from '../db'
 import { lexicalSearch } from '../lexicalSearch'
 import { listBacklinks } from '../store/refs'

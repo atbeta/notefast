@@ -6,7 +6,7 @@
  * 锚点还没有向量时回退词法，保证未配嵌入的库仍能出结果。
  */
 
-import { readTags, type BlockRow } from '@notefast/core'
+import { readTags, type BlockRow } from '@notefast-next/core'
 import { hybridSearch } from '../ai/hybridSearch'
 import {
   loadAiExcludedDocIds,

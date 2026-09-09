@@ -10,7 +10,7 @@ import {
   docFrontmatterFromRow,
   withDocFrontmatter,
   type BlockRow,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { getDb } from '../db'
 import { fetchDocBlocks } from '../store/blocks'
 

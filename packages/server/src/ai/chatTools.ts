@@ -7,8 +7,8 @@
  * 写库语义与 MCP/REST 写路径一致。
  */
 
-import type { ToolDefinition } from '@notefast/core'
-import { rowToBlock, blocksToMarkdown, buildBlockTree } from '@notefast/core'
+import type { ToolDefinition } from '@notefast-next/core'
+import { rowToBlock, blocksToMarkdown, buildBlockTree } from '@notefast-next/core'
 import type { AiLang } from './locale'
 import type { ToolResult } from './chat'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'

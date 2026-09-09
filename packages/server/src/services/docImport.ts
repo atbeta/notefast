@@ -14,9 +14,9 @@
  * - 子块 level 按父链深度计算（文档根 = 0，顶层子块 = 1，逐层 +1）
  */
 
-import { normalizeTagList, parseImportedTimestamp, stripDocFrontmatter, stripTitleHeading } from '@notefast/core'
+import { normalizeTagList, parseImportedTimestamp, stripDocFrontmatter, stripTitleHeading } from '@notefast-next/core'
 import { parseMarkdownToBlocksForSave } from './markdownParse'
-import type { CreateBlockInput } from '@notefast/core'
+import type { CreateBlockInput } from '@notefast-next/core'
 import type { getDb } from '../db'
 import { findDocIdBySource, getMaxChildSort, insertBlock, nowTimestamp, touchDocRoot } from '../store/blocks'
 

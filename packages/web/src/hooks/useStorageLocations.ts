@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from './useAPI'
-import type { StorageLocation } from '@notefast/core'
+import type { StorageLocation } from '@notefast-next/core'
 
 /**
  * 存储连接库（GET /storage-locations）共享 hook。

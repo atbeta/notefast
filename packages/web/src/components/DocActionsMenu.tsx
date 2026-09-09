@@ -23,7 +23,7 @@ import {
   Share2,
   Trash2,
 } from 'lucide-react'
-import type { DocSummary } from '@notefast/core'
+import type { DocSummary } from '@notefast-next/core'
 import { api } from '../hooks/useAPI'
 import { useApiMutation } from '../hooks/useApiMutation'
 import { usePopoverDismiss } from '../hooks/usePopoverDismiss'

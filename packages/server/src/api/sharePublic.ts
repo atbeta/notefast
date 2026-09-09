@@ -16,7 +16,7 @@
 
 import { Hono } from 'hono'
 import { readFileSync } from 'node:fs'
-import { buildBlockTree, blocksToMarkdown, type Block } from '@notefast/core'
+import { buildBlockTree, blocksToMarkdown, type Block } from '@notefast-next/core'
 import { getDb } from '../db'
 import { fetchDocBlocks } from '../store/blocks'
 import { getShareByToken } from '../store/shares'

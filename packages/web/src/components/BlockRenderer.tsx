@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, createElement, memo, createContext, useCo
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, Cloud, CloudOff, Loader2 } from 'lucide-react'
-import type { Block } from '@notefast/core'
+import type { Block } from '@notefast-next/core'
 import MermaidDiagram from './MermaidDiagram'
 import MathBlock, { MathInline } from './MathBlock'
 import { CodeFenceView } from './CodeFenceView'

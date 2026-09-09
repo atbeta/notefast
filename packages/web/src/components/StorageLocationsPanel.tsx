@@ -5,7 +5,7 @@ import { api } from '../hooks/useAPI'
 import { ActionButton, EmptyState, Tooltip, useToast } from './ui'
 import { SettingsCard, InlineField } from './settings/ui'
 import { useStorageLocations } from '../hooks/useStorageLocations'
-import { STORAGE_SECRET_MASK, type StorageLocation } from '@notefast/core'
+import { STORAGE_SECRET_MASK, type StorageLocation } from '@notefast-next/core'
 
 /**
  * 存储连接管理面板：备份 / 多端同步 / Markdown 归档 共用的连接（bucket/凭据）只填一次。

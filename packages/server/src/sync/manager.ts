@@ -22,12 +22,12 @@ import {
   type SyncResult,
   type PushOptions,
   publicSyncView,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { createLocalFsAdapter } from './localFs'
 import { createS3Adapter } from './s3'
 import { createWebDavAdapter } from './webdav'
 import { getStorageLocation } from '../storage/locations'
-import type { StorageLocation } from '@notefast/core'
+import type { StorageLocation } from '@notefast-next/core'
 import { createJsonConfigStore } from '../services/jsonConfig'
 
 const CONFIG_FILE = 'sync.config.json'

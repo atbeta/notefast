@@ -1,5 +1,5 @@
 {
-  "name": "@notefast/tauri-client",
+  "name": "@notefast-next/tauri-client",
   "version": "0.86.1",
   "private": true,
   "scripts": {

@@ -14,7 +14,7 @@ import {
   type BackupManifest,
   type BackupRestorePoint,
   type S3LocationConfig,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { createS3ObjectStore, getObjectText, type ObjectStore } from '../storage/objectStore'
 
 export interface BackupStore {

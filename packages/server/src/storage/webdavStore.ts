@@ -9,7 +9,7 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { WebDavLocationConfig } from '@notefast/core'
+import type { WebDavLocationConfig } from '@notefast-next/core'
 import type { ObjectBody, ObjectStore } from './objectStore'
 
 /** 供测试注入的裸 HTTP 客户端（与 sync/webdav.ts 的 WebDavClientLike 同形） */

@@ -1,5 +1,5 @@
 {
-  "name": "@notefast/core",
+  "name": "@notefast-next/core",
   "version": "0.86.1",
   "private": true,
   "type": "module",

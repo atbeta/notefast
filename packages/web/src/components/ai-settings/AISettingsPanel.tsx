@@ -27,7 +27,7 @@ import {
   type RerankerDefinition,
   type RuntimeStatus,
   type Capabilities,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { api } from '../../hooks/useAPI'
 import { currentLocale } from '../../lib/time'
 import { ActionButton, useToast, Toggle, Tooltip } from '../ui'

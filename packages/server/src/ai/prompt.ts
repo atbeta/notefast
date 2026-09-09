@@ -8,7 +8,7 @@
  * - tool 定义：在 system prompt 末尾追加「可用工具」段；实际 tool_calls 由 chat 层注入 messages（OpenAI 协议）
  */
 
-import type { ChatMessage, ToolDefinition } from '@notefast/core'
+import type { ChatMessage, ToolDefinition } from '@notefast-next/core'
 import type { Citation } from './hybridSearch'
 import type { AiLang } from './locale'
 

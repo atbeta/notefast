@@ -18,7 +18,7 @@
  * 但会改变构建结果 → content_hash 变化 → 触发重索引（freshness 联动见 aiRuntime）。
  */
 
-import { readTags, type BlockRow } from '@notefast/core'
+import { readTags, type BlockRow } from '@notefast-next/core'
 import { getDb } from '../db'
 import { getBlockById } from '../store/blocks'
 import { captionForAsset, visionEnabled } from './imageCaptions'

@@ -11,7 +11,7 @@ import {
   Cloud,
 } from 'lucide-react'
 import { api } from '../hooks/useAPI'
-import { type BackupRuntimeStatus, type BackupRestorePoint } from '@notefast/core'
+import { type BackupRuntimeStatus, type BackupRestorePoint } from '@notefast-next/core'
 import { ActionButton, Tooltip, useToast } from './ui'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
 import LocationSelect from './LocationSelect'
@@ -120,7 +120,7 @@ export default function BackupPanel() {
   }
 
   const copyRestoreCmd = async (objectKey: string) => {
-    const cmd = `bun --filter @notefast/server backup:restore -- --data-dir ./data --object-key ${objectKey} --yes`
+    const cmd = `bun --filter @notefast-next/server backup:restore -- --data-dir ./data --object-key ${objectKey} --yes`
     await navigator.clipboard.writeText(cmd)
     toast.success({ title: t('backup.copiedRestoreCmd'), description: t('backup.stopServiceFirst') })
   }

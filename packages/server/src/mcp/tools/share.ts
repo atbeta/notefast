@@ -18,7 +18,7 @@
  */
 
 import { z } from 'zod'
-import { rowToBlock } from '@notefast/core'
+import { rowToBlock } from '@notefast-next/core'
 import { getDb } from '../../db'
 import { getLiveDocById } from '../../store/blocks'
 import {

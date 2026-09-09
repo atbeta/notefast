@@ -10,7 +10,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import BlockRenderer from '../BlockRenderer'
 import { ToastProvider } from '../ui'
-import { BlockType, type Block } from '@notefast/core'
+import { BlockType, type Block } from '@notefast-next/core'
 
 let sort = 0
 function leaf(type: BlockType, content: string, properties: Record<string, unknown> = {}): Block {

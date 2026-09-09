@@ -16,7 +16,7 @@ import {
   type SyncResult,
   type PushOptions,
   type S3LocationConfig,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { createS3ObjectStore, type ObjectStore } from '../storage/objectStore'
 import { pushArchiveViaStore } from './archivePush'
 

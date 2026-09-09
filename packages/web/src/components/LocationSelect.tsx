@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useStorageLocations } from '../hooks/useStorageLocations'
-import { STORAGE_SECRET_MASK } from '@notefast/core'
+import { STORAGE_SECRET_MASK } from '@notefast-next/core'
 
 /**
  * 存储连接下拉：备份 / 多端同步 / Markdown 归档共用。

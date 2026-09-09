@@ -32,7 +32,7 @@ import {
   uploadSingleAsset,
   findReferencingDocs,
 } from '../assets/store'
-import { hasImageUploadCommand, imageUploadConfigSchema, emptyImageUploadConfig, mergeImageUploadConfig, type ImageUploadConfigInput } from '@notefast/core'
+import { hasImageUploadCommand, imageUploadConfigSchema, emptyImageUploadConfig, mergeImageUploadConfig, type ImageUploadConfigInput } from '@notefast-next/core'
 import {
   applyImageUploadConfig,
   getImageUploadPublicConfig,

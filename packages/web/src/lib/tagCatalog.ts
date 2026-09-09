@@ -3,7 +3,7 @@
  * 模块级单例 + in-flight 去重；有旧数据先画，后台刷新。
  */
 
-import type { TagInfo } from '@notefast/core'
+import type { TagInfo } from '@notefast-next/core'
 
 export interface TagCatalogPayload {
   provider: string

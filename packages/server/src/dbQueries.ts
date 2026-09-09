@@ -14,7 +14,7 @@
  * FTS5 与 SQLite 共生，检索层不参与数据访问层抽象。
  */
 
-import type { BlockRow } from '@notefast/core'
+import type { BlockRow } from '@notefast-next/core'
 import type { getDb } from './db'
 
 type Db = ReturnType<typeof getDb>

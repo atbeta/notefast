@@ -912,7 +912,7 @@ describe('MCP create_doc 不从 YAML 发明标签', () => {
     expect(result.isError).toBeFalsy()
     const { getDb } = await import('../db')
     const { getBlockById } = await import('../store/blocks')
-    const { readTags } = await import('@notefast/core')
+    const { readTags } = await import('@notefast-next/core')
     expect(readTags(getBlockById(getDb(), payload.doc_id as string)!)).toEqual([])
   })
 
@@ -925,7 +925,7 @@ describe('MCP create_doc 不从 YAML 发明标签', () => {
     expect(result.isError).toBeFalsy()
     const { getDb } = await import('../db')
     const { getBlockById } = await import('../store/blocks')
-    const { readTags } = await import('@notefast/core')
+    const { readTags } = await import('@notefast-next/core')
     expect(readTags(getBlockById(getDb(), payload.doc_id as string)!)).toEqual(['work'])
   })
 })

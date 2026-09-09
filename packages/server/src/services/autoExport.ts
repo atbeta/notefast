@@ -15,7 +15,7 @@
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { readTags } from '@notefast/core'
+import { readTags } from '@notefast-next/core'
 import { isSyncConfigured, syncPush } from '../sync/manager'
 import { archiveRelPath } from '../sync/archive'
 import { getDb } from '../db'

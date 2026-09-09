@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { SemanticHit } from '@notefast/core'
+import type { SemanticHit } from '@notefast-next/core'
 import { getDb } from '../db'
 import { getBlockById } from '../store/blocks'
 import { loadSqliteVec } from '../sqliteVec'

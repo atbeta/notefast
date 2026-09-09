@@ -5,7 +5,7 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { createPluginSystem, AiRuntime, emptyConfig } from '@notefast/core'
+import { createPluginSystem, AiRuntime, emptyConfig } from '@notefast-next/core'
 import { initDb, closeDb, getDb } from '../db'
 import {
   initAiRuntime,

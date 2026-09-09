@@ -15,8 +15,8 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AiConfig } from '@notefast/core'
-import { createPluginSystem } from '@notefast/core'
+import type { AiConfig } from '@notefast-next/core'
+import { createPluginSystem } from '@notefast-next/core'
 import { initDb, closeDb, getDb } from '../db'
 import {
   initAiRuntime,

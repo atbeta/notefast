@@ -5,7 +5,7 @@
  * 按规则生成查询集，写到 data/eval/private-queries.json（已 gitignore）。
  *
  * 用法：
- *   bun --filter @notefast/server eval:private [--data-dir ./data] [--out <path>]
+ *   bun --filter @notefast-next/server eval:private [--data-dir ./data] [--out <path>]
  *
  * 生成规则（不调 LLM，纯模板）：
  * - title_exact：直接取标题（跳过过短 / 无意义标题）

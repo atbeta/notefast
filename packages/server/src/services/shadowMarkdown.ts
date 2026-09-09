@@ -9,7 +9,7 @@
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, rmdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { readTags, type BlockRow } from '@notefast/core'
+import { readTags, type BlockRow } from '@notefast-next/core'
 import { readAsset } from '../assets/store'
 import { getDb } from '../db'
 import { getLiveDocById, listDocRows } from '../store/blocks'

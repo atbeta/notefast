@@ -9,7 +9,7 @@
 
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { storageLocationSchema } from '@notefast/core'
+import { storageLocationSchema } from '@notefast-next/core'
 import {
   createStorageLocation,
   deleteStorageLocation,

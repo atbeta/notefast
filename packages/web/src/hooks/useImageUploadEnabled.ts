@@ -6,7 +6,7 @@
  */
 
 import { useSyncExternalStore } from 'react'
-import { hasImageUploadCommand } from '@notefast/core'
+import { hasImageUploadCommand } from '@notefast-next/core'
 import { api } from './useAPI'
 
 export type ImageUploadEnabledSnapshot = {

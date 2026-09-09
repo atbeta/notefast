@@ -11,7 +11,7 @@ import { initDb, closeDb, getDb } from '../db'
 import { initAssetStore, saveAsset } from '../assets/store'
 import { insertDocFromMarkdown } from '../services/docImport'
 import { archiveRelPath } from '../sync/archive'
-import { readTags } from '@notefast/core'
+import { readTags } from '@notefast-next/core'
 import { getDocById } from '../store/blocks'
 import { publishDocChange, FLUSH_MS } from '../services/docEvents'
 import {

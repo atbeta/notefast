@@ -14,7 +14,7 @@ import { createHash } from 'node:crypto'
 import { createReadStream, existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { Database } from 'bun:sqlite'
-import { CURRENT_SCHEMA_VERSION } from '@notefast/core'
+import { CURRENT_SCHEMA_VERSION } from '@notefast-next/core'
 import { getDb, getSchemaVersion } from '../db'
 import { loadSqliteVec } from '../sqliteVec'
 

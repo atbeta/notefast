@@ -11,8 +11,8 @@ import {
   stripTitleFromMarkdown,
   clipContinuePrefix,
   clipContinueSuffix,
-} from '@notefast/core'
-import type { Block } from '@notefast/core'
+} from '@notefast-next/core'
+import type { Block } from '@notefast-next/core'
 import { api } from '../hooks/useAPI'
 import { useToast } from './ui'
 import { relativeTime } from '../lib/time'

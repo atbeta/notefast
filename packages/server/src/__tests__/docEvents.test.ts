@@ -6,8 +6,8 @@ import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:tes
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { Hono } from 'hono'
-import { createPluginSystem, rowToBlock } from '@notefast/core'
-import type { BlockRow } from '@notefast/core'
+import { createPluginSystem, rowToBlock } from '@notefast-next/core'
+import type { BlockRow } from '@notefast-next/core'
 import { initDb, closeDb, getDb } from '../db'
 import { insertDocFromMarkdown } from '../services/docImport'
 import {

@@ -16,7 +16,7 @@
  * - 分阶段 timing（understand / fts / embed_query / semantic / rerank / total）可量化 Fast
  */
 
-import { highlightSnippet } from '@notefast/core'
+import { highlightSnippet } from '@notefast-next/core'
 import { lexicalSearch, type LexicalTermGroup } from '../lexicalSearch'
 import { semanticSearch } from './indexer'
 import { entitySearch } from './entitySearch'

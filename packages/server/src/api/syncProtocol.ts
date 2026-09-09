@@ -14,7 +14,7 @@
 
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { syncProtocolConfigSchema } from '@notefast/core'
+import { syncProtocolConfigSchema } from '@notefast-next/core'
 import {
   applyProtocolManagerConfig,
   disableProtocolManager,

@@ -5,8 +5,8 @@
  * `shadow` 双跑后仍写 mdast。日志只含块数与差异路径，不含正文。
  */
 
-import { parseMarkdownForPersistence, safeLogError, safeLogWarn } from '@notefast/core'
-import type { CreateBlockInput, MarkdownParserMode } from '@notefast/core'
+import { parseMarkdownForPersistence, safeLogError, safeLogWarn } from '@notefast-next/core'
+import type { CreateBlockInput, MarkdownParserMode } from '@notefast-next/core'
 
 export function readMarkdownParserMode(): MarkdownParserMode {
   const raw = (process.env.NOTEFAST_MARKDOWN_PARSER || '').trim().toLowerCase()

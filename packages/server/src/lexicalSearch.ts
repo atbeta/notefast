@@ -24,7 +24,7 @@
  * 仍做词典展开；未注入时行为与历史完全一致。
  */
 
-import { fullToHalfWidth, halfToFullPunct } from '@notefast/core'
+import { fullToHalfWidth, halfToFullPunct } from '@notefast-next/core'
 import { getDb } from './db'
 import { runFtsQuery } from './dbQueries'
 import { expandDictTerm } from './termDict'

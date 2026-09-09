@@ -6,7 +6,7 @@ import {
   KEY_MASK,
   type ProviderDefinition,
   type ProviderPresetId,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { FieldRow, Input, Tooltip } from '../ui'
 import { InlineField } from '../settings/ui'
 import type { FieldErrors } from './validation'

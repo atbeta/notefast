@@ -8,7 +8,7 @@
  * 无 YAML tags 时每一层目录作为 tag（untagged/media/__MACOSX 除外）。
  */
 
-import { stripDocFrontmatter, normalizeTagList } from '@notefast/core'
+import { stripDocFrontmatter, normalizeTagList } from '@notefast-next/core'
 import { createHash } from 'node:crypto'
 import type { getDb } from '../db'
 import { ingestLocalImageRefs, saveAsset } from '../assets/store'

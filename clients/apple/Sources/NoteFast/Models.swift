@@ -1,7 +1,7 @@
 import Foundation
 
 /// 文档摘要（对齐 `GET /docs/list` 返回的 `DocSummary[]`，见 server `api/docs.ts`）。
-/// 字段语义与 `@notefast/core` 一致；条件字段（ai_exclude / status）缺省为 nil。
+/// 字段语义与 `@notefast-next/core` 一致；条件字段（ai_exclude / status）缺省为 nil。
 public struct DocSummary: Decodable, Identifiable, Equatable {
     public let id: String
     public let title: String

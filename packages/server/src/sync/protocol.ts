@@ -35,7 +35,7 @@ import {
   type SyncChange,
   type SyncManifest,
   type SyncSnapshotMeta,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import type { getDb } from '../db'
 import { listChanges, getChangesAnchor, pruneChanges, runFeedSuppressed } from '../store/changeFeed'
 import { nowTimestamp } from '../store/blocks'

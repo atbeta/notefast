@@ -19,7 +19,7 @@ import {
 } from '../sync/protocolManager'
 import { createS3ObjectStore } from '../storage/objectStore'
 import { initStorageLocations, createStorageLocation, _resetStorageLocationsForTests } from '../storage/locations'
-import { SYNC_S3_DIR } from '@notefast/core'
+import { SYNC_S3_DIR } from '@notefast-next/core'
 
 const S3_CFG = { bucket: 'b', region: 'r', accessKeyId: 'k', secretAccessKey: 's' }
 let locationId = ''

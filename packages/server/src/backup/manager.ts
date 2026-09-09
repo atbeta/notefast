@@ -12,7 +12,7 @@ import {
   type BackupRestorePoint,
   type BackupRunResult,
   type BackupRuntimeStatus,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import {
   applyBackupConfig,
   disableBackupConfig,

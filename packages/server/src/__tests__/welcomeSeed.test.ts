@@ -5,7 +5,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { readTags } from '@notefast/core'
+import { readTags } from '@notefast-next/core'
 import { initDb, closeDb, getDb } from '../db'
 import { countDocRows, listDocRows } from '../store/blocks'
 import {

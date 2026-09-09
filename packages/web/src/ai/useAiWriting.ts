@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
 import i18next from '../i18n'
 import { streamSSE } from '../lib/streaming'
-import type { WriteMode } from '@notefast/core'
+import type { WriteMode } from '@notefast-next/core'
 
 interface StreamCallbacks {
   onToken: (text: string) => void

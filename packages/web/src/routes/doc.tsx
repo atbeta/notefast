@@ -2,8 +2,8 @@ import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, laz
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type { Block, HeadingNode } from '@notefast/core'
-import { buildHeadingTree } from '@notefast/core'
+import type { Block, HeadingNode } from '@notefast-next/core'
+import { buildHeadingTree } from '@notefast-next/core'
 import {
   ArrowLeft,
   Sparkles,

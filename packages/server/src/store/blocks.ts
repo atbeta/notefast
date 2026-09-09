@@ -13,8 +13,8 @@
  * autolink / assets / api_tokens 等自有表的 store。
  */
 
-import type { BlockRow, BlockRevision, DocSnapshot, DocRevisionEntry, DocStatus, TagMatchMode } from '@notefast/core'
-import { buildBlockTree, blocksToMarkdown } from '@notefast/core'
+import type { BlockRow, BlockRevision, DocSnapshot, DocRevisionEntry, DocStatus, TagMatchMode } from '@notefast-next/core'
+import { buildBlockTree, blocksToMarkdown } from '@notefast-next/core'
 import type { getDb } from '../db'
 import { computeContentHash } from '../services/contentHash'
 

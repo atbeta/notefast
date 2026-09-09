@@ -12,7 +12,7 @@
 
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { backupConfigSchema, type BackupConfigInput } from '@notefast/core'
+import { backupConfigSchema, type BackupConfigInput } from '@notefast-next/core'
 import {
   applyBackupManagerConfig,
   backupStatus,

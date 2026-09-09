@@ -16,7 +16,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { initDb, closeDb, getDb } from '../db'
 import * as m013 from '../migrations/013_block_refs_unique_pair'
-import { createPluginSystem } from '@notefast/core'
+import { createPluginSystem } from '@notefast-next/core'
 import {
   initAiRuntime,
   applyNewConfig,

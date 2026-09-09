@@ -9,7 +9,7 @@
 
 import { getDb } from '../db'
 import { getBlockById, getBlocksByIds } from '../store/blocks'
-import type { BlockRow } from '@notefast/core'
+import type { BlockRow } from '@notefast-next/core'
 import { getRuntime } from '../services/aiRuntime'
 import {
   JsonVectorStore,

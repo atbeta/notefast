@@ -27,7 +27,7 @@ import {
   DEFAULT_AUTO_LINK_RATE_LIMIT_PER_MINUTE,
   parseLlmJson,
   type ChatMessage,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { getDb } from '../db'
 import { getBlockById, getLiveBlockById, fetchDocBlocks } from '../store/blocks'
 import { findRefByPair, insertRef, deleteRefsFromSource } from '../store/refs'

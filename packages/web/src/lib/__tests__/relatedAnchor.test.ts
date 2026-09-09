@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { BlockType, type Block } from '@notefast/core'
+import { BlockType, type Block } from '@notefast-next/core'
 import { resolveRelatedBlockId, scanMarkdownBlocks } from '../relatedAnchor'
 
 function block(partial: Partial<Block> & { id: string; type: Block['type']; content: string }): Block {

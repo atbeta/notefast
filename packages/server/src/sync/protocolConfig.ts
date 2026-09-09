@@ -10,7 +10,7 @@ import {
   publicSyncProtocolView,
   type SyncProtocolConfigInput,
   type SyncProtocolPersistedConfig,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { createJsonConfigStore } from '../services/jsonConfig'
 
 const store = createJsonConfigStore<SyncProtocolPersistedConfig>({

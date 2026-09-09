@@ -20,7 +20,7 @@ import {
   takeStagedMarkdown,
 } from '../services/markdownStage'
 import { fetchDocBlocks } from '../store/blocks'
-import { buildBlockTree, blocksToMarkdown } from '@notefast/core'
+import { buildBlockTree, blocksToMarkdown } from '@notefast-next/core'
 import { makeMinimalDocx } from './helpers/minimalDocx'
 import { convertDocxToMarkdown } from '../services/docxImport'
 

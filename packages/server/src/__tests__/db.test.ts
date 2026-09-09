@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { CURRENT_SCHEMA_VERSION } from '@notefast/core'
+import { CURRENT_SCHEMA_VERSION } from '@notefast-next/core'
 import { initDb, closeDb, getDb, getSchemaVersion } from '../db'
 import { nowTimestamp, updateBlock, getBlockById } from '../store/blocks'
 import { extractCjkBigrams } from '../cjkNgrams'

@@ -10,7 +10,7 @@ import {
   publicStorageLocation,
   type StorageLocation,
   type StorageLocationInput,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { createJsonConfigStore } from '../services/jsonConfig'
 
 const CONFIG_FILE = 'storage-locations.json'

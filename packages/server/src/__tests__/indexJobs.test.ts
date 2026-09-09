@@ -6,7 +6,7 @@ import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:tes
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { Hono } from 'hono'
-import { createPluginSystem, type ProviderDefinition } from '@notefast/core'
+import { createPluginSystem, type ProviderDefinition } from '@notefast-next/core'
 import { initDb, closeDb, getDb } from '../db'
 import { initAiRuntime, applyNewConfig, _setRuntimeForTests, getRuntime } from '../services/aiRuntime'
 import { initVectorStore } from '../ai/indexer'

@@ -1,5 +1,5 @@
 import type { Database } from 'bun:sqlite'
-import { CURRENT_SCHEMA_VERSION } from '@notefast/core'
+import { CURRENT_SCHEMA_VERSION } from '@notefast-next/core'
 
 export const id = '001_initial'
 export const description = 'Baseline schema (squashed from 001–010)'

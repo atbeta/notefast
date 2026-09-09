@@ -20,8 +20,8 @@
  *     c. 否则 → 答案已在流中发出
  */
 
-import type { ChatMessage, ToolCall, Block } from '@notefast/core'
-import { ThinkStreamParser, splitThinkContent, readDocStatus, readTags, parseStaleWithin, parseUpdatedWithin, messageText, buildBlockTree, blocksToMarkdown } from '@notefast/core'
+import type { ChatMessage, ToolCall, Block } from '@notefast-next/core'
+import { ThinkStreamParser, splitThinkContent, readDocStatus, readTags, parseStaleWithin, parseUpdatedWithin, messageText, buildBlockTree, blocksToMarkdown } from '@notefast-next/core'
 import type { Citation } from './hybridSearch'
 import { getDb } from '../db'
 import {

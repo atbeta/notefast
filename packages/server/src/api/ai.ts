@@ -34,7 +34,7 @@ import {
   buildFtsQuery,
   resolveApiKey,
   validateConfig,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import {
   getRuntime,
   applyNewConfigFromCurrent,

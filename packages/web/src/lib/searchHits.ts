@@ -1,4 +1,4 @@
-import type { SearchResult } from '@notefast/core'
+import type { SearchResult } from '@notefast-next/core'
 
 /** ⌘K 展示的去重后文档条数 */
 export const PALETTE_DOC_LIMIT = 8

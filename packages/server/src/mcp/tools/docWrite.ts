@@ -18,7 +18,7 @@ import {
   readDocStatus,
   readTags,
   rowToBlock,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { insertDocFromMarkdown, normalizeDocTags } from '../../services/docImport'
 import {
   createDocFromMarkdownFile,

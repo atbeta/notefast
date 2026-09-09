@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import type { TagInfo } from '@notefast/core'
+import type { TagInfo } from '@notefast-next/core'
 import { api } from './useAPI'
 import {
   loadTagCatalog,

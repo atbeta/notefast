@@ -9,7 +9,7 @@
  *   区分「整篇删除」（document 块）与「子块删除」（归属 root_id 文档的更新）
  */
 
-import type { Block, PluginSystem } from '@notefast/core'
+import type { Block, PluginSystem } from '@notefast-next/core'
 import { getDb } from '../db'
 import { getBlockById } from '../store/blocks'
 

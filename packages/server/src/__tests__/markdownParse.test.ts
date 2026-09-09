@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
-import { parseMarkdownToBlocks, parseMarkdownToBlocksLegacy } from '@notefast/core'
+import { parseMarkdownToBlocks, parseMarkdownToBlocksLegacy } from '@notefast-next/core'
 import { parseMarkdownToBlocksForSave, readMarkdownParserMode } from '../services/markdownParse'
 
 function shape(inputs: ReturnType<typeof parseMarkdownToBlocks>) {

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { AlertCircle, CheckCircle2, FileSearch, GitBranch, Link2, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import i18next from '../../i18n'
-import type { AiDiagnoseResult } from '@notefast/core'
+import type { AiDiagnoseResult } from '@notefast-next/core'
 
 type DiagR = {
   configured: boolean

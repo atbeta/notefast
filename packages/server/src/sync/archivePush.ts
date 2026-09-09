@@ -7,8 +7,8 @@
  * 陈旧文档与 media → 写 manifest。
  */
 
-import type { PushOptions, SyncResult } from '@notefast/core'
-import { readTags } from '@notefast/core'
+import type { PushOptions, SyncResult } from '@notefast-next/core'
+import { readTags } from '@notefast-next/core'
 import { getDb } from '../db'
 import { listDocRows } from '../store/blocks'
 import { portableDocMarkdown } from '../services/portableMarkdown'

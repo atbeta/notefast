@@ -11,7 +11,7 @@
  * 描述变更不触发块重索引（v1 不进 indexed text，hash 语义不受影响）。
  */
 
-import type { ChatMessage } from '@notefast/core'
+import type { ChatMessage } from '@notefast-next/core'
 import { getDb } from '../db'
 import {
   DESC_MIN_MENTIONS,

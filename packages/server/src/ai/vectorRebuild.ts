@@ -1,7 +1,7 @@
 import { getDb } from '../db'
 import { getRuntime } from '../services/aiRuntime'
 import { buildIndexedText } from './indexedText'
-import type { BlockRow } from '@notefast/core'
+import type { BlockRow } from '@notefast-next/core'
 import {
   contentHash,
   embeddingFingerprint,

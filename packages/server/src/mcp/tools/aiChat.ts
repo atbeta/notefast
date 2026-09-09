@@ -11,7 +11,7 @@ import {
   suggestTitle,
   type ChatMessage,
   type LLMProvider,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { hasRuntime, getRuntime } from '../../services/aiRuntime'
 import { getDocById } from '../../store/blocks'
 import { semanticSearch } from '../../ai/indexer'

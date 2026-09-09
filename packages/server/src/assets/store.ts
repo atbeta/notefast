@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { getDb } from '../db'
 import { getChangesAnchor, contentRevisionToken } from '../store/changeFeed'
-import { hasImageUploadCommand, isImageUploadAuto, type ImageUploadConfig } from '@notefast/core'
+import { hasImageUploadCommand, isImageUploadAuto, type ImageUploadConfig } from '@notefast-next/core'
 import { extForMime, mimeForExt } from '../sync/archiveMedia'
 
 export const ASSET_REF_PREFIX = 'asset:'

@@ -12,7 +12,7 @@ import {
   publicImageUploadView,
   type ImageUploadConfig,
   type ImageUploadConfigInput,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { createJsonConfigStore } from './jsonConfig'
 
 const CONFIG_FILE = 'image-upload.config.json'

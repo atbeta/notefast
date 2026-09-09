@@ -16,7 +16,7 @@ import {
   clipContinueSuffix,
   ThinkStreamParser,
   type WriteMode,
-} from '@notefast/core'
+} from '@notefast-next/core'
 import { getRuntime, hasRuntime } from '../services/aiRuntime'
 
 export interface WriteEvent {
