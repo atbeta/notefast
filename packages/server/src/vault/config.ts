@@ -6,8 +6,11 @@
  *   VAULT_PATH        vault 根目录（必填，不存在则启动失败）
  *   VAULT_IGNORE      额外忽略的相对路径前缀，逗号分隔（默认已含 .obsidian/.trash/.git 等隐藏目录）
  *   VAULT_WATCH       'false' 关闭文件监听（仍可 POST /api/v1/vault/rebuild 手动重建）
- *   VAULT_WRITEBACK   'true' 开启 SQLite → 文件写回（RFC 0003；默认关闭，只做索引）
+ *   VAULT_WRITEBACK   'false' 关闭 SQLite → 文件写回（RFC 0003；默认开启，关闭后 NoteFast 端编辑只落索引）
  *   VAULT_STABILITY_MS  编辑器多次写盘合并窗口（chokidar awaitWriteFinish，默认 300）
+ *   VAULT_USE_POLLING 'true' 用轮询代替原生文件事件（Docker bind mount、网络盘；macOS 上 /tmp、/var/folders
+ *                     这类经符号链接的路径 FSEvents 不投递事件，测试也用它）
+ *   VAULT_POLL_INTERVAL_MS  轮询间隔（默认 1000）
  */
 
 import { existsSync, statSync } from 'node:fs'
@@ -21,6 +24,8 @@ export interface VaultConfig {
   watch: boolean
   writeback: boolean
   stabilityMs: number
+  usePolling: boolean
+  pollIntervalMs: number
 }
 
 /** 默认忽略：工具私有目录。隐藏目录（任一段以 . 开头）在 paths.isIgnored 里统一忽略，此处列出仅为显式 */
@@ -38,11 +43,14 @@ export function loadVaultConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Va
     .map((s) => s.trim().replace(/^\/+|\/+$/g, ''))
     .filter(Boolean)
   const stability = Number.parseInt(env.VAULT_STABILITY_MS ?? '', 10)
+  const pollInterval = Number.parseInt(env.VAULT_POLL_INTERVAL_MS ?? '', 10)
   return {
     root,
     ignore: [...new Set([...DEFAULT_VAULT_IGNORE, ...extra])],
     watch: env.VAULT_WATCH !== 'false',
-    writeback: env.VAULT_WRITEBACK === 'true' || env.VAULT_WRITEBACK === '1',
+    writeback: env.VAULT_WRITEBACK !== 'false' && env.VAULT_WRITEBACK !== '0',
     stabilityMs: Number.isFinite(stability) && stability >= 0 ? stability : 300,
+    usePolling: env.VAULT_USE_POLLING === 'true' || env.VAULT_USE_POLLING === '1',
+    pollIntervalMs: Number.isFinite(pollInterval) && pollInterval > 0 ? pollInterval : 1000,
   }
 }

@@ -49,9 +49,25 @@ shadow-markdown（v0.86）解决了「能看见文件」，vault mode 解决「�
 
 一个 `DATA_DIR` 只绑一个 vault；`notebooks.vault_root` 记录绑定，启动时路径不一致直接拒绝（不静默换绑）。
 
-### D5. 写回默认关闭，先做「只读索引」
+### D5. 写回默认开启；RFC 0003 完成前不发布可用版本
 
-SQLite → 文件 的写回是双向同步的另一半，格式保真（Obsidian 私有语法、用户排版）没有解决之前不默认开启。MVP 默认 `VAULT_WRITEBACK=false`：NoteFast / MCP 端对 vault 文档的编辑只落索引，下一次文件变更会覆盖它。启动日志与 `/api/v1/vault/status` 都明示这一点。写回的完整设计见 RFC 0003。
+SQLite → 文件 的写回是双向同步的另一半。默认 `VAULT_WRITEBACK=true`：NoteFast / MCP / AI 对 vault 文档的每次编辑都落到文件，避免「编辑只在索引里、下次文件变更就丢」这类需要在 UI 上打补丁的状态。代价是格式保真——整篇序列化会规范化用户排版、改写 Obsidian 私有语法。因此：**RFC 0003 的按块局部 patch（阶段 C）是发布门禁**，完成前 vault mode 只在 `next` 上可用，不进 release。`VAULT_WRITEBACK=false` 保留给排障。
+
+### D7. 不兼容历史数据，不做原地转换
+
+`kind='db'` notebook 不提供「一键转 vault」。用户路径是：旧实例导出 Markdown 归档 → 整理成文件夹 → 新 `DATA_DIR` + `VAULT_PATH` 启动，对账自动建库。块 id / 引用 / 向量 / 修订 / 分享全部重建，`notefast_id` frontmatter 被忽略。指引见 `docs/vault-migration.md`。
+
+### D8. `ai_exclude` / `status` 进 frontmatter
+
+vault 文档的 NoteFast 元数据写在 frontmatter，Obsidian Properties 面板可见可改，重建索引不丢：
+
+```yaml
+tags: [dev, 知识库]        # Obsidian 原生
+notefast_ai_exclude: true  # 缺省 false
+notefast_status: inbox     # 缺省 note
+```
+
+写回只增删改这三个键，用户其他 frontmatter 字段原样保留（RFC 0003 阶段 B）。
 
 ### D6. vault 模式下关闭的能力
 
@@ -101,10 +117,11 @@ SQLite → 文件 的写回是双向同步的另一半，格式保真（Obsidian
 
 | 版本 | 内容 |
 |---|---|
-| v0.87 | 本 RFC 基础 + 写回（默认关）；`/api/v1/vault/*`；MCP `notefast_vault_status` |
-| v0.88 | wikilink / `^block` 软解析进 `block_refs`（RFC 0002 §引用解析）；`assets/` 相对路径 ↔ `asset:<sha>` 映射 |
-| v0.89 | 写回格式保真（RFC 0003 §按块局部 patch）；写回默认开 |
-| 之后 | 桌面壳「打开文件夹为 vault」；Web 只读视图标记 vault 文档来源 |
+| M1 | 本 RFC 基础 + 写回（默认开）；`/api/v1/vault/*` — 已完成 |
+| M2 | 写回保真：frontmatter 透传、按块局部 patch、冲突副本（RFC 0003 B–D）— **发布门禁** |
+| M3 | wikilink / `^block` 软解析进 `block_refs`；vault 内图片直出 |
+| M4 | MCP vault 工具、Web 设置页 / 文档头、桌面壳「打开文件夹为 vault」、定时轻量对账 |
+| M5 | 性能验证、迁移指引定稿、Docker polling、首个可用版本 |
 
 ## 非目标
 
@@ -116,7 +133,9 @@ SQLite → 文件 的写回是双向同步的另一半，格式保真（Obsidian
 
 ## 开放问题
 
-1. Web UI 是否要对 vault 文档禁用编辑器（写回关闭时编辑会被文件覆盖）？倾向：写回关闭时编辑器只读 + 提示「在外部工具中编辑」
-2. `properties.ai_exclude` 在文件里如何表达？倾向 frontmatter `notefast_ai_exclude: true`，写回时保留
+1. ~~Web 编辑器对 vault 文档是否只读~~ → 写回默认开（D5），编辑器照常可用
+2. ~~`ai_exclude` 在文件里如何表达~~ → D8
 3. 大 vault（10k+）首次对账的进度暴露：`/status.reconciling` 已有，是否需要 SSE 进度
 4. 符号链接：当前跳过链接目录、链接文件按 vault 内位置处理；是否需要 `VAULT_FOLLOW_SYMLINKS`
+
+执行计划见 `docs/plans/vault-mode.md`。

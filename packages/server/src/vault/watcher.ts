@@ -175,6 +175,10 @@ export async function startVaultWatcher(ctx: VaultContext, opts: VaultWatcherOpt
     persistent: true,
     ignoreInitial: true, // 存量由 reconcileVault 处理
     awaitWriteFinish: { stabilityThreshold: ctx.config.stabilityMs, pollInterval: Math.min(100, Math.max(20, ctx.config.stabilityMs / 3)) },
+    // 原生事件在 bind mount / 网络盘 / macOS 符号链接路径（/tmp → /private/tmp）下不可靠，按配置退回轮询
+    usePolling: ctx.config.usePolling,
+    interval: ctx.config.pollIntervalMs,
+    binaryInterval: ctx.config.pollIntervalMs,
   })
 
   watcher.on('add', (p: string) => q.push('change', p))

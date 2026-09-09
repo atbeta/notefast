@@ -31,7 +31,17 @@ let notebookId: string
 let ctx: VaultContext
 
 function makeConfig(root: string, over: Partial<VaultConfig> = {}): VaultConfig {
-  return { root, ignore: [...DEFAULT_VAULT_IGNORE], watch: false, writeback: false, stabilityMs: 50, ...over }
+  // usePolling：macOS 上 /tmp → /private/tmp 经符号链接，FSEvents 不投递事件；轮询在任何文件系统上都确定
+  return {
+    root,
+    ignore: [...DEFAULT_VAULT_IGNORE],
+    watch: false,
+    writeback: false,
+    stabilityMs: 50,
+    usePolling: true,
+    pollIntervalMs: 50,
+    ...over,
+  }
 }
 
 function writeVault(rel: string, content: string): void {
@@ -116,12 +126,17 @@ describe('vault paths', () => {
   test('配置：VAULT_PATH 不存在时报错，未设时返回 null', () => {
     expect(loadVaultConfigFromEnv({})).toBeNull()
     expect(() => loadVaultConfigFromEnv({ VAULT_PATH: join(vaultDir, 'nope') })).toThrow()
-    const cfg = loadVaultConfigFromEnv({ VAULT_PATH: vaultDir, VAULT_IGNORE: 'templates, /drafts/', VAULT_WRITEBACK: 'true' })!
+    const cfg = loadVaultConfigFromEnv({ VAULT_PATH: vaultDir, VAULT_IGNORE: 'templates, /drafts/' })!
     expect(cfg.root).toBe(vaultDir)
     expect(cfg.ignore).toContain('templates')
     expect(cfg.ignore).toContain('drafts')
-    expect(cfg.writeback).toBe(true)
+    expect(cfg.writeback).toBe(true) // 默认开启（RFC 0001 D5）
     expect(cfg.watch).toBe(true)
+    expect(cfg.usePolling).toBe(false)
+    const off = loadVaultConfigFromEnv({ VAULT_PATH: vaultDir, VAULT_WRITEBACK: 'false', VAULT_USE_POLLING: 'true', VAULT_POLL_INTERVAL_MS: '250' })!
+    expect(off.writeback).toBe(false)
+    expect(off.usePolling).toBe(true)
+    expect(off.pollIntervalMs).toBe(250)
   })
 })
 

@@ -29,6 +29,7 @@ export interface VaultStatus {
   notebook_id: string
   watch: boolean
   writeback: boolean
+  use_polling: boolean
   watcher_active: boolean
   reconciling: boolean
   files: number
@@ -124,6 +125,7 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
         notebook_id: ctx.notebookId,
         watch: ctx.config.watch,
         writeback: ctx.config.writeback,
+        use_polling: ctx.config.usePolling,
         watcher_active: watcher !== null,
         reconciling: reconciling !== null,
         files: listVaultFiles(ctx.db, ctx.notebookId).length,

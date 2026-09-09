@@ -69,6 +69,7 @@ AI-first 知识库 — block 级 API + MCP。AI 负责写入与理解，人类�
 
 > **`next` 分支（vault mode）**：main 的普通功能分支，包名不变（`@notefast/*`），按 `--ff-only` 合回 main。
 > vault mode 是 notebook 类型 `kind='vault'`（`VAULT_PATH` 启用），不是平行产品线；架构决策先写 `docs/rfcs/`，不在 PR 评论里讨论。
+> 执行计划在 `docs/plans/vault-mode.md`（任务 V-xxx，含验收标准与已知坑）；领任务前先读它的「开工必读」。RFC 0003 阶段 B–D（M2）完成前不发布可用版本。
 > 旧的 `@notefast-next/*` 重命名草案已废弃，归档于 tag `archive/next-draft-20260909`。
 
 ### 目录结构
@@ -81,8 +82,9 @@ notefast/
 ├── packages/web       # React 阅读 / 编辑器
 ├── clients/apple      # macOS Swift 壳（非 Bun workspace）
 ├── clients/tauri      # Windows Tauri 壳（非 Bun workspace）
-├── docs/              # backup.md / capture.md
-│   └── rfcs/          # 0001 vault-mode · 0002 身份与 ingest · 0003 写回与冲突
+├── docs/              # backup.md / capture.md / vault-migration.md
+│   ├── rfcs/          # 0001 vault-mode · 0002 身份与 ingest · 0003 写回与冲突
+│   └── plans/         # vault-mode.md 执行计划（任务 V-xxx）
 ├── docker-compose.yml
 └── bun.lock
 ```

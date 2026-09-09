@@ -322,7 +322,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
       console.log(
         `📂 vault mode: ${vaultConfig.root}` +
           (vaultConfig.watch ? '' : '（未监听，需手动 rebuild）') +
-          (vaultConfig.writeback ? '，写回已开启' : '，只读索引（VAULT_WRITEBACK=true 开启写回）'),
+          (vaultConfig.writeback ? '' : '，写回已关闭（NoteFast 端编辑只落索引，会被文件变更覆盖）'),
       )
     }
 
