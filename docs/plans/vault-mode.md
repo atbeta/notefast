@@ -39,7 +39,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | M1 基础 | 文件 → 索引闭环 + 整篇写回 | — | 完成（`c4f9e2c` `b14d6c5`） |
 | M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **完成**（V-201 ✅ V-202 ✅ V-203 ✅ V-204 ✅ V-205 ✅） |
 | M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | **完成**（V-301 ✅ V-302 ✅ V-303 ✅ V-304 ✅） |
-| M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | V-401 ✅ |
+| M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | V-401 ✅ V-402 ✅ V-404 ✅ |
 | M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | V-503 ✅ |
 
 依赖关系：V-201 → V-202 → V-203 → V-204；V-203 依赖 V-304（解析器要能无损识别 Obsidian 语法，否则区间对不上）；V-301/302 可与 M2 并行；V-303 独立；M4 依赖 M2 完成；M5 最后。
@@ -233,6 +233,11 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **要点**：每 `VAULT_RECONCILE_MINUTES`（默认 10）跑一次 light 模式——只 `stat` 比较 `size + mtime_ms` 与映射行，不同才读文件；`process.on('SIGCONT')` / 前端可见性变化不做，靠定时；`status` 暴露 `next_reconcile_at`
 - **验收**：测试——绕过 watcher 直接改文件 → 触发 light 对账 → 入库；未变文件不读（用计数 spy）
 - **依赖**：无 · **估算**：1 人天
+- **状态**：完成（`79d45d2`）
+  - `VAULT_RECONCILE_MINUTES`（默认 10，`0` 关闭）→ 定时跑 `reconcileVault(ctx, { light: true })`
+  - light 模式对已知文件先比 `size + mtime_ms`，一致就**不读盘**（sha 短路只省解析，省不掉读）；新增 / 变更 / 消失的文件照常处理
+  - `ReconcileStats` 增加 `stat_skipped`（本轮跳过读盘的文件数），`status` 增加 `next_reconcile_at`
+  - 定时任务与手动 rebuild 共用 `reconciling` 状态与串行锁，不会交错；`stop()` 清定时器
 
 ---
 
