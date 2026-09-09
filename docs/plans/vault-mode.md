@@ -318,8 +318,8 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | 任务 | 内容 | 状态 |
 |---|---|---|
 | F-1 | 引擎：内容寻址 blob + 每设备清单分片 + 冲突副本（`vault/fileSync.ts`、迁移 027、`store/vaultSyncState.ts`） | 完成（`ce8154a`） |
-| F-2 | 运行时 + HTTP：调度、状态、`/api/v1/vault/sync/*`、vault notebook 上协议同步强制停用 | 完成（`ead8e76`） |
-| F-3 | Web：设置页同步区块（开关 / 目标 / 立即推拉 / 冲突列表）+ i18n | 进行中 |
+| F-2 | 运行时 + HTTP：调度、状态、`/api/v1/vault/sync/*`（含 `GET config` 与 `in_flight`）、vault notebook 上协议同步强制停用 | 完成（`ead8e76` `caffa41`） |
+| F-3 | Web：设置页同步区块（开关 / 目标 / 立即推拉 / 冲突列表 / 第三方同步告警）+ i18n | 完成（`a601f87`） |
 | F-4 | 文档：README 章节、RFC 0004 数字、迁移指引交叉引用 | 完成 |
 
 **实测（LocalFS 后端）**：1000 文件首次 push 147ms / pull 161ms；10k 文件 push 1.50s / pull 1.47s；幂等复跑 6–45ms。

@@ -1,6 +1,6 @@
 # RFC 0004: vault 文件同步（NoteFast Sync for files）
 
-- 状态：已接受并实施（P1 引擎、P2 运行时/API 已落地；P3 Web、P4 文档进行中）
+- 状态：已接受并实施（P1 引擎、P2 运行时/API、P3 Web、P4 文档全部落地）
 - 依赖：RFC 0001（vault 模式）、RFC 0002（身份与 ingest）、RFC 0003（写回与冲突）
 - 实现：`packages/server/src/vault/fileSync.ts`、`store/vaultSyncState.ts`、迁移 027、`vault/index.ts`、`storage/*`
 
@@ -159,7 +159,8 @@ CREATE TABLE vault_sync_state (
   - 本地有未推送改动时远端删除不覆盖本地；
   - 重复 push/pull 幂等（不产生新对象、不改文件）；
   - 资源文件（图片）同步；远端 `vault_id` 不一致拒绝混库。
-- 运行时 + HTTP（`__tests__/vaultFileSyncRuntime.test.ts`，4 例）：状态、配置、手动推拉、落盘后索引跟随（`status.files` 增长）、协议同步短路。
+- 运行时 + HTTP（`__tests__/vaultFileSyncRuntime.test.ts`，6 例）：状态、配置（`GET` 回填 + `PUT` 保存）、手动推拉、落盘后索引跟随（`status.files` 增长）、目标解析（LocalFS / 缺连接 / S3）、第三方同步痕迹检测、协议同步短路。
+- Web（`web/src/components/__tests__/vaultPanel.test.tsx` + `web/src/lib/__tests__/vault.test.ts`）：同步区块渲染契约（未配置 / 已配置 / 冲突列表 / `in_flight` 禁用 / 第三方告警 / 旧服务端无 `sync` 字段时不渲染）。
 - 规模（LocalFS 后端，macOS arm64 / Bun 1.3.14，1000 / 10000 篇 × 约 60B 内容）：
 
   | 文件数 | 首次 push | 首次 pull | 幂等 push | 幂等 pull |
