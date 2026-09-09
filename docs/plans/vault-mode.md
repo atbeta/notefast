@@ -40,7 +40,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **完成**（V-201 ✅ V-202 ✅ V-203 ✅ V-204 ✅ V-205 ✅） |
 | M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | **完成**（V-301 ✅ V-302 ✅ V-303 ✅ V-304 ✅） |
 | M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | **完成**（V-401 ✅ V-402 ✅ V-403 ✅ V-404 ✅） |
-| M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | V-503 ✅ |
+| M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | V-501 ✅ V-502 ✅ V-503 ✅（V-504 待人工发布） |
 
 依赖关系：V-201 → V-202 → V-203 → V-204；V-203 依赖 V-304（解析器要能无损识别 Obsidian 语法，否则区间对不上）；V-301/302 可与 M2 并行；V-303 独立；M4 依赖 M2 完成；M5 最后。
 
@@ -257,6 +257,11 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **要点**：对账期间 `pauseShadowWrites`、hooks 批量化（`fireAfterCreateMany` 已有）；发现热点再优化，不预先优化
 - **验收**：bench 脚本输出写进 RFC 0002 §验证标准表；若不达标开 issue 列热点
 - **依赖**：M2 · **估算**：1 人天
+- **状态**：完成（`8de24b9`）
+  - `packages/server/src/eval/vaultBench.ts` + `bench:vault` script：合成 vault（12 块/篇、32 目录，含列表 / callout / 代码 / `$$` / `^id` / wikilink）→ 走真实 `createVaultRuntime` + `reconcileVault`，输出分阶段耗时、吞吐、25ms 采样峰值 RSS、变更→可搜中位数；跑完清理临时目录
+  - **实测（RFC 0002 §验证标准已填）**：1000 文件 **8.6s**（117 files/s，RSS 202MB）；10k 文件 **269.1s**（37.2 files/s，RSS 712MB，余量 10%）；变更→可搜 **323ms**（1k）/ **376ms**（10k）——三项均达标
+  - **bench 口径关键决定**：默认轮询。合成 vault 落在 macOS 临时目录（`/var/folders` → 符号链接），chokidar 原生事件在那里会延迟十几秒 / 丢事件甚至卡在初始扫描（1000 文件中位 3776ms、样本 376/14196/3776ms），测出来的是环境噪声；轮询下同一环境 323ms。`--native` 保留作对照
+  - **热点（已记「待议」，未优化）**：`syncVaultWikilinks` 每次 ingest 重建全库文件索引 → 对账整体 O(n²)，吞吐 117 → 37.2 files/s；10k 虽达标但 20k 会超预算
 
 ### V-502 迁移指引定稿
 
