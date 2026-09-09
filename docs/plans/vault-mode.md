@@ -37,7 +37,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | 里程碑 | 目标 | 任务 | 状态 |
 |---|---|---|---|
 | M1 基础 | 文件 → 索引闭环 + 整篇写回 | — | 完成（`c4f9e2c` `b14d6c5`） |
-| M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **发布门禁** |
+| M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **发布门禁**（V-201 ✅） |
 | M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | |
 | M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | |
 | M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | |
@@ -59,6 +59,9 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
   - `serializeVaultDoc` 改为 `patchFrontmatter(row.frontmatter_raw, …) + body`；缺省值（`ai_exclude=false`、`status=note`）不写键，已有键则删掉
 - **验收**：测试——含 `aliases: [x]` 与自定义键的文件 ingest → 改一个块 → 写回后 frontmatter 除 `tags` 外逐字节相同；`tags: [a, b]` 内联写法能入库；无 frontmatter 且无标签的文件写回后仍无 frontmatter
 - **依赖**：无 · **估算**：1.5 人天
+- **状态**：完成（`5369b8f`）。`meta_hash` 列随迁移 024 建好，逻辑留 V-202
+  - 落地口径：`parseSimpleFrontmatter` 的 tags 只解引号、不做归一化（三种写法一致），小写 / 空格折叠仍由 `ingest.ts`、`docImport.ts` 的 `normalizeTagList` 负责
+  - 测试：`core/src/__tests__/frontmatter.test.ts`（`raw`、三种写法、`patchFrontmatter` 全分支）、`server/src/__tests__/vault.test.ts`（透传逐字节、内联入库、清空标签只删 `tags` 键、无 frontmatter 保持无）
 
 ### V-202 `ai_exclude` / `status` 双向 + 元数据回声修正
 
@@ -223,3 +226,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 ## 待议
 
 （执行中发现但未决的问题记在这里，附发现者与日期）
+
+- 2026-09-09（V-201 评估）：**V-203 列表保真缺口**——按「顶层块 span」整体替换列表时，未改动的兄弟列表项也会被 `blocksToMarkdown` 归一化（缩进、标记符）。要么把验收显式写成「列表块视为整体」，要么把 span 细化到 listItem。
+- 2026-09-09（V-201 评估）：**V-203 span 偏移必须与 `stripTitleHeading` 组合**——`markdown.ts:451` 会移除同名 H1 并提升其子块，先 parse 再 strip 会让 offset 漂移。建议 `parseMarkdownWithSpans` 在 strip 之后产出，避免两遍 parse。
+- 2026-09-09（V-201 评估）：**V-202 副作用不能进事务**——`applyAiExcludeChange`（向量增删）与 `fireDocAfterStatusChange`（钩子）不能在 `ingest.ts` 的 `db.transaction()` 内执行，须事务 commit 后再应用，并在最后刷新 `meta_hash`。

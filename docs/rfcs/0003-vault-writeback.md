@@ -54,7 +54,7 @@ disk_sha === next_sha             → 内容已一致 → 不写
 `serializeVaultDoc`：
 
 - 不输出 `# title`（标题即文件名，RFC 0001 D2）
-- 仅在有标签时输出 Obsidian 兼容 frontmatter：`tags:` 列表
+- frontmatter = `patchFrontmatter(row.frontmatter_raw, patch)` 行级透传：只增删改 `tags` / `notefast_ai_exclude` / `notefast_status` 三键，用户手写的其余字段（aliases、cssclasses、自定义键）逐字节保留；无标签且无 NoteFast 元数据时不输出 frontmatter
 - 正文 = `blocksToMarkdown(root.children)`，末尾单个换行
 
 ## 已知限制：格式保真
@@ -63,7 +63,7 @@ disk_sha === next_sha             → 内容已一致 → 不写
 
 - 空行数、列表缩进、强调符号（`*` vs `_`）等排版被统一
 - 非 CommonMark 的 Obsidian 私有语法（callout `> [!note]`、`%%注释%%`、`^block-id`、`![[embed]]`、dataview 查询块）被 mdast 当普通段落 / 引用块处理，写回后可能改写
-- 用户手写的 frontmatter 只保留 `tags`，其余字段丢失
+- ~~用户手写的 frontmatter 只保留 `tags`，其余字段丢失~~ → 阶段 B（V-201）已修复：`vault_files.frontmatter_raw` 行级透传
 
 对 Obsidian 用户而言「工具重排了我的文件」是零容忍事项，所以 B/C 是发布门禁。
 
@@ -72,7 +72,7 @@ disk_sha === next_sha             → 内容已一致 → 不写
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | A | 回声抑制 + 乐观并发 + 整篇写回 + `.trash/` | 已落地，默认开启 |
-| B | frontmatter 透传：ingest 保留原始 frontmatter 文本（`vault_files.frontmatter_raw`），写回只增删改 `tags` / `notefast_ai_exclude` / `notefast_status` 三键；`meta_hash` 修正回声判定 | 待做（计划 V-201 / V-202） |
+| B | frontmatter 透传：ingest 保留原始 frontmatter 文本（`vault_files.frontmatter_raw`），写回只增删改 `tags` / `notefast_ai_exclude` / `notefast_status` 三键；`meta_hash` 修正回声判定 | 透传已落地（V-201）；`meta_hash` 回声修正待做（V-202） |
 | C | 按块局部 patch：ingest 记录每个顶层块在文件中的 `[start, end)` 行区间；写回只替换 `updatedIds` 区间、在 `insertedIds` 的前驱后插入、删除 `deletedIds` 区间，其余字节原样保留；区间失效（sha 不符）时退回整篇 | 待做（V-203） |
 | D | 冲突副本 `<name>.notefast-conflict-<ts>.md` | 待做（V-204） |
 
