@@ -308,5 +308,5 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 
 - ~~2026-09-09（V-201 评估）：**V-203 列表保真缺口**——按「顶层块 span」整体替换列表时，未改动的兄弟列表项也会被 `blocksToMarkdown` 归一化~~ → V-203 落地后每个顶层列表项是独立块（嵌套项是它的子块），兄弟项不再被波及；剩余问题是**序列化器拍平嵌套项**（语料 `21-nested-list` 冻结），导致整篇退回后无法重建区间 → 这类文档持续走整篇写回。修序列化器属于 V-304 范围。
 - ~~2026-09-09（V-201 评估）：**V-203 span 偏移必须与 `stripTitleHeading` 组合**~~ → 已解：区间按块记录（含被提升的 H1 子块），`stripTitleHeading` 只影响哪些块是顶层，不改变区间偏移。
-- 2026-09-09（V-202 落地）：**文件改 status 不复制 API 的级联**——`PATCH /docs/:id/status` 在归档时会撤销公开分享、升格时 `reanalyzeDoc`；ingest 里只做 `updateBlock({ status })` + `fireDocAfterStatusChange`。若认为文件也是「用户操作」，应把这段抽成共享函数（`services/docStatusChange.ts`）给两处复用。
+- ~~2026-09-09（V-202 落地）：**文件改 status 不复制 API 的级联**~~ → 已解（`ef22bab`）：升格回 `note`（inbox / archived → note）时 ingest 也调 `reanalyzeDoc`，判定收在 `vault/meta.ts#needsReanalyzeOnStatusChange` 并有单测；归档时的分享撤销仍只在 API 路径（文件无法表达 `archived`）。
 - 2026-09-09（V-202 落地）：**frontmatter 识别是启发式**——「所有非空行都像 YAML」才算 frontmatter；单行 `Note: 正文` 这类仍是误判面。若 Obsidian 侧出现误剥离，考虑改为「首行必须是 `key:` 或 `key: value`」再放宽。
