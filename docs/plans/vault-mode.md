@@ -37,7 +37,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | 里程碑 | 目标 | 任务 | 状态 |
 |---|---|---|---|
 | M1 基础 | 文件 → 索引闭环 + 整篇写回 | — | 完成（`c4f9e2c` `b14d6c5`） |
-| M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **发布门禁**（V-201 ✅） |
+| M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **发布门禁**（V-201 ✅ V-202 ✅） |
 | M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | |
 | M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | |
 | M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | |
@@ -73,6 +73,11 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
   - 写回回声判定改为：`doc_updated_at` 相同 **且** `meta_hash` 相同 → 跳过
 - **验收**：测试——文件里加 `notefast_ai_exclude: true` → ingest 后 `readDocAiExclude` 为真且该文档向量被清；UI 侧 `PATCH ai_exclude`（直接调 `writeDocAiExclude` + `handle(ev)`）→ 文件出现该键；反向切回 false → 键被删除；纯回声（ingest 后立刻 handle）仍 `skipped/echo`
 - **依赖**：V-201 · **估算**：1 人天
+- **状态**：完成（`cc5d389`）
+  - 元数据读取与指纹收敛到新模块 `vault/meta.ts`（`readVaultDocMeta` / `vaultMetaHash` / `desiredStatusFromFile`），ingest 与 writeback 共用同一套口径
+  - **超出原文件清单的两处必要改动**：① `api/docs.ts` 的 tags / ai_exclude 两个 PATCH 之前不发任何 doc 级事件（`touchUpdatedAt:false` 不触发 block 钩子），写回永远收不到通知 → 补 `publishDocChange(id, 'updated')`；② `parseSimpleFrontmatter` 对「只有用户自定义字段」的 frontmatter 返回 null，导致整段 YAML 被当正文入库 → 按「全部行都像 YAML 才认」修正
+  - **archived 语义**：文件无法表达 archived，缺键时不降级（`desiredStatusFromFile`），写回也不写该键
+  - **未做**：文件改 status 不走 API 路径的分享级联与 `reanalyzeDoc`（见「待议」）
 
 ### V-203 按块局部 patch
 
@@ -229,4 +234,5 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 
 - 2026-09-09（V-201 评估）：**V-203 列表保真缺口**——按「顶层块 span」整体替换列表时，未改动的兄弟列表项也会被 `blocksToMarkdown` 归一化（缩进、标记符）。要么把验收显式写成「列表块视为整体」，要么把 span 细化到 listItem。
 - 2026-09-09（V-201 评估）：**V-203 span 偏移必须与 `stripTitleHeading` 组合**——`markdown.ts:451` 会移除同名 H1 并提升其子块，先 parse 再 strip 会让 offset 漂移。建议 `parseMarkdownWithSpans` 在 strip 之后产出，避免两遍 parse。
-- 2026-09-09（V-201 评估）：**V-202 副作用不能进事务**——`applyAiExcludeChange`（向量增删）与 `fireDocAfterStatusChange`（钩子）不能在 `ingest.ts` 的 `db.transaction()` 内执行，须事务 commit 后再应用，并在最后刷新 `meta_hash`。
+- 2026-09-09（V-202 落地）：**文件改 status 不复制 API 的级联**——`PATCH /docs/:id/status` 在归档时会撤销公开分享、升格时 `reanalyzeDoc`；ingest 里只做 `updateBlock({ status })` + `fireDocAfterStatusChange`。若认为文件也是「用户操作」，应把这段抽成共享函数（`services/docStatusChange.ts`）给两处复用。
+- 2026-09-09（V-202 落地）：**frontmatter 识别是启发式**——「所有非空行都像 YAML」才算 frontmatter；单行 `Note: 正文` 这类仍是误判面。若 Obsidian 侧出现误剥离，考虑改为「首行必须是 `key:` 或 `key: value`」再放宽。

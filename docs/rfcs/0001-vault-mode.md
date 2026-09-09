@@ -69,6 +69,8 @@ notefast_status: inbox     # 缺省 note
 
 写回只增删改这三个键，用户其他 frontmatter 字段原样保留（RFC 0003 阶段 B）。
 
+文件是权威：键存在即生效，键缺失即缺省值（`ai_exclude=false` / `status=note`）。**例外是 `archived`** —— 归档无法在文件里表达，文件缺 `notefast_status` 时不会把已归档文档降级回 `note`，写回也不写该键（否则任何一次正文编辑都会静默解除归档）。
+
 ### D6. vault 模式下关闭的能力
 
 文件层已经承担了同步与备份，以下能力对 `kind='vault'` notebook 不再有意义，MVP 阶段**不调用**（不是禁用 UI，而是 ingest 路径不触发）：

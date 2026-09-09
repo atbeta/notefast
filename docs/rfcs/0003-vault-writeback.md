@@ -22,15 +22,18 @@ RFC 0001 说「文件是权威、单向跟随」，但 NoteFast 是 AI-first 产
 
 元数据（RFC 0001 D8）：`tags` / `notefast_ai_exclude` / `notefast_status` 写进 frontmatter；创建 / 修改时间不写（文件系统与 git 已有）。
 
-**元数据变更的回声判定陷阱**：`updateBlock` 对 tags / ai_exclude 用 `touchUpdatedAt: false`，`doc.updated_at` 不变，§回声抑制会把它误判成回声而跳过。阶段 B 必须让 `vault_files` 额外记录 `meta_hash = sha(tags + ai_exclude + status)`，写回判定改为 `doc_updated_at 相同 且 meta_hash 相同` 才算回声。
+**元数据变更的回声判定陷阱**：`updateBlock` 对 tags / ai_exclude 用 `touchUpdatedAt: false`，`doc.updated_at` 不变，§回声抑制会把它误判成回声而跳过。阶段 B 让 `vault_files` 额外记录 `meta_hash = sha(tags + ai_exclude + status)`，写回判定改为 `doc_updated_at 相同 且 meta_hash 相同` 才算回声。
+
+**元数据变更必须发 doc 级事件**：`touchUpdatedAt: false` 的写入不经过 block 级 `afterUpdate` 钩子，而 doc 级事件总线（SSE、写回）只订阅那些钩子。因此 `PATCH /docs/:id/tags` 与 `PATCH /docs/:id/ai-exclude` 在写库后显式 `publishDocChange(id, 'updated')`；漏掉这步的症状是「NoteFast 改了元数据，文件永远不更新」。
 
 ## 回声抑制
 
-ingest 结束时把 `doc.updated_at` 记进 `vault_files.doc_updated_at`。写回收到 `updated` 事件时：
+ingest 结束时把 `doc.updated_at` 与 `meta_hash` 记进 `vault_files`。写回收到 `updated` 事件时：
 
 ```
-row.doc_updated_at === doc.updated_at  → 这次变更就是刚才的 ingest → 跳过（echo）
-否则                                    → SQLite 端真实编辑 → 写回
+row.doc_updated_at === doc.updated_at 且 row.meta_hash === 当前元数据指纹
+  → 这次变更就是刚才的 ingest → 跳过（echo）
+否则 → SQLite 端真实编辑（含只改标签 / ai_exclude）→ 写回
 ```
 
 写回成功后同样对齐 `doc_updated_at` 并刷新 `content_sha256`，于是紧随其后的 watcher 事件在 ingest 的 sha 短路处成为 `unchanged`。两个方向的回声都在各自入口被吞掉，不需要全局「正在写」标记。
@@ -72,7 +75,7 @@ disk_sha === next_sha             → 内容已一致 → 不写
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | A | 回声抑制 + 乐观并发 + 整篇写回 + `.trash/` | 已落地，默认开启 |
-| B | frontmatter 透传：ingest 保留原始 frontmatter 文本（`vault_files.frontmatter_raw`），写回只增删改 `tags` / `notefast_ai_exclude` / `notefast_status` 三键；`meta_hash` 修正回声判定 | 透传已落地（V-201）；`meta_hash` 回声修正待做（V-202） |
+| B | frontmatter 透传：ingest 保留原始 frontmatter 文本（`vault_files.frontmatter_raw`），写回只增删改 `tags` / `notefast_ai_exclude` / `notefast_status` 三键；`meta_hash` 修正回声判定 | 已落地（V-201 `5369b8f` / V-202） |
 | C | 按块局部 patch：ingest 记录每个顶层块在文件中的 `[start, end)` 行区间；写回只替换 `updatedIds` 区间、在 `insertedIds` 的前驱后插入、删除 `deletedIds` 区间，其余字节原样保留；区间失效（sha 不符）时退回整篇 | 待做（V-203） |
 | D | 冲突副本 `<name>.notefast-conflict-<ts>.md` | 待做（V-204） |
 
