@@ -14,9 +14,11 @@ COPY . .
 RUN bun install --frozen-lockfile
 RUN bun run build
 # 校验构建产物布局与 runner 一致：server-dist/native/vec0.so（无 node_modules）
+# 同时确认 vault 监听依赖 chokidar 已 inline 进单文件 bundle（runner 不带 node_modules）
 RUN mkdir -p /tmp/runtime-check/server-dist \
   && cp -R /app/packages/server/dist/. /tmp/runtime-check/server-dist/ \
   && test -f /tmp/runtime-check/server-dist/native/vec0.so \
+  && bun -e "const s = await Bun.file('/app/packages/server/dist/index.js').text(); if (!s.includes('Non-string provided as watch path')) { console.error('chokidar missing from server bundle'); process.exit(1) }; console.log('chokidar inlined ok')" \
   && bun -e "import { Database } from 'bun:sqlite'; const db = new Database(':memory:'); db.loadExtension('/tmp/runtime-check/server-dist/native/vec0.so'); const row = db.query('SELECT vec_version() AS version').get(); if (!row?.version) process.exit(1); console.log('sqlite-vec ok', row.version)"
 
 FROM base AS runner

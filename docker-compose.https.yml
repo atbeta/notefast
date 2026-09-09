@@ -26,9 +26,16 @@ services:
       - LLM_MODEL=${LLM_MODEL:-}
       # 接收代理转发的真实协议（HTTPS）
       - TRUSTED_PROXIES=*
+      # vault mode（kind='vault'）：容器内约定把笔记文件夹挂在 /vault，见下方 volumes
+      # Docker Desktop（macOS / Windows）的 bind mount 不投递 inotify 事件，必须开轮询
+      # - VAULT_PATH=/vault
+      # - VAULT_USE_POLLING=true
+      # - VAULT_POLL_INTERVAL_MS=1000
     volumes:
       - notefast_data:/app/data
       - notefast_export:/app/export
+      # vault mode：宿主机笔记文件夹 → 容器 /vault（要可写：NoteFast 端编辑会写回文件）
+      # - ~/Notes:/vault
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

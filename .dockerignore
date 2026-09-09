@@ -3,6 +3,7 @@ dist
 **/dist
 packages/*/dist
 data
+**/data
 .ai
 .env
 .env.local

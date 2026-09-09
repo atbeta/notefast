@@ -126,6 +126,35 @@ Common environment variables:
 
 AI providers are configured at runtime in **Settings → AI** (three slots: chat / embedding / reranker).
 
+### vault mode over Docker
+
+Setting `VAULT_PATH` turns the notebook into `kind='vault'`: your Markdown folder is the source of truth and SQLite is a rebuildable index (see [docs/vault-migration.md](docs/vault-migration.md)). Inside a container the folder is mounted at `/vault` — `docker-compose.yml` carries a commented example:
+
+```yaml
+    environment:
+      - VAULT_PATH=/vault
+      - VAULT_USE_POLLING=true
+      - VAULT_POLL_INTERVAL_MS=1000
+    volumes:
+      - ~/Notes:/vault      # read-write: NoteFast writes edits back to your files
+```
+
+| Variable | Description |
+|---|---|
+| `VAULT_PATH` | Vault root inside the container (`/vault` by convention); enables vault mode |
+| `VAULT_USE_POLLING` | `true` (or `1`) polls for changes instead of using native file events |
+| `VAULT_POLL_INTERVAL_MS` | Polling interval in ms (default 1000) |
+| `VAULT_WATCH` | `false` disables watching (`POST /api/v1/vault/rebuild` still works) |
+| `VAULT_WRITEBACK` | `false` keeps edits in the index only (no write-back to files) |
+
+**On macOS and Windows with Docker Desktop, polling is mandatory.** A bind mount shared from the host into the container does not deliver inotify events, so the watcher never sees your edits and the index silently goes stale until a manual rebuild. Set `VAULT_USE_POLLING=true` and confirm the effective mode:
+
+```bash
+curl -s http://localhost:3140/api/v1/vault/status | jq '{enabled, use_polling, watcher_active, files}'
+```
+
+`use_polling: true` with `watcher_active: true` means the watcher is running in polling mode, and `files` changes shortly after you add or edit a Markdown file. Linux hosts with a native bind mount normally keep inotify events and can leave polling off.
+
 ## Development
 
 ```
