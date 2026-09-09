@@ -6,17 +6,41 @@
  * vault 未启用（含状态尚未返回）时整体不渲染——设置页不出现错误墙。
  */
 import { useTranslation } from 'react-i18next'
-import { FolderTree, Loader2, RefreshCw, TriangleAlert } from 'lucide-react'
-import { Button, CopyButton } from './ui'
-import { SettingsCard, SettingsSection, StatusBadge } from './settings/ui'
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Cloud,
+  FolderTree,
+  Loader2,
+  RefreshCw,
+  TriangleAlert,
+} from 'lucide-react'
+import { Button, CopyButton, Toggle } from './ui'
+import { SettingsCard, SettingsSection, InlineField, StatusBadge } from './settings/ui'
+import LocationSelect from './LocationSelect'
 import { formatIsoDateTime } from '../lib/time'
-import { isVaultEnabled, recentConflictPaths, type VaultStatus } from '../lib/vault'
+import {
+  isVaultEnabled,
+  recentConflictPaths,
+  syncConflictCount,
+  syncTargetLabel,
+  type VaultStatus,
+  type VaultSyncFormState,
+} from '../lib/vault'
 
 export interface VaultPanelProps {
   status: VaultStatus | null
   /** 重建请求进行中（服务端 `reconciling` 之外的本地态） */
   rebuilding?: boolean
   onRebuild?: () => void
+  /** 文件同步配置表单（不传则整块不渲染，保持纯状态面板） */
+  syncForm?: VaultSyncFormState
+  onSyncFormChange?: (patch: Partial<VaultSyncFormState>) => void
+  onSyncSave?: () => void
+  onSyncPush?: () => void
+  onSyncPull?: () => void
+  /** 保存 / 推送 / 拉取请求进行中（服务端 `sync.running` 之外的本地态） */
+  syncBusy?: boolean
 }
 
 /** 对账统计的一格 */
@@ -29,7 +53,17 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   )
 }
 
-export default function VaultPanel({ status, rebuilding = false, onRebuild }: VaultPanelProps) {
+export default function VaultPanel({
+  status,
+  rebuilding = false,
+  onRebuild,
+  syncForm,
+  onSyncFormChange,
+  onSyncSave,
+  onSyncPush,
+  onSyncPull,
+  syncBusy = false,
+}: VaultPanelProps) {
   const { t } = useTranslation()
   if (!isVaultEnabled(status)) return null
 
@@ -38,6 +72,14 @@ export default function VaultPanel({ status, rebuilding = false, onRebuild }: Va
   const stats = status.last_reconcile ?? null
   const conflictCount = status.conflicts?.count ?? 0
   const conflictPaths = recentConflictPaths(status)
+  const sync = status.sync ?? null
+  const showSync = Boolean(sync && syncForm)
+  /**
+   * 同步动作（保存 / 推送 / 拉取）的禁用条件：
+   * 本地请求态（syncBusy）或服务端报告的一次运行（in_flight）。
+   * 注意 `sync.running` 是「同步服务已启动」（vault 模式下恒为真），不能用来禁用。
+   */
+  const syncLocked = syncBusy || sync?.in_flight === true
   const flag = (on: boolean | undefined) =>
     on ? t('settings.vault.flagOn') : t('settings.vault.flagOff')
 
@@ -191,6 +233,232 @@ export default function VaultPanel({ status, rebuilding = false, onRebuild }: Va
               {t('settings.vault.conflictHint')}
             </p>
           </div>
+
+          {/* 文件同步（RFC 0004 阶段 P3） */}
+          {showSync && syncForm && sync && (
+            <div className="rounded-md border border-border/50 bg-background/60 p-4 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Cloud className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
+                  <span className="text-base font-medium text-foreground">
+                    {t('settings.vault.syncTitle')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {syncBusy && (
+                    <span className="text-xs text-warning inline-flex items-center gap-1">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      {t('settings.vault.syncRunning')}
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    {sync.running
+                      ? t('settings.vault.syncServiceOn')
+                      : t('settings.vault.syncServiceOff')}
+                  </span>
+                  <span
+                    className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                      sync.configured
+                        ? 'bg-success-soft text-success border-success/20'
+                        : 'bg-muted text-muted-foreground border-border/50'
+                    }`}
+                  >
+                    {sync.configured
+                      ? t('settings.vault.syncConfigured')
+                      : t('settings.vault.syncUnconfigured')}
+                  </span>
+                </div>
+              </div>
+
+              {/* 开关 */}
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-base font-medium text-foreground">
+                  {t('settings.vault.syncEnable')}
+                </span>
+                <Toggle
+                  checked={syncForm.enabled}
+                  disabled={syncLocked}
+                  onChange={(v) => onSyncFormChange?.({ enabled: v })}
+                />
+              </div>
+
+              {/* 双重同步告警（RFC 0004 §已知坑） */}
+              {(sync.foreign_sync_hints ?? []).length > 0 && (
+                <p className="text-sm text-warning leading-relaxed">
+                  {t('settings.vault.syncForeignHints', { tools: (sync.foreign_sync_hints ?? []).join(' / ') })}
+                </p>
+              )}
+
+              {/* 当前目标 */}
+              <div className="space-y-1.5">
+                <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                  {t('settings.vault.syncTarget')}
+                </div>
+                <code className="block text-sm break-all rounded-md border border-border bg-background px-3 py-2 text-foreground">
+                  {syncTargetLabel(status) ?? t('settings.vault.syncTargetNone')}
+                </code>
+              </div>
+
+              {/* 目标配置 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                    {t('settings.vault.syncStorage')}
+                  </label>
+                  <div className="mt-1.5">
+                    <LocationSelect
+                      value={syncForm.locationId}
+                      onChange={(id) => onSyncFormChange?.({ locationId: id })}
+                    />
+                  </div>
+                </div>
+                <InlineField
+                  label={t('settings.vault.syncLocalDir')}
+                  description={t('settings.vault.syncLocalDirDesc')}
+                  value={syncForm.localDir}
+                  onChange={(v) => onSyncFormChange?.({ localDir: v })}
+                  mono
+                />
+                <InlineField
+                  label={t('settings.vault.syncPrefix')}
+                  description={t('settings.vault.syncPrefixDesc')}
+                  value={syncForm.prefix}
+                  onChange={(v) => onSyncFormChange?.({ prefix: v })}
+                  mono
+                />
+                <InlineField
+                  label={t('settings.vault.syncInterval')}
+                  description={t('settings.vault.syncIntervalDesc')}
+                  value={syncForm.intervalSeconds}
+                  onChange={(v) => onSyncFormChange?.({ intervalSeconds: v })}
+                  type="number"
+                />
+              </div>
+
+              {/* 动作 */}
+              <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-border/40">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  data-sync-action="save"
+                  onClick={onSyncSave}
+                  disabled={syncLocked || !onSyncSave}
+                >
+                  {t('settings.vault.syncSave')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  data-sync-action="push"
+                  onClick={onSyncPush}
+                  disabled={syncLocked || !sync.configured || !onSyncPush}
+                  icon={<ArrowUpFromLine className="w-3.5 h-3.5" strokeWidth={1.75} />}
+                >
+                  {t('settings.vault.syncPush')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  data-sync-action="pull"
+                  onClick={onSyncPull}
+                  disabled={syncLocked || !sync.configured || !onSyncPull}
+                  icon={<ArrowDownToLine className="w-3.5 h-3.5" strokeWidth={1.75} />}
+                >
+                  {t('settings.vault.syncPull')}
+                </Button>
+              </div>
+
+              {/* 最近一次推送 / 拉取 */}
+              <dl className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-base">
+                <Stat label={t('settings.vault.syncTracked')} value={sync.tracked_files} />
+                <Stat
+                  label={t('settings.vault.syncLastPush')}
+                  value={sync.last_push_at ? formatIsoDateTime(sync.last_push_at) : t('settings.vault.syncNever')}
+                />
+                <Stat
+                  label={t('settings.vault.syncLastPull')}
+                  value={sync.last_pull_at ? formatIsoDateTime(sync.last_pull_at) : t('settings.vault.syncNever')}
+                />
+              </dl>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {sync.next_run_at
+                  ? t('settings.vault.syncNextRun', { at: formatIsoDateTime(sync.next_run_at) })
+                  : t('settings.vault.syncNextRunOff')}
+              </p>
+
+              {sync.last_push && (
+                <p className="text-sm text-muted-foreground">
+                  {t('settings.vault.syncPushSummary', {
+                    scanned: sync.last_push.scanned,
+                    changed: sync.last_push.changed,
+                    uploaded: sync.last_push.uploaded_blobs,
+                    tombstones: sync.last_push.tombstones,
+                    touched: sync.last_push.touched_only,
+                  })}
+                </p>
+              )}
+              {sync.last_pull && (
+                <p className="text-sm text-muted-foreground">
+                  {t('settings.vault.syncPullSummary', {
+                    remote: sync.last_pull.remote_entries,
+                    applied: sync.last_pull.applied,
+                    deleted: sync.last_pull.deleted,
+                    unchanged: sync.last_pull.unchanged,
+                  })}
+                </p>
+              )}
+
+              {sync.last_error && (
+                <div className="text-sm text-destructive flex items-start gap-1.5">
+                  <TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" strokeWidth={1.75} />
+                  <span className="break-all">
+                    {t('settings.vault.syncLastError')}
+                    <span className="mx-1.5">·</span>
+                    {sync.last_error}
+                  </span>
+                </div>
+              )}
+
+              {/* 拉取冲突副本 */}
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-foreground">
+                  {t('settings.vault.syncConflicts', { n: syncConflictCount(status) })}
+                </div>
+                {sync.last_pull && sync.last_pull.conflicts.length > 0 ? (
+                  <ul className="space-y-0.5">
+                    {sync.last_pull.conflicts.map((p) => (
+                      <li key={p} className="text-sm break-all">
+                        <code className="text-foreground/80">{p}</code>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {t('settings.vault.syncNoConflicts')}
+                  </p>
+                )}
+              </div>
+
+              {sync.last_pull && sync.last_pull.errors.length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-sm font-medium text-destructive">
+                    {t('settings.vault.syncErrors')}
+                  </div>
+                  <ul className="space-y-0.5">
+                    {sync.last_pull.errors.map((e) => (
+                      <li key={e} className="text-xs text-muted-foreground break-all">
+                        {e}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground/70 leading-relaxed">
+                {t('settings.vault.syncHint')}
+              </p>
+            </div>
+          )}
         </div>
       </SettingsCard>
     </SettingsSection>

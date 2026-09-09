@@ -1,13 +1,26 @@
 import { describe, test, expect } from 'bun:test'
+import type { StorageLocation } from '@notefast/core'
 import {
   isVaultAssetName,
   isVaultEnabled,
+  parseSyncIntervalSeconds,
   recentConflictPaths,
   reconcileErrorCount,
   resolveVaultAssetSrc,
   resolveVaultEmbedSrc,
+  syncConfigPayload,
+  syncConflictCount,
+  syncConfigured,
+  syncEnabled,
+  syncFormFromStatus,
+  syncLocalDirOf,
+  syncServiceRunning,
+  syncStatusOf,
+  syncTargetLabel,
+  syncTargetLocationId,
   vaultPathOf,
   type VaultStatus,
+  type VaultSyncStatus,
 } from '../vault'
 
 const ENABLED: VaultStatus = {
@@ -63,6 +76,202 @@ describe('reconcileErrorCount', () => {
   test('没有 last_reconcile → 0', () => {
     expect(reconcileErrorCount({ enabled: true })).toBe(0)
     expect(reconcileErrorCount(null)).toBe(0)
+  })
+})
+
+// ───────────────────── 文件同步（RFC 0004 P3） ─────────────────────
+
+const SYNC: VaultSyncStatus = {
+  enabled: true,
+  configured: true,
+  target: 's3://notefast-bucket/notefast-vault-sync/',
+  prefix: 'notefast-vault-sync/',
+  interval_seconds: 120,
+  vault_id: 'vault-1',
+  device_id: 'device-1',
+  last_push_at: '2030-01-02T03:04:05.000Z',
+  last_pull_at: null,
+  last_error: null,
+  last_push: { scanned: 12, changed: 3, uploaded_blobs: 2, tombstones: 1, touched_only: 4 },
+  last_pull: {
+    remote_entries: 9,
+    applied: 2,
+    deleted: 0,
+    unchanged: 7,
+    conflicts: ['a.md', 'b.md'],
+    errors: [],
+  },
+  tracked_files: 11,
+  next_run_at: null,
+  running: true,
+}
+
+const LOCATIONS: StorageLocation[] = [
+  {
+    id: 'loc-s3',
+    name: 'bucket',
+    kind: 's3',
+    s3: { bucket: 'notefast-bucket', region: 'us-east-1', accessKeyId: 'k', secretAccessKey: 's' },
+  },
+  {
+    id: 'loc-s3-deep',
+    name: 'nested',
+    kind: 's3',
+    s3: { bucket: 'notefast-bucket', region: 'us-east-1', accessKeyId: 'k', secretAccessKey: 's' },
+  },
+  {
+    id: 'loc-webdav',
+    name: 'dav',
+    kind: 'webdav',
+    webdav: { endpoint: 'https://dav.example.com/remote.php/dav', username: 'u', password: 'p' },
+  },
+]
+
+const withSync = (sync?: VaultSyncStatus): VaultStatus => ({ enabled: true, root: '/v', sync })
+
+describe('syncStatusOf / syncConfigured / syncEnabled / syncServiceRunning', () => {
+  test('有 sync 块 → 原样返回', () => {
+    expect(syncStatusOf(withSync(SYNC))).toEqual(SYNC)
+  })
+
+  test('旧服务端 / null → null 与安全兜底 false', () => {
+    expect(syncStatusOf(withSync())).toBeNull()
+    expect(syncStatusOf(null)).toBeNull()
+    expect(syncConfigured(withSync())).toBe(false)
+    expect(syncEnabled(null)).toBe(false)
+    expect(syncServiceRunning(null)).toBe(false)
+  })
+
+  test('configured / enabled / running 各自独立', () => {
+    const s = { ...SYNC, configured: false, enabled: false, running: false }
+    expect(syncConfigured(withSync(s))).toBe(false)
+    expect(syncEnabled(withSync(s))).toBe(false)
+    expect(syncServiceRunning(withSync(s))).toBe(false)
+    expect(syncConfigured(withSync(SYNC))).toBe(true)
+    expect(syncEnabled(withSync(SYNC))).toBe(true)
+    expect(syncServiceRunning(withSync(SYNC))).toBe(true)
+  })
+})
+
+describe('syncConflictCount / syncTargetLabel / syncLocalDirOf', () => {
+  test('冲突副本数来自 last_pull.conflicts', () => {
+    expect(syncConflictCount(withSync(SYNC))).toBe(2)
+    expect(syncConflictCount(withSync({ ...SYNC, last_pull: null }))).toBe(0)
+    expect(syncConflictCount(null)).toBe(0)
+  })
+
+  test('target 为空 / 缺省 → null', () => {
+    expect(syncTargetLabel(withSync(SYNC))).toBe('s3://notefast-bucket/notefast-vault-sync/')
+    expect(syncTargetLabel(withSync({ ...SYNC, target: null }))).toBeNull()
+    expect(syncTargetLabel(withSync({ ...SYNC, target: '  ' }))).toBeNull()
+    expect(syncTargetLabel(null)).toBeNull()
+  })
+
+  test('LocalFS 目标反解本地目录', () => {
+    expect(syncLocalDirOf(withSync({ ...SYNC, target: 'local:/tmp/nf-sync' }))).toBe('/tmp/nf-sync')
+    expect(syncLocalDirOf(withSync(SYNC))).toBe('')
+    expect(syncLocalDirOf(null)).toBe('')
+  })
+})
+
+describe('syncTargetLocationId', () => {
+  test('S3 目标按 bucket 反查连接 id', () => {
+    expect(syncTargetLocationId(withSync(SYNC), [LOCATIONS[2]!, LOCATIONS[0]!])).toBe('loc-s3')
+  })
+
+  test('WebDAV 目标按 endpoint 反查连接 id', () => {
+    const s = { ...SYNC, target: 'webdav:https://dav.example.com/remote.php/dav/sync/' }
+    expect(syncTargetLocationId(withSync(s), LOCATIONS)).toBe('loc-webdav')
+  })
+
+  test('LocalFS / 未配置 / 连接已删除 → 空串', () => {
+    expect(syncTargetLocationId(withSync({ ...SYNC, target: 'local:/tmp/x' }), LOCATIONS)).toBe('')
+    expect(syncTargetLocationId(withSync(SYNC), [])).toBe('')
+    expect(syncTargetLocationId(null, LOCATIONS)).toBe('')
+  })
+})
+
+describe('syncFormFromStatus', () => {
+  test('已配置 → 回填开关 / 连接 / 前缀（去掉尾斜杠）/ 间隔', () => {
+    expect(syncFormFromStatus(withSync(SYNC), LOCATIONS)).toEqual({
+      enabled: true,
+      locationId: 'loc-s3',
+      localDir: '',
+      prefix: 'notefast-vault-sync',
+      intervalSeconds: '120',
+    })
+  })
+
+  test('LocalFS 目标 → 回填本地目录且不带连接', () => {
+    const s = { ...SYNC, target: 'local:/tmp/nf-sync', prefix: '' }
+    expect(syncFormFromStatus(withSync(s), LOCATIONS)).toEqual({
+      enabled: true,
+      locationId: '',
+      localDir: '/tmp/nf-sync',
+      prefix: '',
+      intervalSeconds: '120',
+    })
+  })
+
+  test('未配置 / 无 sync 块 → 空表单 + 60 秒兜底', () => {
+    const empty = {
+      enabled: false,
+      locationId: '',
+      localDir: '',
+      prefix: '',
+      intervalSeconds: '60',
+    }
+    expect(syncFormFromStatus(withSync())).toEqual(empty)
+    expect(syncFormFromStatus(null)).toEqual(empty)
+    expect(syncFormFromStatus(withSync({ ...SYNC, enabled: false, interval_seconds: 0 }))).toEqual({
+      ...empty,
+      prefix: 'notefast-vault-sync',
+      intervalSeconds: '0',
+    })
+  })
+})
+
+describe('parseSyncIntervalSeconds / syncConfigPayload', () => {
+  test('空 / 非法 / 负数 / 小数 → 0 或取整', () => {
+    expect(parseSyncIntervalSeconds('')).toBe(0)
+    expect(parseSyncIntervalSeconds('  ')).toBe(0)
+    expect(parseSyncIntervalSeconds('abc')).toBe(0)
+    expect(parseSyncIntervalSeconds('-5')).toBe(0)
+    expect(parseSyncIntervalSeconds('90.4')).toBe(90)
+    expect(parseSyncIntervalSeconds(' 60 ')).toBe(60)
+  })
+
+  test('表单 → PUT 入参：空连接为 null，字符串去空白', () => {
+    expect(
+      syncConfigPayload({
+        enabled: true,
+        locationId: '  ',
+        localDir: ' /tmp/nf-sync ',
+        prefix: ' sync ',
+        intervalSeconds: '',
+      }),
+    ).toEqual({
+      enabled: true,
+      locationId: null,
+      localDir: '/tmp/nf-sync',
+      prefix: 'sync',
+      intervalSeconds: 0,
+    })
+    expect(
+      syncConfigPayload({
+        enabled: false,
+        locationId: 'loc-s3',
+        localDir: '',
+        prefix: '',
+        intervalSeconds: '120',
+      }),
+    ).toEqual({
+      enabled: false,
+      locationId: 'loc-s3',
+      localDir: '',
+      prefix: '',
+      intervalSeconds: 120,
+    })
   })
 })
 
