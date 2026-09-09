@@ -174,6 +174,22 @@ VAULT_PATH=~/Notes DATA_DIR=./data-vault PORT=3141 bun --filter @notefast/server
 
 What carries over: body, tags, creation time, Obsidian block ids (`^abc123`), images, and `[[wikilinks]]` re-resolved by file name. What is rebuilt or lost: document/block ids, references, AutoLink, vectors, revision history, share links, and **the inbox / `ai_exclude` state** (the export does not write `notefast_status` / `notefast_ai_exclude`). Two gotchas the guide calls out: macOS `unzip` mangles UTF-8 file names (use `ditto`), and the exported slug differs from the original `# title`, so the duplicate H1 is kept unless you rename files to the H1.
 
+### Syncing a vault between devices
+
+vault mode syncs **the files themselves** through an object store you own (S3, WebDAV or a local folder) — the same storage connections used by backup and archiving. The SQLite index is never synced: it is rebuilt from the files, so there is exactly one authority. Design and measurements: [docs/rfcs/0004-vault-file-sync.md](docs/rfcs/0004-vault-file-sync.md).
+
+```bash
+# Settings → Vault → File sync: pick a storage connection (or a local folder), enable, save
+curl -X PUT http://localhost:3140/api/v1/vault/sync/config \
+  -H "Authorization: Bearer $API_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"enabled":true,"locationId":"my-s3","prefix":"notefast-vault/","intervalSeconds":60}'
+curl -X POST http://localhost:3140/api/v1/vault/sync/push   # 立即推送
+curl -X POST http://localhost:3140/api/v1/vault/sync/pull   # 立即拉取
+curl -s  http://localhost:3140/api/v1/vault/sync/status     # 状态 / 上次结果 / 冲突
+```
+
+How it behaves: content-addressed blobs deduplicate identical files; each device writes only its own manifest shard, so devices never race on one remote file; conflicts never silently merge — the newer version becomes the file and the older one is kept next to it as `<name>.notefast-conflict-<device>-<timestamp>.md`. Files land on disk and are ingested by the normal watcher, so search, links and AI follow automatically. **Do not run a second file-sync tool (iCloud, Dropbox, Syncthing) on the same folder** — that is the known double-sync failure mode; the vault panel warns about it.
+
 ## Development
 
 ```

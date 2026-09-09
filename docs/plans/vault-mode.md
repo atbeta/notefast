@@ -310,6 +310,24 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 
 ---
 
+## M6 文件同步（RFC 0004，超出原 M1–M5 范围）
+
+用户 2026-09-10 拍板：vault 模式做「同步文件」而不是同步派生索引（方案 B，C/CRDT 不做）。
+设计与边界见 `docs/rfcs/0004-vault-file-sync.md`。
+
+| 任务 | 内容 | 状态 |
+|---|---|---|
+| F-1 | 引擎：内容寻址 blob + 每设备清单分片 + 冲突副本（`vault/fileSync.ts`、迁移 027、`store/vaultSyncState.ts`） | 完成（`ce8154a`） |
+| F-2 | 运行时 + HTTP：调度、状态、`/api/v1/vault/sync/*`、vault notebook 上协议同步强制停用 | 完成（`ead8e76`） |
+| F-3 | Web：设置页同步区块（开关 / 目标 / 立即推拉 / 冲突列表）+ i18n | 进行中 |
+| F-4 | 文档：README 章节、RFC 0004 数字、迁移指引交叉引用 | 完成 |
+
+**实测（LocalFS 后端）**：1000 文件首次 push 147ms / pull 161ms；10k 文件 push 1.50s / pull 1.47s；幂等复跑 6–45ms。
+
+**与 db 模式协议同步的关系**：vault notebook 上 `scheduleSyncNow()` 直接短路，`POST /api/v1/sync/run|pull` 返回 409 `vault_mode_uses_file_sync`（实测断言在 `vaultFileSyncRuntime.test.ts`）。
+
+---
+
 ## 完成定义（每个任务）
 
 - 对应测试新增并通过；`bun lint && bun run typecheck && bun test` 全绿

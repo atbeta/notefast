@@ -1,6 +1,6 @@
 # RFC 0004: vault 文件同步（NoteFast Sync for files）
 
-- 状态：已接受，分阶段实施（P1 引擎 → P2 运行时/API → P3 Web → P4 文档）
+- 状态：已接受并实施（P1 引擎、P2 运行时/API 已落地；P3 Web、P4 文档进行中）
 - 依赖：RFC 0001（vault 模式）、RFC 0002（身份与 ingest）、RFC 0003（写回与冲突）
 - 实现：`packages/server/src/vault/fileSync.ts`、`store/vaultSyncState.ts`、迁移 027、`vault/index.ts`、`storage/*`
 
@@ -153,9 +153,18 @@ CREATE TABLE vault_sync_state (
 
 ## 验证
 
-- 两实例（两个 `DATA_DIR`）经一个 LocalFS 目录同步：
-  - 新建 / 编辑 / 改名 / 删除 各自收敛；
-  - 双方同时改同一文件 → 两侧都有两个版本，较新者为当前文件，另一个为 `.notefast-conflict-*`；
-  - 重复 push/pull 幂等（不产生新对象、不改文件 mtime）；
-  - 文件落盘后索引跟随（`GET /api/v1/vault/status.files` 与搜索命中）。
-- 1000 文件首次 push/pull 计时记入 `docs/rfcs/0002-block-identity.md` §验证标准（或本 RFC 附录）。
+- 两实例（两个 `DATA_DIR`）经一个 LocalFS 目录同步（`__tests__/vaultFileSync.test.ts`，8 例）：
+  - 新建 / 编辑 / 改名 / 删除 各自收敛，删除进 `.trash/`；
+  - 双方同时改同一文件 → 较新者为当前文件，另一个为 `<stem>.notefast-conflict-<device8>-<ts>.md`；
+  - 本地有未推送改动时远端删除不覆盖本地；
+  - 重复 push/pull 幂等（不产生新对象、不改文件）；
+  - 资源文件（图片）同步；远端 `vault_id` 不一致拒绝混库。
+- 运行时 + HTTP（`__tests__/vaultFileSyncRuntime.test.ts`，4 例）：状态、配置、手动推拉、落盘后索引跟随（`status.files` 增长）、协议同步短路。
+- 规模（LocalFS 后端，macOS arm64 / Bun 1.3.14，1000 / 10000 篇 × 约 60B 内容）：
+
+  | 文件数 | 首次 push | 首次 pull | 幂等 push | 幂等 pull |
+  |---|---|---|---|---|
+  | 1000 | 147ms（6792 篇/s，1000 blob） | 161ms（1000 落盘） | 6ms | 8ms |
+  | 10000 | 1.50s（6686 篇/s，10000 blob） | 1.47s | 45ms | 45ms |
+
+  幂等复跑只做 stat 与清单比对；S3 / WebDAV 后端受网络与请求数限制，量级另计。
