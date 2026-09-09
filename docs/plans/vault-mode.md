@@ -37,7 +37,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | 里程碑 | 目标 | 任务 | 状态 |
 |---|---|---|---|
 | M1 基础 | 文件 → 索引闭环 + 整篇写回 | — | 完成（`c4f9e2c` `b14d6c5`） |
-| M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **发布门禁**（V-201 ✅ V-202 ✅） |
+| M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **发布门禁**（V-201 ✅ V-202 ✅ V-203 ✅） |
 | M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | |
 | M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | |
 | M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | |
@@ -91,6 +91,16 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
   - 写回后重新 ingest 一次以刷新 spans（或直接按 patch 结果重算）
 - **验收**：测试——fixture 含 callout `> [!note]`、`%%注释%%`、行尾 `^abc123`、`![[img.png]]`、不规则空行与 `*`/`_` 混用；ingest → `updateBlock` 改第二段 → 写回 → 除第二段区间外字节全等；插入 / 删除各一例；spans 缺失时退回整篇且有审计事件
 - **依赖**：V-201、V-304 · **估算**：3 人天
+- **状态**：完成（`adfb22f`）
+  - 落地口径：迁移 025 建 `vault_block_spans(doc_id, block_id, start, end, content_hash)`，每次 ingest / 写回**整表重写**（表非空 = 完整快照，写回才能把「无区间」判为新增块而非记录残缺）
+  - `content_hash` 是块子树指纹（类型 + 内容 + properties + 子块）：只看序列化文本无法区分「用户改了」与「mdast 归一化」
+  - 区间偏移 = 「块首行行首 → 块末行行尾」，按**行号**换算以规避 `$$` → ```math 改写的长度漂移；顶层列表项连同嵌套子项是一个块
+  - 组装：指纹未变的块复制旧字节；相邻且顺序未变的块复制它们之间的旧空行；其余接缝用 `\n\n`。首块前 / 末块后的空白仅在仍是原首 / 原末块时照搬
+  - 兜底：区间缺失 / 越界 / 与 DB 顶层块对不上 → 整篇序列化 + 审计 `doc.vault_written_full`；`doc.vault_written` 带 `mode: patch | full`
+  - 冲突判定前移到读盘后：外部改过的文件不参与解析
+  - **依赖偏离**：未等 V-304 即落地。理由：不变区域从不重新序列化，本任务验收（除被改块外字节全等）不依赖解析器无损；V-304 仍影响「被编辑块」的保真与 V-302 的 `^id` 往返
+  - **已知限制**：整篇退回后，含嵌套列表的文档无法重建区间（现行序列化器拍平嵌套项，语料 `21-nested-list` 已冻结）→ 这类文档持续走整篇写回，不会产生重复块；局部写回路径不受影响
+  - 测试：`core/parseMdastSpans.test.ts`（区间切回源码、`$$` 不漂移、`bodyOnly`）、`vault.test.ts`（改 / 插 / 删 / 嵌套子块、缺失与越界退回、审计计数）
 
 ### V-204 冲突副本
 
@@ -232,7 +242,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 
 （执行中发现但未决的问题记在这里，附发现者与日期）
 
-- 2026-09-09（V-201 评估）：**V-203 列表保真缺口**——按「顶层块 span」整体替换列表时，未改动的兄弟列表项也会被 `blocksToMarkdown` 归一化（缩进、标记符）。要么把验收显式写成「列表块视为整体」，要么把 span 细化到 listItem。
-- 2026-09-09（V-201 评估）：**V-203 span 偏移必须与 `stripTitleHeading` 组合**——`markdown.ts:451` 会移除同名 H1 并提升其子块，先 parse 再 strip 会让 offset 漂移。建议 `parseMarkdownWithSpans` 在 strip 之后产出，避免两遍 parse。
+- ~~2026-09-09（V-201 评估）：**V-203 列表保真缺口**——按「顶层块 span」整体替换列表时，未改动的兄弟列表项也会被 `blocksToMarkdown` 归一化~~ → V-203 落地后每个顶层列表项是独立块（嵌套项是它的子块），兄弟项不再被波及；剩余问题是**序列化器拍平嵌套项**（语料 `21-nested-list` 冻结），导致整篇退回后无法重建区间 → 这类文档持续走整篇写回。修序列化器属于 V-304 范围。
+- ~~2026-09-09（V-201 评估）：**V-203 span 偏移必须与 `stripTitleHeading` 组合**~~ → 已解：区间按块记录（含被提升的 H1 子块），`stripTitleHeading` 只影响哪些块是顶层，不改变区间偏移。
 - 2026-09-09（V-202 落地）：**文件改 status 不复制 API 的级联**——`PATCH /docs/:id/status` 在归档时会撤销公开分享、升格时 `reanalyzeDoc`；ingest 里只做 `updateBlock({ status })` + `fireDocAfterStatusChange`。若认为文件也是「用户操作」，应把这段抽成共享函数（`services/docStatusChange.ts`）给两处复用。
 - 2026-09-09（V-202 落地）：**frontmatter 识别是启发式**——「所有非空行都像 YAML」才算 frontmatter；单行 `Note: 正文` 这类仍是误判面。若 Obsidian 侧出现误剥离，考虑改为「首行必须是 `key:` 或 `key: value`」再放宽。
