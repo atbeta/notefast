@@ -214,6 +214,10 @@ describe('injectEngineAssets', () => {
 
   beforeEach(() => {
     saved = saveEnv()
+    // 仓库根 `.env` 带 DATA_DIR（Bun 会自动加载），不隔离的话「vault 派生 DATA_DIR」会被当成显式指定
+    delete process.env.DATA_DIR
+    delete process.env.VAULT_PATH
+    delete process.env.NOTEFAST_APP_SUPPORT_DIR
     assetsDir = mkdtempSync(join(tmpdir(), 'nf-native-'))
   })
   afterEach(() => {
