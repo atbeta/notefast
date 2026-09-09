@@ -210,6 +210,11 @@ async function migrateToV2(db: ReturnType<typeof getDb>, store: ObjectStore, pre
  * 执行一轮同步（发布端语义）：布局检测 → 发布本地增量 → 定期快照（compaction）→ 更新 manifest。
  */
 export async function syncNow(): Promise<{ published: number; snapshotCreated: boolean; state: SyncProtocolState }> {
+  if (protocolSyncSuppressed) {
+    throw Object.assign(new Error(`vault 模式使用文件同步，协议同步已停用：${protocolSyncSuppressed}`), {
+      code: 'vault_mode_uses_file_sync',
+    })
+  }
   if (!store) {
     throw Object.assign(new Error('多端同步未配置（S3 未配置或未启用）'), { code: 'not_configured' })
   }
@@ -311,6 +316,11 @@ export async function syncNow(): Promise<{ published: number; snapshotCreated: b
  * 本地未发布改动随之丢失），调用方需理解这是「恢复到本地」而非「服务端自合并」。
  */
 export async function syncPull(): Promise<{ mode: 'full' | 'incremental'; applied: number; mediaRestored: number; state: SyncProtocolState }> {
+  if (protocolSyncSuppressed) {
+    throw Object.assign(new Error(`vault 模式使用文件同步，协议同步已停用：${protocolSyncSuppressed}`), {
+      code: 'vault_mode_uses_file_sync',
+    })
+  }
   if (!store) {
     throw Object.assign(new Error('多端同步未配置（S3 未配置或未启用）'), { code: 'not_configured' })
   }
@@ -460,7 +470,25 @@ async function safeMergeRemote(): Promise<void> {
  * 窗口内多次写入合并为一次。未配置 S3 时静默跳过（不打扰用户）。
  * 不阻塞写入响应；syncNow 的 running 互斥天然防重叠。
  */
+/**
+ * vault notebook 下停用协议同步（RFC 0004 §与 db 模式同步的关系）。
+ * 原因：协议同步发布的是 entity_changes + 块状态，快照还会带上 vault_files；
+ * 在 vault 实例上消费会替换整库、覆盖文件映射与块 id，随后按文件重建索引。
+ * 文件同步是 vault 模式唯一的同步通道。
+ */
+let protocolSyncSuppressed: string | null = null
+
+export function setProtocolSyncSuppressed(reason: string | null): void {
+  protocolSyncSuppressed = reason
+  if (reason) stopDebounceTimer()
+}
+
+export function isProtocolSyncSuppressed(): boolean {
+  return protocolSyncSuppressed !== null
+}
+
 export function scheduleSyncNow(): void {
+  if (protocolSyncSuppressed) return // vault 模式：协议同步停用（文件同步接管）
   if (debounceTimer) clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => {
     debounceTimer = null
@@ -528,11 +556,17 @@ let cachedDeviceId: string | null = null
 export function getDeviceId(): string {
   if (cachedDeviceId) return cachedDeviceId
   const path = join(dataDir, DEVICE_ID_FILE)
-  if (existsSync(path)) {
-    cachedDeviceId = readFileSync(path, 'utf-8').trim()
-  } else {
+  try {
+    if (existsSync(path)) {
+      cachedDeviceId = readFileSync(path, 'utf-8').trim()
+    } else {
+      cachedDeviceId = crypto.randomUUID()
+      writeFileSync(path, cachedDeviceId, 'utf-8')
+    }
+  } catch {
+    // DATA_DIR 不可写（只读卷 / 测试里目录已被清理）：退化为进程内 id，
+    // 不能因为读设备身份失败就让 status / 同步整个挂掉
     cachedDeviceId = crypto.randomUUID()
-    writeFileSync(path, cachedDeviceId, 'utf-8')
   }
   return cachedDeviceId
 }

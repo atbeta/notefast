@@ -5,6 +5,8 @@
  * `server/src/vault/fileSync.ts`（引擎）与 `server/src/vault/fileSyncConfig.ts`（持久化）。
  */
 
+import { z } from 'zod'
+
 /** 远端清单里的一条记录（按设备分片存放，读时合并） */
 export interface VaultSyncEntry {
   /** vault 相对路径（POSIX 分隔符） */
@@ -45,12 +47,31 @@ export interface VaultFileSyncConfig {
   prefix: string
   /** 定时 pull 间隔（秒）；0 = 只手动 / 只在文件变更时 push */
   intervalSeconds: number
+  /**
+   * 本 vault 的稳定身份（远端 meta.json 用它防串库）；null = 尚未生成。
+   * 由引擎维护，API 入参不覆盖（见 merge）。
+   */
+  vaultId: string | null
 }
 
-export type VaultFileSyncConfigInput = Omit<VaultFileSyncConfig, 'version'>
+export interface VaultFileSyncConfigInput {
+  enabled: boolean
+  locationId: string | null
+  localDir?: string
+  prefix?: string
+  intervalSeconds?: number
+}
 
 export function emptyVaultFileSyncConfig(): VaultFileSyncConfig {
-  return { version: 1, enabled: false, locationId: null, localDir: '', prefix: '', intervalSeconds: 60 }
+  return {
+    version: 1,
+    enabled: false,
+    locationId: null,
+    localDir: '',
+    prefix: '',
+    intervalSeconds: 60,
+    vaultId: null,
+  }
 }
 
 export function normalizeVaultSyncPrefix(prefix?: string | null): string {
@@ -61,9 +82,10 @@ export function normalizeVaultSyncPrefix(prefix?: string | null): string {
 
 export function mergeVaultFileSyncConfig(
   incoming: VaultFileSyncConfigInput,
-  _existing: VaultFileSyncConfig,
+  existing: VaultFileSyncConfig,
 ): VaultFileSyncConfig {
-  const interval = Number.isFinite(incoming.intervalSeconds) ? Math.round(incoming.intervalSeconds) : 60
+  const rawInterval = incoming.intervalSeconds
+  const interval = rawInterval !== undefined && Number.isFinite(rawInterval) ? Math.round(rawInterval) : 60
   return {
     version: 1,
     enabled: incoming.enabled === true,
@@ -71,6 +93,8 @@ export function mergeVaultFileSyncConfig(
     localDir: (incoming.localDir ?? '').trim(),
     prefix: normalizeVaultSyncPrefix(incoming.prefix),
     intervalSeconds: interval >= 0 ? interval : 60,
+    // 身份只由引擎维护：换存储目标不换 vault id
+    vaultId: existing.vaultId,
   }
 }
 
@@ -84,3 +108,12 @@ export function isNewerVaultSyncEntry(candidate: VaultSyncEntry, current: VaultS
   if (candidate.updated_at !== current.updated_at) return candidate.updated_at > current.updated_at
   return candidate.device_id > current.device_id
 }
+
+/** PUT /api/v1/vault/sync/config 的入参（vaultId 由引擎维护，不接受客户端覆盖） */
+export const vaultFileSyncConfigSchema = z.object({
+  enabled: z.boolean(),
+  locationId: z.string().nullable(),
+  localDir: z.string().optional(),
+  prefix: z.string().optional(),
+  intervalSeconds: z.number().optional(),
+})

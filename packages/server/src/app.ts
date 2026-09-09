@@ -32,7 +32,7 @@ import { startMaintenance } from './services/maintenance'
 import { noteRequestActivity } from './services/activity'
 import { initAiRuntime } from './services/aiRuntime'
 import { initSyncManager } from './sync/manager'
-import { initProtocolManager } from './sync/protocolManager'
+import { initProtocolManager, setProtocolSyncSuppressed } from './sync/protocolManager'
 import { initBackupManager, stopBackupManager } from './backup/manager'
 import { initStorageLocations } from './storage/locations'
 import { getUiPreferences, initPreferences } from './api/preferences'
@@ -77,6 +77,7 @@ import { initInstancePaths, initShadowMarkdown, stopShadowMarkdown } from './ser
 import instanceRouter from './api/instance'
 import { startEntityDescribe } from './ai/entityDescribe'
 import { createVaultRouter, createVaultRuntime, loadVaultConfigFromEnv, type VaultRuntime } from './vault'
+import { initVaultFileSyncConfig } from './vault/fileSyncConfig'
 
 export interface NoteFastServer {
   /** Hono app（未 serve 的纯处理器；可直接 app.fetch(req) 或自建 Bun.serve） */
@@ -310,6 +311,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     initSyncManager(dataDir)
     initBackupManager(dataDir)
     initProtocolManager(dataDir)
+    initVaultFileSyncConfig(dataDir)
     initAiRuntime(pluginSystem, dataDir)
     initTermDict(dataDir)
     startEntityDescribe()
@@ -317,6 +319,8 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
 
     // vault mode：hooks / 向量 / 事件总线都已就位后再挂 watcher；全量对账在后台跑，不挡 listen
     if (vaultConfig) {
+      // vault 模式只用文件同步（RFC 0004）：协议同步会把派生索引当权威，必须停用
+      setProtocolSyncSuppressed('vault notebook 使用文件同步')
       vaultRuntime = createVaultRuntime({ db: getDb(), notebookId, config: vaultConfig })
       await vaultRuntime.start()
       console.log(
@@ -378,6 +382,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     if (vaultRuntime) {
       try { await vaultRuntime.stop() } catch { /* ignore */ }
       vaultRuntime = null
+      setProtocolSyncSuppressed(null)
     }
     try { stopShadowMarkdown() } catch { /* ignore */ }
     if (exportStarted) { /* autoExport 无 stop API；进程退出时自然清理 */ }

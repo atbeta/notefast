@@ -85,7 +85,7 @@ syncProtocol.post('/run', async (c) => {
     return c.json({ ok: true, ...result, status: protocolStatus() })
   } catch (e) {
     const code = (e as { code?: string }).code
-    const status = code === 'not_configured' ? 503 : code === 'sync_in_progress' ? 409 : 500
+    const status = code === 'not_configured' ? 503 : code === 'sync_in_progress' || code === 'vault_mode_uses_file_sync' ? 409 : 500
     return c.json(
       { error: code ?? 'sync_error', message: e instanceof Error ? e.message : String(e) },
       status,
@@ -100,7 +100,7 @@ syncProtocol.post('/pull', async (c) => {
     return c.json({ ok: true, ...result, status: protocolStatus() })
   } catch (e) {
     const code = (e as { code?: string }).code
-    const status = code === 'not_configured' ? 503 : code === 'sync_in_progress' ? 409 : 500
+    const status = code === 'not_configured' ? 503 : code === 'sync_in_progress' || code === 'vault_mode_uses_file_sync' ? 409 : 500
     return c.json(
       { error: code ?? 'sync_error', message: e instanceof Error ? e.message : String(e) },
       status,

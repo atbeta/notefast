@@ -40,6 +40,15 @@ export function applyVaultFileSyncConfig(incoming: VaultFileSyncConfigInput): Va
   return store.get()
 }
 
+/**
+ * 写入 vault 身份（引擎首次同步时生成）。
+ * 不走 merge：merge 有意保留旧 vaultId，避免用户改配置时把身份改掉。
+ */
+export function setVaultSyncVaultId(vaultId: string): VaultFileSyncConfig {
+  store.set({ ...store.get(), vaultId })
+  return store.get()
+}
+
 export function disableVaultFileSyncConfig(): VaultFileSyncConfig {
   store.set(emptyVaultFileSyncConfig())
   return store.get()

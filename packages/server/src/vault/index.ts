@@ -9,6 +9,7 @@
  */
 
 import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { getDb } from '../db'
@@ -19,6 +20,9 @@ import { createSerialLock } from './lock'
 import { ingestVaultFile, reconcileVault, type IngestResult, type ReconcileStats, type VaultContext } from './ingest'
 import { isIgnoredRelPath, toVaultAbsPath, VaultPathError, toVaultRelPath } from './paths'
 import { startVaultWatcher, type VaultWatcher } from './watcher'
+import { createVaultFileSync, type VaultFileSync, type VaultFileSyncStatus } from './fileSyncRuntime'
+import { getVaultFileSyncConfig } from './fileSyncConfig'
+import { vaultFileSyncConfigSchema } from '@notefast/core'
 import { startVaultWriteback, type VaultWriteback } from './writeback'
 import { sha256Hex } from './writer'
 
@@ -57,6 +61,8 @@ export interface VaultStatus {
   conflicts: { count: number; paths: string[] }
   /** 下一次定时轻量对账时间（ISO）；未开启定时对账时为 null */
   next_reconcile_at: string | null
+  /** 文件同步（RFC 0004）状态 */
+  sync: VaultFileSyncStatus
 }
 
 export interface VaultRuntime {
@@ -68,6 +74,8 @@ export interface VaultRuntime {
   ingest(path: string): Promise<IngestResult>
   /** 等待 watcher 队列 / 写回队列 / 后台对账全部空闲（测试与优雅停机） */
   idle(): Promise<void>
+  /** 文件同步（RFC 0004）；未配置时各方法返回错误说明，不抛异常 */
+  sync: VaultFileSync
 }
 
 export function createVaultRuntime(opts: { db: Db; notebookId: string; config: VaultConfig }): VaultRuntime {
@@ -78,6 +86,7 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
   let lastReconcile: ReconcileStats | null = null
   let reconcileTimer: ReturnType<typeof setTimeout> | null = null
   let nextReconcileAt: string | null = null
+  const fileSync = createVaultFileSync(ctx)
 
   const runReconcile = (light: boolean): Promise<ReconcileStats> => {
     if (reconciling) return reconciling
@@ -139,6 +148,8 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
       if (ctx.config.watch && !watcher) {
         watcher = await startVaultWatcher(ctx, {
           onError: (rel, e) => console.warn(`[vault] watcher ${rel}:`, e instanceof Error ? e.message : e),
+          // 文件变了 → 去抖推送到远端（RFC 0004）
+          onResult: () => fileSync.notifyFileChange(),
         })
       }
       if (ctx.config.writeback && !writeback) {
@@ -146,9 +157,23 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
           onOutcome: (docId, outcome) => {
             if (outcome.kind === 'conflict') {
               console.warn(`[vault] 写回冲突，已保留磁盘版本: ${outcome.relPath} (doc ${docId})`)
+            } else if (outcome.kind === 'written') {
+              // 写回落了盘 → 也要推到远端
+              fileSync.notifyFileChange()
             }
           },
         })
+      }
+
+      fileSync.start()
+      // 启动时先 pull（拿到别端改动）再对账；同步失败不阻断启动
+      const syncCfg = getVaultFileSyncConfig()
+      if (syncCfg.enabled) {
+        try {
+          await fileSync.pull()
+        } catch (e) {
+          console.warn('[vault] 启动文件同步失败:', e instanceof Error ? e.message : e)
+        }
       }
 
       scheduleReconcile()
@@ -174,6 +199,7 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
         writeback = null
       }
       stopReconcileTimer()
+      fileSync.stop()
       if (activeRuntime === runtime) setActiveVaultRuntime(null)
     },
     status() {
@@ -190,9 +216,11 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
         last_reconcile: lastReconcile,
         conflicts: listVaultWritebackConflicts(),
         next_reconcile_at: nextReconcileAt,
+        sync: fileSync.status(),
       }
     },
     rebuild,
+    sync: fileSync,
     ingest: (path) => ctx.lock(() => ingestVaultFile(ctx, path)),
     async idle() {
       if (reconciling) await reconciling.catch(() => undefined)
@@ -275,6 +303,43 @@ export function createVaultRouter(getRuntime: () => VaultRuntime | null): Hono {
         deleted_at: r.deleted_at,
       })),
     )
+  })
+
+  /** 文件同步（RFC 0004）：状态 / 配置 / 手动推拉 */
+  router.get('/sync/status', (c) => {
+    const rt = getRuntime()
+    if (!rt) return c.json({ error: 'vault_disabled', message: '未启用 vault mode' }, 404)
+    return c.json(rt.sync.status())
+  })
+
+  router.put('/sync/config', zValidator('json', vaultFileSyncConfigSchema), (c) => {
+    const rt = getRuntime()
+    if (!rt) return c.json({ error: 'vault_disabled', message: '未启用 vault mode' }, 404)
+    const status = rt.sync.applyConfig(c.req.valid('json'))
+    if (!status.configured) {
+      return c.json({ error: 'bad_request', message: status.last_error ?? '同步目标不可用', sync: status }, 400)
+    }
+    return c.json(status)
+  })
+
+  router.post('/sync/push', async (c) => {
+    const rt = getRuntime()
+    if (!rt) return c.json({ error: 'vault_disabled', message: '未启用 vault mode' }, 404)
+    try {
+      return c.json(await rt.sync.push())
+    } catch (e) {
+      return c.json({ error: 'sync_failed', message: e instanceof Error ? e.message : String(e) }, 500)
+    }
+  })
+
+  router.post('/sync/pull', async (c) => {
+    const rt = getRuntime()
+    if (!rt) return c.json({ error: 'vault_disabled', message: '未启用 vault mode' }, 404)
+    try {
+      return c.json(await rt.sync.pull())
+    } catch (e) {
+      return c.json({ error: 'sync_failed', message: e instanceof Error ? e.message : String(e) }, 500)
+    }
   })
 
   router.post('/rebuild', async (c) => {
