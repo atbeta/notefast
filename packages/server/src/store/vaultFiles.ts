@@ -22,6 +22,10 @@ export interface VaultFileRow {
   /** ingest 完成时文档根的 updated_at；写回订阅者据此区分「ingest 回声」与「SQLite 端真实编辑」 */
   doc_updated_at: string
   deleted_at: string | null
+  /** 用户手写 frontmatter 原文（不含首尾 `---`）；写回透传（RFC 0003 阶段 B） */
+  frontmatter_raw: string | null
+  /** sha256(JSON[tags, ai_exclude, status])，修正元数据变更的回声判定（阶段 B） */
+  meta_hash: string | null
 }
 
 export interface UpsertVaultFileInput {
@@ -32,6 +36,7 @@ export interface UpsertVaultFileInput {
   size: number
   mtime_ms: number
   doc_updated_at: string
+  frontmatter_raw: string | null
 }
 
 export function getVaultFileByPath(db: Db, notebookId: string, relPath: string): VaultFileRow | null {
@@ -68,8 +73,8 @@ export function listVaultFiles(db: Db, notebookId: string, opts: { includeDelete
 
 export function upsertVaultFile(db: Db, input: UpsertVaultFileInput): void {
   db.query(
-    `INSERT INTO vault_files (notebook_id, rel_path, doc_id, content_sha256, size, mtime_ms, ingested_at, doc_updated_at, deleted_at)
-     VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?, NULL)
+    `INSERT INTO vault_files (notebook_id, rel_path, doc_id, content_sha256, size, mtime_ms, ingested_at, doc_updated_at, deleted_at, frontmatter_raw)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?, NULL, ?)
      ON CONFLICT(notebook_id, rel_path) DO UPDATE SET
        doc_id = excluded.doc_id,
        content_sha256 = excluded.content_sha256,
@@ -77,7 +82,8 @@ export function upsertVaultFile(db: Db, input: UpsertVaultFileInput): void {
        mtime_ms = excluded.mtime_ms,
        ingested_at = excluded.ingested_at,
        doc_updated_at = excluded.doc_updated_at,
-       deleted_at = NULL`,
+       deleted_at = NULL,
+       frontmatter_raw = excluded.frontmatter_raw`,
   ).run(
     input.notebook_id,
     input.rel_path,
@@ -86,6 +92,7 @@ export function upsertVaultFile(db: Db, input: UpsertVaultFileInput): void {
     input.size,
     input.mtime_ms,
     input.doc_updated_at,
+    input.frontmatter_raw,
   )
 }
 
@@ -114,12 +121,19 @@ export function touchVaultFileAfterWrite(
   db: Db,
   notebookId: string,
   relPath: string,
-  patch: { content_sha256: string; size: number; mtime_ms: number; doc_updated_at: string },
+  patch: { content_sha256: string; size: number; mtime_ms: number; doc_updated_at: string; frontmatter_raw?: string | null },
 ): void {
+  const args: (string | number | null)[] = [patch.content_sha256, patch.size, patch.mtime_ms, patch.doc_updated_at]
+  let fmRawSql = ''
+  if (patch.frontmatter_raw !== undefined) {
+    fmRawSql = ', frontmatter_raw = ?'
+    args.push(patch.frontmatter_raw)
+  }
+  args.push(notebookId, relPath)
   db.query(
-    `UPDATE vault_files SET content_sha256 = ?, size = ?, mtime_ms = ?, doc_updated_at = ?, ingested_at = datetime('now')
+    `UPDATE vault_files SET content_sha256 = ?, size = ?, mtime_ms = ?, doc_updated_at = ?, ingested_at = datetime('now')${fmRawSql}
      WHERE notebook_id = ? AND rel_path = ?`,
-  ).run(patch.content_sha256, patch.size, patch.mtime_ms, patch.doc_updated_at, notebookId, relPath)
+  ).run(...args)
 }
 
 // ───────────────────── notebooks.kind ─────────────────────

@@ -13,13 +13,14 @@
 
 import { existsSync, mkdirSync, renameSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { blocksToMarkdown, buildBlockTree, readTags, type BlockRow } from '@notefast/core'
+import { blocksToMarkdown, buildBlockTree, patchFrontmatter, readTags, type BlockRow } from '@notefast/core'
 import { fetchDocBlocks, getBlockById, getLiveDocById } from '../store/blocks'
 import {
   getVaultFileByDocId,
   markVaultFileDeleted,
   touchVaultFileAfterWrite,
   upsertVaultFile,
+  type VaultFileRow,
 } from '../store/vaultFiles'
 import { subscribeDocChanges, type DocChangeEvent } from '../services/docEvents'
 import { auditVault } from './audit'
@@ -41,14 +42,25 @@ export interface VaultWriteback {
   handle: (ev: DocChangeEvent) => Promise<WritebackOutcome>
 }
 
-/** 文档 → vault 正文：不写 `# title`（标题即文件名），仅在有标签时输出 Obsidian 兼容 frontmatter */
-export function serializeVaultDoc(ctx: VaultContext, doc: BlockRow): string {
+/** 文档 → vault 正文：不写 `# title`（标题即文件名），frontmatter 只增删改 tags，其余字段透传（RFC 0003 阶段 B） */
+export function serializeVaultDocParts(
+  ctx: VaultContext,
+  doc: BlockRow,
+  row: VaultFileRow | null = null,
+): { content: string; frontmatterRaw: string } {
   const tree = buildBlockTree(fetchDocBlocks(ctx.db, doc.id))
   const root = tree[0]
   const body = root ? blocksToMarkdown(root.children ?? []) : ''
   const tags = readTags(doc)
-  const fm = tags.length > 0 ? ['---', 'tags:', ...tags.map((t) => `  - ${t}`), '---', ''].join('\n') : ''
-  return fm + body.replace(/^\n+/, '').replace(/\n*$/, '\n')
+  const frontmatterRaw = patchFrontmatter(row?.frontmatter_raw ?? null, { tags })
+  const fm = frontmatterRaw ? `---\n${frontmatterRaw}\n---\n` : ''
+  const content = fm + body.replace(/^\n+/, '').replace(/\n*$/, '\n')
+  return { content, frontmatterRaw }
+}
+
+/** 兼容旧签名：仅返回正文（供现有测试 / 非写回方使用） */
+export function serializeVaultDoc(ctx: VaultContext, doc: BlockRow, row: VaultFileRow | null = null): string {
+  return serializeVaultDocParts(ctx, doc, row).content
 }
 
 /** 标题 → 文件名：去掉路径与文件系统保留字符，空则 untitled；重名追加 (n) */
@@ -92,7 +104,7 @@ export function startVaultWriteback(
       return { kind: 'skipped', reason: 'echo' }
     }
 
-    const content = serializeVaultDoc(ctx, doc)
+    const { content, frontmatterRaw } = serializeVaultDocParts(ctx, doc, row)
     const relPath = row ? row.rel_path : uniqueRelPathForTitle(config.root, doc.content)
     const abs = toVaultAbsPath(config.root, relPath)
     const expectedSha = row && !row.deleted_at ? row.content_sha256 : null
@@ -118,6 +130,7 @@ export function startVaultWriteback(
         size: written.size,
         mtime_ms: written.mtimeMs,
         doc_updated_at: doc.updated_at,
+        frontmatter_raw: frontmatterRaw || null,
       })
     } else {
       upsertVaultFile(db, {
@@ -128,6 +141,7 @@ export function startVaultWriteback(
         size: written.size,
         mtime_ms: written.mtimeMs,
         doc_updated_at: doc.updated_at,
+        frontmatter_raw: frontmatterRaw || null,
       })
     }
     if (written.unchanged && row) return { kind: 'skipped', reason: 'unchanged' }

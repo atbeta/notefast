@@ -181,6 +181,7 @@ export async function ingestVaultFile(ctx: VaultContext, pathInput: string): Pro
       size: file.size,
       mtime_ms: file.mtimeMs,
       doc_updated_at: docRow.updated_at,
+      frontmatter_raw: stripped.raw,
     })
     fireAfterCreate(rowToBlock(docRow))
     fireAfterCreateMany(getBlocksByIds(db, created.blockIds).map(rowToBlock))
@@ -236,6 +237,7 @@ export async function ingestVaultFile(ctx: VaultContext, pathInput: string): Pro
     size: file.size,
     mtime_ms: file.mtimeMs,
     doc_updated_at: docAfter.updated_at,
+    frontmatter_raw: stripped.raw,
   })
 
   fireAfterDeleteMany(deletedIds)
@@ -325,6 +327,7 @@ export function moveVaultFilePath(ctx: VaultContext, fromInput: string, toInput:
     size: row.size,
     mtime_ms: row.mtime_ms,
     doc_updated_at: after.updated_at,
+    frontmatter_raw: row.frontmatter_raw,
   })
   if (doc.content !== title) fireAfterUpdate(rowToBlock(after))
   auditVault('doc.vault_moved', doc.id, { from, to })

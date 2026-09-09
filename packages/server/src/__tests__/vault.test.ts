@@ -362,10 +362,92 @@ describe('vault writeback', () => {
     writeVault('s.md', '---\ntags:\n  - x\n---\nbody line\n\n## Section\n\nmore\n')
     const r = await ingestVaultFile(ctx, 's.md')
     const doc = getLiveDocById(getDb(), r.docId!)!
-    const out = serializeVaultDoc(ctx, doc)
+    const row = getVaultFileByPath(getDb(), notebookId, 's.md')!
+    const out = serializeVaultDoc(ctx, doc, row)
     expect(out.startsWith('---\ntags:\n  - x\n---\n')).toBe(true)
     expect(out).not.toContain('# s\n')
     expect(out).toContain('## Section')
+  })
+
+  // ── V-201 frontmatter 透传（RFC 0003 阶段 B）──
+
+  test('V-201 用户手写 frontmatter 逐字节保留，写回只动被编辑的块', async () => {
+    const original = [
+      '---',
+      'aliases:',
+      '  - NF',
+      'cssclasses: [wide, dark]',
+      'custom_key: keep me',
+      'tags:',
+      '  - dev',
+      '---',
+      'para one',
+      '',
+      'para two',
+      '',
+    ].join('\n')
+    writeVault('fm.md', original)
+    const r = await ingestVaultFile(ctx, 'fm.md')
+    expect(getVaultFileByPath(getDb(), notebookId, 'fm.md')!.frontmatter_raw).toBe(
+      'aliases:\n  - NF\ncssclasses: [wide, dark]\ncustom_key: keep me\ntags:\n  - dev\n',
+    )
+
+    updateBlock(getDb(), childIds(r.docId!)[1]!, { content: 'para two (ai)', actor: 'mcp' })
+    const wb = startVaultWriteback(ctx)
+    try {
+      expect((await wb.handle({ doc_id: r.docId!, kind: 'updated', at: new Date().toISOString() })).kind).toBe('written')
+    } finally {
+      wb.stop()
+    }
+    expect(readFileSync(join(vaultDir, 'fm.md'), 'utf8')).toBe(original.replace('para two\n', 'para two (ai)\n'))
+  })
+
+  test('V-201 内联 tags 写法可入库，写回统一为块列表', async () => {
+    writeVault('inline.md', '---\ntags: [Dev, 知识库]\n---\nbody\n')
+    const r = await ingestVaultFile(ctx, 'inline.md')
+    expect(readTags(getLiveDocById(getDb(), r.docId!)!)).toEqual(['dev', '知识库'])
+
+    updateBlock(getDb(), r.docId!, { tags: JSON.stringify(['dev', '知识库', 'new']) })
+    updateBlock(getDb(), childIds(r.docId!)[0]!, { content: 'body (ai)', actor: 'mcp' })
+    const wb = startVaultWriteback(ctx)
+    try {
+      expect((await wb.handle({ doc_id: r.docId!, kind: 'updated', at: new Date().toISOString() })).kind).toBe('written')
+    } finally {
+      wb.stop()
+    }
+    expect(readFileSync(join(vaultDir, 'inline.md'), 'utf8')).toBe(
+      '---\ntags:\n  - dev\n  - 知识库\n  - new\n---\nbody (ai)\n',
+    )
+  })
+
+  test('V-201 清空标签 → 只删 tags 键，其余 frontmatter 原样保留', async () => {
+    writeVault('untag.md', '---\naliases:\n  - NF\ntags:\n  - dev\n---\nbody\n')
+    const r = await ingestVaultFile(ctx, 'untag.md')
+
+    updateBlock(getDb(), r.docId!, { tags: JSON.stringify([]) })
+    updateBlock(getDb(), childIds(r.docId!)[0]!, { content: 'body (ai)', actor: 'mcp' })
+    const wb = startVaultWriteback(ctx)
+    try {
+      expect((await wb.handle({ doc_id: r.docId!, kind: 'updated', at: new Date().toISOString() })).kind).toBe('written')
+    } finally {
+      wb.stop()
+    }
+    expect(readFileSync(join(vaultDir, 'untag.md'), 'utf8')).toBe('---\naliases:\n  - NF\n---\nbody (ai)\n')
+  })
+
+  test('V-201 无 frontmatter 且无标签 → 写回后仍无 frontmatter', async () => {
+    writeVault('bare.md', 'plain one\n\nplain two\n')
+    const r = await ingestVaultFile(ctx, 'bare.md')
+    expect(getVaultFileByPath(getDb(), notebookId, 'bare.md')!.frontmatter_raw).toBeNull()
+
+    updateBlock(getDb(), childIds(r.docId!)[1]!, { content: 'plain two (ai)', actor: 'mcp' })
+    const wb = startVaultWriteback(ctx)
+    try {
+      expect((await wb.handle({ doc_id: r.docId!, kind: 'updated', at: new Date().toISOString() })).kind).toBe('written')
+    } finally {
+      wb.stop()
+    }
+    expect(readFileSync(join(vaultDir, 'bare.md'), 'utf8')).toBe('plain one\n\nplain two (ai)\n')
   })
 
   test('ingest 回声不写盘；SQLite 端编辑写回；外部改动触发冲突不覆盖', async () => {
