@@ -292,7 +292,8 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **要点**：门禁 = M2 全绿 + V-501 达标 + V-502 完成；CHANGELOG 由 conventional commits 生成；`bump-minor-pre-major` 下 `feat!` 只升 minor
 - **依赖**：以上全部
 - **状态**：**待人工执行**（准备度已核验，见下）
-  - 代码侧门禁已满足：M2 / M3 / M4（除 V-403 见其状态）全部落地；`bun lint` / `bun run typecheck` / `bun test` 全绿
+  - 代码侧门禁已满足：M2 / M3 / M4 / M5 其余任务全部落地；`bun lint` 3/3 · `bun run typecheck` 3/3 · `bun test` **1609 pass / 0 fail**（根目录全量）；`swift test` 29/0、`cargo test` 10/0 亦通过
+  - V-501 达标：1000 文件 8.6s（<30s）、10k 269.1s（<5min）、变更→可搜 323–376ms（<500ms）
   - `next` 是 `origin/main` 的后代（`git merge-base --is-ancestor origin/main next` 通过）→ 可直接 `--ff-only` 合回，无需 rebase
   - release-please 配置就位：`.github/release-please-config.json` 已含 `"bump-minor-pre-major": true`，版本文件覆盖根 / 三个包 / Tauri 两处；manifest 当前 `0.86.1`
   - **人工步骤**（需要有写权限的账号 + `RELEASE_PLEASE_TOKEN`）：
@@ -302,7 +303,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
     git push origin main          # 触发 release-please 开 release PR
     # 合并 release PR → 打 tag → 触发 macos-release / windows-release / docker-publish
     ```
-  - 发布前人工复核：V-501 的 10k 文件对账耗时是否达标（见其状态）；V-403 两平台手工验证（见其状态）
+  - 发布前人工复核：V-403 两壳 GUI 各走一遍（见其状态）；10k 对账余量仅 10%（热点见「待议」，如需扩到 20k+ 先优化）
 
 ---
 
