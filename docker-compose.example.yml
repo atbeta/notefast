@@ -11,6 +11,8 @@ services:
       - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-}
       - AUTH_PASSWORD=${AUTH_PASSWORD:-}
+      # vault 模式下 DATA_DIR 是索引的父目录（索引派生到 <DATA_DIR>/<sha256 前12位>）
+      - NOTEFAST_APP_SUPPORT_DIR=${NOTEFAST_APP_SUPPORT_DIR:-/app/data}
       # vault mode（kind='vault'）：容器内约定把笔记文件夹挂在 /vault，见下方 volumes
       # watcher 后端启动时自动探测（Docker Desktop 的 bind mount 不投递 inotify → 自动轮询）
       # - VAULT_PATH=/vault

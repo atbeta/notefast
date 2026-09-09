@@ -116,7 +116,7 @@ docker compose up -d
 
 - **Block 是原子单位**：不允许绕过 block 模型直接操作原始文件；`block.content` 存行内 Markdown，块级结构通过 children 表达
 - **SQLite 单文件**是 `kind='db'` notebook 的权威存储，位于 `data/`；不为单用户知识库引入 Qdrant/pgvector 等独立向量库。向量经 sqlite-vec，是可重建二级索引
-- **vault notebook（`kind='vault'`）反过来**：`VAULT_PATH` 文件夹是权威，SQLite 是派生索引，可删可重建；索引留在 `DATA_DIR`，不放进 vault。文件 ↔ 文档映射只走 `store/vaultFiles.ts`；ingest 复用 `syncMarkdownChildren` 保块 id 稳定；块 id 永远是 UUID，不用内容哈希当 ID。所有写文件 `tmp + rename`，永不锁文件。详见 `docs/rfcs/0001`–`0003`
+- **vault notebook（`kind='vault'`）反过来**：`VAULT_PATH` 文件夹是权威，SQLite 是派生索引，可删可重建；索引留在 `DATA_DIR` 下（vault 模式派生到 `<DATA_DIR>/<sha256(vault 路径) 前 12 位>`，db 模式就是 `DATA_DIR` 本身），不放进 vault。文件 ↔ 文档映射只走 `store/vaultFiles.ts`；ingest 复用 `syncMarkdownChildren` 保块 id 稳定；块 id 永远是 UUID，不用内容哈希当 ID。所有写文件 `tmp + rename`，永不锁文件。详见 `docs/rfcs/0001`–`0003`、`0005`
 - **blocks / block_refs 读写走 `server/src/store/`**，不要另开 SQL 旁路
 - **图片**：主数据在 `data/media/<sha256>`（内容寻址），Markdown 用 `asset:<sha256>`；引用靠内容扫描，不建关联表。备份 SQLite 快照不覆盖 media，需另行纳入卷/文件级备份
 - **Markdown 仅作表达与导出**（db notebook），不是权威存储。便携导出/归档可把 tags、时间、`notefast_id` 投影为 YAML frontmatter；导入可读 tags，不按 id 静默覆盖。vault notebook 的写回不写 `# title`、不写 `notefast_id`，仅有标签时输出 `tags:` frontmatter
@@ -159,4 +159,4 @@ docker compose up -d
 - **SSE**：`relaxSseIdleTimeout` 必须注册在任何 `app.route()` 之前；停机先 `closeAllSseStreams()` 再 `server.stop`
 - 同步 `publishChanges` 必须照常附带 ai_exclude 文档的 block 状态，不能当成 tombstone
 - **vault 写路径必须过 `ctx.lock`**（ingest / reconcile / writeback 共用串行锁），否则两次对齐会读到过期子块。`vault_files.content_sha256` 同时是变更短路、rename 配对、回声抑制、写回乐观并发的依据，改动 ingest 时四条语义都要过一遍。`doc_updated_at` 与 `doc.updated_at` 相等 = ingest 回声，写回必须跳过
-- vault 模式下 ingest **不**调用 `scheduleSyncNow`、不记 `doc_snapshots`、不种欢迎文档；一个 `DATA_DIR` 只绑一个 vault（`notebooks.vault_root`），路径不一致启动直接拒绝，不静默换绑
+- vault 模式下 ingest **不**调用 `scheduleSyncNow`、不记 `doc_snapshots`、不种欢迎文档；一个索引目录只绑一个 vault（`notebooks.vault_root`），路径不一致启动直接拒绝，不静默换绑（vault 模式下索引按 vault 派生，同一父目录下可并存多个 vault 的索引）

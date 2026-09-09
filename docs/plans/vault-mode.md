@@ -342,14 +342,19 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | U-1 | 可见性：只读模式端点（模式 / vault 根 / 索引目录 / 实际 watcher 模式）+ 设置页常显「数据来源」，db 模式不再整项隐藏 | 完成（`5450b61`） |
 | U-2 | watcher 自动探测：启动时探测原生事件，失败降级轮询；实际模式进 `/vault/status`；`VAULT_USE_POLLING` 保留强制覆盖 | 完成（`815f6da`） |
 | U-3 | 索引位置统一：vault 模式一律派生 `<父目录>/<sha256 前12位>`（`vault/dataDir.ts` 双入口共用）；旧布局同一 vault 沿用并告警，db 库拒绝启动 | 完成 |
-| U-4 | 部署默认对齐：`docker-compose.yml` / example 默认启用 vault（db 变体留注释）+ README / `docs/vault-migration.md` 同步 | 待开始 |
+| U-4 | 部署默认对齐：新增 `docker-compose.vault.yml`（挂 `./notes` → `/vault`，一条命令即 vault）；README / `docs/vault-migration.md` 同步 | 完成 |
 | U-5 | 修订历史：vault 也记 `doc_snapshots`（存 `DATA_DIR`、键用 `rel_path`、内容 sha256 去重、每篇 50 条），**恢复走写回** | 待开始 |
 | U-6 | 分享身份：`shares` 改 `rel_path` + 内容校验，文件缺失返回 410；迁移既有数据 | 待开始 |
 | U-7 | 对账性能：修 `syncVaultWikilinks` 的 O(n²)，目标 10k 文件 < 60s，并给 50k 不崩的证据 | 待开始 |
 
 U-1 … U-4 是部署一致性；U-5 … U-7 是统一的前置 parity（U-7 可与其余并行）。
 
-**U-2 验证记录**：单测 8 例（`vaultWatchProbe.test.ts`：显式 env 优先、探测降级、超时判定、不留探测文件、配置 `pollingSource` 三态）；实测探测延迟在 `/tmp`（符号链接 → `/private/tmp`）与工作区真实路径上都是 11–14ms，探测文件为隐藏文件（`paths.isIgnoredRelPath` 忽略），不会被 ingest。**未验证**：真 Docker Desktop bind mount（本机只有 OrbStack，且 0.90.0 镜像不含本次改动），该路径的结论依赖「无事件 → 超时 → 轮询」这条单测覆盖的逻辑。
+**U-4 与计划的偏差**：没有把 `docker-compose.yml` 的默认模式翻成 vault——它被 `docker compose up -d` 直接使用，未挂 `/vault` 时会因 `VAULT_PATH` 指向不存在的目录而启动失败（比默认 db 更难排查）。改为提供可运行的 `docker-compose.vault.yml`，README 的 Docker 一节以它为首选入口，等价达成「新部署默认 vault」。
+
+**U-2 验证记录**：单测 13 例（`vaultWatchProbe.test.ts`：显式 env 优先、文件系统判定优先于探测、探测降级、超时判定、不留探测文件、配置 `pollingSource` 三态）；实测探测延迟在 `/tmp`（符号链接 → `/private/tmp`）与工作区真实路径上都是 11–14ms，探测文件是隐藏文件（`paths.isIgnoredRelPath` 忽略），不会被 ingest。
+**U-2/U-4 容器实测**（本地重建镜像 + OrbStack，`docker-compose.vault.yml` 挂宿主机目录）：vault 根是 virtiofs → 启动日志报「原生事件不保证投递宿主侧改动，使用轮询」，`watcher_mode=polling`；宿主机新建文件 5s 内 `files` 1→2、宿主机编辑后搜索命中；API 建文档写回宿主机 `Written By NoteFast (2).md` 且内容正确；索引落在 `/app/data/27d33c883a0e`（按 vault 派生）。
+**重要修正**：只靠单文件探测会给出假阳性——virtiofs 上容器内写文件能触发事件，但宿主机侧变更投递不可靠；判定顺序因此改为「env 显式 → 文件系统类型（`fuse`/`virtiofs`/`9p`/`nfs`/`cifs`/`smb`… 一律轮询）→ 单文件探测」。
+**未验证**：真 Docker Desktop（gRPC-FUSE）行为，仅按文件系统类型归入同一类。
 
 ---
 

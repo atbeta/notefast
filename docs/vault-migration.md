@@ -82,8 +82,12 @@ done
 
 ```bash
 VAULT_PATH=~/Notes DATA_DIR=./data-vault PORT=3141 bun --filter @notefast/server dev
-# Docker：-v ~/Notes:/vault -e VAULT_PATH=/vault -v ./data-vault:/app/data -e VAULT_USE_POLLING=true
+# Docker：-v ~/Notes:/vault -e VAULT_PATH=/vault -v ./data-vault:/app/data
 ```
+
+vault 模式下 `DATA_DIR` 是索引的**父目录**：实际索引落在 `./data-vault/<sha256(~/Notes) 前 12 位>/`，
+一个 vault 一个索引；`data/*.json` 里的可复用配置也放在这个父目录（见第 5 步）。
+Docker 上 watcher 后端启动时自动探测（bind mount 不投递 inotify → 自动轮询），无需手动设 `VAULT_USE_POLLING`。
 
 启动日志出现 `📂 vault 对账完成: N 文件，+N …` 即完成；`GET /api/v1/vault/status` 看 `files` 与 `last_reconcile`。
 **实测**：5 篇文档首次对账 52ms；`status.files=5`、`last_reconcile.created=5`。

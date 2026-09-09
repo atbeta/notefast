@@ -128,27 +128,36 @@ AI providers are configured at runtime in **Settings → AI** (three slots: chat
 
 ### vault mode over Docker
 
-Setting `VAULT_PATH` turns the notebook into `kind='vault'`: your Markdown folder is the source of truth and SQLite is a rebuildable index (see [docs/vault-migration.md](docs/vault-migration.md)). Inside a container the folder is mounted at `/vault` — `docker-compose.yml` carries a commented example:
+Setting `VAULT_PATH` turns the notebook into `kind='vault'`: your Markdown folder is the source of truth and SQLite is a rebuildable index (see [docs/vault-migration.md](docs/vault-migration.md)). This is the recommended setup for a new deployment — a ready-to-run compose file is included:
+
+```bash
+mkdir -p notes
+docker compose -f docker-compose.vault.yml up -d
+```
+
+It mounts `./notes` at `/vault` and sets `VAULT_PATH=/vault`. To add vault mode to your own compose file:
 
 ```yaml
     environment:
       - VAULT_PATH=/vault
-      - VAULT_USE_POLLING=true
-      - VAULT_POLL_INTERVAL_MS=1000
+      - NOTEFAST_APP_SUPPORT_DIR=/app/data   # index parent; see below
     volumes:
       - ~/Notes:/vault      # read-write: NoteFast writes edits back to your files
 ```
 
+`DATA_DIR` (and `NOTEFAST_APP_SUPPORT_DIR`) is the **index parent** in vault mode: the index lands in `<parent>/<sha256(vault path) 前12位>`, so one vault gets one index and switching vaults never reuses the old one. In db mode `DATA_DIR` is still the index itself. Upgrading from 0.90.0 with an index directly in `/app/data` keeps working: the engine detects the old layout, reuses it and prints a warning.
+
 | Variable | Description |
 |---|---|
 | `VAULT_PATH` | Vault root inside the container (`/vault` by convention); enables vault mode |
+| `NOTEFAST_APP_SUPPORT_DIR` | Index parent in vault mode (defaults to `DATA_DIR`, then the platform app-support dir) |
 | `VAULT_USE_POLLING` | Force a watcher backend: `true`/`1` = poll, `false`/`0` = native events; unset = detected at startup |
 | `VAULT_POLL_INTERVAL_MS` | Polling interval in ms (default 1000) |
 | `VAULT_WATCH` | `false` disables watching (`POST /api/v1/vault/rebuild` still works) |
 | `VAULT_WRITEBACK` | `false` keeps edits in the index only (no write-back to files) |
 | `VAULT_RECONCILE_MINUTES` | Light periodic reconcile interval in minutes (default 10, `0` disables) — catches edits missed by the watcher |
 
-**The watcher backend is detected at startup.** A bind mount shared from the host into the container does not deliver inotify events on macOS / Windows Docker Desktop, and macOS paths behind a symlink (`/tmp` → `/private/tmp`) do not deliver FSEvents either. Instead of making you remember which environment needs polling, the engine writes a hidden probe file into the vault root, watches it, and falls back to polling when no native event arrives. The effective mode is reported:
+**The watcher backend is detected at startup.** A bind mount shared from the host into the container does not reliably deliver host-side changes (Docker Desktop's gRPC-FUSE / VirtioFS, OrbStack's VirtioFS, NAS mounts), and macOS paths behind a symlink (`/tmp` → `/private/tmp`) do not deliver FSEvents reliably either. Instead of making you remember which environment needs polling, the engine checks the filesystem type of the vault root — virtual or network filesystems get polling outright — and otherwise writes a hidden probe file and watches it. The effective mode is reported:
 
 ```bash
 curl -s http://localhost:3140/api/v1/vault/status | jq '{enabled, watcher_mode, polling_auto, use_polling, watcher_active, files}'

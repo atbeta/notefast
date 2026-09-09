@@ -92,7 +92,7 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
   let reconcileTimer: ReturnType<typeof setTimeout> | null = null
   let nextReconcileAt: string | null = null
   /** watcher 后端：env 显式指定，或启动时探测得出（RFC 0005 U-2） */
-  let watchMode: WatchMode = { usePolling: opts.config.usePolling, auto: false }
+  let watchMode: WatchMode = { usePolling: opts.config.usePolling, auto: false, reason: 'pending' }
   const fileSync = createVaultFileSync(ctx)
 
   const runReconcile = (light: boolean): Promise<ReconcileStats> => {

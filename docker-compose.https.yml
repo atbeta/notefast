@@ -26,8 +26,9 @@ services:
       - LLM_MODEL=${LLM_MODEL:-}
       # 接收代理转发的真实协议（HTTPS）
       - TRUSTED_PROXIES=*
-      # vault mode（kind='vault'）：容器内约定把笔记文件夹挂在 /vault，见下方 volumes
-      # Docker Desktop（macOS / Windows）的 bind mount 不投递 inotify 事件，必须开轮询
+      # vault mode（kind='vault'）：容器内约定把笔记文件夹挂在 /vault，见下方 volumes。
+      # DATA_DIR 在 vault 模式下是索引父目录（索引派生到 <DATA_DIR>/<sha256 前12位>）。
+      # watcher 后端启动时自动探测（Docker Desktop 的 bind mount 不投递 inotify → 自动轮询）
       # - VAULT_PATH=/vault
       # - VAULT_USE_POLLING=true
       # - VAULT_POLL_INTERVAL_MS=1000

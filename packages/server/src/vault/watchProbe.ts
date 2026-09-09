@@ -10,7 +10,7 @@
  */
 
 import chokidar, { type FSWatcher } from 'chokidar'
-import { unlinkSync, writeFileSync } from 'node:fs'
+import { readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { VaultConfig } from './config'
 
@@ -19,8 +19,45 @@ export type WatchBackend = 'native' | 'polling'
 export interface WatchMode {
   /** 实际生效：true = 轮询，false = 原生事件 */
   usePolling: boolean
-  /** true = 由探测得出（env 未显式指定） */
+  /** true = 由文件系统判定 / 探测得出（env 未显式指定） */
   auto: boolean
+  /** 结论来源，便于日志排障 */
+  reason: 'env' | 'watch-off' | 'filesystem' | 'probe' | 'pending'
+}
+
+/**
+ * 虚拟 / 网络文件系统：容器里的 bind mount（Docker Desktop、OrbStack 的 virtiofs、9p）
+ * 与 NAS 挂载（nfs / cifs / smb）都不保证投递**宿主侧**改动。
+ *
+ * 实测（OrbStack + virtiofs）：容器内写文件会触发事件，但宿主机新建的文件迟迟不进索引。
+ * 单文件探测只写自己这一侧，测不出这个方向，所以先看文件系统类型再决定要不要探测。
+ */
+const UNRELIABLE_FS = /^(fuse|virtiofs|9p|nfs|cifs|smb|sshfs|davfs|afs|glusterfs|ceph)/i
+
+export function isUnreliableFilesystem(fsType: string | null | undefined): boolean {
+  return typeof fsType === 'string' && UNRELIABLE_FS.test(fsType)
+}
+
+/** 读 `/proc/self/mounts`，取包含该路径的最长挂载点的文件系统类型（仅 Linux；其他平台 null） */
+export function detectFilesystemType(path: string): string | null {
+  if (process.platform !== 'linux') return null
+  try {
+    const mounts = readFileSync('/proc/self/mounts', 'utf8').split('\n')
+    let best: { mountPoint: string; fsType: string } | null = null
+    for (const line of mounts) {
+      const parts = line.split(' ')
+      const mountPoint = parts[1]
+      const fsType = parts[2]
+      if (!mountPoint || !fsType) continue
+      const mp = mountPoint.replace(/\\040/g, ' ')
+      const inMount = path === mp || path.startsWith(mp.endsWith('/') ? mp : `${mp}/`)
+      if (!inMount) continue
+      if (!best || mp.length > best.mountPoint.length) best = { mountPoint: mp, fsType }
+    }
+    return best?.fsType ?? null
+  } catch {
+    return null
+  }
 }
 
 /** 探测文件前缀：隐藏文件，且带独立前缀便于排障时识别 */
@@ -112,9 +149,21 @@ export async function probeNativeWatch(root: string, timeoutMs = 1500): Promise<
 export async function resolveWatchMode(
   config: Pick<VaultConfig, 'root' | 'watch' | 'usePolling' | 'pollingSource'>,
   probe: (root: string, timeoutMs?: number) => Promise<WatchBackend> = probeNativeWatch,
+  fsTypeOf: (root: string) => string | null = detectFilesystemType,
 ): Promise<WatchMode> {
-  if (!config.watch) return { usePolling: config.usePolling, auto: false }
-  if (config.pollingSource === 'env') return { usePolling: config.usePolling, auto: false }
+  if (!config.watch) return { usePolling: config.usePolling, auto: false, reason: 'watch-off' }
+  if (config.pollingSource === 'env') {
+    return { usePolling: config.usePolling, auto: false, reason: 'env' }
+  }
+  // bind mount / 网络盘：宿主侧改动不一定投递，直接轮询（不必花 1.5s 探测）
+  const fsType = fsTypeOf(config.root)
+  if (isUnreliableFilesystem(fsType)) {
+    console.warn(
+      `[notefast] vault 位于 ${fsType} 文件系统（bind mount / 网络盘），` +
+        '原生事件不保证投递宿主侧改动，使用轮询',
+    )
+    return { usePolling: true, auto: true, reason: 'filesystem' }
+  }
   const backend = await probe(config.root)
-  return { usePolling: backend === 'polling', auto: true }
+  return { usePolling: backend === 'polling', auto: true, reason: 'probe' }
 }

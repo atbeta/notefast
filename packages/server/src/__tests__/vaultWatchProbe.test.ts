@@ -9,7 +9,13 @@ import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { probeNativeWatch, resolveWatchMode, WATCH_PROBE_PREFIX } from '../vault/watchProbe'
+import {
+  detectFilesystemType,
+  isUnreliableFilesystem,
+  probeNativeWatch,
+  resolveWatchMode,
+  WATCH_PROBE_PREFIX,
+} from '../vault/watchProbe'
 import { loadVaultConfigFromEnv } from '../vault/config'
 
 /** 探测要在真实目录上跑：优先 $HOME（macOS 的 /tmp 经符号链接，FSEvents 不投递） */
@@ -46,7 +52,7 @@ describe('resolveWatchMode', () => {
       },
     )
     expect(called).toBe(false)
-    expect(mode).toEqual({ usePolling: false, auto: false })
+    expect(mode).toMatchObject({ usePolling: false, auto: false })
   })
 
   test('env 显式指定：不探测，尊重用户选择（false 也保留）', async () => {
@@ -59,17 +65,62 @@ describe('resolveWatchMode', () => {
       },
     )
     expect(called).toBe(false)
-    expect(mode).toEqual({ usePolling: false, auto: false })
+    expect(mode).toMatchObject({ usePolling: false, auto: false })
   })
 
   test('自动：原生事件可用 → 不轮询', async () => {
     const mode = await resolveWatchMode(base, async () => 'native')
-    expect(mode).toEqual({ usePolling: false, auto: true })
+    expect(mode).toMatchObject({ usePolling: false, auto: true })
   })
 
   test('自动：原生事件不可用 → 退回轮询', async () => {
     const mode = await resolveWatchMode(base, async () => 'polling')
-    expect(mode).toEqual({ usePolling: true, auto: true })
+    expect(mode).toMatchObject({ usePolling: true, auto: true, reason: 'probe' })
+  })
+
+  test('bind mount / 网络盘：直接轮询，不做探测', async () => {
+    let probed = false
+    const mode = await resolveWatchMode(
+      base,
+      async () => {
+        probed = true
+        return 'native'
+      },
+      () => 'virtiofs',
+    )
+    expect(probed).toBe(false)
+    expect(mode).toEqual({ usePolling: true, auto: true, reason: 'filesystem' })
+  })
+
+  test('本地文件系统：仍然按探测结果决定', async () => {
+    const mode = await resolveWatchMode(base, async () => 'native', () => 'ext4')
+    expect(mode).toEqual({ usePolling: false, auto: true, reason: 'probe' })
+  })
+
+  test('env 显式指定：优先级高于文件系统判定', async () => {
+    const mode = await resolveWatchMode(
+      { ...base, pollingSource: 'env', usePolling: false },
+      async () => 'polling',
+      () => 'virtiofs',
+    )
+    expect(mode).toEqual({ usePolling: false, auto: false, reason: 'env' })
+  })
+})
+
+describe('文件系统判定', () => {
+  test('虚拟 / 网络文件系统一律视为不可靠', () => {
+    for (const t of ['fuse', 'fuse.grpcfuse', 'virtiofs', '9p', 'nfs4', 'cifs', 'smb3', 'sshfs']) {
+      expect(isUnreliableFilesystem(t)).toBe(true)
+    }
+    for (const t of ['ext4', 'xfs', 'btrfs', 'apfs', 'overlay', null, undefined]) {
+      expect(isUnreliableFilesystem(t)).toBe(false)
+    }
+  })
+
+  test('detectFilesystemType：非 Linux 返回 null，Linux 至少不抛', () => {
+    const t = detectFilesystemType(dir)
+    if (process.platform !== 'linux') expect(t).toBeNull()
+    else expect(typeof t === 'string' || t === null).toBe(true)
   })
 })
 
