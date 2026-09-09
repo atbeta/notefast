@@ -26,7 +26,7 @@ import {
   softDeleteBlocks,
   updateBlock,
 } from '../store/blocks'
-import { deleteRefsTouchingBlocks } from '../store/refs'
+import { deleteRefsTouchingBlocks, listBacklinks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
 import { deleteSharesByDocIds } from '../store/shares'
 import {
@@ -39,6 +39,7 @@ import {
   deleteVaultFileRow,
 } from '../store/vaultFiles'
 import { deleteVaultBlockSpans } from '../store/vaultSpans'
+import { deleteUnresolvedForBlocks, insertUnresolvedLinks } from '../store/vaultLinks'
 import { insertDocFromMarkdown } from '../services/docImport'
 import { syncMarkdownChildren } from '../services/markdownChildSync'
 import { parseMarkdownToBlocksForSave } from '../services/markdownParse'
@@ -58,6 +59,7 @@ import { applyAiExcludeChange, writeDocAiExclude } from '../ai/aiExclude'
 import { readVaultFile } from './writer'
 import { desiredStatusFromFile, vaultMetaHash } from './meta'
 import { recordVaultSpans } from './spans'
+import { resolveUnresolvedForDoc, syncVaultWikilinks, wikilinkNamesForPath } from './wikilinks'
 import { isIgnoredRelPath, isMarkdownPath, titleFromRelPath, toVaultAbsPath, toVaultRelPath } from './paths'
 import type { VaultConfig } from './config'
 import type { SerialLock } from './lock'
@@ -243,6 +245,9 @@ export async function ingestVaultFile(ctx: VaultContext, pathInput: string): Pro
     scheduleDocIndex(created.docId, created.blockIds)
     // 记录顶层块区间，供后续按块局部写回（解析结果与入库块对不上时自动清空 → 退回整篇）
     recordVaultSpans(db, created.docId, { body: stripped.body })
+    // 新文件可能正是别人 `[[引用的名字]]`：先建自己的引用，再补建指向自己的未解析引用
+    syncVaultWikilinks(ctx, { touchedBlockIds: created.blockIds })
+    resolveUnresolvedForDoc(ctx, created.docId)
     auditVault('doc.vault_ingested', created.docId, { rel_path: relPath, block_count: created.blockIds.length })
     return { relPath, docId: created.docId, action: 'created', kept: 0, inserted: created.blockIds.length, updated: 0, deleted: 0 }
   }
@@ -302,6 +307,9 @@ export async function ingestVaultFile(ctx: VaultContext, pathInput: string): Pro
   scheduleDocIndex(docId, reindexIds)
   // 顶层块区间随本次 ingest 整表重写（写回的字节保真基线）
   recordVaultSpans(db, docId, { body: stripped.body })
+  // wikilink：改动块重建引用，删除块清理；再看有没有指向本文件的未解析引用可以补上
+  syncVaultWikilinks(ctx, { touchedBlockIds: [...insertedIds, ...updatedIds], deletedBlockIds: deletedIds })
+  resolveUnresolvedForDoc(ctx, docId)
   fireAfterCreateMany(getBlocksByIds(db, insertedIds).map(rowToBlock))
   for (const row of getBlocksByIds(db, updatedIds)) fireAfterUpdate(rowToBlock(row))
   fireAfterUpdate(rowToBlock(docAfter))
@@ -342,6 +350,22 @@ export function removeVaultFile(ctx: VaultContext, pathInput: string): IngestRes
   }
 
   const allIds = [doc.id, ...fetchSubtreeBlocks(db, doc.id).map((r) => r.id)]
+  // 删 ref 会让反链消失：先把「谁引用过这个文件名」记进 unresolved，
+  // 文件同路径重现（回收站恢复）时 resolveUnresolvedForDoc 会把引用补回来
+  const incoming = listBacklinks(db, doc.id)
+  if (incoming.length > 0) {
+    const names = wikilinkNamesForPath(relPath)
+    const canonical = names[1] ?? names[0]!
+    insertUnresolvedLinks(
+      db,
+      notebookId,
+      [...new Set(incoming.map((r) => r.source_id))].map((sourceId) => ({
+        source_block_id: sourceId,
+        target_name: canonical,
+        anchor: '',
+      })),
+    )
+  }
   db.transaction(() => {
     deleteRefsTouchingBlocks(db, allIds)
     deleteMentionsTouchingBlocks(db, allIds)
@@ -351,6 +375,7 @@ export function removeVaultFile(ctx: VaultContext, pathInput: string): IngestRes
   })()
   void deleteVectorMany(allIds)
   deleteVaultBlockSpans(db, doc.id)
+  deleteUnresolvedForBlocks(db, allIds)
   fireAfterDeleteMany(allIds)
   fireDocAfterDelete({ doc: rowToBlock(doc) })
   auditVault('doc.deleted', doc.id, { block_count: allIds.length, rel_path: relPath })
@@ -392,6 +417,8 @@ export function moveVaultFilePath(ctx: VaultContext, fromInput: string, toInput:
     meta_hash: row.meta_hash,
   })
   if (doc.content !== title) fireAfterUpdate(rowToBlock(after))
+  // 改名后别人 `[[新名字]]` 的未解析引用可能可以补上了
+  resolveUnresolvedForDoc(ctx, doc.id)
   auditVault('doc.vault_moved', doc.id, { from, to })
   return { relPath: to, docId: doc.id, action: 'moved', ...zeroStats() }
 }

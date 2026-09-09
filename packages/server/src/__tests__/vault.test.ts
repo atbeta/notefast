@@ -34,7 +34,7 @@ import { DEFAULT_VAULT_IGNORE, loadVaultConfigFromEnv } from '../vault/config'
 import { isIgnoredRelPath, normalizeRelPath, titleFromRelPath, toVaultRelPath, VaultPathError } from '../vault/paths'
 import { sha256Hex, VaultConflictError, writeVaultFileAtomic } from '../vault/writer'
 import { createSerialLock } from '../vault/lock'
-import { ingestVaultFile, reconcileVault, removeVaultFile, type VaultContext } from '../vault/ingest'
+import { ingestVaultFile, reconcileVault, removeVaultFile, moveVaultFilePath, type VaultContext } from '../vault/ingest'
 import { createVaultQueue, startVaultWatcher } from '../vault/watcher'
 import { serializeVaultDoc, startVaultWriteback } from '../vault/writeback'
 import { createVaultRouter, createVaultRuntime } from '../vault'
@@ -101,6 +101,8 @@ afterAll(() => {
 beforeEach(() => {
   const db = getDb()
   db.query('DELETE FROM vault_files').run()
+  db.query('DELETE FROM vault_block_spans').run()
+  db.query('DELETE FROM vault_unresolved_links').run()
   db.query('DELETE FROM block_refs').run()
   db.query('DELETE FROM blocks').run()
   db.exec("INSERT INTO blocks_fts(blocks_fts) VALUES('rebuild')")
@@ -1085,6 +1087,116 @@ describe('vault doc API', () => {
     } finally {
       wb.stop()
     }
+  })
+})
+
+// ───────────────────── wikilink → block_refs（V-301） ─────────────────────
+
+describe('vault wikilinks', () => {
+  const unresolvedCount = (): number =>
+    (getDb().query('SELECT count(*) AS c FROM vault_unresolved_links').get() as { c: number }).c
+  const refBetween = (sourceId: string, targetId: string): boolean => Boolean(findRefByPair(getDb(), sourceId, targetId))
+
+  test('目标不存在 → 不建 ref、记 unresolved；目标出现后补建并清空 unresolved', async () => {
+    writeVault('a.md', '见 [[B]] 与 [[missing note]]\n')
+    const a = await ingestVaultFile(ctx, 'a.md')
+    const block = childIds(a.docId!)[0]!
+    expect(refBetween(block, a.docId!)).toBe(false)
+    expect(unresolvedCount()).toBe(2)
+
+    writeVault('b.md', '被引用\n')
+    const b = await ingestVaultFile(ctx, 'b.md')
+    expect(refBetween(block, b.docId!)).toBe(true)
+    // 只剩 missing note 未解析
+    expect(unresolvedCount()).toBe(1)
+  })
+
+  test('别名与路径写法：[[folder/B|别名]] 命中 rel_path', async () => {
+    writeVault('notes/b.md', '目标\n')
+    const b = await ingestVaultFile(ctx, 'notes/b.md')
+    writeVault('src.md', '参见 [[notes/b|小 b]]\n')
+    const src = await ingestVaultFile(ctx, 'src.md')
+    const block = childIds(src.docId!)[0]!
+    expect(refBetween(block, b.docId!)).toBe(true)
+    expect(unresolvedCount()).toBe(0)
+  })
+
+  test('最短唯一路径：裸文件名命中唯一 basename；重名（多义）记 unresolved', async () => {
+    writeVault('x/dup.md', '一\n')
+    writeVault('y/dup.md', '二\n')
+    const x = await ingestVaultFile(ctx, 'x/dup.md')
+    await ingestVaultFile(ctx, 'y/dup.md')
+
+    // 多义：两个 dup.md → 不建 ref
+    writeVault('amb.md', '[[dup]]\n')
+    const amb = await ingestVaultFile(ctx, 'amb.md')
+    expect(refBetween(childIds(amb.docId!)[0]!, x.docId!)).toBe(false)
+    expect(unresolvedCount()).toBe(1)
+
+    // 带路径则精确命中
+    writeVault('exact.md', '[[x/dup]]\n')
+    const exact = await ingestVaultFile(ctx, 'exact.md')
+    expect(refBetween(childIds(exact.docId!)[0]!, x.docId!)).toBe(true)
+  })
+
+  test('行内代码与代码块里的 [[...]] 不建引用', async () => {
+    writeVault('t.md', '目标\n')
+    await ingestVaultFile(ctx, 't.md')
+    writeVault('code.md', '行内 `[[t]]` 不是链接\n\n```\n[[t]]\n```\n')
+    const code = await ingestVaultFile(ctx, 'code.md')
+    const ids = childIds(code.docId!)
+    expect(refBetween(ids[0]!, getVaultFileByPath(getDb(), notebookId, 't.md')!.doc_id)).toBe(false)
+    expect(unresolvedCount()).toBe(0)
+  })
+
+  test('改名 / 移动文件后引用保持（目标文档 id 不变）', async () => {
+    writeVault('old.md', '内容\n')
+    const old = await ingestVaultFile(ctx, 'old.md')
+    writeVault('src2.md', '[[old]]\n')
+    const src = await ingestVaultFile(ctx, 'src2.md')
+    const block = childIds(src.docId!)[0]!
+    expect(refBetween(block, old.docId!)).toBe(true)
+
+    // watcher 的 unlink+add 配对路径：纯移动，文档 id 不变 → 引用保持
+    renameSync(join(vaultDir, 'old.md'), join(vaultDir, 'renamed.md'))
+    const moved = moveVaultFilePath(ctx, 'old.md', 'renamed.md')
+    expect(moved.action).toBe('moved')
+    expect(moved.docId).toBe(old.docId!)
+    expect(refBetween(block, old.docId!)).toBe(true)
+  })
+
+  test('回收站里同路径重现 → 引用自动补回', async () => {
+    writeVault('back.md', '目标\n')
+    const back = await ingestVaultFile(ctx, 'back.md')
+    writeVault('src4.md', '[[back]]\n')
+    const src = await ingestVaultFile(ctx, 'src4.md')
+    const block = childIds(src.docId!)[0]!
+
+    unlinkSync(join(vaultDir, 'back.md'))
+    removeVaultFile(ctx, 'back.md')
+    expect(refBetween(block, back.docId!)).toBe(false)
+    expect(unresolvedCount()).toBe(1)
+
+    // 同路径重现：文档 id 复用，引用按 unresolved 记录补回
+    writeVault('back.md', '目标\n')
+    const restored = await ingestVaultFile(ctx, 'back.md')
+    expect(restored.action).toBe('restored')
+    expect(restored.docId).toBe(back.docId!)
+    expect(refBetween(block, back.docId!)).toBe(true)
+    expect(unresolvedCount()).toBe(0)
+  })
+
+  test('删除被引用文件 → 指向它的引用随之清理', async () => {
+    writeVault('gone.md', '目标\n')
+    const gone = await ingestVaultFile(ctx, 'gone.md')
+    writeVault('src3.md', '[[gone]]\n')
+    const src = await ingestVaultFile(ctx, 'src3.md')
+    const block = childIds(src.docId!)[0]!
+    expect(refBetween(block, gone.docId!)).toBe(true)
+
+    unlinkSync(join(vaultDir, 'gone.md'))
+    removeVaultFile(ctx, 'gone.md')
+    expect(refBetween(block, gone.docId!)).toBe(false)
   })
 })
 
