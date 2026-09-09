@@ -47,7 +47,10 @@ export interface VaultFileSyncStatus {
   foreign_sync_hints: string[]
   /** 下一次定时同步时间（ISO）；未启用定时同步为 null */
   next_run_at: string | null
+  /** 同步服务已启动（vault runtime 起来后恒为 true） */
   running: boolean
+  /** 此刻是否有一次 push / pull 正在跑（UI 据此禁用按钮） */
+  in_flight: boolean
 }
 
 /**
@@ -287,6 +290,7 @@ export function createVaultFileSync(ctx: VaultContext): VaultFileSync {
         foreign_sync_hints: detectForeignSyncHints(ctx.config.root),
         next_run_at: nextRunAt,
         running,
+        in_flight: inFlight !== null,
       }
     },
   }

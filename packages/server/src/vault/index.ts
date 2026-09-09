@@ -312,6 +312,13 @@ export function createVaultRouter(getRuntime: () => VaultRuntime | null): Hono {
     return c.json(rt.sync.status())
   })
 
+  /** 当前同步配置（表单回填用；不含凭据） */
+  router.get('/sync/config', (c) => {
+    const rt = getRuntime()
+    if (!rt) return c.json({ error: 'vault_disabled', message: '未启用 vault mode' }, 404)
+    return c.json(getVaultFileSyncConfig())
+  })
+
   router.put('/sync/config', zValidator('json', vaultFileSyncConfigSchema), (c) => {
     const rt = getRuntime()
     if (!rt) return c.json({ error: 'vault_disabled', message: '未启用 vault mode' }, 404)

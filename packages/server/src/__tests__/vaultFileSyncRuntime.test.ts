@@ -162,8 +162,21 @@ describe('vault 文件同步运行时', () => {
       expect(put.status).toBe(200)
       expect(((await put.json()) as { configured: boolean }).configured).toBe(true)
 
+      // 配置读接口（表单回填用，不含凭据）
+      const cfg = (await (await app.request('/api/v1/vault/sync/config')).json()) as {
+        enabled: boolean
+        localDir: string
+        prefix: string
+      }
+      expect(cfg.enabled).toBe(true)
+      expect(cfg.localDir).toBe(storeDir)
+      expect(cfg.prefix).toBe(PREFIX)
+
       expect((await app.request('/api/v1/vault/sync/push', { method: 'POST' })).status).toBe(200)
       expect((await app.request('/api/v1/vault/sync/pull', { method: 'POST' })).status).toBe(200)
+      // 空闲时 in_flight=false
+      const st = (await (await app.request('/api/v1/vault/sync/status')).json()) as { in_flight: boolean }
+      expect(st.in_flight).toBe(false)
 
       // 目标不可用 → 400 且状态里带原因
       const bad = await app.request('/api/v1/vault/sync/config', {
