@@ -340,7 +340,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | 任务 | 内容 | 状态 |
 |---|---|---|
 | U-1 | 可见性：只读模式端点（模式 / vault 根 / 索引目录 / 实际 watcher 模式）+ 设置页常显「数据来源」，db 模式不再整项隐藏 | 完成（`5450b61`） |
-| U-2 | watcher 自动探测：启动时探测原生事件，失败降级轮询；实际模式进 `/vault/status`；`VAULT_USE_POLLING` 保留强制覆盖 | 完成 |
+| U-2 | watcher 自动探测：启动时探测原生事件，失败降级轮询；实际模式进 `/vault/status`；`VAULT_USE_POLLING` 保留强制覆盖 | 完成（`815f6da`） |
 | U-3 | 索引位置统一：vault 模式一律派生 `<父目录>/<sha256 前12位>`；Docker 用 `NOTEFAST_APP_SUPPORT_DIR=/app/data`；检测到旧 `/app/data/index.sqlite` 时沿用并告警 | 待开始 |
 | U-4 | 部署默认对齐：`docker-compose.yml` / example 默认启用 vault（db 变体留注释）+ README / `docs/vault-migration.md` 同步 | 待开始 |
 | U-5 | 修订历史：vault 也记 `doc_snapshots`（存 `DATA_DIR`、键用 `rel_path`、内容 sha256 去重、每篇 50 条），**恢复走写回** | 待开始 |
@@ -348,6 +348,8 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | U-7 | 对账性能：修 `syncVaultWikilinks` 的 O(n²)，目标 10k 文件 < 60s，并给 50k 不崩的证据 | 待开始 |
 
 U-1 … U-4 是部署一致性；U-5 … U-7 是统一的前置 parity（U-7 可与其余并行）。
+
+**U-2 验证记录**：单测 8 例（`vaultWatchProbe.test.ts`：显式 env 优先、探测降级、超时判定、不留探测文件、配置 `pollingSource` 三态）；实测探测延迟在 `/tmp`（符号链接 → `/private/tmp`）与工作区真实路径上都是 11–14ms，探测文件为隐藏文件（`paths.isIgnoredRelPath` 忽略），不会被 ingest。**未验证**：真 Docker Desktop bind mount（本机只有 OrbStack，且 0.90.0 镜像不含本次改动），该路径的结论依赖「无事件 → 超时 → 轮询」这条单测覆盖的逻辑。
 
 ---
 
