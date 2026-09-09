@@ -293,7 +293,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **依赖**：以上全部
 - **状态**：**待人工执行**（准备度已核验，见下）
   - 代码侧门禁已满足：M2 / M3 / M4 / M5 其余任务全部落地；`bun lint` 3/3 · `bun run typecheck` 3/3 · `bun test` **1609 pass / 0 fail**（根目录全量）；`swift test` 29/0、`cargo test` 10/0 亦通过
-  - V-501 达标：1000 文件 8.6s（<30s）、10k 269.1s（<5min）、变更→可搜 323–376ms（<500ms）
+  - V-501 达标：1000 文件 8.6–9.4s（<30s）、10k 258.6–279.8s（<5min，最差余量 6.7%）、变更→可搜 317–376ms（<500ms）
   - `next` 是 `origin/main` 的后代（`git merge-base --is-ancestor origin/main next` 通过）→ 可直接 `--ff-only` 合回，无需 rebase
   - release-please 配置就位：`.github/release-please-config.json` 已含 `"bump-minor-pre-major": true`，版本文件覆盖根 / 三个包 / Tauri 两处；manifest 当前 `0.86.1`
   - **人工步骤**（需要有写权限的账号 + `RELEASE_PLEASE_TOKEN`）：
@@ -303,6 +303,9 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
     git push origin main          # 触发 release-please 开 release PR
     # 合并 release PR → 打 tag → 触发 macos-release / windows-release / docker-publish
     ```
+  - **升级兼容性（实测）**：迁移 023–026 全是加法（`ADD COLUMN` + `CREATE TABLE`，无改列 / 无数据重写）。把 next 建的库降级成 0.86.1 形态（删新表 / 新列 / 4 条迁移记录）后再用 next 启动：4 条迁移重新应用成功，文档、标签、搜索完好，`notebooks.kind` 默认 `'db'`、`GET /docs/:id` 不多 `vault_path`。不设 `VAULT_PATH` 的旧用户升级后行为不变（vault runtime 仅在 `vaultConfig` 非空时创建）。回退旧版本也安全：framework 只删 squash 进 001 的旧 id，不认识的新迁移记录会保留。
+  - **旧数据的三处形态变化**（仅下次保存时发生，Markdown round-trip 不变）：段尾 ` ^id` 挪进 `properties.obsidian_block_id`；含列表 / 代码 / 嵌套引用的 callout 整段存原文（旧版本这些子节点本就丢了，救不回，新版本保证以后不再丢）；只有用户自定义字段的 frontmatter 现在会被正确剥离（此前整段 YAML 当正文入库）。
+  - **Web 兼容性**：新 web + 旧 engine → `/vault/status` 404 → 设置页 vault 入口整体隐藏（`useApiQuery` 保持 data=null，不报错墙）；`vault_path` 缺失 → 文档头不显示来源行。旧 web + 新 engine → 旧 web 不调用 vault 端点，`/docs/:id` 新字段被忽略。新增请求只发生在设置页（文档 / 阅读页无额外请求）；PWA 无 Service Worker，不存在旧壳缓存问题。
   - 发布前人工复核：V-403 两壳 GUI 各走一遍（见其状态）；10k 对账余量仅 10%（热点见「待议」，如需扩到 20k+ 先优化）
 
 ---
