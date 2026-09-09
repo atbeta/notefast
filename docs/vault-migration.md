@@ -101,6 +101,21 @@ VAULT_PATH=~/Notes DATA_DIR=./data-vault PORT=3141 bun --filter @notefast/server
 - 在 NoteFast 里改一段，文件被就地改写、frontmatter 与未动块逐字节保留（实测通过）；
 - `git init ~/Notes && git add -A && git commit`，之后 NoteFast 的写回都能 `git diff` 看见。
 
+### 7. 多端同步（可选）
+
+迁移完成后，同一份 vault 在第二台设备上不需要再导出一次：两台设备都指向**同一个存储连接**即可
+（设置 → Vault → 文件同步；S3 / WebDAV / 本地目录）。它同步的是文件本身，索引在每台设备各自重建。
+
+```bash
+curl -X PUT http://localhost:3140/api/v1/vault/sync/config \
+  -H "Authorization: Bearer $API_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"enabled":true,"locationId":"my-s3","prefix":"notefast-vault/","intervalSeconds":60}'
+```
+
+注意：**不要再叠加 iCloud / Dropbox / Syncthing**（双重同步会让文件互相删，面板会给出提示）；
+冲突不会静默合并，旧版本会留成 `<name>.notefast-conflict-<device>-<时间>.md`。
+设计与实测见 [RFC 0004](rfcs/0004-vault-file-sync.md)。
+
 ## 回退
 
 新实例只是一份派生索引：停掉它、删掉 `data-vault/` 即回到原状；`~/Notes` 里的文件是你的，
