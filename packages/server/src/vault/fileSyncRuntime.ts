@@ -5,6 +5,7 @@
  * 引擎在 `fileSync.ts`（纯文件层），这里只管「什么时候跑、用什么 store、状态给谁看」。
  */
 
+import { readdirSync } from 'node:fs'
 import type { VaultFileSyncConfig, VaultFileSyncConfigInput } from '@notefast/core'
 import { getDeviceId } from '../sync/protocolManager'
 import { getStorageLocation } from '../storage/locations'
@@ -42,9 +43,35 @@ export interface VaultFileSyncStatus {
   last_pull: VaultPullResult | null
   /** 同步基线里的文件数（= 上次同步过多少文件） */
   tracked_files: number
+  /** 检测到的第三方同步痕迹（双重同步会让文件互相删，RFC 0004 §已知坑） */
+  foreign_sync_hints: string[]
   /** 下一次定时同步时间（ISO）；未启用定时同步为 null */
   next_run_at: string | null
   running: boolean
+}
+
+/**
+ * 扫描 vault 根目录，找第三方同步工具的痕迹。
+ * 双重同步（iCloud / Dropbox / Syncthing 与本同步同时开）会互相删文件，
+ * Obsidian 官方也把 double-syncing 列为已知故障；这里只提示，不自动禁用。
+ */
+export function detectForeignSyncHints(root: string): string[] {
+  const hints = new Set<string>()
+  let entries: string[] = []
+  try {
+    entries = readdirSync(root)
+  } catch {
+    return []
+  }
+  for (const name of entries) {
+    const lower = name.toLowerCase()
+    if (lower === '.icloud' || lower.endsWith('.icloud')) hints.add('iCloud')
+    else if (lower.startsWith('.dropbox')) hints.add('Dropbox')
+    else if (lower === '.stfolder' || lower === '.stversions' || lower === '.stignore') hints.add('Syncthing')
+    else if (lower === '.sync' || lower === '.sync-conflict' || lower.includes('sync-conflict')) hints.add('sync-conflict')
+    else if (lower === '.dropbox.attr') hints.add('Dropbox')
+  }
+  return [...hints]
 }
 
 export interface VaultFileSync {
@@ -257,6 +284,7 @@ export function createVaultFileSync(ctx: VaultContext): VaultFileSync {
         last_push: lastPush,
         last_pull: lastPull,
         tracked_files: listVaultSyncState(ctx.db).length,
+        foreign_sync_hints: detectForeignSyncHints(ctx.config.root),
         next_run_at: nextRunAt,
         running,
       }

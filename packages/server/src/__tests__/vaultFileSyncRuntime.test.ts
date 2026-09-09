@@ -16,6 +16,7 @@ import { initProtocolManager, setProtocolSyncSuppressed, syncNow } from '../sync
 import { createLocalFsObjectStore } from '../storage/webdavStore'
 import { DEFAULT_VAULT_IGNORE, type VaultConfig } from '../vault/config'
 import { createVaultRouter, createVaultRuntime, type VaultRuntime } from '../vault'
+import { detectForeignSyncHints } from '../vault/fileSyncRuntime'
 import { disableVaultFileSyncConfig, initVaultFileSyncConfig } from '../vault/fileSyncConfig'
 import { ensureVaultSyncMeta, pushVaultFiles, type FileSyncDeps } from '../vault/fileSync'
 import * as m027 from '../migrations/027_vault_sync_state'
@@ -174,6 +175,20 @@ describe('vault 文件同步运行时', () => {
     } finally {
       await runtime.stop()
       getDb().query(`UPDATE notebooks SET kind = 'db', vault_root = NULL WHERE id = ?`).run(notebookId)
+    }
+  })
+
+  test('第三方同步痕迹检测：iCloud / Dropbox / Syncthing / sync-conflict', () => {
+    const dir = mkdtempSync(join('/tmp', 'nf-foreign-'))
+    try {
+      mkdirSync(join(dir, '.icloud'), { recursive: true })
+      writeFileSync(join(dir, '.dropbox'), '')
+      mkdirSync(join(dir, '.stfolder'), { recursive: true })
+      writeFileSync(join(dir, 'note.sync-conflict-20260910-120000-ABCDEFG.md'), 'x')
+      expect(detectForeignSyncHints(dir).sort()).toEqual(['Dropbox', 'Syncthing', 'iCloud', 'sync-conflict'])
+      expect(detectForeignSyncHints(mkdtempSync(join('/tmp', 'nf-clean-')))).toEqual([])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
     }
   })
 
