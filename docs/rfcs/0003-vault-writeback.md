@@ -48,9 +48,9 @@ disk_sha === next_sha             → 内容已一致 → 不写
 否则                              → 外部工具在我们之后改过 → VaultConflictError
 ```
 
-冲突时**不覆盖**，记审计事件 `doc.vault_writeback_conflict`（含 expected / actual sha），启动日志告警。此时磁盘版本会（或已经）被 watcher ingest，SQLite 端那次编辑就此丢失——这是「文件是权威」的直接推论，不做三方合并。
+冲突时**不覆盖**用户文件，把 NoteFast 版本另存为同目录 `<stem>.notefast-conflict-<yyyyMMdd-HHmmss>.md`（tmp+rename），记审计 `doc.vault_writeback_conflict`（含 expected / actual sha 与 `conflict_path`）。副本会被 watcher 当新文档 ingest —— 这是预期：用户看得见、可自行合并，NoteFast 端那次编辑不再无声丢失。磁盘版本同样会被 watcher ingest，仍然是「文件是权威」，不做三方合并。
 
-后续（未落地）：冲突时把 NoteFast 版本另存为 `<name>.notefast-conflict-<ts>.md` 交给用户处理（Syncthing / Obsidian Sync 的通行做法）。
+`/api/v1/vault/status.conflicts` 暴露最近 24h 冲突计数与最近 10 条副本路径（读 `app_logs`），前端在 V-402 呈现。
 
 ## 序列化
 
@@ -97,7 +97,7 @@ disk_sha === next_sha             → 内容已一致 → 不写
 | A | 回声抑制 + 乐观并发 + 整篇写回 + `.trash/` | 已落地，默认开启 |
 | B | frontmatter 透传：ingest 保留原始 frontmatter 文本（`vault_files.frontmatter_raw`），写回只增删改 `tags` / `notefast_ai_exclude` / `notefast_status` 三键；`meta_hash` 修正回声判定 | 已落地（`5369b8f` 等） |
 | C | 按块局部 patch：`vault_block_spans` 记录顶层块区间与子树指纹，未改动块复用磁盘字节，区间失效退回整篇 | 已落地 |
-| D | 冲突副本 `<name>.notefast-conflict-<ts>.md` | 待做（V-204） |
+| D | 冲突副本 `<name>.notefast-conflict-<ts>.md` | 已落地 |
 
 ## 开放问题
 

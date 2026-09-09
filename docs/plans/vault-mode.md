@@ -37,7 +37,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | 里程碑 | 目标 | 任务 | 状态 |
 |---|---|---|---|
 | M1 基础 | 文件 → 索引闭环 + 整篇写回 | — | 完成（`c4f9e2c` `b14d6c5`） |
-| M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **发布门禁**（V-201 ✅ V-202 ✅ V-203 ✅） |
+| M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **发布门禁**（V-201 ✅ V-202 ✅ V-203 ✅ V-204 ✅） |
 | M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | |
 | M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | |
 | M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | |
@@ -109,6 +109,10 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **要点**：`VaultConflictError` 时把序列化结果写到同目录 `<stem>.notefast-conflict-<yyyyMMdd-HHmmss>.md`（tmp+rename），审计 `doc.vault_writeback_conflict` 附 `conflict_path`；该文件会被 watcher 当新文档 ingest，这是预期（用户可见）；`/api/v1/vault/status` 增加 `conflicts`（最近 24h 计数 + 最近 10 条路径）
 - **验收**：测试——制造冲突 → 副本存在且内容为 NoteFast 版本 → 原文件未动 → status.conflicts 计数 1
 - **依赖**：V-203 · **估算**：0.5 人天
+- **状态**：完成（`7836a45`）
+  - 副本落同目录 `<stem>.notefast-conflict-<yyyyMMdd-HHmmss>.md`，同秒多次冲突追加 `-2`/`-3` 不覆盖；写失败只 warn，不影响冲突判定
+  - 两条冲突路径（读盘 sha 不符、写入瞬间的乐观并发）共用同一出口，审计附 `conflict_path`
+  - `status.conflicts` = 从 `app_logs` 读 `doc.vault_writeback_conflict`：24h 计数 + 最近 10 条 `conflict_path`
 
 ### V-205 编辑器整篇保存经写回验证
 
