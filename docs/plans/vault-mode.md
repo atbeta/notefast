@@ -38,7 +38,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 |---|---|---|---|
 | M1 基础 | 文件 → 索引闭环 + 整篇写回 | — | 完成（`c4f9e2c` `b14d6c5`） |
 | M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **完成**（V-201 ✅ V-202 ✅ V-203 ✅ V-204 ✅ V-205 ✅） |
-| M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | V-301 ✅ V-302 ✅ V-304 ✅ |
+| M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | **完成**（V-301 ✅ V-302 ✅ V-303 ✅ V-304 ✅） |
 | M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | V-401 ✅ |
 | M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | V-503 ✅ |
 
@@ -170,6 +170,12 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
   - 不做：图片上传到 vault、`asset:` ↔ 路径双向映射（db notebook 的 `asset:` 语义不变）
 - **验收**：测试——路由守卫（`../`、`.md`、未知扩展名 404/400）；ETag 命中 304；前端单测：相对路径解析
 - **依赖**：V-401（`vault_path` 字段） · **估算**：2 人天
+- **状态**：完成（`e30855f`）
+  - `GET /api/v1/vault/raw/*`：`toVaultRelPath` 守卫（越界 400）、扩展名白名单（png/jpg/jpeg/gif/webp/svg/pdf，其余含 `.md` 一律 404）、`Cache-Control: private, max-age=60` + `ETag=sha256`（命中 `If-None-Match` 回 304）
+  - 只有文件名的请求（`![[x.png]]`）回退到「全 vault 唯一 basename」；同名多份 404，不猜
+  - 前端：`VaultDocProvider` 把 `vault_path` 传给阅读态；`![图](assets/x.png)` 按**文档所在目录**解析（`../` 越界返回 null 保持原样），`![[x.png]]` 渲染为图片、`![[某篇笔记]]` 保留原文；db notebook 与分享页行为不变（`asset:` 语义不受影响）
+  - MCP：`notefast_get_doc` 保持相对路径原样输出（由消费方解析）
+  - 测试：`vault.test.ts` 4 例（守卫 / 直出与 304 / basename 回退与多义 / 未启用）；`web` 侧 `vault.test.ts` 纯函数 + `blockRendererPresentation.test.tsx` 渲染 4 例；`mcpVault.test.ts` 1 例
 
 ### V-304 解析器对 Obsidian 语法的无损识别
 
