@@ -76,6 +76,7 @@ import { initDocEvents } from './services/docEvents'
 import { initInstancePaths, initShadowMarkdown, stopShadowMarkdown } from './services/shadowMarkdown'
 import instanceRouter from './api/instance'
 import { startEntityDescribe } from './ai/entityDescribe'
+import { createVaultRouter, createVaultRuntime, loadVaultConfigFromEnv, type VaultRuntime } from './vault'
 
 export interface NoteFastServer {
   /** Hono app（未 serve 的纯处理器；可直接 app.fetch(req) 或自建 Bun.serve） */
@@ -112,6 +113,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   let notebookId = ''
   let serverRef: Server<undefined> | null = null
   let exportStarted = false
+  let vaultRuntime: VaultRuntime | null = null
 
   const app = new Hono()
 
@@ -265,6 +267,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   app.route('/api/v1/sync/protocol', syncProtocolRouter)
   app.route('/api/v1/client-errors', clientErrors)
   app.route('/api/v1/db', maintenance)
+  app.route('/api/v1/vault', createVaultRouter(() => vaultRuntime))
 
   // 分享页防 iframe 嵌入/点击劫持：中间件必须先于 app.route 注册
   // （Hono 按注册顺序执行，放路由后 = 死代码，响应拿不到安全头）
@@ -289,7 +292,9 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     const isNewDb = !existsSync(join(dataDir, 'notefast.db'))
     const { notebookId: nb } = initDb(dataDir)
     notebookId = nb
-    seedWelcomeDocIfNeeded(getDb(), notebookId, { isNewDb })
+    // vault mode（VAULT_PATH）：文件夹是权威，不种欢迎文档——库里的每篇文档都应对应一个文件
+    const vaultConfig = loadVaultConfigFromEnv()
+    if (!vaultConfig) seedWelcomeDocIfNeeded(getDb(), notebookId, { isNewDb })
     process.on('exit', () => { stopBackupManager(); closeDb() })
 
     initDocEvents(pluginSystem)
@@ -309,6 +314,17 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     initTermDict(dataDir)
     startEntityDescribe()
     startMaintenance()
+
+    // vault mode：hooks / 向量 / 事件总线都已就位后再挂 watcher；全量对账在后台跑，不挡 listen
+    if (vaultConfig) {
+      vaultRuntime = createVaultRuntime({ db: getDb(), notebookId, config: vaultConfig })
+      await vaultRuntime.start()
+      console.log(
+        `📂 vault mode: ${vaultConfig.root}` +
+          (vaultConfig.watch ? '' : '（未监听，需手动 rebuild）') +
+          (vaultConfig.writeback ? '，写回已开启' : '，只读索引（VAULT_WRITEBACK=true 开启写回）'),
+      )
+    }
 
     // MCP 工具注册表预填充：真实 SDK 注册在首次 MCP 会话时（createSession 懒加载），
     // 但设置页 /api/v1/mcp/tools 需要启动即有数据；重复注册幂等（reset + 重推）。
@@ -359,6 +375,10 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   const stop = async (): Promise<void> => {
     if (!started) return
     started = false
+    if (vaultRuntime) {
+      try { await vaultRuntime.stop() } catch { /* ignore */ }
+      vaultRuntime = null
+    }
     try { stopShadowMarkdown() } catch { /* ignore */ }
     if (exportStarted) { /* autoExport 无 stop API；进程退出时自然清理 */ }
     try { stopBackupManager() } catch { /* ignore */ }
