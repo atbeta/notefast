@@ -40,7 +40,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **完成**（V-201 ✅ V-202 ✅ V-203 ✅ V-204 ✅ V-205 ✅） |
 | M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | V-301 ✅ V-302 ✅ V-304 ✅ |
 | M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | V-401 ✅ |
-| M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | |
+| M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | V-503 ✅ |
 
 依赖关系：V-201 → V-202 → V-203 → V-204；V-203 依赖 V-304（解析器要能无损识别 Obsidian 语法，否则区间对不上）；V-301/302 可与 M2 并行；V-303 独立；M4 依赖 M2 完成；M5 最后。
 
@@ -252,6 +252,11 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **要点**：`VAULT_USE_POLLING` / `VAULT_POLL_INTERVAL_MS` 已落地（`vault/config.ts`，status 暴露 `use_polling`）；剩余：`docker-compose.yml` 注释示例 + `/vault` 挂载约定；`Dockerfile` 确认 chokidar 进镜像；文档说明 macOS Docker Desktop 必须 polling
 - **验收**：手工 compose 验证（改文件 → `GET /vault/status.files` 变化）
 - **依赖**：无 · **估算**：0.5 人天
+- **状态**：完成（`df638e1`）
+  - 三个 compose 文件加注释形式的 `/vault` bind mount 与 `VAULT_PATH` / `VAULT_USE_POLLING` / `VAULT_POLL_INTERVAL_MS`；README 新增「vault mode over Docker」一节
+  - `Dockerfile` 构建期断言 chokidar 已 inline 进单文件 bundle（runner 不带 node_modules），与既有 vec0.so 断言同一模式
+  - `.dockerignore` 加 `**/data`：本仓库 `packages/server/data` 有数 GB 本地数据，否则构建上下文爆掉（实测 `no space left on device`）
+  - **实测**（OrbStack Docker Engine 29.4.0，linux/arm64）：真 `docker build` 成功；compose 起服务后宿主机新建文件 2s 内 `status.files` 2→3、编辑文件触发 `action=updated`；对照 `VAULT_USE_POLLING=false` 时 16s 内不变 → 证明 macOS 宿主 bind mount 不投递 inotify，README 的「必须轮询」有实测支撑
 
 ### V-504 首个可用版本
 
