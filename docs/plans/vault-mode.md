@@ -40,7 +40,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **完成**（V-201 ✅ V-202 ✅ V-203 ✅ V-204 ✅ V-205 ✅） |
 | M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | **完成**（V-301 ✅ V-302 ✅ V-303 ✅ V-304 ✅） |
 | M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | **完成**（V-401 ✅ V-402 ✅ V-403 ✅ V-404 ✅） |
-| M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | V-501 ✅ V-502 ✅ V-503 ✅（V-504 待人工发布） |
+| M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | **完成**（V-501 ✅ V-502 ✅ V-503 ✅ V-504 ✅ v0.90.0 已发布） |
 
 依赖关系：V-201 → V-202 → V-203 → V-204；V-203 依赖 V-304（解析器要能无损识别 Obsidian 语法，否则区间对不上）；V-301/302 可与 M2 并行；V-303 独立；M4 依赖 M2 完成；M5 最后。
 
@@ -291,22 +291,25 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **目标**：`next` → `main` `--ff-only`，release-please 出版本
 - **要点**：门禁 = M2 全绿 + V-501 达标 + V-502 完成；CHANGELOG 由 conventional commits 生成；`bump-minor-pre-major` 下 `feat!` 只升 minor
 - **依赖**：以上全部
-- **状态**：**待人工执行**（准备度已核验，见下）
-  - 代码侧门禁已满足：M2 / M3 / M4 / M5 其余任务全部落地；`bun lint` 3/3 · `bun run typecheck` 3/3 · `bun test` **1609 pass / 0 fail**（根目录全量）；`swift test` 29/0、`cargo test` 10/0 亦通过
+- **状态**：**已发布 v0.90.0**（2026-09-09）
+  - 发布记录：`next` → `main` `--ff-only`（`c1c9558` → `c4d5e32`，59 commits）；空提交带 `Release-As: 0.90.0` footer 强制跳版（默认只会算出 0.87.0，跳掉 0.87–0.89）；release PR #138 落地后 tag `v0.90.0` 指向 `0308f95`，GitHub Release 同分钟发布，macos-release / windows-release / docker-publish 由 tag 触发
+  - `Cargo.lock` 里 `notefast-tauri` 的版本 release-please 不管（它只改 `Cargo.toml`），本次在 release PR 分支上补了 `chore(tauri): sync Cargo.lock version with Cargo.toml` 再合入（0.86.1 那次是发布后另补的 `1efee2f`）
+  - 代码侧门禁已满足：M2 / M3 / M4 / M5 其余任务全部落地；`bun lint` 3/3 · `bun run typecheck` 3/3 · `bun test` **1651 pass / 0 fail**（根目录全量）；`swift test` 29/0、`cargo test` 10/0 亦通过
   - V-501 达标：1000 文件 8.6–9.4s（<30s）、10k 258.6–279.8s（<5min，最差余量 6.7%）、变更→可搜 317–376ms（<500ms）
   - `next` 是 `origin/main` 的后代（`git merge-base --is-ancestor origin/main next` 通过）→ 可直接 `--ff-only` 合回，无需 rebase
   - release-please 配置就位：`.github/release-please-config.json` 已含 `"bump-minor-pre-major": true`，版本文件覆盖根 / 三个包 / Tauri 两处；manifest 当前 `0.86.1`
-  - **人工步骤**（需要有写权限的账号 + `RELEASE_PLEASE_TOKEN`）：
+  - **发布流程**（下次沿用，需要有写权限的账号 + `RELEASE_PLEASE_TOKEN`）：
     ```bash
     git checkout main && git pull --ff-only
     git merge --ff-only next
+    git commit --allow-empty -m "chore: release X.Y.Z" -m "Release-As: X.Y.Z"   # 仅跳版时加 footer
     git push origin main          # 触发 release-please 开 release PR
     # 合并 release PR → 打 tag → 触发 macos-release / windows-release / docker-publish
     ```
   - **升级兼容性（实测）**：迁移 023–026 全是加法（`ADD COLUMN` + `CREATE TABLE`，无改列 / 无数据重写）。把 next 建的库降级成 0.86.1 形态（删新表 / 新列 / 4 条迁移记录）后再用 next 启动：4 条迁移重新应用成功，文档、标签、搜索完好，`notebooks.kind` 默认 `'db'`、`GET /docs/:id` 不多 `vault_path`。不设 `VAULT_PATH` 的旧用户升级后行为不变（vault runtime 仅在 `vaultConfig` 非空时创建）。回退旧版本也安全：framework 只删 squash 进 001 的旧 id，不认识的新迁移记录会保留。
   - **旧数据的三处形态变化**（仅下次保存时发生，Markdown round-trip 不变）：段尾 ` ^id` 挪进 `properties.obsidian_block_id`；含列表 / 代码 / 嵌套引用的 callout 整段存原文（旧版本这些子节点本就丢了，救不回，新版本保证以后不再丢）；只有用户自定义字段的 frontmatter 现在会被正确剥离（此前整段 YAML 当正文入库）。
   - **Web 兼容性**：新 web + 旧 engine → `/vault/status` 404 → 设置页 vault 入口整体隐藏（`useApiQuery` 保持 data=null，不报错墙）；`vault_path` 缺失 → 文档头不显示来源行。旧 web + 新 engine → 旧 web 不调用 vault 端点，`/docs/:id` 新字段被忽略。新增请求只发生在设置页（文档 / 阅读页无额外请求）；PWA 无 Service Worker，不存在旧壳缓存问题。
-  - 发布前人工复核：V-403 两壳 GUI 各走一遍（见其状态）；10k 对账余量仅 10%（热点见「待议」，如需扩到 20k+ 先优化）
+  - 发布后仍待人工复核：V-403 两壳 GUI 各走一遍（见其状态）；10k 对账余量仅 6.7%（热点见「待议」，如需扩到 20k+ 先优化）
 
 ---
 
