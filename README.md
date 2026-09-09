@@ -146,6 +146,7 @@ Setting `VAULT_PATH` turns the notebook into `kind='vault'`: your Markdown folde
 | `VAULT_POLL_INTERVAL_MS` | Polling interval in ms (default 1000) |
 | `VAULT_WATCH` | `false` disables watching (`POST /api/v1/vault/rebuild` still works) |
 | `VAULT_WRITEBACK` | `false` keeps edits in the index only (no write-back to files) |
+| `VAULT_RECONCILE_MINUTES` | Light periodic reconcile interval in minutes (default 10, `0` disables) — catches edits missed by the watcher |
 
 **On macOS and Windows with Docker Desktop, polling is mandatory.** A bind mount shared from the host into the container does not deliver inotify events, so the watcher never sees your edits and the index silently goes stale until a manual rebuild. Set `VAULT_USE_POLLING=true` and confirm the effective mode:
 
@@ -154,6 +155,24 @@ curl -s http://localhost:3140/api/v1/vault/status | jq '{enabled, use_polling, w
 ```
 
 `use_polling: true` with `watcher_active: true` means the watcher is running in polling mode, and `files` changes shortly after you add or edit a Markdown file. Linux hosts with a native bind mount normally keep inotify events and can leave polling off.
+
+### Migrating an existing notebook to vault mode
+
+vault mode does not convert a `kind='db'` notebook in place. Export it to Markdown, tidy the folder, and start a new instance against it — the old instance stays untouched as a fallback. Full step-by-step guide with measured timings: [docs/vault-migration.md](docs/vault-migration.md).
+
+```bash
+curl -H "Authorization: Bearer $API_TOKEN" -o notefast-archive.zip \
+  http://localhost:3140/api/v1/export/archive
+ditto -x -k notefast-archive.zip ~/Notes     # macOS; GNU unzip: unzip -O UTF-8 ...
+cd ~/Notes && rm -f notefast-archive.manifest.json && mv media assets
+find . -name '*.md' -exec sed -i '' 's|](\.\./media/|](../assets/|g' {} +
+find . -name '*--*.md' -print0 | while IFS= read -r -d '' f; do
+  mv "$f" "$(dirname "$f")/$(basename "$f" | sed 's/--[0-9a-f]\{12\}\.md$/.md/')"
+done
+VAULT_PATH=~/Notes DATA_DIR=./data-vault PORT=3141 bun --filter @notefast/server dev
+```
+
+What carries over: body, tags, creation time, Obsidian block ids (`^abc123`), images, and `[[wikilinks]]` re-resolved by file name. What is rebuilt or lost: document/block ids, references, AutoLink, vectors, revision history, share links, and **the inbox / `ai_exclude` state** (the export does not write `notefast_status` / `notefast_ai_exclude`). Two gotchas the guide calls out: macOS `unzip` mangles UTF-8 file names (use `ditto`), and the exported slug differs from the original `# title`, so the duplicate H1 is kept unless you rename files to the H1.
 
 ## Development
 
