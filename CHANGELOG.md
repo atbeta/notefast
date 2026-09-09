@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.91.0](https://github.com/atbeta/notefast/compare/v0.90.0...v0.91.0) (2026-09-09)
+
+
+### Features
+
+* derive the vault index directory in every deployment ([f249571](https://github.com/atbeta/notefast/commit/f249571a3817483b1850e8e497df0089e3a76c81))
+* detect the vault watcher backend at startup ([815f6da](https://github.com/atbeta/notefast/commit/815f6da541dec2b00e108c0ee8cb0e1b701c294a))
+* expose the instance mode and stop hiding the vault settings entry ([5450b61](https://github.com/atbeta/notefast/commit/5450b6103e8ece915735ee4a14c73727d8003c72))
+* pick the watcher backend from the filesystem type too ([e21c367](https://github.com/atbeta/notefast/commit/e21c367c1e9516ff9ad6fae8d9b622bea49ef6e2))
+
 ## [0.90.0](https://github.com/atbeta/notefast/compare/v0.86.1...v0.90.0) (2026-09-09)
 
 
