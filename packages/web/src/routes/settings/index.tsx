@@ -13,8 +13,6 @@ import {
   Info,
 } from 'lucide-react'
 import { AiChatHeaderSlot } from '../../components/PageHeader'
-import { useVaultStatus } from '../../hooks/useVaultStatus'
-import { isVaultEnabled } from '../../lib/vault'
 
 const NAV_ITEMS = [
   { to: 'general', tabKey: 'general', Icon: Sliders },
@@ -31,9 +29,6 @@ const NAV_ITEMS = [
 
 export default function SettingsLayout() {
   const { t } = useTranslation()
-  // vault 未启用（或状态还没回来 / 请求失败）时不出现入口，避免点进去看错误墙
-  const { data: vaultStatus } = useVaultStatus()
-  const navItems = NAV_ITEMS.filter((item) => item.to !== 'vault' || isVaultEnabled(vaultStatus))
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 sm:px-8 py-8 sm:py-10 animate-fade-in pb-32">
@@ -53,7 +48,7 @@ export default function SettingsLayout() {
         {/* 桌面端：左侧二级导航（sticky） */}
         <aside className="hidden lg:block">
           <nav className="sticky top-4 space-y-0.5">
-            {navItems.map(({ to, tabKey, Icon }) => (
+            {NAV_ITEMS.map(({ to, tabKey, Icon }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -76,7 +71,7 @@ export default function SettingsLayout() {
         {/* 移动端：顶部胶囊 tabs（窄屏下保留横向滚动） */}
         <div className="lg:hidden mb-5 sticky top-0 z-header -mx-2 px-2 py-3 bg-background/80 backdrop-blur-md border-b border-border/50">
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar mask-edges">
-            {navItems.map(({ to, tabKey, Icon: _ }) => (
+            {NAV_ITEMS.map(({ to, tabKey, Icon: _ }) => (
               <NavLink
                 key={to}
                 to={to}

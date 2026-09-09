@@ -66,7 +66,13 @@
       "shadowOff": "Off",
       "loadFailed": "Could not read the data directory",
       "saveFailed": "Could not save",
-      "revealFailed": "Could not open the file manager"
+      "revealFailed": "Could not open the file manager",
+      "modeLabel": "Data source",
+      "modeDb": "Database (SQLite is authoritative)",
+      "modeVault": "Folder (files are authoritative)",
+      "vaultRootLabel": "Notes folder",
+      "modeDbHint": "Notes live in the data directory below. To make them plain files any tool can open, see Vault mode.",
+      "modeVaultHint": "The .md files in this folder are authoritative; the data directory below only holds the index and can be rebuilt from scratch."
     },
     "language": {
       "title": "Interface language",
@@ -227,7 +233,16 @@
       "syncPushFailed": "Push failed",
       "syncPullDone": "Pull complete",
       "syncPullFailed": "Pull failed",
-      "syncForeignHints": "Third-party sync traces detected ({{tools}}): two sync tools on one folder delete each other's files — keep exactly one."
+      "syncForeignHints": "Third-party sync traces detected ({{tools}}): two sync tools on one folder delete each other's files — keep exactly one.",
+      "disabledTitle": "Currently in database mode",
+      "disabledHint": "Notes live in SQLite, not as .md files in a folder. In vault mode your Markdown folder becomes authoritative and SQLite is only a rebuildable index.",
+      "disabledHowTo": "How to switch to vault mode",
+      "disabledDesktop": "Desktop: menu Vault → Open folder as vault… (Windows: use the button on the start screen)",
+      "disabledDocker": "Docker: mount your notes folder at /vault and set VAULT_PATH=/vault (on Docker Desktop also set VAULT_USE_POLLING=true)",
+      "disabledServer": "Self-hosted: start with VAULT_PATH=~/Notes (see the vault mode section in the README)",
+      "disabledMigration": "To move existing notes, see docs/vault-migration.md. There is no in-place conversion; the old instance is left untouched.",
+      "loading": "Loading…",
+      "loadFailed": "Could not read vault status"
     }
   }
 }

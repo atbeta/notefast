@@ -13,6 +13,9 @@ interface InstanceInfo {
   data_dir: string
   markdown_dir: string
   shadow_markdown_enabled: boolean
+  /** RFC 0005 U-1：数据权威在 SQLite（db）还是用户文件夹（vault） */
+  mode?: 'db' | 'vault'
+  vault_root?: string | null
 }
 
 function revealLabelKey(): 'revealFinder' | 'revealExplorer' | 'revealFolder' {
@@ -65,6 +68,9 @@ export default function LocalDataPanel() {
       }
     >
       <div className="space-y-5">
+        {/* 数据来源（RFC 0005 U-1）：vault 模式下文件夹才是权威 */}
+        {data?.mode && <DataModeSection mode={data.mode} vaultRoot={data.vault_root ?? null} />}
+
         <div className="space-y-2">
           <div className="text-base font-medium text-foreground">{t('settings.localData.pathLabel')}</div>
           {loading && !data ? (
@@ -122,5 +128,50 @@ export default function LocalDataPanel() {
         </div>
       </div>
     </SettingsCard>
+  )
+}
+
+/**
+ * 数据来源区块（纯展示，便于 SSR 契约测试）。
+ * vault 模式下额外显示笔记文件夹路径——这是用户唯一需要备份/同步的目录。
+ */
+export function DataModeSection({
+  mode,
+  vaultRoot,
+}: {
+  mode: 'db' | 'vault'
+  vaultRoot: string | null
+}) {
+  const { t } = useTranslation()
+  return (
+    <div className="space-y-2">
+      <div className="text-base font-medium text-foreground">{t('settings.localData.modeLabel')}</div>
+      <div className="text-sm text-foreground">
+        {mode === 'vault' ? t('settings.localData.modeVault') : t('settings.localData.modeDb')}
+      </div>
+      {mode === 'vault' && vaultRoot && (
+        <div className="space-y-1">
+          <div className="text-sm text-muted-foreground">
+            {t('settings.localData.vaultRootLabel')}
+          </div>
+          <div className="flex items-start gap-2">
+            <code className="flex-1 min-w-0 text-sm break-all rounded-md border border-border bg-background px-3 py-2 text-foreground">
+              {vaultRoot}
+            </code>
+            <CopyButton
+              text={vaultRoot}
+              ariaLabel={t('settings.localData.copyPath')}
+              title={t('settings.localData.copyPath')}
+              className="shrink-0 inline-flex items-center justify-center h-9 w-9 rounded-[var(--radius-btn)] border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+            />
+          </div>
+        </div>
+      )}
+      <p className="text-sm text-muted-foreground leading-relaxed">
+        {mode === 'vault'
+          ? t('settings.localData.modeVaultHint')
+          : t('settings.localData.modeDbHint')}
+      </p>
+    </div>
   )
 }

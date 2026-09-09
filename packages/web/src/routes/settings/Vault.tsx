@@ -30,7 +30,7 @@ const POLL_MS = 1500
 export default function SettingsVault() {
   const { t } = useTranslation()
   const toast = useToast()
-  const { data, refetch } = useVaultStatus()
+  const { data, loading, error, refetch } = useVaultStatus()
   const { locations } = useStorageLocations()
   const [rebuilding, setRebuilding] = useState(false)
   const [syncForm, setSyncForm] = useState<VaultSyncFormState>(() => syncFormFromStatus(null))
@@ -181,6 +181,8 @@ export default function SettingsVault() {
   return (
     <VaultPanel
       status={data}
+      loading={loading}
+      error={Boolean(error)}
       rebuilding={rebuilding}
       onRebuild={() => void handleRebuild()}
       syncForm={syncForm}

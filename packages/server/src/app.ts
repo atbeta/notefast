@@ -74,7 +74,7 @@ import storageLocations from './api/storageLocations'
 import sharePublic from './api/sharePublic'
 import { initDocEvents } from './services/docEvents'
 import { initInstancePaths, initShadowMarkdown, stopShadowMarkdown } from './services/shadowMarkdown'
-import instanceRouter from './api/instance'
+import { createInstanceRouter } from './api/instance'
 import { startEntityDescribe } from './ai/entityDescribe'
 import { createVaultRouter, createVaultRuntime, loadVaultConfigFromEnv, type VaultRuntime } from './vault'
 import { initVaultFileSyncConfig } from './vault/fileSyncConfig'
@@ -261,7 +261,14 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
   app.route('/api/v1/pinned-views', pinnedViews)
   app.route('/api/v1/preferences', preferences)
   app.route('/api/v1/status', statusRouter)
-  app.route('/api/v1/instance', instanceRouter)
+  // 模式（db / vault）由引擎判定并上报，Web 不再靠端点 404 推断（RFC 0005 D1/D5）
+  app.route(
+    '/api/v1/instance',
+    createInstanceRouter(() => ({
+      mode: vaultRuntime ? 'vault' : 'db',
+      vault_root: vaultRuntime ? vaultRuntime.ctx.config.root : null,
+    })),
+  )
   app.route('/api/v1/term-dict', termDict)
   app.route('/api/v1/mcp', mcpRouter)
   app.route('/api/v1/events', eventsRouter)

@@ -66,7 +66,13 @@
       "shadowOff": "已关闭",
       "loadFailed": "无法读取数据目录",
       "saveFailed": "无法保存",
-      "revealFailed": "无法打开文件管理器"
+      "revealFailed": "无法打开文件管理器",
+      "modeLabel": "数据来源",
+      "modeDb": "数据库（SQLite 权威）",
+      "modeVault": "文件夹（文件权威）",
+      "vaultRootLabel": "笔记文件夹",
+      "modeDbHint": "笔记存在下面的数据目录里。想让它们变成随时能用别的工具打开的文件，见「Vault 模式」。",
+      "modeVaultHint": "笔记以这个文件夹里的 .md 为准；下面的数据目录只存索引，删掉也能重建。"
     },
     "language": {
       "title": "界面语言",
@@ -227,7 +233,16 @@
       "syncPushFailed": "推送失败",
       "syncPullDone": "拉取完成",
       "syncPullFailed": "拉取失败",
-      "syncForeignHints": "检测到第三方同步痕迹（{{tools}}）：同时跑两套同步会让文件互相删，请只保留一套。"
+      "syncForeignHints": "检测到第三方同步痕迹（{{tools}}）：同时跑两套同步会让文件互相删，请只保留一套。",
+      "disabledTitle": "当前为数据库模式",
+      "disabledHint": "笔记存在 SQLite 里，不是文件夹里的 .md。切到 vault 模式后，你的 Markdown 文件夹成为权威，SQLite 只作可随时重建的索引。",
+      "disabledHowTo": "如何切换到 vault 模式",
+      "disabledDesktop": "桌面端：菜单 Vault → 打开文件夹为 vault…（Windows 在启动页点按钮）",
+      "disabledDocker": "Docker：把笔记文件夹挂到 /vault，并设置 VAULT_PATH=/vault（Docker Desktop 还要 VAULT_USE_POLLING=true）",
+      "disabledServer": "自建服务：启动时加 VAULT_PATH=~/Notes（见 README 的 vault mode 一节）",
+      "disabledMigration": "已有笔记的迁移见 docs/vault-migration.md；db 库不支持原地转换，旧实例会原样保留。",
+      "loading": "正在读取…",
+      "loadFailed": "无法读取 vault 状态"
     }
   }
 }

@@ -30,6 +30,10 @@ import {
 
 export interface VaultPanelProps {
   status: VaultStatus | null
+  /** 状态请求进行中（用于把「未启用」与「还没回来」区分开） */
+  loading?: boolean
+  /** 状态请求失败（旧服务端没有该端点、或网络错误） */
+  error?: boolean
   /** 重建请求进行中（服务端 `reconciling` 之外的本地态） */
   rebuilding?: boolean
   onRebuild?: () => void
@@ -55,6 +59,8 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 
 export default function VaultPanel({
   status,
+  loading = false,
+  error = false,
   rebuilding = false,
   onRebuild,
   syncForm,
@@ -65,7 +71,57 @@ export default function VaultPanel({
   syncBusy = false,
 }: VaultPanelProps) {
   const { t } = useTranslation()
-  if (!isVaultEnabled(status)) return null
+
+  /** 既没有状态、也不在加载 / 失败：不渲染（避免把未知状态误判成 db 模式） */
+  if (!status && !loading && !error) return null
+
+  /**
+   * 未启用 / 加载中 / 请求失败：不再整体隐藏（RFC 0005 U-1）。
+   * 隐藏入口是用户「找不到 Vault 设置」的直接原因；这里改成明说当前模式与切换方式。
+   */
+  if (!isVaultEnabled(status)) {
+    return (
+      <SettingsSection id="vault" title={t('settings.tabs.vault')}>
+        <SettingsCard
+          title={loading || error ? t('settings.vault.title') : t('settings.vault.disabledTitle')}
+          icon={<FolderTree className="w-4 h-4" strokeWidth={1.75} />}
+          defaultExpanded
+          collapsible={false}
+          statusBadge={
+            <StatusBadge
+              active={false}
+              label={loading ? t('settings.vault.loading') : error ? t('settings.vault.loadFailed') : undefined}
+            />
+          }
+        >
+          {loading ? (
+            <p className="text-sm text-muted-foreground">{t('settings.vault.loading')}</p>
+          ) : error ? (
+            <p className="text-sm text-destructive">{t('settings.vault.loadFailed')}</p>
+          ) : (
+            <div className="space-y-5">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {t('settings.vault.disabledHint')}
+              </p>
+              <div className="space-y-2">
+                <div className="text-base font-medium text-foreground">
+                  {t('settings.vault.disabledHowTo')}
+                </div>
+                <ul className="space-y-1.5 text-sm text-muted-foreground leading-relaxed">
+                  <li>{t('settings.vault.disabledDesktop')}</li>
+                  <li>{t('settings.vault.disabledDocker')}</li>
+                  <li>{t('settings.vault.disabledServer')}</li>
+                </ul>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {t('settings.vault.disabledMigration')}
+              </p>
+            </div>
+          )}
+        </SettingsCard>
+      </SettingsSection>
+    )
+  }
 
   const reconciling = status.reconciling === true
   const busy = reconciling || rebuilding

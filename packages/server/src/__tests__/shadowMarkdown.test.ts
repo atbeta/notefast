@@ -25,7 +25,7 @@ import {
   writeShadowDoc,
   _resetShadowMarkdownForTests,
 } from '../services/shadowMarkdown'
-import instanceRouter from '../api/instance'
+import { createInstanceRouter } from '../api/instance'
 
 let testDir: string
 let notebookId: string
@@ -57,7 +57,7 @@ beforeAll(() => {
   initAssetStore(testDir)
   initShadowMarkdown(testDir)
   app = new Hono()
-  app.route('/api/v1/instance', instanceRouter)
+  app.route('/api/v1/instance', createInstanceRouter(() => ({ mode: 'db', vault_root: null })))
 })
 
 afterAll(() => {
@@ -241,10 +241,28 @@ describe('GET/PUT /api/v1/instance', () => {
       data_dir: string
       markdown_dir: string
       shadow_markdown_enabled: boolean
+      mode: string
+      vault_root: string | null
     }
     expect(body.data_dir).toBe(resolve(testDir))
     expect(body.markdown_dir).toBe(resolve(join(testDir, 'markdown')))
     expect(body.shadow_markdown_enabled).toBe(true)
+    // RFC 0005 U-1：模式由引擎上报，db 模式下没有 vault 根
+    expect(body.mode).toBe('db')
+    expect(body.vault_root).toBeNull()
+  })
+
+  test('vault 模式下 mode=vault 且带 vault_root', async () => {
+    const vaultApp = new Hono()
+    vaultApp.route(
+      '/api/v1/instance',
+      createInstanceRouter(() => ({ mode: 'vault', vault_root: '/tmp/some-vault' })),
+    )
+    const res = await vaultApp.fetch(new Request('http://localhost/api/v1/instance'))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { mode: string; vault_root: string | null }
+    expect(body.mode).toBe('vault')
+    expect(body.vault_root).toBe('/tmp/some-vault')
   })
 
   test('PUT 可关闭影子副本', async () => {

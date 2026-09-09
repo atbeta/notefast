@@ -74,6 +74,8 @@ const SYNC_FORM: VaultSyncFormState = {
 }
 
 interface RenderExtra {
+  loading?: boolean
+  error?: boolean
   rebuilding?: boolean
   onRebuild?: () => void
   syncForm?: VaultSyncFormState
@@ -87,6 +89,8 @@ function render(status: VaultStatus | null, extra: RenderExtra = {}) {
   return renderToStaticMarkup(
     createElement(VaultPanel, {
       status,
+      loading: extra.loading,
+      error: extra.error,
       rebuilding: extra.rebuilding,
       onRebuild: extra.onRebuild ?? (() => {}),
       syncForm: extra.syncForm,
@@ -112,11 +116,28 @@ function actionDisabled(html: string, action: 'save' | 'push' | 'pull'): boolean
 }
 
 describe('VaultPanel 可见性', () => {
-  test('vault 未启用：整体不渲染（设置页不出现错误墙）', () => {
-    expect(render({ enabled: false })).toBe('')
+  test('vault 未启用：渲染「当前为数据库模式」与切换指引，不再整体隐藏', () => {
+    const html = render({ enabled: false })
+    expect(html).toContain(i18next.t('settings.vault.disabledTitle'))
+    expect(html).toContain(i18next.t('settings.vault.disabledHowTo'))
+    expect(html).toContain(i18next.t('settings.vault.disabledDesktop'))
+    expect(html).toContain(i18next.t('settings.vault.disabledDocker'))
+    expect(html).not.toContain(i18next.t('settings.vault.rootLabel'))
   })
 
-  test('状态尚未返回（null）：整体不渲染', () => {
+  test('状态尚未返回（null）：显示读取中，不误报为数据库模式', () => {
+    const html = render(null, { loading: true })
+    expect(html).toContain(i18next.t('settings.vault.loading'))
+    expect(html).not.toContain(i18next.t('settings.vault.disabledTitle'))
+  })
+
+  test('状态请求失败：显示失败提示，不误报为数据库模式', () => {
+    const html = render(null, { error: true })
+    expect(html).toContain(i18next.t('settings.vault.loadFailed'))
+    expect(html).not.toContain(i18next.t('settings.vault.disabledTitle'))
+  })
+
+  test('null 且既非加载也非失败：不渲染（避免空态误判）', () => {
     expect(render(null)).toBe('')
   })
 
