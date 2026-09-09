@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.90.0](https://github.com/atbeta/notefast/compare/v0.86.1...v0.90.0) (2026-09-09)
+
+
+### Features
+
+* **server:** vault mode foundation as notebook kind ([c4f9e2c](https://github.com/atbeta/notefast/commit/c4f9e2ce570de752bd2ef06fabca9f196027cb70))
+* **vault:** add periodic light reconcile for self-healing ([79d45d2](https://github.com/atbeta/notefast/commit/79d45d2192c9d1c18d47c4494884414bcd0808d9))
+* **vault:** add the file sync engine with content-addressed blobs ([ce8154a](https://github.com/atbeta/notefast/commit/ce8154a7f0bc2815174eafababb61ccc995c0e89))
+* **vault:** enable write-back by default, add polling option and dev plan ([7097746](https://github.com/atbeta/notefast/commit/70977466b0fa42eac767545cc03c5f8398c8a62c))
+* **vault:** expose the sync config and an in-flight flag ([caffa41](https://github.com/atbeta/notefast/commit/caffa4158b8dbcc1ad5981337973f440f3052c91))
+* **vault:** expose vault origin and landing paths to API and MCP ([36317e8](https://github.com/atbeta/notefast/commit/36317e8652776e0f7be9f2bf5ff406cee662a8ef))
+* **vault:** keep a conflict copy instead of dropping NoteFast edits ([7836a45](https://github.com/atbeta/notefast/commit/7836a45fe749a4b29380d0461c4833ed7c77c0d3))
+* **vault:** make editor saves write through without snapshots ([475c8fc](https://github.com/atbeta/notefast/commit/475c8fc9ff490a1aeef62a578b0c230895105caa))
+* **vault:** open a folder as a vault from the desktop shells ([2b59810](https://github.com/atbeta/notefast/commit/2b598109ac5bc87d88bf304989f1ec0bbdc0eb60))
+* **vault:** pass through user frontmatter on write-back ([5369b8f](https://github.com/atbeta/notefast/commit/5369b8fc446cdeb4ec87a82cefc9ef96d61f62a7))
+* **vault:** patch write-back per block instead of serializing whole file ([adfb22f](https://github.com/atbeta/notefast/commit/adfb22f9430ac59e86e163b14bf5195855fef162))
+* **vault:** resolve heading and block-id anchors in wikilinks ([c6f3303](https://github.com/atbeta/notefast/commit/c6f3303092963f6c0a029476687d63cc932ec220))
+* **vault:** resolve wikilinks into block refs ([0a44cfe](https://github.com/atbeta/notefast/commit/0a44cfe3b5f5a8c4b8cf8db42136c26c82475ba8))
+* **vault:** run file sync from the vault runtime with an HTTP surface ([ead8e76](https://github.com/atbeta/notefast/commit/ead8e76bf493d40e2d316e2aea0d66f80e0eb6d2))
+* **vault:** serve vault assets directly and resolve them in the reader ([e30855f](https://github.com/atbeta/notefast/commit/e30855f188110ba530635b57d1a621eb74784357))
+* **vault:** sync ai_exclude and status with frontmatter ([cc5d389](https://github.com/atbeta/notefast/commit/cc5d389590b7f757d0bb32aa945cda6602cbbb7e))
+* **vault:** warn when a third-party sync tool touches the vault ([8d03d5f](https://github.com/atbeta/notefast/commit/8d03d5ff1d07cf3870c086510cb19f00b510d79f))
+* **web:** add vault settings panel and document source path ([f324de8](https://github.com/atbeta/notefast/commit/f324de8818456725d321d13a433a40d14f4e36c9))
+* **web:** configure and monitor vault file sync from settings ([a601f87](https://github.com/atbeta/notefast/commit/a601f87b5166cfe58df1a9ccaa58523e0a1cff21))
+* **web:** surface next reconcile time and stat-skipped count ([d684ea8](https://github.com/atbeta/notefast/commit/d684ea8e566f2e002e358fc828d849a7e44e6b7a))
+
+
+### Bug Fixes
+
+* **markdown:** stop dropping blockquote content and normalize quote blanks ([5a634a9](https://github.com/atbeta/notefast/commit/5a634a9917f707d7d21b333d041ca782a671789f))
+* **sync:** never write the device id relative to the working directory ([a372cfb](https://github.com/atbeta/notefast/commit/a372cfb6c29b3d702809efafbdbe3f50bbd6ee8c))
+* **vault:** reanalyze documents promoted from a file status change ([ef22bab](https://github.com/atbeta/notefast/commit/ef22bab3592a293621430509a9f09ab323d06952))
+* **web:** strip quote prefixes when rendering raw blockquotes ([94bf3fd](https://github.com/atbeta/notefast/commit/94bf3fd59da1387ed3eadd12ef049d87beb8eb5f))
+
+
+### Performance Improvements
+
+* **vault:** add a reproducible first-reconcile benchmark ([8de24b9](https://github.com/atbeta/notefast/commit/8de24b9a938391cd0dc8bfa14cdb47d4b92d05f9))
+
+
+### Miscellaneous Chores
+
+* release 0.90.0 ([c7c9735](https://github.com/atbeta/notefast/commit/c7c9735652b53a9fdc2a5ec5cf537da31ca7ed82))
+
 ## [0.86.1](https://github.com/atbeta/notefast/compare/v0.86.0...v0.86.1) (2026-09-06)
 
 
