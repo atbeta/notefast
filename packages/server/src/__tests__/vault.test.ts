@@ -10,14 +10,24 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, u
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
-import { fetchDocBlocks, getDeletedBlockById, getLiveDocById, updateBlock } from '../store/blocks'
+import {
+  fetchDocBlocks,
+  getDeletedBlockById,
+  getLiveDocById,
+  insertBlock,
+  nowTimestamp,
+  softDeleteBlocks,
+  updateBlock,
+} from '../store/blocks'
 import { insertRef, findRefByPair } from '../store/refs'
 import { getVaultFileByDocId, getVaultFileByPath, getNotebookVaultBinding, listVaultFiles } from '../store/vaultFiles'
 import { insertDocFromMarkdown } from '../services/docImport'
-import { readTags, readDocStatus } from '@notefast/core'
+import { readTags, readDocStatus, stripDocFrontmatter } from '@notefast/core'
 import { readDocAiExclude } from '../ai/aiExcludeQuery'
 import { writeDocAiExclude } from '../ai/aiExclude'
 import { subscribeDocChanges, FLUSH_MS, type DocChangeEvent } from '../services/docEvents'
+import { listVaultBlockSpans, deleteVaultBlockSpans } from '../store/vaultSpans'
+import { topLevelBlocks } from '../vault/spans'
 import docsRouter from '../api/docs'
 import type { VaultConfig } from '../vault/config'
 import { DEFAULT_VAULT_IGNORE, loadVaultConfigFromEnv } from '../vault/config'
@@ -616,6 +626,249 @@ describe('vault metadata', () => {
       expect(seen[0]!.kind).toBe('updated')
     } finally {
       unsub()
+    }
+  })
+})
+
+// ───────────────────── 按块局部写回（V-203） ─────────────────────
+
+describe('vault block patch', () => {
+  const FIXTURE = [
+    '---',
+    'aliases: [x]',
+    '---',
+    '第一段 *斜体* 与 _斜体_',
+    '',
+    '> [!note] 提醒',
+    '> 细节一',
+    '>',
+    '> 细节二',
+    '',
+    '%%私密注释%%',
+    '',
+    '',
+    '',
+    '- 列表项 A',
+    '  - 嵌套 B',
+    '',
+    '$$',
+    'E = mc^2',
+    '$$',
+    '',
+    '尾段 ^abc123',
+    '',
+    '![[img.png]]',
+    '',
+  ].join('\n')
+
+  const ev = (docId: string): DocChangeEvent => ({ doc_id: docId, kind: 'updated', at: new Date().toISOString() })
+  const fullWriteCount = (): number =>
+    (getDb().query(`SELECT count(*) AS c FROM app_logs WHERE message = 'doc.vault_written_full'`).get() as {
+      c: number
+    }).c
+
+  /** 文件里 frontmatter 前缀长度（区间记录是 body 相对偏移） */
+  function bodyPrefix(content: string): number {
+    return content.length - stripDocFrontmatter(content).body.length
+  }
+
+  function spanTexts(docId: string, content: string): string[] {
+    const prefix = bodyPrefix(content)
+    return listVaultBlockSpans(getDb(), docId).map((s) => content.slice(prefix + s.start, prefix + s.end))
+  }
+
+  test('改一个块：其余块逐字节保留（callout / %% / ^id / 嵌入 / 不规则空行 / $$）', async () => {
+    writeVault('patch.md', FIXTURE)
+    const r = await ingestVaultFile(ctx, 'patch.md')
+    expect(readFileSync(join(vaultDir, 'patch.md'), 'utf8')).toBe(FIXTURE)
+
+    const spansBefore = listVaultBlockSpans(getDb(), r.docId!)
+    expect(spansBefore.length).toBeGreaterThan(5)
+    const before = FIXTURE
+    const prefix = bodyPrefix(before)
+    const tail = topLevelBlocks(getDb(), r.docId!).find((b) => b.content.startsWith('尾段'))!
+    const fullBefore = fullWriteCount()
+
+    updateBlock(getDb(), tail.id, { content: '尾段（改） ^abc123', actor: 'mcp' })
+    const wb = startVaultWriteback(ctx)
+    try {
+      expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'written' })
+    } finally {
+      wb.stop()
+    }
+
+    const after = readFileSync(join(vaultDir, 'patch.md'), 'utf8')
+    // 未改动块的字节原样保留
+    for (const s of spansBefore) {
+      if (s.block_id === tail.id) continue
+      expect(after).toContain(before.slice(prefix + s.start, prefix + s.end))
+    }
+    // Obsidian 语法不被归一化、空行与接缝原样
+    expect(after).toContain('_斜体_')
+    expect(after).toContain('%%私密注释%%')
+    expect(after).toContain('$$\nE = mc^2\n$$')
+    expect(after).toContain('![[img.png]]')
+    expect(after).toContain('%%私密注释%%\n\n\n\n- 列表项 A')
+    expect(after).toContain('> [!note] 提醒\n> 细节一\n>\n> 细节二')
+    // 被改块已更新，frontmatter 仍透传
+    expect(after).toContain('尾段（改） ^abc123')
+    expect(after.startsWith('---\naliases: [x]\n---\n')).toBe(true)
+    // 走的是局部改写，不是整篇序列化
+    expect(fullWriteCount()).toBe(fullBefore)
+
+    // 区间记录已刷新到新正文
+    const spansAfter = listVaultBlockSpans(getDb(), r.docId!)
+    expect(spansAfter).toHaveLength(spansBefore.length)
+    expect(spanTexts(r.docId!, after)).toContain('尾段（改） ^abc123')
+  })
+
+  test('插入新块：只追加新块，其余块逐字节保留', async () => {
+    writeVault('insert.md', FIXTURE)
+    const r = await ingestVaultFile(ctx, 'insert.md')
+    const spansBefore = listVaultBlockSpans(getDb(), r.docId!)
+    const prefix = bodyPrefix(FIXTURE)
+    const tops = topLevelBlocks(getDb(), r.docId!)
+
+    insertBlock(getDb(), {
+      id: crypto.randomUUID(),
+      notebook_id: notebookId,
+      parent_id: r.docId!,
+      root_id: r.docId!,
+      type: 'paragraph',
+      content: '新增段落',
+      properties: '{}',
+      sort: tops[tops.length - 1]!.sort + 1,
+      level: 1,
+      now: nowTimestamp(),
+    })
+
+    const wb = startVaultWriteback(ctx)
+    try {
+      expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'written' })
+    } finally {
+      wb.stop()
+    }
+
+    const after = readFileSync(join(vaultDir, 'insert.md'), 'utf8')
+    expect(after.endsWith('新增段落\n')).toBe(true)
+    for (const s of spansBefore) {
+      expect(after).toContain(FIXTURE.slice(prefix + s.start, prefix + s.end))
+    }
+    expect(after).toContain('![[img.png]]\n\n新增段落\n')
+  })
+
+  test('删除块：只去掉该块，其余块逐字节保留', async () => {
+    writeVault('del.md', FIXTURE)
+    const r = await ingestVaultFile(ctx, 'del.md')
+    const spansBefore = listVaultBlockSpans(getDb(), r.docId!)
+    const prefix = bodyPrefix(FIXTURE)
+    const victim = topLevelBlocks(getDb(), r.docId!).find((b) => b.content.includes('私密注释'))!
+
+    softDeleteBlocks(getDb(), [victim.id])
+
+    const wb = startVaultWriteback(ctx)
+    try {
+      expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'written' })
+    } finally {
+      wb.stop()
+    }
+
+    const after = readFileSync(join(vaultDir, 'del.md'), 'utf8')
+    expect(after).not.toContain('私密注释')
+    for (const s of spansBefore) {
+      if (s.block_id === victim.id) continue
+      expect(after).toContain(FIXTURE.slice(prefix + s.start, prefix + s.end))
+    }
+  })
+
+  test('嵌套子块被改 → 归到其顶层祖先重写，其他块仍逐字节保留', async () => {
+    writeVault('nested.md', FIXTURE)
+    const r = await ingestVaultFile(ctx, 'nested.md')
+    const spansBefore = listVaultBlockSpans(getDb(), r.docId!)
+    const prefix = bodyPrefix(FIXTURE)
+    const nested = fetchDocBlocks(getDb(), r.docId!).find((b) => b.content === '嵌套 B')!
+
+    updateBlock(getDb(), nested.id, { content: '嵌套 B（改）', actor: 'mcp' })
+
+    const wb = startVaultWriteback(ctx)
+    try {
+      expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'written' })
+    } finally {
+      wb.stop()
+    }
+
+    const after = readFileSync(join(vaultDir, 'nested.md'), 'utf8')
+    expect(after).toContain('嵌套 B（改）')
+    for (const s of spansBefore) {
+      // 列表块整体重写（现行序列化器不缩进嵌套项，见语料 21-nested-list），其余块逐字节保留
+      if (s.block_id === nested.parent_id) continue
+      expect(after).toContain(FIXTURE.slice(prefix + s.start, prefix + s.end))
+    }
+  })
+
+  test('区间记录缺失 → 退回整篇序列化并记审计 doc.vault_written_full', async () => {
+    const simple = ['---', 'aliases: [x]', '---', '第一段 _斜体_', '', '第二段', '', '第三段', ''].join('\n')
+    writeVault('fallback.md', simple)
+    const r = await ingestVaultFile(ctx, 'fallback.md')
+    deleteVaultBlockSpans(getDb(), r.docId!)
+    const tail = topLevelBlocks(getDb(), r.docId!).find((b) => b.content === '第三段')!
+    const fullBefore = fullWriteCount()
+
+    updateBlock(getDb(), tail.id, { content: '第三段（改）', actor: 'mcp' })
+    const wb = startVaultWriteback(ctx)
+    try {
+      expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'written' })
+    } finally {
+      wb.stop()
+    }
+
+    const after = readFileSync(join(vaultDir, 'fallback.md'), 'utf8')
+    // 整篇序列化会归一化 `_斜体_`（局部改写不会）
+    expect(after).toContain('*斜体*')
+    expect(after).not.toContain('_斜体_')
+    expect(after).toContain('第三段（改）')
+    expect(fullWriteCount()).toBe(fullBefore + 1)
+    // 退回整篇后重新记录区间，下一次仍能局部改写
+    expect(listVaultBlockSpans(getDb(), r.docId!).length).toBeGreaterThan(0)
+  })
+
+  test('区间越界 → 退回整篇序列化（不按坏区间改文件）', async () => {
+    const simple = ['第一段 _斜体_', '', '第二段', '', '第三段', ''].join('\n')
+    writeVault('oob.md', simple)
+    const r = await ingestVaultFile(ctx, 'oob.md')
+    getDb().query('UPDATE vault_block_spans SET end = 999999 WHERE doc_id = ?').run(r.docId!)
+    const tail = topLevelBlocks(getDb(), r.docId!).find((b) => b.content === '第三段')!
+    const fullBefore = fullWriteCount()
+
+    updateBlock(getDb(), tail.id, { content: '第三段（改）', actor: 'mcp' })
+    const wb = startVaultWriteback(ctx)
+    try {
+      expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'written' })
+    } finally {
+      wb.stop()
+    }
+    expect(readFileSync(join(vaultDir, 'oob.md'), 'utf8')).toContain('第三段（改）')
+    expect(fullWriteCount()).toBe(fullBefore + 1)
+  })
+
+  test('整篇退回后含嵌套列表的文档无法重建区间 → 继续安全退回，不产生重复块', async () => {
+    writeVault('flat.md', FIXTURE)
+    const r = await ingestVaultFile(ctx, 'flat.md')
+    deleteVaultBlockSpans(getDb(), r.docId!)
+    const tail = topLevelBlocks(getDb(), r.docId!).find((b) => b.content.startsWith('尾段'))!
+
+    updateBlock(getDb(), tail.id, { content: '尾段（改） ^abc123', actor: 'mcp' })
+    const wb = startVaultWriteback(ctx)
+    try {
+      expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'written' })
+      // 现行序列化器把嵌套列表拍平（语料 21-nested-list 冻结），重解析块数与 DB 不符 → 区间清空
+      expect(listVaultBlockSpans(getDb(), r.docId!)).toHaveLength(0)
+      // 第二次写回同样退回整篇：内容稳定，不出现重复块
+      const again = readFileSync(join(vaultDir, 'flat.md'), 'utf8')
+      expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'skipped', reason: 'echo' })
+      expect(readFileSync(join(vaultDir, 'flat.md'), 'utf8')).toBe(again)
+    } finally {
+      wb.stop()
     }
   })
 })

@@ -30,15 +30,70 @@ type MdNode = {
   }
 }
 
+/** 块在正文中的源码区间 `[start, end)`（相对已剥离 frontmatter 的 body） */
+export interface BlockSpan {
+  start: number
+  end: number
+}
+
+export interface ParsedBlocksWithSpans {
+  blocks: CreateBlockInput[]
+  /** 与 blocks 同序；null = 该块没有可用源码区间 */
+  spans: Array<BlockSpan | null>
+}
+
 export function parseMarkdownToBlocksMdast(markdown: string, notebookId: string): CreateBlockInput[] {
-  const { body } = stripDocFrontmatter(markdown)
-  if (body === '') return []
+  return parseMarkdownToBlocksWithSpans(markdown, notebookId).blocks
+}
+
+export interface ParseWithSpansOptions {
+  /**
+   * 传入的文本已剥离 frontmatter（vault ingest / 写回手里就是 body）。
+   * true 时不再剥一次 —— 否则正文本身形如 frontmatter 时会被二次剥离，偏移全错。
+   */
+  bodyOnly?: boolean
+}
+
+/**
+ * 与 `parseMarkdownToBlocksMdast` 同结果，额外返回每个块的源码区间（RFC 0003 阶段 C）。
+ *
+ * 偏移取「块首行行首 → 块末行行尾」：`$$…$$` 会在进 mdast 前被改写成 ```math（长度变化），
+ * 直接用 mdast 的字符偏移会错位；改写只替换整行内容、不增删行，因此行号在 body 与改写文本间
+ * 一一对应，按行换算即可拿到原始偏移。
+ */
+export function parseMarkdownToBlocksWithSpans(
+  markdown: string,
+  notebookId: string,
+  opts: ParseWithSpansOptions = {},
+): ParsedBlocksWithSpans {
+  const body = opts.bodyOnly ? markdown.replace(/^\uFEFF/, '') : stripDocFrontmatter(markdown).body
+  if (body === '') return { blocks: [], spans: [] }
 
   const occupied = findMdastFencedCodeSpans(body)
   const doc = rewriteClosedExclusiveDollarMath(body, occupied)
   const tree = fromNoteFastMarkdown(doc) as MdNode
 
+  const docLineStarts = lineStarts(doc)
+  const bodyLines = body.split('\n')
+  const bodyLineStarts = lineStarts(body)
+
   const out: CreateBlockInput[] = []
+  const spans: Array<BlockSpan | null> = []
+
+  const spanOf = (node: MdNode): BlockSpan | null => {
+    const s = node.position?.start.offset
+    const e = node.position?.end.offset
+    if (s == null || e == null || e <= s) return null
+    const startLine = lineIndexAt(docLineStarts, s)
+    const endLine = lineIndexAt(docLineStarts, e - 1)
+    if (startLine == null || endLine == null || endLine >= bodyLines.length) return null
+    return { start: bodyLineStarts[startLine]!, end: bodyLineStarts[endLine]! + bodyLines[endLine]!.length }
+  }
+
+  const push = (input: CreateBlockInput, node: MdNode | null): void => {
+    out.push(input)
+    spans.push(node ? spanOf(node) : null)
+  }
 
   const walk = (nodes: MdNode[] | undefined, parentId: string | null): void => {
     if (!nodes) return
@@ -46,63 +101,72 @@ export function parseMarkdownToBlocksMdast(markdown: string, notebookId: string)
       switch (node.type) {
         case 'heading': {
           const id = crypto.randomUUID()
-          out.push(makeInput(id, notebookId, parentId, BlockType.Heading, phrasingContent(node), {
+          push(makeInput(id, notebookId, parentId, BlockType.Heading, phrasingContent(node), {
             headingLevel: node.depth ?? 1,
-          }))
+          }), node)
           break
         }
         case 'paragraph': {
           const id = crypto.randomUUID()
-          out.push(makeInput(id, notebookId, parentId, BlockType.Paragraph, phrasingContent(node), {}))
+          push(makeInput(id, notebookId, parentId, BlockType.Paragraph, phrasingContent(node), {}), node)
           break
         }
         case 'blockquote': {
           const id = crypto.randomUUID()
-          out.push(makeInput(id, notebookId, parentId, BlockType.Quote, quoteContent(node), {}))
+          push(makeInput(id, notebookId, parentId, BlockType.Quote, quoteContent(node), {}), node)
           break
         }
         case 'code': {
           const id = crypto.randomUUID()
           const lang = (node.lang ?? '').trim()
-          out.push(makeInput(id, notebookId, parentId, BlockType.Code, node.value ?? '', lang ? { language: lang } : {}))
+          push(
+            makeInput(id, notebookId, parentId, BlockType.Code, node.value ?? '', lang ? { language: lang } : {}),
+            node,
+          )
           break
         }
         case 'table': {
           const id = crypto.randomUUID()
-          out.push(makeInput(id, notebookId, parentId, BlockType.Table, sliceTrimEnd(node, doc), {}))
+          push(makeInput(id, notebookId, parentId, BlockType.Table, sliceTrimEnd(node, doc), {}), node)
           break
         }
         case 'thematicBreak': {
           const id = crypto.randomUUID()
-          out.push(makeInput(id, notebookId, parentId, BlockType.Paragraph, '---', {}))
+          push(makeInput(id, notebookId, parentId, BlockType.Paragraph, '---', {}), node)
           break
         }
         case 'html': {
           const id = crypto.randomUUID()
-          out.push(makeInput(id, notebookId, parentId, BlockType.Paragraph, node.value ?? '', {}))
+          push(makeInput(id, notebookId, parentId, BlockType.Paragraph, node.value ?? '', {}), node)
           break
         }
         case 'list': {
-          walkListItems(node, parentId, notebookId, doc, out, walk)
+          walkListItems(node, parentId, notebookId, doc, push, walk)
           break
         }
         case 'definition':
         case 'footnoteDefinition': {
           const id = crypto.randomUUID()
-          out.push(makeInput(id, notebookId, parentId, BlockType.Paragraph, sliceTrimEnd(node, doc), {
-            markdownFallback: true,
-            markdownNodeType: node.type,
-          }))
+          push(
+            makeInput(id, notebookId, parentId, BlockType.Paragraph, sliceTrimEnd(node, doc), {
+              markdownFallback: true,
+              markdownNodeType: node.type,
+            }),
+            node,
+          )
           break
         }
         default: {
           if (node.children?.length) walk(node.children, parentId)
           else if (node.value) {
             const id = crypto.randomUUID()
-            out.push(makeInput(id, notebookId, parentId, BlockType.Paragraph, node.value, {
-              markdownFallback: true,
-              markdownNodeType: node.type,
-            }))
+            push(
+              makeInput(id, notebookId, parentId, BlockType.Paragraph, node.value, {
+                markdownFallback: true,
+                markdownNodeType: node.type,
+              }),
+              node,
+            )
           }
         }
       }
@@ -110,7 +174,29 @@ export function parseMarkdownToBlocksMdast(markdown: string, notebookId: string)
   }
 
   walk(tree.children, null)
-  return out
+  return { blocks: out, spans }
+}
+
+/** 每行起始偏移；长度 = 行数 + 1（末尾多一个 = 文本长度） */
+function lineStarts(text: string): number[] {
+  const starts = [0]
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) === 10) starts.push(i + 1)
+  }
+  return starts
+}
+
+/** 二分查找 offset 所在行（最后一个 start <= offset） */
+function lineIndexAt(starts: number[], offset: number): number | null {
+  if (offset < 0) return null
+  let lo = 0
+  let hi = starts.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (starts[mid]! <= offset) lo = mid
+    else hi = mid - 1
+  }
+  return lo
 }
 
 function makeInput(
@@ -137,7 +223,7 @@ function walkListItems(
   parentId: string | null,
   notebookId: string,
   doc: string,
-  out: CreateBlockInput[],
+  push: (input: CreateBlockInput, node: MdNode | null) => void,
   walk: (nodes: MdNode[] | undefined, parentId: string | null) => void,
 ): void {
   const ordered = list.ordered === true
@@ -145,7 +231,7 @@ function walkListItems(
     if (item.type !== 'listItem') continue
     const id = crypto.randomUUID()
     const { text, nested } = splitListItem(item)
-    out.push(makeInput(id, notebookId, parentId, BlockType.ListItem, text, listItemProps(item, ordered, doc)))
+    push(makeInput(id, notebookId, parentId, BlockType.ListItem, text, listItemProps(item, ordered, doc)), item)
     walk(nested, id)
   }
 }

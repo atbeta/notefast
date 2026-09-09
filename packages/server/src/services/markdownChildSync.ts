@@ -20,6 +20,8 @@ export interface SyncMarkdownChildrenResult {
   deletedIds: string[]
   /** 正文或 properties 变了的既有块（需重索引） */
   updatedIds: string[]
+  /** 与 inputs 同序的块 id（keep / insert 都有），供 vault 记录块区间（RFC 0003 阶段 C） */
+  idByInputIndex: string[]
 }
 
 function levelOf(inp: CreateBlockInput, byTempId: Map<string, CreateBlockInput>): number {
@@ -148,5 +150,10 @@ export function syncMarkdownChildren(
     touchDocRoot(db, opts.rootId)
   }
 
-  return { insertedIds, deletedIds, updatedIds }
+  return {
+    insertedIds,
+    deletedIds,
+    updatedIds,
+    idByInputIndex: opts.inputs.map((_, i) => newIndexToId.get(i) ?? ''),
+  }
 }

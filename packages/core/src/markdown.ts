@@ -19,6 +19,14 @@ export interface ParsedBlock {
   properties: Record<string, unknown>
 }
 
+/** 带源码区间的解析入口（vault 按块局部写回用，RFC 0003 阶段 C） */
+export {
+  parseMarkdownToBlocksWithSpans,
+  type BlockSpan,
+  type ParsedBlocksWithSpans,
+  type ParseWithSpansOptions,
+} from './markdown/parseMdast'
+
 /** 可容纳子块并保留在解析栈上的容器类型（叶子块不入栈，避免后续兄弟被错误嵌套） */
 const CONTAINER_TYPES = new Set<BlockType>([
   BlockType.Document,

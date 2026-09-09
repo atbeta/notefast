@@ -13,7 +13,13 @@
 
 import { existsSync, mkdirSync, renameSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { blocksToMarkdown, buildBlockTree, patchFrontmatter, type BlockRow } from '@notefast/core'
+import {
+  blocksToMarkdown,
+  buildBlockTree,
+  patchFrontmatter,
+  type BlockRow,
+  type FrontmatterPatch,
+} from '@notefast/core'
 import { fetchDocBlocks, getBlockById, getLiveDocById } from '../store/blocks'
 import {
   getVaultFileByDocId,
@@ -22,12 +28,19 @@ import {
   upsertVaultFile,
   type VaultFileRow,
 } from '../store/vaultFiles'
+import {
+  listVaultBlockSpans,
+  replaceVaultBlockSpans,
+  type VaultBlockSpanInput,
+} from '../store/vaultSpans'
 import { subscribeDocChanges, type DocChangeEvent } from '../services/docEvents'
 import { auditVault } from './audit'
 import type { VaultContext } from './ingest'
 import { readVaultDocMeta, vaultMetaHash } from './meta'
+import { patchVaultContent, type PatchBlock } from './patch'
 import { toVaultAbsPath } from './paths'
-import { VaultConflictError, writeVaultFileAtomic } from './writer'
+import { blockSubtreeHash, recordVaultSpans, topLevelBlocks } from './spans'
+import { readVaultFile, VaultConflictError, writeVaultFileAtomic } from './writer'
 
 export type WritebackOutcome =
   | { kind: 'written'; relPath: string; created: boolean }
@@ -52,10 +65,10 @@ export function serializeVaultDocParts(
   ctx: VaultContext,
   doc: BlockRow,
   row: VaultFileRow | null = null,
-): { content: string; frontmatterRaw: string } {
+): { content: string; frontmatterRaw: string; body: string } {
   const tree = buildBlockTree(fetchDocBlocks(ctx.db, doc.id))
   const root = tree[0]
-  const body = root ? blocksToMarkdown(root.children ?? []) : ''
+  const body = (root ? blocksToMarkdown(root.children ?? []) : '').replace(/^\n+/, '').replace(/\n*$/, '\n')
   const meta = readVaultDocMeta(doc)
   const frontmatterRaw = patchFrontmatter(row?.frontmatter_raw ?? null, {
     tags: meta.tags,
@@ -64,8 +77,17 @@ export function serializeVaultDocParts(
     notefast_status: meta.status === 'inbox' ? 'inbox' : 'note',
   })
   const fm = frontmatterRaw ? `---\n${frontmatterRaw}\n---\n` : ''
-  const content = fm + body.replace(/^\n+/, '').replace(/\n*$/, '\n')
-  return { content, frontmatterRaw }
+  return { content: fm + body, frontmatterRaw, body }
+}
+
+/** 当前顶层块 → 局部改写输入（指纹 + 序列化文本） */
+function patchBlocksOf(ctx: VaultContext, docId: string): PatchBlock[] {
+  return topLevelBlocks(ctx.db, docId).map((block) => ({
+    id: block.id,
+    hash: blockSubtreeHash(block),
+    // 单个块序列化会带一个尾部换行，区间编辑自己负责接缝，去掉它
+    text: blocksToMarkdown([block]).replace(/\n+$/, ''),
+  }))
 }
 
 /** 兼容旧签名：仅返回正文（供现有测试 / 非写回方使用） */
@@ -117,14 +139,58 @@ export function startVaultWriteback(
       return { kind: 'skipped', reason: 'echo' }
     }
 
-    const { content, frontmatterRaw } = serializeVaultDocParts(ctx, doc, row)
+    const meta = readVaultDocMeta(doc)
+    const frontmatterPatch: FrontmatterPatch = {
+      tags: meta.tags,
+      notefast_ai_exclude: meta.aiExclude,
+      notefast_status: meta.status === 'inbox' ? 'inbox' : 'note',
+    }
+
+    const existing = Boolean(row && !row.deleted_at)
     const relPath = row ? row.rel_path : uniqueRelPathForTitle(config.root, doc.content)
     const abs = toVaultAbsPath(config.root, relPath)
-    const expectedSha = row && !row.deleted_at ? row.content_sha256 : null
+    const expectedSha = existing ? row!.content_sha256 : null
+
+    // 优先按块局部改写：未改动的块直接复用磁盘字节（RFC 0003 阶段 C）。
+    // 拿不到完整区间记录 / 区间失效 → 退回整篇序列化并记审计。
+    let plan: {
+      content: string
+      body: string
+      frontmatterRaw: string
+      spans: VaultBlockSpanInput[] | null
+      mode: 'patch' | 'full'
+    } | null = null
+
+    if (existing) {
+      const disk = await readVaultFile(abs)
+      // 磁盘已被外部改过 → 不解析、不覆盖（与 writer 的乐观并发同一判定）
+      if (disk && disk.sha256 !== expectedSha) {
+        auditVault('doc.vault_writeback_conflict', doc.id, {
+          rel_path: relPath,
+          expected_sha: expectedSha,
+          actual_sha: disk.sha256,
+        })
+        return { kind: 'conflict', relPath }
+      }
+      if (disk) {
+        const patched = patchVaultContent({
+          diskContent: disk.content,
+          oldSpans: listVaultBlockSpans(db, doc.id),
+          blocks: patchBlocksOf(ctx, doc.id),
+          frontmatterPatch,
+        })
+        if (patched) plan = { ...patched, mode: 'patch' }
+      }
+    }
+    if (!plan) {
+      const parts = serializeVaultDocParts(ctx, doc, row)
+      plan = { ...parts, spans: null, mode: 'full' }
+      if (existing) auditVault('doc.vault_written_full', doc.id, { rel_path: relPath })
+    }
 
     let written
     try {
-      written = await writeVaultFileAtomic(abs, content, { expectedSha })
+      written = await writeVaultFileAtomic(abs, plan.content, { expectedSha })
     } catch (e) {
       if (e instanceof VaultConflictError) {
         auditVault('doc.vault_writeback_conflict', doc.id, {
@@ -137,13 +203,13 @@ export function startVaultWriteback(
       throw e
     }
 
-    if (row && !row.deleted_at) {
+    if (existing) {
       touchVaultFileAfterWrite(db, notebookId, relPath, {
         content_sha256: written.sha256,
         size: written.size,
         mtime_ms: written.mtimeMs,
         doc_updated_at: doc.updated_at,
-        frontmatter_raw: frontmatterRaw || null,
+        frontmatter_raw: plan.frontmatterRaw || null,
         meta_hash: metaHash,
       })
     } else {
@@ -155,13 +221,18 @@ export function startVaultWriteback(
         size: written.size,
         mtime_ms: written.mtimeMs,
         doc_updated_at: doc.updated_at,
-        frontmatter_raw: frontmatterRaw || null,
+        frontmatter_raw: plan.frontmatterRaw || null,
         meta_hash: metaHash,
       })
     }
+
+    // 刷新区间记录：局部改写直接用新偏移，整篇则按写出的正文重新解析
+    if (plan.spans) replaceVaultBlockSpans(db, doc.id, plan.spans)
+    else recordVaultSpans(db, doc.id, { body: plan.body })
+
     if (written.unchanged && row) return { kind: 'skipped', reason: 'unchanged' }
-    auditVault('doc.vault_written', doc.id, { rel_path: relPath, created: !row || Boolean(row.deleted_at) })
-    return { kind: 'written', relPath, created: !row || Boolean(row.deleted_at) }
+    auditVault('doc.vault_written', doc.id, { rel_path: relPath, created: !existing, mode: plan.mode })
+    return { kind: 'written', relPath, created: !existing }
   }
 
   const trashDoc = (docId: string): WritebackOutcome => {

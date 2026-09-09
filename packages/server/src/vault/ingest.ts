@@ -38,6 +38,7 @@ import {
   upsertVaultFile,
   deleteVaultFileRow,
 } from '../store/vaultFiles'
+import { deleteVaultBlockSpans } from '../store/vaultSpans'
 import { insertDocFromMarkdown } from '../services/docImport'
 import { syncMarkdownChildren } from '../services/markdownChildSync'
 import { parseMarkdownToBlocksForSave } from '../services/markdownParse'
@@ -56,6 +57,7 @@ import { deleteVectorMany } from '../ai/indexer'
 import { applyAiExcludeChange, writeDocAiExclude } from '../ai/aiExclude'
 import { readVaultFile } from './writer'
 import { desiredStatusFromFile, vaultMetaHash } from './meta'
+import { recordVaultSpans } from './spans'
 import { isIgnoredRelPath, isMarkdownPath, titleFromRelPath, toVaultAbsPath, toVaultRelPath } from './paths'
 import type { VaultConfig } from './config'
 import type { SerialLock } from './lock'
@@ -239,6 +241,8 @@ export async function ingestVaultFile(ctx: VaultContext, pathInput: string): Pro
       meta: { status: readDocStatus(docRow), tags: readTags(docRow), source: 'vault' },
     })
     scheduleDocIndex(created.docId, created.blockIds)
+    // 记录顶层块区间，供后续按块局部写回（解析结果与入库块对不上时自动清空 → 退回整篇）
+    recordVaultSpans(db, created.docId, { body: stripped.body })
     auditVault('doc.vault_ingested', created.docId, { rel_path: relPath, block_count: created.blockIds.length })
     return { relPath, docId: created.docId, action: 'created', kept: 0, inserted: created.blockIds.length, updated: 0, deleted: 0 }
   }
@@ -296,6 +300,8 @@ export async function ingestVaultFile(ctx: VaultContext, pathInput: string): Pro
   fireAfterDeleteMany(deletedIds)
   const reindexIds = [...new Set([...restoredIds.filter((id) => id !== docId), ...insertedIds, ...updatedIds])]
   scheduleDocIndex(docId, reindexIds)
+  // 顶层块区间随本次 ingest 整表重写（写回的字节保真基线）
+  recordVaultSpans(db, docId, { body: stripped.body })
   fireAfterCreateMany(getBlocksByIds(db, insertedIds).map(rowToBlock))
   for (const row of getBlocksByIds(db, updatedIds)) fireAfterUpdate(rowToBlock(row))
   fireAfterUpdate(rowToBlock(docAfter))
@@ -344,6 +350,7 @@ export function removeVaultFile(ctx: VaultContext, pathInput: string): IngestRes
     markVaultFileDeleted(db, notebookId, relPath)
   })()
   void deleteVectorMany(allIds)
+  deleteVaultBlockSpans(db, doc.id)
   fireAfterDeleteMany(allIds)
   fireDocAfterDelete({ doc: rowToBlock(doc) })
   auditVault('doc.deleted', doc.id, { block_count: allIds.length, rel_path: relPath })
