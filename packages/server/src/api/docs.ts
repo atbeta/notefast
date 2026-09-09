@@ -28,6 +28,7 @@ import {
 } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
+import { getNotebookVaultBinding } from '../store/vaultFiles'
 import { deleteShare, deleteSharesByDocIds, listSharedDocIdsFor } from '../store/shares'
 import { insertDocFromMarkdown, normalizeDocTags } from '../services/docImport'
 import { syncMarkdownChildren } from '../services/markdownChildSync'
@@ -434,6 +435,10 @@ function applyMarkdownReplace(
     return { ok: false, error: `文档 ${id} 不存在` }
   }
 
+  // vault notebook：文件层承担历史与同步（RFC 0001 D6）——不记整篇快照、不触发多端同步。
+  // 判定走 notebooks.kind，而不是「有没有 VAULT_PATH 环境变量」：同一进程可换 DATA_DIR。
+  const isVaultNotebook = getNotebookVaultBinding(db, docRow.notebook_id)?.kind === 'vault'
+
   const rawInputs = parseMarkdownToBlocksForSave(markdown, docRow.notebook_id)
   // 剥离与标题重复的首个 H1（导出的 markdown 首行是 `# {标题}`，直接回解析会重复入库）
   const newTitle = title || docRow.content
@@ -441,7 +446,7 @@ function applyMarkdownReplace(
 
   // 按指纹对齐旧子块：只改动的块换内容，id 保持稳定（搜索 hash / 引用 / 向量不再整篇作废）。
   // checkpoint=true（切走/手动）才记整篇快照；自动保存不记，避免历史刷屏。
-  const shouldSnapshot = checkpoint
+  const shouldSnapshot = checkpoint && !isVaultNotebook
   const oldMarkdown = shouldSnapshot
     ? blocksToMarkdown(buildBlockTree(fetchDocBlocks(db, id)))
     : ''
@@ -481,8 +486,9 @@ function applyMarkdownReplace(
   }
   const updatedDocRow = getBlockById(db, id)!
   fireAfterUpdate(rowToBlock(updatedDocRow))
-  // 编辑器整篇保存：去抖自动同步（fire-and-forget，未配置时静默跳过）
-  scheduleSyncNow()
+  // 编辑器整篇保存：去抖自动同步（fire-and-forget，未配置时静默跳过）；
+  // vault notebook 不同步（RFC 0001 D6），保存本身已发 doc 级事件供写回消费
+  if (!isVaultNotebook) scheduleSyncNow()
 
   // 编辑器自动保存用 omit_tree=1 跳过整棵树（可到数 MB）；默认仍返回树，保持 API 形状。
   const tree = includeTree ? buildBlockTree(fetchDocBlocks(db, id)) : []

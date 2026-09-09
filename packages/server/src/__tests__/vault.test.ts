@@ -20,7 +20,7 @@ import {
   updateBlock,
 } from '../store/blocks'
 import { insertRef, findRefByPair } from '../store/refs'
-import { getVaultFileByDocId, getVaultFileByPath, getNotebookVaultBinding, listVaultFiles } from '../store/vaultFiles'
+import { getVaultFileByDocId, getVaultFileByPath, getNotebookVaultBinding, bindNotebookToVault, listVaultFiles } from '../store/vaultFiles'
 import { insertDocFromMarkdown } from '../services/docImport'
 import { readTags, readDocStatus, stripDocFrontmatter } from '@notefast/core'
 import { readDocAiExclude } from '../ai/aiExcludeQuery'
@@ -935,6 +935,49 @@ describe('vault conflict copy', () => {
       expect(readFileSync(join(vaultDir, 'dup.md'), 'utf8')).toBe('external B\n')
     } finally {
       wb.stop()
+    }
+  })
+})
+
+// ───────────────────── 编辑器整篇保存（V-205） ─────────────────────
+
+describe('vault editor save', () => {
+  test('PUT markdown → 写回 → 再 ingest 为 unchanged；vault 文档不记 doc_snapshots', async () => {
+    const app = new Hono()
+    app.route('/api/v1/docs', docsRouter)
+    bindNotebookToVault(getDb(), notebookId, vaultDir)
+    try {
+      writeVault('editor.md', '第一段\n\n第二段\n')
+      const r = await ingestVaultFile(ctx, 'editor.md')
+      const snapshots = (): number =>
+        (getDb().query('SELECT count(*) AS c FROM doc_snapshots WHERE doc_id = ?').get(r.docId!) as { c: number }).c
+      const before = snapshots()
+
+      const wb = startVaultWriteback(ctx)
+      try {
+        const res = await app.request(`/api/v1/docs/${r.docId}/markdown`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            markdown: '第一段\n\n第二段（编辑器改）\n\n第三段\n',
+            // checkpoint=true 在 db notebook 下会写整篇快照；vault notebook 必须跳过
+            checkpoint: true,
+          }),
+        })
+        expect(res.status).toBe(200)
+
+        const out = await wb.handle({ doc_id: r.docId!, kind: 'updated', at: new Date().toISOString() })
+        expect(out).toMatchObject({ kind: 'written' })
+        expect(readFileSync(join(vaultDir, 'editor.md'), 'utf8')).toBe('第一段\n\n第二段（编辑器改）\n\n第三段\n')
+        // 写回后映射 sha 已对齐：watcher 回声是 no-op
+        expect((await ingestVaultFile(ctx, 'editor.md')).action).toBe('unchanged')
+        // vault 文档不记整篇快照（RFC 0001 D6）
+        expect(snapshots()).toBe(before)
+      } finally {
+        wb.stop()
+      }
+    } finally {
+      getDb().query(`UPDATE notebooks SET kind = 'db', vault_root = NULL WHERE id = ?`).run(notebookId)
     }
   })
 })
