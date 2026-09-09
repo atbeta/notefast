@@ -39,9 +39,13 @@ CREATE TABLE vault_files (
   ingested_at     TEXT NOT NULL,
   doc_updated_at  TEXT NOT NULL,          -- ingest 结束时 doc.updated_at；写回订阅者据此识别回声（RFC 0003）
   deleted_at      TEXT,                   -- 非空 = 文件已消失、文档在回收站
+  frontmatter_raw TEXT,                   -- 用户手写 frontmatter 原文，写回行级透传（RFC 0003 阶段 B）
+  meta_hash       TEXT,                   -- sha(tags + ai_exclude + status)，补齐 touchUpdatedAt:false 的回声盲区
   PRIMARY KEY (notebook_id, rel_path)
 );
 ```
+
+顶层块在正文中的位置另存 `vault_block_spans(doc_id, block_id, start, end, content_hash)`（RFC 0003 阶段 C）：按块局部写回靠它复用磁盘字节。
 
 `content_sha256` 一列承担四个职责，是整个设计里最重要的字段：
 

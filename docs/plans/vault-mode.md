@@ -39,7 +39,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 | M1 基础 | 文件 → 索引闭环 + 整篇写回 | — | 完成（`c4f9e2c` `b14d6c5`） |
 | M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **完成**（V-201 ✅ V-202 ✅ V-203 ✅ V-204 ✅ V-205 ✅） |
 | M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | V-304 ✅ |
-| M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | |
+| M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | V-401 ✅ |
 | M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | |
 
 依赖关系：V-201 → V-202 → V-203 → V-204；V-203 依赖 V-304（解析器要能无损识别 Obsidian 语法，否则区间对不上）；V-301/302 可与 M2 并行；V-303 独立；M4 依赖 M2 完成；M5 最后。
@@ -185,6 +185,13 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **要点**：`/api/v1` 只做加法；`path` 参数走 `toVaultRelPath` 守卫；工具描述用中文
 - **验收**：mcpTools 测试覆盖两个新工具与 `path` 参数；`GET /docs/:id` 在 db notebook 下无 `vault_path` 字段
 - **依赖**：M2 · **估算**：1 人天
+- **状态**：完成（`36317e8`）
+  - `GET /docs/:id` 与 MCP `notefast_get_doc` 在 vault 文档上带 `vault_path`（相对 vault 根）；判定走 `notebooks.kind`，db notebook 不出现该字段
+  - MCP 新增工具组 `mcp/tools/vault.ts`：`notefast_vault_status`（只读；未启用返回 `enabled:false` + hint）、`notefast_vault_rebuild`（写工具，走 scope 门禁；未启用报 `invalid_params`）
+  - `notefast_create_doc` 新增可选 `path`：走 `toVaultRelPath` 守卫（越界 → `invalid_params`），存进文档根 `properties.vault_hint_path`；未启用 vault 时传 `path` 直接报错
+  - 写回落盘尊重 `vault_hint_path`：以 `.md` 结尾视为完整文件名（重名追加 ` (n)`），否则视为子目录；越界提示回退 vault 根
+  - 运行时通过 `vault/index.ts` 的 `getActiveVaultRuntime()` 暴露（不改 `registerMcpTools` 签名；`start()` 挂上、`stop()` 清空）
+  - 测试：`mcpVault.test.ts`（5 例，真实 MCP 会话）、`vault.test.ts`（`GET /docs/:id` 字段有无、`vault_hint_path` 落盘 / 去重 / 越界）
 
 ### V-402 Web：设置页 vault 面板 + 文档头来源
 
