@@ -11,6 +11,7 @@
     "backup:restore": "bun run src/cli/restoreBackup.ts",
     "eval": "bun run src/eval/runEval.ts",
     "eval:private": "bun run src/eval/generatePrivateEval.ts",
+    "bench:vault": "bun run src/eval/vaultBench.ts",
     "lint": "oxlint src",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
