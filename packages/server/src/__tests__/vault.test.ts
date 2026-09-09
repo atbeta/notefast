@@ -38,6 +38,7 @@ import { ingestVaultFile, reconcileVault, removeVaultFile, moveVaultFilePath, ty
 import { createVaultQueue, startVaultWatcher } from '../vault/watcher'
 import { serializeVaultDoc, startVaultWriteback } from '../vault/writeback'
 import { createVaultRouter, createVaultRuntime } from '../vault'
+import { needsReanalyzeOnStatusChange } from '../vault/meta'
 
 let dataDir: string
 let vaultDir: string
@@ -1255,6 +1256,18 @@ describe('vault wikilinks', () => {
     unlinkSync(join(vaultDir, 'gone.md'))
     removeVaultFile(ctx, 'gone.md')
     expect(refBetween(block, gone.docId!)).toBe(false)
+  })
+})
+
+// ───────────────────── 状态级联（待议收口） ─────────────────────
+
+describe('vault status cascade', () => {
+  test('只有升格回 note 才需要重抽实体与链（与 PATCH /docs/:id/status 一致）', () => {
+    expect(needsReanalyzeOnStatusChange('inbox', 'note')).toBe(true)
+    expect(needsReanalyzeOnStatusChange('archived', 'note')).toBe(true)
+    expect(needsReanalyzeOnStatusChange('note', 'inbox')).toBe(false)
+    expect(needsReanalyzeOnStatusChange('note', 'note')).toBe(false)
+    expect(needsReanalyzeOnStatusChange('inbox', 'archived')).toBe(false)
   })
 })
 

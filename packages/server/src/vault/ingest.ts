@@ -56,8 +56,9 @@ import {
 import { scheduleDocIndex } from '../ai/indexJobs'
 import { deleteVectorMany } from '../ai/indexer'
 import { applyAiExcludeChange, writeDocAiExclude } from '../ai/aiExclude'
+import { reanalyzeDoc } from '../ai/autoLink'
 import { readVaultFile } from './writer'
-import { desiredStatusFromFile, vaultMetaHash } from './meta'
+import { desiredStatusFromFile, needsReanalyzeOnStatusChange, vaultMetaHash } from './meta'
 import { recordVaultSpans } from './spans'
 import { resolveUnresolvedForDoc, syncVaultWikilinks, wikilinkNamesForPath } from './wikilinks'
 import { isIgnoredRelPath, isMarkdownPath, titleFromRelPath, toVaultAbsPath, toVaultRelPath } from './paths'
@@ -140,6 +141,8 @@ async function applyFileMetaToDoc(
       before: { status: oldStatus },
       meta: { status: wantStatus, source: 'vault' },
     })
+    // 升格（inbox / archived → note）：文档重新进入流通，补齐实体与链——与 PATCH /docs/:id/status 一致
+    if (needsReanalyzeOnStatusChange(oldStatus, wantStatus)) reanalyzeDoc(doc.id)
     changed = true
   }
 

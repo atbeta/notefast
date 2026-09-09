@@ -49,3 +49,12 @@ export function desiredStatusFromFile(
   if (fromFile === 'inbox' || fromFile === 'note') return fromFile
   return current === 'archived' ? 'archived' : 'note'
 }
+
+/**
+ * 状态升级（inbox / archived → note）要不要重新抽实体与链。
+ * 与 `PATCH /docs/:id/status` 的级联一致：文件也是用户操作，不该比 API 少做一步。
+ * （archived → note 只能由 API 触发，但把判定收在一处更不容易走偏。）
+ */
+export function needsReanalyzeOnStatusChange(oldStatus: DocStatus, newStatus: DocStatus): boolean {
+  return newStatus === 'note' && (oldStatus === 'inbox' || oldStatus === 'archived')
+}
