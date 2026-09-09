@@ -256,6 +256,11 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - **目标**：`docs/vault-migration.md` 从草稿变为可执行步骤（RFC 0001 D7）
 - **要点**：实际走一遍「v0.86 实例 → `GET /api/v1/export/archive` → 整理文件夹（去 `--<id>` 后缀、`media/` → `assets/`）→ 新 DATA_DIR + VAULT_PATH」；记录丢失项与耗时；README 加一节
 - **依赖**：V-303（图片路径）、V-501 · **估算**：0.5 人天
+- **状态**：完成（`d3bbc95`）
+  - 真机走通：0.86.1 实例建 5 篇文档（含标签 / inbox / ai_exclude / 图片 / `^abc123` / 无标签）→ `GET /api/v1/export/archive` → `ditto -x -k` 解压 → 整理 → 新 `DATA_DIR` + `VAULT_PATH` 启动
+  - **实测结论**：标签、创建时间、`^abc123`（→ `properties.obsidian_block_id`）、图片直出（`/vault/raw/assets/<sha>.png` 200）全部保留；文档 / 块 id 重建；**inbox 与 ai_exclude 丢失**（导出档不写这两键）；首次对账 5 文件 52ms；外部改文件 → 可搜 382ms；NoteFast 写回就地改写且 frontmatter / 未动块逐字节保留
+  - **两个真实坑（已写进指引）**：① macOS 自带 `unzip` 不认 zip 的 UTF-8 标志位，中文文件名报 `Illegal byte sequence` → 用 `ditto -x -k` 或 GNU `unzip -O UTF-8`；② 导出文件名是 slug（空格→`-`），与正文首行 `# 原标题` 不一致 → `stripTitleHeading` 不生效，多出一个同名 heading 块，可用 H1 重命名文件名规避
+  - README 增加迁移小节 + `VAULT_RECONCILE_MINUTES` 说明
 
 ### V-503 Docker
 
