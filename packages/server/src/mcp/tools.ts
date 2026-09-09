@@ -12,6 +12,7 @@
  * - autoLink.ts  AutoLink：run（高置信直接建链，无审核队列）
  * - share.ts     分享：share_doc / get_share / unshare_doc
  * - pinnedViews.ts 固定视图：list_pinned_views / pin_view / unpin_view
+ * - vault.ts     vault 模式：status / rebuild（未启用时返回 enabled:false）
  *
  * 调用方（mcp/server.ts）只依赖本文件的 registerMcpTools，签名不变。
  */
@@ -26,6 +27,7 @@ import { registerAutoLinkTools } from './tools/autoLink'
 import { registerEntityTools } from './tools/entityTools'
 import { registerShareTools } from './tools/share'
 import { registerPinnedViewTools } from './tools/pinnedViews'
+import { registerVaultTools } from './tools/vault'
 
 export function registerMcpTools(server: McpServer, notebookId: string, getScopes: () => string[] = () => ['admin']): void {
   // 清单只填一次：并发 session 不得 reset 全局数组，否则 GET /mcp/tools 会被清空
@@ -45,4 +47,5 @@ export function registerMcpTools(server: McpServer, notebookId: string, getScope
   registerEntityTools(ctx)
   registerShareTools(ctx)
   registerPinnedViewTools(ctx)
+  registerVaultTools(ctx)
 }

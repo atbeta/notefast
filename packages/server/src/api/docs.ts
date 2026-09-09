@@ -28,7 +28,7 @@ import {
 } from '../store/blocks'
 import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
-import { getNotebookVaultBinding } from '../store/vaultFiles'
+import { getNotebookVaultBinding, getVaultPathForDoc } from '../store/vaultFiles'
 import { deleteShare, deleteSharesByDocIds, listSharedDocIdsFor } from '../store/shares'
 import { insertDocFromMarkdown, normalizeDocTags } from '../services/docImport'
 import { syncMarkdownChildren } from '../services/markdownChildSync'
@@ -167,7 +167,11 @@ docs.get('/:id', (c) => {
 
   const tree = buildBlockTree(fetchDocBlocks(db, id))
 
-  return c.json(tree.length > 0 ? tree[0] : null)
+  const root = tree.length > 0 ? tree[0] : null
+  if (!root) return c.json(null)
+  // vault 文档带出来源文件路径（`/api/v1` 只做加法：db notebook 下不出现该字段）
+  const vaultPath = getVaultPathForDoc(db, docRow.notebook_id, id)
+  return c.json(vaultPath ? { ...root, vault_path: vaultPath } : root)
 })
 
 /**

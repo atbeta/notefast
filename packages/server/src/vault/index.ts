@@ -24,6 +24,21 @@ export { loadVaultConfigFromEnv } from './config'
 
 type Db = ReturnType<typeof getDb>
 
+/**
+ * 当前进程的 vault runtime（未启用 vault 时为 null）。
+ * MCP 工具在 app.ts 注册之后才被调用，且启动顺序保证 runtime 先就位，
+ * 因此这里用模块级引用而不是改 registerMcpTools 的签名。
+ */
+let activeRuntime: VaultRuntime | null = null
+
+export function getActiveVaultRuntime(): VaultRuntime | null {
+  return activeRuntime
+}
+
+export function setActiveVaultRuntime(runtime: VaultRuntime | null): void {
+  activeRuntime = runtime
+}
+
 export interface VaultStatus {
   enabled: true
   root: string
@@ -84,6 +99,7 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
       if (binding.kind !== 'vault' || binding.vault_root !== ctx.config.root) {
         bindNotebookToVault(ctx.db, ctx.notebookId, ctx.config.root)
       }
+      setActiveVaultRuntime(runtime)
 
       if (ctx.config.watch && !watcher) {
         watcher = await startVaultWatcher(ctx, {
@@ -120,6 +136,7 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
         writeback.stop()
         writeback = null
       }
+      if (activeRuntime === runtime) setActiveVaultRuntime(null)
     },
     status() {
       return {

@@ -51,6 +51,11 @@ export interface InsertDocFromMarkdownOptions {
    * 查找既有文档做更新而非重复新建（见 findDocIdBySource）。
    */
   source?: DocSourceRef
+  /**
+   * 额外的文档根 properties（与 source 合并）。
+   * vault 模式用 `vault_hint_path` 指定落盘子目录（见 vault/writeback.ts）。
+   */
+  properties?: Record<string, unknown>
 }
 
 /** 外部来源标识（未来连接器：webhook / RSS / 剪藏插件等） */
@@ -115,7 +120,10 @@ export function insertDocFromMarkdown(
     db.run('PRAGMA defer_foreign_keys = ON')
 
     const initialTags = resolvedTags.length ? JSON.stringify(resolvedTags) : '[]'
-    const docProperties = opts.source ? JSON.stringify({ source: opts.source }) : '{}'
+    const docProperties = JSON.stringify({
+      ...(opts.source ? { source: opts.source } : {}),
+      ...(opts.properties ?? {}),
+    })
 
     insertBlock(db, {
       id: docId,

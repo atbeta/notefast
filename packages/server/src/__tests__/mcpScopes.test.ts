@@ -151,7 +151,7 @@ describe('MCP 只读 scope 的工具层门禁', () => {
 
     const msg = list.body[0] as { result: { tools: Array<{ name: string; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean } }> } }
     const tools = msg.result.tools
-    expect(tools.length).toBe(35)
+    expect(tools.length).toBe(37)
     // 每个工具都有 readOnlyHint 标注
     for (const t of tools) {
       expect(typeof t.annotations?.readOnlyHint).toBe('boolean')
@@ -173,6 +173,8 @@ describe('MCP 只读 scope 的工具层门禁', () => {
     expect(byName.get('notefast_pin_view')!.readOnlyHint).toBe(false)
     expect(byName.get('notefast_unpin_view')!.readOnlyHint).toBe(false)
     expect(byName.get('notefast_unpin_view')!.destructiveHint).toBe(true)
+    expect(byName.get('notefast_vault_status')!.readOnlyHint).toBe(true)
+    expect(byName.get('notefast_vault_rebuild')!.readOnlyHint).toBe(false)
   })
 })
 

@@ -1023,6 +1023,71 @@ describe('vault editor save', () => {
   })
 })
 
+// ───────────────────── API / 落盘位置（V-401） ─────────────────────
+
+describe('vault doc API', () => {
+  test('GET /docs/:id：vault 文档带 vault_path，db notebook 不带该字段', async () => {
+    const app = new Hono()
+    app.route('/api/v1/docs', docsRouter)
+    writeVault('api.md', '来自文件\n')
+    const r = await ingestVaultFile(ctx, 'api.md')
+
+    const plain = (await (await app.request(`/api/v1/docs/${r.docId}`)).json()) as Record<string, unknown>
+    expect(plain.vault_path).toBeUndefined()
+
+    bindNotebookToVault(getDb(), notebookId, vaultDir)
+    try {
+      const withVault = (await (await app.request(`/api/v1/docs/${r.docId}`)).json()) as Record<string, unknown>
+      expect(withVault.vault_path).toBe('api.md')
+      expect(withVault.content).toBe('api')
+    } finally {
+      getDb().query(`UPDATE notebooks SET kind = 'db', vault_root = NULL WHERE id = ?`).run(notebookId)
+    }
+  })
+
+  test('properties.vault_hint_path：新建文档落到指定子目录 / 文件名，越界回退根目录', async () => {
+    const wb = startVaultWriteback(ctx)
+    try {
+      const { docId } = insertDocFromMarkdown(getDb(), {
+        notebookId,
+        title: '收件',
+        markdown: '正文\n',
+        properties: { vault_hint_path: 'inbox' },
+      })
+      expect(await wb.handle({ doc_id: docId, kind: 'created', at: new Date().toISOString() })).toMatchObject({
+        kind: 'written',
+        relPath: 'inbox/收件.md',
+      })
+      expect(existsSync(join(vaultDir, 'inbox', '收件.md'))).toBe(true)
+
+      // 显式文件名 + 重名去重
+      const { docId: dup } = insertDocFromMarkdown(getDb(), {
+        notebookId,
+        title: '收件',
+        markdown: '第二篇\n',
+        properties: { vault_hint_path: 'inbox/收件.md' },
+      })
+      expect(await wb.handle({ doc_id: dup, kind: 'created', at: new Date().toISOString() })).toMatchObject({
+        relPath: 'inbox/收件 (2).md',
+      })
+
+      // 越界提示（../）不能逃出 vault：回退到根目录
+      const { docId: bad } = insertDocFromMarkdown(getDb(), {
+        notebookId,
+        title: '越界',
+        markdown: 'x\n',
+        properties: { vault_hint_path: '../outside' },
+      })
+      expect(await wb.handle({ doc_id: bad, kind: 'created', at: new Date().toISOString() })).toMatchObject({
+        relPath: '越界.md',
+      })
+      expect(existsSync(join(vaultDir, '越界.md'))).toBe(true)
+    } finally {
+      wb.stop()
+    }
+  })
+})
+
 // ───────────────────── runtime + routes ─────────────────────
 
 describe('vault runtime & routes', () => {

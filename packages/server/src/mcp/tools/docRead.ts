@@ -24,6 +24,7 @@ import {
   listDocRows,
 } from '../../store/blocks'
 import { listBacklinks } from '../../store/refs'
+import { getVaultPathForDoc } from '../../store/vaultFiles'
 import {
   isDocAiExcluded,
   loadAiExcludedDocIds,
@@ -94,11 +95,14 @@ export function registerDocReadTools(ctx: ToolContext): void {
 
       const allRows = fetchDocBlocks(db, doc_id)
       const tree = buildBlockTree(allRows)
+      // vault 文档带出来源文件路径（相对 vault 根）；db notebook 下不出现该字段
+      const vaultPath = getVaultPathForDoc(db, docRow.notebook_id, doc_id)
 
       return {
         content: [toText({
           doc: tree.length > 0 ? limitTreeDepth(tree[0], depth ?? 5) : null,
           block_count: allRows.length,
+          ...(vaultPath ? { vault_path: vaultPath } : {}),
         })],
       }
     },

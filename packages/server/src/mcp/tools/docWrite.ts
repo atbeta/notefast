@@ -20,6 +20,8 @@ import {
   rowToBlock,
 } from '@notefast/core'
 import { insertDocFromMarkdown, normalizeDocTags } from '../../services/docImport'
+import { getActiveVaultRuntime } from '../../vault'
+import { toVaultRelPath } from '../../vault/paths'
 import {
   createDocFromMarkdownFile,
   DocFileImportError,
@@ -293,12 +295,30 @@ export function registerDocWriteTools(ctx: ToolContext): void {
         markdown: z.string().describe('Markdown 内容（短文）。不要为了打标签而写 YAML frontmatter。块级公式用独占行 $$ 或 ```math；行内用 $...$。'),
         status: z.enum(['note', 'inbox']).optional().describe('inbox=收集箱；缺省 note'),
         tags: z.array(z.string().min(1).max(64)).max(64).optional().describe('仅当用户明确指定标签时传入；未指定则省略，不要自行归纳'),
+        path: z
+          .string()
+          .optional()
+          .describe('vault 模式落盘位置（相对 vault 根）：以 .md 结尾视为完整文件名，否则视为子目录（如 inbox）。未启用 vault 时传了会报错。'),
       },
     },
-    async ({ notebook_id, title, markdown, status, tags }) => {
+    async ({ notebook_id, title, markdown, status, tags, path }) => {
       const nid = notebook_id || notebookId
       const nbErr = validateNotebook(db, nid)
       if (nbErr) return nbErr
+
+      // vault 落盘位置提示：越界路径必须挡在写入之前（toVaultRelPath 守卫）
+      let hintPath: string | undefined
+      if (path) {
+        const runtime = getActiveVaultRuntime()
+        if (!runtime) {
+          return toolError('invalid_params', '当前实例未启用 vault 模式，path 参数不可用')
+        }
+        try {
+          hintPath = toVaultRelPath(runtime.ctx.config.root, path)
+        } catch (e) {
+          return toolError('invalid_params', e instanceof Error ? e.message : 'path 非法', { path })
+        }
+      }
 
       const { docId, blockIds, parsedCount } = insertDocFromMarkdown(db, {
         notebookId: nid,
@@ -307,6 +327,7 @@ export function registerDocWriteTools(ctx: ToolContext): void {
         status,
         tags: tags?.length ? normalizeDocTags(tags) : undefined,
         applyFrontmatterTags: false,
+        ...(hintPath ? { properties: { vault_hint_path: hintPath } } : {}),
       })
 
       // Hook 触发（fire-and-forget）：先 doc，再批量子块；索引进度走 scheduleDocIndex

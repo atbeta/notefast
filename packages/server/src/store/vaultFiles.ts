@@ -52,6 +52,16 @@ export function getVaultFileByDocId(db: Db, docId: string): VaultFileRow | null 
   return (db.query('SELECT * FROM vault_files WHERE doc_id = ?').get(docId) as VaultFileRow | undefined) ?? null
 }
 
+/**
+ * 文档 → vault 相对路径（RFC 0001 D2：AI 与前端要能说出「这篇来自哪个文件」）。
+ * 非 vault notebook / 没有映射 / 映射已删除 → null（调用方据此不加 `vault_path` 字段）。
+ */
+export function getVaultPathForDoc(db: Db, notebookId: string, docId: string): string | null {
+  if (getNotebookVaultBinding(db, notebookId)?.kind !== 'vault') return null
+  const row = getVaultFileByDocId(db, docId)
+  return row && !row.deleted_at ? row.rel_path : null
+}
+
 /** 已删除（文件消失）且内容 sha 相同的映射：用于 rename / 重现配对 */
 export function findDeletedVaultFileBySha(db: Db, notebookId: string, sha: string): VaultFileRow | null {
   return (

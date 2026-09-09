@@ -39,7 +39,7 @@ import type { VaultConfig } from './config'
 import type { VaultContext } from './ingest'
 import { readVaultDocMeta, vaultMetaHash } from './meta'
 import { patchVaultContent, type PatchBlock } from './patch'
-import { toVaultAbsPath } from './paths'
+import { toVaultAbsPath, toVaultRelPath } from './paths'
 import { blockSubtreeHash, recordVaultSpans, topLevelBlocks } from './spans'
 import { readVaultFile, VaultConflictError, writeVaultFileAtomic } from './writer'
 
@@ -97,7 +97,7 @@ export function serializeVaultDoc(ctx: VaultContext, doc: BlockRow, row: VaultFi
 }
 
 /** 标题 → 文件名：去掉路径与文件系统保留字符，空则 untitled；重名追加 (n) */
-export function uniqueRelPathForTitle(root: string, title: string): string {
+export function uniqueRelPathForTitle(root: string, title: string, hintPath?: string | null): string {
   const stem =
     Array.from(title)
       .map((ch) => (ch.charCodeAt(0) < 0x20 || /[\\/:*?"<>|]/.test(ch) ? ' ' : ch))
@@ -105,13 +105,47 @@ export function uniqueRelPathForTitle(root: string, title: string): string {
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 120) || 'untitled'
-  let candidate = `${stem}.md`
+
+  // 落盘位置提示（MCP create_doc 的 path）：以 .md 结尾视为完整文件名，否则视为目录；
+  // 越界路径由 toVaultRelPath 抛错，这里退回 vault 根
+  let dir = ''
+  let base = `${stem}.md`
+  if (hintPath) {
+    let rel = ''
+    try {
+      rel = toVaultRelPath(root, hintPath)
+    } catch {
+      rel = ''
+    }
+    if (rel) {
+      const slash = rel.lastIndexOf('/')
+      if (/\.md$/i.test(rel)) {
+        dir = slash >= 0 ? rel.slice(0, slash + 1) : ''
+        base = slash >= 0 ? rel.slice(slash + 1) : rel
+      } else {
+        dir = rel.endsWith('/') ? rel : `${rel}/`
+      }
+    }
+  }
+
+  let candidate = `${dir}${base}`
   let n = 2
   while (existsSync(join(root, candidate))) {
-    candidate = `${stem} (${n}).md`
+    candidate = `${dir}${base.replace(/\.md$/i, '')} (${n}).md`
     n++
   }
   return candidate
+}
+
+/** 文档根 properties.vault_hint_path（MCP create_doc 的 path 参数落在这里） */
+function vaultHintPathOf(doc: BlockRow): string | null {
+  try {
+    const props = JSON.parse(doc.properties || '{}') as Record<string, unknown>
+    const hint = props.vault_hint_path
+    return typeof hint === 'string' && hint.trim() ? hint.trim() : null
+  } catch {
+    return null
+  }
 }
 
 /** 冲突副本文件名时间戳：yyyyMMdd-HHmmss */
@@ -201,7 +235,7 @@ export function startVaultWriteback(
     }
 
     const existing = Boolean(row && !row.deleted_at)
-    const relPath = row ? row.rel_path : uniqueRelPathForTitle(config.root, doc.content)
+    const relPath = row ? row.rel_path : uniqueRelPathForTitle(config.root, doc.content, vaultHintPathOf(doc))
     const abs = toVaultAbsPath(config.root, relPath)
     const expectedSha = existing ? row!.content_sha256 : null
 
