@@ -85,6 +85,26 @@ struct AppMenuCommands: Commands {
             .keyboardShortcut("r")
         }
 
+        CommandMenu("Vault") {
+            Button("打开文件夹为 vault…") {
+                model.openVaultFolder()
+            }
+            .keyboardShortcut("o", modifiers: [.command, .shift])
+            if !model.recentVaults.isEmpty {
+                Divider()
+                ForEach(model.recentVaults.prefix(5)) { entry in
+                    Button(entry.name) {
+                        model.activateVault(at: entry.url)
+                    }
+                }
+            }
+            Divider()
+            Button("退出 vault 模式") {
+                model.leaveVaultMode()
+            }
+            .disabled(!model.isVaultMode)
+        }
+
         CommandMenu("帮助") {
             Button("关于 NoteFast") {
                 model.openAbout()

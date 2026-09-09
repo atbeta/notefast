@@ -1,7 +1,10 @@
 //! 内嵌 NoteFast engine 进程管理（对应 server `src/native/bootstrap.ts` 契约）。
 //!
 //! 契约：
-//! - spawn：`notefast-server --data-dir <dir> --port 0 --assets-dir <engineDir>`
+//! - spawn（普通 db notebook）：`notefast-server --data-dir <dir> --assets-dir <engineDir>`
+//! - spawn（vault 模式）：`notefast-server --vault-path <folder> --app-support-dir <dir> --assets-dir <engineDir>`；
+//!   **DATA_DIR 不由壳计算**，engine 按 `sha256(canonical vault path)` 前 12 位派生到应用支持目录
+//!   （一个 vault 一个索引，RFC 0001 D4）——口径只留在 engine 侧，壳不复制业务规则
 //! - **stdout 是机器握手通道**：常规日志全部在 stderr，启动成功后写一行 `NF_READY <json>`；
 //!   客户端按 `NF_READY ` 前缀扫描即可容错（与 macOS 壳 `EngineProcess.swift` 同模式）
 //! - 优雅停机：Windows 无 SIGTERM 语义，经 `POST /internal/shutdown`（bootstrap 内部路由，
@@ -10,7 +13,7 @@
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::thread;
@@ -22,6 +25,19 @@ const SHUTDOWN_GRACE: Duration = Duration::from_secs(8);
 /// CREATE_NO_WINDOW：engine 是控制台子系统 exe，不带此标志会在每次启动时闪一个控制台窗口
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// 启动模式：壳只选模式，DATA_DIR 的派生口径留在 engine 侧
+#[derive(Clone, Debug)]
+pub enum LaunchMode {
+    /// 普通 db notebook：壳显式给数据目录
+    DataDir(PathBuf),
+    /// vault 模式：壳给 vault 路径 + 应用支持目录，
+    /// engine 派生 `DATA_DIR = <app_support_dir>/<sha256(vault 路径) 前 12 位>`（RFC 0001 D4）
+    Vault {
+        vault_path: PathBuf,
+        app_support_dir: PathBuf,
+    },
+}
 
 /// 握手行 JSON（字段对齐 bootstrap 的 NF_READY 输出；缺省字段宽容处理）。
 /// `url` 是壳层入口地址（由 port 计算，非握手 JSON 自带），序列化时一并下发前端
@@ -38,6 +54,12 @@ pub struct EngineInfo {
     pub api_path: Option<String>,
     #[serde(default)]
     pub mcp_path: Option<String>,
+    /// vault 模式才有：规范化后的 vault 根目录（engine 回报）
+    #[serde(default)]
+    pub vault_path: Option<String>,
+    /// vault 模式才有：engine 实际使用的 DATA_DIR（= 应用支持目录/<sha256 前 12 位>）
+    #[serde(default)]
+    pub data_dir: Option<String>,
 }
 
 impl EngineInfo {
@@ -97,22 +119,40 @@ pub fn engine_binary_name() -> &'static str {
 
 /// 启动 engine 并阻塞等待 NF_READY 握手；超时或进程提前退出则报错（并清理进程）。
 /// 注意：握手阻塞期间调用线程被占用，壳层应放线程池/异步执行。
-pub fn start(engine_dir: &Path, data_dir: &Path) -> Result<EngineHandle, String> {
+pub fn start(engine_dir: &Path, mode: LaunchMode) -> Result<EngineHandle, String> {
     let binary = engine_dir.join(engine_binary_name());
     if !binary.exists() {
         return Err(format!("engine 可执行文件不存在: {}", binary.display()));
     }
-    std::fs::create_dir_all(data_dir)
-        .map_err(|e| format!("无法创建数据目录 {}: {e}", data_dir.display()))?;
 
     let mut cmd = new_engine_command(&binary);
-    cmd.arg("--data-dir")
-        .arg(data_dir)
-        // 不传 --port：用 bootstrap 默认固定端口（3876，被占用自动回退随机）——
-        // 固定端口让页面 origin 稳定，localStorage（主题/语言缓存）跨启动持久
-        .arg("--assets-dir")
-        .arg(engine_dir)
-        .stdout(Stdio::piped())
+    // 不传 --port：用 bootstrap 默认固定端口（3876，被占用自动回退随机）——
+    // 固定端口让页面 origin 稳定，localStorage（主题/语言缓存）跨启动持久
+    cmd.arg("--assets-dir").arg(engine_dir);
+    match &mode {
+        LaunchMode::DataDir(data_dir) => {
+            std::fs::create_dir_all(data_dir)
+                .map_err(|e| format!("无法创建数据目录 {}: {e}", data_dir.display()))?;
+            cmd.arg("--data-dir").arg(data_dir);
+        }
+        LaunchMode::Vault {
+            vault_path,
+            app_support_dir,
+        } => {
+            if !vault_path.is_dir() {
+                return Err(format!("vault 文件夹不可用: {}", vault_path.display()));
+            }
+            // 每 vault 的索引目录由 engine 自建，这里只保证父目录存在
+            std::fs::create_dir_all(app_support_dir).map_err(|e| {
+                format!("无法创建应用支持目录 {}: {e}", app_support_dir.display())
+            })?;
+            cmd.arg("--vault-path")
+                .arg(vault_path)
+                .arg("--app-support-dir")
+                .arg(app_support_dir);
+        }
+    }
+    cmd.stdout(Stdio::piped())
         // stderr 不接管：engine 日志（含启动告警）不进握手通道
         .stderr(Stdio::null());
 
@@ -182,4 +222,39 @@ fn send_shutdown_request(port: u16) {
     let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
     let mut buf = [0u8; 64];
     let _ = stream.read(&mut buf);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_handshake_plain_mode() {
+        let info = parse_handshake(r#"NF_READY {"port":3876,"version":"0.31.0","notebookId":"nb-1"}"#)
+            .expect("应解析成功");
+        assert_eq!(info.port, 3876);
+        assert_eq!(info.version, "0.31.0");
+        assert_eq!(info.notebook_id.as_deref(), Some("nb-1"));
+        assert!(info.vault_path.is_none());
+        assert!(info.data_dir.is_none());
+        assert_eq!(info.entry_url(), "http://127.0.0.1:3876/?native=tauri");
+    }
+
+    #[test]
+    fn parse_handshake_vault_mode() {
+        let line = r#"NF_READY {"port":3876,"version":"0.31.0","vaultPath":"/Users/x/MyVault","dataDir":"/Users/x/Library/Application Support/NoteFast/ab12cd34ef56"}"#;
+        let info = parse_handshake(line).expect("应解析成功");
+        assert_eq!(info.vault_path.as_deref(), Some("/Users/x/MyVault"));
+        assert_eq!(
+            info.data_dir.as_deref(),
+            Some("/Users/x/Library/Application Support/NoteFast/ab12cd34ef56")
+        );
+    }
+
+    #[test]
+    fn parse_handshake_ignores_noise() {
+        assert!(parse_handshake("").is_none());
+        assert!(parse_handshake("[log] NoteFast Server running").is_none());
+        assert!(parse_handshake("NF_READY not-json").is_none());
+    }
 }

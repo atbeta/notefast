@@ -25,14 +25,22 @@ final class AppModel: ObservableObject {
     @Published var availableUpdate: ReleaseInfo?
     /// 冷启动带文件：跳过首页，WebView 尚未有 URL 时显示「正在打开…」
     @Published var openingImportedFile = false
+    /// 当前 vault 根目录；nil = 普通 db notebook 模式
+    @Published private(set) var vaultPath: URL?
+    /// 最近打开的 vault（壳侧记忆，最新在前）
+    @Published private(set) var recentVaults: [VaultEntry] = []
+    /// 引擎实际使用的 DATA_DIR（vault 模式下 = 应用支持目录/<sha256 前 12 位>，由握手回报）
+    @Published private(set) var engineDataDir: URL?
 
     let navigator = WebNavigator()
 
+    private let recentVaultsStore = RecentVaults()
     private var engine: EngineProcess?
     private var terminateObserver: NSObjectProtocol?
     private var transientMessageTask: Task<Void, Never>?
 
     init() {
+        recentVaults = recentVaultsStore.all()
         // App 退出前优雅停机 engine（SIGTERM drain → 关 DB）。
         // queue: .main 保证回调在主线程同步执行（termination 期间 Task 可能被推迟）；
         // assumeIsolated 让编译器认可「此处确在主 actor」，避免误报并发隔离。
@@ -58,6 +66,8 @@ final class AppModel: ObservableObject {
         if case .running = state { return true }
         return false
     }
+
+    var isVaultMode: Bool { vaultPath != nil }
 
     var baseURL: URL? {
         guard case .running(let hs) = state else { return nil }
@@ -119,7 +129,13 @@ final class AppModel: ObservableObject {
             state = .failed(error)
             return
         }
-        let engine = EngineProcess(engineDir: engineDir, dataDir: Self.dataDir())
+        let engine = EngineProcess(
+            engineDir: engineDir,
+            dataDir: Self.dataDir(),
+            // vault 模式：壳只传文件夹 + 应用支持目录，DATA_DIR 由引擎按 sha256 派生
+            vaultPath: vaultPath,
+            appSupportDir: Self.dataDir()
+        )
         self.engine = engine
         // 运行期崩溃监控：握手成功后进程意外退出 → 进入失败态（FailureView 可一键重试）+ 系统通知
         engine.onUnexpectedExit = { [weak self] code in
@@ -136,6 +152,7 @@ final class AppModel: ObservableObject {
             let hs = try engine.start(timeout: 20)
             state = .running(hs)
             engineVersion = hs.version
+            engineDataDir = hs.dataDir.map { URL(fileURLWithPath: $0) }
             verifyEngineVersion(hs.version)
             // 冷启动双击 .md：不要先灌首页再跳文档（两次整页加载）。
             // 有待导入文件时直接 drain → 导入完成后导航到文档/收集箱。
@@ -158,6 +175,7 @@ final class AppModel: ObservableObject {
     func stop() {
         engine?.stop(wait: 8)
         engine = nil
+        engineDataDir = nil
     }
 
     /// 契约稳定守则：engine 版本低于客户端最低支持 → 标记不兼容
@@ -220,10 +238,57 @@ final class AppModel: ObservableObject {
         throw EngineError.binaryNotFound("bundle 与 NOTEFAST_ENGINE_DIR 均未找到内嵌 engine")
     }
 
+    /// 应用支持目录：普通模式即 engine 数据目录；vault 模式下是每 vault 索引的父目录
+    /// （索引目录 = 本目录/<sha256(vault 路径) 前 12 位>，由引擎派生）
     private static func dataDir() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         return base.appendingPathComponent("NoteFast", isDirectory: true)
+    }
+
+    // MARK: - vault（打开文件夹为 vault；壳只传路径，索引位置由引擎派生）
+
+    /// 菜单入口：选文件夹 → 以 vault 模式重启引擎
+    func openVaultFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+        panel.title = "打开文件夹为 vault"
+        panel.message = "选择笔记文件夹：该文件夹是权威存储，NoteFast 只在应用支持目录里建派生索引。"
+        panel.prompt = "打开为 vault"
+        if let current = vaultPath ?? recentVaults.first?.url {
+            panel.directoryURL = current
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        activateVault(at: url)
+    }
+
+    /// 以 vault 模式打开（重启引擎；同一 vault 已在跑则不动）
+    func activateVault(at url: URL) {
+        let target = URL(fileURLWithPath: RecentVaults.normalize(url.path))
+        if let current = vaultPath, RecentVaults.comparisonKey(current.path) == RecentVaults.comparisonKey(target.path), isRunning {
+            showMainWindow()
+            return
+        }
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: target.path, isDirectory: &isDir), isDir.boolValue else {
+            showTransientMessage("无法打开：文件夹不存在（\(target.path)）")
+            recentVaults = recentVaultsStore.remove(target.path)
+            return
+        }
+        vaultPath = target
+        recentVaults = recentVaultsStore.remember(target.path)
+        showMainWindow()
+        restart()
+    }
+
+    /// 退出 vault 模式，回到普通 db notebook（索引仍在应用支持目录，不删任何文件）
+    func leaveVaultMode() {
+        guard vaultPath != nil else { return }
+        vaultPath = nil
+        restart()
     }
 
     // MARK: - 诊断入口（帮助菜单：Finder 中显示 engine 日志 / 数据目录）
@@ -239,6 +304,11 @@ final class AppModel: ObservableObject {
     }
 
     func revealDataDir() {
+        // vault 模式下显示引擎实际使用的派生索引目录（握手回报），否则显示默认数据目录
+        if let dir = engineDataDir {
+            NSWorkspace.shared.open(dir)
+            return
+        }
         Self.openDataDir()
     }
 

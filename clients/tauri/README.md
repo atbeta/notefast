@@ -11,6 +11,7 @@ Windows 桌面客户端 = **Tauri 壳 + 内嵌 server engine**（复用 `package
 │  Rust 壳                                             │
 │   ├─ engine.rs    spawn notefast-server.exe          │
 │   │               └─ NF_READY 握手 → 入口 URL         │
+│   ├─ vault.rs     最近 vault 列表（壳侧 JSON）        │
 │   ├─ ui/          最小启动页（invoke engine_start → 跳转）│
 │   └─ WebView2     加载 engine 的 web-dist（?native=tauri）│
 └──────────────┬───────────────────────────────────────┘
@@ -27,6 +28,27 @@ Windows 桌面客户端 = **Tauri 壳 + 内嵌 server engine**（复用 `package
 - **优雅停机**：Windows 无 SIGTERM，Rust 侧退出时 `POST /internal/shutdown`
   （bootstrap 内部路由，仅回环 + trustedLocal 可及）→ engine drain → 关 DB；
   8s 超时未退则 TerminateProcess 兜底
+
+## 打开文件夹为 vault（V-403）
+
+启动页上的「打开文件夹为 vault…」+ 最近 vault 列表（`vault.rs`，存
+`<数据目录>/recent-vaults.json`，最新在前、去重、上限 10）即为入口：
+
+```text
+选择文件夹 → vault_open / vault_pick_and_open
+  → 停掉 db 模式 engine
+  → spawn notefast-server.exe --vault-path <folder> --app-support-dir <应用支持目录>
+  → engine 派生 DATA_DIR = <应用支持目录>/<sha256(canonical vault path) 前 12 位>
+  → NF_READY 握手回来 → 整页跳转新入口
+```
+
+- **壳只传路径**：`DATA_DIR` 的派生口径留在 engine（`packages/server/src/native/bootstrap.ts`
+  的 `vaultDataDir`），一个 vault 一个索引（RFC 0001 D4），索引不进 vault 文件夹
+- 应用支持目录：便携版 = exe 所在目录；安装版 = `%APPDATA%/com.notefast.desktop`
+- 启动页的 vault 入口只在 engine 就绪后出现（切换 vault 要先停旧实例，避免抢句柄）
+- 已运行时想切 vault：再启动一次 `NoteFast.exe --vault-picker`（单实例回调直接弹选择框），
+  或退出重开（重开回到默认数据目录）
+- 每次启动默认是**普通 db notebook 模式**；不自动重开上次的 vault（避免改变既有启动行为）
 
 ## 开发
 
@@ -70,6 +92,7 @@ bun run build:full
 | 进程管理 | `EngineProcess.swift` | `src-tauri/src/engine.rs` |
 | 握手 | `parseHandshake`（NF_READY 前缀扫描） | `parse_handshake`（同契约） |
 | 停机 | SIGTERM | `POST /internal/shutdown` + 超时强杀 |
+| 打开文件夹为 vault | Vault 菜单（⌘⇧O）+ 最近列表 | 启动页按钮 + 最近列表（`vault.rs`） |
 | dev 定位 engine | `NOTEFAST_ENGINE_DIR` | 同 |
 | UI 复用 | WKWebView 加载 engine 页面 | WebView2 加载 engine 页面（同源，天然无桥） |
 | 打开外链 | `NSWorkspace` 拦截 http(s)/mailto | `tauri-plugin-opener`（`opener:default`） |

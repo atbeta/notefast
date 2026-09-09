@@ -9,6 +9,10 @@ public struct EngineHandshake: Codable, Equatable {
     public let notebookId: String?
     public let apiPath: String?
     public let mcpPath: String?
+    /// vault 模式才有：规范化后的 vault 根目录（引擎回报，壳层据此显示来源）
+    public let vaultPath: String?
+    /// vault 模式才有：引擎实际使用的 DATA_DIR（= 应用支持目录/<sha256 前 12 位>）
+    public let dataDir: String?
 }
 
 public enum EngineError: Error, LocalizedError, Equatable {
@@ -37,13 +41,21 @@ public enum EngineError: Error, LocalizedError, Equatable {
 /// 内嵌 NoteFast engine 进程管理。
 ///
 /// 契约（见 server `src/native/bootstrap.ts`）：
-/// - spawn：`notefast-server --data-dir <dir> --port 0 --assets-dir <engineDir>`
+/// - spawn（普通 db notebook）：`notefast-server --data-dir <dir> --assets-dir <engineDir>`
+/// - spawn（vault 模式）：`notefast-server --vault-path <folder> --app-support-dir <dir> --assets-dir <engineDir>`；
+///   **DATA_DIR 不由壳计算**，引擎按 `sha256(canonical vault path)` 前 12 位派生到应用支持目录
+///   （一个 vault 一个索引，RFC 0001 D4）——派生口径只留在引擎侧，壳不复制业务规则
 /// - **stdout 是机器握手通道**：常规日志全部在 stderr，启动成功后写一行 `NF_READY <json>`；
 ///   客户端按 `NF_READY ` 前缀扫描即可容错
 /// - SIGTERM 触发 engine 优雅停机（drain 在飞请求 + 关闭 DB），stop() 等待后再强退兜底
 public final class EngineProcess {
     public let engineDir: URL
+    /// 普通模式的数据目录；vault 模式下不使用（引擎自行派生，见 `vaultPath`）
     public let dataDir: URL
+    /// vault 根目录；nil = 普通 db notebook 模式
+    public let vaultPath: URL?
+    /// 每 vault 索引的父目录（应用支持目录）；仅 vault 模式传给引擎
+    public let appSupportDir: URL?
 
     private var process: Process?
     private var pipe: Pipe?
@@ -58,12 +70,16 @@ public final class EngineProcess {
     /// stop() 主动停机标记：区分「我们杀的」与「意外崩溃」
     private var stopping = false
 
-    public init(engineDir: URL, dataDir: URL) {
+    public init(engineDir: URL, dataDir: URL, vaultPath: URL? = nil, appSupportDir: URL? = nil) {
         self.engineDir = engineDir
         self.dataDir = dataDir
+        self.vaultPath = vaultPath
+        self.appSupportDir = appSupportDir
     }
 
     public var isRunning: Bool { process?.isRunning ?? false }
+
+    public var isVaultMode: Bool { vaultPath != nil }
 
     public var engineBinaryURL: URL {
         engineDir.appendingPathComponent("notefast-server")
@@ -78,6 +94,28 @@ public final class EngineProcess {
         return try? JSONDecoder().decode(EngineHandshake.self, from: data)
     }
 
+    /// 启动参数（纯函数，便于单测）：
+    /// - vault 模式：`--vault-path <folder> --app-support-dir <dir>`，**不传 --data-dir**——
+    ///   引擎按 sha256 派生每 vault 的 DATA_DIR（壳不复制这条规则）
+    /// - 普通模式：`--data-dir <dir>`
+    public static func launchArguments(
+        engineDir: URL,
+        dataDir: URL,
+        vaultPath: URL? = nil,
+        appSupportDir: URL? = nil
+    ) -> [String] {
+        var args = ["--assets-dir", engineDir.path]
+        if let vaultPath {
+            args += ["--vault-path", vaultPath.path]
+            if let appSupportDir {
+                args += ["--app-support-dir", appSupportDir.path]
+            }
+        } else {
+            args += ["--data-dir", dataDir.path]
+        }
+        return args
+    }
+
     /// 启动并阻塞等待握手；timeout 内未收到 NF_READY 则终止进程并抛 .handshakeTimeout。
     @discardableResult
     public func start(timeout: TimeInterval = 15) throws -> EngineHandshake {
@@ -85,12 +123,22 @@ public final class EngineProcess {
             throw EngineError.binaryNotFound(engineBinaryURL.path)
         }
         guard !isRunning else { throw EngineError.alreadyRunning }
-        try FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
+        if vaultPath != nil && appSupportDir == nil {
+            throw EngineError.launchFailed("vault 模式缺少 appSupportDir（每 vault 索引的父目录）")
+        }
+        // 普通模式建数据目录；vault 模式建应用支持目录（派生索引目录由引擎自建）
+        let dirToCreate = vaultPath == nil ? dataDir : (appSupportDir ?? dataDir)
+        try FileManager.default.createDirectory(at: dirToCreate, withIntermediateDirectories: true)
 
         let proc = Process()
         proc.executableURL = engineBinaryURL
         // 不传 --port：bootstrap 默认固定端口（origin 稳定 → localStorage 持久，主题/语言不丢）
-        proc.arguments = ["--data-dir", dataDir.path, "--assets-dir", engineDir.path]
+        proc.arguments = Self.launchArguments(
+            engineDir: engineDir,
+            dataDir: dataDir,
+            vaultPath: vaultPath,
+            appSupportDir: appSupportDir
+        )
         let outPipe = Pipe()
         proc.standardOutput = outPipe
         // stderr 落盘日志（~/Library/Logs/NoteFast/engine.log）：不进握手通道，但出问题时要有线索可查

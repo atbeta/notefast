@@ -6,11 +6,13 @@
 mod engine;
 mod import;
 mod ui_theme;
+mod vault;
 
-use engine::{EngineHandle, EngineInfo};
-use std::path::PathBuf;
+use engine::{EngineHandle, EngineInfo, LaunchMode};
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_dialog::DialogExt;
 
 /// 全局 engine 句柄（同一时刻只有一个内嵌实例）
 struct EngineState(Mutex<Option<EngineHandle>>);
@@ -45,21 +47,142 @@ async fn engine_start(app: AppHandle, state: State<'_, EngineState>) -> Result<E
             }
         }
     }
-    let engine_dir = resolve_engine_dir(&app)?;
     let data_dir = default_data_dir(&app)?;
+    launch(&app, LaunchMode::DataDir(data_dir)).await
+}
 
-    let started = tauri::async_runtime::spawn_blocking(move || {
-        engine::start(&engine_dir, &data_dir)
-    })
-    .await
-    .map_err(|e| format!("engine 启动任务失败: {e}"))??;
-
+/// 同步启动（阻塞握手）并写入 EngineState；调用方负责放线程池。
+fn start_and_store(app: &AppHandle, mode: LaunchMode) -> Result<EngineInfo, String> {
+    let engine_dir = resolve_engine_dir(app)?;
+    let started = engine::start(&engine_dir, mode)?;
     let info = started.info.clone();
-    *state
+    *app.state::<EngineState>()
         .0
         .lock()
         .map_err(|_| "engine state 锁被污染".to_string())? = Some(started);
     Ok(info)
+}
+
+/// 启动（或重启）engine，成功后写入 EngineState。mode 决定 --data-dir / --vault-path。
+async fn launch(app: &AppHandle, mode: LaunchMode) -> Result<EngineInfo, String> {
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || start_and_store(&app, mode))
+        .await
+        .map_err(|e| format!("engine 启动任务失败: {e}"))?
+}
+
+/// 停掉当前 engine（优雅停机；无实例时是 no-op）。阻塞，调用方放线程池。
+fn stop_engine(app: &AppHandle) {
+    if let Some(state) = app.try_state::<EngineState>() {
+        if let Ok(mut guard) = state.0.lock() {
+            if let Some(mut handle) = guard.take() {
+                handle.stop();
+            }
+        }
+    }
+}
+
+/// 应用支持目录：每 vault 索引的父目录（engine 派生 `<本目录>/<sha256 前 12 位>`）。
+/// 便携模式 = exe 所在目录；安装版 = `%APPDATA%/com.notefast.desktop`（与 macOS 壳
+/// `~/Library/Application Support/NoteFast` 对应）。
+fn app_support_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Some(exe_dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf())) {
+        if exe_dir.join(PORTABLE_MARKER).is_file() {
+            return Ok(exe_dir);
+        }
+    }
+    app.path()
+        .app_data_dir()
+        .map_err(|e| format!("无法定位应用支持目录: {e}"))
+}
+
+// ───────────────────────── vault（打开文件夹为 vault，V-403）─────────────────────────
+
+/// 最近打开的 vault（壳侧记忆，最新在前）
+#[tauri::command]
+fn vault_recent(app: AppHandle) -> Vec<String> {
+    default_data_dir(&app).map(|d| vault::read(&d)).unwrap_or_default()
+}
+
+/// 弹系统文件夹选择框，选中后以 vault 模式重启 engine；用户取消返回 null
+#[tauri::command]
+async fn vault_pick_and_open(app: AppHandle) -> Result<Option<EngineInfo>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(folder) = app
+            .dialog()
+            .file()
+            .set_title("打开文件夹为 vault")
+            .blocking_pick_folder()
+        else {
+            return Ok(None);
+        };
+        let path = folder
+            .into_path()
+            .map_err(|e| format!("无法解析所选文件夹: {e}"))?;
+        open_vault(&app, &path).map(Some)
+    })
+    .await
+    .map_err(|e| format!("vault 切换任务失败: {e}"))?
+}
+
+/// 以 vault 模式打开指定文件夹（启动页的最近列表走这里，不再弹框）
+#[tauri::command]
+async fn vault_open(app: AppHandle, path: String) -> Result<EngineInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || open_vault(&app, Path::new(&path)))
+        .await
+        .map_err(|e| format!("vault 切换任务失败: {e}"))?
+}
+
+/// 以 vault 模式打开文件夹（阻塞）：校验 → 记最近列表 → 停旧实例 → 起新实例。
+/// DATA_DIR 由 engine 派生，壳只传文件夹与应用支持目录。
+fn open_vault(app: &AppHandle, path: &Path) -> Result<EngineInfo, String> {
+    if !path.is_dir() {
+        // 文件夹被删 / 移动：从最近列表里清掉，避免启动页一直挂着一条打不开的条目
+        if let Ok(data_dir) = default_data_dir(app) {
+            vault::forget(&data_dir, &path.to_string_lossy());
+        }
+        return Err(format!("文件夹不可用: {}", path.display()));
+    }
+    let data_dir = default_data_dir(app)?;
+    vault::remember(&data_dir, &path.to_string_lossy());
+
+    stop_engine(app);
+    let mode = LaunchMode::Vault {
+        vault_path: path.to_path_buf(),
+        app_support_dir: app_support_dir(app)?,
+    };
+    start_and_store(app, mode)
+}
+
+/// 启动页/单实例回调共用的「选文件夹 → 开 vault」入口（失败只记日志）
+fn pick_and_open_vault(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let picked = tauri::async_runtime::spawn_blocking({
+            let app = app.clone();
+            move || {
+                app.dialog()
+                    .file()
+                    .set_title("打开文件夹为 vault")
+                    .blocking_pick_folder()
+            }
+        })
+        .await
+        .ok()
+        .flatten();
+        let Some(folder) = picked else { return };
+        let Ok(path) = folder.into_path() else { return };
+        let result = tauri::async_runtime::spawn_blocking({
+            let app = app.clone();
+            move || open_vault(&app, &path)
+        })
+        .await;
+        match result {
+            Ok(Ok(_)) => {}
+            Ok(Err(e)) => eprintln!("[notefast] 打开 vault 失败: {e}"),
+            Err(e) => eprintln!("[notefast] 打开 vault 任务失败: {e}"),
+        }
+    });
 }
 
 /// 定位 engine 产物目录，优先级：
@@ -109,10 +232,15 @@ fn resolve_engine_dir(app: &AppHandle) -> Result<PathBuf, String> {
 /// 不存在则认为是 NSIS 安装版（走 AppData）。
 const PORTABLE_MARKER: &str = "notefast-portable";
 
-/// 数据目录：
+/// 第二实例参数：不重启应用，直接弹「打开文件夹为 vault」选择框
+const VAULT_PICKER_FLAG: &str = "--vault-picker";
+
+/// 数据目录（普通 db notebook）：
 /// - 便携模式（exe 同目录存在 `notefast-portable`）→ `<exe 父目录>/data`，整个文件夹复制走即可
 /// - NSIS 安装模式 → `%APPDATA%/com.notefast.desktop/data`（macOS 壳同理）
 /// - `NOTEFAST_DATA_DIR` 环境变量可覆盖（CI / 自定义部署）
+///
+/// vault 模式的索引目录不在这里，由 engine 派生到 `app_support_dir`（见上）。
 fn default_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     if let Ok(custom) = std::env::var("NOTEFAST_DATA_DIR") {
         let custom = custom.trim();
@@ -120,17 +248,7 @@ fn default_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
             return Ok(PathBuf::from(custom));
         }
     }
-    if let Some(exe_dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf())) {
-        let marker = exe_dir.join(PORTABLE_MARKER);
-        if marker.is_file() {
-            return Ok(exe_dir.join("data"));
-        }
-    }
-    let base = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法定位数据目录: {e}"))?;
-    Ok(base.join("data"))
+    Ok(app_support_dir(app)?.join("data"))
 }
 
 pub fn run() {
@@ -153,7 +271,7 @@ pub fn run() {
             // 已运行时双击 .md：第二实例 argv 带文件路径 → 打开即导入
             // （is_initial=false：应用已运行，导入完成后延时跳转即可，不改变启动页行为）
             let files: Vec<PathBuf> = args
-                .into_iter()
+                .iter()
                 .map(PathBuf::from)
                 .filter(|p| import::is_markdown_path(p) && p.is_file())
                 .collect();
@@ -164,6 +282,11 @@ pub fn run() {
                         *g = true;
                     }
                 }
+            }
+            // `NoteFast.exe --vault-picker`（第二实例）：不重启应用，直接弹 vault 选择框。
+            // 补启动页那 1.4s 窗口不易点中的问题——用户可把该参数做成快捷方式。
+            if args.iter().any(|a| a == VAULT_PICKER_FLAG) {
+                pick_and_open_vault(app);
             }
             import::handle_open_files(app, files, false);
         }))
@@ -179,6 +302,9 @@ pub fn run() {
             engine_start,
             has_pending_open_files,
             ui_theme_pref,
+            vault_recent,
+            vault_pick_and_open,
+            vault_open,
         ])
         .setup(move |app| {
             // 启动闪屏：conf 里 visible=false。light/dark 用 ui-preferences；

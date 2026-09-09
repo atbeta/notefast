@@ -16,6 +16,11 @@ SwiftUI App（NoteFastApp）
 ## 已实现（P0 壳 + 阅读为主）
 
 - 内嵌 server 生命周期：spawn（`--data-dir / --assets-dir`）→ stdout `NF_READY` 握手 → 退出 SIGTERM drain；**运行期崩溃自愈**（engine 意外退出 → 失败态 UI 一键重试）
+- **打开文件夹为 vault（V-403）**：Vault 菜单 ⌘⇧O 选文件夹 → 以 vault 模式重启 engine。
+  壳只传 `--vault-path` + `--app-support-dir`，`DATA_DIR` 由引擎按 `sha256(canonical vault path)`
+  前 12 位派生到 `~/Library/Application Support/NoteFast/<hash>`（一个 vault 一个索引，RFC 0001 D4），
+  壳不复制这条规则；最近 vault 存 UserDefaults（`RecentVaults`，最新在前、去重、上限 10），
+  菜单直接重开；「退出 vault 模式」回到普通 db notebook（不删任何文件）
 - WKWebView 内容区（`/?native=macos`，全窗口 Web 应用，隐藏式标题栏）
 - 导航策略：同源放行（target=_blank 当前页打开）、**外链交系统浏览器**、下载（`<a download>`/blob 导出/不可展示 MIME）存 `~/Downloads` 重名自动加序号
 - 菜单栏：⌘N 新建笔记、⌘, 设置、⌘[ ⌘] 后退/前进、⌘+ ⌘- ⌘0 缩放、⌘P 打印、⌘R 刷新、复制本机 MCP 地址、显示 engine 日志/数据目录
@@ -51,6 +56,8 @@ swift test
 - 本机需已执行 `bun run build:engine`（app bundle 内嵌 `dist-engine` 产物快照）
 - dev 模式（`swift run`）：`NOTEFAST_ENGINE_DIR=../packages/server/dist-engine swift run NoteFastApp`
 - 数据目录 `~/Library/Application Support/NoteFast/`（首次启动自动创建）
+- vault 模式：索引在 `~/Library/Application Support/NoteFast/<sha256(vault 路径) 前 12 位>/`，
+  vault 文件夹里只放用户文件（引擎不写索引、不写 `.notefast/`）
 - 免鉴权模式（engine 未配置 AUTH_PASSWORD）：回环 trustedLocal 自动放行，无需登录
 
 ## 待办（规划）
