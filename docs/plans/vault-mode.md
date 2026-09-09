@@ -38,7 +38,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 |---|---|---|---|
 | M1 基础 | 文件 → 索引闭环 + 整篇写回 | — | 完成（`c4f9e2c` `b14d6c5`） |
 | M2 写回保真 | 用户文件字节级不被无故改写 | V-201 … V-205 | **完成**（V-201 ✅ V-202 ✅ V-203 ✅ V-204 ✅ V-205 ✅） |
-| M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | V-304 ✅ |
+| M3 引用与资产 | wikilink / 块锚 / 图片在索引层可用 | V-301 … V-304 | V-301 ✅ V-304 ✅ |
 | M4 体验 | MCP / Web / 桌面壳 / 自愈 | V-401 … V-404 | V-401 ✅ |
 | M5 发布 | 性能、迁移、Docker、版本 | V-501 … V-504 | |
 
@@ -139,6 +139,12 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
   - 新文件 created 后查 `vault_unresolved_links` 中 `target_name` 匹配的行，重解析对应源块（软解析的「后到先解」）
 - **验收**：测试——A 引用 `[[B]]` 而 B 尚不存在 → unresolved；创建 B → ref 出现、unresolved 清空；改名 B → 引用保留（已由 move 保证，加断言）；`[[B|别名]]` 正确
 - **依赖**：无 · **估算**：2 人天
+- **状态**：完成（`0a44cfe`）
+  - 解析在块粒度：代码块整块跳过、行内代码等长打码后匹配；`![[embed]]` 不建 ref（V-303 渲染）
+  - 目标解析按「最短唯一路径」：精确 rel_path（补 `.md`）→ 唯一 basename → basename 忽略大小写；多义与缺失都记 `vault_unresolved_links`
+  - 带锚点的引用在 V-302 前一律记 unresolved（不建 ref），避免指错块
+  - 引用目标 = 文档根 block id → 改名 / 移动天然保持；回收站删除时把「谁引用过这个名字」补记进 unresolved，同路径重现后由 `resolveUnresolvedForDoc` 自动补回
+  - 测试：`vault.test.ts` 7 例（缺失→补建、别名与路径、多义、代码块与行内代码、改名保持、回收站重现补回、删除清理）
 
 ### V-302 `#heading` / `^block` 锚点
 

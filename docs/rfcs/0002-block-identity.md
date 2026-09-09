@@ -45,7 +45,7 @@ CREATE TABLE vault_files (
 );
 ```
 
-顶层块在正文中的位置另存 `vault_block_spans(doc_id, block_id, start, end, content_hash)`（RFC 0003 阶段 C）：按块局部写回靠它复用磁盘字节。
+顶层块在正文中的位置另存 `vault_block_spans(doc_id, block_id, start, end, content_hash)`（RFC 0003 阶段 C）：按块局部写回靠它复用磁盘字节。未解析的 wikilink 目标存在 `vault_unresolved_links(notebook_id, source_block_id, target_name, anchor)`（§引用解析）。
 
 `content_sha256` 一列承担四个职责，是整个设计里最重要的字段：
 
@@ -110,14 +110,16 @@ grace 窗口默认 `max(1000ms, stabilityMs × 3)`；窗口内文件在原路径
 
 对账与 watcher 队列、写回共用一把串行锁；事件在对账期间排队，不会交错。
 
-## 引用解析（v0.88，未落地）
+## 引用解析（V-301 已落地；锚点 V-302 待做）
 
 `[[Note]]`、`[[Note#Heading]]`、`[[Note#^abc123]]` 在 ingest 时解析为 `block_refs` 行，按最严到最宽降级：
 
 1. `^abc123` 命中块级 `properties.obsidian_block_id`（Obsidian 用户自定义短码，不是我们的 UUID）
 2. `#Heading` 命中该文档下 heading 块（slug 比较）
 3. 文件名按 Obsidian「最短唯一路径」规则命中 `vault_files.rel_path`
-4. 失败 → 不建 ref，记 `unresolved_links` 供 UI 显示，不抛错
+4. 失败 → 不建 ref，记 `vault_unresolved_links` 供 UI 显示，不抛错
+
+现状：无锚点引用已按 3 → 4 落地（`vault/wikilinks.ts`，`ref_type='wikilink'`，目标为文档根 id）；带锚点的引用暂时记 unresolved，等 V-302 落地后再升级为块级引用。`vault_unresolved_links(notebook_id, source_block_id, target_name, anchor)` 随源块重写，目标文件出现 / 改名 / 从回收站恢复时按 `target_name` 反查补建。
 
 ## 验证标准
 
