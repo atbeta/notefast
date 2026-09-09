@@ -10,7 +10,7 @@
  */
 
 import { BlockType } from '@notefast/core'
-import { getBlocksByIds } from '../store/blocks'
+import { fetchDocBlocks, getBlocksByIds } from '../store/blocks'
 import { deleteRefsFromSource, findRefByPair, insertRef } from '../store/refs'
 import { getVaultFileByDocId, listVaultFiles } from '../store/vaultFiles'
 import {
@@ -129,6 +129,54 @@ export function resolveWikilinkDoc(index: VaultFileIndex, target: string): strin
   return uniqueDocId(index.byBasenameLower.get(base.toLowerCase()))
 }
 
+// ───────────────────── 锚点解析（V-302） ─────────────────────
+
+/** Obsidian heading 比较规则：trim + 折叠空白 + 忽略大小写 */
+export function normalizeHeadingSlug(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function readObsidianBlockId(properties: string | null | undefined): string | null {
+  if (!properties) return null
+  try {
+    const obj = JSON.parse(properties) as Record<string, unknown>
+    const id = obj.obsidian_block_id
+    return typeof id === 'string' && id ? id : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 锚点 → 文档内具体块（RFC 0002 §引用解析降级顺序）：
+ * 1. `^abc123` 命中 `properties.obsidian_block_id`
+ * 2. 其余按 heading 文本做 slug 比较（命中多个取第一个）
+ * 找不到返回 null（调用方退化为文档级引用 + 记 unresolved）。
+ */
+export function resolveAnchorBlock(ctx: VaultContext, docId: string, anchor: string): string | null {
+  const raw = anchor.trim()
+  if (!raw) return null
+  const rows = fetchDocBlocks(ctx.db, docId)
+
+  if (raw.startsWith('^')) {
+    const id = raw.slice(1)
+    if (!/^[A-Za-z0-9-]+$/.test(id)) return null
+    for (const row of rows) {
+      if (row.id === docId) continue
+      if (readObsidianBlockId(row.properties) === id) return row.id
+    }
+    return null
+  }
+
+  const slug = normalizeHeadingSlug(raw)
+  if (!slug) return null
+  for (const row of rows) {
+    if (row.type !== BlockType.Heading) continue
+    if (normalizeHeadingSlug(row.content ?? '') === slug) return row.id
+  }
+  return null
+}
+
 // ───────────────────── 与 ingest 的衔接 ─────────────────────
 
 export interface SyncVaultWikilinksOptions {
@@ -161,20 +209,34 @@ export function syncVaultWikilinks(ctx: VaultContext, opts: SyncVaultWikilinksOp
     if (links.length === 0) continue
 
     const linked = new Set<string>()
+    const linkTo = (targetBlockId: string): void => {
+      if (linked.has(targetBlockId)) return
+      linked.add(targetBlockId)
+      // (source,target) 全局唯一：可能已有其他类型的引用，存在就跳过
+      if (!findRefByPair(db, row.id, targetBlockId)) {
+        insertRef(db, { sourceId: row.id, targetId: targetBlockId, refType: 'wikilink' })
+      }
+    }
+
     for (const link of links) {
       // 空目标 = 同文档锚点链接 `[[#标题]]`
       const docId = link.target ? resolveWikilinkDoc(index, link.target) : (row.root_id as string)
-      // 带锚点的引用在 V-302 前一律记 unresolved：先不建 ref，避免指错块
-      if (!docId || link.anchor) {
+      if (!docId) {
         unresolved.push({ source_block_id: row.id, target_name: link.target, anchor: link.anchor })
         continue
       }
-      if (linked.has(docId)) continue
-      linked.add(docId)
-      // (source,target) 全局唯一：可能已有其他类型的引用，存在就跳过
-      if (!findRefByPair(db, row.id, docId)) {
-        insertRef(db, { sourceId: row.id, targetId: docId, refType: 'wikilink' })
+      if (!link.anchor) {
+        linkTo(docId)
+        continue
       }
+      // 带锚点：先按 `^id` / heading 命中具体块，命中不了退化为文档级引用并记 unresolved
+      const anchorBlock = resolveAnchorBlock(ctx, docId, link.anchor)
+      if (anchorBlock) {
+        linkTo(anchorBlock)
+        continue
+      }
+      linkTo(docId)
+      unresolved.push({ source_block_id: row.id, target_name: link.target, anchor: link.anchor })
     }
   }
 

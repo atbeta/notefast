@@ -332,8 +332,12 @@ function blocksToCreateInputs(root: ParsedBlock, notebookId: string): CreateBloc
   return inputs
 }
 
-export function blocksToMarkdown(blocks: Block[]): string {
-  const lines: string[] = []
+/** 行尾还原 Obsidian 块 id（` ^abc123`）；无则不追加 */
+function withObsidianBlockId(content: string, blockId: unknown): string {
+  return typeof blockId === 'string' && blockId ? `${content} ^${blockId}` : content
+}
+
+export function blocksToMarkdown(blocks: Block[]): string {  const lines: string[] = []
 
   // compact：引用块内部不插空行（空行会把一个 quote 拆成两段）
   function traverse(children: Block[], depth: number, compact = false) {
@@ -384,7 +388,8 @@ export function blocksToMarkdown(blocks: Block[]): string {
 
         case BlockType.Paragraph:
           if (block.content) {
-            lines.push(block.content)
+            // Obsidian 块 id 还原到行尾（parse 时剥离进 properties）
+            lines.push(withObsidianBlockId(block.content, block.properties.obsidian_block_id))
           }
           // 兼容历史错误嵌套：旧解析可能把 code 等塞进 paragraph children
           if (block.children.length > 0) {
@@ -406,7 +411,7 @@ export function blocksToMarkdown(blocks: Block[]): string {
           const task = block.properties.task
             ? `[${block.properties.checked ? 'x' : ' '}] `
             : ''
-          lines.push(`${indent}${bullet} ${task}${block.content}`)
+          lines.push(`${indent}${bullet} ${task}${withObsidianBlockId(block.content, block.properties.obsidian_block_id)}`)
           traverse(block.children, depth + 1)
           break
         }

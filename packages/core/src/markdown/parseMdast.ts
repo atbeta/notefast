@@ -123,7 +123,11 @@ export function parseMarkdownToBlocksWithSpans(
         }
         case 'paragraph': {
           const id = crypto.randomUUID()
-          push(makeInput(id, notebookId, parentId, BlockType.Paragraph, phrasingContent(node), {}), node)
+          const { text, blockId } = splitObsidianBlockId(phrasingContent(node))
+          push(
+            makeInput(id, notebookId, parentId, BlockType.Paragraph, text, blockId ? { obsidian_block_id: blockId } : {}),
+            node,
+          )
           break
         }
         case 'blockquote': {
@@ -257,10 +261,23 @@ function walkListItems(
   for (const item of list.children ?? []) {
     if (item.type !== 'listItem') continue
     const id = crypto.randomUUID()
-    const { text, nested } = splitListItem(item)
-    push(makeInput(id, notebookId, parentId, BlockType.ListItem, text, listItemProps(item, ordered, doc)), item)
+    const { text: rawText, nested } = splitListItem(item)
+    const { text, blockId } = splitObsidianBlockId(rawText)
+    const props = listItemProps(item, ordered, doc)
+    if (blockId) props.obsidian_block_id = blockId
+    push(makeInput(id, notebookId, parentId, BlockType.ListItem, text, props), item)
     walk(nested, id)
   }
+}
+
+/**
+ * 剥离 Obsidian 块 id：块末尾的 ` ^abc123`（空格 + `^` + 字母数字连字符）。
+ * 存进 `properties.obsidian_block_id`，序列化时原样还原（V-302）。
+ */
+export function splitObsidianBlockId(content: string): { text: string; blockId: string | null } {
+  const m = content.match(/ \^([A-Za-z0-9-]+)$/)
+  if (!m) return { text: content, blockId: null }
+  return { text: content.slice(0, content.length - m[0].length), blockId: m[1]! }
 }
 
 function splitListItem(item: MdNode): { text: string; nested: MdNode[] } {

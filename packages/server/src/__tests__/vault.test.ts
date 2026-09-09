@@ -704,17 +704,19 @@ describe('vault block patch', () => {
       '%%私密注释%%',
       '列表项 A',
       'E = mc^2',
-      '尾段 ^abc123',
+      '尾段',
       '![[img.png]]',
     ])
     expect(tops[3]!.children.map((c) => c.content)).toEqual(['嵌套 B'])
     expect(tops[4]!.properties.language).toBe('math')
+    // Obsidian 块 id 剥离进 properties（V-302），原文由序列化还原
+    expect(tops[5]!.properties.obsidian_block_id).toBe('abc123')
     const before = FIXTURE
     const prefix = bodyPrefix(before)
     const tail = topLevelBlocks(getDb(), r.docId!).find((b) => b.content.startsWith('尾段'))!
     const fullBefore = fullWriteCount()
 
-    updateBlock(getDb(), tail.id, { content: '尾段（改） ^abc123', actor: 'mcp' })
+    updateBlock(getDb(), tail.id, { content: '尾段（改）', actor: 'mcp' })
     const wb = startVaultWriteback(ctx)
     try {
       expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'written' })
@@ -900,7 +902,7 @@ describe('vault block patch', () => {
     deleteVaultBlockSpans(getDb(), r.docId!)
     const tail = topLevelBlocks(getDb(), r.docId!).find((b) => b.content.startsWith('尾段'))!
 
-    updateBlock(getDb(), tail.id, { content: '尾段（改） ^abc123', actor: 'mcp' })
+    updateBlock(getDb(), tail.id, { content: '尾段（改）', actor: 'mcp' })
     const wb = startVaultWriteback(ctx)
     try {
       expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'written' })
@@ -1184,6 +1186,61 @@ describe('vault wikilinks', () => {
     expect(restored.docId).toBe(back.docId!)
     expect(refBetween(block, back.docId!)).toBe(true)
     expect(unresolvedCount()).toBe(0)
+  })
+
+  test('锚点：[[B#标题]] 指向 heading 块，[[B#^abc123]] 指向块 id', async () => {
+    writeVault('b.md', '## 安装步骤\n\n正文一\n\n结论段落 ^abc123\n\n## 常见问题\n\n正文二\n')
+    const b = await ingestVaultFile(ctx, 'b.md')
+    const rows = fetchDocBlocks(getDb(), b.docId!)
+    const heading = rows.find((r) => r.type === 'heading' && r.content === '安装步骤')!
+    const blockId = rows.find((r) => (r.content ?? '').startsWith('结论段落'))!
+    expect(JSON.parse(blockId.properties).obsidian_block_id).toBe('abc123')
+
+    writeVault('linker.md', '看 [[b#安装步骤]] 与 [[b#^abc123]]，还有 [[b#不存在的标题]]\n')
+    const linker = await ingestVaultFile(ctx, 'linker.md')
+    const block = childIds(linker.docId!)[0]!
+
+    expect(refBetween(block, heading.id)).toBe(true)
+    expect(refBetween(block, blockId.id)).toBe(true)
+    // 锚点没命中 → 退化为文档级引用，并记 unresolved 等待补齐
+    expect(refBetween(block, b.docId!)).toBe(true)
+    expect(unresolvedCount()).toBe(1)
+  })
+
+  test('锚点后补：目标文档补上标题 → 引用升级为 heading 块', async () => {
+    writeVault('t2.md', '正文\n')
+    const t2 = await ingestVaultFile(ctx, 't2.md')
+    writeVault('src5.md', '[[t2#新章节]]\n')
+    const src = await ingestVaultFile(ctx, 'src5.md')
+    const block = childIds(src.docId!)[0]!
+    expect(refBetween(block, t2.docId!)).toBe(true)
+    expect(unresolvedCount()).toBe(1)
+
+    // 目标文件补上同名 heading
+    writeVault('t2.md', '# 新章节\n\n正文\n')
+    await ingestVaultFile(ctx, 't2.md')
+    const heading = fetchDocBlocks(getDb(), t2.docId!).find((r) => r.type === 'heading')!
+    expect(refBetween(block, heading.id)).toBe(true)
+    expect(refBetween(block, t2.docId!)).toBe(false)
+    expect(unresolvedCount()).toBe(0)
+  })
+
+  test('块 id 经 ingest → 写回逐字节不变（V-203 联动）', async () => {
+    const md = '第一段 ^p1\n\n第二段\n\n- 列表项 ^l1\n'
+    writeVault('bid.md', md)
+    const r = await ingestVaultFile(ctx, 'bid.md')
+    const tail = topLevelBlocks(getDb(), r.docId!).find((b) => b.content === '第二段')!
+
+    updateBlock(getDb(), tail.id, { content: '第二段（改）', actor: 'mcp' })
+    const wb = startVaultWriteback(ctx)
+    try {
+      expect(await wb.handle({ doc_id: r.docId!, kind: 'updated', at: new Date().toISOString() })).toMatchObject({
+        kind: 'written',
+      })
+    } finally {
+      wb.stop()
+    }
+    expect(readFileSync(join(vaultDir, 'bid.md'), 'utf8')).toBe('第一段 ^p1\n\n第二段（改）\n\n- 列表项 ^l1\n')
   })
 
   test('删除被引用文件 → 指向它的引用随之清理', async () => {
