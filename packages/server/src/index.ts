@@ -3,14 +3,23 @@
  *
  * 只是 createApp() 的宿主：负责 Bun.serve、优雅停机信号处理、启动告警。
  * 业务/路由/初始化全部在 app.ts 的 createApp() 中（可被原生客户端等复用）。
+ *
+ * 索引目录口径与桌面壳一致（RFC 0005 D1/D3）：vault 模式下 `DATA_DIR` 是索引**父目录**，
+ * 实际索引派生到 `<父目录>/<sha256(canonical vault path) 前 12 位>`。
  */
 
 import { createApp } from './app'
 import { isAuthEnabled } from './middleware/auth'
 import { closeAllSseStreams } from './api/events'
+import { resolveIndexParentDir, resolveVaultDataDirWithProbe } from './vault/dataDir'
 
 const PORT = parseInt(process.env.PORT || '3140', 10)
-const DATA_DIR = process.env.DATA_DIR || './data'
+const VAULT_PATH = process.env.VAULT_PATH?.trim() || null
+const DATA_DIR = VAULT_PATH
+  ? resolveVaultDataDirWithProbe(VAULT_PATH, resolveIndexParentDir()).dataDir
+  : process.env.DATA_DIR || './data'
+// 下游（shadowMarkdown / 备份 / 派生索引）统一读 env，保持一致
+process.env.DATA_DIR = DATA_DIR
 
 const handle = createApp({ dataDir: DATA_DIR })
 

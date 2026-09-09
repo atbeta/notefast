@@ -341,7 +341,7 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 |---|---|---|
 | U-1 | 可见性：只读模式端点（模式 / vault 根 / 索引目录 / 实际 watcher 模式）+ 设置页常显「数据来源」，db 模式不再整项隐藏 | 完成（`5450b61`） |
 | U-2 | watcher 自动探测：启动时探测原生事件，失败降级轮询；实际模式进 `/vault/status`；`VAULT_USE_POLLING` 保留强制覆盖 | 完成（`815f6da`） |
-| U-3 | 索引位置统一：vault 模式一律派生 `<父目录>/<sha256 前12位>`；Docker 用 `NOTEFAST_APP_SUPPORT_DIR=/app/data`；检测到旧 `/app/data/index.sqlite` 时沿用并告警 | 待开始 |
+| U-3 | 索引位置统一：vault 模式一律派生 `<父目录>/<sha256 前12位>`（`vault/dataDir.ts` 双入口共用）；旧布局同一 vault 沿用并告警，db 库拒绝启动 | 完成 |
 | U-4 | 部署默认对齐：`docker-compose.yml` / example 默认启用 vault（db 变体留注释）+ README / `docs/vault-migration.md` 同步 | 待开始 |
 | U-5 | 修订历史：vault 也记 `doc_snapshots`（存 `DATA_DIR`、键用 `rel_path`、内容 sha256 去重、每篇 50 条），**恢复走写回** | 待开始 |
 | U-6 | 分享身份：`shares` 改 `rel_path` + 内容校验，文件缺失返回 410；迁移既有数据 | 待开始 |

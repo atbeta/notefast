@@ -16,14 +16,18 @@ import { join } from 'node:path'
 import { dirname } from 'node:path'
 import {
   parseNativeArgs,
+  finalizeVaultDataDir,
   injectEngineAssets,
   handleInternalRoute,
+  inspectIndexAt,
+  resolveVaultDataDir,
   DEFAULT_PORT,
   VAULT_DIR_HASH_LEN,
   canonicalVaultPath,
   vaultPathHash,
   vaultDataDir,
 } from '../native/bootstrap'
+import { Database } from 'bun:sqlite'
 
 const ENV_KEYS = [
   'DATA_DIR',
@@ -54,7 +58,7 @@ function expectedHash(path: string): string {
 }
 
 function minimalArgs(dataDir: string, assetsDir: string): Parameters<typeof injectEngineAssets>[0] {
-  return { dataDir, port: 0, assetsDir, vaultPath: null, appSupportDir: '/tmp/nf-support' }
+  return { dataDir, port: 0, assetsDir, vaultPath: null, appSupportDir: '/tmp/nf-support', vaultParentDir: '/tmp/nf-support' }
 }
 
 describe('parseNativeArgs', () => {
@@ -104,6 +108,7 @@ describe('parseNativeArgs', () => {
       const args = parseNativeArgs(['--vault-path', vault, '--app-support-dir', support])
       expect(args.vaultPath).toBe(vault)
       expect(args.appSupportDir).toBe(support)
+      finalizeVaultDataDir(args)
       expect(args.dataDir).toBe(join(support, expectedHash(vault)))
       expect(args.dataDir).not.toBe(vault)
     } finally {
@@ -120,6 +125,7 @@ describe('parseNativeArgs', () => {
       process.env.NOTEFAST_APP_SUPPORT_DIR = support
       const args = parseNativeArgs([])
       expect(args.vaultPath).toBe(vault)
+      finalizeVaultDataDir(args)
       expect(args.dataDir).toBe(join(support, expectedHash(vault)))
     } finally {
       rmSync(vault, { recursive: true, force: true })
@@ -127,7 +133,7 @@ describe('parseNativeArgs', () => {
     }
   })
 
-  test('显式 --data-dir 优先于 vault 派生（排障出口）', () => {
+  test('--data-dir 在 vault 模式下是索引父目录（RFC 0005 D3）', () => {
     const vault = mkdtempSync(join(tmpdir(), 'nf-vault-explicit-'))
     try {
       const args = parseNativeArgs([
@@ -136,21 +142,30 @@ describe('parseNativeArgs', () => {
         '--data-dir', '/tmp/nf-explicit',
       ])
       expect(args.vaultPath).toBe(vault)
-      expect(args.dataDir).toBe('/tmp/nf-explicit')
+      finalizeVaultDataDir(args)
+      expect(args.dataDir).toBe(join('/tmp/nf-explicit', expectedHash(vault)))
     } finally {
       rmSync(vault, { recursive: true, force: true })
     }
   })
 
-  test('DATA_DIR env 也算显式指定，不覆盖', () => {
+  test('DATA_DIR env 在 vault 模式下同样作为索引父目录', () => {
     const vault = mkdtempSync(join(tmpdir(), 'nf-vault-envdd-'))
     try {
       process.env.DATA_DIR = '/env/dd'
       const args = parseNativeArgs(['--vault-path', vault])
-      expect(args.dataDir).toBe('/env/dd')
+      finalizeVaultDataDir(args)
+      expect(args.dataDir).toBe(join('/env/dd', expectedHash(vault)))
     } finally {
       rmSync(vault, { recursive: true, force: true })
     }
+  })
+
+  test('db 模式：DATA_DIR 仍是索引本体，不派生', () => {
+    process.env.DATA_DIR = '/env/db-only'
+    const args = parseNativeArgs([])
+    expect(args.vaultPath).toBeNull()
+    expect(args.dataDir).toBe('/env/db-only')
   })
 })
 
@@ -268,6 +283,8 @@ describe('injectEngineAssets', () => {
     try {
       const args = parseNativeArgs(['--vault-path', vault, '--app-support-dir', support])
       injectEngineAssets(args)
+      // 派生推迟到资源注入之后（探测旧索引需要先配置 SQLite 扩展加载）
+      finalizeVaultDataDir(args)
 
       expect(process.env.VAULT_PATH).toBe(vault)
       expect(process.env.DATA_DIR).toBe(join(support, expectedHash(vault)))
@@ -296,5 +313,97 @@ describe('handleInternalRoute', () => {
     expect(handleInternalRoute(new Request('http://127.0.0.1:3140/internal/shutdown'))).toBeNull()
     expect(handleInternalRoute(new Request('http://127.0.0.1:3140/api/v1/docs', { method: 'POST' }))).toBeNull()
     expect(handleInternalRoute(new Request('http://127.0.0.1:3140/anything', { method: 'POST' }))).toBeNull()
+  })
+})
+
+// ───────────────────── 索引位置统一（RFC 0005 D3）─────────────────────
+
+/** 造一个最小的 notefast.db，只含 notebooks 表 */
+function writeIndex(dir: string, kind: 'db' | 'vault', vaultRoot: string | null): void {
+  mkdirSync(dir, { recursive: true })
+  const db = new Database(join(dir, 'notefast.db'))
+  db.run('CREATE TABLE notebooks (id TEXT PRIMARY KEY, kind TEXT, vault_root TEXT)')
+  db.run('INSERT INTO notebooks (id, kind, vault_root) VALUES (?, ?, ?)', ['nb-1', kind, vaultRoot])
+  db.close()
+}
+
+describe('resolveVaultDataDir / inspectIndexAt', () => {
+  test('父目录没有旧索引：派生到 <父目录>/<hash>', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'nf-parent-'))
+    const vault = mkdtempSync(join(tmpdir(), 'nf-vault-'))
+    try {
+      const r = resolveVaultDataDir(vault, parent)
+      expect(r.dataDir).toBe(join(parent, expectedHash(vault)))
+      expect(r.legacyReused).toBe(false)
+    } finally {
+      rmSync(parent, { recursive: true, force: true })
+      rmSync(vault, { recursive: true, force: true })
+    }
+  })
+
+  test('派生目录已有索引：直接用派生目录，不再看父目录', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'nf-parent2-'))
+    const vault = mkdtempSync(join(tmpdir(), 'nf-vault2-'))
+    try {
+      writeIndex(join(parent, expectedHash(vault)), 'vault', canonicalVaultPath(vault))
+      writeIndex(parent, 'db', null) // 父目录即使有 db 库也不该拦路
+      const r = resolveVaultDataDir(vault, parent)
+      expect(r.dataDir).toBe(join(parent, expectedHash(vault)))
+      expect(r.legacyReused).toBe(false)
+    } finally {
+      rmSync(parent, { recursive: true, force: true })
+      rmSync(vault, { recursive: true, force: true })
+    }
+  })
+
+  test('旧布局且是同一个 vault：沿用父目录并标记', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'nf-parent3-'))
+    const vault = mkdtempSync(join(tmpdir(), 'nf-vault3-'))
+    try {
+      writeIndex(parent, 'vault', canonicalVaultPath(vault))
+      const r = resolveVaultDataDir(vault, parent)
+      expect(r.dataDir).toBe(parent)
+      expect(r.legacyReused).toBe(true)
+    } finally {
+      rmSync(parent, { recursive: true, force: true })
+      rmSync(vault, { recursive: true, force: true })
+    }
+  })
+
+  test('旧布局是 db notebook：报错而不是静默新建空库', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'nf-parent4-'))
+    const vault = mkdtempSync(join(tmpdir(), 'nf-vault4-'))
+    try {
+      writeIndex(parent, 'db', null)
+      expect(() => resolveVaultDataDir(vault, parent)).toThrow(/db notebook/)
+    } finally {
+      rmSync(parent, { recursive: true, force: true })
+      rmSync(vault, { recursive: true, force: true })
+    }
+  })
+
+  test('旧布局是别的 vault：报错', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'nf-parent5-'))
+    const vault = mkdtempSync(join(tmpdir(), 'nf-vault5-'))
+    const other = mkdtempSync(join(tmpdir(), 'nf-vault5-other-'))
+    try {
+      writeIndex(parent, 'vault', canonicalVaultPath(other))
+      expect(() => resolveVaultDataDir(vault, parent)).toThrow(/其他 vault/)
+    } finally {
+      rmSync(parent, { recursive: true, force: true })
+      rmSync(vault, { recursive: true, force: true })
+      rmSync(other, { recursive: true, force: true })
+    }
+  })
+
+  test('inspectIndexAt：没有文件 / 不是 sqlite 都返回 null 或 unknown，不抛', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'nf-inspect-'))
+    try {
+      expect(inspectIndexAt(dir)).toBeNull()
+      writeFileSync(join(dir, 'notefast.db'), 'not a database')
+      expect(inspectIndexAt(dir)).toEqual({ kind: 'unknown', vaultRoot: null })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

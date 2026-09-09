@@ -330,9 +330,11 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
       setProtocolSyncSuppressed('vault notebook 使用文件同步')
       vaultRuntime = createVaultRuntime({ db: getDb(), notebookId, config: vaultConfig })
       await vaultRuntime.start()
+      const vs = vaultRuntime.status()
       console.log(
         `📂 vault mode: ${vaultConfig.root}` +
           (vaultConfig.watch ? '' : '（未监听，需手动 rebuild）') +
+          (vaultConfig.watch ? `，watcher=${vs.watcher_mode}${vs.polling_auto ? '(自动探测)' : ''}` : '') +
           (vaultConfig.writeback ? '' : '，写回已关闭（NoteFast 端编辑只落索引，会被文件变更覆盖）'),
       )
     }

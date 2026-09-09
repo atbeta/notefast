@@ -58,9 +58,10 @@ NoteFast 有两种 notebook 模式：`kind='db'`（SQLite 权威）与 `kind='va
 
 vault 模式下索引一律派生为 `<父目录>/<sha256(canonical vault path) 前 12 位>`：
 
-- 父目录 = 显式 `NOTEFAST_APP_SUPPORT_DIR`，否则应用支持目录（`bootstrap.ts:96`，已含 macOS / Windows / XDG 三平台口径）
-- 显式 `--data-dir` / `DATA_DIR` 仍然优先（排障与既有部署）
-- Docker 传 `NOTEFAST_APP_SUPPORT_DIR=/app/data`，于是容器与壳的规则完全相同：一个 vault 一个索引，切 vault 不会复用旧索引
+- 父目录来源（按优先级）：`--app-support-dir` / `NOTEFAST_APP_SUPPORT_DIR` > `--data-dir` / `DATA_DIR` > 平台缺省应用支持目录
+- **vault 模式下 `DATA_DIR` 是索引父目录，不是索引本体**（db 模式不变）；这样 Docker 沿用既有 `DATA_DIR=/app/data` 也能自动获得「一个 vault 一个索引」，无需再教用户一个新变量
+- 旧布局兼容：`<父目录>/notefast.db` 存在时——同一 vault → 沿用并告警（0.90.0 及更早的 Docker 布局）；db notebook 或别的 vault → 拒绝启动并给出两条出路，绝不静默新建空库
+- 实现位置：`packages/server/src/vault/dataDir.ts`，壳（`native/bootstrap.ts`）与 Docker / `bun dev`（`index.ts`）共用；探测旧索引前必须先 `configureSqliteForExtensions()`（bun:sqlite 一打开数据库就锁定 SQLite，之后再 `setCustomSQLite` 会失败——实测 macOS 启动失败）
 
 ### D4 watcher 自动探测，而不是按平台写死
 
@@ -114,7 +115,7 @@ vault 模式下索引一律派生为 `<父目录>/<sha256(canonical vault path) 
 | 场景 | 行为 |
 |---|---|
 | 既有 Docker **db** 部署 | 完全不变：`DATA_DIR=/app/data` 直用，不派生 |
-| 既有 Docker **vault** 部署 | vault 0.90.0 刚发布，索引位置将从 `/app/data` 变为 `/app/data/<hash12>`。检测到 `<父目录>/index.sqlite` 且处于 vault 模式时，**继续使用旧位置并打印警告**，不静默搬库 |
+| 既有 Docker **vault** 部署 | vault 0.90.0 刚发布，索引位置将从 `/app/data` 变为 `/app/data/<hash12>`。检测到 `<父目录>/notefast.db` 且处于 vault 模式时，**继续使用旧位置并打印警告**，不静默搬库 |
 | 既有桌面壳 | 索引位置不变（早已派生），仅 watcher 探测与可见性变化 |
 | 新安装（含 Docker） | 默认引导选文件夹（D2） |
 | db → vault 迁移 | 仍走 `docs/vault-migration.md`；本 RFC 不承诺无损，只承诺**迁移指引不骗人** |

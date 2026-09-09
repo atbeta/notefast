@@ -33,6 +33,9 @@ export const WATCH_PROBE_PREFIX = '.notefast-watch-probe-'
 export async function probeNativeWatch(root: string, timeoutMs = 1500): Promise<WatchBackend> {
   const probePath = join(root, `${WATCH_PROBE_PREFIX}${process.pid}-${Date.now()}`)
   let watcher: FSWatcher | null = null
+  /** 结论已出：禁止再补写探测文件（否则清理后又被定时器重建，留下残留） */
+  let finished = false
+  const touchTimers: Array<ReturnType<typeof setTimeout>> = []
   try {
     writeFileSync(probePath, 'probe-init')
     watcher = chokidar.watch(root, {
@@ -45,19 +48,37 @@ export async function probeNativeWatch(root: string, timeoutMs = 1500): Promise<
     })
 
     const gotEvent = new Promise<boolean>((resolve) => {
-      const hit = () => resolve(true)
+      let settled = false
+      const hit = () => {
+        if (settled) return
+        settled = true
+        resolve(true)
+      }
       watcher!.on('add', hit)
       watcher!.on('change', hit)
       watcher!.on('unlink', hit)
-      watcher!.once('ready', () => {
-        // 监听就绪后再改文件，确保事件是「新发生」的
-        try {
-          writeFileSync(probePath, `probe-${Date.now()}`)
-        } catch {
-          resolve(false)
-        }
+      watcher!.once('error', () => {
+        if (settled) return
+        settled = true
+        resolve(false)
       })
-      watcher!.once('error', () => resolve(false))
+      watcher!.once('ready', () => {
+        // ready 之后再改文件，确保事件是「新发生」的；首次写入可能与 chokidar
+        // 初始扫描的窗口重叠而被吞掉，所以中途再补一次（探测失败只会退化成轮询，方向安全）
+        const touch = () => {
+          if (settled || finished) return
+          try {
+            writeFileSync(probePath, `probe-${Date.now()}`)
+          } catch {
+            /* 写入失败：交给超时兜底 */
+          }
+        }
+        touchTimers.push(
+          setTimeout(touch, 60),
+          setTimeout(touch, Math.max(250, Math.floor(timeoutMs / 2))),
+          setTimeout(touch, Math.max(400, Math.floor((timeoutMs * 3) / 4))),
+        )
+      })
     })
 
     const timedOut = new Promise<boolean>((resolve) => {
@@ -69,6 +90,8 @@ export async function probeNativeWatch(root: string, timeoutMs = 1500): Promise<
   } catch {
     return 'polling'
   } finally {
+    finished = true
+    for (const t of touchTimers) clearTimeout(t)
     try {
       await watcher?.close()
     } catch {

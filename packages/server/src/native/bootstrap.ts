@@ -18,12 +18,16 @@
  * 编译：`bun build src/native/bootstrap.ts --compile`（见 scripts/build-engine.ts）
  */
 
-import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, realpathSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { createApp } from '../app'
 import { closeAllSseStreams } from '../api/events'
+import {
+  VAULT_DIR_HASH_LEN,
+  canonicalVaultPath,
+  resolveIndexParentDir,
+  resolveVaultDataDirWithProbe,
+} from '../vault/dataDir'
 
 // ───────────────────── stdout = 协议通道 ─────────────────────
 const writeStdout = process.stdout.write.bind(process.stdout)
@@ -46,6 +50,12 @@ export interface NativeArgs {
   vaultPath: string | null
   /** 每 vault 索引的父目录（应用支持目录）；vault 模式下 dataDir 由它派生 */
   appSupportDir: string
+  /**
+   * vault 模式下实际用于派生的父目录（CLI 参数 > env > 平台缺省）。
+   * 派生本身推迟到 `finalizeVaultDataDir`——探测旧索引要打开 SQLite，
+   * 必须等 `injectEngineAssets` 注入 SQLITE_LIBRARY_PATH 之后再做。
+   */
+  vaultParentDir: string
 }
 
 /**
@@ -54,66 +64,33 @@ export interface NativeArgs {
  */
 export const DEFAULT_PORT = 3876
 
-/** 每 vault 索引目录名 = sha256 前 N 位十六进制（RFC 0001 D4） */
-export const VAULT_DIR_HASH_LEN = 12
-
 /**
- * vault 路径规范化：绝对化 → 解析符号链接（路径已存在时）→ 去尾部分隔符。
- * 用途是让「同一个文件夹的不同写法」落到同一个索引目录：macOS 上
- * `~/Documents` 与 `/Users/x/Documents`、`/tmp/x` 与 `/private/tmp/x` 必须同 hash。
+ * 索引目录口径（RFC 0001 D4 / RFC 0005 D3）统一在 `vault/dataDir.ts`：
+ * 壳与 Docker / `bun dev` 走同一份实现，避免同一份代码在部署方式之间分叉。
  */
-export function canonicalVaultPath(vaultPath: string): string {
-  const abs = resolve(vaultPath)
-  let canonical = abs
-  try {
-    // realpathSync.native 同时给出磁盘上的真实大小写（Windows / 大小写不敏感卷）
-    canonical = realpathSync.native(abs)
-  } catch {
-    // 路径暂不存在（用户选了个还没建的目录）：退化为 resolve 结果
-  }
-  const stripped = canonical.replace(/[\\/]+$/, '')
-  return stripped || canonical
-}
+export {
+  VAULT_DIR_HASH_LEN,
+  canonicalVaultPath,
+  vaultPathHash,
+  vaultDataDir,
+  inspectIndexAt,
+  resolveVaultDataDir,
+  resolveVaultDataDirWithProbe,
+  resolveIndexParentDir,
+  defaultAppSupportDir,
+} from '../vault/dataDir'
+export type { LegacyIndexInfo } from '../vault/dataDir'
 
-/** vault 路径 → 索引目录名（sha256 前 12 位十六进制） */
-export function vaultPathHash(vaultPath: string): string {
-  return createHash('sha256')
-    .update(canonicalVaultPath(vaultPath))
-    .digest('hex')
-    .slice(0, VAULT_DIR_HASH_LEN)
-}
-
-/**
- * 一个 vault 一个 DATA_DIR：`<appSupportDir>/<sha256(canonical vault path) 前 12 位>`。
- * 索引留在应用支持目录（不进 vault，避免 git / iCloud 同步 SQLite 损坏），
- * 且不同 vault 互不覆盖（RFC 0001 D4）。
- */
-export function vaultDataDir(vaultPath: string, appSupportDir: string): string {
-  return join(appSupportDir, vaultPathHash(vaultPath))
-}
-
-/** 应用支持目录缺省值（壳未显式传 `--app-support-dir` 时用；口径与两平台壳一致） */
-export function defaultAppSupportDir(): string {
-  const home = homedir()
-  if (process.platform === 'darwin') {
-    return join(home, 'Library', 'Application Support', 'NoteFast')
-  }
-  if (process.platform === 'win32') {
-    const appData = process.env.APPDATA?.trim() || join(home, 'AppData', 'Roaming')
-    return join(appData, 'com.notefast.desktop')
-  }
-  const xdg = process.env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share')
-  return join(xdg, 'notefast')
-}
 
 function usage(): string {
   return [
     '用法: notefast-server [选项]',
-    '  --data-dir <path>   数据目录（SQLite + media + 配置）[env DATA_DIR]',
+    '  --data-dir <path>   数据目录（SQLite + media + 配置）[env DATA_DIR]；',
+    '                      vault 模式下它是索引父目录，实际索引在 <path>/<hash> 下',
     '  --vault-path <path> vault 根目录，以 vault 模式启动（文件夹是权威，SQLite 是派生索引）',
-    `                      [env VAULT_PATH]；未显式给 --data-dir 时，DATA_DIR 派生为`,
-    `                      <应用支持目录>/<sha256(vault 路径) 前 ${VAULT_DIR_HASH_LEN} 位>`,
-    '  --app-support-dir <path> 每 vault 索引的父目录（缺省按平台：macOS ~/Library/Application Support/NoteFast，',
+    `                      [env VAULT_PATH]；DATA_DIR 一律派生为`,
+    `                      <父目录>/<sha256(vault 路径) 前 ${VAULT_DIR_HASH_LEN} 位>`,
+    '  --app-support-dir <path> vault 模式下索引的父目录（缺省按平台：macOS ~/Library/Application Support/NoteFast，',
     '                      Windows %APPDATA%/com.notefast.desktop）[env NOTEFAST_APP_SUPPORT_DIR]',
     `  --port <n>          监听端口；缺省 ${DEFAULT_PORT}（被占用自动回退随机），0 = 直接随机`,
     '  --assets-dir <path> 引擎资源根目录（VERSION / native/ / web-dist）[默认: 可执行文件目录]',
@@ -129,10 +106,12 @@ export function parseNativeArgs(argv: string[]): NativeArgs {
     port: DEFAULT_PORT,
     assetsDir: dirname(process.execPath),
     vaultPath: process.env.VAULT_PATH?.trim() || null,
-    appSupportDir: process.env.NOTEFAST_APP_SUPPORT_DIR?.trim() || defaultAppSupportDir(),
+    // vault 模式的索引父目录：显式应用支持目录 > DATA_DIR（Docker 的写法）> 平台缺省
+    appSupportDir: resolveIndexParentDir(),
+    vaultParentDir: '',
   }
-  // 显式 DATA_DIR（env 或 --data-dir）优先于 vault 派生，留一条排障出口
-  let dataDirExplicit = Boolean(process.env.DATA_DIR)
+  /** vault 模式下索引父目录的显式来源；CLI 参数优先于 env */
+  let parentOverride: string | null = null
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]
     const takeValue = (): string => {
@@ -143,13 +122,14 @@ export function parseNativeArgs(argv: string[]): NativeArgs {
     switch (flag) {
       case '--data-dir':
         args.dataDir = takeValue()
-        dataDirExplicit = true
+        parentOverride = args.dataDir
         break
       case '--vault-path':
         args.vaultPath = takeValue()
         break
       case '--app-support-dir':
         args.appSupportDir = takeValue()
+        parentOverride = args.appSupportDir
         break
       case '--port': {
         const p = Number(takeValue())
@@ -171,11 +151,20 @@ export function parseNativeArgs(argv: string[]): NativeArgs {
         throw new Error(`未知参数: ${flag}\n\n${usage()}`)
     }
   }
-  // vault 模式且未显式指定 DATA_DIR：一个 vault 一个索引目录（RFC 0001 D4）
-  if (args.vaultPath && !dataDirExplicit) {
-    args.dataDir = vaultDataDir(args.vaultPath, args.appSupportDir)
-  }
+  args.vaultParentDir = parentOverride ?? args.appSupportDir
   return args
+}
+
+/**
+ * vault 模式：把 DATA_DIR 派生到 `<父目录>/<sha256 前 12 位>`（RFC 0005 D3）。
+ *
+ * 必须在 `injectEngineAssets` 之后调用：探测旧索引会打开 SQLite，
+ * 而 macOS 上 bun:sqlite 一旦自动加载系统 SQLite，`setCustomSQLite` 就会失败。
+ */
+export function finalizeVaultDataDir(args: NativeArgs): void {
+  if (!args.vaultPath) return
+  args.dataDir = resolveVaultDataDirWithProbe(args.vaultPath, args.vaultParentDir).dataDir
+  process.env.DATA_DIR = args.dataDir
 }
 
 /** 将引擎资源路径注入 env（创建 app 前调用；资源缺失时保留既有解析逻辑） */
@@ -220,6 +209,14 @@ async function main(): Promise<void> {
   }
 
   injectEngineAssets(args)
+  // 资源注入（含 SQLITE_LIBRARY_PATH）之后才能安全探测旧索引
+  try {
+    finalizeVaultDataDir(args)
+  } catch (e) {
+    console.error(`[bootstrap] 启动失败: ${e instanceof Error ? e.message : String(e)}`)
+    process.exit(1)
+    return
+  }
 
   // 启动失败（vault 路径不可用、DB 打不开等）走 stderr + 非零退出：
   // 壳层拿不到 NF_READY 会报「engine 进程提前退出」，日志里有可读原因
