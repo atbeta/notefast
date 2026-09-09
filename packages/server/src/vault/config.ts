@@ -8,8 +8,8 @@
  *   VAULT_WATCH       'false' 关闭文件监听（仍可 POST /api/v1/vault/rebuild 手动重建）
  *   VAULT_WRITEBACK   'false' 关闭 SQLite → 文件写回（RFC 0003；默认开启，关闭后 NoteFast 端编辑只落索引）
  *   VAULT_STABILITY_MS  编辑器多次写盘合并窗口（chokidar awaitWriteFinish，默认 300）
- *   VAULT_USE_POLLING 'true' 用轮询代替原生文件事件（Docker bind mount、网络盘；macOS 上 /tmp、/var/folders
- *                     这类经符号链接的路径 FSEvents 不投递事件，测试也用它）
+ *   VAULT_USE_POLLING 'true'/'1' 强制轮询，'false'/'0' 强制原生事件；未设时启动探测 vault 根
+ *                     是否投递原生事件（Docker bind mount、网络盘、macOS 符号链接路径都投递不了）
  *   VAULT_POLL_INTERVAL_MS  轮询间隔（默认 1000）
  *   VAULT_RECONCILE_MINUTES  定时轻量对账间隔（分钟，默认 10；0 = 关闭）。chokidar 漏事件 / 休眠唤醒后的兜底
  */
@@ -26,6 +26,10 @@ export interface VaultConfig {
   writeback: boolean
   stabilityMs: number
   usePolling: boolean
+  /**
+   * `usePolling` 的来源：`env` = VAULT_USE_POLLING 显式指定；`auto` = 由运行时探测决定（RFC 0005 U-2）
+   */
+  pollingSource: 'auto' | 'env'
   pollIntervalMs: number
   /** 定时轻量对账间隔（分钟）；0 = 关闭 */
   reconcileMinutes: number
@@ -48,13 +52,18 @@ export function loadVaultConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Va
   const stability = Number.parseInt(env.VAULT_STABILITY_MS ?? '', 10)
   const pollInterval = Number.parseInt(env.VAULT_POLL_INTERVAL_MS ?? '', 10)
   const reconcile = Number.parseFloat(env.VAULT_RECONCILE_MINUTES ?? '')
+  // 显式 true/1/false/0 才算「用户指定」，其余（未设 / 空串 / 拼错）交给运行时探测
+  const pollingEnv = env.VAULT_USE_POLLING?.trim().toLowerCase()
+  const pollingExplicit =
+    pollingEnv === 'true' || pollingEnv === '1' || pollingEnv === 'false' || pollingEnv === '0'
   return {
     root,
     ignore: [...new Set([...DEFAULT_VAULT_IGNORE, ...extra])],
     watch: env.VAULT_WATCH !== 'false',
     writeback: env.VAULT_WRITEBACK !== 'false' && env.VAULT_WRITEBACK !== '0',
     stabilityMs: Number.isFinite(stability) && stability >= 0 ? stability : 300,
-    usePolling: env.VAULT_USE_POLLING === 'true' || env.VAULT_USE_POLLING === '1',
+    usePolling: pollingEnv === 'true' || pollingEnv === '1',
+    pollingSource: pollingExplicit ? 'env' : 'auto',
     pollIntervalMs: Number.isFinite(pollInterval) && pollInterval > 0 ? pollInterval : 1000,
     reconcileMinutes: Number.isFinite(reconcile) && reconcile >= 0 ? reconcile : 10,
   }

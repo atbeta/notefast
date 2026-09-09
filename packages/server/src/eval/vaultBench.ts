@@ -422,6 +422,8 @@ async function main(): Promise<void> {
       writeback: opts.writeback,
       stabilityMs: opts.stabilityMs,
       usePolling: opts.usePolling,
+      // 基准显式指定后端，不走启动探测（探测本身要花 1.5s，会污染数字）
+      pollingSource: 'env',
       pollIntervalMs: opts.pollIntervalMs,
       reconcileMinutes: 0,
     }

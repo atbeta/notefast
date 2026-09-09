@@ -29,6 +29,7 @@ function makeConfig(root: string): VaultConfig {
     writeback: false,
     stabilityMs: 50,
     usePolling: true,
+    pollingSource: 'env',
     pollIntervalMs: 50,
     reconcileMinutes: 0,
   }

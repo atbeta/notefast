@@ -149,6 +149,23 @@ describe('VaultPanel 可见性', () => {
   })
 })
 
+describe('VaultPanel watcher 后端提示', () => {
+  test('自动探测到轮询：显示原因说明', () => {
+    const html = render({ ...BASE, use_polling: true, polling_auto: true, watcher_mode: 'polling' })
+    expect(html).toContain(i18next.t('settings.vault.pollingAuto'))
+  })
+
+  test('原生事件生效：不显示自动轮询说明', () => {
+    const html = render({ ...BASE, use_polling: false, polling_auto: false, watcher_mode: 'native' })
+    expect(html).not.toContain(i18next.t('settings.vault.pollingAuto'))
+  })
+
+  test('旧服务端没有 polling_auto 字段：不渲染说明，也不报错', () => {
+    const html = render(BASE)
+    expect(html).not.toContain(i18next.t('settings.vault.pollingAuto'))
+  })
+})
+
 describe('VaultPanel 冲突列表', () => {
   test('冲突计数与最近冲突副本路径逐条渲染', () => {
     const paths = [

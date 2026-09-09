@@ -242,7 +242,8 @@
       "disabledServer": "自建服务：启动时加 VAULT_PATH=~/Notes（见 README 的 vault mode 一节）",
       "disabledMigration": "已有笔记的迁移见 docs/vault-migration.md；db 库不支持原地转换，旧实例会原样保留。",
       "loading": "正在读取…",
-      "loadFailed": "无法读取 vault 状态"
+      "loadFailed": "无法读取 vault 状态",
+      "pollingAuto": "启动时探测到该目录不投递原生事件，已自动切到轮询（可用 VAULT_USE_POLLING 强制指定）。"
     }
   }
 }

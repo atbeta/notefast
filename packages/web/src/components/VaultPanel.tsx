@@ -185,6 +185,11 @@ export default function VaultPanel({
               ? t('settings.vault.watcherActive')
               : t('settings.vault.watcherInactive')}
           </p>
+          {status.polling_auto === true && (
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {t('settings.vault.pollingAuto')}
+            </p>
+          )}
           <p className="text-sm text-muted-foreground leading-relaxed">
             {status.next_reconcile_at
               ? t('settings.vault.nextReconcile', { at: formatIsoDateTime(status.next_reconcile_at) })

@@ -30,6 +30,10 @@ export interface VaultStatus {
   watch?: boolean
   writeback?: boolean
   use_polling?: boolean
+  /** 轮询是启动探测的结果（RFC 0005 U-2）；旧服务端没有该字段 */
+  polling_auto?: boolean
+  /** 实际生效的 watcher 后端；旧服务端没有该字段 */
+  watcher_mode?: 'native' | 'polling' | 'off'
   watcher_active?: boolean
   reconciling?: boolean
   files?: number

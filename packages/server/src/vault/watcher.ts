@@ -18,6 +18,8 @@ import { readVaultFile } from './writer'
 export interface VaultWatcherOptions {
   /** unlink 等待配对 add 的窗口；默认 max(1000, stabilityMs * 3) */
   renameGraceMs?: number
+  /** 覆盖 `config.usePolling`（RFC 0005 U-2：探测得出的生效值） */
+  usePolling?: boolean
   onResult?: (result: IngestResult) => void
   onError?: (relPath: string, error: unknown) => void
 }
@@ -175,8 +177,8 @@ export async function startVaultWatcher(ctx: VaultContext, opts: VaultWatcherOpt
     persistent: true,
     ignoreInitial: true, // 存量由 reconcileVault 处理
     awaitWriteFinish: { stabilityThreshold: ctx.config.stabilityMs, pollInterval: Math.min(100, Math.max(20, ctx.config.stabilityMs / 3)) },
-    // 原生事件在 bind mount / 网络盘 / macOS 符号链接路径（/tmp → /private/tmp）下不可靠，按配置退回轮询
-    usePolling: ctx.config.usePolling,
+    // 原生事件在 bind mount / 网络盘 / macOS 符号链接路径（/tmp → /private/tmp）下不可靠，按生效配置退回轮询
+    usePolling: opts.usePolling ?? ctx.config.usePolling,
     interval: ctx.config.pollIntervalMs,
     binaryInterval: ctx.config.pollIntervalMs,
   })

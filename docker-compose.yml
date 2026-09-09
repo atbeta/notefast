@@ -16,9 +16,9 @@ services:
       - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-}
       # vault mode（kind='vault'）：容器内约定把笔记文件夹挂在 /vault，见下方 volumes
-      # Docker Desktop（macOS / Windows）的 bind mount 不投递 inotify 事件，必须开轮询
+      # watcher 后端启动时自动探测（Docker Desktop 的 bind mount 不投递 inotify → 自动轮询）
       # - VAULT_PATH=/vault
-      # - VAULT_USE_POLLING=true
+      # - VAULT_USE_POLLING=true      # 仅在需要强制指定后端时设置
       # - VAULT_POLL_INTERVAL_MS=1000
     volumes:
       - notefast_data:/app/data

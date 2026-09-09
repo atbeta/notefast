@@ -54,6 +54,7 @@ function makeConfig(root: string, over: Partial<VaultConfig> = {}): VaultConfig 
     writeback: false,
     stabilityMs: 50,
     usePolling: true,
+    pollingSource: 'env',
     pollIntervalMs: 50,
     reconcileMinutes: 0,
     ...over,

@@ -242,7 +242,8 @@
       "disabledServer": "Self-hosted: start with VAULT_PATH=~/Notes (see the vault mode section in the README)",
       "disabledMigration": "To move existing notes, see docs/vault-migration.md. There is no in-place conversion; the old instance is left untouched.",
       "loading": "Loading…",
-      "loadFailed": "Could not read vault status"
+      "loadFailed": "Could not read vault status",
+      "pollingAuto": "Native file events do not reach this folder, so polling was enabled automatically (set VAULT_USE_POLLING to override)."
     }
   }
 }

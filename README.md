@@ -142,19 +142,19 @@ Setting `VAULT_PATH` turns the notebook into `kind='vault'`: your Markdown folde
 | Variable | Description |
 |---|---|
 | `VAULT_PATH` | Vault root inside the container (`/vault` by convention); enables vault mode |
-| `VAULT_USE_POLLING` | `true` (or `1`) polls for changes instead of using native file events |
+| `VAULT_USE_POLLING` | Force a watcher backend: `true`/`1` = poll, `false`/`0` = native events; unset = detected at startup |
 | `VAULT_POLL_INTERVAL_MS` | Polling interval in ms (default 1000) |
 | `VAULT_WATCH` | `false` disables watching (`POST /api/v1/vault/rebuild` still works) |
 | `VAULT_WRITEBACK` | `false` keeps edits in the index only (no write-back to files) |
 | `VAULT_RECONCILE_MINUTES` | Light periodic reconcile interval in minutes (default 10, `0` disables) — catches edits missed by the watcher |
 
-**On macOS and Windows with Docker Desktop, polling is mandatory.** A bind mount shared from the host into the container does not deliver inotify events, so the watcher never sees your edits and the index silently goes stale until a manual rebuild. Set `VAULT_USE_POLLING=true` and confirm the effective mode:
+**The watcher backend is detected at startup.** A bind mount shared from the host into the container does not deliver inotify events on macOS / Windows Docker Desktop, and macOS paths behind a symlink (`/tmp` → `/private/tmp`) do not deliver FSEvents either. Instead of making you remember which environment needs polling, the engine writes a hidden probe file into the vault root, watches it, and falls back to polling when no native event arrives. The effective mode is reported:
 
 ```bash
-curl -s http://localhost:3140/api/v1/vault/status | jq '{enabled, use_polling, watcher_active, files}'
+curl -s http://localhost:3140/api/v1/vault/status | jq '{enabled, watcher_mode, polling_auto, use_polling, watcher_active, files}'
 ```
 
-`use_polling: true` with `watcher_active: true` means the watcher is running in polling mode, and `files` changes shortly after you add or edit a Markdown file. Linux hosts with a native bind mount normally keep inotify events and can leave polling off.
+`watcher_mode: "polling"` with `polling_auto: true` means polling was chosen automatically, and `files` changes shortly after you add or edit a Markdown file. Force a backend with `VAULT_USE_POLLING=true` (polling) or `VAULT_USE_POLLING=false` (native events); when the variable is unset the probe decides.
 
 ### Migrating an existing notebook to vault mode
 

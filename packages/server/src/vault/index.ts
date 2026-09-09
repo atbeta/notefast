@@ -20,6 +20,7 @@ import { createSerialLock } from './lock'
 import { ingestVaultFile, reconcileVault, type IngestResult, type ReconcileStats, type VaultContext } from './ingest'
 import { isIgnoredRelPath, toVaultAbsPath, VaultPathError, toVaultRelPath } from './paths'
 import { startVaultWatcher, type VaultWatcher } from './watcher'
+import { resolveWatchMode, type WatchMode } from './watchProbe'
 import { createVaultFileSync, type VaultFileSync, type VaultFileSyncStatus } from './fileSyncRuntime'
 import { getVaultFileSyncConfig } from './fileSyncConfig'
 import { vaultFileSyncConfigSchema } from '@notefast/core'
@@ -53,6 +54,10 @@ export interface VaultStatus {
   watch: boolean
   writeback: boolean
   use_polling: boolean
+  /** true = 轮询是启动探测的结果（VAULT_USE_POLLING 未显式指定，RFC 0005 U-2） */
+  polling_auto: boolean
+  /** 实际生效的 watcher 后端 */
+  watcher_mode: 'native' | 'polling' | 'off'
   watcher_active: boolean
   reconciling: boolean
   files: number
@@ -86,6 +91,8 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
   let lastReconcile: ReconcileStats | null = null
   let reconcileTimer: ReturnType<typeof setTimeout> | null = null
   let nextReconcileAt: string | null = null
+  /** watcher 后端：env 显式指定，或启动时探测得出（RFC 0005 U-2） */
+  let watchMode: WatchMode = { usePolling: opts.config.usePolling, auto: false }
   const fileSync = createVaultFileSync(ctx)
 
   const runReconcile = (light: boolean): Promise<ReconcileStats> => {
@@ -146,7 +153,10 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
       setActiveVaultRuntime(runtime)
 
       if (ctx.config.watch && !watcher) {
+        // 先实测 vault 根是否投递原生事件，再决定后端（Docker bind mount / macOS 符号链接路径会失败）
+        watchMode = await resolveWatchMode(ctx.config)
         watcher = await startVaultWatcher(ctx, {
+          usePolling: watchMode.usePolling,
           onError: (rel, e) => console.warn(`[vault] watcher ${rel}:`, e instanceof Error ? e.message : e),
           // 文件变了 → 去抖推送到远端（RFC 0004）
           onResult: () => fileSync.notifyFileChange(),
@@ -209,7 +219,9 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
         notebook_id: ctx.notebookId,
         watch: ctx.config.watch,
         writeback: ctx.config.writeback,
-        use_polling: ctx.config.usePolling,
+        use_polling: watchMode.usePolling,
+        polling_auto: watchMode.auto,
+        watcher_mode: !ctx.config.watch ? 'off' : watchMode.usePolling ? 'polling' : 'native',
         watcher_active: watcher !== null,
         reconciling: reconciling !== null,
         files: listVaultFiles(ctx.db, ctx.notebookId).length,
