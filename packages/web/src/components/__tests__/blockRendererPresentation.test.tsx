@@ -108,6 +108,30 @@ describe('BlockRenderer vault 图片（V-303）', () => {
   })
 })
 
+describe('BlockRenderer 复杂引用阅读态', () => {
+  test('markdownFallback 引用：剥掉一层 `> ` 前缀，不显示字面 >', () => {
+    const quote: Block = {
+      ...leaf(BlockType.Quote, '> [!tip] 提示\n> - 项一\n> - 项二'),
+      properties: { markdownFallback: true, markdownNodeType: 'blockquote' },
+    }
+    const html = renderToStaticMarkup(
+      createElement(ToastProvider, null, createElement(BlockRenderer, { block: doc([quote]) })),
+    )
+    expect(html).toContain('[!tip] 提示')
+    expect(html).toContain('- 项一')
+    expect(html).not.toContain('&gt;')
+  })
+
+  test('普通引用（结构化 content）：原样渲染', () => {
+    const quote = leaf(BlockType.Quote, '第一行\n第二行')
+    const html = renderToStaticMarkup(
+      createElement(ToastProvider, null, createElement(BlockRenderer, { block: doc([quote]) })),
+    )
+    expect(html).toContain('第一行')
+    expect(html).toContain('第二行')
+  })
+})
+
 describe('BlockRenderer 表格 \\| 转义', () => {
   test('单元格内 \\| 不增列，阅读态与 GFM 一致', () => {
     const content = [

@@ -202,8 +202,23 @@ const INLINE_RE = new RegExp(
   'g',
 )
 
-/** 阅读态图片：vault 文档里相对路径解析到 /api/v1/vault/raw/*（V-303），其余原样 */
-function MarkdownImg({ rawSrc, alt }: { rawSrc: string; alt: string }) {
+/**
+ * 引用块的阅读态文本。
+ *
+ * 简单引用 content 是去掉 `> ` 的正文；含列表 / 代码 / 嵌套引用的引用整段存原文
+ * （`properties.markdownFallback`，见 parseMdast），阅读时要把 `> ` 前缀剥掉一层，
+ * 否则 blockquote 里会出现字面 `>`。只影响显示，存储与写回仍是原文。
+ */
+function quoteDisplayText(block: Block): string {
+  const content = block.content || ''
+  if (block.properties?.markdownFallback !== true) return content
+  return content
+    .split('\n')
+    .map((line) => line.replace(/^>\s?/, ''))
+    .join('\n')
+}
+
+/** 阅读态图片：vault 文档里相对路径解析到 /api/v1/vault/raw/*（V-303），其余原样 */function MarkdownImg({ rawSrc, alt }: { rawSrc: string; alt: string }) {
   const vaultPath = useVaultPath()
   const src = resolveVaultAssetSrc(rawSrc, vaultPath) ?? rawSrc
   return (
@@ -577,7 +592,7 @@ const BlockNode = memo(function BlockNode({ block }: BlockNodeProps) {
     case 'quote':
       node = (
         <blockquote id={block.id} className="scroll-mt-20 my-5 pl-4 border-l-[3px] border-border-strong text-muted-foreground bg-muted/35 rounded-r">
-          <p className="leading-[1.65] text-[1.05em]">{renderInline(block.content || '', `q-${block.id}`)}</p>
+          <p className="leading-[1.65] text-[1.05em]">{renderInline(quoteDisplayText(block), `q-${block.id}`)}</p>
           <ChildrenView children={block.children} />
         </blockquote>
       )
