@@ -16,7 +16,7 @@
  *   --blocks-per-file <n>  每篇正文块数（默认 12；内容 profile，越大越慢）
  *   --dirs <n>             子目录数（默认 32）
  *   --stability-ms <n>     编辑器写盘合并窗口（默认 300，= VAULT_STABILITY_MS 默认）
- *   --native               用原生文件事件（默认轮询，见下）
+ *   --native-events        用原生文件事件（默认轮询，见下；仅作对照）
  *   --poll-interval-ms <n> 轮询间隔（默认 100，仅轮询模式生效）
  *   --no-writeback         关闭写回（默认开启，与 VAULT_WRITEBACK 默认一致）
  *   --shadow               **不**暂停影子副本写盘（默认暂停，见下）
@@ -35,7 +35,7 @@
  *   - watcher 模式对「变更→可搜」影响极大：bench 的 vault 落在 macOS 临时目录，
  *     chokidar 原生事件（Bun 1.3.14）在这里会延迟十几秒、丢事件，甚至卡在初始扫描不返回
  *     （卡住时连 JS 定时器都不触发，`--start-timeout-ms` 兜不住，只能 Ctrl-C）。
- *     因此**默认轮询**（与 Docker bind mount 同理，AGENTS.md 已有同款告诫），`--native` 仅作对照。
+ *     因此**默认轮询**（与 Docker bind mount 同理，AGENTS.md 已有同款告诫），`--native-events` 仅作对照。
  *   - 内存为 25ms 采样峰值 RSS（Bun 含 SQLite / 原生扩展，非纯堆），只做量级参考。
  *   - 单次进程只跑一个文件数：RSS 峰值与 SQLite 页缓存不被前一轮污染。10k 请单独起进程。
  */
@@ -108,7 +108,7 @@ function parseArgs(argv: string[]): BenchOptions {
     blocksPerFile: num('blocks-per-file', 12),
     dirs: num('dirs', 32),
     stabilityMs: num('stability-ms', 300),
-    usePolling: raw.native !== true,
+    usePolling: raw['native-events'] !== true && raw.native !== true,
     pollIntervalMs: num('poll-interval-ms', 100),
     writeback: raw['no-writeback'] !== true,
     pauseShadow: raw.shadow !== true,
@@ -399,7 +399,7 @@ async function main(): Promise<void> {
       `⚙️  stabilityMs=${opts.stabilityMs} watcher=${opts.usePolling ? `polling(${opts.pollIntervalMs}ms)` : 'native'} writeback=${opts.writeback ? 'on' : 'off'} shadow=${opts.pauseShadow ? 'paused' : 'live'}`,
     )
     if (!opts.usePolling) {
-      console.warn('⚠️  --native：chokidar 原生事件在本环境可能长时间卡在初始扫描（Bun 1.3.14），必要时 Ctrl-C；结论请以默认轮询为准')
+      console.warn('⚠️  --native-events：chokidar 原生事件在本环境可能长时间卡在初始扫描（Bun 1.3.14），必要时 Ctrl-C；结论请以默认轮询为准')
     }
 
     // 真实启动顺序（app.ts）：initDb → initVectorStore → plugin/ai/docEvents/shadow → vault runtime
@@ -441,7 +441,7 @@ async function main(): Promise<void> {
           if (runtime!.status().reconciling) return
           reject(
             new Error(
-              `runtime.start() 超过 ${opts.startTimeoutMs}ms 仍未进入对账——原生事件在临时目录下常卡在 watcher ready；去掉 --native（默认轮询）再试`,
+              `runtime.start() 超过 ${opts.startTimeoutMs}ms 仍未进入对账——原生事件在临时目录下常卡在 watcher ready；去掉 --native-events（默认轮询）再试`,
             ),
           )
         }, opts.startTimeoutMs)
