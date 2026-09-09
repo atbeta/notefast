@@ -63,20 +63,50 @@ bun run build
 
 ---
 
-## 项目：NoteFast
+## 项目：NoteFast（next 分支 — vault mode）
+
+> ⚠️ 你在 `next` 分支上。这是 NoteFast 的 vault mode 重写线，与 `main`（v0.86.x）平行存在。
+>
+> **本分支与 main 的差异**：
+> - 包名：`@notefast-next/{core,server,web}`（与 main 的 `@notefast/*` 彻底分离）
+> - 数据模型：vault 文件夹是权威，SQLite 是派生索引（main 反过来）
+> - 编辑器：任意外部工具（Obsidian 优先），不内置写编辑器（MVP）
+> - 同步：文件系统层（git / iCloud / Syncthing），不内置 S3/WebDAV
+>
+> **纪律**：
+> - main 不接受 vault mode 相关改动（cherry-pick 老 bugfix 用 `--ff-only`）
+> - next 独立 semver：`@notefast-next/*@0.x.y-next.z`
+> - 重大决策先写 RFC 到 `docs/rfcs/`，不在 PR 评论里讨论架构
+> - 每两周手动 sync 一次 `main` 改动到 `next`
+>
+> 📄 详见 `docs/rfcs/0001-vault-mode.md` 和 `0002-block-identity.md`。
 
 AI-first 知识库 — block 级 API + MCP。AI 负责写入与理解，人类负责阅读；写作体验是正轨，不是整站副产品。
+
+**vault mode 额外原则**：
+- 文件层是权威：用户能 git 跟踪、跨工具编辑、随时拷走
+- 索引层是 ephemeral：可删可重建，丢了不致命
+- 引用层是软解析：块 ID 漂移时降级匹配，不抛 broken link
+- 永远不锁文件：所有写入用 `tmp + rename`
+- 单向跟随：vault 改了 → SQLite 更新；SQLite 改了 → 写回 vault（AI 编辑场景）
 
 ### 目录结构
 
 ```
 notefast/
-├── packages/core      # 共享类型与数据模型（纯库）
-├── packages/server    # REST API + MCP + SQLite
-├── packages/web       # React 阅读 / 编辑器
-├── clients/apple      # macOS Swift 壳（非 Bun workspace）
-├── clients/tauri      # Windows Tauri 壳（非 Bun workspace）
-├── docs/              # backup.md / capture.md
+├── packages/core             # 共享类型与数据模型（纯库）
+├── packages/server           # REST API + MCP + SQLite
+│   └── src/vault/            # next-only: vault adapter + watcher + ingest
+├── packages/web              # React 阅读 / 编辑器
+├── clients/apple             # macOS Swift 壳（非 Bun workspace）
+├── clients/tauri             # Windows Tauri 壳（非 Bun workspace）
+├── docs/
+│   ├── backup.md
+│   ├── capture.md
+│   └── rfcs/                 # next-only: 架构决策 RFC
+│       ├── 0001-vault-mode.md
+│       └── 0002-block-identity.md
+├── tools/vault-poc/          # next-only: 独立 chokidar PoC 工具
 ├── docker-compose.yml
 └── bun.lock
 ```
