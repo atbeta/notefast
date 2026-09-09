@@ -55,6 +55,8 @@ export interface VaultStatus {
   last_reconcile: ReconcileStats | null
   /** 最近 24h 写回冲突：计数 + 最近 10 条冲突副本路径（RFC 0003 阶段 D） */
   conflicts: { count: number; paths: string[] }
+  /** 下一次定时轻量对账时间（ISO）；未开启定时对账时为 null */
+  next_reconcile_at: string | null
 }
 
 export interface VaultRuntime {
@@ -74,10 +76,12 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
   let writeback: VaultWriteback | null = null
   let reconciling: Promise<ReconcileStats> | null = null
   let lastReconcile: ReconcileStats | null = null
+  let reconcileTimer: ReturnType<typeof setTimeout> | null = null
+  let nextReconcileAt: string | null = null
 
-  const rebuild = (): Promise<ReconcileStats> => {
+  const runReconcile = (light: boolean): Promise<ReconcileStats> => {
     if (reconciling) return reconciling
-    reconciling = ctx.lock(() => reconcileVault(ctx))
+    reconciling = ctx.lock(() => reconcileVault(ctx, { light }))
       .then((stats) => {
         lastReconcile = stats
         return stats
@@ -86,6 +90,34 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
         reconciling = null
       })
     return reconciling
+  }
+
+  const rebuild = (): Promise<ReconcileStats> => runReconcile(false)
+
+  /**
+   * 定时轻量对账（V-404）：chokidar 漏事件 / 休眠唤醒后的自愈兜底。
+   * 与手动 rebuild 共用 reconciling 状态与串行锁，所以面板能显示、也不会交错。
+   */
+  const scheduleReconcile = (): void => {
+    if (ctx.config.reconcileMinutes <= 0) return
+    const ms = Math.max(1000, Math.round(ctx.config.reconcileMinutes * 60_000))
+    nextReconcileAt = new Date(Date.now() + ms).toISOString()
+    reconcileTimer = setTimeout(() => {
+      reconcileTimer = null
+      nextReconcileAt = null
+      const run = reconciling ?? runReconcile(true)
+      run
+        .catch((e) => console.warn('[vault] 定时对账失败:', e instanceof Error ? e.message : e))
+        .finally(() => scheduleReconcile())
+    }, ms)
+    // CLI / 测试场景：定时器不阻止进程退出
+    ;(reconcileTimer as unknown as { unref?: () => void }).unref?.()
+  }
+
+  const stopReconcileTimer = (): void => {
+    if (reconcileTimer) clearTimeout(reconcileTimer)
+    reconcileTimer = null
+    nextReconcileAt = null
   }
 
   const runtime: VaultRuntime = {
@@ -119,6 +151,8 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
         })
       }
 
+      scheduleReconcile()
+
       const job = rebuild().then((stats) => {
         console.log(
           `📂 vault 对账完成: ${stats.totalFiles} 文件，+${stats.created} ~${stats.updated} =${stats.unchanged}` +
@@ -139,6 +173,7 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
         writeback.stop()
         writeback = null
       }
+      stopReconcileTimer()
       if (activeRuntime === runtime) setActiveVaultRuntime(null)
     },
     status() {
@@ -154,6 +189,7 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
         files: listVaultFiles(ctx.db, ctx.notebookId).length,
         last_reconcile: lastReconcile,
         conflicts: listVaultWritebackConflicts(),
+        next_reconcile_at: nextReconcileAt,
       }
     },
     rebuild,

@@ -30,6 +30,7 @@ function makeConfig(root: string): VaultConfig {
     stabilityMs: 50,
     usePolling: true,
     pollIntervalMs: 50,
+    reconcileMinutes: 0,
   }
 }
 

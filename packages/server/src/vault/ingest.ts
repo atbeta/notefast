@@ -63,6 +63,7 @@ import { resolveUnresolvedForDoc, syncVaultWikilinks, wikilinkNamesForPath } fro
 import { isIgnoredRelPath, isMarkdownPath, titleFromRelPath, toVaultAbsPath, toVaultRelPath } from './paths'
 import type { VaultConfig } from './config'
 import type { SerialLock } from './lock'
+import { statSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -433,8 +434,18 @@ export interface ReconcileStats {
   restored: number
   moved: number
   deleted: number
+  /** 轻量模式：size + mtime 与映射行一致、直接跳过未读盘的文件数 */
+  stat_skipped: number
   errors: Array<{ relPath: string; error: string }>
   durationMs: number
+}
+
+export interface ReconcileOptions {
+  /**
+   * 轻量模式（定时兜底，V-404）：已知文件先比 size + mtime_ms，一致就不读盘；
+   * 新增 / 变更 / 消失的文件照常处理，因此漏事件、休眠唤醒都能追平。
+   */
+  light?: boolean
 }
 
 /** 递归列出 vault 内全部 .md 相对路径（跳过忽略目录与符号链接） */
@@ -467,8 +478,9 @@ export async function listVaultMarkdownFiles(config: VaultConfig): Promise<strin
  * 1. 磁盘上有、映射里没有 或 sha 变了 → ingest（新建 / 更新）
  * 2. 映射里有、磁盘上没有 → 先按 sha 与「新文件」配对成 move，配不上的进回收站
  */
-export async function reconcileVault(ctx: VaultContext): Promise<ReconcileStats> {
+export async function reconcileVault(ctx: VaultContext, opts: ReconcileOptions = {}): Promise<ReconcileStats> {
   const start = Date.now()
+  const light = opts.light === true
   const stats: ReconcileStats = {
     totalFiles: 0,
     created: 0,
@@ -476,6 +488,7 @@ export async function reconcileVault(ctx: VaultContext): Promise<ReconcileStats>
     unchanged: 0,
     restored: 0,
     moved: 0,
+    stat_skipped: 0,
     deleted: 0,
     errors: [],
     durationMs: 0,
@@ -519,8 +532,21 @@ export async function reconcileVault(ctx: VaultContext): Promise<ReconcileStats>
     }
   }
 
+  const liveByPath = new Map(liveRows.map((r) => [r.rel_path, r]))
   for (const rel of onDisk) {
     try {
+      // 轻量模式：先比 stat，未变的文件不读盘（sha 短路只能省解析，省不掉读）
+      if (light) {
+        const row = liveByPath.get(rel)
+        if (row) {
+          const abs = toVaultAbsPath(ctx.config.root, rel)
+          const st = statSync(abs, { throwIfNoEntry: false })
+          if (st && st.size === row.size && Math.round(st.mtimeMs) === row.mtime_ms) {
+            stats.stat_skipped++
+            continue
+          }
+        }
+      }
       const r = await ingestVaultFile(ctx, rel)
       switch (r.action) {
         case 'created':

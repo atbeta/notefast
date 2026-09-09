@@ -54,6 +54,7 @@ function makeConfig(root: string, over: Partial<VaultConfig> = {}): VaultConfig 
     stabilityMs: 50,
     usePolling: true,
     pollIntervalMs: 50,
+    reconcileMinutes: 0,
     ...over,
   }
 }
@@ -1254,6 +1255,63 @@ describe('vault wikilinks', () => {
     unlinkSync(join(vaultDir, 'gone.md'))
     removeVaultFile(ctx, 'gone.md')
     expect(refBetween(block, gone.docId!)).toBe(false)
+  })
+})
+
+// ───────────────────── 定时轻量对账（V-404） ─────────────────────
+
+describe('vault light reconcile', () => {
+  test('绕过 watcher 直接改文件 → light 对账入库；未变文件只 stat 不读盘', async () => {
+    writeVault('l1.md', '一\n')
+    expect((await reconcileVault(ctx, { light: true })).created).toBe(1)
+
+    // 未变：第二次只比 size + mtime
+    const second = await reconcileVault(ctx, { light: true })
+    expect(second.stat_skipped).toBe(1)
+    expect(second.unchanged).toBe(0)
+
+    // 绕过 watcher 直接改（size 变了）→ 重新 ingest
+    writeVault('l1.md', '一（改）\n')
+    const third = await reconcileVault(ctx, { light: true })
+    expect(third.updated).toBe(1)
+    expect(third.stat_skipped).toBe(0)
+    const docId = getVaultFileByPath(getDb(), notebookId, 'l1.md')!.doc_id
+    expect(childContents(docId)).toEqual(['一（改）'])
+
+    // 漏事件期间新增的文件也能被发现
+    writeVault('l2.md', '二\n')
+    const fourth = await reconcileVault(ctx, { light: true })
+    expect(fourth.created).toBe(1)
+    expect(fourth.stat_skipped).toBe(1)
+  })
+
+  test('运行时：status 暴露 next_reconcile_at，stop 后清空', async () => {
+    const runtime = createVaultRuntime({
+      db: getDb(),
+      notebookId,
+      config: makeConfig(vaultDir, { reconcileMinutes: 10 }),
+    })
+    await runtime.start({ awaitReconcile: true })
+    try {
+      const next = runtime.status().next_reconcile_at
+      expect(next).toBeTruthy()
+      expect(Date.parse(next!)).toBeGreaterThan(Date.now())
+    } finally {
+      await runtime.stop()
+      getDb().query(`UPDATE notebooks SET kind = 'db', vault_root = NULL WHERE id = ?`).run(notebookId)
+    }
+    expect(runtime.status().next_reconcile_at).toBeNull()
+  })
+
+  test('reconcileMinutes = 0 → 不排定时对账', async () => {
+    const runtime = createVaultRuntime({ db: getDb(), notebookId, config: makeConfig(vaultDir) })
+    await runtime.start({ awaitReconcile: true })
+    try {
+      expect(runtime.status().next_reconcile_at).toBeNull()
+    } finally {
+      await runtime.stop()
+      getDb().query(`UPDATE notebooks SET kind = 'db', vault_root = NULL WHERE id = ?`).run(notebookId)
+    }
   })
 })
 

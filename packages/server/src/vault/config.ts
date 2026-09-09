@@ -11,6 +11,7 @@
  *   VAULT_USE_POLLING 'true' 用轮询代替原生文件事件（Docker bind mount、网络盘；macOS 上 /tmp、/var/folders
  *                     这类经符号链接的路径 FSEvents 不投递事件，测试也用它）
  *   VAULT_POLL_INTERVAL_MS  轮询间隔（默认 1000）
+ *   VAULT_RECONCILE_MINUTES  定时轻量对账间隔（分钟，默认 10；0 = 关闭）。chokidar 漏事件 / 休眠唤醒后的兜底
  */
 
 import { existsSync, statSync } from 'node:fs'
@@ -26,6 +27,8 @@ export interface VaultConfig {
   stabilityMs: number
   usePolling: boolean
   pollIntervalMs: number
+  /** 定时轻量对账间隔（分钟）；0 = 关闭 */
+  reconcileMinutes: number
 }
 
 /** 默认忽略：工具私有目录。隐藏目录（任一段以 . 开头）在 paths.isIgnored 里统一忽略，此处列出仅为显式 */
@@ -44,6 +47,7 @@ export function loadVaultConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Va
     .filter(Boolean)
   const stability = Number.parseInt(env.VAULT_STABILITY_MS ?? '', 10)
   const pollInterval = Number.parseInt(env.VAULT_POLL_INTERVAL_MS ?? '', 10)
+  const reconcile = Number.parseFloat(env.VAULT_RECONCILE_MINUTES ?? '')
   return {
     root,
     ignore: [...new Set([...DEFAULT_VAULT_IGNORE, ...extra])],
@@ -52,5 +56,6 @@ export function loadVaultConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Va
     stabilityMs: Number.isFinite(stability) && stability >= 0 ? stability : 300,
     usePolling: env.VAULT_USE_POLLING === 'true' || env.VAULT_USE_POLLING === '1',
     pollIntervalMs: Number.isFinite(pollInterval) && pollInterval > 0 ? pollInterval : 1000,
+    reconcileMinutes: Number.isFinite(reconcile) && reconcile >= 0 ? reconcile : 10,
   }
 }
