@@ -11,6 +11,7 @@
 import { Hono } from 'hono'
 import type { getDb } from '../db'
 import { bindNotebookToVault, getNotebookVaultBinding, listVaultFiles } from '../store/vaultFiles'
+import { listVaultWritebackConflicts } from '../services/appLogs'
 import type { VaultConfig } from './config'
 import { createSerialLock } from './lock'
 import { ingestVaultFile, reconcileVault, type IngestResult, type ReconcileStats, type VaultContext } from './ingest'
@@ -34,6 +35,8 @@ export interface VaultStatus {
   reconciling: boolean
   files: number
   last_reconcile: ReconcileStats | null
+  /** 最近 24h 写回冲突：计数 + 最近 10 条冲突副本路径（RFC 0003 阶段 D） */
+  conflicts: { count: number; paths: string[] }
 }
 
 export interface VaultRuntime {
@@ -130,6 +133,7 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
         reconciling: reconciling !== null,
         files: listVaultFiles(ctx.db, ctx.notebookId).length,
         last_reconcile: lastReconcile,
+        conflicts: listVaultWritebackConflicts(),
       }
     },
     rebuild,

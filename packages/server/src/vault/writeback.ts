@@ -35,6 +35,7 @@ import {
 } from '../store/vaultSpans'
 import { subscribeDocChanges, type DocChangeEvent } from '../services/docEvents'
 import { auditVault } from './audit'
+import type { VaultConfig } from './config'
 import type { VaultContext } from './ingest'
 import { readVaultDocMeta, vaultMetaHash } from './meta'
 import { patchVaultContent, type PatchBlock } from './patch'
@@ -113,6 +114,40 @@ export function uniqueRelPathForTitle(root: string, title: string): string {
   return candidate
 }
 
+/** 冲突副本文件名时间戳：yyyyMMdd-HHmmss */
+function conflictStamp(d = new Date()): string {
+  const p = (n: number): string => String(n).padStart(2, '0')
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
+}
+
+/**
+ * 冲突时把 NoteFast 版本另存到同目录 `<stem>.notefast-conflict-<ts>.md`（tmp+rename），
+ * 不覆盖用户文件。副本会被 watcher 当新文档 ingest —— 这是预期（用户可见、可自行合并）。
+ * 返回相对 vault 根的路径（记进审计与 status.conflicts）。
+ */
+async function writeConflictCopy(
+  config: VaultConfig,
+  abs: string,
+  content: string,
+): Promise<string | null> {
+  const dir = dirname(abs)
+  const stem = abs.slice(dir.length + 1).replace(/\.md$/i, '')
+  const stamp = conflictStamp()
+  let dest = join(dir, `${stem}.notefast-conflict-${stamp}.md`)
+  let n = 2
+  while (existsSync(dest)) {
+    dest = join(dir, `${stem}.notefast-conflict-${stamp}-${n}.md`)
+    n++
+  }
+  try {
+    await writeVaultFileAtomic(dest, content)
+  } catch (e) {
+    console.warn('[vault writeback] 冲突副本写入失败:', e instanceof Error ? e.message : e)
+    return null
+  }
+  return dest.startsWith(config.root) ? dest.slice(config.root.length).replace(/^[/\\]/, '') : dest
+}
+
 export function startVaultWriteback(
   ctx: VaultContext,
   opts: { onOutcome?: (docId: string, outcome: WritebackOutcome) => void } = {},
@@ -122,6 +157,25 @@ export function startVaultWriteback(
   const idleWaiters: Array<() => void> = []
 
   const handle = (ev: DocChangeEvent): Promise<WritebackOutcome> => ctx.lock(() => handleUnlocked(ev))
+
+  /** 冲突统一出口：另存 NoteFast 版本 + 审计（附 conflict_path），原文件保持用户版本 */
+  const conflictWithCopy = async (args: {
+    docId: string
+    relPath: string
+    abs: string
+    expectedSha: string | null
+    actualSha: string | null
+    content: string
+  }): Promise<WritebackOutcome> => {
+    const conflictPath = await writeConflictCopy(ctx.config, args.abs, args.content)
+    auditVault('doc.vault_writeback_conflict', args.docId, {
+      rel_path: args.relPath,
+      expected_sha: args.expectedSha,
+      actual_sha: args.actualSha,
+      ...(conflictPath ? { conflict_path: conflictPath } : {}),
+    })
+    return { kind: 'conflict', relPath: args.relPath }
+  }
 
   const handleUnlocked = async (ev: DocChangeEvent): Promise<WritebackOutcome> => {
     const { db, notebookId, config } = ctx
@@ -163,14 +217,16 @@ export function startVaultWriteback(
 
     if (existing) {
       const disk = await readVaultFile(abs)
-      // 磁盘已被外部改过 → 不解析、不覆盖（与 writer 的乐观并发同一判定）
+      // 磁盘已被外部改过 → 不解析、不覆盖；NoteFast 版本另存副本（与 writer 的乐观并发同一判定）
       if (disk && disk.sha256 !== expectedSha) {
-        auditVault('doc.vault_writeback_conflict', doc.id, {
-          rel_path: relPath,
-          expected_sha: expectedSha,
-          actual_sha: disk.sha256,
+        return conflictWithCopy({
+          docId: doc.id,
+          relPath,
+          abs,
+          expectedSha,
+          actualSha: disk.sha256,
+          content: serializeVaultDocParts(ctx, doc, row).content,
         })
-        return { kind: 'conflict', relPath }
       }
       if (disk) {
         const patched = patchVaultContent({
@@ -193,12 +249,14 @@ export function startVaultWriteback(
       written = await writeVaultFileAtomic(abs, plan.content, { expectedSha })
     } catch (e) {
       if (e instanceof VaultConflictError) {
-        auditVault('doc.vault_writeback_conflict', doc.id, {
-          rel_path: relPath,
-          expected_sha: e.expectedSha,
-          actual_sha: e.actualSha,
+        return conflictWithCopy({
+          docId: doc.id,
+          relPath,
+          abs,
+          expectedSha,
+          actualSha: e.actualSha,
+          content: plan.content,
         })
-        return { kind: 'conflict', relPath }
       }
       throw e
     }

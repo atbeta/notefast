@@ -76,6 +76,45 @@ export function listAppLogs(limit = 100): Array<{
   }))
 }
 
+/**
+ * 最近的 vault 写回冲突（`/api/v1/vault/status.conflicts` 用）。
+ * 从 app_logs 读 `doc.vault_writeback_conflict`：24h 计数 + 最近 N 条冲突副本路径。
+ */
+export function listVaultWritebackConflicts(
+  opts: { sinceHours?: number; limit?: number } = {},
+): { count: number; paths: string[] } {
+  const db = getDb()
+  const hours = opts.sinceHours ?? 24
+  const limit = Math.min(Math.max(opts.limit ?? 10, 1), 100)
+  const count = (
+    db
+      .query(
+        `SELECT count(*) AS c FROM app_logs
+         WHERE message = 'doc.vault_writeback_conflict' AND ts >= datetime('now', ?)`,
+      )
+      .get(`-${hours} hours`) as { c: number }
+  ).c
+  const rows = db
+    .query(
+      `SELECT fields FROM app_logs
+       WHERE message = 'doc.vault_writeback_conflict' AND ts >= datetime('now', ?)
+       ORDER BY id DESC LIMIT ?`,
+    )
+    .all(`-${hours} hours`, limit) as Array<{ fields: string | null }>
+  const paths: string[] = []
+  for (const row of rows) {
+    if (!row.fields) continue
+    try {
+      const fields = JSON.parse(row.fields) as Record<string, unknown>
+      const p = fields.conflict_path ?? fields.rel_path
+      if (typeof p === 'string' && p) paths.push(p)
+    } catch {
+      /* 坏日志跳过 */
+    }
+  }
+  return { count, paths }
+}
+
 /** 启动时裁剪环形日志（TTL + 行数上限）；幂等可重复调用 */
 export function initAppLogs(): void {
   const db = getDb()

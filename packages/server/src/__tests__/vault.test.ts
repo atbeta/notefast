@@ -6,7 +6,7 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
@@ -867,6 +867,72 @@ describe('vault block patch', () => {
       const again = readFileSync(join(vaultDir, 'flat.md'), 'utf8')
       expect(await wb.handle(ev(r.docId!))).toMatchObject({ kind: 'skipped', reason: 'echo' })
       expect(readFileSync(join(vaultDir, 'flat.md'), 'utf8')).toBe(again)
+    } finally {
+      wb.stop()
+    }
+  })
+})
+
+// ───────────────────── 冲突副本（V-204） ─────────────────────
+
+describe('vault conflict copy', () => {
+  test('写回冲突 → 原文件不动、NoteFast 版本另存副本，status.conflicts 可查', async () => {
+    writeVault('c.md', 'para one\n\npara two\n')
+    const r = await ingestVaultFile(ctx, 'c.md')
+    const wb = startVaultWriteback(ctx)
+    try {
+      // 外部工具（Obsidian）先改了文件
+      writeFileSync(join(vaultDir, 'c.md'), 'obsidian wins\n')
+      await new Promise((res) => setTimeout(res, 5))
+      updateBlock(getDb(), childIds(r.docId!)[1]!, { content: 'para two (ai)', actor: 'mcp' })
+
+      const out = await wb.handle({ doc_id: r.docId!, kind: 'updated', at: new Date().toISOString() })
+      expect(out.kind).toBe('conflict')
+
+      // 原文件保持用户版本，不覆盖
+      expect(readFileSync(join(vaultDir, 'c.md'), 'utf8')).toBe('obsidian wins\n')
+
+      // 副本存在且内容是 NoteFast 版本
+      const copies = readdirSync(vaultDir).filter((f) => f.startsWith('c.notefast-conflict-'))
+      expect(copies).toHaveLength(1)
+      expect(copies[0]).toMatch(/^c\.notefast-conflict-\d{8}-\d{6}\.md$/)
+      expect(readFileSync(join(vaultDir, copies[0]!), 'utf8')).toBe('para one\n\npara two (ai)\n')
+
+      // status.conflicts：24h 计数 + 最近路径
+      const status = createVaultRuntime({ db: getDb(), notebookId, config: makeConfig(vaultDir) }).status()
+      expect(status.conflicts.count).toBeGreaterThanOrEqual(1)
+      expect(status.conflicts.paths[0]).toBe(copies[0])
+
+      // 副本是普通 vault 文件：会被 ingest 成新文档（用户可见，自行合并）
+      expect((await ingestVaultFile(ctx, copies[0]!)).action).toBe('created')
+    } finally {
+      wb.stop()
+    }
+  })
+
+  test('同秒多次冲突不覆盖已有副本', async () => {
+    writeVault('dup.md', 'one\n')
+    const r = await ingestVaultFile(ctx, 'dup.md')
+    const wb = startVaultWriteback(ctx)
+    try {
+      writeFileSync(join(vaultDir, 'dup.md'), 'external A\n')
+      await new Promise((res) => setTimeout(res, 5))
+      updateBlock(getDb(), r.docId!, { content: 'dup', actor: 'mcp' })
+      updateBlock(getDb(), childIds(r.docId!)[0]!, { content: 'one (ai)', actor: 'mcp' })
+      expect((await wb.handle({ doc_id: r.docId!, kind: 'updated', at: new Date().toISOString() })).kind).toBe(
+        'conflict',
+      )
+
+      writeFileSync(join(vaultDir, 'dup.md'), 'external B\n')
+      await new Promise((res) => setTimeout(res, 5))
+      updateBlock(getDb(), childIds(r.docId!)[0]!, { content: 'one (ai again)', actor: 'mcp' })
+      expect((await wb.handle({ doc_id: r.docId!, kind: 'updated', at: new Date().toISOString() })).kind).toBe(
+        'conflict',
+      )
+
+      const copies = readdirSync(vaultDir).filter((f) => f.startsWith('dup.notefast-conflict-'))
+      expect(copies).toHaveLength(2)
+      expect(readFileSync(join(vaultDir, 'dup.md'), 'utf8')).toBe('external B\n')
     } finally {
       wb.stop()
     }
