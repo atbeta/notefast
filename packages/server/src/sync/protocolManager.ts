@@ -555,6 +555,11 @@ let cachedDeviceId: string | null = null
 /** 本端持久设备 id（data/device.id，首用生成）；客户端同理自持，互不依赖 */
 export function getDeviceId(): string {
   if (cachedDeviceId) return cachedDeviceId
+  // 未初始化 dataDir（纯库用法 / 测试）：只给进程内 id，绝不往 cwd 写文件
+  if (!dataDir) {
+    cachedDeviceId = crypto.randomUUID()
+    return cachedDeviceId
+  }
   const path = join(dataDir, DEVICE_ID_FILE)
   try {
     if (existsSync(path)) {
