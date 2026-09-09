@@ -129,8 +129,13 @@ grace 窗口默认 `max(1000ms, stabilityMs × 3)`；窗口内文件在原路径
 | 中间插入一段的旧块 id 保持率 | 100% | 测试覆盖 |
 | 改名 / 移动文件的引用保持率 | 100% | 测试覆盖（`vault.test.ts` 改名 / 回收站重现两例） |
 | 删除后同内容重现的文档 id 保持率 | 100%（回收站未清空） | 测试覆盖 |
-| 1000 文件首次对账 | < 30s | 待测（V-501 bench） |
-| 文件变更 → SQLite 可见 | < stabilityMs + 200ms | 实测 382ms（stabilityMs 300，迁移走查） |
+| 1000 文件首次对账 | < 30s | **8.4s**（110 files/s，18k 块，峰值 RSS 202MB） |
+| 10k 文件首次对账 | < 5min | **258.6s**（38.7 files/s，180k 块，峰值 RSS 650MB）—— 达标但余量仅 14% |
+| 文件变更 → SQLite 可见 | < stabilityMs + 200ms | **323ms**（1000 文件）/ **374ms**（10k）/ 382ms（迁移走查） |
+
+测量口径：`packages/server/src/eval/vaultBench.ts`，12 块/篇、32 目录、`stabilityMs=300`、轮询监听（**必须**：合成 vault 落在 macOS 临时目录，经符号链接 FSEvents 不投递，用原生事件测出来的是环境噪声——1000 文件时中位 3776ms、样本 376/14196/3776ms）。
+
+已知热点（见计划「待议」）：`syncVaultWikilinks` 每次 ingest 都重建全库文件索引，对账整体呈 O(n²)。
 
 ## 风险
 

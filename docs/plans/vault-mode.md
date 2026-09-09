@@ -317,3 +317,5 @@ VAULT_PATH=/tmp/v DATA_DIR=/tmp/d PORT=3999 bun --filter @notefast/server dev   
 - ~~2026-09-09（V-201 评估）：**V-203 span 偏移必须与 `stripTitleHeading` 组合**~~ → 已解：区间按块记录（含被提升的 H1 子块），`stripTitleHeading` 只影响哪些块是顶层，不改变区间偏移。
 - ~~2026-09-09（V-202 落地）：**文件改 status 不复制 API 的级联**~~ → 已解（`ef22bab`）：升格回 `note`（inbox / archived → note）时 ingest 也调 `reanalyzeDoc`，判定收在 `vault/meta.ts#needsReanalyzeOnStatusChange` 并有单测；归档时的分享撤销仍只在 API 路径（文件无法表达 `archived`）。
 - 2026-09-09（V-202 落地）：**frontmatter 识别是启发式**——「所有非空行都像 YAML」才算 frontmatter；单行 `Note: 正文` 这类仍是误判面。若 Obsidian 侧出现误剥离，考虑改为「首行必须是 `key:` 或 `key: value`」再放宽。
+- 2026-09-10（V-501 bench）：**首次对账整体 O(n²)**——`vault/wikilinks.ts#syncVaultWikilinks` 每次 ingest 都 `buildVaultFileIndex(ctx)`（`listVaultFiles` 全表 + 4 张 map）。实测：1000 文件时单次 0.8ms、10k 文件时 10ms，吞吐从 110 files/s 掉到 38.7 files/s；10k 对账 258.6s 虽然达标（<5min），但余量只剩 14%，20k 会超。建议对账期间构建一次索引并沿调用链传下去，或在 `vault_files` 写入时失效缓存。
+- 2026-09-10（V-501 bench）：**原生事件在符号链接临时目录下测不准**——bench 默认写进 macOS 临时目录（`/var/folders` → `/private/var/folders`），FSEvents 不投递/延迟极不稳定（1000 文件中位 3776ms、样本 376/14196/3776ms）。bench 已改为默认轮询（同一环境 1000 文件 323ms、10k 374ms）；原生事件保留为对照开关，结论一律以轮询为准。
