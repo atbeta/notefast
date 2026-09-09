@@ -25,6 +25,7 @@ import * as m023 from './023_vault_mode'
 import * as m024 from './024_vault_frontmatter'
 import * as m025 from './025_vault_block_spans'
 import * as m026 from './026_vault_unresolved_links'
+import * as m027 from './027_vault_sync_state'
 
 interface Migration {
   id: string
@@ -34,7 +35,7 @@ interface Migration {
 }
 
 /** 唯一基线迁移。历史 002-010 已合并到此。 */
-const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012, m013, m014, m015, m016, m017, m018, m019, m020, m021, m022, m023, m024, m025, m026]
+const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012, m013, m014, m015, m016, m017, m018, m019, m020, m021, m022, m023, m024, m025, m026, m027]
 
 /**
  * squash 进 001_initial 的旧 id。只删这些，禁止「不在本二进制里的 id 一律删」——
