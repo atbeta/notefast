@@ -364,8 +364,9 @@ Windows 实机使用后反馈三条，全部与「壳不记忆模式」同源：
 | U-10 | 目录感知的新建：`POST /docs`、`/import/markdown` 收 `dir`（越界忽略）；侧栏/新建页带上当前 `?dir=`；目录树订阅变更即时刷新 | 完成 |
 | U-11 | 边界落地（RFC 0006）：`notefast_status` 支持 archived（文件完全权威）、树上标记收集箱/归档、采集默认落盘目录（`data/vault-capture.json` + 设置项） | 完成 |
 | U-12 | 砍掉 vault 下不适用的功能：影子副本强制关闭（含启动全量投影与 API 重开）、资源页 / 图床设置 / 归档导出入口隐藏 | 完成 |
-| U-13 | 图片落盘：上传与拖入的图片写进笔记同名资源夹 `<笔记名>.assets/`，正文用相对路径；db 模式保持 `asset:<sha>` | 待开始 |
+| U-13 | 图片落盘：上传与拖入的图片写进笔记同名资源夹 `<笔记名>.assets/`，正文用相对路径；db 模式保持 `asset:<sha>` | 完成 |
 | U-14 | 唯一形态落地：db 模式（旧库 / 空库两种文案）引导页 + 导出旧笔记；vault 下忽略 `AUTO_EXPORT_DIR`；`/instance` 增 `db_doc_count`（不含欢迎文档） | 完成 |
+| U-15 | 发版杂务：release-please 接管 `Cargo.lock` 版本（extra-files + 校验 jsonpath）；CI 加 `bun run check:versions` 兜底 | 完成 |
 
 U-1 … U-4 是部署一致性；U-5 … U-7 是统一的前置 parity（U-7 可与其余并行）。
 
@@ -395,6 +396,16 @@ U-1 … U-4 是部署一致性；U-5 … U-7 是统一的前置 parity（U-7 可
 3. **spans 不再重复建树**：ingest 已经解析过一次正文，把解析结果 / 顶层块指纹传进 `recordVaultSpans`，省掉每篇的 `fetchDocBlocks` + `buildBlockTree`
 
 剖析方法（可复现）：`bun --cpu-prof --cpu-prof-dir=/tmp/prof run packages/server/src/eval/vaultBench.ts --files 2000`，再用脚本把 native 采样归因到最近的 JS 调用者。
+
+**U-13 图片落盘（唯一还破坏「文件是我的」的地方）**：
+- `POST /api/v1/assets?doc_id=<doc>`：vault 笔记的图片写进**笔记同名资源夹** `notes/a.assets/截图.png`，返回**相对引用** `a.assets/截图.png`；不带 `doc_id`、或 doc 没有 vault 映射（db notebook）时照旧进资源库返回 `asset:<sha>`。前端 `useImageUploader` 现在带上 `docId`，编辑器/粘贴/拖拽三条路都走它
+- 为什么每篇一个资源夹而不是全库共享 `assets/`：共享会让全库图片挤在一起、归属不清；每篇一个则「删笔记连资源夹一起删」，相对引用在任何 Markdown 工具里都能渲染
+- **实测**：上传 → `notes/a.assets/截图.png` 落盘、`ref=a.assets/截图.png`；`/vault/raw/notes/a.assets/截图.png` 返回 200 + image/png（阅读器解析相对路径）；正文写回后磁盘上的 `.md` 就是 `![截图](a.assets/截图.png)`
+- 单测 11 例，其中一条抓出真 bug：**根目录笔记的引用漏掉了资源夹**（只写 `image.png` → 碎图），已修
+- 已知限制：在应用外重命名笔记，它的 `.assets/` 不会跟着改（用户自己改的，我们不动），引用会断——与「不猜用户意图」一致
+
+**U-15 发版杂务**：`Cargo.lock` 以前总是落后一版（release-please 只管 `Cargo.toml`）。
+现在把它加进 `.github/release-please-config.json` 的 extra-files：`{"type":"toml","path":"clients/tauri/src-tauri/Cargo.lock","jsonpath":"$.package[?(!@.source)].version"}`。用 `!@.source` 而不是按包名过滤（registry 依赖必带 source、本地成员从不带）；用 release-please 内部同款库（smol-toml + jsonpath-plus）对真实锁文件验证过：**只命中 `notefast-tauri` 一条**。另加 CI 门禁 `bun run check:versions`（比对 8 处版本），漏改会当场红，不会再等到发版后才发现。
 
 **U-14 vault 作为唯一形态（RFC 0006）**：定位是「只提示，不迁移」。
 - `/api/v1/instance` 增 `db_doc_count`（活文档数，**排除引擎自己种的欢迎文档**——否则每个新装 db 实例都会被当成 0.90 前的老库）

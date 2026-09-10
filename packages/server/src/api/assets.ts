@@ -39,10 +39,52 @@ import {
   getImageUploadConfig,
 } from '../services/imageUploadConfig'
 import { getDb } from '../db'
+import { getActiveVaultRuntime } from '../vault'
+import { writeVaultImage } from '../vault/images'
+import { getVaultFileByDocId } from '../store/vaultFiles'
+
+/**
+ * 若该文档属于当前 vault，就把图片写进它的资源夹并返回相对引用；否则返回 null
+ * （调用方走原有的 asset 存储，db 模式行为不变）。
+ */
+function writeIntoVaultImage(
+  docId: string,
+  filename: string | null,
+  mime: string,
+  bytes: Uint8Array,
+): { id: string; url: string; ref: string; mime: string; size: number; dedup: boolean } | null {
+  const rt = getActiveVaultRuntime()
+  if (!rt) return null
+  const row = getVaultFileByDocId(getDb(), docId)
+  if (!row || row.deleted_at) return null
+  try {
+    const written = writeVaultImage({
+      root: rt.ctx.config.root,
+      noteRelPath: row.rel_path,
+      fileName: filename,
+      mime,
+      bytes,
+    })
+    return {
+      // 没有内容寻址 id：图片是用户文件夹里的普通文件（这正是本设计的目的）
+      id: written.relPath,
+      url: `/api/v1/vault/raw/${written.relPath.split('/').map(encodeURIComponent).join('/')}`,
+      ref: written.ref,
+      mime,
+      size: bytes.length,
+      dedup: false,
+    }
+  } catch (e) {
+    console.warn('[vault] 图片落盘失败，退回资源库:', e instanceof Error ? e.message : e)
+    return null
+  }
+}
 
 const assets = new Hono()
 
 assets.post('/', async (c) => {
+  // vault 模式：带 doc_id 时图片写进笔记的资源夹，返回相对引用（RFC 0006 / U-13）
+  const docId = (c.req.query('doc_id') || '').trim()
   const mime = (c.req.header('Content-Type') || '').split(';')[0].trim().toLowerCase()
   if (!mime.startsWith('image/')) {
     return c.json({ error: 'bad_request', message: `仅接受图片（image/*），收到 ${mime || '未知类型'}` }, 400)
@@ -61,6 +103,12 @@ assets.post('/', async (c) => {
     try { filename = decodeURIComponent(rawName) } catch { filename = rawName }
     filename = filename.trim() || null
   }
+  // vault 笔记：图片落在笔记同名的资源夹里，正文用相对路径（Obsidian 等工具直接可读）
+  if (docId) {
+    const placed = writeIntoVaultImage(docId, filename, mime, buf)
+    if (placed) return c.json(placed, 201)
+  }
+
   const { meta, dedup } = saveAsset(buf, mime, filename)
   // 自动上传模式：异步旁路传图床（不阻塞响应；失败静默降级本地）
   maybeUploadToRemote(meta.id)

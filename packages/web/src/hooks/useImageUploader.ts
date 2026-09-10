@@ -5,6 +5,8 @@ import { useToast } from '../components/ui'
 
 interface UseImageUploaderOpts {
   insertAtCursor: (text: string, opts?: { cursorOffset?: number; selectStart?: number }) => void
+  /** 当前文档 id；vault 笔记据此把图片写进「笔记同名资源夹」（RFC 0006 / U-13） */
+  docId?: string
 }
 
 interface UploadState {
@@ -22,14 +24,19 @@ interface UploadState {
  * 同源策略下 onprogress 在跨域时不可见（需要 CORS 暴露 header），
  * 当前 /api/v1/assets 默认 same-origin 所以总是能拿到。
  */
-export function useImageUploader({ insertAtCursor }: UseImageUploaderOpts) {
+export function useImageUploader({ insertAtCursor, docId }: UseImageUploaderOpts) {
   const [{ uploading, progress }, setUpload] = useState<UploadState>({
     uploading: false,
     progress: 0,
   })
   const toast = useToast()
 
-  /** 上传单个图片文件，返回 asset:<sha256> 引用；失败抛错（调用方决定提示/落点）。 */
+  /**
+   * 上传单个图片文件，返回可直接插进正文的引用；失败抛错（调用方决定提示/落点）。
+   *
+   * vault 笔记带 `doc_id`：图片落在笔记同名的资源夹里，返回相对路径（`a.assets/pic.png`）；
+   * db 模式没有 doc/vault 映射时服务端退回资源库，返回 `asset:<sha256>`。前端不区分。
+   */
   const uploadFile = useCallback(async (file: File): Promise<string> => {
     if (!file.type.startsWith('image/')) throw new Error('Not an image')
     setUpload({ uploading: true, progress: 0 })
@@ -44,7 +51,7 @@ export function useImageUploader({ insertAtCursor }: UseImageUploaderOpts) {
     try {
       const result = await new Promise<{ ref: string }>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
-        xhr.open('POST', '/api/v1/assets')
+        xhr.open('POST', docId ? `/api/v1/assets?doc_id=${encodeURIComponent(docId)}` : '/api/v1/assets')
         for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v)
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable && e.total > 0) {
@@ -81,7 +88,7 @@ export function useImageUploader({ insertAtCursor }: UseImageUploaderOpts) {
       setUpload({ uploading: false, progress: 0 })
       throw e
     }
-  }, [])
+  }, [docId])
 
   const uploadImage = useCallback(
     async (file: File) => {

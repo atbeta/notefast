@@ -319,7 +319,7 @@ function EditorInline({
     recoverDraftContentRef.current = null
   }, [draft])
 
-  const imageUploader = useImageUploader({ insertAtCursor })
+  const imageUploader = useImageUploader({ insertAtCursor, docId })
 
   // 图片替换：保留原 alt，只换 src；光标不动（replaceImageLine 不传 selection）
   const handleReplaceImage = useCallback((from: number, to: number, ref: string, alt: string) => {
