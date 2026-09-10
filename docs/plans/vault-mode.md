@@ -361,6 +361,8 @@ Windows 实机使用后反馈三条，全部与「壳不记忆模式」同源：
 | U-7 | 对账性能：修 `syncVaultWikilinks` 的 O(n²)（**已修**），目标 10k < 60s **未达成**（实测 185s）——剩余热点见下，需要批量 ingest 改造 | 部分完成 |
 | U-8 | 侧栏文件夹树：`GET /vault/tree`（按层聚合）+ 文档列表 `?dir=` 前缀过滤 + vault 模式下侧栏置顶「文件夹」区块 | 完成 |
 | U-9 | 侧栏 vault 专属入口：未解析 wikilink（表已有、无 API）、冲突副本、回收站改绑 `.trash/` 语义 | 完成 |
+| U-10 | 目录感知的新建：`POST /docs`、`/import/markdown` 收 `dir`（越界忽略）；侧栏/新建页带上当前 `?dir=`；目录树订阅变更即时刷新 | 完成 |
+| U-11 | 边界落地（RFC 0006）：`notefast_status` 支持 archived（文件完全权威）、树上标记收集箱/归档、采集默认落盘目录（`data/vault-capture.json` + 设置项） | 完成 |
 
 U-1 … U-4 是部署一致性；U-5 … U-7 是统一的前置 parity（U-7 可与其余并行）。
 
@@ -389,6 +391,15 @@ U-1 … U-4 是部署一致性；U-5 … U-7 是统一的前置 parity（U-7 可
 3. **spans 不再重复建树**：ingest 已经解析过一次正文，把解析结果 / 顶层块指纹传进 `recordVaultSpans`，省掉每篇的 `fetchDocBlocks` + `buildBlockTree`
 
 剖析方法（可复现）：`bun --cpu-prof --cpu-prof-dir=/tmp/prof run packages/server/src/eval/vaultBench.ts --files 2000`，再用脚本把 native 采样归因到最近的 JS 调用者。
+
+**U-10 / U-11 边界落地（RFC 0006 P0）**：
+- **新建落当前目录**：`POST /docs` 与 `/import/markdown` 收可选 `dir`（服务端 `toVaultRelPath` 校验，越界/绝对路径静默忽略）；侧栏「新建」与 `/new` 带上当前 `?dir=`；MCP 早已有 `path`
+- **目录即时刷新**：`VaultFolderTree` 订阅 `useDocChanges`，只重拉根层与已展开层级（此前只在挂载时拉一次，文件写下去了但不显示）
+- **状态可见**：`/vault/tree` 的文件行补 `status`（只查本层 id），树上给收集箱/归档加标记——位置看不出状态，不显示等于 R1 对用户不可见
+- **归档进文件**：`notefast_status` 支持 `archived`，写回把三个状态都写回文件（此前 archived 只活在索引里，文件表达不了，编辑正文还会被静默拉回 note）；老文件不带该键时仍不降级
+- **采集默认落盘目录**：`data/vault-capture.json` + `GET/PUT /api/v1/vault/capture` + 设置页输入框。**默认仍是根目录**；只影响新建的收集箱文档，不移动已有文件（显式 `dir` 优先）
+- **实测**：采集件落到 `Inbox/随手记.md` 且文件里带 `notefast_status: inbox`；树上 `手写 note` / `随手记 inbox`；应用归档后文件写入 `notefast_status: archived`；在文件里改成 `note` → 索引跟着变
+- 顺带修掉一个真问题：**macOS 临时区域（`/tmp`、`/var/folders` 经符号链接）的 FSEvents 延迟 11s**（探测仍 12ms 就拿到事件）→ 按路径结构直接判为不可靠、走轮询，实测外部编辑 **1s** 生效
 
 **U-9 vault 巡检入口（方案 B 第二批）**：
 - 端点：`GET /vault/links/unresolved`（按目标名聚合 + 来源文档，表 `vault_unresolved_links` 此前只写不读）、`GET /vault/conflicts`（按 `.notefast-conflict-` 命名约定查映射表，不扫盘）、`GET /vault/trash`（读 `.trash/`，索引里没有这部分）
