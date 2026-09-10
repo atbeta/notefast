@@ -21,6 +21,16 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
+      # 版本文件清单在 .github/release-please-config.json 的 extra-files 里，其中一条是
+      # clients/tauri/src-tauri/Cargo.lock：
+      #   { "type": "toml", "path": "…/Cargo.lock", "jsonpath": "$.package[?(!@.source)].version" }
+      # 为什么用 `!@.source` 而不是按包名过滤：registry 依赖一定带 `source = "registry+…"`，
+      # 本地 path 成员从不带，所以这条正好命中我们的本地成员（当前锁文件里只有一个：
+      # notefast-tauri）。按包名过滤（`@.name=="x"`）在部分 release-please 版本上被报过匹配不到
+      # （googleapis/release-please#2455），`!@.source` 更稳。Cargo.lock 不能用
+      # `x-release-please-version` 注释——cargo 重新序列化锁文件时会把它抹掉。
+      # 兜底：CI 的 `bun run check:versions` 会在版本对不齐时直接失败，不会再出现
+      # 「发完版才发现 Cargo.lock 落后一版」。
       - name: Run Release Please
         uses: googleapis/release-please-action@v4
         with:
