@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.93.0](https://github.com/atbeta/notefast/compare/v0.92.0...v0.93.0) (2026-09-10)
+
+
+### Features
+
+* create documents in the folder you are looking at ([c3c0856](https://github.com/atbeta/notefast/commit/c3c0856e1c4a9cc74ffa84c4a53c56bae9d6f05c))
+* drop db-era features that do not fit a vault ([299115f](https://github.com/atbeta/notefast/commit/299115ffed13ca7d7e4e8756f3b689f1ba17560b))
+* keep vault images inside the notes folder ([d80646d](https://github.com/atbeta/notefast/commit/d80646dea85de388394e0bff01256e462cbb8a98))
+* make inbox captures visible and give them a landing folder ([71dd2d4](https://github.com/atbeta/notefast/commit/71dd2d48d6d5094e09d0b565d1346e4cd9273c46))
+* make the default docker deployment vault-first ([3e4db02](https://github.com/atbeta/notefast/commit/3e4db02b8b48a409f800def3c1ff2b3c3be16d36))
+* treat vault as the only shape and guide old installs ([198e410](https://github.com/atbeta/notefast/commit/198e410ab04bab1acece7089bc6d7cc3a3c25df0))
+
+
+### Bug Fixes
+
+* poll on macOS temp-area vaults instead of trusting native events ([9f7fd1c](https://github.com/atbeta/notefast/commit/9f7fd1c00329a49f90b033a185122db695c4c872))
+
 ## [0.92.0](https://github.com/atbeta/notefast/compare/v0.91.0...v0.92.0) (2026-09-10)
 
 
