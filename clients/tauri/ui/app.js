@@ -4,6 +4,10 @@
 // vault 入口（V-403）：选文件夹 → Rust 侧以 `--vault-path` + `--app-support-dir` 重启 engine
 // （DATA_DIR 由 engine 按 sha256 派生），拿到新入口 URL 后同样整页跳转。
 //
+// 首次启动（壳侧没记住模式）：**不自动跳转**，强制用户先选「笔记文件夹」或「先用数据库模式」。
+// 选过之后模式记在壳侧（active-mode.json），以后启动直接进对应模式——否则每次都回 db 模式，
+// 用户会以为自己的笔记丢了，而文件夹里的外部改动也永远不会出现在应用里。
+//
 // 闪烁对策：engine 很快就绪时也不要立刻跳走——给 logo 动画留足时间，
 // 淡出后再 replace；否则会看到「启动页闪一下 → 空白 → React 冒出」。
 applySplashTheme()
@@ -17,6 +21,13 @@ const msg = document.getElementById('msg')
   const t0 = performance.now()
 
   try {
+    // 首次启动（没记住模式）：停在启动页让用户选，不启动 engine、不跳转
+    const state = await readModeState()
+    if (state && !state.mode) {
+      await renderFirstRun(state)
+      return
+    }
+
     const info = await window.__TAURI__.core.invoke('engine_start')
     // engine 就绪后再渲染 vault 入口：避免与 engine_start 抢句柄（切 vault 要先停旧实例）
     await initVaultEntry()
@@ -59,6 +70,55 @@ const msg = document.getElementById('msg')
   }
 })()
 
+// ── 模式（首次启动 / 已记住）────────────────────────────────────────────────────
+
+/** 壳侧记住的启动模式；调用失败返回 null（当作「已决定」，走原来的启动流程） */
+async function readModeState() {
+  try {
+    return await window.__TAURI__.core.invoke('mode_state')
+  } catch {
+    return null
+  }
+}
+
+const FIRST_RUN_HINT = '选择一个文件夹作为笔记库：里面的 Markdown 就是你的笔记，' +
+  'NoteFast 会为它建索引，编辑也会写回这些文件。'
+
+/** 首次启动：标题改为让用户选，并给出「选文件夹」与「先用数据库模式」两个出口 */
+async function renderFirstRun(state) {
+  const box = document.getElementById('vault')
+  const pick = document.getElementById('vault-pick')
+  const dbBtn = document.getElementById('vault-db')
+
+  box.hidden = false
+  pick.textContent = '选择笔记文件夹…'
+  pick.classList.add('primary')
+  dbBtn.hidden = false
+  msg.classList.add('hint')
+  msg.textContent = FIRST_RUN_HINT
+  const restoreHint = () => {
+    msg.textContent = FIRST_RUN_HINT
+  }
+
+  pick.addEventListener('click', () => {
+    openVault(() => window.__TAURI__.core.invoke('vault_pick_and_open'), restoreHint)
+  })
+  dbBtn.addEventListener('click', () => {
+    openVault(() => window.__TAURI__.core.invoke('use_db_mode'), restoreHint)
+  })
+
+  for (const path of (state.recent || []).slice(0, 3)) {
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.textContent = basename(path)
+    btn.title = path
+    btn.addEventListener('click', () => {
+      openVault(() => window.__TAURI__.core.invoke('vault_open', { path }))
+    })
+    box.appendChild(btn)
+  }
+}
+
 // ── vault 入口 ────────────────────────────────────────────────────────────────
 
 /** 渲染「打开文件夹为 vault…」+ 最近 vault（壳侧记忆，最多 3 条） */
@@ -88,8 +148,9 @@ async function initVaultEntry() {
   }
 }
 
-/** 让出 splash 的自动跳转，等 Rust 侧切到 vault 模式后整页跳新入口 */
-async function openVault(run) {
+/** 让出 splash 的自动跳转，等 Rust 侧切到 vault 模式后整页跳新入口。
+ *  `onCancel`：用户取消选择时的复原动作（首次启动的必选流程要回到提示文案）。 */
+async function openVault(run, onCancel) {
   window.__nfVaultBusy = true
   msg.textContent = '正在打开 vault…'
   try {
@@ -97,7 +158,8 @@ async function openVault(run) {
     if (!info || !info.url) {
       // 用户取消选择：放开跳转权，splash 继续原来的流程
       window.__nfVaultBusy = false
-      msg.textContent = '正在启动 NoteFast'
+      if (onCancel) onCancel()
+      else msg.textContent = '正在启动 NoteFast'
       return
     }
     await alignWebviewToAppBg()

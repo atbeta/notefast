@@ -170,6 +170,19 @@
       color: var(--fg);
       border-color: var(--brand);
     }
+    /* 首次启动的主选项（选文件夹）：比「先用数据库模式」显眼 */
+    .vault button.primary {
+      color: var(--fg);
+      border-color: var(--brand);
+      font-size: 13px;
+      padding: 7px 16px;
+    }
+    /* 首次启动的说明行（比常规 msg 更亮一点） */
+    .msg.hint {
+      color: var(--fg);
+      max-width: 380px;
+      line-height: 1.7;
+    }
     .vault button:disabled {
       cursor: default;
       opacity: 0.5;
@@ -197,6 +210,7 @@
     <p class="msg" id="msg">正在启动 NoteFast</p>
     <div class="vault" id="vault" hidden>
       <button id="vault-pick" type="button">打开文件夹为 vault…</button>
+      <button id="vault-db" type="button" hidden>先用数据库模式</button>
     </div>
   </div>
   <script src="app.js"></script>

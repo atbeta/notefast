@@ -6,7 +6,44 @@
 //! 存放位置：`<壳数据目录>/recent-vaults.json`（与 `ui-preferences.json` 同目录），
 //! 与 engine 的 DATA_DIR 无关——切到 vault 模式后壳自己的配置仍在这里。
 
+use serde::{Deserialize, Serialize};
 use std::path::Path;
+
+/// 记住的启动模式（`<壳数据目录>/active-mode.json`）。
+///
+/// 为什么必须记：不记的话每次启动都回落 db 模式——用户选了文件夹、下次打开又看不到
+/// 自己的笔记（vault 索引是按 vault 派生的，db 模式的库是另一个库），表现为「数据丢了」。
+/// 首次启动（文件不存在）时 `read_mode` 返回 `None`，启动页据此**强制**让用户先选。
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(tag = "mode", rename_all = "lowercase")]
+pub enum ActiveMode {
+    /// 文件夹是权威（`VAULT_PATH`）
+    Vault { vault_path: String },
+    /// 数据库模式（SQLite 权威，不含文件夹）
+    Db,
+}
+
+const MODE_FILE: &str = "active-mode.json";
+
+/// 读模式；文件缺失 / 非法 / 记的文件夹已不可用 → None（重新问用户）
+pub fn read_mode(data_dir: &Path) -> Option<ActiveMode> {
+    let raw = std::fs::read_to_string(data_dir.join(MODE_FILE)).ok()?;
+    let mode: ActiveMode = serde_json::from_str(&raw).ok()?;
+    if let ActiveMode::Vault { vault_path } = &mode {
+        if vault_path.trim().is_empty() || !Path::new(vault_path).is_dir() {
+            return None;
+        }
+    }
+    Some(mode)
+}
+
+pub fn write_mode(data_dir: &Path, mode: &ActiveMode) -> Result<(), String> {
+    std::fs::create_dir_all(data_dir)
+        .map_err(|e| format!("无法创建数据目录 {}: {e}", data_dir.display()))?;
+    let raw = serde_json::to_string_pretty(mode).map_err(|e| format!("序列化失败: {e}"))?;
+    std::fs::write(data_dir.join(MODE_FILE), raw).map_err(|e| format!("写入 {MODE_FILE} 失败: {e}"))
+}
+
 
 /// 上限：菜单/启动页只展示前几条，存太多没意义
 pub const MAX_ENTRIES: usize = 10;
@@ -158,6 +195,37 @@ mod tests {
         assert_eq!(read(&dir), list);
         let list = forget(&dir, &a.to_string_lossy());
         assert_eq!(list, vec![normalize(&b.to_string_lossy())]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn mode_round_trip_and_validation() {
+        let dir = temp_dir("mode");
+        let vault = dir.join("Notes");
+        std::fs::create_dir_all(&vault).unwrap();
+
+        // 首次启动：没记过 → None（启动页必须让用户选）
+        assert_eq!(read_mode(&dir), None);
+
+        write_mode(&dir, &ActiveMode::Vault { vault_path: vault.to_string_lossy().to_string() }).unwrap();
+        match read_mode(&dir) {
+            Some(ActiveMode::Vault { vault_path }) => assert_eq!(vault_path, vault.to_string_lossy()),
+            other => panic!("应读回 vault 模式，实际 {other:?}"),
+        }
+
+        write_mode(&dir, &ActiveMode::Db).unwrap();
+        assert_eq!(read_mode(&dir), Some(ActiveMode::Db));
+
+        // 文件夹被删 / 路径为空 → 当成没选过，重新问
+        write_mode(&dir, &ActiveMode::Vault { vault_path: dir.join("gone").to_string_lossy().to_string() }).unwrap();
+        assert_eq!(read_mode(&dir), None);
+        write_mode(&dir, &ActiveMode::Vault { vault_path: "  ".to_string() }).unwrap();
+        assert_eq!(read_mode(&dir), None);
+
+        // 非法 JSON 不 panic
+        std::fs::write(dir.join("active-mode.json"), "{oops").unwrap();
+        assert_eq!(read_mode(&dir), None);
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

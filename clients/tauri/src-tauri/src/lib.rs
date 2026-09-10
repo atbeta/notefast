@@ -9,6 +9,7 @@ mod ui_theme;
 mod vault;
 
 use engine::{EngineHandle, EngineInfo, LaunchMode};
+use vault::ActiveMode;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
@@ -48,7 +49,56 @@ async fn engine_start(app: AppHandle, state: State<'_, EngineState>) -> Result<E
         }
     }
     let data_dir = default_data_dir(&app)?;
-    launch(&app, LaunchMode::DataDir(data_dir)).await
+    // 上次选过的模式优先：不记的话每次启动都回 db 模式，用户会以为自己的笔记丢了
+    let mode = match vault::read_mode(&data_dir) {
+        Some(ActiveMode::Vault { vault_path }) => LaunchMode::Vault {
+            vault_path: PathBuf::from(vault_path),
+            app_support_dir: app_support_dir(&app)?,
+        },
+        _ => LaunchMode::DataDir(data_dir),
+    };
+    launch(&app, mode).await
+}
+
+/// 启动页据此决定：直接启动（mode 已定）还是**强制**先让用户选文件夹（mode = null）
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ModeState {
+    /// "vault" | "db" | null（null = 首次启动，或上次记的文件夹已不可用）
+    mode: Option<String>,
+    vault_path: Option<String>,
+    recent: Vec<String>,
+}
+
+#[tauri::command]
+fn mode_state(app: AppHandle) -> ModeState {
+    let data_dir = default_data_dir(&app).ok();
+    let mode = data_dir.as_deref().and_then(vault::read_mode);
+    ModeState {
+        mode: match &mode {
+            Some(ActiveMode::Vault { .. }) => Some("vault".to_string()),
+            Some(ActiveMode::Db) => Some("db".to_string()),
+            None => None,
+        },
+        vault_path: match &mode {
+            Some(ActiveMode::Vault { vault_path }) => Some(vault_path.clone()),
+            _ => None,
+        },
+        recent: data_dir.map(|d| vault::read(&d)).unwrap_or_default(),
+    }
+}
+
+/// 首次启动选「先用数据库模式」/ 从 vault 回到数据库模式：记住并（重）起 db 实例
+#[tauri::command]
+async fn use_db_mode(app: AppHandle) -> Result<EngineInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let data_dir = default_data_dir(&app)?;
+        vault::write_mode(&data_dir, &ActiveMode::Db)?;
+        stop_engine(&app);
+        start_and_store(&app, LaunchMode::DataDir(data_dir))
+    })
+    .await
+    .map_err(|e| format!("切换数据库模式失败: {e}"))?
 }
 
 /// 同步启动（阻塞握手）并写入 EngineState；调用方负责放线程池。
@@ -145,6 +195,11 @@ fn open_vault(app: &AppHandle, path: &Path) -> Result<EngineInfo, String> {
     }
     let data_dir = default_data_dir(app)?;
     vault::remember(&data_dir, &path.to_string_lossy());
+    // 记住模式：下次启动直接回到这个文件夹（否则又回 db 模式 = 像数据丢了）
+    vault::write_mode(
+        &data_dir,
+        &ActiveMode::Vault { vault_path: path.to_string_lossy().to_string() },
+    )?;
 
     stop_engine(app);
     let mode = LaunchMode::Vault {
@@ -305,6 +360,8 @@ pub fn run() {
             vault_recent,
             vault_pick_and_open,
             vault_open,
+            use_db_mode,
+            mode_state,
         ])
         .setup(move |app| {
             // 启动闪屏：conf 里 visible=false。light/dark 用 ui-preferences；
