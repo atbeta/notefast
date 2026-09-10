@@ -11,7 +11,7 @@
  * 按块局部 patch 见 RFC 0003 §后续。
  */
 
-import { existsSync, mkdirSync, renameSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
   blocksToMarkdown,
@@ -41,7 +41,7 @@ import { readVaultDocMeta, vaultMetaHash } from './meta'
 import { patchVaultContent, type PatchBlock } from './patch'
 import { toVaultAbsPath, toVaultRelPath } from './paths'
 import { blockSubtreeHash, recordVaultSpans, topLevelBlocks } from './spans'
-import { readVaultFile, VaultConflictError, writeVaultFileAtomic } from './writer'
+import { readVaultFile, sha256Hex, VaultConflictError, writeVaultFileAtomic } from './writer'
 
 export type WritebackOutcome =
   | { kind: 'written'; relPath: string; created: boolean }
@@ -214,6 +214,9 @@ export function startVaultWriteback(
   const handleUnlocked = async (ev: DocChangeEvent): Promise<WritebackOutcome> => {
     const { db, notebookId, config } = ctx
     if (ev.kind === 'deleted') return trashDoc(ev.doc_id)
+    // 从回收站恢复：先把文件从 .trash/ 搬回原位（拿不到原文件时继续走下面的重建路径）
+    const restored = restoreTrashed(ev.doc_id)
+    if (restored) return restored
 
     const doc = getLiveDocById(db, ev.doc_id)
     if (!doc) return { kind: 'skipped', reason: 'missing' }
@@ -325,6 +328,58 @@ export function startVaultWriteback(
     if (written.unchanged && row) return { kind: 'skipped', reason: 'unchanged' }
     auditVault('doc.vault_written', doc.id, { rel_path: relPath, created: !existing, mode: plan.mode })
     return { kind: 'written', relPath, created: !existing }
+  }
+
+  /**
+   * 回收站恢复（RFC 0005 U-9）：映射行 deleted_at 有值 = 这篇是从回收站恢复的。
+   *
+   * 优先把 `.trash/` 里的**原文件**搬回原位，而不是用索引内容重写一遍——
+   * 用户可能用别的工具调过排版，搬回来字节级不变；搬回来之后 watcher 会把索引对齐到文件
+   * （文件是权威）。只有原文件确实不在 `.trash/` 时才退回按索引重建。
+   */
+  const restoreTrashed = (docId: string): WritebackOutcome | null => {
+    const { db, notebookId, config } = ctx
+    const row = getVaultFileByDocId(db, docId)
+    if (!row || !row.deleted_at) return null
+    const parts = row.rel_path.split('/')
+    const trashDir = join(config.root, '.trash', ...parts.slice(0, -1))
+    const base = parts[parts.length - 1] ?? row.rel_path
+    const candidates = [join(trashDir, base)]
+    // 重名时 trashDoc 会加 `.时间戳` 后缀
+    const stem = base.replace(/\.md$/i, '')
+    try {
+      for (const name of readdirSync(trashDir)) {
+        if (name.startsWith(`${stem}.`) && name.toLowerCase().endsWith('.md')) {
+          candidates.push(join(trashDir, name))
+        }
+      }
+    } catch {
+      /* 没有 .trash 目录：只试精确路径 */
+    }
+    const source = candidates.find((abs) => existsSync(abs))
+    if (!source) return null
+
+    const abs = toVaultAbsPath(config.root, row.rel_path)
+    try {
+      mkdirSync(dirname(abs), { recursive: true })
+      renameSync(source, abs)
+      const st = statSync(abs)
+      const content = readFileSync(abs, 'utf-8')
+      const docRow = getLiveDocById(db, docId)
+      touchVaultFileAfterWrite(db, notebookId, row.rel_path, {
+        content_sha256: sha256Hex(content),
+        size: st.size,
+        mtime_ms: Math.round(st.mtimeMs),
+        doc_updated_at: docRow?.updated_at ?? row.doc_updated_at,
+        frontmatter_raw: row.frontmatter_raw,
+        meta_hash: row.meta_hash,
+      })
+    } catch (e) {
+      console.warn('[vault writeback] 恢复回收站文件失败:', e instanceof Error ? e.message : e)
+      return null
+    }
+    auditVault('doc.vault_restored', docId, { rel_path: row.rel_path })
+    return { kind: 'written', relPath: row.rel_path, created: false }
   }
 
   const trashDoc = (docId: string): WritebackOutcome => {

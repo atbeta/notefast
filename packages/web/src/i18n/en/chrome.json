@@ -56,6 +56,8 @@
     "vaultTreeEmpty": "No Markdown in this folder yet",
     "vaultTreeExpand": "Expand folder",
     "vaultTreeCollapse": "Collapse folder",
+    "unresolvedLinks": "Unresolved links",
+    "conflictCopies": "Conflict copies",
     "sectionNotes": "Notes",
     "sectionRelations": "Relations",
     "allDocs": "All documents",

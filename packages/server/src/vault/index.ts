@@ -10,10 +10,17 @@
 
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
+import { existsSync, readdirSync, unlinkSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { getDb } from '../db'
-import { bindNotebookToVault, getNotebookVaultBinding, listVaultFiles } from '../store/vaultFiles'
+import {
+  bindNotebookToVault,
+  deleteVaultFileRow,
+  getNotebookVaultBinding,
+  getVaultFileByDocId,
+  listVaultFiles,
+} from '../store/vaultFiles'
 import { listVaultWritebackConflicts } from '../services/appLogs'
 import type { VaultConfig } from './config'
 import { createSerialLock } from './lock'
@@ -22,6 +29,8 @@ import { isIgnoredRelPath, toVaultAbsPath, VaultPathError, toVaultRelPath } from
 import { startVaultWatcher, type VaultWatcher } from './watcher'
 import { resolveWatchMode, type WatchMode } from './watchProbe'
 import { buildVaultTree } from './tree'
+import { listUnresolvedTargets } from '../store/vaultLinks'
+import { listVaultConflicts, listVaultTrash } from './inspect'
 import { createVaultFileSync, type VaultFileSync, type VaultFileSyncStatus } from './fileSyncRuntime'
 import { getVaultFileSyncConfig } from './fileSyncConfig'
 import { vaultFileSyncConfigSchema } from '@notefast/core'
@@ -82,6 +91,8 @@ export interface VaultRuntime {
   idle(): Promise<void>
   /** 文件同步（RFC 0004）；未配置时各方法返回错误说明，不抛异常 */
   sync: VaultFileSync
+  /** 永久删除文档后清理 vault 侧残留（`.trash/` 副本 + 映射行，RFC 0005 U-9） */
+  discardTrashed(docId: string): void
 }
 
 export function createVaultRuntime(opts: { db: Db; notebookId: string; config: VaultConfig }): VaultRuntime {
@@ -135,6 +146,39 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
     if (reconcileTimer) clearTimeout(reconcileTimer)
     reconcileTimer = null
     nextReconcileAt = null
+  }
+
+  /**
+   * 永久删除（清空回收站）后的 vault 侧清理：
+   * 索引行随 blocks 一起消失，但 `.trash/` 里的副本与 `vault_files` 映射行会残留，
+   * 这里把两者一并清掉。命中不到文件（被外部挪走 / 重名加了时间戳）不算错。
+   */
+  const discardTrashed = (docId: string): void => {
+    const row = getVaultFileByDocId(ctx.db, docId)
+    if (!row) return
+    const parts = row.rel_path.split('/')
+    const trashDir = join(ctx.config.root, '.trash', ...parts.slice(0, -1))
+    const base = parts[parts.length - 1] ?? row.rel_path
+    const candidates = [join(trashDir, base)]
+    // 写回冲突时重名会加 `.时间戳` 后缀（writeback.ts），按前缀兜底捞一份
+    const stem = base.replace(/\.md$/i, '')
+    try {
+      for (const name of readdirSync(trashDir)) {
+        if (name.startsWith(`${stem}.`) && name.toLowerCase().endsWith('.md')) {
+          candidates.push(join(trashDir, name))
+        }
+      }
+    } catch {
+      /* 目录不存在：只试精确路径 */
+    }
+    for (const abs of candidates) {
+      try {
+        if (existsSync(abs)) unlinkSync(abs)
+      } catch {
+        /* 删不掉：巡检页仍能看到残留，不阻断永久删除 */
+      }
+    }
+    deleteVaultFileRow(ctx.db, ctx.notebookId, row.rel_path)
   }
 
   const runtime: VaultRuntime = {
@@ -234,6 +278,7 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
     },
     rebuild,
     sync: fileSync,
+    discardTrashed,
     ingest: (path) => ctx.lock(() => ingestVaultFile(ctx, path)),
     async idle() {
       if (reconciling) await reconciling.catch(() => undefined)
@@ -330,6 +375,30 @@ export function createVaultRouter(getRuntime: () => VaultRuntime | null): Hono {
       docId: row.doc_id,
     }))
     return c.json(buildVaultTree(entries, { path: c.req.query('path') ?? '', ignore: rt.ctx.config.ignore }))
+  })
+
+  /**
+   * 未解析 wikilink（侧栏「未解析链接」）：按目标名聚合，附来源文档。
+   * `vault_unresolved_links` 表一直只写不读，这里是第一个读出口。
+   */
+  router.get('/links/unresolved', (c) => {
+    const rt = getRuntime()
+    if (!rt) return c.json({ error: 'vault_disabled', message: '未启用 vault mode' }, 404)
+    return c.json(listUnresolvedTargets(rt.ctx.db, rt.ctx.notebookId))
+  })
+
+  /** 冲突副本（写回 / 文件同步产生）：按文件名约定从映射表里捞，不扫盘 */
+  router.get('/conflicts', (c) => {
+    const rt = getRuntime()
+    if (!rt) return c.json({ error: 'vault_disabled', message: '未启用 vault mode' }, 404)
+    return c.json(listVaultConflicts(rt.ctx.db, rt.ctx.notebookId))
+  })
+
+  /** 文件夹回收站（`.trash/`）：vault 模式的删除落到这里，与 db 模式的软删除不同轨 */
+  router.get('/trash', async (c) => {
+    const rt = getRuntime()
+    if (!rt) return c.json({ error: 'vault_disabled', message: '未启用 vault mode' }, 404)
+    return c.json(await listVaultTrash(rt.ctx.config.root))
   })
 
   /** 文件同步（RFC 0004）：状态 / 配置 / 手动推拉 */

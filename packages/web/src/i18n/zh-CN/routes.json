@@ -54,6 +54,10 @@
     "noMatch": "没有匹配「{{query}}」的归档文档"
   },
   "trash": {
+    "descriptionVault": "删除在 vault 模式下是把文件移进文件夹的 .trash/（Obsidian 同名约定），索引里的位置会保留——恢复时 NoteFast 会把文件写回原位。永久删除会一并清掉 .trash/ 里的副本。",
+    "folderTitle": ".trash/ 里的文件",
+    "folderHint": "文件夹里实际存在的删除文件。它们不再被索引（.trash 属忽略目录），要彻底清理可直接在本机删除，或在上面的列表里「永久删除」对应文档。",
+    "folderMore": "还有 {{n}} 个文件未显示",
     "title": "回收站",
     "description": "删除的文档会保留在这里，可以随时恢复。注意：分享链接在删除时已永久失效，恢复后需重新开启分享。",
     "deletedAt": "删除于 {{time}}",
@@ -69,6 +73,26 @@
     "emptyTrashTitle": "清空回收站？",
     "emptyTrashMessage": "回收站中的 {{count}} 个文档将被彻底删除，无法恢复。",
     "emptyTrashFailed": "清空回收站失败"
+  },
+  "unresolved": {
+    "title": "未解析链接",
+    "description": "这些 [[链接]] 指向的笔记还不存在。目标文件建好后引用会自动接上——不需要手动补。",
+    "emptyTitle": "没有未解析链接",
+    "emptyDesc": "所有 [[链接]] 都能找到对应文件。",
+    "targetCount": "{{n}} 处引用",
+    "sourceLabel": "来自",
+    "openDoc": "打开文档",
+    "anchor": "锚点",
+    "notVault": "当前实例不是 vault 模式，没有文件引用可解析。"
+  },
+  "conflicts": {
+    "title": "冲突副本",
+    "description": "写回或文件同步遇到两边同时改动时，NoteFast 不改你的文件，而是把它的版本另存为这些副本。确认内容后，删掉不需要的那一份即可。",
+    "emptyTitle": "没有冲突副本",
+    "emptyDesc": "最近没有发生写回或同步冲突。",
+    "originalLabel": "原始文件",
+    "openDoc": "打开副本",
+    "notVault": "当前实例不是 vault 模式，不会有文件冲突副本。"
   },
   "newDoc": {
     "tabCreate": "新建文档",

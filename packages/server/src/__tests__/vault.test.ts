@@ -17,6 +17,7 @@ import {
   insertBlock,
   listDocRows,
   nowTimestamp,
+  restoreBlocks,
   softDeleteBlocks,
   updateBlock,
 } from '../store/blocks'
@@ -378,6 +379,53 @@ describe('vault watcher', () => {
 // ───────────────────── writeback ─────────────────────
 
 describe('vault writeback', () => {
+  test('回收站：删除把文件移进 .trash/，恢复把原文件搬回原位（RFC 0005 U-9）', async () => {
+    writeVault('recycle.md', '# recycle\n\n用户自己的排版\n')
+    const r = await ingestVaultFile(ctx, 'recycle.md')
+    const docId = r.docId!
+    const wb = startVaultWriteback(ctx)
+    try {
+      // 删除（软删 + doc 事件）：文件进 .trash/
+      softDeleteBlocks(getDb(), [docId])
+      const trashed = await wb.handle({ doc_id: docId, kind: 'deleted', at: new Date().toISOString() })
+      expect(trashed.kind).toBe('trashed')
+      expect(existsSync(join(vaultDir, 'recycle.md'))).toBe(false)
+      expect(existsSync(join(vaultDir, '.trash', 'recycle.md'))).toBe(true)
+
+      // 恢复：原文件搬回原位（字节不变），映射行 cleared，.trash/ 不再有副本
+      restoreBlocks(getDb(), [docId])
+      const restored = await wb.handle({ doc_id: docId, kind: 'updated', at: new Date().toISOString() })
+      expect(restored.kind).toBe('written')
+      expect(existsSync(join(vaultDir, 'recycle.md'))).toBe(true)
+      expect(readFileSync(join(vaultDir, 'recycle.md'), 'utf-8')).toBe('# recycle\n\n用户自己的排版\n')
+      expect(existsSync(join(vaultDir, '.trash', 'recycle.md'))).toBe(false)
+      const row = getVaultFileByPath(getDb(), notebookId, 'recycle.md')!
+      expect(row.deleted_at).toBeNull()
+    } finally {
+      wb.stop()
+    }
+  })
+
+  test('回收站：.trash/ 里没有原文件时，退回按索引重建', async () => {
+    writeVault('rebuild.md', '# rebuild\n\nbody\n')
+    const r = await ingestVaultFile(ctx, 'rebuild.md')
+    const docId = r.docId!
+    const wb = startVaultWriteback(ctx)
+    try {
+      softDeleteBlocks(getDb(), [docId])
+      await wb.handle({ doc_id: docId, kind: 'deleted', at: new Date().toISOString() })
+      // 模拟用户在文件管理器里清掉了回收站目录
+      rmSync(join(vaultDir, '.trash'), { recursive: true, force: true })
+
+      restoreBlocks(getDb(), [docId])
+      const restored = await wb.handle({ doc_id: docId, kind: 'updated', at: new Date().toISOString() })
+      expect(restored.kind).toBe('written')
+      expect(existsSync(join(vaultDir, 'rebuild.md'))).toBe(true)
+    } finally {
+      wb.stop()
+    }
+  })
+
   test('序列化：无 `# title`，仅有标签时带 Obsidian 兼容 frontmatter', async () => {
     writeVault('s.md', '---\ntags:\n  - x\n---\nbody line\n\n## Section\n\nmore\n')
     const r = await ingestVaultFile(ctx, 's.md')

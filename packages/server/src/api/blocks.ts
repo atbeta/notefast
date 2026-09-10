@@ -34,6 +34,7 @@ import { deleteRefsTouchingBlocks } from '../store/refs'
 import { deleteMentionsTouchingBlocks } from '../store/entities'
 import { deleteSharesByDocIds } from '../store/shares'
 import { fireAfterCreate, fireAfterUpdate, fireAfterDelete } from '../services/hooks'
+import { publishDocChange } from '../services/docEvents'
 import { deleteVector, deleteVectorMany } from '../ai/indexer'
 import { applyAiExcludeChange } from '../ai/aiExclude'
 import { reanalyzeDoc } from '../ai/autoLink'
@@ -306,6 +307,9 @@ blocks.post('/:id/restore', (c) => {
   if (existing.type === 'document') {
     scheduleDocIndex(id, allIds)
     reanalyzeDoc(id)
+    // 发 doc 变更事件：vault 模式靠它把 `.trash/` 里的原文件搬回原位（RFC 0005 U-9），
+    // 其他端也借此即时刷新。此前恢复完全不发事件，vault 文件会一直留在回收站目录。
+    publishDocChange(id, 'updated')
   }
 
   scheduleSyncNow()

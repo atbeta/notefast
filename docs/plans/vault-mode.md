@@ -360,11 +360,20 @@ Windows 实机使用后反馈三条，全部与「壳不记忆模式」同源：
 | U-6 | 分享身份：`shares` 改 `rel_path` + 内容校验，文件缺失返回 410；迁移既有数据 | 待开始 |
 | U-7 | 对账性能：修 `syncVaultWikilinks` 的 O(n²)，目标 10k 文件 < 60s，并给 50k 不崩的证据 | 待开始 |
 | U-8 | 侧栏文件夹树：`GET /vault/tree`（按层聚合）+ 文档列表 `?dir=` 前缀过滤 + vault 模式下侧栏置顶「文件夹」区块 | 完成 |
-| U-9 | 侧栏 vault 专属入口：未解析 wikilink（表已有、无 API）、冲突副本、回收站改绑 `.trash/` 语义 | 待开始 |
+| U-9 | 侧栏 vault 专属入口：未解析 wikilink（表已有、无 API）、冲突副本、回收站改绑 `.trash/` 语义 | 完成 |
 
 U-1 … U-4 是部署一致性；U-5 … U-7 是统一的前置 parity（U-7 可与其余并行）。
 
 **U-4 与计划的偏差**：没有把 `docker-compose.yml` 的默认模式翻成 vault——它被 `docker compose up -d` 直接使用，未挂 `/vault` 时会因 `VAULT_PATH` 指向不存在的目录而启动失败（比默认 db 更难排查）。改为提供可运行的 `docker-compose.vault.yml`，README 的 Docker 一节以它为首选入口，等价达成「新部署默认 vault」。
+
+**U-9 vault 巡检入口（方案 B 第二批）**：
+- 端点：`GET /vault/links/unresolved`（按目标名聚合 + 来源文档，表 `vault_unresolved_links` 此前只写不读）、`GET /vault/conflicts`（按 `.notefast-conflict-` 命名约定查映射表，不扫盘）、`GET /vault/trash`（读 `.trash/`，索引里没有这部分）
+- Web：新增 `/unresolved`（点来源跳文档）与 `/conflicts`（副本 + 原始路径）两页；vault 模式下侧栏在「归档」后插入两条带计数徽标的入口；回收站页在 vault 模式下改为说明 `.trash/` 语义并列出目录内容
+- **修掉两个真 bug（实测发现）**：
+  1. `POST /blocks/:id/restore` **从不发 doc 变更事件** → vault 写回永远不知道文档被恢复了，文件一直躺在 `.trash/`（「恢复后文件没回来」）。改为 `publishDocChange(id,'updated')`
+  2. `touchVaultFileAfterWrite` 不清 `deleted_at` → 恢复后映射行仍是已删除态。已清空
+  3. 顺带：恢复优先把 `.trash/` 里的**原文件搬回原位**（字节不变，保留用户排版），拿不到原文件才按索引重建；永久删除会一并清掉 `.trash/` 副本与映射行（此前永久删除只在库里删，磁盘文件永远残留）
+- **验证**：新增 `vaultInspect.test.ts` 10 例；`vault.test.ts` 回收站 2 例（搬回原位 / 无原文件时重建）；`docLifecycle.test.ts` 加恢复事件断言；实测 dev server：删除 → 文件进 `.trash/`、`/vault/trash` 计数 1、永久删除后 `.trash/` 清空、恢复后文件回原位且内容逐字节不变
 
 **U-8 侧栏文件夹树（方案 B 第一批）**：用户反馈「vault 模式侧栏还是 db 那套，已经跟不上」→ 定方案 B（侧栏按模式分支，db 模式不动）。
 - 端点：`GET /api/v1/vault/tree?path=` 只聚合**一层**（前端展开哪层拉哪层），目录带 `files`（直接）/`total`（递归）两个计数；附件不进树，忽略目录（`.trash`/`.obsidian`/隐藏）整棵不出

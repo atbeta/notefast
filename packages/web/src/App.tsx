@@ -24,6 +24,8 @@ const SettingsSecurity = lazy(() => import('./routes/settings/Security'))
 const SettingsMaintenance = lazy(() => import('./routes/settings/Maintenance'))
 const SettingsAbout = lazy(() => import('./routes/settings/About'))
 const SharePage = lazy(() => import('./routes/share'))
+const UnresolvedPage = lazy(() => import('./routes/unresolved'))
+const ConflictsPage = lazy(() => import('./routes/conflicts'))
 import Layout from './components/Layout'
 import RouteTransition from './components/RouteTransition'
 import RouteBoundary from './components/RouteBoundary'
@@ -100,6 +102,26 @@ export default function App() {
                 <RouteBoundary name="resources">
                   <Suspense fallback={<RouteLoadingShell />}>
                     <ResourcesPage />
+                  </Suspense>
+                </RouteBoundary>
+              }
+            />
+            <Route
+              path="/unresolved"
+              element={
+                <RouteBoundary name="unresolved">
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <UnresolvedPage />
+                  </Suspense>
+                </RouteBoundary>
+              }
+            />
+            <Route
+              path="/conflicts"
+              element={
+                <RouteBoundary name="conflicts">
+                  <Suspense fallback={<RouteLoadingShell />}>
+                    <ConflictsPage />
                   </Suspense>
                 </RouteBoundary>
               }

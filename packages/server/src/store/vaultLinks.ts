@@ -96,3 +96,65 @@ export function countUnresolvedLinks(db: Db, notebookId: string): number {
       .get(notebookId) as { c: number }
   ).c
 }
+
+/** 侧栏「未解析链接」用的聚合视图：按目标名分组，附来源文档 */
+export interface UnresolvedTargetGroup {
+  target_name: string
+  anchor: string
+  /** 引用该目标的源块数 */
+  count: number
+  /** 来源文档（按 rel_path 排序；rel_path 缺失时保留 doc_id，前端退化为跳文档） */
+  sources: Array<{ doc_id: string; rel_path: string | null }>
+}
+
+/**
+ * 按目标名聚合未解析引用。
+ *
+ * 为什么按 `(target_name, anchor)` 分组而不是逐行：用户关心的是「我想链的那篇笔记还不存在」，
+ * 而不是每个引用点；同一个目标被多少篇引用才是行动依据。
+ * 每组的来源最多 `maxSourcesPerTarget` 条，避免热门目标把响应撑爆（count 仍是全量）。
+ */
+export function listUnresolvedTargets(
+  db: Db,
+  notebookId: string,
+  opts: { maxSourcesPerTarget?: number; maxTargets?: number } = {},
+): { total: number; targets: UnresolvedTargetGroup[] } {
+  const maxSources = opts.maxSourcesPerTarget ?? 5
+  const maxTargets = opts.maxTargets ?? 200
+  const rows = db
+    .query(
+      `SELECT u.target_name AS target_name, u.anchor AS anchor,
+              b.root_id AS doc_id, vf.rel_path AS rel_path
+         FROM vault_unresolved_links u
+         JOIN blocks b ON b.id = u.source_block_id
+    LEFT JOIN vault_files vf ON vf.doc_id = b.root_id AND vf.deleted_at IS NULL
+        WHERE u.notebook_id = ?
+        ORDER BY u.target_name ASC, vf.rel_path ASC`,
+    )
+    .all(notebookId) as Array<{
+    target_name: string
+    anchor: string
+    doc_id: string | null
+    rel_path: string | null
+  }>
+
+  const byKey = new Map<string, UnresolvedTargetGroup>()
+  for (const row of rows) {
+    const key = `${row.target_name}\u0000${row.anchor}`
+    let group = byKey.get(key)
+    if (!group) {
+      group = { target_name: row.target_name, anchor: row.anchor, count: 0, sources: [] }
+      byKey.set(key, group)
+    }
+    group.count += 1
+    if (!row.doc_id) continue
+    if (group.sources.length >= maxSources) continue
+    if (group.sources.some((s) => s.doc_id === row.doc_id)) continue
+    group.sources.push({ doc_id: row.doc_id, rel_path: row.rel_path })
+  }
+
+  const targets = [...byKey.values()].sort(
+    (a, b) => b.count - a.count || a.target_name.localeCompare(b.target_name),
+  )
+  return { total: rows.length, targets: targets.slice(0, maxTargets) }
+}

@@ -16,6 +16,7 @@ import { useApiQuery } from '../hooks/useApiQuery'
 import { useDocChanges } from '../hooks/useDocEvents'
 import { formatRelative } from '../lib/time'
 import PageHeader from '../components/PageHeader'
+import { useInstanceMode } from '../hooks/useInstanceMode'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { EmptyState, ListRowsSkeleton, Tooltip, useToast } from '../components/ui'
 
@@ -23,6 +24,20 @@ interface TrashItem {
   id: string
   title: string
   deleted_at: string
+}
+
+/** `.trash/` 里的文件（vault 模式才有；见 GET /api/v1/vault/trash） */
+interface VaultTrashFile {
+  path: string
+  name: string
+  size: number
+  mtime_ms: number
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
 export default function TrashPage() {
@@ -41,6 +56,15 @@ export default function TrashPage() {
   // 外部通道（MCP / AI 聊天）删除或恢复时即时刷新
   useDocChanges(() => refetch())
   const docs = error ? [] : (data ?? [])
+
+  // vault 模式：删除是把文件移进文件夹的 `.trash/`，那份清单来自文件系统而不是索引
+  const { mode } = useInstanceMode()
+  const vaultMode = mode === 'vault'
+  const { data: vaultTrash } = useApiQuery(
+    () => (vaultMode ? api.get<{ count: number; files: VaultTrashFile[]; truncated: boolean }>('/vault/trash') : Promise.resolve(null)),
+    [vaultMode],
+  )
+  const trashedFiles = vaultMode ? (vaultTrash?.files ?? []) : []
 
   const restore = async (id: string) => {
     setBusyId(id)
@@ -114,8 +138,39 @@ export default function TrashPage() {
 
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 pt-7 pb-16 space-y-5">
         <p className="text-base text-muted-foreground leading-relaxed px-1">
-          {t('trash.description')}
+          {vaultMode ? t('trash.descriptionVault') : t('trash.description')}
         </p>
+
+        {vaultMode && trashedFiles.length > 0 && (
+          <div className="rounded-lg border border-border/60 bg-card/50 p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-base font-medium text-foreground">
+                {t('trash.folderTitle')}
+              </span>
+              <span className="font-mono text-xs text-muted-foreground/80 tabular-nums">
+                {trashedFiles.length}
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {t('trash.folderHint')}
+            </p>
+            <div className="grid gap-0.5">
+              {trashedFiles.slice(0, 20).map((file) => (
+                <div key={file.path} className="flex items-center gap-2 text-xs">
+                  <code className="min-w-0 flex-1 truncate text-muted-foreground">{file.path}</code>
+                  <span className="shrink-0 tabular-nums text-muted-foreground/70">
+                    {formatSize(file.size)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {trashedFiles.length > 20 && (
+              <p className="text-xs text-muted-foreground/70">
+                {t('trash.folderMore', { n: trashedFiles.length - 20 })}
+              </p>
+            )}
+          </div>
+        )}
 
         {loading ? (
           <ListRowsSkeleton rows={4} />

@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -19,6 +19,8 @@ import {
   EyeOff,
   Waypoints,
   Network,
+  Link2Off,
+  FileWarning,
   ChevronDown,
   Images,
 } from 'lucide-react'
@@ -56,9 +58,20 @@ interface SidebarCounts {
   trash: number
   untagged: number
   ai_exclude: number
+  /** vault 模式：未解析 wikilink 数 / 冲突副本数（来自 /vault/*，db 模式为 0） */
+  unresolved: number
+  conflicts: number
 }
 
-const EMPTY_COUNTS: SidebarCounts = { inbox: 0, archived: 0, trash: 0, untagged: 0, ai_exclude: 0 }
+const EMPTY_COUNTS: SidebarCounts = {
+  inbox: 0,
+  archived: 0,
+  trash: 0,
+  untagged: 0,
+  ai_exclude: 0,
+  unresolved: 0,
+  conflicts: 0,
+}
 
 /** 计数徽章统一样式（收集箱 / 回收站 / 智能视图共用） */
 const COUNT_BADGE_CLS =
@@ -242,6 +255,9 @@ export default function Sidebar({
 
   const { mode } = useInstanceMode()
   const vaultMode = mode === 'vault'
+  // refreshCounts 是稳定回调，但需要一个「当前是否 vault 模式」的最新值 → ref 转发
+  const vaultModeRef = useRef(vaultMode)
+  vaultModeRef.current = vaultMode
 
   const { views: pinnedViews, unpin, rename } = usePinnedViews()
   const navFadeRef = useScrollFade<HTMLElement>()
@@ -300,6 +316,19 @@ export default function Sidebar({
     api.get<SidebarCounts>('/docs/counts')
       .then(setCounts)
       .catch(() => {})
+    // vault 巡检计数（未解析链接 / 冲突副本）：与文档计数同源刷新，失败静默
+    if (vaultModeRef.current) {
+      Promise.all([
+        api.get<{ total: number }>('/vault/links/unresolved').catch(() => null),
+        api.get<{ count: number }>('/vault/conflicts').catch(() => null),
+      ]).then(([links, conflicts]) => {
+        setCounts((prev) => ({
+          ...prev,
+          unresolved: links?.total ?? 0,
+          conflicts: conflicts?.count ?? 0,
+        }))
+      })
+    }
   }, [])
 
   // 外部 MCP / AI 聊天等任何通道写入文档 → 即时刷新最近列表（服务端已聚合去抖）
@@ -452,6 +481,24 @@ export default function Sidebar({
               <Archive className="w-4 h-4" strokeWidth={1.75} />
               <span className="flex-1">{t('sidebar.archived')}</span>
             </Link>
+            {vaultMode && (
+              <Link to="/unresolved" onClick={closeAfterNav} className={location.pathname === '/unresolved' ? 'sidebar-link-active' : 'sidebar-link'}>
+                <Link2Off className="w-4 h-4" strokeWidth={1.75} />
+                <span className="flex-1">{t('sidebar.unresolvedLinks')}</span>
+                {counts.unresolved > 0 && (
+                  <span className={COUNT_BADGE_CLS}>{formatCount(counts.unresolved)}</span>
+                )}
+              </Link>
+            )}
+            {vaultMode && (
+              <Link to="/conflicts" onClick={closeAfterNav} className={location.pathname === '/conflicts' ? 'sidebar-link-active' : 'sidebar-link'}>
+                <FileWarning className="w-4 h-4" strokeWidth={1.75} />
+                <span className="flex-1">{t('sidebar.conflictCopies')}</span>
+                {counts.conflicts > 0 && (
+                  <span className={COUNT_BADGE_CLS}>{formatCount(counts.conflicts)}</span>
+                )}
+              </Link>
+            )}
             <Link to="/trash" onClick={closeAfterNav} className={location.pathname === '/trash' ? 'sidebar-link-active' : 'sidebar-link'}>
               <Trash2 className="w-4 h-4" strokeWidth={1.75} />
               <span className="flex-1">{t('sidebar.trash')}</span>

@@ -56,6 +56,8 @@
     "vaultTreeEmpty": "这个文件夹里还没有 Markdown",
     "vaultTreeExpand": "展开目录",
     "vaultTreeCollapse": "折叠目录",
+    "unresolvedLinks": "未解析链接",
+    "conflictCopies": "冲突副本",
     "sectionNotes": "笔记",
     "sectionRelations": "关系",
     "allDocs": "所有文档",

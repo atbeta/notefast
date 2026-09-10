@@ -155,7 +155,9 @@ export function touchVaultFileAfterWrite(
   }
   args.push(notebookId, relPath)
   db.query(
-    `UPDATE vault_files SET content_sha256 = ?, size = ?, mtime_ms = ?, doc_updated_at = ?, ingested_at = datetime('now')${extraSql}
+    // deleted_at 一并清空：本函数只在「文件确实写出来了」之后调用，
+    // 从回收站恢复走的就是这条路径（RFC 0005 U-9）
+    `UPDATE vault_files SET content_sha256 = ?, size = ?, mtime_ms = ?, doc_updated_at = ?, ingested_at = datetime('now'), deleted_at = NULL${extraSql}
      WHERE notebook_id = ? AND rel_path = ?`,
   ).run(...args)
 }

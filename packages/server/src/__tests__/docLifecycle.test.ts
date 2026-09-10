@@ -5,6 +5,7 @@ import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
 import { listDocTagCounts } from '../store/blocks'
 import { createPluginSystem, type DocumentEventPayload } from '@notefast/core'
+import { FLUSH_MS, subscribeDocChanges } from '../services/docEvents'
 import { initAiRuntime, _setRuntimeForTests } from '../services/aiRuntime'
 import docsRouter from '../api/docs'
 import blocksRouter from '../api/blocks'
@@ -22,6 +23,8 @@ let app: Hono
 let notebookId: string
 
 const events: Array<{ hook: string; payload: DocumentEventPayload }> = []
+/** doc 级变更事件（去抖后异步 flush，恢复等场景靠它驱动写回） */
+const docChanges: string[] = []
 
 function tapAll(): void {
   const sys = pluginSystem.doc
@@ -40,6 +43,7 @@ function untapAll(): void {
 }
 
 beforeAll(() => {
+  subscribeDocChanges((ev) => docChanges.push(ev.doc_id))
   testDir = mkdtempSync(join('/tmp', 'notefast-dochook-'))
   const result = initDb(testDir)
   notebookId = result.notebookId
@@ -58,6 +62,7 @@ afterAll(() => {
 
 beforeEach(() => {
   events.length = 0
+  docChanges.length = 0
   _setRuntimeForTests(null)
   const configPath = join(testDir, 'ai.config.json')
   if (existsSync(configPath)) unlinkSync(configPath)
@@ -222,6 +227,11 @@ describe('回收站（GET /docs/trash + restore）', () => {
 
     const listAfter = await app.request('/docs/list')
     expect(((await listAfter.json()) as Array<{ id: string }>).some((d) => d.id === docId)).toBe(true)
+
+    // 恢复必须发 doc 变更事件：vault 模式靠它把 `.trash/` 里的原文件搬回原位（RFC 0005 U-9），
+    // 事件缺失时文件会一直留在回收站目录（实测踩过）。事件按 300ms 聚合后 flush，故等一拍
+    await new Promise((r) => setTimeout(r, FLUSH_MS + 50))
+    expect(docChanges).toContain(docId)
 
     // 重复恢复 = 没有可恢复的已删除 block
     const again = await app.request(`/blocks/${docId}/restore`, { method: 'POST' })

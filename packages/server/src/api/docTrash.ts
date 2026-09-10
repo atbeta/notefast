@@ -13,6 +13,7 @@ import { deleteMentionsTouchingBlocks } from '../store/entities'
 import { deleteSharesByDocIds } from '../store/shares'
 import { auditDocAction } from '../services/hooks'
 import { deleteVectorMany } from '../ai/indexer'
+import { getActiveVaultRuntime } from '../vault'
 
 /**
  * 永久删除一棵已软删除的文档子树（不可恢复）：
@@ -26,6 +27,16 @@ async function purgeDeletedDoc(
 ): Promise<{ ok: true; count: number } | { ok: false; error: 'not_found' }> {
   const existing = getDeletedBlockById(db, id)
   if (!existing) return { ok: false, error: 'not_found' }
+
+  // vault notebook：先清 `.trash/` 副本与映射行（RFC 0005 U-9）。
+  // 放在硬删之前——映射行是按 doc_id 查的，blocks 一旦消失就查不到了。
+  if (existing.type === 'document') {
+    try {
+      getActiveVaultRuntime()?.discardTrashed(id)
+    } catch (e) {
+      console.warn('[vault] 清理回收站副本失败:', e instanceof Error ? e.message : e)
+    }
+  }
 
   const allIds = [id, ...fetchDeletedSubtreeIds(db, id)]
 

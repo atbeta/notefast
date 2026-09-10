@@ -54,6 +54,10 @@
     "noMatch": "No archived documents match “{{query}}”"
   },
   "trash": {
+    "descriptionVault": "In vault mode, deleting moves the file into the folder's .trash/ (the Obsidian convention) and the index keeps its place — restoring writes the file back. Permanent delete also removes the copy in .trash/.",
+    "folderTitle": "Files in .trash/",
+    "folderHint": "Deleted files that still exist on disk. They are no longer indexed (.trash is an ignored directory); delete them on disk, or permanently delete the matching document above.",
+    "folderMore": "{{n}} more files not shown",
     "title": "Trash",
     "description": "Deleted documents are kept here and can be restored anytime. Note: share links are permanently revoked on deletion — re-enable sharing after restoring.",
     "deletedAt": "Deleted {{time}}",
@@ -69,6 +73,26 @@
     "emptyTrashTitle": "Empty trash?",
     "emptyTrashMessage": "{{count}} documents in trash will be permanently deleted. This cannot be undone.",
     "emptyTrashFailed": "Failed to empty trash"
+  },
+  "unresolved": {
+    "title": "Unresolved links",
+    "description": "These [[links]] point at notes that do not exist yet. Once the target file appears the reference is wired up automatically — no manual fix needed.",
+    "emptyTitle": "No unresolved links",
+    "emptyDesc": "Every [[link]] resolves to a file.",
+    "targetCount": "{{n}} references",
+    "sourceLabel": "From",
+    "openDoc": "Open document",
+    "anchor": "Anchor",
+    "notVault": "This instance is not in vault mode, so there are no file links to resolve."
+  },
+  "conflicts": {
+    "title": "Conflict copies",
+    "description": "When write-back or file sync finds both sides changed, NoteFast leaves your file alone and saves its own version as one of these copies. Compare them, then delete the one you do not want.",
+    "emptyTitle": "No conflict copies",
+    "emptyDesc": "No write-back or sync conflicts recently.",
+    "originalLabel": "Original file",
+    "openDoc": "Open copy",
+    "notVault": "This instance is not in vault mode, so there are no file conflicts."
   },
   "newDoc": {
     "tabCreate": "New document",
