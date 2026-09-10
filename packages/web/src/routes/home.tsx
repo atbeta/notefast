@@ -31,6 +31,11 @@ function viewTitle(params: URLSearchParams): string {
     return i18next.t('home.viewStaleLong')
   }
   if (params.get('ai_exclude') === '1') return i18next.t('home.viewAiExclude')
+  const dir = (params.get('dir') || '').trim()
+  if (dir) {
+    const parts = dir.split('/').filter(Boolean)
+    return parts[parts.length - 1] ?? dir
+  }
   if (params.get('status') === 'archived') return i18next.t('home.viewArchived')
   if (params.get('status') === 'inbox') return i18next.t('home.viewInbox')
   const tags = params.get('tags') || params.get('tag')
@@ -73,6 +78,10 @@ function buildListQuery(params: URLSearchParams): string {
 
   if (params.get('ai_exclude') === '1') q.set('ai_exclude', '1')
 
+  // vault 目录视图（?dir=notes/books）：侧栏文件夹树点进来的
+  const dir = (params.get('dir') || '').trim()
+  if (dir) q.set('dir', dir)
+
   // status 透传（?status=archived / inbox 直达对应视图）
   const status = params.get('status') || ''
   if (status === 'archived' || status === 'inbox' || status === 'all') q.set('status', status)
@@ -94,7 +103,7 @@ export default function HomePage() {
   const hasFilter = searchParams.get('tags') || searchParams.get('tag') ||
     searchParams.get('status') || searchParams.get('updated_within') ||
     searchParams.get('created_within') || searchParams.get('stale_within') ||
-    searchParams.get('ai_exclude') === '1' ||
+    searchParams.get('ai_exclude') === '1' || searchParams.get('dir') ||
     searchParams.get('untagged') === '1' || searchParams.get('view') === 'untagged' ||
     searchParams.get('view') === 'recent'
 

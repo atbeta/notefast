@@ -359,10 +359,18 @@ Windows 实机使用后反馈三条，全部与「壳不记忆模式」同源：
 | U-5 | 修订历史：vault 也记 `doc_snapshots`（存 `DATA_DIR`、键用 `rel_path`、内容 sha256 去重、每篇 50 条），**恢复走写回** | 待开始 |
 | U-6 | 分享身份：`shares` 改 `rel_path` + 内容校验，文件缺失返回 410；迁移既有数据 | 待开始 |
 | U-7 | 对账性能：修 `syncVaultWikilinks` 的 O(n²)，目标 10k 文件 < 60s，并给 50k 不崩的证据 | 待开始 |
+| U-8 | 侧栏文件夹树：`GET /vault/tree`（按层聚合）+ 文档列表 `?dir=` 前缀过滤 + vault 模式下侧栏置顶「文件夹」区块 | 完成 |
+| U-9 | 侧栏 vault 专属入口：未解析 wikilink（表已有、无 API）、冲突副本、回收站改绑 `.trash/` 语义 | 待开始 |
 
 U-1 … U-4 是部署一致性；U-5 … U-7 是统一的前置 parity（U-7 可与其余并行）。
 
 **U-4 与计划的偏差**：没有把 `docker-compose.yml` 的默认模式翻成 vault——它被 `docker compose up -d` 直接使用，未挂 `/vault` 时会因 `VAULT_PATH` 指向不存在的目录而启动失败（比默认 db 更难排查）。改为提供可运行的 `docker-compose.vault.yml`，README 的 Docker 一节以它为首选入口，等价达成「新部署默认 vault」。
+
+**U-8 侧栏文件夹树（方案 B 第一批）**：用户反馈「vault 模式侧栏还是 db 那套，已经跟不上」→ 定方案 B（侧栏按模式分支，db 模式不动）。
+- 端点：`GET /api/v1/vault/tree?path=` 只聚合**一层**（前端展开哪层拉哪层），目录带 `files`（直接）/`total`（递归）两个计数；附件不进树，忽略目录（`.trash`/`.obsidian`/隐藏）整棵不出
+- 列表：`/api/v1/docs/list?dir=notes/books` 走 `vault_files.rel_path` 前缀匹配，`%`/`_`/`\` 已转义（否则 `a_b` 会误匹配 `axb`）；db notebook 传了只会得到空集
+- Web：`VaultFolderTree`（纯展示 `VaultTreeRows` + 取数容器）、侧栏按 `/instance` 的 mode 分支渲染、点目录 → `/?dir=`、点文件 → `/doc/:id`；`?dir=` 直达时自动展开并加载祖先
+- **验证**：单测 `vaultTree.test.ts` 9 例（计数/忽略/排序/层级/归一化）、vault.test.ts 新增端点 3 例 + 过滤 2 例、web `vaultFolderTree.test.tsx` 8 例；实测（真实 vault + dev server）根层/子层聚合正确，`dir=notes` → a,b,c（含子目录）、`dir=notes/books` → c、`dir=work` → w
 
 **U-2 验证记录**：单测 13 例（`vaultWatchProbe.test.ts`：显式 env 优先、文件系统判定优先于探测、探测降级、超时判定、不留探测文件、配置 `pollingSource` 三态）；实测探测延迟在 `/tmp`（符号链接 → `/private/tmp`）与工作区真实路径上都是 11–14ms，探测文件是隐藏文件（`paths.isIgnoredRelPath` 忽略），不会被 ingest。
 **U-2/U-4 容器实测**（本地重建镜像 + OrbStack，`docker-compose.vault.yml` 挂宿主机目录）：vault 根是 virtiofs → 启动日志报「原生事件不保证投递宿主侧改动，使用轮询」，`watcher_mode=polling`；宿主机新建文件 5s 内 `files` 1→2、宿主机编辑后搜索命中；API 建文档写回宿主机 `Written By NoteFast (2).md` 且内容正确；索引落在 `/app/data/27d33c883a0e`（按 vault 派生）。

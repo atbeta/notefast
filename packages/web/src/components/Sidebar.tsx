@@ -26,6 +26,7 @@ import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
 import { useDocChanges } from '../hooks/useDocEvents'
 import { usePinnedViews, canonicalViewQuery, type PinnedView } from '../hooks/usePinnedViews'
+import { useInstanceMode } from '../hooks/useInstanceMode'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { DRAFT_CHANGED_EVENT, hasDraftSync } from '../hooks/useEditorDraft'
 import {
@@ -38,6 +39,7 @@ import {
 import { isWindowZoomDoubleClickTarget, nativeToggleWindowZoom } from '../lib/nativeWindow'
 import type { DocSummary } from '@notefast/core'
 import DocActionsMenu from './DocActionsMenu'
+import VaultFolderTree from './VaultFolderTree'
 import { Tooltip, ShortcutKeys } from './ui'
 
 interface SidebarProps {
@@ -225,6 +227,8 @@ export default function Sidebar({
   const [counts, setCounts] = useState<SidebarCounts>(EMPTY_COUNTS)
   const [recentExpanded, setRecentExpanded] = useState(false)
   const [notesOpen, toggleNotes] = useSidebarSectionOpen('notes', true)
+  // vault 模式：侧栏最上面是文件夹树（vault 的目录是用户自己组织的，db 时代那套体现不出来）
+  const [foldersOpen, toggleFolders] = useSidebarSectionOpen('vaultFolders', true)
   const [relationsOpen, toggleRelations] = useSidebarSectionOpen('relations', false)
   const [smartOpen, toggleSmart] = useSidebarSectionOpen('smart', true)
   const [pinnedOpen, togglePinned] = useSidebarSectionOpen('pinned', true)
@@ -235,6 +239,9 @@ export default function Sidebar({
   const [recentOpen, toggleRecent] = useSidebarSectionOpen('recentVisited', true)
   const [visitIds, setVisitIds] = useState(() => getRecentVisitIds())
   useEffect(() => subscribeRecentVisits(() => setVisitIds(getRecentVisitIds())), [])
+
+  const { mode } = useInstanceMode()
+  const vaultMode = mode === 'vault'
 
   const { views: pinnedViews, unpin, rename } = usePinnedViews()
   const navFadeRef = useScrollFade<HTMLElement>()
@@ -405,6 +412,18 @@ export default function Sidebar({
       </div>
 
       <nav ref={navFadeRef} className="scroll-fade px-2 pt-1 pb-2 flex-1 overflow-y-auto">
+        {vaultMode && (
+          <div className="mb-4">
+            <SidebarSectionLabel
+              label={t('sidebar.sectionFolders')}
+              collapsible
+              open={foldersOpen}
+              onToggle={toggleFolders}
+            />
+            {foldersOpen && <VaultFolderTree onNavigate={closeAfterNav} />}
+          </div>
+        )}
+
         <SidebarSectionLabel label={t('sidebar.sectionNotes')} collapsible open={notesOpen} onToggle={toggleNotes} />
         {notesOpen && (
           <div className="flex flex-col gap-0.5">

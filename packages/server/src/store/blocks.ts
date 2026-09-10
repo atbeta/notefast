@@ -167,6 +167,11 @@ export interface ListDocRowsOptions {
   tagMatch?: TagMatchMode
   /** 只列 ai_exclude=1（REST ?ai_exclude=1） */
   aiExcludeOnly?: boolean
+  /**
+   * vault 目录过滤（REST ?dir=notes/books）：只列该目录及其子目录下的文档。
+   * 走 `vault_files.rel_path` 前缀匹配；db notebook 没有映射行，因此传了也只会得到空集。
+   */
+  vaultDir?: string
   /** 排除 ai_exclude（MCP 默认） */
   excludeAiExclude?: boolean
   /** sqlite 时间串：updated_at >= */
@@ -240,6 +245,17 @@ export function listDocRows(db: Db, opts: ListDocRowsOptions = {}): ListedDocRow
     if ((opts.tagMatch ?? 'all') !== 'any') params.push(opts.tags.length)
   }
   if (opts.aiExcludeOnly) sql += ' AND ai_exclude = 1'
+  if (opts.vaultDir) {
+    // 目录名里的 % / _ / \ 必须转义，否则 `a_b` 会误匹配 `axb`
+    const dir = opts.vaultDir.replace(/^\/+|\/+$/g, '')
+    if (dir) {
+      const like = dir.replace(/[\\%_]/g, (m) => `\\${m}`)
+      sql +=
+        " AND EXISTS (SELECT 1 FROM vault_files vf WHERE vf.doc_id = blocks.id" +
+        " AND vf.deleted_at IS NULL AND vf.rel_path LIKE ? ESCAPE '\\')"
+      params.push(`${like}/%`)
+    }
+  }
   if (opts.excludeAiExclude) sql += ' AND ai_exclude = 0'
   if (opts.updatedAfter) {
     sql += ' AND updated_at >= ?'

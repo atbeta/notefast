@@ -15,6 +15,7 @@ import {
   getDeletedBlockById,
   getLiveDocById,
   insertBlock,
+  listDocRows,
   nowTimestamp,
   softDeleteBlocks,
   updateBlock,
@@ -1383,6 +1384,111 @@ describe('vault raw assets', () => {
     const app = new Hono()
     app.route('/api/v1/vault', createVaultRouter(() => null))
     expect((await app.request('/api/v1/vault/raw/a.png')).status).toBe(404)
+  })
+})
+
+// ───────────────────── 目录树（RFC 0005 U-8） ─────────────────────
+
+describe('GET /vault/tree', () => {
+  interface Level {
+    path: string
+    dirs: Array<{ path: string; name: string; files: number; total: number }>
+    files: Array<{ path: string; name: string; doc_id: string }>
+  }
+
+  async function treeApp(withRuntime = true): Promise<Hono> {
+    const app = new Hono()
+    const runtime = withRuntime
+      ? createVaultRuntime({ db: getDb(), notebookId, config: makeConfig(vaultDir) })
+      : null
+    if (runtime) await runtime.start({ awaitReconcile: true })
+    app.route('/api/v1/vault', createVaultRouter(() => runtime))
+    return app
+  }
+
+  test('按层返回目录与文件，计数分别是直接/递归', async () => {
+    writeVault('t/root.md', 'root\n')
+    writeVault('t/notes/a.md', 'a\n')
+    writeVault('t/notes/sub/b.md', 'b\n')
+    const app = await treeApp()
+
+    // 根层：只有 t 一个目录（t/root.md 在 t 下）
+    const root = (await (await app.request('/api/v1/vault/tree')).json()) as Level
+    const t = root.dirs.find((d) => d.path === 't')!
+    expect(t.name).toBe('t')
+    expect(t.files).toBe(1) // t/root.md
+    expect(t.total).toBe(3) // + notes/a.md + notes/sub/b.md
+
+    const tLevel = (await (await app.request('/api/v1/vault/tree?path=t')).json()) as Level
+    expect(tLevel.path).toBe('t')
+    expect(tLevel.files.map((f) => f.path)).toEqual(['t/root.md'])
+    expect(tLevel.dirs.map((d) => [d.path, d.total])).toEqual([['t/notes', 2]])
+
+    const notes = (await (await app.request('/api/v1/vault/tree?path=t/notes')).json()) as Level
+    expect(notes.files.map((f) => f.name)).toEqual(['a'])
+    expect(notes.dirs.map((d) => d.path)).toEqual(['t/notes/sub'])
+  })
+
+  test('忽略目录不出现在树里（.trash / .obsidian）', async () => {
+    writeVault('.trash/gone.md', 'x\n')
+    writeVault('.obsidian/workspace.md', 'x\n')
+    writeVault('keep.md', 'k\n')
+    const app = await treeApp()
+    const root = (await (await app.request('/api/v1/vault/tree')).json()) as Level
+    const paths = [...root.dirs.map((d) => d.path), ...root.files.map((f) => f.path)]
+    expect(paths).not.toContain('.trash')
+    expect(paths).not.toContain('.obsidian')
+    expect(root.files.map((f) => f.path)).toContain('keep.md')
+  })
+
+  test('未启用 vault → 404', async () => {
+    const app = await treeApp(false)
+    expect((await app.request('/api/v1/vault/tree')).status).toBe(404)
+  })
+})
+
+// ───────────────────── 目录过滤（?dir=，侧栏点目录用） ─────────────────────
+
+describe('listDocRows 的 vaultDir 过滤', () => {
+  test('只列该目录及其子目录下的文档', async () => {
+    writeVault('f/root.md', 'root\n')
+    writeVault('f/notes/one.md', 'one\n')
+    writeVault('f/notes/deep/two.md', 'two\n')
+    writeVault('f/other/three.md', 'three\n')
+    const runtime = createVaultRuntime({ db: getDb(), notebookId, config: makeConfig(vaultDir) })
+    await runtime.start({ awaitReconcile: true })
+
+    const titles = (dir?: string) =>
+      listDocRows(getDb(), { notebookId, vaultDir: dir })
+        .map((row) => row.content)
+        .filter((c) => ['root', 'one', 'two', 'three'].includes(c))
+        .sort()
+
+    expect(titles('f/notes')).toEqual(['one', 'two'])
+    expect(titles('f/other')).toEqual(['three'])
+    expect(titles('f')).toEqual(['one', 'root', 'three', 'two'])
+    expect(titles(undefined)).toEqual(['one', 'root', 'three', 'two'])
+    expect(titles('f/nope')).toEqual([])
+  })
+
+  test('目录名里的 % 与 _ 按字面匹配（不当作 LIKE 通配）', async () => {
+    // 文档行 content = 标题 = 文件名（vault 约定），所以用 a/b/c/d 区分
+    writeVault('g/100%/a.md', 'percent\n')
+    writeVault('g/100x/b.md', 'decoy\n')
+    writeVault('g/a_b/c.md', 'underscore\n')
+    writeVault('g/axb/d.md', 'decoy2\n')
+    const runtime = createVaultRuntime({ db: getDb(), notebookId, config: makeConfig(vaultDir) })
+    await runtime.start({ awaitReconcile: true })
+
+    const titles = (dir: string) =>
+      listDocRows(getDb(), { notebookId, vaultDir: dir })
+        .map((row) => row.content)
+        .filter((c) => ['a', 'b', 'c', 'd'].includes(c))
+        .sort()
+
+    // `%` 若被当成通配，`g/100x/b.md` 也会命中；`_` 若被当成单字符通配，`g/axb/d.md` 会命中
+    expect(titles('g/100%')).toEqual(['a'])
+    expect(titles('g/a_b')).toEqual(['c'])
   })
 })
 

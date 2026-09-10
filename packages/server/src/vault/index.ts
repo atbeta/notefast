@@ -21,6 +21,7 @@ import { ingestVaultFile, reconcileVault, type IngestResult, type ReconcileStats
 import { isIgnoredRelPath, toVaultAbsPath, VaultPathError, toVaultRelPath } from './paths'
 import { startVaultWatcher, type VaultWatcher } from './watcher'
 import { resolveWatchMode, type WatchMode } from './watchProbe'
+import { buildVaultTree } from './tree'
 import { createVaultFileSync, type VaultFileSync, type VaultFileSyncStatus } from './fileSyncRuntime'
 import { getVaultFileSyncConfig } from './fileSyncConfig'
 import { vaultFileSyncConfigSchema } from '@notefast/core'
@@ -315,6 +316,20 @@ export function createVaultRouter(getRuntime: () => VaultRuntime | null): Hono {
         deleted_at: r.deleted_at,
       })),
     )
+  })
+
+  /**
+   * 目录树（一层）：`?path=notes/books` 拉该目录的直接子目录与 .md。
+   * 前端点开目录再拉下一层——`/files` 是全量行，10k 文件不能一次给前端建树。
+   */
+  router.get('/tree', (c) => {
+    const rt = getRuntime()
+    if (!rt) return c.json({ error: 'vault_disabled', message: '未启用 vault mode' }, 404)
+    const entries = listVaultFiles(rt.ctx.db, rt.ctx.notebookId).map((row) => ({
+      relPath: row.rel_path,
+      docId: row.doc_id,
+    }))
+    return c.json(buildVaultTree(entries, { path: c.req.query('path') ?? '', ignore: rt.ctx.config.ignore }))
   })
 
   /** 文件同步（RFC 0004）：状态 / 配置 / 手动推拉 */

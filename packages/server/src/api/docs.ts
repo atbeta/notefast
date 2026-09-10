@@ -68,6 +68,8 @@ docs.get('/list', (c) => {
 
   const createdMs = parseCreatedWithin(c.req.query('created_within'))
   const staleMs = parseStaleWithin(c.req.query('stale_within'))
+  // vault 模式侧栏的目录过滤（?dir=notes/books）；db notebook 传了也只会是空集
+  const vaultDir = (c.req.query('dir') || '').trim()
 
   const rows = listDocRows(db, {
     notebookId: notebookId || undefined,
@@ -77,6 +79,7 @@ docs.get('/list', (c) => {
     tags: !untagged && selectedTags.length > 0 ? selectedTags : undefined,
     tagMatch,
     aiExcludeOnly: c.req.query('ai_exclude') === '1' || undefined,
+    vaultDir: vaultDir || undefined,
     updatedAfter: withinMs != null ? msToSqliteTime(Date.now() - withinMs) : undefined,
     updatedBefore: staleMs != null ? msToSqliteTime(Date.now() - staleMs) : undefined,
     createdAfter: createdMs != null ? msToSqliteTime(Date.now() - createdMs) : undefined,
