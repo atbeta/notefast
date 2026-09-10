@@ -6,6 +6,7 @@ import { parseContentDispositionFilename, deliverExport } from '../lib/download'
 import { type LocalFsAdapterConfig, type SyncAdapterConfig } from '@notefast/core'
 import LocationSelect from './LocationSelect'
 import { useStorageLocations } from '../hooks/useStorageLocations'
+import { useInstanceMode } from '../hooks/useInstanceMode'
 import { ActionButton, Button, Tooltip, useToast, Toggle } from './ui'
 import { SettingsCard, InlineField, StatusBadge } from './settings/ui'
 import { formatIsoDateTime } from '../lib/time'
@@ -116,6 +117,9 @@ export default function SyncPanel() {
 
   /** 整库导出存档：Tauri 壳弹「另存为」选路径；浏览器直接下载（与单文档导出一致） */
   const importRef = useRef<HTMLInputElement>(null)
+  // vault 模式：笔记本来就是文件夹里的 Markdown，导出 zip 是 db 时代的搬迁工具（RFC 0006）
+  const { mode } = useInstanceMode()
+  const vaultMode = mode === 'vault'
   const [busyExport, setBusyExport] = useState(false)
   const [busyImport, setBusyImport] = useState(false)
   const importToastId = useRef<string | null>(null)
@@ -398,15 +402,21 @@ export default function SyncPanel() {
 
         {/* 便携副本：整库导出 / 导入（与归档推送同构的 zip，无需配置存储连接） */}
         <div className="flex items-center gap-3 pt-4 border-t border-border/40">
-          <Button
-            variant="secondary"
-            loading={busyExport}
-            disabled={busyImport}
-            onClick={() => { void handleExportArchive() }}
-          >
-            <Upload className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
-            {t('sync.exportArchive')}
-          </Button>
+          {vaultMode ? (
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {t('sync.exportArchiveVault')}
+            </p>
+          ) : (
+            <Button
+              variant="secondary"
+              loading={busyExport}
+              disabled={busyImport}
+              onClick={() => { void handleExportArchive() }}
+            >
+              <Upload className="w-4 h-4 mr-1.5" strokeWidth={1.75} />
+              {t('sync.exportArchive')}
+            </Button>
+          )}
           <Button
             variant="secondary"
             loading={busyImport}

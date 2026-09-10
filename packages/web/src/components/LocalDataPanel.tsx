@@ -13,6 +13,8 @@ interface InstanceInfo {
   data_dir: string
   markdown_dir: string
   shadow_markdown_enabled: boolean
+  /** false = vault 模式下影子副本不可用（文件夹本身就是 Markdown）；旧服务端没有该字段 */
+  shadow_markdown_available?: boolean
   /** RFC 0005 U-1：数据权威在 SQLite（db）还是用户文件夹（vault） */
   mode?: 'db' | 'vault'
   vault_root?: string | null
@@ -117,15 +119,27 @@ export default function LocalDataPanel() {
           )}
         </div>
 
-        <div className="flex items-start justify-between gap-4 pt-4 border-t border-border/40">
-          <div className="min-w-0 space-y-1">
-            <div className="text-base font-medium text-foreground">{t('settings.localData.shadowTitle')}</div>
+        {/* vault 模式：文件夹本身就是 Markdown，影子副本整块隐藏（RFC 0006） */}
+        {data?.shadow_markdown_available === false ? (
+          <div className="pt-4 border-t border-border/40 space-y-1">
+            <div className="text-base font-medium text-foreground">
+              {t('settings.localData.shadowVaultTitle')}
+            </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              {t('settings.localData.shadowHint')}
+              {t('settings.localData.shadowVaultHint')}
             </p>
           </div>
-          <Toggle checked={enabled} onChange={(v) => void handleToggle(v)} disabled={!data} />
-        </div>
+        ) : (
+          <div className="flex items-start justify-between gap-4 pt-4 border-t border-border/40">
+            <div className="min-w-0 space-y-1">
+              <div className="text-base font-medium text-foreground">{t('settings.localData.shadowTitle')}</div>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {t('settings.localData.shadowHint')}
+              </p>
+            </div>
+            <Toggle checked={enabled} onChange={(v) => void handleToggle(v)} disabled={!data} />
+          </div>
+        )}
       </div>
     </SettingsCard>
   )

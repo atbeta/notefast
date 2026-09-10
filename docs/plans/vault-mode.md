@@ -363,6 +363,8 @@ Windows 实机使用后反馈三条，全部与「壳不记忆模式」同源：
 | U-9 | 侧栏 vault 专属入口：未解析 wikilink（表已有、无 API）、冲突副本、回收站改绑 `.trash/` 语义 | 完成 |
 | U-10 | 目录感知的新建：`POST /docs`、`/import/markdown` 收 `dir`（越界忽略）；侧栏/新建页带上当前 `?dir=`；目录树订阅变更即时刷新 | 完成 |
 | U-11 | 边界落地（RFC 0006）：`notefast_status` 支持 archived（文件完全权威）、树上标记收集箱/归档、采集默认落盘目录（`data/vault-capture.json` + 设置项） | 完成 |
+| U-12 | 砍掉 vault 下不适用的功能：影子副本强制关闭（含启动全量投影与 API 重开）、资源页 / 图床设置 / 归档导出入口隐藏 | 完成 |
+| U-13 | 图片落盘：上传与拖入的图片写进笔记同名资源夹 `<笔记名>.assets/`，正文用相对路径；db 模式保持 `asset:<sha>` | 待开始 |
 
 U-1 … U-4 是部署一致性；U-5 … U-7 是统一的前置 parity（U-7 可与其余并行）。
 
@@ -391,6 +393,12 @@ U-1 … U-4 是部署一致性；U-5 … U-7 是统一的前置 parity（U-7 可
 3. **spans 不再重复建树**：ingest 已经解析过一次正文，把解析结果 / 顶层块指纹传进 `recordVaultSpans`，省掉每篇的 `fetchDocBlocks` + `buildBlockTree`
 
 剖析方法（可复现）：`bun --cpu-prof --cpu-prof-dir=/tmp/prof run packages/server/src/eval/vaultBench.ts --files 2000`，再用脚本把 native 采样归因到最近的 JS 调用者。
+
+**U-12 功能取舍（RFC 0006 §vault 模式下的功能取舍）**：判据是「符合直觉吗 + 在这个场景还有意义吗」。
+- **影子副本**：`services/shadowMarkdown.ts` 此前**完全不知道 vault 存在**（`grep -c vault` = 0），默认开启 → vault 下每次变更都往 `data/markdown/` 再写一份副本并重写整份 manifest，启动还全量投影。现改为 vault 模式**强制关闭**（`suppressShadowForVault`），`applyShadowConfig` 拒绝重新打开，`/instance` 增 `shadow_markdown_available: false`，设置项整块换成说明。**必须在 `initShadowMarkdown` 之后调用**——顺序写反过一次，store 未初始化直接抛错（错误信息很清楚，已修正）
+- **资源页 / 图床设置 / 归档导出**：vault 模式隐藏（资源页列的是 `data/media`；图床是 db 模式的东西；笔记本来就是文件夹里的 Markdown，导出 zip 没必要，按钮换成一句说明）
+- **实测**：vault 实例 `/instance` 返回 `shadow_markdown_enabled=false, available=false`；PUT 打开无效；改一篇文档后 `DATA_DIR/markdown/` 目录根本没被创建，而 vault 文件已更新
+- **下一步（U-13，已定策略）**：图片落到**笔记同名资源夹** `<笔记名>.assets/`（不共用全库 `assets/`：避免所有图片挤一个目录、归属不清），引用用相对路径；应用内改名时资源夹一起改名并改写相对引用，应用外改名不动
 
 **U-10 / U-11 边界落地（RFC 0006 P0）**：
 - **新建落当前目录**：`POST /docs` 与 `/import/markdown` 收可选 `dir`（服务端 `toVaultRelPath` 校验，越界/绝对路径静默忽略）；侧栏「新建」与 `/new` 带上当前 `?dir=`；MCP 早已有 `path`

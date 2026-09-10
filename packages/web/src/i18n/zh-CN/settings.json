@@ -67,6 +67,8 @@
       "loadFailed": "无法读取数据目录",
       "saveFailed": "无法保存",
       "revealFailed": "无法打开文件管理器",
+      "shadowVaultTitle": "Markdown 影子副本",
+      "shadowVaultHint": "vault 模式下这个功能不可用：你的笔记文件夹本身就是 Markdown，再投影一份只会产生重复文件。",
       "modeLabel": "数据来源",
       "modeDb": "数据库（SQLite 权威）",
       "modeVault": "文件夹（文件权威）",

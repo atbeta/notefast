@@ -73,7 +73,12 @@ import { initAppLogs } from './services/appLogs'
 import storageLocations from './api/storageLocations'
 import sharePublic from './api/sharePublic'
 import { initDocEvents } from './services/docEvents'
-import { initInstancePaths, initShadowMarkdown, stopShadowMarkdown } from './services/shadowMarkdown'
+import {
+  initInstancePaths,
+  initShadowMarkdown,
+  stopShadowMarkdown,
+  suppressShadowForVault,
+} from './services/shadowMarkdown'
 import { createInstanceRouter } from './api/instance'
 import { startEntityDescribe } from './ai/entityDescribe'
 import { createVaultRouter, createVaultRuntime, loadVaultConfigFromEnv, type VaultRuntime } from './vault'
@@ -310,6 +315,9 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     await initVectorStore()
     initAssetStore(dataDir)
     initShadowMarkdown(dataDir) // 订阅立刻挂上；全量投影后台跑，不挡 listen
+    // vault notebook 的文件本身就是 Markdown：影子副本纯属重复数据 + O(n) 重写（RFC 0006）。
+    // 必须在 initShadowMarkdown 之后——store 未初始化时改配置会抛错（顺序写反过一次）
+    if (vaultConfig) suppressShadowForVault()
     // 图床上传配置：init 后注入 assets 存储层（异步上传命令契约）
     setImageUploadConfig(initImageUploadConfig(dataDir))
     initStorageLocations(dataDir)

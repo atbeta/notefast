@@ -16,6 +16,9 @@ import { getDocById } from '../store/blocks'
 import { publishDocChange, FLUSH_MS } from '../services/docEvents'
 import {
   applyShadowConfig,
+  isShadowSuppressedForVault,
+  publicInstanceView,
+  suppressShadowForVault,
   fullSyncShadow,
   getShadowConfig,
   initShadowMarkdown,
@@ -275,5 +278,42 @@ describe('GET/PUT /api/v1/instance', () => {
     const body = (await res.json()) as { shadow_markdown_enabled: boolean }
     expect(body.shadow_markdown_enabled).toBe(false)
     expect(getShadowConfig().enabled).toBe(false)
+  })
+})
+
+// ───────────────────── vault 模式：影子副本整体禁用（RFC 0006） ─────────────────────
+
+describe('vault 模式抑制影子副本', () => {
+  test('抑制后：开关读回 false，且 applyShadowConfig 无法重新打开', () => {
+    expect(isShadowSuppressedForVault()).toBe(false)
+    suppressShadowForVault()
+    try {
+      expect(isShadowSuppressedForVault()).toBe(true)
+      expect(getShadowConfig().enabled).toBe(false)
+      // 用户点设置里的开关：vault 模式下必须无效
+      const next = applyShadowConfig({ enabled: true })
+      expect(next.enabled).toBe(false)
+      expect(getShadowConfig().enabled).toBe(false)
+    } finally {
+      _resetShadowMarkdownForTests()
+    }
+  })
+
+  test('抑制后：instance 视图告诉前端该功能不可用', () => {
+    suppressShadowForVault()
+    try {
+      const view = publicInstanceView()
+      expect(view.shadow_markdown_enabled).toBe(false)
+      expect(view.shadow_markdown_available).toBe(false)
+    } finally {
+      _resetShadowMarkdownForTests()
+    }
+  })
+
+  test('未抑制（db 模式）：开关照常可用', () => {
+    const next = applyShadowConfig({ enabled: true })
+    expect(next.enabled).toBe(true)
+    expect(publicInstanceView().shadow_markdown_available).toBe(true)
+    _resetShadowMarkdownForTests()
   })
 })

@@ -53,6 +53,7 @@
     "disabled": "Disabled"
   },
   "sync": {
+    "exportArchiveVault": "No export needed in vault mode: your notes are the Markdown in that folder already — copy or zip the folder itself.",
     "loadConfigFailed": "Failed to load archive configuration",
     "chooseConnection": "Please select a storage connection",
     "savingConfig": "Saving archive configuration…",

@@ -66,6 +66,8 @@ let fullSyncRunning = false
 let fullSyncQueued = false
 /** 批量导入期间暂停逐篇写盘，结束后由调用方补写新增文档 */
 let shadowWritePause = 0
+/** vault 模式：影子副本整体禁用（见 suppressShadowForVault） */
+let vaultShadowSuppressed = false
 
 export function initInstancePaths(dir: string): void {
   dataDirAbs = resolve(dir)
@@ -81,6 +83,25 @@ export function getMarkdownDirAbs(): string {
 
 export function getShadowConfig(): ShadowConfig {
   return store.get()
+}
+
+/**
+ * vault 模式下强制关闭影子副本（RFC 0006）。
+ *
+ * vault notebook 的文件本身就是 Markdown：再往 `data/markdown/` 投影一份纯属重复数据，
+ * 而且每次变更都会重写整份 manifest（O(n)），启动还会全量投影一遍——纯浪费。
+ * 关闭是**强制的**：`applyShadowConfig` 在 vault 模式下拒绝重新打开
+ * （否则用户点一下设置里的开关，就又把重复数据和开销带回来了）。
+ */
+export function suppressShadowForVault(): void {
+  vaultShadowSuppressed = true
+  store.set({ version: 1, enabled: false })
+  cancelScheduledFullSync()
+}
+
+/** 当前是否因为 vault 模式而禁用影子副本 */
+export function isShadowSuppressedForVault(): boolean {
+  return vaultShadowSuppressed
 }
 
 export function initShadowMarkdown(dir: string): void {
@@ -153,9 +174,11 @@ function runScheduledFullSync(): void {
 }
 
 export function applyShadowConfig(incoming: { enabled?: boolean }): ShadowConfig {
+  // vault 模式下不允许打开：文件夹本身就是 Markdown，投影一份是重复数据 + O(n) 开销
+  const want = incoming.enabled ?? store.get().enabled
   const next: ShadowConfig = {
     version: 1,
-    enabled: incoming.enabled ?? store.get().enabled,
+    enabled: vaultShadowSuppressed ? false : want,
   }
   const wasEnabled = store.get().enabled
   store.set(next)
@@ -171,11 +194,14 @@ export function publicInstanceView(): {
   data_dir: string
   markdown_dir: string
   shadow_markdown_enabled: boolean
+  /** false = vault 模式下该功能不可用，前端隐藏开关（RFC 0006） */
+  shadow_markdown_available: boolean
 } {
   return {
     data_dir: getDataDirAbs(),
     markdown_dir: getMarkdownDirAbs(),
-    shadow_markdown_enabled: store.get().enabled,
+    shadow_markdown_enabled: vaultShadowSuppressed ? false : store.get().enabled,
+    shadow_markdown_available: !vaultShadowSuppressed,
   }
 }
 
@@ -294,6 +320,7 @@ export function fullSyncShadow(): void {
 }
 
 export function _resetShadowMarkdownForTests(): void {
+  vaultShadowSuppressed = false
   stopShadowMarkdown()
   store._resetForTests()
   dataDirAbs = ''

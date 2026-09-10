@@ -53,6 +53,7 @@
     "disabled": "未启用"
   },
   "sync": {
+    "exportArchiveVault": "vault 模式下不需要导出：你的笔记就是这个文件夹里的 Markdown，直接复制或压缩整个文件夹即可。",
     "loadConfigFailed": "加载归档配置失败",
     "chooseConnection": "请选择存储连接",
     "savingConfig": "正在保存归档配置…",

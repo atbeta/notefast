@@ -463,10 +463,13 @@ export default function Sidebar({
               <LayoutGrid className="w-4 h-4" strokeWidth={1.75} />
               {t('sidebar.allDocs')}
             </Link>
-            <Link to="/resources" onClick={closeAfterNav} className={location.pathname.startsWith('/resources') ? 'sidebar-link-active' : 'sidebar-link'}>
-              <Images className="w-4 h-4" strokeWidth={1.75} />
-              <span className="flex-1">{t('sidebar.resources')}</span>
-            </Link>
+            {/* 资源页列的是 data/media 里的资产，vault 模式的附件在笔记文件夹里（RFC 0006） */}
+            {!vaultMode && (
+              <Link to="/resources" onClick={closeAfterNav} className={location.pathname.startsWith('/resources') ? 'sidebar-link-active' : 'sidebar-link'}>
+                <Images className="w-4 h-4" strokeWidth={1.75} />
+                <span className="flex-1">{t('sidebar.resources')}</span>
+              </Link>
+            )}
             <Tooltip className="w-full" label={t('sidebar.newDocTitle')}>
               {/* 在目录视图里新建 → 落到当前目录（vault 模式下的 dir 提示由服务端解析） */}
               <Link to={newDocHref} onClick={closeAfterNav} className={`w-full ${location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'}`}>

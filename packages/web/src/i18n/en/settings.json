@@ -67,6 +67,8 @@
       "loadFailed": "Could not read the data directory",
       "saveFailed": "Could not save",
       "revealFailed": "Could not open the file manager",
+      "shadowVaultTitle": "Markdown shadow copy",
+      "shadowVaultHint": "Unavailable in vault mode: your notes folder already is Markdown, so projecting a second copy would only duplicate files.",
       "modeLabel": "Data source",
       "modeDb": "Database (SQLite is authoritative)",
       "modeVault": "Folder (files are authoritative)",

@@ -13,12 +13,14 @@ import {
   Info,
 } from 'lucide-react'
 import { AiChatHeaderSlot } from '../../components/PageHeader'
+import { useInstanceMode } from '../../hooks/useInstanceMode'
 
 const NAV_ITEMS = [
   { to: 'general', tabKey: 'general', Icon: Sliders },
   { to: 'ai', tabKey: 'ai', Icon: Sparkles },
   { to: 'termdict', tabKey: 'termdict', Icon: BookOpen },
-  { to: 'images', tabKey: 'images', Icon: Image },
+  // 图床是 db 模式的东西：vault 模式下图片跟着笔记走（RFC 0006），入口隐藏
+  { to: 'images', tabKey: 'images', Icon: Image, dbOnly: true },
   { to: 'backup', tabKey: 'backup', Icon: HardDriveDownload },
   { to: 'vault', tabKey: 'vault', Icon: FolderTree },
   { to: 'tokens', tabKey: 'tokens', Icon: Plug },
@@ -29,6 +31,9 @@ const NAV_ITEMS = [
 
 export default function SettingsLayout() {
   const { t } = useTranslation()
+  // vault 模式下隐藏 db 专有的设置页（目前只有图床）
+  const { mode } = useInstanceMode()
+  const navItems = NAV_ITEMS.filter((item) => !('dbOnly' in item && item.dbOnly && mode === 'vault'))
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 sm:px-8 py-8 sm:py-10 animate-fade-in pb-32">
@@ -48,7 +53,7 @@ export default function SettingsLayout() {
         {/* 桌面端：左侧二级导航（sticky） */}
         <aside className="hidden lg:block">
           <nav className="sticky top-4 space-y-0.5">
-            {NAV_ITEMS.map(({ to, tabKey, Icon }) => (
+            {navItems.map(({ to, tabKey, Icon }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -71,7 +76,7 @@ export default function SettingsLayout() {
         {/* 移动端：顶部胶囊 tabs（窄屏下保留横向滚动） */}
         <div className="lg:hidden mb-5 sticky top-0 z-header -mx-2 px-2 py-3 bg-background/80 backdrop-blur-md border-b border-border/50">
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar mask-edges">
-            {NAV_ITEMS.map(({ to, tabKey, Icon: _ }) => (
+            {navItems.map(({ to, tabKey, Icon: _ }) => (
               <NavLink
                 key={to}
                 to={to}
