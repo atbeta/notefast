@@ -270,7 +270,7 @@ export async function ingestVaultFile(
     // 记录顶层块区间，供后续按块局部写回（解析结果与入库块对不上时自动清空 → 退回整篇）
     recordVaultSpans(db, created.docId, { body: stripped.body })
     // 新文件可能正是别人 `[[引用的名字]]`：先建自己的引用，再补建指向自己的未解析引用
-    batch && indexVaultFile(batch.index, relPath, created.docId)
+    if (batch) indexVaultFile(batch.index, relPath, created.docId)
     syncVaultWikilinks(ctx, { touchedBlockIds: created.blockIds, ...(batch ? { index: batch.index } : {}) })
     resolveUnresolvedForDoc(ctx, created.docId, batch?.index)
     auditVault('doc.vault_ingested', created.docId, { rel_path: relPath, block_count: created.blockIds.length })
@@ -333,7 +333,7 @@ export async function ingestVaultFile(
   // 顶层块区间随本次 ingest 整表重写（写回的字节保真基线）
   recordVaultSpans(db, docId, { body: stripped.body })
   // wikilink：改动块重建引用，删除块清理；再看有没有指向本文件的未解析引用可以补上
-  batch && indexVaultFile(batch.index, relPath, docId)
+  if (batch) indexVaultFile(batch.index, relPath, docId)
   syncVaultWikilinks(ctx, {
     touchedBlockIds: [...insertedIds, ...updatedIds],
     deletedBlockIds: deletedIds,
@@ -372,7 +372,7 @@ export function removeVaultFile(
   if (!row || row.deleted_at) {
     return { relPath, docId: row?.doc_id ?? null, action: 'skipped', ...zeroStats() }
   }
-  batch && deindexVaultFile(batch.index, relPath, row.doc_id)
+  if (batch) deindexVaultFile(batch.index, relPath, row.doc_id)
   const state = docRowAny(db, row.doc_id)
   if (!state) {
     deleteVaultFileRow(db, notebookId, relPath)
@@ -458,8 +458,10 @@ export function moveVaultFilePath(
   })
   if (doc.content !== title) fireAfterUpdate(rowToBlock(after))
   // 改名后别人 `[[新名字]]` 的未解析引用可能可以补上了
-  batch && deindexVaultFile(batch.index, from, row.doc_id)
-  batch && indexVaultFile(batch.index, to, doc.id)
+  if (batch) {
+    deindexVaultFile(batch.index, from, row.doc_id)
+    indexVaultFile(batch.index, to, doc.id)
+  }
   resolveUnresolvedForDoc(ctx, doc.id, batch?.index)
   auditVault('doc.vault_moved', doc.id, { from, to })
   return { relPath: to, docId: doc.id, action: 'moved', ...zeroStats() }
