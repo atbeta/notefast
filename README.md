@@ -152,6 +152,7 @@ If you run an instance **without** a folder (database mode), the engine still wo
 | Variable | Description |
 |---|---|
 | `VAULT_PATH` | Vault root inside the container (`/vault` by convention); enables vault mode |
+| `AUTO_EXPORT_DIR` | Database mode only: hourly full Markdown export. **Ignored in vault mode** (your notes already are Markdown) |
 | `NOTEFAST_APP_SUPPORT_DIR` | Index parent in vault mode (defaults to `DATA_DIR`, then the platform app-support dir) |
 | `VAULT_USE_POLLING` | Force a watcher backend: `true`/`1` = poll, `false`/`0` = native events; unset = detected at startup |
 | `VAULT_POLL_INTERVAL_MS` | Polling interval in ms (default 1000) |
