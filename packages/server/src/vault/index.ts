@@ -107,9 +107,26 @@ export function createVaultRuntime(opts: { db: Db; notebookId: string; config: V
   let watchMode: WatchMode = { usePolling: opts.config.usePolling, auto: false, reason: 'pending' }
   const fileSync = createVaultFileSync(ctx)
 
+  /**
+   * vault 模式不需要变更馈送：协议同步在 vault notebook 上被强制停用（RFC 0001 D6），
+   * `entity_changes` 行没有任何消费者。整库对账时按 migration 014 的 guard 机制静默掉
+   * blocks 触发器写馈送的那一步（每块少一条 INSERT），结束后还原。
+   *
+   * 为什么用 guard 行而不是删触发器：同一份 DB 若被以 db 模式打开（用户取消 VAULT_PATH），
+   * 触发器必须还在——删掉会让协议同步静默丢变更。
+   */
+  const withFeedSuppressed = async <T>(fn: () => Promise<T>): Promise<T> => {
+    ctx.db.query('INSERT OR REPLACE INTO sync_consume_guard (id) VALUES (1)').run()
+    try {
+      return await fn()
+    } finally {
+      ctx.db.query('DELETE FROM sync_consume_guard').run()
+    }
+  }
+
   const runReconcile = (light: boolean): Promise<ReconcileStats> => {
     if (reconciling) return reconciling
-    reconciling = ctx.lock(() => reconcileVault(ctx, { light }))
+    reconciling = ctx.lock(() => withFeedSuppressed(() => reconcileVault(ctx, { light })))
       .then((stats) => {
         lastReconcile = stats
         return stats

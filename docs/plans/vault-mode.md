@@ -358,13 +358,37 @@ Windows 实机使用后反馈三条，全部与「壳不记忆模式」同源：
 | U-4 | 部署默认对齐：新增 `docker-compose.vault.yml`（挂 `./notes` → `/vault`，一条命令即 vault）；README / `docs/vault-migration.md` 同步 | 完成 |
 | U-5 | 修订历史：vault 也记 `doc_snapshots`（存 `DATA_DIR`、键用 `rel_path`、内容 sha256 去重、每篇 50 条），**恢复走写回** | 待开始 |
 | U-6 | 分享身份：`shares` 改 `rel_path` + 内容校验，文件缺失返回 410；迁移既有数据 | 待开始 |
-| U-7 | 对账性能：修 `syncVaultWikilinks` 的 O(n²)，目标 10k 文件 < 60s，并给 50k 不崩的证据 | 待开始 |
+| U-7 | 对账性能：修 `syncVaultWikilinks` 的 O(n²)（**已修**），目标 10k < 60s **未达成**（实测 185s）——剩余热点见下，需要批量 ingest 改造 | 部分完成 |
 | U-8 | 侧栏文件夹树：`GET /vault/tree`（按层聚合）+ 文档列表 `?dir=` 前缀过滤 + vault 模式下侧栏置顶「文件夹」区块 | 完成 |
 | U-9 | 侧栏 vault 专属入口：未解析 wikilink（表已有、无 API）、冲突副本、回收站改绑 `.trash/` 语义 | 完成 |
 
 U-1 … U-4 是部署一致性；U-5 … U-7 是统一的前置 parity（U-7 可与其余并行）。
 
 **U-4 与计划的偏差**：没有把 `docker-compose.yml` 的默认模式翻成 vault——它被 `docker compose up -d` 直接使用，未挂 `/vault` 时会因 `VAULT_PATH` 指向不存在的目录而启动失败（比默认 db 更难排查）。改为提供可运行的 `docker-compose.vault.yml`，README 的 Docker 一节以它为首选入口，等价达成「新部署默认 vault」。
+
+**U-7 对账性能（部分完成，目标未达成）**
+
+已落地两项（10k 实测 258.6–279.8s → **185.1s**，54.0 files/s；2000 文件 28.87s → 17.25s）：
+
+1. **共享文件索引**（`2aab8a8`）：整库对账原本每个文件都 `buildVaultFileIndex`（全表 + 4 张 map，10k 时单次 9.6ms）→ O(n²)。改为对账开始构建一次，随后由 ingest / move / remove 增量维护（`indexVaultFile` / `deindexVaultFile`）；单文件交互式 ingest 仍各自构建（一次改动只有一次）。
+2. **对账期间抑制变更馈送**：`entity_changes` 在 vault notebook 上没有消费者（协议同步被强制停用，RFC 0001 D6），按 migration 014 的 guard 机制静默 blocks 触发器写馈送那一步（**不删触发器**——同一份 DB 若被 db 模式打开，删了会静默丢变更）。2000 文件实测再降 ~7%。
+
+**为什么没到 60s**：`bun --cpu-prof` + 「向上找最近的 JS 调用者」归因（总 23.7s 采样 / 2000 文件）显示成本已不在 wikilink：
+
+| 归因 | 占比 | 说明 |
+|---|---|---|
+| `insertBlock`（INSERT + 触发器） | 28.8% | 每块 ~8 条语句：INSERT + FTS insert + FTS rowid map + entity_changes + guard 子查询 + touchDocRoot UPDATE 等 |
+| `insertDocFromMarkdown`（事务提交） | 25.7% | 每文件一个事务 → 2000 次 COMMIT（含 WAL checkpoint / 延迟 FK 检查），随库增大而变慢 |
+| `topLevelBlocks`（`vault/spans.ts`） | 12.9% | `recordVaultSpans` 每篇 `fetchDocBlocks` 拉整棵子树再建树（`blockSubtreeHash` 需要 children，不能只查顶层行） |
+| `listUnresolvedByTargetNames` | 2.0% | 每篇一次，随 n 略增 |
+| shiki 代码高亮 | ~5% | `parseMarkdownToBlocks` 里对 code fence 做语法高亮，纯 JS |
+
+下一步（按收益排序，均需实测）：
+1. **批量 ingest 模式**：对账时把 N 个文件合成一个事务（现在是每篇一次 COMMIT）；注意 `db.transaction` 不能嵌套，需要把 ingest 的事务边界提取成参数
+2. **FTS 批量重建**：对账期间用同一 guard 思路静默 FTS 触发器，结束后 `rebuildBlocksFts(db)` 一次性重建（`fts.ts` 已有该函数）
+3. **spans 不再重复建树**：ingest 已经解析过一次正文，把解析结果 / 顶层块指纹传进 `recordVaultSpans`，省掉每篇的 `fetchDocBlocks` + `buildBlockTree`
+
+剖析方法（可复现）：`bun --cpu-prof --cpu-prof-dir=/tmp/prof run packages/server/src/eval/vaultBench.ts --files 2000`，再用脚本把 native 采样归因到最近的 JS 调用者。
 
 **U-9 vault 巡检入口（方案 B 第二批）**：
 - 端点：`GET /vault/links/unresolved`（按目标名聚合 + 来源文档，表 `vault_unresolved_links` 此前只写不读）、`GET /vault/conflicts`（按 `.notefast-conflict-` 命名约定查映射表，不扫盘）、`GET /vault/trash`（读 `.trash/`，索引里没有这部分）
