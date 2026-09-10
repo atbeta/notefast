@@ -34,6 +34,9 @@ final class AppModel: ObservableObject {
 
     let navigator = WebNavigator()
 
+    /// web → 壳消息桥（DocWebView）需要拿到当前模型实例；全 app 只有一个 AppModel
+    private(set) static weak var shared: AppModel?
+
     private let recentVaultsStore = RecentVaults()
     private var engine: EngineProcess?
     private var terminateObserver: NSObjectProtocol?
@@ -41,6 +44,12 @@ final class AppModel: ObservableObject {
 
     init() {
         recentVaults = recentVaultsStore.all()
+        // 上次选过 vault 就回到 vault 模式：不恢复的话每次启动都变成 db notebook，
+        // 用户会以为自己的笔记丢了（vault 索引是按 vault 派生的另一份库）
+        if let restored = recentVaultsStore.restorableActive() {
+            vaultPath = URL(fileURLWithPath: restored)
+        }
+        AppModel.shared = self
         // App 退出前优雅停机 engine（SIGTERM drain → 关 DB）。
         // queue: .main 保证回调在主线程同步执行（termination 期间 Task 可能被推迟）；
         // assumeIsolated 让编译器认可「此处确在主 actor」，避免误报并发隔离。
@@ -280,6 +289,7 @@ final class AppModel: ObservableObject {
         }
         vaultPath = target
         recentVaults = recentVaultsStore.remember(target.path)
+        recentVaultsStore.setActive(target.path)
         showMainWindow()
         restart()
     }
@@ -288,6 +298,7 @@ final class AppModel: ObservableObject {
     func leaveVaultMode() {
         guard vaultPath != nil else { return }
         vaultPath = nil
+        recentVaultsStore.setActive(nil)
         restart()
     }
 

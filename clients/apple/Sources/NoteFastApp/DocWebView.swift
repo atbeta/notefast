@@ -98,6 +98,16 @@ struct DocWebView: NSViewRepresentable {
                 Task { @MainActor in
                     AppModel.openDataDir()
                 }
+            // 网页设置页的「打开文件夹为 vault…」/「回到数据库模式」：
+            // 切模式要重启引擎，只有壳能做（web 侧 nativeVault.ts 经这条桥发消息）
+            case "openVault":
+                Task { @MainActor in
+                    AppModel.shared?.openVaultFolder()
+                }
+            case "leaveVault":
+                Task { @MainActor in
+                    AppModel.shared?.leaveVaultMode()
+                }
             default:
                 break
             }

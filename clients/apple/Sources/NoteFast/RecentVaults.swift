@@ -32,6 +32,8 @@ public final class RecentVaults {
     public static let maxEntries = 10
     /// UserDefaults 键（与 web 侧 localStorage 无关，纯壳层）
     public static let defaultKey = "notefast.recentVaults"
+    /// 「上次用的 vault」键：启动时据此回到同一模式，避免每次打开又变成 db notebook
+    public static let activeKey = "notefast.activeVaultPath"
 
     private let defaults: UserDefaults
     private let key: String
@@ -65,6 +67,34 @@ public final class RecentVaults {
 
     public func clear() {
         defaults.removeObject(forKey: key)
+    }
+
+    // MARK: - 上次使用的 vault（启动恢复用）
+
+    /// 上次以 vault 模式打开的文件夹；没记过 / 已清空 → nil
+    public func active() -> String? {
+        let raw = defaults.string(forKey: Self.activeKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (raw?.isEmpty ?? true) ? nil : raw
+    }
+
+    /// 记住 / 清除当前 vault（传 nil = 回到数据库模式）
+    public func setActive(_ path: String?) {
+        guard let path, !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            defaults.removeObject(forKey: Self.activeKey)
+            return
+        }
+        defaults.set(Self.normalize(path), forKey: Self.activeKey)
+    }
+
+    /// 启动恢复：记住的文件夹仍然存在才返回，否则清掉记录（避免每次启动都试一次坏路径）
+    public func restorableActive(fileManager: FileManager = .default) -> String? {
+        guard let path = active() else { return nil }
+        var isDir: ObjCBool = false
+        guard fileManager.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else {
+            setActive(nil)
+            return nil
+        }
+        return path
     }
 
     /// 路径规范化：去尾斜杠、折叠 `..`（不存在也不报错）

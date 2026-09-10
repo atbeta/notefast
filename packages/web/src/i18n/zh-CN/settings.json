@@ -243,7 +243,12 @@
       "disabledMigration": "已有笔记的迁移见 docs/vault-migration.md；db 库不支持原地转换，旧实例会原样保留。",
       "loading": "正在读取…",
       "loadFailed": "无法读取 vault 状态",
-      "pollingAuto": "启动时探测到该目录不投递原生事件，已自动切到轮询（可用 VAULT_USE_POLLING 强制指定）。"
+      "pollingAuto": "启动时探测到该目录不投递原生事件，已自动切到轮询（可用 VAULT_USE_POLLING 强制指定）。",
+      "pickVault": "打开文件夹为 vault…",
+      "pickVaultHint": "会重启 NoteFast 并切到所选文件夹：里面的 Markdown 成为权威数据。当前数据库模式的数据仍在磁盘上，随时可以切回来。",
+      "leaveVault": "回到数据库模式",
+      "leaveVaultHint": "会重启 NoteFast，回到数据库模式；文件夹里的文件不受影响，索引仍留在磁盘上。",
+      "modeSwitchFailed": "切换失败"
     }
   }
 }

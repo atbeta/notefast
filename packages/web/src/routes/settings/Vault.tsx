@@ -13,6 +13,11 @@ import { api } from '../../hooks/useAPI'
 import { useStorageLocations } from '../../hooks/useStorageLocations'
 import { useVaultStatus } from '../../hooks/useVaultStatus'
 import {
+  canSwitchModeFromShell,
+  nativeLeaveVault,
+  nativePickVaultFolder,
+} from '../../lib/nativeVault'
+import {
   syncConfigPayload,
   syncFormFromConfig,
   syncFormFromStatus,
@@ -78,6 +83,31 @@ export default function SettingsVault() {
   const patchSyncForm = useCallback((patch: Partial<VaultSyncFormState>) => {
     setSyncForm((f) => ({ ...f, ...patch }))
   }, [])
+
+  // 原生壳才有「切模式」通道（浏览器做不到：VAULT_PATH 是启动期参数，要重启引擎）
+  const canSwitchMode = canSwitchModeFromShell()
+
+  const handlePickVault = useCallback(async () => {
+    try {
+      await nativePickVaultFolder()
+    } catch (e) {
+      toast.error({
+        title: t('settings.vault.modeSwitchFailed'),
+        description: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }, [t, toast])
+
+  const handleLeaveVault = useCallback(async () => {
+    try {
+      await nativeLeaveVault()
+    } catch (e) {
+      toast.error({
+        title: t('settings.vault.modeSwitchFailed'),
+        description: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }, [t, toast])
 
   const handleRebuild = useCallback(async () => {
     setRebuilding(true)
@@ -184,6 +214,8 @@ export default function SettingsVault() {
       loading={loading}
       error={Boolean(error)}
       rebuilding={rebuilding}
+      onPickVault={canSwitchMode ? () => void handlePickVault() : undefined}
+      onLeaveVault={canSwitchMode ? () => void handleLeaveVault() : undefined}
       onRebuild={() => void handleRebuild()}
       syncForm={syncForm}
       onSyncFormChange={patchSyncForm}

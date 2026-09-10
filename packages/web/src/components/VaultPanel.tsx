@@ -37,6 +37,10 @@ export interface VaultPanelProps {
   /** 重建请求进行中（服务端 `reconciling` 之外的本地态） */
   rebuilding?: boolean
   onRebuild?: () => void
+  /** 原生壳里「打开文件夹为 vault…」（浏览器形态不传：切模式要重启引擎，网页做不到） */
+  onPickVault?: () => void
+  /** 原生壳里「回到数据库模式」（仅 vault 模式渲染） */
+  onLeaveVault?: () => void
   /** 文件同步配置表单（不传则整块不渲染，保持纯状态面板） */
   syncForm?: VaultSyncFormState
   onSyncFormChange?: (patch: Partial<VaultSyncFormState>) => void
@@ -63,6 +67,8 @@ export default function VaultPanel({
   error = false,
   rebuilding = false,
   onRebuild,
+  onPickVault,
+  onLeaveVault,
   syncForm,
   onSyncFormChange,
   onSyncSave,
@@ -113,6 +119,23 @@ export default function VaultPanel({
                   <li>{t('settings.vault.disabledServer')}</li>
                 </ul>
               </div>
+              {onPickVault && (
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    data-vault-action="pick"
+                    icon={<FolderTree className="w-4 h-4" strokeWidth={1.75} />}
+                    onClick={onPickVault}
+                  >
+                    {t('settings.vault.pickVault')}
+                  </Button>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {t('settings.vault.pickVaultHint')}
+                  </p>
+                </div>
+              )}
               <p className="text-sm text-muted-foreground leading-relaxed">
                 {t('settings.vault.disabledMigration')}
               </p>
@@ -172,6 +195,23 @@ export default function VaultPanel({
               )}
             </div>
           </div>
+
+          {onLeaveVault && (
+            <div className="space-y-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                data-vault-action="leave"
+                onClick={onLeaveVault}
+              >
+                {t('settings.vault.leaveVault')}
+              </Button>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {t('settings.vault.leaveVaultHint')}
+              </p>
+            </div>
+          )}
 
           {/* 概览：文件数 + 开关位（VAULT_* 环境变量，只读） */}
           <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-base">

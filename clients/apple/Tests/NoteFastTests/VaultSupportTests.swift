@@ -57,6 +57,36 @@ final class VaultSupportTests: XCTestCase {
         XCTAssertTrue(store.all().isEmpty)
     }
 
+    // MARK: - 记住上次的 vault（启动恢复）
+
+    func testActiveVaultRoundTrip() {
+        let store = RecentVaults(defaults: defaults)
+        XCTAssertNil(store.active(), "没记过应为空")
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nf-active-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        store.setActive(dir.path)
+        XCTAssertEqual(store.active(), RecentVaults.normalize(dir.path))
+        XCTAssertEqual(store.restorableActive(), RecentVaults.normalize(dir.path))
+
+        // 文件夹被删：启动恢复返回 nil 并清掉记录（下次不再问坏路径）
+        try? FileManager.default.removeItem(at: dir)
+        XCTAssertNil(store.restorableActive())
+        XCTAssertNil(store.active())
+
+        store.setActive("   ")
+        XCTAssertNil(store.active())
+    }
+
+    func testSetActiveNilClears() {
+        let store = RecentVaults(defaults: defaults)
+        store.setActive("/tmp/some-vault")
+        XCTAssertNotNil(store.active())
+        store.setActive(nil)
+        XCTAssertNil(store.active())
+    }
+
     func testNormalizeAndComparisonKey() {
         XCTAssertEqual(RecentVaults.normalize("/Users/x/Vault/"), "/Users/x/Vault")
         XCTAssertEqual(RecentVaults.normalize("/Users/x/sub/../Vault"), "/Users/x/Vault")

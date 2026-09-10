@@ -76,6 +76,8 @@ const SYNC_FORM: VaultSyncFormState = {
 interface RenderExtra {
   loading?: boolean
   error?: boolean
+  onPickVault?: () => void
+  onLeaveVault?: () => void
   rebuilding?: boolean
   onRebuild?: () => void
   syncForm?: VaultSyncFormState
@@ -91,6 +93,8 @@ function render(status: VaultStatus | null, extra: RenderExtra = {}) {
       status,
       loading: extra.loading,
       error: extra.error,
+      onPickVault: extra.onPickVault,
+      onLeaveVault: extra.onLeaveVault,
       rebuilding: extra.rebuilding,
       onRebuild: extra.onRebuild ?? (() => {}),
       syncForm: extra.syncForm,
@@ -146,6 +150,36 @@ describe('VaultPanel 可见性', () => {
     expect(html).toContain('/Users/me/Vault')
     expect(html).toContain('12')
     expect(html).toContain('42 ms')
+  })
+})
+
+describe('VaultPanel 切模式入口（原生壳）', () => {
+  // 按钮用 data-vault-action 定位：指引文案里也含「打开文件夹为 vault…」字样，
+  // 直接断言文本会把说明文字误判成按钮
+  const hasAction = (html: string, action: 'pick' | 'leave') =>
+    html.includes(`data-vault-action="${action}"`)
+
+  test('db 模式 + 壳有通道：渲染「打开文件夹为 vault…」与说明', () => {
+    const html = render({ enabled: false }, { onPickVault: () => {} })
+    expect(hasAction(html, 'pick')).toBe(true)
+    expect(html).toContain(i18next.t('settings.vault.pickVault'))
+    expect(html).toContain(i18next.t('settings.vault.pickVaultHint'))
+  })
+
+  test('db 模式 + 浏览器形态（没有通道）：不渲染按钮，只留指引', () => {
+    const html = render({ enabled: false })
+    expect(hasAction(html, 'pick')).toBe(false)
+    expect(html).toContain(i18next.t('settings.vault.disabledHowTo'))
+  })
+
+  test('vault 模式 + 壳有通道：渲染「回到数据库模式」', () => {
+    const html = render(BASE, { onLeaveVault: () => {} })
+    expect(hasAction(html, 'leave')).toBe(true)
+    expect(html).toContain(i18next.t('settings.vault.leaveVaultHint'))
+  })
+
+  test('vault 模式 + 浏览器形态：不渲染「回到数据库模式」', () => {
+    expect(hasAction(render(BASE), 'leave')).toBe(false)
   })
 })
 

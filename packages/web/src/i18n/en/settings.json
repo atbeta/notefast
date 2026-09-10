@@ -243,7 +243,12 @@
       "disabledMigration": "To move existing notes, see docs/vault-migration.md. There is no in-place conversion; the old instance is left untouched.",
       "loading": "Loading…",
       "loadFailed": "Could not read vault status",
-      "pollingAuto": "Native file events do not reach this folder, so polling was enabled automatically (set VAULT_USE_POLLING to override)."
+      "pollingAuto": "Native file events do not reach this folder, so polling was enabled automatically (set VAULT_USE_POLLING to override).",
+      "pickVault": "Open a folder as vault…",
+      "pickVaultHint": "Restarts NoteFast with the folder you pick: its Markdown becomes the source of truth. Your database-mode data stays on disk and you can switch back at any time.",
+      "leaveVault": "Back to database mode",
+      "leaveVaultHint": "Restarts NoteFast in database mode. The files in your folder are untouched and the index stays on disk.",
+      "modeSwitchFailed": "Could not switch"
     }
   }
 }
