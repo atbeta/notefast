@@ -41,6 +41,12 @@ export interface VaultPanelProps {
   onPickVault?: () => void
   /** 原生壳里「回到数据库模式」（仅 vault 模式渲染） */
   onLeaveVault?: () => void
+  /** 采集默认落盘目录（空串 = vault 根）；不传则整块不渲染 */
+  captureDir?: string
+  onCaptureDirChange?: (value: string) => void
+  onCaptureDirSave?: () => void
+  /** 保存中 */
+  captureBusy?: boolean
   /** 文件同步配置表单（不传则整块不渲染，保持纯状态面板） */
   syncForm?: VaultSyncFormState
   onSyncFormChange?: (patch: Partial<VaultSyncFormState>) => void
@@ -69,6 +75,10 @@ export default function VaultPanel({
   onRebuild,
   onPickVault,
   onLeaveVault,
+  captureDir,
+  onCaptureDirChange,
+  onCaptureDirSave,
+  captureBusy = false,
   syncForm,
   onSyncFormChange,
   onSyncSave,
@@ -195,6 +205,34 @@ export default function VaultPanel({
               )}
             </div>
           </div>
+
+          {onCaptureDirChange && (
+            <div className="space-y-2">
+              <InlineField
+                label={t('settings.vault.captureDir')}
+                description={t('settings.vault.captureDirDesc')}
+                value={captureDir ?? ''}
+                onChange={onCaptureDirChange}
+                placeholder={t('settings.vault.captureDirPlaceholder')}
+                mono
+              />
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  data-vault-action="capture-save"
+                  disabled={captureBusy}
+                  onClick={onCaptureDirSave}
+                >
+                  {t('settings.vault.captureDirSave')}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {t('settings.vault.captureDirHint')}
+                </span>
+              </div>
+            </div>
+          )}
 
           {onLeaveVault && (
             <div className="space-y-2">

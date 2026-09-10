@@ -38,15 +38,15 @@ export function vaultMetaHash(doc: BlockRow): string {
 
 /**
  * 文件侧声明的状态 → 文档应有的状态。
- * - 文件写了 `notefast_status: inbox` / `note` → 文件为准
- * - 文件没写 → 缺省 note，但**绝不**把 archived 降级（archived 无法在文件里表达，
- *   否则任何一次正文编辑都会把归档文档静默拉回 note）
+ * - 文件写了 `notefast_status: inbox | note | archived` → 文件为准（三个状态都能表达）
+ * - 文件没写 → 缺省 note，但**绝不**把 archived 降级：老文件没有这个键，
+ *   一次正文编辑就把归档文档静默拉回 note 是更坏的结果
  */
 export function desiredStatusFromFile(
-  fromFile: 'inbox' | 'note' | undefined,
+  fromFile: 'inbox' | 'note' | 'archived' | undefined,
   current: DocStatus,
 ): DocStatus {
-  if (fromFile === 'inbox' || fromFile === 'note') return fromFile
+  if (fromFile === 'inbox' || fromFile === 'note' || fromFile === 'archived') return fromFile
   return current === 'archived' ? 'archived' : 'note'
 }
 

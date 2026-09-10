@@ -150,7 +150,11 @@ describe('frontmatter export projection', () => {
     expect(read('notefast_status: inbox').meta?.notefast_status).toBe('inbox')
     expect(read('notefast_status: note').meta?.notefast_status).toBe('note')
 
-    const bad = read('notefast_status: archived')
+    // archived 是合法值（RFC 0005 U-11：文件完全权威，归档也能写在文件里）
+    expect(read('notefast_status: archived').meta?.notefast_status).toBe('archived')
+
+    // 非法值忽略，但整段仍是 frontmatter（不落进正文）
+    const bad = read('notefast_status: bogus')
     expect(bad.meta?.notefast_status).toBeUndefined()
     expect(bad.body).toBe('x\n')
     expect(read('notefast_ai_exclude: yes').meta?.notefast_ai_exclude).toBeUndefined()

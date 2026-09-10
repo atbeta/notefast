@@ -14,7 +14,9 @@
  * - 子块 level 按父链深度计算（文档根 = 0，顶层子块 = 1，逐层 +1）
  */
 
-import { normalizeTagList, parseImportedTimestamp, stripDocFrontmatter, stripTitleHeading } from '@notefast/core'
+import { normalizeTagList, parseImportedTimestamp, stripDocFrontmatter, stripTitleHeading,
+  type DocStatus,
+} from '@notefast/core'
 import { parseMarkdownToBlocksForSave } from './markdownParse'
 import type { CreateBlockInput } from '@notefast/core'
 import type { getDb } from '../db'
@@ -31,8 +33,8 @@ export interface InsertDocFromMarkdownOptions {
   notebookId: string
   title: string
   markdown: string
-  /** inbox=收集箱；缺省 note */
-  status?: 'note' | 'inbox'
+  /** inbox=收集箱 / archived=归档；缺省 note */
+  status?: DocStatus
   /** true 时解析结果为空抛 EmptyMarkdownError（import 接口的 400 语义） */
   rejectEmpty?: boolean
   /** 初始标签（已 normalize） */
@@ -102,7 +104,8 @@ export function insertDocFromMarkdown(
   // 剥离与标题重复的首个 H1（导出的 markdown 首行是 `# {标题}`，直接回解析会重复入库）
   const inputs = stripTitleHeading(rawInputs, opts.title)
 
-  const docStatus = opts.status === 'inbox' ? 'inbox' : 'note'
+  const docStatus: DocStatus =
+    opts.status === 'inbox' || opts.status === 'archived' ? opts.status : 'note'
   const docId = opts.docId ?? crypto.randomUUID()
   const now = nowTimestamp()
   const applyFm = opts.applyFrontmatterTags !== false

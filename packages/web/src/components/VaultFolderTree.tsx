@@ -28,6 +28,8 @@ export interface VaultTreeFile {
   path: string
   name: string
   doc_id: string
+  /** 收集箱 / 归档 / 普通（位置看不出状态，见 RFC 0005 U-11） */
+  status?: 'note' | 'inbox' | 'archived'
 }
 
 export interface VaultTreeLevel {
@@ -143,11 +145,23 @@ export function VaultTreeRows({
           onClick={onNavigate}
           title={file.path}
           data-tree-file={file.path}
+          data-tree-status={file.status ?? 'note'}
           className={`${ROW_CLS} py-1.5 pr-2 text-base`}
           style={indentAt(depthOf(path) + 1)}
         >
           <FileText className="w-4 h-4 shrink-0 opacity-70" strokeWidth={1.75} />
           <span className="truncate">{file.name}</span>
+          {/* 状态标记：采集件和手写笔记都可能在同一个目录里，只有状态能区分 */}
+          {file.status === 'inbox' && (
+            <span className="ml-auto shrink-0 text-2xs font-medium px-1.5 py-px rounded-md border border-border/60 text-sidebar-muted/90">
+              {t('sidebar.inbox')}
+            </span>
+          )}
+          {file.status === 'archived' && (
+            <span className="ml-auto shrink-0 text-2xs font-medium px-1.5 py-px rounded-md border border-border/60 text-sidebar-muted/90">
+              {t('sidebar.archived')}
+            </span>
+          )}
         </Link>
       ))}
     </div>

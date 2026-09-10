@@ -10,6 +10,7 @@
 
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
 import { existsSync, readdirSync, unlinkSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -33,6 +34,7 @@ import { listUnresolvedTargets } from '../store/vaultLinks'
 import { listVaultConflicts, listVaultTrash } from './inspect'
 import { createVaultFileSync, type VaultFileSync, type VaultFileSyncStatus } from './fileSyncRuntime'
 import { getVaultFileSyncConfig } from './fileSyncConfig'
+import { applyVaultCaptureConfig, getVaultCaptureConfig } from './captureConfig'
 import { vaultFileSyncConfigSchema } from '@notefast/core'
 import { startVaultWriteback, type VaultWriteback } from './writeback'
 import { sha256Hex } from './writer'
@@ -391,7 +393,23 @@ export function createVaultRouter(getRuntime: () => VaultRuntime | null): Hono {
       relPath: row.rel_path,
       docId: row.doc_id,
     }))
-    return c.json(buildVaultTree(entries, { path: c.req.query('path') ?? '', ignore: rt.ctx.config.ignore }))
+    const level = buildVaultTree(entries, {
+      path: c.req.query('path') ?? '',
+      ignore: rt.ctx.config.ignore,
+    })
+    // 只给本层文件补状态（一层的行数是个位数～几十，不查全库）
+    if (level.files.length > 0) {
+      const ids = level.files.map((f) => f.doc_id)
+      const rows = rt.ctx.db
+        .query(`SELECT id, status FROM blocks WHERE id IN (${ids.map(() => '?').join(',')})`)
+        .all(...ids) as Array<{ id: string; status: string }>
+      const byId = new Map(rows.map((r) => [r.id, r.status]))
+      for (const file of level.files) {
+        const status = byId.get(file.doc_id)
+        if (status === 'inbox' || status === 'archived' || status === 'note') file.status = status
+      }
+    }
+    return c.json(level)
   })
 
   /**
@@ -409,6 +427,27 @@ export function createVaultRouter(getRuntime: () => VaultRuntime | null): Hono {
     const rt = getRuntime()
     if (!rt) return c.json({ error: 'vault_disabled', message: '未启用 vault mode' }, 404)
     return c.json(listVaultConflicts(rt.ctx.db, rt.ctx.notebookId))
+  })
+
+  /** 采集默认落盘目录（RFC 0005 U-11）：只影响新采集件的位置，不影响状态语义 */
+  router.get('/capture', (c) => {
+    const rt = getRuntime()
+    if (!rt) return c.json({ error: 'vault_disabled', message: '未启用 vault mode' }, 404)
+    return c.json({ dir: getVaultCaptureConfig().dir })
+  })
+
+  router.put('/capture', zValidator('json', z.object({ dir: z.string().max(1024).nullable() })), (c) => {
+    const rt = getRuntime()
+    if (!rt) return c.json({ error: 'vault_disabled', message: '未启用 vault mode' }, 404)
+    const { dir } = c.req.valid('json')
+    try {
+      return c.json(applyVaultCaptureConfig(rt.ctx.config.root, dir))
+    } catch (e) {
+      return c.json(
+        { error: 'invalid_params', message: e instanceof Error ? e.message : '目录非法' },
+        400,
+      )
+    }
   })
 
   /** 文件夹回收站（`.trash/`）：vault 模式的删除落到这里，与 db 模式的软删除不同轨 */

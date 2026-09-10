@@ -77,6 +77,7 @@ import { initInstancePaths, initShadowMarkdown, stopShadowMarkdown } from './ser
 import { createInstanceRouter } from './api/instance'
 import { startEntityDescribe } from './ai/entityDescribe'
 import { createVaultRouter, createVaultRuntime, loadVaultConfigFromEnv, type VaultRuntime } from './vault'
+import { initVaultCaptureConfig } from './vault/captureConfig'
 import { initVaultFileSyncConfig } from './vault/fileSyncConfig'
 
 export interface NoteFastServer {
@@ -319,6 +320,7 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
     initBackupManager(dataDir)
     initProtocolManager(dataDir)
     initVaultFileSyncConfig(dataDir)
+    initVaultCaptureConfig(dataDir)
     initAiRuntime(pluginSystem, dataDir)
     initTermDict(dataDir)
     startEntityDescribe()

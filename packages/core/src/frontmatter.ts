@@ -86,8 +86,11 @@ export function withDocFrontmatter(bodyMarkdown: string, meta: DocFrontmatterMet
 export interface ParsedFrontmatterMeta extends Partial<DocFrontmatterMeta> {
   /** `notefast_ai_exclude: true`；缺省 / 无法识别时不出现（调用方按 false 处理） */
   notefast_ai_exclude?: boolean
-  /** `notefast_status: inbox`；缺省 / 无法识别时不出现（调用方按 note 处理） */
-  notefast_status?: 'inbox' | 'note'
+  /**
+   * `notefast_status: inbox | note | archived`；缺省 / 无法识别时不出现（调用方按「文件没声明」处理）。
+   * `archived` 让文件完全权威：归档也能手写在文件里，而不是只活在索引里。
+   */
+  notefast_status?: 'inbox' | 'note' | 'archived'
 }
 
 export interface StrippedFrontmatter {
@@ -226,7 +229,7 @@ function parseSimpleFrontmatter(yamlText: string): ParsedFrontmatterMeta | null 
     const status = trimmed.match(/^notefast_status\s*:\s*(.*)$/)
     if (status) {
       const v = unquoteYaml(status[1]!.trim()).toLowerCase()
-      if (v === 'inbox' || v === 'note') meta.notefast_status = v
+      if (v === 'inbox' || v === 'note' || v === 'archived') meta.notefast_status = v
       sawAny = true
       i++
       continue
@@ -265,7 +268,7 @@ function unquoteYaml(raw: string): string {
 export interface FrontmatterPatch {
   tags?: string[] | null
   notefast_ai_exclude?: boolean | null
-  notefast_status?: 'inbox' | 'note' | null
+  notefast_status?: 'inbox' | 'note' | 'archived' | null
 }
 
 function escapeRegExp(s: string): string {
@@ -326,7 +329,9 @@ export function patchFrontmatter(raw: string | null, patch: FrontmatterPatch): s
     const fresh: string[] = []
     if (hasTags && (patch.tags?.length ?? 0) > 0) fresh.push(...tagsBlock(normalizeTagList(patch.tags!)))
     if (hasAi && patch.notefast_ai_exclude === true) fresh.push('notefast_ai_exclude: true')
-    if (hasStatus && patch.notefast_status === 'inbox') fresh.push('notefast_status: inbox')
+    if (hasStatus && (patch.notefast_status === 'inbox' || patch.notefast_status === 'archived')) {
+      fresh.push(`notefast_status: ${patch.notefast_status}`)
+    }
     return fresh.join('\n')
   }
 
@@ -342,7 +347,9 @@ export function patchFrontmatter(raw: string | null, patch: FrontmatterPatch): s
     out = patchTopLevelKey(
       out,
       'notefast_status',
-      patch.notefast_status === 'inbox' ? ['notefast_status: inbox'] : null,
+      patch.notefast_status === 'inbox' || patch.notefast_status === 'archived'
+        ? [`notefast_status: ${patch.notefast_status}`]
+        : null,
     )
   }
 

@@ -644,17 +644,42 @@ describe('vault metadata', () => {
     }
   })
 
-  test('归档文档：文件没写该键时不降级为 note，写回也不写该键', async () => {
+  test('归档：写回带上 notefast_status: archived，文件完全权威（RFC 0005 U-11）', async () => {
     writeVault('arch.md', 'body\n')
     const r = await ingestVaultFile(ctx, 'arch.md')
     updateBlock(getDb(), r.docId!, { status: 'archived' })
 
-    writeVault('arch.md', 'body edited\n')
-    expect((await ingestVaultFile(ctx, 'arch.md')).action).toBe('updated')
-    expect(readDocStatus(getLiveDocById(getDb(), r.docId!)!)).toBe('archived')
-
     const row = getVaultFileByPath(getDb(), notebookId, 'arch.md')!
-    expect(serializeVaultDoc(ctx, getLiveDocById(getDb(), r.docId!)!, row)).toBe('body edited\n')
+    expect(serializeVaultDoc(ctx, getLiveDocById(getDb(), r.docId!)!, row)).toBe(
+      '---\nnotefast_status: archived\n---\nbody\n',
+    )
+  })
+
+  test('归档：文件没写该键时不降级为 note（老文件兼容）', async () => {
+    writeVault('arch2.md', 'body\n')
+    const r = await ingestVaultFile(ctx, 'arch2.md')
+    updateBlock(getDb(), r.docId!, { status: 'archived' })
+
+    writeVault('arch2.md', 'body edited\n')
+    expect((await ingestVaultFile(ctx, 'arch2.md')).action).toBe('updated')
+    expect(readDocStatus(getLiveDocById(getDb(), r.docId!)!)).toBe('archived')
+  })
+
+  test('文件写 notefast_status 三个值都能改状态（含 archived → note）', async () => {
+    writeVault('fm-arch.md', '---\nnotefast_status: archived\n---\nbody\n')
+    const arch = await ingestVaultFile(ctx, 'fm-arch.md')
+    expect(readDocStatus(getLiveDocById(getDb(), arch.docId!)!)).toBe('archived')
+
+    // 用户在文件里把它改回 note（以前只能从应用里点）
+    writeVault('fm-arch.md', '---\nnotefast_status: note\n---\nbody\n')
+    await ingestVaultFile(ctx, 'fm-arch.md')
+    expect(readDocStatus(getLiveDocById(getDb(), arch.docId!)!)).toBe('note')
+
+    // 再写回归档：键要重新出现
+    updateBlock(getDb(), arch.docId!, { status: 'archived' })
+    const row = getVaultFileByPath(getDb(), notebookId, 'fm-arch.md')!
+    const out = serializeVaultDoc(ctx, getLiveDocById(getDb(), arch.docId!)!, row)
+    expect(out).toContain('notefast_status: archived')
   })
 
   test('PATCH /docs/:id/ai_exclude 发 doc 级事件（vault 写回据此触发）', async () => {

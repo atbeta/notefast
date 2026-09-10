@@ -16,7 +16,11 @@ const root: VaultTreeLevel = {
     { path: 'notes', name: 'notes', files: 2, total: 5 },
     { path: 'work', name: 'work', files: 0, total: 1 },
   ],
-  files: [{ path: 'inbox.md', name: 'inbox', doc_id: 'doc-inbox' }],
+  files: [
+    { path: 'inbox.md', name: 'inbox', doc_id: 'doc-inbox' },
+    { path: 'captured.md', name: 'captured', doc_id: 'doc-captured', status: 'inbox' },
+    { path: 'old.md', name: 'old', doc_id: 'doc-old', status: 'archived' },
+  ],
 }
 
 const notesLevel: VaultTreeLevel = {
@@ -97,6 +101,18 @@ describe('VaultTreeRows', () => {
     expect(html).toContain('aria-expanded="true"')
     expect(html).toContain(i18next.t('sidebar.vaultTreeCollapse'))
     expect(render({})).toContain(i18next.t('sidebar.vaultTreeExpand'))
+  })
+
+  test('状态标记：收集箱 / 归档文件带标记，普通笔记不带', () => {
+    const html = render({})
+    // 采集件（根目录里和手写笔记并排）必须能一眼看出来
+    expect(html).toContain('data-tree-file="captured.md"')
+    expect(html).toContain('data-tree-status="inbox"')
+    expect(html).toContain('data-tree-status="archived"')
+    expect(html).toContain('data-tree-status="note"')
+    // 标记文案复用侧栏既有 key，不新造词
+    expect(html).toContain(i18next.t('sidebar.inbox'))
+    expect(html).toContain(i18next.t('sidebar.archived'))
   })
 
   test('空目录（无子目录无文件）：只有容器，没有行', () => {

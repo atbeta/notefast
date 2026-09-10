@@ -135,7 +135,7 @@ function docRowAny(db: Db, docId: string): DocState | null {
 async function applyFileMetaToDoc(
   ctx: VaultContext,
   doc: BlockRow,
-  fromFile: { aiExclude?: boolean; status?: 'inbox' | 'note' },
+  fromFile: { aiExclude?: boolean; status?: 'inbox' | 'note' | 'archived' },
 ): Promise<boolean> {
   const { db } = ctx
   let changed = false
@@ -239,7 +239,7 @@ export async function ingestVaultFile(
       notebookId,
       title,
       markdown: file.content,
-      status: fmStatus === 'inbox' ? 'inbox' : 'note',
+      status: fmStatus === 'inbox' || fmStatus === 'archived' ? fmStatus : 'note',
       applyFrontmatterTags: true,
       rejectEmpty: false,
     })

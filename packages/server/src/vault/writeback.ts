@@ -38,6 +38,7 @@ import { auditVault } from './audit'
 import type { VaultConfig } from './config'
 import type { VaultContext } from './ingest'
 import { readVaultDocMeta, vaultMetaHash } from './meta'
+import { getVaultCaptureDir } from './captureConfig'
 import { patchVaultContent, type PatchBlock } from './patch'
 import { toVaultAbsPath, toVaultRelPath } from './paths'
 import { blockSubtreeHash, recordVaultSpans, topLevelBlocks } from './spans'
@@ -75,7 +76,7 @@ export function serializeVaultDocParts(
     tags: meta.tags,
     // 缺省值（ai_exclude=false、status=note）不写键，已有键则删掉
     notefast_ai_exclude: meta.aiExclude,
-    notefast_status: meta.status === 'inbox' ? 'inbox' : 'note',
+    notefast_status: meta.status,
   })
   const fm = frontmatterRaw ? `---\n${frontmatterRaw}\n---\n` : ''
   return { content: fm + body, frontmatterRaw, body }
@@ -135,6 +136,15 @@ export function uniqueRelPathForTitle(root: string, title: string, hintPath?: st
     n++
   }
   return candidate
+}
+
+/**
+ * 采集默认目录：只对**新建的收集箱文档**生效，且显式 hint 优先。
+ * 位置只是默认落点，权威是 frontmatter 的 notefast_status（RFC 0005 U-11）。
+ */
+function captureDirHintFor(config: VaultConfig, doc: BlockRow): string | null {
+  if (readVaultDocMeta(doc).status !== 'inbox') return null
+  return getVaultCaptureDir(config.root)
 }
 
 /** 文档根 properties.vault_hint_path（MCP create_doc 的 path 参数落在这里） */
@@ -234,11 +244,17 @@ export function startVaultWriteback(
     const frontmatterPatch: FrontmatterPatch = {
       tags: meta.tags,
       notefast_ai_exclude: meta.aiExclude,
-      notefast_status: meta.status === 'inbox' ? 'inbox' : 'note',
+      notefast_status: meta.status,
     }
 
     const existing = Boolean(row && !row.deleted_at)
-    const relPath = row ? row.rel_path : uniqueRelPathForTitle(config.root, doc.content, vaultHintPathOf(doc))
+    const relPath = row
+      ? row.rel_path
+      : uniqueRelPathForTitle(
+          config.root,
+          doc.content,
+          vaultHintPathOf(doc) ?? captureDirHintFor(config, doc),
+        )
     const abs = toVaultAbsPath(config.root, relPath)
     const expectedSha = existing ? row!.content_sha256 : null
 

@@ -17,6 +17,12 @@ import {
   type VaultRuntime,
 } from '../vault'
 import { startVaultWriteback, type VaultWriteback } from '../vault/writeback'
+import {
+  _resetVaultCaptureConfigForTests,
+  applyVaultCaptureConfig,
+  getVaultCaptureDir,
+  initVaultCaptureConfig,
+} from '../vault/captureConfig'
 import docsRouter from '../api/docs'
 import importRouter from '../api/import'
 
@@ -87,6 +93,10 @@ beforeEach(() => {
   stopVault()
   rmSync(vaultDir, { recursive: true, force: true })
   mkdirSync(vaultDir, { recursive: true })
+  _resetVaultCaptureConfigForTests()
+  // 配置持久化在 dataDir：只清内存态不够，磁盘文件会被 init 读回来
+  rmSync(join(dataDir, 'vault-capture.json'), { force: true })
+  initVaultCaptureConfig(dataDir)
 })
 
 async function createDoc(body: Record<string, unknown>): Promise<{ status: number; id: string }> {
@@ -167,5 +177,65 @@ describe('POST /import/markdown 的 dir', () => {
     const created = (await res.json()) as { doc: { id: string } }
     await writebackNow(created.doc.id)
     expect(existsSync(join(vaultDir, '导入越界.md'))).toBe(true)
+  })
+})
+
+// ───────────────────── 采集默认落盘目录（RFC 0005 U-11） ─────────────────────
+
+describe('采集落盘目录', () => {
+  test('收集箱文档落到配置目录；普通笔记不受影响', async () => {
+    await startVault()
+    applyVaultCaptureConfig(vaultDir, 'Inbox')
+
+    const inbox = await createDoc({ title: '采集件', status: 'inbox' })
+    const note = await createDoc({ title: '手写笔记' })
+    await writebackNow(inbox.id)
+    await writebackNow(note.id)
+
+    expect(existsSync(join(vaultDir, 'Inbox', '采集件.md'))).toBe(true)
+    expect(existsSync(join(vaultDir, '采集件.md'))).toBe(false)
+    // 普通笔记仍在根目录：落盘目录只对收集箱生效
+    expect(existsSync(join(vaultDir, '手写笔记.md'))).toBe(true)
+  })
+
+  test('显式 dir 优先于采集目录', async () => {
+    await startVault()
+    applyVaultCaptureConfig(vaultDir, 'Inbox')
+    const { id } = await createDoc({ title: '指定目录', status: 'inbox', dir: 'notes/raw' })
+    await writebackNow(id)
+    expect(existsSync(join(vaultDir, 'notes', 'raw', '指定目录.md'))).toBe(true)
+    expect(existsSync(join(vaultDir, 'Inbox', '指定目录.md'))).toBe(false)
+  })
+
+  test('未配置：收集箱仍落根目录（默认行为不变）', async () => {
+    await startVault()
+    const { id } = await createDoc({ title: '默认采集', status: 'inbox' })
+    await writebackNow(id)
+    expect(existsSync(join(vaultDir, '默认采集.md'))).toBe(true)
+  })
+
+  test('已存在的文档不会被搬到采集目录（只影响新建）', async () => {
+    await startVault()
+    const { id } = await createDoc({ title: '老采集件', status: 'inbox' })
+    await writebackNow(id)
+    expect(existsSync(join(vaultDir, '老采集件.md'))).toBe(true)
+
+    applyVaultCaptureConfig(vaultDir, 'Inbox')
+    // 再次写回同一篇（例如改了正文）：位置来自映射行，不动
+    await writebackNow(id)
+    expect(existsSync(join(vaultDir, '老采集件.md'))).toBe(true)
+    expect(existsSync(join(vaultDir, 'Inbox', '老采集件.md'))).toBe(false)
+  })
+
+  test('配置校验：越界被拒绝，空值回落根目录', () => {
+    expect(() => applyVaultCaptureConfig(vaultDir, '../outside')).toThrow()
+    expect(() => applyVaultCaptureConfig(vaultDir, '/etc')).toThrow()
+    expect(getVaultCaptureDir(vaultDir)).toBeNull()
+
+    applyVaultCaptureConfig(vaultDir, 'Inbox/2026')
+    expect(getVaultCaptureDir(vaultDir)).toBe('Inbox/2026')
+
+    applyVaultCaptureConfig(vaultDir, '  ')
+    expect(getVaultCaptureDir(vaultDir)).toBeNull()
   })
 })

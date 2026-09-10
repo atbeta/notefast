@@ -40,6 +40,9 @@ export default function SettingsVault() {
   const [rebuilding, setRebuilding] = useState(false)
   const [syncForm, setSyncForm] = useState<VaultSyncFormState>(() => syncFormFromStatus(null))
   const [syncBusy, setSyncBusy] = useState(false)
+  // 采集落盘目录（vault 模式才有；空串 = 根目录）
+  const [captureDir, setCaptureDir] = useState<string | null>(null)
+  const [captureBusy, setCaptureBusy] = useState(false)
   /** 配置接口回填（比从 target 反解可靠：连接改名 / 换 bucket 也能对上） */
   const [syncConfig, setSyncConfig] = useState<VaultFileSyncConfigView | null>(null)
   const seeded = useRef(false)
@@ -50,6 +53,39 @@ export default function SettingsVault() {
     const timer = window.setInterval(refetch, POLL_MS)
     return () => window.clearInterval(timer)
   }, [reconciling, refetch])
+
+  // 拉一次采集落盘目录（旧服务端没有该端点时整块不渲染）
+  useEffect(() => {
+    if (data?.enabled !== true) return
+    let cancelled = false
+    api
+      .get<{ dir: string | null }>('/vault/capture')
+      .then((cfg) => {
+        if (!cancelled) setCaptureDir(cfg.dir ?? '')
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [data?.enabled])
+
+  const handleCaptureSave = useCallback(async () => {
+    setCaptureBusy(true)
+    try {
+      const saved = await api.put<{ dir: string | null }>('/vault/capture', {
+        dir: (captureDir ?? '').trim() || null,
+      })
+      setCaptureDir(saved.dir ?? '')
+      toast.success({ title: t('settings.vault.captureDirSaved'), description: saved.dir ?? t('settings.vault.captureDirPlaceholder') })
+    } catch (e) {
+      toast.error({
+        title: t('settings.vault.modeSwitchFailed'),
+        description: e instanceof Error ? e.message : String(e),
+      })
+    } finally {
+      setCaptureBusy(false)
+    }
+  }, [captureDir, t, toast])
 
   // 拉一次同步配置（旧服务端没有该端点时静默失败，回退到从状态反解）
   useEffect(() => {
@@ -215,6 +251,14 @@ export default function SettingsVault() {
       error={Boolean(error)}
       rebuilding={rebuilding}
       onPickVault={canSwitchMode ? () => void handlePickVault() : undefined}
+      {...(captureDir !== null
+        ? {
+            captureDir,
+            onCaptureDirChange: setCaptureDir,
+            onCaptureDirSave: () => void handleCaptureSave(),
+            captureBusy,
+          }
+        : {})}
       onLeaveVault={canSwitchMode ? () => void handleLeaveVault() : undefined}
       onRebuild={() => void handleRebuild()}
       syncForm={syncForm}

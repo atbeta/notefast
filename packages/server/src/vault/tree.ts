@@ -7,6 +7,7 @@
  * 纯函数 + 入参是 rel_path 列表，便于单测；DB 读取留在路由层。
  */
 
+import type { DocStatus } from '@notefast/core'
 import { isIgnoredRelPath, isMarkdownPath } from './paths'
 
 export interface VaultTreeDir {
@@ -25,6 +26,11 @@ export interface VaultTreeFile {
   /** 显示名（文件名去掉 .md；vault 约定标题 = 文件名） */
   name: string
   doc_id: string
+  /**
+   * 文档状态（收集箱 / 归档 / 普通）。
+   * 位置看不出状态——采集件和手写笔记都可能在根目录，状态才是权威（RFC 0005 U-11）。
+   */
+  status?: DocStatus
 }
 
 export interface VaultTreeLevel {
@@ -38,6 +44,8 @@ export interface VaultTreeLevel {
 export interface VaultTreeEntry {
   relPath: string
   docId: string
+  /** 由路由层从 blocks 补齐；纯函数不需要它也能建树 */
+  status?: DocStatus
 }
 
 function parentOf(relPath: string): string {
@@ -93,7 +101,14 @@ export function buildVaultTree(
       cursor = parentOf(cursor)
     }
 
-    if (parent === dirPath) files.push({ path: rel, name: baseName(rel), doc_id: entry.docId })
+    if (parent === dirPath) {
+      files.push({
+        path: rel,
+        name: baseName(rel),
+        doc_id: entry.docId,
+        ...(entry.status ? { status: entry.status } : {}),
+      })
+    }
   }
 
   const dirs: VaultTreeDir[] = []
