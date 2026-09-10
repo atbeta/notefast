@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.92.0](https://github.com/atbeta/notefast/compare/v0.91.0...v0.92.0) (2026-09-10)
+
+
+### Features
+
+* add vault inspection entries and fix restore from trash ([3efb08f](https://github.com/atbeta/notefast/commit/3efb08f9fdd072c69d9b75f48b90404e8cde7835))
+* show a vault folder tree in the sidebar ([f3edeac](https://github.com/atbeta/notefast/commit/f3edeacea37c0ca1cf91022f8cb977819c4a32dd))
+* switch vault mode from inside the app ([14d9d58](https://github.com/atbeta/notefast/commit/14d9d58b1026d1947b3462354a28733f70210c53))
+
+
+### Bug Fixes
+
+* **tauri:** remember the vault mode and force a first-run choice ([d222b6e](https://github.com/atbeta/notefast/commit/d222b6e5dd052239c7b826169439795fc1fa7c12))
+* use explicit conditionals for the optional batch index ([ce0dd02](https://github.com/atbeta/notefast/commit/ce0dd02d1acc5a4ead348516ff2dfb048cad7063))
+
+
+### Performance Improvements
+
+* share one vault file index across a reconcile ([2aab8a8](https://github.com/atbeta/notefast/commit/2aab8a8f0fa1220b29e7b1efd71500e30d6f68d4))
+* suppress the change feed while reconciling a vault ([882e2dc](https://github.com/atbeta/notefast/commit/882e2dc6f73901e70ae0c03999b2304d3c5d2e91))
+
 ## [0.91.0](https://github.com/atbeta/notefast/compare/v0.90.0...v0.91.0) (2026-09-09)
 
 
