@@ -27,16 +27,15 @@ services:
       # 接收代理转发的真实协议（HTTPS）
       - TRUSTED_PROXIES=*
       # vault mode（kind='vault'）：容器内约定把笔记文件夹挂在 /vault，见下方 volumes。
-      # DATA_DIR 在 vault 模式下是索引父目录（索引派生到 <DATA_DIR>/<sha256 前12位>）。
-      # watcher 后端启动时自动探测（Docker Desktop 的 bind mount 不投递 inotify → 自动轮询）
-      # - VAULT_PATH=/vault
+      # 笔记文件夹是权威（vault 是唯一数据形态，RFC 0006）；索引父目录在其下按 vault 派生
+      - VAULT_PATH=/vault
+      # watcher 后端启动时自动探测（bind mount 不投递宿主侧事件 → 自动轮询）：
       # - VAULT_USE_POLLING=true
       # - VAULT_POLL_INTERVAL_MS=1000
     volumes:
       - notefast_data:/app/data
-      - notefast_export:/app/export
-      # vault mode：宿主机笔记文件夹 → 容器 /vault（要可写：NoteFast 端编辑会写回文件）
-      # - ~/Notes:/vault
+      # 笔记文件夹：必须可写（NoteFast 端编辑会写回 .md）；换成自己的路径，例如 ~/Notes:/vault
+      - ./notes:/vault
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -80,6 +79,5 @@ services:
 
 volumes:
   notefast_data:
-  notefast_export:
   caddy_data:
   caddy_config:

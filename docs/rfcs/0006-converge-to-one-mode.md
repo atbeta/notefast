@@ -35,7 +35,11 @@ vault 模式落地后，项目里同时存在两套词汇：**文件层的事实
 
 两种情形都留一个「**暂时继续用数据库模式**」的出口（记住选择）：Docker 没挂载文件夹、或者只想先试试的人不该被挡住。
 
-配套的两条清理：
+部署层面的落地：**`docker-compose.yml` 直接就是 vault 优先**（挂 `./notes` → `/vault`，
+`VAULT_PATH=/vault`），README 以 `mkdir -p notes && docker compose up -d` 为首选入口；
+不挂文件夹的实例会看到上面那张引导页。数据库模式的 compose 变体以注释形式留在文件末尾。
+
+另有两处清理：
 - `AUTO_EXPORT_DIR` 在 vault 模式下**忽略**并打日志——笔记已经就是文件夹里的 Markdown
 - `GET /api/v1/instance` 增 `db_doc_count`（不含欢迎文档），前端据此选文案
 

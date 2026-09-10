@@ -11,22 +11,21 @@ services:
       - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-}
       - AUTH_PASSWORD=${AUTH_PASSWORD:-}
-      # vault 模式下 DATA_DIR 是索引的父目录（索引派生到 <DATA_DIR>/<sha256 前12位>）
+      # 笔记文件夹是权威（vault 是唯一数据形态，RFC 0006）
+      - VAULT_PATH=/vault
+      # 索引父目录：索引派生到 <父目录>/<sha256(vault 路径) 前12位>
       - NOTEFAST_APP_SUPPORT_DIR=${NOTEFAST_APP_SUPPORT_DIR:-/app/data}
-      # vault mode（kind='vault'）：容器内约定把笔记文件夹挂在 /vault，见下方 volumes
-      # watcher 后端启动时自动探测（Docker Desktop 的 bind mount 不投递 inotify → 自动轮询）
-      # - VAULT_PATH=/vault
-      # - VAULT_USE_POLLING=true      # 仅在需要强制指定后端时设置
+      # watcher 后端启动时自动探测（bind mount 不投递宿主侧事件 → 自动轮询）。
+      # 只有要强制指定时才设置：
+      # - VAULT_USE_POLLING=true
       # - VAULT_POLL_INTERVAL_MS=1000
     volumes:
       - notefast_data:/app/data
-      - notefast_export:/app/export
-      # vault mode：宿主机笔记文件夹 → 容器 /vault（要可写：NoteFast 端编辑会写回文件）
-      # - ~/Notes:/vault
+      # 笔记文件夹：必须可写（NoteFast 端编辑会写回 .md）
+      - ./notes:/vault
     restart: unless-stopped
 
 # 数据库备份：在 Web 设置页配置 S3 快照（不再使用 Litestream profile）。
 
 volumes:
   notefast_data:
-  notefast_export:

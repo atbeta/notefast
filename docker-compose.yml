@@ -1,3 +1,13 @@
+# NoteFast 默认部署：vault 优先（vault 是唯一数据形态，RFC 0006）
+#
+# 用法：
+#   mkdir -p notes            # 先建目录，避免 Docker 以 root 拥有它（Linux 上容器用户写不进去）
+#   docker compose up -d
+# 然后浏览器打开 http://localhost:3140；`./notes` 就是你的笔记库，里面的 .md 就是数据本身。
+#
+# 为什么默认挂载文件夹：NoteFast 只以「文件夹是权威、SQLite 是可重建索引」这一种形态运行。
+# 数据库模式（不带文件夹）只作为 0.90 之前旧库的过渡，见文件末尾注释。
+
 services:
   notefast:
     image: ${NOTEFAST_IMAGE:-xbeta/notefast:latest}
@@ -8,27 +18,26 @@ services:
       - AUTH_PASSWORD=${AUTH_PASSWORD:-}
       - API_TOKEN=${API_TOKEN:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3140}
-      # 仅显式设置时启用 hourly 全量 Markdown 导出；默认关闭以免大库周期性卡顿
-      - AUTO_EXPORT_DIR=${AUTO_EXPORT_DIR:-}
       - AI_PROVIDER=${AI_PROVIDER:-}
       - AI_API_KEY=${AI_API_KEY:-}
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-}
       - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-}
-      # vault 模式下 DATA_DIR 是索引的**父目录**：索引派生到 <DATA_DIR>/<sha256 前12位>，
-      # 一个 vault 一个索引，切 vault 不会复用旧索引（RFC 0005 D3）。
-      - NOTEFAST_APP_SUPPORT_DIR=${NOTEFAST_APP_SUPPORT_DIR:-/app/data}
-      # vault mode（kind='vault'）：容器内约定把笔记文件夹挂在 /vault，见下方 volumes。
-      # watcher 后端启动时自动探测（Docker Desktop 的 bind mount 不投递 inotify → 自动轮询）。
-      # 现成配置见 docker-compose.vault.yml。
-      # - VAULT_PATH=/vault
-      # - VAULT_USE_POLLING=true      # 仅在需要强制指定后端时设置
+      # 笔记文件夹是权威
+      - VAULT_PATH=/vault
+      # 索引父目录：索引派生到 /app/data/<sha256(vault 路径) 前 12 位>，
+      # 一个 vault 一个索引，切 vault 不会复用旧索引（RFC 0005 D3）
+      - NOTEFAST_APP_SUPPORT_DIR=/app/data
+      # watcher 后端启动时自动探测：Docker Desktop / OrbStack 的 bind mount 不投递宿主侧
+      # 事件（或延迟到十几秒），引擎会据此自动轮询。只有要强制指定时才设置：
+      # - VAULT_USE_POLLING=true
       # - VAULT_POLL_INTERVAL_MS=1000
     volumes:
+      # 索引 + 配置（可删可重建）；权威数据在下面的笔记文件夹里
       - notefast_data:/app/data
-      - notefast_export:/app/export
-      # vault mode：宿主机笔记文件夹 → 容器 /vault（要可写：NoteFast 端编辑会写回文件）
-      # - ~/Notes:/vault
+      # 笔记文件夹：必须可写（NoteFast 端编辑会写回 .md）。换成自己的路径即可，例如：
+      #   - ~/Notes:/vault
+      - ./notes:/vault
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -42,9 +51,15 @@ services:
     cpus: '1.0'
     pids_limit: 200
 
-# 数据库灾备已改为应用内 S3 快照（设置页 → 数据库备份）。
-# 旧 Litestream profile 已移除：其 `replicate -exec true` 会导致复制进程立即退出。
+# ── 数据库模式（仅用于 0.90 之前的旧库：先导出，再迁到文件夹） ──
+#
+# 不挂 /vault、不设 VAULT_PATH 即回到数据库模式。启动后 Web 会给引导页，
+# 里面有「导出笔记（zip）」按钮与迁移三步。迁移完请改回上面的 vault 配置。
+#
+#   environment:
+#     - DATA_DIR=/app/data
+#   volumes:
+#     - notefast_data:/app/data
 
 volumes:
   notefast_data:
-  notefast_export:

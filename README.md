@@ -126,16 +126,18 @@ Common environment variables:
 
 AI providers are configured at runtime in **Settings → AI** (three slots: chat / embedding / reranker).
 
-### vault mode over Docker
+### Docker: a folder is the deployment
 
-Setting `VAULT_PATH` turns the notebook into `kind='vault'`: your Markdown folder is the source of truth and SQLite is a rebuildable index (see [docs/vault-migration.md](docs/vault-migration.md)). This is the recommended setup for a new deployment — a ready-to-run compose file is included:
+A vault is the only supported shape: your Markdown folder is the source of truth and SQLite is a rebuildable index (see [docs/vault-migration.md](docs/vault-migration.md)). `docker-compose.yml` is already set up that way — create the folder first, then start it:
 
 ```bash
-mkdir -p notes
-docker compose -f docker-compose.vault.yml up -d
+mkdir -p notes            # create it yourself: Docker would create it owned by root
+docker compose up -d
 ```
 
-It mounts `./notes` at `/vault` and sets `VAULT_PATH=/vault`. To add vault mode to your own compose file:
+`./notes` is mounted at `/vault` and `VAULT_PATH=/vault` points the engine at it. Point it elsewhere by editing the volume line, e.g. `- ~/Notes:/vault`.
+
+If you run an instance **without** a folder (database mode), the engine still works but the web UI shows a setup notice instead of the app: it explains how to move pre-0.90 notes over (with an export button) or how to attach a folder. To add vault mode to your own compose file:
 
 ```yaml
     environment:
