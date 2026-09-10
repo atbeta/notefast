@@ -60,7 +60,15 @@ import { reanalyzeDoc } from '../ai/autoLink'
 import { readVaultFile } from './writer'
 import { desiredStatusFromFile, needsReanalyzeOnStatusChange, vaultMetaHash } from './meta'
 import { recordVaultSpans } from './spans'
-import { resolveUnresolvedForDoc, syncVaultWikilinks, wikilinkNamesForPath } from './wikilinks'
+import {
+  buildVaultFileIndex,
+  deindexVaultFile,
+  indexVaultFile,
+  resolveUnresolvedForDoc,
+  syncVaultWikilinks,
+  wikilinkNamesForPath,
+  type VaultFileIndex,
+} from './wikilinks'
 import { isIgnoredRelPath, isMarkdownPath, titleFromRelPath, toVaultAbsPath, toVaultRelPath } from './paths'
 import type { VaultConfig } from './config'
 import type { SerialLock } from './lock'
@@ -158,7 +166,19 @@ async function applyFileMetaToDoc(
 
 // ───────────────────── 单文件 ingest ─────────────────────
 
-export async function ingestVaultFile(ctx: VaultContext, pathInput: string): Promise<IngestResult> {
+/**
+ * 批量场景（整库对账）的共享状态：把「文件索引」构建一次，之后随映射表增删改增量维护。
+ * 不传则每次 ingest 各自构建一次——单文件交互式路径本来就只有一次，没必要维护增量。
+ */
+export interface VaultBatchContext {
+  index: VaultFileIndex
+}
+
+export async function ingestVaultFile(
+  ctx: VaultContext,
+  pathInput: string,
+  batch?: VaultBatchContext,
+): Promise<IngestResult> {
   const relPath = toVaultRelPath(ctx.config.root, pathInput)
   if (!isMarkdownPath(relPath) || isIgnoredRelPath(relPath, ctx.config.ignore)) {
     return { relPath, docId: null, action: 'skipped', ...zeroStats() }
@@ -250,8 +270,9 @@ export async function ingestVaultFile(ctx: VaultContext, pathInput: string): Pro
     // 记录顶层块区间，供后续按块局部写回（解析结果与入库块对不上时自动清空 → 退回整篇）
     recordVaultSpans(db, created.docId, { body: stripped.body })
     // 新文件可能正是别人 `[[引用的名字]]`：先建自己的引用，再补建指向自己的未解析引用
-    syncVaultWikilinks(ctx, { touchedBlockIds: created.blockIds })
-    resolveUnresolvedForDoc(ctx, created.docId)
+    batch && indexVaultFile(batch.index, relPath, created.docId)
+    syncVaultWikilinks(ctx, { touchedBlockIds: created.blockIds, ...(batch ? { index: batch.index } : {}) })
+    resolveUnresolvedForDoc(ctx, created.docId, batch?.index)
     auditVault('doc.vault_ingested', created.docId, { rel_path: relPath, block_count: created.blockIds.length })
     return { relPath, docId: created.docId, action: 'created', kept: 0, inserted: created.blockIds.length, updated: 0, deleted: 0 }
   }
@@ -312,8 +333,13 @@ export async function ingestVaultFile(ctx: VaultContext, pathInput: string): Pro
   // 顶层块区间随本次 ingest 整表重写（写回的字节保真基线）
   recordVaultSpans(db, docId, { body: stripped.body })
   // wikilink：改动块重建引用，删除块清理；再看有没有指向本文件的未解析引用可以补上
-  syncVaultWikilinks(ctx, { touchedBlockIds: [...insertedIds, ...updatedIds], deletedBlockIds: deletedIds })
-  resolveUnresolvedForDoc(ctx, docId)
+  batch && indexVaultFile(batch.index, relPath, docId)
+  syncVaultWikilinks(ctx, {
+    touchedBlockIds: [...insertedIds, ...updatedIds],
+    deletedBlockIds: deletedIds,
+    ...(batch ? { index: batch.index } : {}),
+  })
+  resolveUnresolvedForDoc(ctx, docId, batch?.index)
   fireAfterCreateMany(getBlocksByIds(db, insertedIds).map(rowToBlock))
   for (const row of getBlocksByIds(db, updatedIds)) fireAfterUpdate(rowToBlock(row))
   fireAfterUpdate(rowToBlock(docAfter))
@@ -335,13 +361,18 @@ export async function ingestVaultFile(ctx: VaultContext, pathInput: string): Pro
  * 文件从 vault 消失：文档进回收站（软删除，可恢复），映射行打 deleted_at。
  * 不物理删除：同 sha 文件再出现时按 rename / 重现恢复，回收站清空才真正丢失。
  */
-export function removeVaultFile(ctx: VaultContext, pathInput: string): IngestResult {
+export function removeVaultFile(
+  ctx: VaultContext,
+  pathInput: string,
+  batch?: VaultBatchContext,
+): IngestResult {
   const relPath = toVaultRelPath(ctx.config.root, pathInput)
   const { db, notebookId } = ctx
   const row = getVaultFileByPath(db, notebookId, relPath)
   if (!row || row.deleted_at) {
     return { relPath, docId: row?.doc_id ?? null, action: 'skipped', ...zeroStats() }
   }
+  batch && deindexVaultFile(batch.index, relPath, row.doc_id)
   const state = docRowAny(db, row.doc_id)
   if (!state) {
     deleteVaultFileRow(db, notebookId, relPath)
@@ -390,7 +421,12 @@ export function removeVaultFile(ctx: VaultContext, pathInput: string): IngestRes
  * 纯移动：内容未变、只换路径。文档 id / 块 id / 引用 / 向量全部保留，只改映射行 + 标题。
  * watcher 在 unlink+add 配对成功时调用；配对失败才退化为 remove + ingest。
  */
-export function moveVaultFilePath(ctx: VaultContext, fromInput: string, toInput: string): IngestResult {
+export function moveVaultFilePath(
+  ctx: VaultContext,
+  fromInput: string,
+  toInput: string,
+  batch?: VaultBatchContext,
+): IngestResult {
   const from = toVaultRelPath(ctx.config.root, fromInput)
   const to = toVaultRelPath(ctx.config.root, toInput)
   const { db, notebookId } = ctx
@@ -422,7 +458,9 @@ export function moveVaultFilePath(ctx: VaultContext, fromInput: string, toInput:
   })
   if (doc.content !== title) fireAfterUpdate(rowToBlock(after))
   // 改名后别人 `[[新名字]]` 的未解析引用可能可以补上了
-  resolveUnresolvedForDoc(ctx, doc.id)
+  batch && deindexVaultFile(batch.index, from, row.doc_id)
+  batch && indexVaultFile(batch.index, to, doc.id)
+  resolveUnresolvedForDoc(ctx, doc.id, batch?.index)
   auditVault('doc.vault_moved', doc.id, { from, to })
   return { relPath: to, docId: doc.id, action: 'moved', ...zeroStats() }
 }
@@ -501,6 +539,12 @@ export async function reconcileVault(ctx: VaultContext, opts: ReconcileOptions =
   const diskSet = new Set(onDisk)
   const liveRows = listVaultFiles(ctx.db, ctx.notebookId)
   const missingRows = liveRows.filter((r) => !diskSet.has(r.rel_path))
+  /**
+   * 整轮对账共享一份文件索引：此前每个文件 ingest 都重建一次（每次都是全表 + 4 张 map），
+   * 10k 文件时白烧几分钟（V-501 实测：吞吐从 110 files/s 掉到 38.7 files/s）。
+   * 映射表的增删改由 ingest / move / remove 同步维护这份索引。
+   */
+  const batch: VaultBatchContext = { index: buildVaultFileIndex(ctx) }
 
   // rename 配对：消失的映射 × 无映射的新文件，sha 相同即为移动
   if (missingRows.length > 0) {
@@ -519,14 +563,14 @@ export async function reconcileVault(ctx: VaultContext, opts: ReconcileOptions =
       const to = candidates?.shift()
       if (to) {
         try {
-          moveVaultFilePath(ctx, row.rel_path, to)
+          moveVaultFilePath(ctx, row.rel_path, to, batch)
           stats.moved++
         } catch (e) {
           stats.errors.push({ relPath: row.rel_path, error: e instanceof Error ? e.message : String(e) })
         }
       } else {
         try {
-          const r = removeVaultFile(ctx, row.rel_path)
+          const r = removeVaultFile(ctx, row.rel_path, batch)
           if (r.action === 'deleted') stats.deleted++
         } catch (e) {
           stats.errors.push({ relPath: row.rel_path, error: e instanceof Error ? e.message : String(e) })
@@ -550,7 +594,7 @@ export async function reconcileVault(ctx: VaultContext, opts: ReconcileOptions =
           }
         }
       }
-      const r = await ingestVaultFile(ctx, rel)
+      const r = await ingestVaultFile(ctx, rel, batch)
       switch (r.action) {
         case 'created':
           stats.created++

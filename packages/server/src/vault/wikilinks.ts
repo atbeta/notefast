@@ -77,20 +77,54 @@ function push(map: Map<string, string[]>, key: string, docId: string): void {
   else map.set(key, [docId])
 }
 
-export function buildVaultFileIndex(ctx: VaultContext): VaultFileIndex {
-  const index: VaultFileIndex = {
+export function emptyVaultFileIndex(): VaultFileIndex {
+  return {
     byPath: new Map(),
     byPathLower: new Map(),
     byBasename: new Map(),
     byBasenameLower: new Map(),
   }
+}
+
+function basenameOf(relPath: string): string {
+  return (relPath.split('/').pop() ?? relPath).replace(/\.md$/i, '')
+}
+
+/**
+ * 把一个文件加进索引。
+ *
+ * 为什么要有增量版本：整库对账时每个文件都重建一次索引是 O(n²)——
+ * 10k 文件时单次 build 就要 10ms，一轮对账白烧几分钟（V-501 实测）。
+ * 对账/批量 ingest 时构建一次，之后随映射表增删改同步维护。
+ */
+export function indexVaultFile(index: VaultFileIndex, relPath: string, docId: string): void {
+  push(index.byPath, relPath, docId)
+  push(index.byPathLower, relPath.toLowerCase(), docId)
+  const base = basenameOf(relPath)
+  push(index.byBasename, base, docId)
+  push(index.byBasenameLower, base.toLowerCase(), docId)
+}
+
+/** 从索引里摘掉一个文件（改名 / 删除时；查不到是 no-op） */
+export function deindexVaultFile(index: VaultFileIndex, relPath: string, docId: string): void {
+  const drop = (map: Map<string, string[]>, key: string): void => {
+    const list = map.get(key)
+    if (!list) return
+    const next = list.filter((id) => id !== docId)
+    if (next.length === 0) map.delete(key)
+    else map.set(key, next)
+  }
+  drop(index.byPath, relPath)
+  drop(index.byPathLower, relPath.toLowerCase())
+  const base = basenameOf(relPath)
+  drop(index.byBasename, base)
+  drop(index.byBasenameLower, base.toLowerCase())
+}
+
+export function buildVaultFileIndex(ctx: VaultContext): VaultFileIndex {
+  const index = emptyVaultFileIndex()
   for (const row of listVaultFiles(ctx.db, ctx.notebookId)) {
-    const path = row.rel_path
-    push(index.byPath, path, row.doc_id)
-    push(index.byPathLower, path.toLowerCase(), row.doc_id)
-    const base = path.split('/').pop()!.replace(/\.md$/i, '')
-    push(index.byBasename, base, row.doc_id)
-    push(index.byBasenameLower, base.toLowerCase(), row.doc_id)
+    indexVaultFile(index, row.rel_path, row.doc_id)
   }
   return index
 }
@@ -180,6 +214,11 @@ export function resolveAnchorBlock(ctx: VaultContext, docId: string, anchor: str
 // ───────────────────── 与 ingest 的衔接 ─────────────────────
 
 export interface SyncVaultWikilinksOptions {
+  /**
+   * 复用的文件索引（整库对账 / 批量 ingest 时由调用方构建一次并维护）。
+   * 不传则内部按当前映射表构建一次——单文件交互式 ingest 的默认路径。
+   */
+  index?: VaultFileIndex
   /** 内容可能变了的块（updated ∪ inserted）：先删旧 ref 再重建 */
   touchedBlockIds: string[]
   /** 已删除的块：清掉它的 ref 与未解析记录 */
@@ -198,7 +237,7 @@ export function syncVaultWikilinks(ctx: VaultContext, opts: SyncVaultWikilinksOp
   const touched = [...new Set(opts.touchedBlockIds)].filter(Boolean)
   if (touched.length === 0) return
 
-  const index = buildVaultFileIndex(ctx)
+  const index = opts.index ?? buildVaultFileIndex(ctx)
   const unresolved: UnresolvedLinkInput[] = []
 
   for (const row of getBlocksByIds(db, touched)) {
@@ -247,10 +286,17 @@ export function syncVaultWikilinks(ctx: VaultContext, opts: SyncVaultWikilinksOp
  * 某文档（新建 / 更新 / 改名）出现后，补建指向它的未解析引用。
  * 只查「这个名字可能指它」的记录，不扫全表。
  */
-export function resolveUnresolvedForDoc(ctx: VaultContext, docId: string): void {
+export function resolveUnresolvedForDoc(
+  ctx: VaultContext,
+  docId: string,
+  index?: VaultFileIndex,
+): void {
   const row = getVaultFileByDocId(ctx.db, docId)
   if (!row) return
   const pending = listUnresolvedByTargetNames(ctx.db, ctx.notebookId, wikilinkNamesForPath(row.rel_path))
   if (pending.length === 0) return
-  syncVaultWikilinks(ctx, { touchedBlockIds: [...new Set(pending.map((p) => p.source_block_id))] })
+  syncVaultWikilinks(ctx, {
+    touchedBlockIds: [...new Set(pending.map((p) => p.source_block_id))],
+    ...(index ? { index } : {}),
+  })
 }
