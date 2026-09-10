@@ -365,6 +365,7 @@ Windows 实机使用后反馈三条，全部与「壳不记忆模式」同源：
 | U-11 | 边界落地（RFC 0006）：`notefast_status` 支持 archived（文件完全权威）、树上标记收集箱/归档、采集默认落盘目录（`data/vault-capture.json` + 设置项） | 完成 |
 | U-12 | 砍掉 vault 下不适用的功能：影子副本强制关闭（含启动全量投影与 API 重开）、资源页 / 图床设置 / 归档导出入口隐藏 | 完成 |
 | U-13 | 图片落盘：上传与拖入的图片写进笔记同名资源夹 `<笔记名>.assets/`，正文用相对路径；db 模式保持 `asset:<sha>` | 待开始 |
+| U-14 | 唯一形态落地：db 模式（旧库 / 空库两种文案）引导页 + 导出旧笔记；vault 下忽略 `AUTO_EXPORT_DIR`；`/instance` 增 `db_doc_count`（不含欢迎文档） | 完成 |
 
 U-1 … U-4 是部署一致性；U-5 … U-7 是统一的前置 parity（U-7 可与其余并行）。
 
@@ -393,6 +394,13 @@ U-1 … U-4 是部署一致性；U-5 … U-7 是统一的前置 parity（U-7 可
 3. **spans 不再重复建树**：ingest 已经解析过一次正文，把解析结果 / 顶层块指纹传进 `recordVaultSpans`，省掉每篇的 `fetchDocBlocks` + `buildBlockTree`
 
 剖析方法（可复现）：`bun --cpu-prof --cpu-prof-dir=/tmp/prof run packages/server/src/eval/vaultBench.ts --files 2000`，再用脚本把 native 采样归因到最近的 JS 调用者。
+
+**U-14 vault 作为唯一形态（RFC 0006）**：定位是「只提示，不迁移」。
+- `/api/v1/instance` 增 `db_doc_count`（活文档数，**排除引擎自己种的欢迎文档**——否则每个新装 db 实例都会被当成 0.90 前的老库）
+- Web 引导页 `VaultSetupNotice` + `useVaultSetupGate`：旧库（有数据）给「导出 zip + 迁移三步」，空库给「各部署方式怎么指定文件夹」；两种都留「暂时继续用数据库模式」出口（localStorage 记住）
+- **不自动迁移、不删数据、不动用户文件**；导出走既有 `/export/archive`
+- `AUTO_EXPORT_DIR` 在 vault 模式下忽略并打日志（笔记本来就是文件夹里的 Markdown）
+- **实测**：全新 db 库（只有欢迎文档）报 `db_doc_count=0`，建一篇真实笔记后报 1；引导页两种文案的 SSR 测试 5 例
 
 **U-12 功能取舍（RFC 0006 §vault 模式下的功能取舍）**：判据是「符合直觉吗 + 在这个场景还有意义吗」。
 - **影子副本**：`services/shadowMarkdown.ts` 此前**完全不知道 vault 存在**（`grep -c vault` = 0），默认开启 → vault 下每次变更都往 `data/markdown/` 再写一份副本并重写整份 manifest，启动还全量投影。现改为 vault 模式**强制关闭**（`suppressShadowForVault`），`applyShadowConfig` 拒绝重新打开，`/instance` 增 `shadow_markdown_available: false`，设置项整块换成说明。**必须在 `initShadowMarkdown` 之后调用**——顺序写反过一次，store 未初始化直接抛错（错误信息很清楚，已修正）

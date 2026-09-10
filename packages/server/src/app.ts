@@ -383,8 +383,12 @@ export function createApp(opts: CreateAppOptions = {}): NoteFastServer {
       app.get('/*', serveIndex)
     }
 
+    // vault 模式不启动兜底导出：笔记本身就是文件夹里的 Markdown（RFC 0006），
+    // 再往 AUTO_EXPORT_DIR 全量投影一份只会产生重复文件与周期性卡顿
     const exportDir = process.env.AUTO_EXPORT_DIR || ''
-    if (exportDir) {
+    if (exportDir && vaultConfig) {
+      console.warn('⚠️  AUTO_EXPORT_DIR 在 vault 模式下忽略：你的笔记已经就是文件夹里的 Markdown')
+    } else if (exportDir) {
       startAutoExport(exportDir)
       exportStarted = true
       if (!process.env.SYNC_LOCAL_DIR) {

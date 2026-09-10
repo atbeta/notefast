@@ -246,6 +246,7 @@ describe('GET/PUT /api/v1/instance', () => {
       shadow_markdown_enabled: boolean
       mode: string
       vault_root: string | null
+      db_doc_count: number
     }
     expect(body.data_dir).toBe(resolve(testDir))
     expect(body.markdown_dir).toBe(resolve(join(testDir, 'markdown')))
@@ -253,6 +254,9 @@ describe('GET/PUT /api/v1/instance', () => {
     // RFC 0005 U-1：模式由引擎上报，db 模式下没有 vault 根
     expect(body.mode).toBe('db')
     expect(body.vault_root).toBeNull()
+    // 引导页据此区分「旧库有数据」与「新装还没选文件夹」（RFC 0006）。
+    // 这个库里还没有任何文档（欢迎文档由 app 层种，这里没走 app），所以是 0
+    expect(body.db_doc_count).toBe(0)
   })
 
   test('vault 模式下 mode=vault 且带 vault_root', async () => {
@@ -315,5 +319,35 @@ describe('vault 模式抑制影子副本', () => {
     expect(next.enabled).toBe(true)
     expect(publicInstanceView().shadow_markdown_available).toBe(true)
     _resetShadowMarkdownForTests()
+  })
+})
+
+describe('db 模式引导计数', () => {
+  test('不含欢迎文档：欢迎文档不算「用户以前有数据」', async () => {
+    const { insertDocFromMarkdown } = await import('../services/docImport')
+    const { WELCOME_DOC_TAG } = await import('../services/welcomeSeed')
+    const db = getDb()
+    const before = (await (await app.fetch(new Request('http://localhost/api/v1/instance'))).json()) as {
+      db_doc_count: number
+    }
+
+    // 种一份带 guide 标签的欢迎文档：计数不该变
+    insertDocFromMarkdown(db, {
+      notebookId,
+      title: '欢迎',
+      markdown: 'welcome\n',
+      tags: [WELCOME_DOC_TAG],
+    })
+    const afterWelcome = (await (await app.fetch(new Request('http://localhost/api/v1/instance'))).json()) as {
+      db_doc_count: number
+    }
+    expect(afterWelcome.db_doc_count).toBe(before.db_doc_count)
+
+    // 用户的真实笔记才计入
+    insertDocFromMarkdown(db, { notebookId, title: '真实笔记', markdown: 'real\n' })
+    const afterReal = (await (await app.fetch(new Request('http://localhost/api/v1/instance'))).json()) as {
+      db_doc_count: number
+    }
+    expect(afterReal.db_doc_count).toBe(before.db_doc_count + 1)
   })
 })

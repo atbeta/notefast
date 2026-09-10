@@ -31,8 +31,12 @@ import RouteTransition from './components/RouteTransition'
 import RouteBoundary from './components/RouteBoundary'
 import RouteLoadingShell from './components/RouteLoadingShell'
 import AuthPrompt from './components/AuthPrompt'
-import { ToastProvider } from './components/ui'
-import { getStoredToken } from './hooks/useAPI'
+import VaultSetupNotice from './components/VaultSetupNotice'
+import { useVaultSetupGate } from './hooks/useVaultSetupGate'
+import { ToastProvider, useToast } from './components/ui'
+import { getStoredToken, fetchWithAuth } from './hooks/useAPI'
+import { deliverExport } from './lib/download'
+import { useTranslation } from 'react-i18next'
 
 interface AuthMode {
   passwordRequired: boolean
@@ -74,6 +78,8 @@ export default function App() {
 
   // 探测未完成 → 不渲染内容（避免短暂闪现未鉴权页面）
   // 探测完成 + 需要密码 + 本地没有可用密码（持久化/会话级均无）→ 仅登录页，不挂 Layout（避免「已进入被遮挡」）
+  // vault 是唯一形态（RFC 0006）：db 模式显示引导页（公开分享页除外）
+  const setup = useVaultSetupGate(!isPublicShare)
   const showAuthPrompt = authMode?.passwordRequired === true && !getStoredToken()
 
   if (showAuthPrompt) {
@@ -87,6 +93,9 @@ export default function App() {
   return (
     <ToastProvider>
       <DemoModeApplier />
+      {setup.docCount !== null ? (
+        <VaultSetupScreen docCount={setup.docCount} onDismiss={setup.dismiss} />
+      ) : (
       <Layout contentClassName={contentClassName}>
         <RouteTransition>
           <Routes>
@@ -243,6 +252,54 @@ export default function App() {
           </Routes>
         </RouteTransition>
       </Layout>
+      )}
     </ToastProvider>
+  )
+}
+
+/**
+ * 引导页本体：需要 toast 上下文（导出失败要能提示），所以放在 ToastProvider 之内。
+ * 导出走与备份页同一条 /export/archive 通道。
+ */
+function VaultSetupScreen({
+  docCount,
+  onDismiss,
+}: {
+  docCount: number
+  onDismiss: () => void
+}) {
+  const { t } = useTranslation()
+  const toast = useToast()
+  const [exporting, setExporting] = useState(false)
+
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const res = await fetchWithAuth('/export/archive')
+      if (!res.ok) {
+        toast.error({ title: t('sync.exportFailed') })
+        return
+      }
+      const blob = await res.blob()
+      const delivery = await deliverExport(blob, 'notefast-export.zip')
+      if (delivery.mode === 'saved') toast.success({ title: t('sync.exportSavedTo', { path: delivery.savedPath }) })
+      else if (delivery.mode === 'downloaded') toast.success({ title: t('sync.exportDone') })
+    } catch (e) {
+      toast.error({
+        title: t('sync.exportFailed'),
+        description: e instanceof Error ? e.message : String(e),
+      })
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  return (
+    <VaultSetupNotice
+      docCount={docCount}
+      onExport={() => void handleExport()}
+      exporting={exporting}
+      onDismiss={onDismiss}
+    />
   )
 }

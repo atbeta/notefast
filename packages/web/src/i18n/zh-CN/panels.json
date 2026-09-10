@@ -229,5 +229,23 @@
     "addNew": "新增存储连接",
     "kindS3": "S3 兼容",
     "kindWebdav": "WebDAV"
+  },
+"vaultSetup": {
+    "title": "NoteFast 现在以文件夹为唯一形态",
+    "legacySubtitle": "检测到这个库里还有 {{n}} 篇数据库模式的笔记",
+    "freshSubtitle": "还没有指定笔记文件夹",
+    "legacyIntro": "以前（0.90 之前）笔记存在数据库里、磁盘上没有对应文件。现在文件夹才是权威：你的笔记应该是一堆能直接打开、能拷走、能用 git 管的 .md 文件。数据都还在，按下面三步搬过去即可——我们不自动迁移，也不动你任何文件。",
+    "step1": "点下面的「导出笔记（zip）」把现有笔记导出成 Markdown。",
+    "step2": "解压到一个文件夹（比如 ~/Notes），按需整理目录。",
+    "step3": "用这个文件夹启动 NoteFast：桌面端菜单「Vault → 打开文件夹为 vault…」；Docker 挂载目录并设 VAULT_PATH=/vault；自建服务用 VAULT_PATH=~/Notes 启动。之后本页不会再出现。",
+    "freshIntro": "vault 模式下你的笔记就是磁盘上的 .md 文件：NoteFast 只负责给它们建索引、让你编辑、让 AI 读写，索引删了也能重建。告诉 NoteFast 用哪个文件夹：",
+    "fresh1": "桌面端：菜单「Vault → 打开文件夹为 vault…」（Windows 在启动页点按钮）。",
+    "fresh2": "Docker：把笔记目录挂到容器 /vault，并设置 VAULT_PATH=/vault（参考仓库里的 docker-compose.vault.yml）。",
+    "fresh3": "自建服务：VAULT_PATH=~/Notes 启动（见 README 的 vault mode 一节）。",
+    "exportNow": "导出笔记（zip）",
+    "guideLink": "查看迁移指引",
+    "legacyKeepHint": "想先看看旧数据？也可以暂时继续用数据库模式（数据不会丢，随时能回来导出）。",
+    "freshKeepHint": "只是想先试试功能？可以暂时继续用数据库模式。",
+    "keepDbMode": "暂时继续用数据库模式"
   }
 }

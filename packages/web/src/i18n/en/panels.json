@@ -229,5 +229,23 @@
     "addNew": "Add storage connection",
     "kindS3": "S3 compatible",
     "kindWebdav": "WebDAV"
+  },
+"vaultSetup": {
+    "title": "NoteFast now uses a folder as its only shape",
+    "legacySubtitle": "This database still holds {{n}} database-mode notes",
+    "freshSubtitle": "No notes folder has been chosen yet",
+    "legacyIntro": "Before 0.90 notes lived inside the database with no files on disk. Now the folder is authoritative: your notes should be .md files you can open, copy and version with git. Nothing is lost — move them over with the three steps below. We never migrate automatically, and we never touch your files.",
+    "step1": "Export your notes as Markdown with the button below.",
+    "step2": "Unzip them into a folder (say ~/Notes) and tidy the structure if you like.",
+    "step3": "Start NoteFast against that folder: desktop menu \"Vault → Open folder as vault…\"; Docker mounts it and sets VAULT_PATH=/vault; a self-hosted server starts with VAULT_PATH=~/Notes. This page will not come back.",
+    "freshIntro": "In vault mode your notes are the .md files on disk: NoteFast indexes them, edits them and lets AI read and write them — and the index can be rebuilt from scratch. Tell NoteFast which folder to use:",
+    "fresh1": "Desktop: menu \"Vault → Open folder as vault…\" (on Windows, the button on the start screen).",
+    "fresh2": "Docker: mount your notes directory at /vault and set VAULT_PATH=/vault (see docker-compose.vault.yml).",
+    "fresh3": "Self-hosted: start with VAULT_PATH=~/Notes (see the vault mode section in the README).",
+    "exportNow": "Export notes (zip)",
+    "guideLink": "Read the migration guide",
+    "legacyKeepHint": "Want to look at the old data first? You can keep using database mode for now — nothing is lost and you can export later.",
+    "freshKeepHint": "Just exploring? You can keep using database mode for now.",
+    "keepDbMode": "Keep database mode for now"
   }
 }
