@@ -283,6 +283,11 @@ export const createDocSchema = z.object({
   markdown: z.string().max(5_000_000).optional(),
   /** 初始标签 */
   tags: z.array(z.string().min(1).max(64)).max(64).optional(),
+  /**
+   * vault 模式下落盘的目录（相对 vault 根；缺省为根目录）。
+   * 越界路径由服务端拒绝；db 模式下忽略——那里没有文件夹概念。
+   */
+  dir: z.string().max(1024).optional(),
 })
 
 export const importMarkdownSchema = z.object({
@@ -297,6 +302,8 @@ export const importMarkdownSchema = z.object({
     provider: z.string().min(1).max(64),
     external_id: z.string().min(1).max(1000),
   }).optional(),
+  /** vault 模式下落盘目录（相对 vault 根）；同 `createDocSchema.dir` */
+  dir: z.string().max(1024).optional(),
 })
 
 export const updateDocStatusSchema = z.object({

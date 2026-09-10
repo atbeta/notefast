@@ -7,12 +7,13 @@
  *
  * 纯展示部分（`VaultTreeRows`）与取数部分（默认导出）分开，前者可无 DOM 单测。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ChevronRight, FileText, Folder, FolderOpen } from 'lucide-react'
 import { api } from '../hooks/useAPI'
 import { useApiQuery } from '../hooks/useApiQuery'
+import { useDocChanges } from '../hooks/useDocEvents'
 
 export interface VaultTreeDir {
   path: string
@@ -161,10 +162,13 @@ export default function VaultFolderTree({ onNavigate }: { onNavigate?: () => voi
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set<string>())
   const activeDir = searchParams.get('dir')
 
-  const { data: root, error } = useApiQuery(
+  const { data: root, error, refetch } = useApiQuery(
     () => api.get<VaultTreeLevel>('/vault/tree'),
     [],
   )
+  /** 已展开的层级路径：刷新时只重拉这些（含根层），别把整棵树拉一遍 */
+  const expandedRef = useRef<ReadonlySet<string>>(expanded)
+  expandedRef.current = expanded
 
   /** 根层来自查询，展开的子层来自 levels；合并视图避免在渲染里改 state */
   const allLevels = useMemo<Record<string, VaultTreeLevel | undefined>>(
@@ -194,6 +198,22 @@ export default function VaultFolderTree({ onNavigate }: { onNavigate?: () => voi
       })
     },
     [levels, load],
+  )
+
+  /**
+   * 文档变更 → 重拉根层与已展开的层级。
+   *
+   * 不加这段时，新建 / 入库的文件要等下次挂载才会出现在树里（用户看到的
+   * 「左侧目录要等扫描」其实是树不刷新，文件早就写下去了）。
+   */
+  useDocChanges(
+    useCallback(() => {
+      refetch()
+      for (const dir of expandedRef.current) {
+        if (dir === 'root') continue
+        void load(dir)
+      }
+    }, [refetch, load]),
   )
 
   // 直接打开 /?dir=… 时把祖先目录都展开，用户能看到自己在哪

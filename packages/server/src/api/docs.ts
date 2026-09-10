@@ -46,8 +46,29 @@ import { registerTrashRoutes } from './docTrash'
 import { listRelatedDocs } from '../services/docRelated'
 import { scheduleSyncNow } from '../sync/protocolManager'
 import { publishDocChange } from '../services/docEvents'
+import { getActiveVaultRuntime } from '../vault'
+import { toVaultRelPath } from '../vault/paths'
 
 const docs = new Hono()
+
+/**
+ * `dir` 请求参数 → 写回用的落盘提示（`properties.vault_hint_path`）。
+ *
+ * 为什么在服务端解析而不是信任前端：越界路径（`../`、绝对路径）必须在这里挡掉，
+ * 校验口径与写回一致（`toVaultRelPath`）。db 模式或未启用 vault 时返回 null——
+ * 调用方照旧落默认位置，不报错。
+ */
+function resolveVaultHintPath(dir: string | undefined): string | null {
+  const raw = (dir ?? '').trim()
+  if (!raw) return null
+  const rt = getActiveVaultRuntime()
+  if (!rt) return null
+  try {
+    return toVaultRelPath(rt.ctx.config.root, raw)
+  } catch {
+    return null
+  }
+}
 
 docs.get('/list', (c) => {
   const db = getDb()
@@ -207,12 +228,15 @@ docs.post('/', zValidator('json', createDocSchema), (c) => {
   const input = c.req.valid('json')
   const status = input.status === 'inbox' ? 'inbox' : 'note'
   const initialTags = normalizeDocTags(input.tags || [])
+  // vault 模式：把落盘目录交给写回（RFC 0005；db 模式没有文件夹概念，忽略）
+  const vaultHint = resolveVaultHintPath(input.dir)
   const { docId, blockIds } = insertDocFromMarkdown(db, {
     notebookId: input.notebook_id,
     title: input.title,
     markdown: input.markdown || '',
     status,
     tags: initialTags,
+    ...(vaultHint ? { properties: { vault_hint_path: vaultHint } } : {}),
   })
 
   const row = getBlockById(db, docId)!

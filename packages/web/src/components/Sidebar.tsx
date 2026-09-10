@@ -255,6 +255,9 @@ export default function Sidebar({
 
   const { mode } = useInstanceMode()
   const vaultMode = mode === 'vault'
+  // 新建入口带上当前目录，避免「在子目录里点新建、文件却掉到根目录」
+  const activeDir = new URLSearchParams(location.search).get('dir')
+  const newDocHref = activeDir ? `/new?dir=${encodeURIComponent(activeDir)}` : '/new'
   // refreshCounts 是稳定回调，但需要一个「当前是否 vault 模式」的最新值 → ref 转发
   const vaultModeRef = useRef(vaultMode)
   vaultModeRef.current = vaultMode
@@ -465,7 +468,8 @@ export default function Sidebar({
               <span className="flex-1">{t('sidebar.resources')}</span>
             </Link>
             <Tooltip className="w-full" label={t('sidebar.newDocTitle')}>
-              <Link to="/new" onClick={closeAfterNav} className={`w-full ${location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'}`}>
+              {/* 在目录视图里新建 → 落到当前目录（vault 模式下的 dir 提示由服务端解析） */}
+              <Link to={newDocHref} onClick={closeAfterNav} className={`w-full ${location.pathname === '/new' ? 'sidebar-link-active' : 'sidebar-link'}`}>
                 <Plus className="w-4 h-4" strokeWidth={1.75} />
                 {t('sidebar.newDoc')}
               </Link>

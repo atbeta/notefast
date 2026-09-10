@@ -3,6 +3,8 @@ import { zValidator } from '@hono/zod-validator'
 import { createHash } from 'node:crypto'
 import { importMarkdownSchema, rowToBlock, readDocStatus, readTags } from '@notefast/core'
 import { getDb } from '../db'
+import { getActiveVaultRuntime } from '../vault'
+import { toVaultRelPath } from '../vault/paths'
 import { findDocIdBySource, getBlockById, getBlocksByIds, getLiveDocById, updateBlock } from '../store/blocks'
 import { fireAfterCreate, fireAfterCreateMany, fireDocAfterCreate } from '../services/hooks'
 import { emitAppEvent } from '../events'
@@ -78,6 +80,19 @@ function respondCreated(
   }
 }
 
+/** `dir` 请求参数 → 落盘提示；非 vault 模式或路径非法时返回 null（照旧落默认位置） */
+function resolveImportDir(dir: string | undefined): string | null {
+  const raw = (dir ?? '').trim()
+  if (!raw) return null
+  const rt = getActiveVaultRuntime()
+  if (!rt) return null
+  try {
+    return toVaultRelPath(rt.ctx.config.root, raw)
+  } catch {
+    return null
+  }
+}
+
 importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => {
   const db = getDb()
   const input = c.req.valid('json')
@@ -123,6 +138,9 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
     return c.json({ error: 'bad_request', message: '未找到可用的笔记本' }, 400)
   }
 
+  // vault 模式：`dir` 指定落盘目录（越界路径静默退回根目录，不阻断导入）
+  const hintPath = resolveImportDir(input.dir)
+
   let result: InsertDocFromMarkdownResult
   try {
     result = insertDocFromMarkdown(db, {
@@ -133,6 +151,7 @@ importRouter.post('/markdown', zValidator('json', importMarkdownSchema), (c) => 
       tags: input.tags ? normalizeDocTags(input.tags) : undefined,
       rejectEmpty: true,
       source,
+      ...(hintPath ? { properties: { vault_hint_path: hintPath } } : {}),
     })
   } catch (e) {
     if (e instanceof EmptyMarkdownError) {

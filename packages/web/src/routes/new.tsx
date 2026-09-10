@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Check, X, Upload, Sparkles, Loader2, Tag, Plus } from 'lucide-react'
 import type { Notebook } from '@notefast/core'
@@ -25,6 +25,9 @@ export default function NewDocPage() {
   /** 当前 markdown 是否来自导入文件（手写新建不跑相对路径图拦截） */
   const [importedFromFile, setImportedFromFile] = useState(false)
   const [creating, setCreating] = useState(false)
+  // 从目录视图（/?dir=notes/books）点进来时，新笔记落到那个目录（vault 模式）
+  const [searchParams] = useSearchParams()
+  const dir = (searchParams.get('dir') || '').trim()
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'create' | 'import'>('create')
   const [generating, setGenerating] = useState(false)
@@ -75,14 +78,14 @@ export default function NewDocPage() {
       if (markdown.trim()) {
         const res = await request<{ doc: { id: string }; index_job?: { id: string } }>('/import/markdown', {
           method: 'POST',
-          body: JSON.stringify({ notebook_id: notebookId, markdown, title: finalTitle, tags }),
+          body: JSON.stringify({ notebook_id: notebookId, markdown, title: finalTitle, tags, ...(dir ? { dir } : {}) }),
         })
         docId = res.doc.id
         indexJobId = res.index_job?.id
       } else {
         const res = await request<{ id: string; index_job?: { id: string } }>('/docs', {
           method: 'POST',
-          body: JSON.stringify({ notebook_id: notebookId, title: finalTitle, tags }),
+          body: JSON.stringify({ notebook_id: notebookId, title: finalTitle, tags, ...(dir ? { dir } : {}) }),
         })
         docId = res.id
         indexJobId = res.index_job?.id
