@@ -11,6 +11,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   detectFilesystemType,
+  isUnreliableDarwinPath,
   isUnreliableFilesystem,
   probeNativeWatch,
   resolveWatchMode,
@@ -97,6 +98,21 @@ describe('resolveWatchMode', () => {
     expect(mode).toEqual({ usePolling: false, auto: true, reason: 'probe' })
   })
 
+  test('macOS 临时区域路径：直接轮询，不做探测', async () => {
+    let probed = false
+    const mode = await resolveWatchMode(
+      base,
+      async () => {
+        probed = true
+        return 'native'
+      },
+      () => 'apfs',
+      () => true,
+    )
+    expect(probed).toBe(false)
+    expect(mode).toEqual({ usePolling: true, auto: true, reason: 'path' })
+  })
+
   test('env 显式指定：优先级高于文件系统判定', async () => {
     const mode = await resolveWatchMode(
       { ...base, pollingSource: 'env', usePolling: false },
@@ -115,6 +131,16 @@ describe('文件系统判定', () => {
     for (const t of ['ext4', 'xfs', 'btrfs', 'apfs', 'overlay', null, undefined]) {
       expect(isUnreliableFilesystem(t)).toBe(false)
     }
+  })
+
+  test('macOS 临时区域判定：/tmp 与 /var/folders 为真，普通路径为假', () => {
+    if (process.platform !== 'darwin') {
+      expect(isUnreliableDarwinPath('/tmp/x')).toBe(false)
+      return
+    }
+    expect(isUnreliableDarwinPath('/tmp')).toBe(true)
+    expect(isUnreliableDarwinPath(dir)).toBe(true) // 测试目录建在 $HOME 或 /tmp，后者经 /private
+    expect(isUnreliableDarwinPath('/Users')).toBe(false)
   })
 
   test('detectFilesystemType：非 Linux 返回 null，Linux 至少不抛', () => {

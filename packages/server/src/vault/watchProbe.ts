@@ -10,7 +10,7 @@
  */
 
 import chokidar, { type FSWatcher } from 'chokidar'
-import { readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { VaultConfig } from './config'
 
@@ -22,7 +22,7 @@ export interface WatchMode {
   /** true = 由文件系统判定 / 探测得出（env 未显式指定） */
   auto: boolean
   /** 结论来源，便于日志排障 */
-  reason: 'env' | 'watch-off' | 'filesystem' | 'probe' | 'pending'
+  reason: 'env' | 'watch-off' | 'filesystem' | 'path' | 'probe' | 'pending'
 }
 
 /**
@@ -36,6 +36,23 @@ const UNRELIABLE_FS = /^(fuse|virtiofs|9p|nfs|cifs|smb|sshfs|davfs|afs|glusterfs
 
 export function isUnreliableFilesystem(fsType: string | null | undefined): boolean {
   return typeof fsType === 'string' && UNRELIABLE_FS.test(fsType)
+}
+
+/**
+ * macOS 的临时区域经符号链接（`/tmp` → `/private/tmp`、`/var/folders` → `/private/var/folders`），
+ * FSEvents 在那里投递极不稳定：V-501 基准实测 1000 文件中位 3776ms、样本到 14s
+ * （同一环境轮询中位 323ms）。单文件探测 12ms 就拿到事件，**测不出这个方向**，
+ * 所以按路径结构直接判为不可靠。
+ */
+export function isUnreliableDarwinPath(root: string): boolean {
+  if (process.platform !== 'darwin') return false
+  try {
+    const real = realpathSync.native(root)
+    const withSlash = real.endsWith('/') ? real : `${real}/`
+    return withSlash.startsWith('/private/tmp/') || withSlash.startsWith('/private/var/folders/')
+  } catch {
+    return false
+  }
 }
 
 /** 读 `/proc/self/mounts`，取包含该路径的最长挂载点的文件系统类型（仅 Linux；其他平台 null） */
@@ -150,6 +167,7 @@ export async function resolveWatchMode(
   config: Pick<VaultConfig, 'root' | 'watch' | 'usePolling' | 'pollingSource'>,
   probe: (root: string, timeoutMs?: number) => Promise<WatchBackend> = probeNativeWatch,
   fsTypeOf: (root: string) => string | null = detectFilesystemType,
+  unreliablePathOf: (root: string) => boolean = isUnreliableDarwinPath,
 ): Promise<WatchMode> {
   if (!config.watch) return { usePolling: config.usePolling, auto: false, reason: 'watch-off' }
   if (config.pollingSource === 'env') {
@@ -163,6 +181,14 @@ export async function resolveWatchMode(
         '原生事件不保证投递宿主侧改动，使用轮询',
     )
     return { usePolling: true, auto: true, reason: 'filesystem' }
+  }
+  // macOS 临时区域（符号链接到 /private/…）：原生事件延迟可达十几秒
+  if (unreliablePathOf(config.root)) {
+    console.warn(
+      '[notefast] vault 位于 macOS 临时区域（/tmp、/var/folders 经符号链接），' +
+        '原生事件投递不稳定，使用轮询',
+    )
+    return { usePolling: true, auto: true, reason: 'path' }
   }
   const backend = await probe(config.root)
   return { usePolling: backend === 'polling', auto: true, reason: 'probe' }
