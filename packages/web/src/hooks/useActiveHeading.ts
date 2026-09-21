@@ -22,10 +22,11 @@
  */
 
 import { useEffect, useState } from 'react'
-import { findScrollableAncestor, scrollLandingTop } from '../lib/scroll'
+import { SCROLL_TOP_GAP, findScrollableAncestor } from '../lib/scroll'
 
-/** 纯函数默认激活线（px）：仅作测试基线与无容器兜底；
- *  运行时由 scrollLandingTop 按「滚动容器上沿 + gap」实测（Tauri 壳标题栏会把容器推低） */
+/** 纯函数默认激活线（px）：仅作测试基线；
+ *  运行时按「滚动容器上沿 + SCROLL_TOP_GAP」实测（Tauri 壳标题栏会把容器推低，
+ *  固定 72px 视口偏移会误判；容器上沿那部分在内容坐标系里会抵消，见 compute） */
 const ACTIVATION_LINE = 72
 /** 激活容差：scrollTop 可能落在 subpixel（如落点 +0.4px），严格比较会漏判——4px 内都算「已滚过」 */
 const ACTIVATION_TOLERANCE = 4
@@ -65,13 +66,45 @@ export function useActiveHeading(headingIds: string[]): string | null {
       return
     }
 
+    // 滚动容器：heading 最近的可滚动祖先（正文区 .overflow-y-auto）；
+    // 内容不足一屏时无滚动容器，退回 window（resize 仍触发重算）
+    const scrollerEl = findScrollableAncestor(elements[0]!)
+    const scroller: HTMLElement | Window = scrollerEl ?? window
+
+    /**
+     * 标题在**滚动内容坐标系**里的位置，以及量它时的 scrollHeight。
+     *
+     * 缓存的意义：滚动热路径每帧对每个标题 getBoundingClientRect 会强制布局，
+     * 一篇几十个标题的文档就是「滚动掉帧」的直接来源（lector outline.ts 记着同一条）。
+     * 缓存后每帧只读一次滚动容器上沿，其余全是算术。
+     *
+     * 失效判据只比 scrollHeight：图片 / mermaid / 公式落笔后内容高度变了才需要重量。
+     */
+    let offsets: number[] = []
+    let offsetsHeight: number | null = null
+
+    const contentOffsetOf = (el: HTMLElement): number => {
+      const rect = el.getBoundingClientRect()
+      if (!scrollerEl) return rect.top + window.scrollY
+      return rect.top - scrollerEl.getBoundingClientRect().top + scrollerEl.scrollTop
+    }
+
+    const measure = () => {
+      offsets = elements.map(contentOffsetOf)
+      offsetsHeight = scrollerEl ? scrollerEl.scrollHeight : document.documentElement.scrollHeight
+    }
+
     let raf = 0
     const compute = () => {
       raf = 0
-      // 激活线 = 滚动容器上沿 + gap（与 scrollToElement 落点同基准，随布局实测）；
-      // 收集 heading 的视口 top（document order），交给纯函数选活跃项
-      const tops = elements.map((el) => el.getBoundingClientRect().top)
-      setActiveId(elements[pickActiveHeadingIndex(tops, scrollLandingTop(elements[0]!))]?.id ?? null)
+      const scrollHeight = scrollerEl ? scrollerEl.scrollHeight : document.documentElement.scrollHeight
+      if (offsets.length !== elements.length || offsetsHeight !== scrollHeight) measure()
+      // 激活线 = 滚动容器上沿 + gap（与 scrollToElement 落点同基准，随布局实测）。
+      // 容器上沿每帧实测一次（顶栏高度可能变），标题位置用缓存偏移换算回视口坐标。
+      const base = scrollerEl ? scrollerEl.getBoundingClientRect().top : 0
+      const scrollTop = scrollerEl ? scrollerEl.scrollTop : window.scrollY
+      const tops = offsets.map((offset) => base + offset - scrollTop)
+      setActiveId(elements[pickActiveHeadingIndex(tops, base + SCROLL_TOP_GAP)]?.id ?? null)
     }
 
     const onScroll = () => {
@@ -79,10 +112,8 @@ export function useActiveHeading(headingIds: string[]): string | null {
       raf = requestAnimationFrame(compute)
     }
 
+    measure()
     compute()
-    // 滚动容器：heading 最近的可滚动祖先（正文区 .overflow-y-auto）；
-    // 内容不足一屏时无滚动容器，退回 window（resize 仍触发重算）
-    const scroller = findScrollableAncestor(elements[0]!) ?? window
     scroller.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onScroll)
     return () => {
@@ -90,7 +121,7 @@ export function useActiveHeading(headingIds: string[]): string | null {
       window.removeEventListener('resize', onScroll)
       if (raf) cancelAnimationFrame(raf)
     }
-    // headingIds 是 React state，每次 render 都会是新 array——频繁重建 observer/listener
+    // headingIds 是 React state，每次 render 都会是新 array——频繁重建 listener
     // 没意义。用 length + 首尾 id 当 memo key（内容顺序变化会体现在首尾上）。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headingIds.length, headingIds[0], headingIds[headingIds.length - 1]])

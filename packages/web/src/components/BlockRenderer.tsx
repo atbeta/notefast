@@ -6,7 +6,8 @@ import type { Block } from '@notefast/core'
 import MermaidDiagram from './MermaidDiagram'
 import MathBlock, { MathInline } from './MathBlock'
 import { CodeFenceView } from './CodeFenceView'
-import { INLINE_MATH_SRC } from '../lib/katex'
+// 行内 token 定义与「上屏文本」提取都在 lib（渲染与统计共用一份，见该文件头注释）
+import { INLINE_RE } from '../lib/inlineMarkdown'
 import BlockSurface, { BlockHandle, RelatedAnchorCtx, PresentationCtx } from './BlockSurface'
 import { Tooltip } from './ui'
 import { api } from '../hooks/useAPI'
@@ -180,23 +181,8 @@ function AssetImage({ assetId, src, alt }: { assetId: string; src: string; alt: 
 }
 
 // ───────────────────────── 行内 Markdown 渲染 ─────────────────────────
-// 支持：![image](url)、`code`、$math$、**bold**、*italic*、~~del~~、[text](url)、裸 URL
-// 单一正则扫描，非嵌套场景覆盖绝大多数笔记内容；image 必须在 link 之前匹配；
-// $math$ 紧随 code 之后（code 内不解析公式），在 bold/italic 之前（避免 * 被先行认领）
-
-const INLINE_RE = new RegExp(
-  [
-    String.raw`(!\[[^\]]*\]\([^)\s]+\))`,
-    '(`[^`]+`)',
-    `(${INLINE_MATH_SRC})`,
-    String.raw`(\*\*[^*\n]+\*\*)`,
-    String.raw`(\*[^*\n]+\*)`,
-    String.raw`(~~[^~\n]+~~)`,
-    String.raw`(\[[^\]]+\]\([^)\s]+\))`,
-    String.raw`(https?:\/\/[^\s<>()"]+)`,
-  ].join('|'),
-  'g',
-)
+// token 定义（INLINE_RE）在 lib/inlineMarkdown.ts：统计口径与渲染口径共用同一份，
+// 两边各写一份必然漂移。分组下标 1..8 与该文件的 renderedInlineText 一一对应。
 
 /** 裸 URL 尾部的标点不应吃进来（如「见 https://a.com/x, 」） */
 function trimUrlTail(url: string): string {

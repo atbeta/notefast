@@ -46,8 +46,10 @@ import { readDocRailWidth, writeDocRailWidth, type DocRailWidth } from '../hooks
 import { openDocChangeAction } from '../lib/openDocChange'
 import { resolveRelatedBlockId } from '../lib/relatedAnchor'
 import { parseDocScrollHash } from '../lib/searchHits'
-import { scrollToElement, scrollLandingTop, SCROLL_TOP_GAP } from '../lib/scroll'
-import { readDocScroll, writeDocScroll } from '../lib/docScroll'
+import { scrollToElement, scrollLandingTop, SCROLL_TOP_GAP, findScrollableAncestor } from '../lib/scroll'
+import { ancestorHeadingIds } from '../lib/outlineNav'
+import { readDocScrollTop, scheduleDocScrollWrite, flushDocScrollWrite } from '../lib/docScroll'
+import { countDocStats, hasRenderableContent, readingMinutes } from '../lib/docStats'
 import DocFindBar from '../components/DocFindBar'
 import { HistoryView, type DocRevision } from './docHistory'
 import { useActiveHeading } from '../hooks/useActiveHeading'
@@ -82,18 +84,6 @@ interface Backlink {
   source_content: string
   source_type: string
   ref_type: string
-}
-
-function countWords(doc: Block): number {
-  let n = 0
-  const walk = (b: Block) => {
-    // 根 document 块的 content 是文档标题而非正文，不计入——
-    // 否则标题恒非空，isEmpty 永远为 false（空态不可达），字数也虚高一个标题长
-    if (b.content && b.type !== 'document') n += b.content.trim().length
-    b.children.forEach(walk)
-  }
-  walk(doc)
-  return n
 }
 
 function flattenHeadings(nodes: HeadingNode[]): Array<HeadingNode & { depth: number }> {
@@ -170,7 +160,8 @@ export default function DocPage() {
   useLayoutEffect(() => {
     const el = scrollRef.current
     const prev = prevScrollIdRef.current
-    if (el && prev && prev !== id) writeDocScroll(prev, el.scrollTop)
+    // 切篇：把上一篇的悬挂写落盘（防抖窗口内的最后一次滚动位置）
+    if (el && prev && prev !== id) flushDocScrollWrite()
     prevScrollIdRef.current = id
   }, [id])
 
@@ -189,7 +180,8 @@ export default function DocPage() {
     }
     const el = scrollRef.current
     if (!el) return
-    const top = readDocScroll(id) ?? 0
+    // 无记录 = 0（回顶部）；有记录但内容已被大幅改短时 docScrollTop 会返回 null
+    const top = readDocScrollTop(id, contentLenRef.current) ?? 0
     el.scrollTop = top
     restoredScrollForIdRef.current = id
     const timer = window.setTimeout(() => {
@@ -200,9 +192,8 @@ export default function DocPage() {
 
   useEffect(() => {
     return () => {
-      const el = scrollRef.current
-      const savedId = prevScrollIdRef.current
-      if (el && savedId) writeDocScroll(savedId, el.scrollTop)
+      // 卸载时把防抖窗口内的位置落盘（离开文档页的最后一次滚动位置）
+      flushDocScrollWrite()
     }
   }, [])
 
@@ -836,8 +827,16 @@ useEffect(() => {
   const activeHeadingId = outlineJumpId ?? scrollActiveHeadingId
   const updatedAt = doc ? formatRelative(doc.updated_at, 'long') : ''
   const createdAt = doc ? formatRelative(doc.created_at, 'long') : ''
-  const wordCount = useMemo(() => (doc ? countWords(doc) : 0), [doc])
-  const isEmpty = wordCount === 0
+  // 统计口径见 lib/docStats.ts：CJK 按字 + 西文按词，markdown 语法与链接地址不计。
+  // isEmpty 单独判「有没有块带内容」——只有图片的笔记字数为 0，但不是空文档。
+  const stats = useMemo(() => countDocStats(doc), [doc])
+  const wordCount = stats.words
+  const readMinutes = readingMinutes(stats)
+  const isEmpty = !hasRenderableContent(doc)
+  // 阅读位置的失效判断要读「当前文档内容长度」，且必须在同一帧里拿到最新值：
+  // 渲染期直接写 ref（幂等赋值），恢复用的 useLayoutEffect 才能读到本篇而不是上一篇的长度。
+  const contentLenRef = useRef(0)
+  contentLenRef.current = stats.charsWithSpaces
 
   const indexSkip = indexState?.skip_reason
   const indexHidden =
@@ -993,7 +992,9 @@ useEffect(() => {
           ref={scrollRef}
           className="flex-1 overflow-y-auto [scrollbar-gutter:stable] print:overflow-visible print:h-auto"
           onScroll={() => {
-            if (id && scrollRef.current) writeDocScroll(id, scrollRef.current.scrollTop)
+            const el = scrollRef.current
+            // 防抖写入（见 lib/docScroll.ts）：滚动热路径不碰 localStorage
+            if (id && el) scheduleDocScrollWrite(id, el.scrollTop, stats.charsWithSpaces)
           }}
         >
           {/* 切换文档时保留旧内容完整展示，新数据到了直接替换 */}
@@ -1130,6 +1131,12 @@ useEffect(() => {
             {!isEditing && (
               <div className="mt-2 mb-8 text-sm text-muted-foreground/70 tabular-nums select-none print:hidden">
                 {wordCount.toLocaleString(currentLocale())} {t('doc.charCount')}
+                {readMinutes > 0 && (
+                  <>
+                    <span className="mx-2 text-border-strong">·</span>
+                    {t('doc.readingTime', { minutes: readMinutes })}
+                  </>
+                )}
                 {createdAt && (
                   <>
                     <span className="mx-2 text-border-strong">·</span>
@@ -1425,6 +1432,30 @@ function OutlineView({
   onJump?: (id: string) => void;
 }) {
   const { t } = useTranslation()
+  // 每个大纲行的 DOM 句柄：当前小节要能滚进侧栏视野（长文档下高亮项常常在视野外）
+  const rowsRef = useRef<Map<string, HTMLAnchorElement> | null>(null)
+  if (!rowsRef.current) rowsRef.current = new Map()
+  // 当前小节所属的分支：读 h3 时也要看得出它挂在哪个 h2/h1 下（长文档的方向感）
+  const ancestors = useMemo(() => new Set(ancestorHeadingIds(headings, activeId)), [headings, activeId])
+
+  useEffect(() => {
+    if (!activeId) return
+    const row = rowsRef.current?.get(activeId)
+    if (!row) return
+    // 只滚动**大纲自己的滚动容器**，不碰正文：nearest 语义 + 8px 呼吸，
+    // 已经在视野里时不动（否则每次滚动都会把侧栏拽一下）
+    const scroller = findScrollableAncestor(row)
+    if (!scroller) return
+    const sRect = scroller.getBoundingClientRect()
+    const rRect = row.getBoundingClientRect()
+    const margin = 8
+    if (rRect.top < sRect.top + margin) {
+      scroller.scrollTop -= sRect.top + margin - rRect.top
+    } else if (rRect.bottom > sRect.bottom - margin) {
+      scroller.scrollTop += rRect.bottom - (sRect.bottom - margin)
+    }
+  }, [activeId, headings])
+
   // 仅首次加载（无数据）时显示加载态；切换文档时保留旧大纲直至新数据到达，避免闪烁
   if (loading && headings.length === 0) {
     return <ListRowsSkeleton rows={3} withIcon={false} />
@@ -1440,9 +1471,16 @@ function OutlineView({
     <div className="flex flex-col">
       {headings.map((h) => {
         const isActive = h.id === activeId
+        const isAncestor = !isActive && ancestors.has(h.id)
         return (
           <Tooltip key={h.id} label={h.content} className="w-full min-w-0">
             <a
+              ref={(el) => {
+                const rows = rowsRef.current
+                if (!rows) return
+                if (el) rows.set(h.id, el)
+                else rows.delete(h.id)
+              }}
               href={`#${h.id}`}
               aria-current={isActive ? 'location' : undefined}
               onClick={(e) => {
@@ -1457,7 +1495,9 @@ function OutlineView({
               className={`block w-full px-1.5 -mx-1.5 py-1 text-sm rounded-md transition-colors truncate ${
                 isActive
                   ? 'text-primary font-medium bg-primary-soft'
-                  : 'text-muted-foreground/85 hover:text-foreground'
+                  : isAncestor
+                    ? 'text-foreground/70'
+                    : 'text-muted-foreground/85 hover:text-foreground'
               }`}
               style={{ paddingLeft: `${(h.depth * 12) + 6}px` }}
             >

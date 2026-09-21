@@ -52,6 +52,7 @@
     "generateTitleNoContent": "暂无可用于生成标题的内容",
     "aiContinueNeedChat": "续写需要先配置 Chat 模型",
     "charCount": "字",
+    "readingTime": "约 {{minutes}} 分钟",
     "updatedAtLabel": "更新于 {{time}}",
     "createdAtLabel": "创建于 {{time}}",
     "archiveTooltip": "归档后不出现在「所有文档」，AI 回答默认不再引用；可随时恢复",
