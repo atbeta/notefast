@@ -95,6 +95,39 @@ if (missingEn.length > 0) {
 }
 console.log(`[i18n] OK：en 覆盖全部 ${zhKeys.size} 个 key`)
 
+// 占位符对齐：同一个 key 在 zh-CN 与 en 里必须用同一组 {{placeholder}}。
+// 行号对齐只保证「同一行」，保证不了「同一个变量名」——把 {{count}} 写成 {{n}}
+// 或者漏掉一个占位符，界面会显示成「已保存 个」这种缺字，而且两端都合法、类型也不报。
+const placeholders = (s: string) =>
+  [...s.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((m) => m[1]!).sort().join(',')
+
+function flattenLeaves(obj: Record<string, unknown>, prefix = ''): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    const p = prefix ? `${prefix}.${k}` : k
+    if (typeof v === 'string') out[p] = v
+    else if (v && typeof v === 'object') Object.assign(out, flattenLeaves(v as Record<string, unknown>, p))
+  }
+  return out
+}
+
+const zhLeaves = flattenLeaves(zhCN as Record<string, unknown>)
+const enLeaves = flattenLeaves(en as Record<string, unknown>)
+const phMismatch: string[] = []
+for (const [key, zhText] of Object.entries(zhLeaves)) {
+  const enText = enLeaves[key]
+  if (enText === undefined) continue
+  if (placeholders(zhText) !== placeholders(enText)) {
+    phMismatch.push(`${key}: zh=[${placeholders(zhText)}] en=[${placeholders(enText)}]`)
+  }
+}
+if (phMismatch.length > 0) {
+  console.error(`[i18n] ${phMismatch.length} 处占位符不一致（同一 key 的 {{变量}} 必须两边一致）：`)
+  for (const m of phMismatch) console.error(`  - ${m}`)
+  process.exit(1)
+}
+console.log(`[i18n] OK：${Object.keys(zhLeaves).length} 个 key 的 {{占位符}} 两边一致`)
+
 // 语言包行号对齐：同一 key 在 zh-CN 与 en 同名文件中必须处于同一行号。
 // 按本仓库语言包格式（一行一个 key、纯对象嵌套、无数组）逐行扫描；
 // 统计花括号前剔除字符串字面量，避免 {{placeholder}} 干扰。

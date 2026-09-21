@@ -60,7 +60,7 @@ NoteFast 的视觉只通过 **CSS 变量 token** 定义。所有组件应通过 
 字体栈走 `var(--font-sans/serif/mono)`。UI 字号用 `text-2xs`（10.5px，侧栏/徽章）到 `text-display`；文档标题用 `text-h1`…`text-h6`（与编辑态 `--text-h1`…同源）。不要写 `text-[12px]` 这类任意值，`bun lint` 会拦。`font-serif` 只给阅读正文。
 
 ### 1.6.1 阅读列宽
-`--reading-max-w`（48rem）— 仅 doc 路由的内层阅读列引用，外层页面容器仍走 `max-w-4xl`。详见 `routes/doc.tsx` 的 `reading-col` 包裹。
+`--reading-max-w`（46rem = 736px；阅读页另有 64rem 加宽档，「阅读显示」弹层里切换）— 仅 doc 路由的内层阅读列引用，外层页面容器仍走 `max-w-4xl`。详见 `routes/doc.tsx` 的 `reading-col` 包裹。
 
 ### 1.7 阴影
 | Token | 用处 |
