@@ -143,6 +143,7 @@ const PAIRS: Array<[string, string, number, string]> = [
   ['--primary', '--background', 4.5, '链接/强调'],
   ['--primary-foreground', '--primary', 4.5, '主按钮文字'],
   ['--destructive', '--background', 4.5, '危险色文字'],
+  ['--destructive-foreground', '--destructive', 4.5, '危险按钮文字'],
   ['--success', '--background', 3, '成功色（图标/徽章）'],
   ['--warning', '--background', 3, '警告色（图标/徽章）'],
 ]
