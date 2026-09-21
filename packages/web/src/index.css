@@ -1097,6 +1097,15 @@ html.theme-fading *::after {
 }
 
 /* Mermaid 围栏块内联预览（```mermaid；光标在块内回退源码；主题切换 widget 内重渲染），容器对齐阅读态 MermaidDiagram */
+/* 图表里的字不参与正文排版：body 上的 font-feature-settings（cv11/ss01/ss03/cv02）
+   会继承进 mermaid 的 SVG 文字，而它的内部 <style> 只锁 font-family、不锁这些
+   OpenType 特性——落到中文字体上可能渲出错的替代字形（lector 踩过同一个坑）。
+   阅读态与编辑器内联预览两条路径一起清零。 */
+.mermaid-diagram svg,
+.cm-mermaid-preview svg {
+  font-feature-settings: normal;
+  font-variant: normal;
+}
 .cm-mermaid-preview {
   position: relative;
   margin: 6px 0;
