@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.87.0](https://github.com/atbeta/notefast/compare/v0.86.1...v0.87.0) (2026-09-21)
+
+
+### Features
+
+* **web:** add find options and guard regex search ([7e1bf1c](https://github.com/atbeta/notefast/commit/7e1bf1c9ef4e5b62a9dfe06389db2e1e1dea4727))
+* **web:** rebuild reading stats, position memory and outline ([5ac0913](https://github.com/atbeta/notefast/commit/5ac09132a0e1789f543912ba8c05069cfe810a0c))
+
+
+### Bug Fixes
+
+* **ci:** let release-please own the tauri Cargo.lock version ([82327f8](https://github.com/atbeta/notefast/commit/82327f880f2f0908561fe5eac023b7583d666a2f))
+
+
+### Performance Improvements
+
+* **web:** cache mermaid renders and bind diagram tokens ([35e16f0](https://github.com/atbeta/notefast/commit/35e16f0767f5be6a23a8aa5f8bf571229fb594fa))
+
 ## [0.86.1](https://github.com/atbeta/notefast/compare/v0.86.0...v0.86.1) (2026-09-06)
 
 
