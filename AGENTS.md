@@ -43,6 +43,16 @@ Conventional Commits，简洁英文。`type(scope): subject`，subject ≤ 72 �
 
 质量门禁：`bun lint`（oxlint，`.oxlintrc.json`，correctness 为 error）+ `bun run typecheck` + `bun test`，由 `.github/workflows/ci.yml` 强制执行。
 
+`bun lint` 里已挂四道静态检查，放宽之前先想清楚：
+| 检查 | 管什么 |
+|---|---|
+| `scripts/check-typography.ts` | 禁止 `text-[Npx]` 任意字号，逼回 token 字阶 |
+| `scripts/check-i18n.ts` | key 有翻译、en 覆盖全量、zh/en 行号对齐、**占位符两边一致**、源码无未入包 CJK |
+| `scripts/check-design.ts` | 禁止 `dark:` 变体 / `emerald-amber-rose-` / 任意值 hex / CSS 按 `prefers-color-scheme` 切主题；`var(--x)` 不得悬空；浅深色正文与次级色对比度过 AA（偏低只 warn） |
+| `scripts/check-text-integrity.ts` | 新增行不得含替换字符 U+FFFD（`bun run check:text`；`--all` 扫全仓，注释除外） |
+
+**文本完整性**：改文件的读写路径必须 UTF-8 感知。别用 PowerShell 的 `Get-Content`/`Set-Content` 往返含中文的文件，也别让临时脚本走文本管道——那会把中文写成 U+FFFD，注释里只是难读，落到用户可见字符串里就是乱码。
+
 ---
 
 ## 技术栈：TypeScript（Bun）
