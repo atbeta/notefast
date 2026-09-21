@@ -1,22 +1,34 @@
 /**
  * 文档阅读态文内查找条。⌘F 打开（macOS 壳经菜单派发 nf:find，因 WKWebView 默认不处理查找）。
- * 高亮走 CSS Custom Highlight；不支持时只滚动到命中。
+ * 高亮走 CSS Custom Highlight（不插 DOM 节点，所以查找不会弄脏文档状态）；
+ * 不支持时只滚动到命中。
+ *
+ * 匹配一律走 lib/docFind.ts 的 compileFind（唯一实现），这里只负责：
+ * 把「上屏文本 → 偏移 → Range → 高亮」串起来，以及三个开关的 UI。
+ * 正文变化（SSE 推送、mermaid 异步落笔、折叠目录展开）会让旧命中集合失效，
+ * 所以开着查找条时挂一个 MutationObserver 重算——否则计数显示的是「上一版正文」的数字。
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react'
 import {
+  DEFAULT_FIND_OPTIONS,
   DOC_FIND_EVENT,
   DOC_FIND_NEXT_EVENT,
   DOC_FIND_PREV_EVENT,
-  findMatchRanges,
+  compileFind,
   stepFindIndex,
+  type FindError,
+  type FindOptions,
   type FindRange,
 } from '../lib/docFind'
 
 const HIGHLIGHT_ALL = 'nf-find'
 const HIGHLIGHT_CUR = 'nf-find-current'
+
+/** 正文变化后重算命中的防抖（mermaid 落笔会连着改好几次 DOM）。 */
+const RECOMPUTE_DEBOUNCE_MS = 150
 
 function resolveRoot(ref: React.RefObject<HTMLElement | null>): HTMLElement | null {
   return ref.current ?? document.querySelector<HTMLElement>('.cm-content, article.reading-prose, .reading-prose')
@@ -92,6 +104,36 @@ function isFindPassthrough(target: EventTarget | null): boolean {
   return false
 }
 
+/** 查找开关按钮：三个共用一套样式与语义（aria-pressed + title）。 */
+function FindToggle({
+  label,
+  pressed,
+  onToggle,
+  children,
+}: {
+  label: string
+  pressed: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={pressed}
+      aria-label={label}
+      title={label}
+      className={`inline-flex items-center justify-center h-6 min-w-6 px-1 rounded-md font-mono text-xs transition-colors ${
+        pressed
+          ? 'text-primary bg-primary/12 hover:bg-primary/15'
+          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
 export default function DocFindBar({
   rootRef,
   disabled,
@@ -107,14 +149,22 @@ export default function DocFindBar({
   const [query, setQuery] = useState('')
   const [current, setCurrent] = useState(-1)
   const [count, setCount] = useState(0)
+  const [opts, setOpts] = useState<FindOptions>(DEFAULT_FIND_OPTIONS)
+  const [error, setError] = useState<FindError | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const rangesRef = useRef<Range[]>([])
+  // MutationObserver 的回调要读「最新的查询与开关」，但不该因为敲字重建 observer
+  const queryRef = useRef(query)
+  const optsRef = useRef(opts)
+  queryRef.current = query
+  optsRef.current = opts
 
   const close = useCallback(() => {
     setOpen(false)
     setQuery('')
     setCurrent(-1)
     setCount(0)
+    setError(null)
     rangesRef.current = []
     clearHighlights()
   }, [])
@@ -127,8 +177,21 @@ export default function DocFindBar({
   }, [])
 
   const runQuery = useCallback(
-    (q: string) => {
+    (q: string, options: FindOptions) => {
+      // 编译一次，计数与高亮共用同一批命中（见 lib/docFind.ts 头注释）
+      const compiled = compileFind(q, options)
       const root = resolveRoot(rootRef)
+      if (!compiled.ok) {
+        // 'empty'（还没输入）不算错误，只是没有结果；正则问题要明说，
+        // 静默当 0 处会让人以为「文档里没有」。
+        setError(compiled.error === 'empty' ? null : compiled.error)
+        rangesRef.current = []
+        setCount(0)
+        setCurrent(-1)
+        clearHighlights()
+        return
+      }
+      setError(null)
       if (!root) {
         rangesRef.current = []
         setCount(0)
@@ -136,7 +199,7 @@ export default function DocFindBar({
         clearHighlights()
         return
       }
-      const matches = findMatchRanges(collectText(root), q)
+      const matches = compiled.find(collectText(root))
       const ranges = rangesFromOffsets(root, matches)
       rangesRef.current = ranges
       setCount(ranges.length)
@@ -175,9 +238,34 @@ export default function DocFindBar({
 
   useEffect(() => {
     if (!open) return
-    const frame = requestAnimationFrame(() => runQuery(query))
+    const frame = requestAnimationFrame(() => runQuery(query, opts))
     return () => cancelAnimationFrame(frame)
-  }, [query, open, rootRef, runQuery, docId])
+    // opts 是三布尔对象：逐项列出依赖，避免每次渲染都重跑（对象字面量每次都新）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, opts.caseSensitive, opts.wholeWord, opts.regex, open, rootRef, runQuery, docId])
+
+  /**
+   * 正文变化后重算命中：SSE 推送换内容、mermaid/KaTeX 异步落笔、折叠目录展开
+   * 都会让旧偏移失效。高亮走 CSS Custom Highlight、不改 DOM，所以这里不会自触发。
+   */
+  useEffect(() => {
+    if (!open) return
+    const root = resolveRoot(rootRef)
+    if (!root || typeof MutationObserver === 'undefined') return
+    let timer = 0
+    const observer = new MutationObserver(() => {
+      if (timer) window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        timer = 0
+        runQuery(queryRef.current, optsRef.current)
+      }, RECOMPUTE_DEBOUNCE_MS)
+    })
+    observer.observe(root, { childList: true, characterData: true, subtree: true })
+    return () => {
+      if (timer) window.clearTimeout(timer)
+      observer.disconnect()
+    }
+  }, [open, rootRef, runQuery, docId])
 
   useEffect(() => () => clearHighlights(), [])
 
@@ -263,8 +351,37 @@ export default function DocFindBar({
           aria-label={t('doc.findPlaceholder')}
         />
         <span className="text-xs tabular-nums text-muted-foreground min-w-[2.75rem] text-right">
-          {query.trim() ? (count === 0 ? t('doc.findNone') : t('doc.findCount', { n: current + 1, total: count })) : ''}
+          {error
+            ? t(error === 'invalid-regex' ? 'doc.findInvalidRegex' : 'doc.findRiskyRegex')
+            : query.trim()
+              ? count === 0
+                ? t('doc.findNone')
+                : t('doc.findCount', { n: current + 1, total: count })
+              : ''}
         </span>
+        {/* 三个开关用 Aa / \b / .* 这组符号而不是文字：查找界面里跨语言通用
+            （VS Code、浏览器都是这套），含义交给 title 与 aria-label。 */}
+        <FindToggle
+          label={t('doc.findCase')}
+          pressed={opts.caseSensitive}
+          onToggle={() => setOpts((o) => ({ ...o, caseSensitive: !o.caseSensitive }))}
+        >
+          Aa
+        </FindToggle>
+        <FindToggle
+          label={t('doc.findWhole')}
+          pressed={opts.wholeWord}
+          onToggle={() => setOpts((o) => ({ ...o, wholeWord: !o.wholeWord }))}
+        >
+          {'\\b'}
+        </FindToggle>
+        <FindToggle
+          label={t('doc.findRegex')}
+          pressed={opts.regex}
+          onToggle={() => setOpts((o) => ({ ...o, regex: !o.regex }))}
+        >
+          .*
+        </FindToggle>
         <button
           type="button"
           onClick={() => step(-1)}
