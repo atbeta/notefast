@@ -7,16 +7,17 @@
   <style>
     /* 默认亮色（与 Web tokens 一致）；暗色走 media，避免亮色系统下 CSS 先暗后亮 */
     :root {
-      /* 品牌色（与主 UI tokens.css --primary 同源：#5A74B0 石板靛蓝） */
-      --brand: #5a74b0;
-      --brand-soft: rgba(90, 116, 176, 0.28);
+      /* 品牌色（与主 UI tokens.css 浅色 --primary 同源：#2563EB） */
+      --brand: #2563eb;
+      --brand-soft: rgba(37, 99, 235, 0.28);
       --bg: #f4f5f9;
       --bg-glow: #eceef5;
       --fg: #26272e;
       --fg-dim: rgba(38, 39, 46, 0.45);
     }
     [data-theme="dark"] {
-      --brand-soft: rgba(90, 116, 176, 0.35);
+      --brand: #60a5fa;
+      --brand-soft: rgba(96, 165, 250, 0.35);
       --bg: #15161a;
       --bg-glow: #1b1d24;
       --fg: #e8e9ed;
@@ -25,7 +26,8 @@
     /* 未设 data-theme 时才跟系统（Rust/JS 尚未写入偏好） */
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme]) {
-        --brand-soft: rgba(90, 116, 176, 0.35);
+        --brand: #60a5fa;
+        --brand-soft: rgba(96, 165, 250, 0.35);
         --bg: #15161a;
         --bg-glow: #1b1d24;
         --fg: #e8e9ed;
@@ -77,8 +79,8 @@
       border-radius: 20px;
       display: grid;
       place-items: center;
-      background: linear-gradient(145deg, rgba(90, 116, 176, 0.16), rgba(90, 116, 176, 0.05));
-      border: 1px solid rgba(90, 116, 176, 0.22);
+      background: linear-gradient(145deg, color-mix(in srgb, var(--brand) 16%, transparent), color-mix(in srgb, var(--brand) 5%, transparent));
+      border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
       animation: glow 2.6s ease-in-out infinite;
     }
     .logo svg {

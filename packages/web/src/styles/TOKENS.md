@@ -24,7 +24,7 @@ NoteFast 的视觉只通过 **CSS 变量 token** 定义。所有组件应通过 
 | `--accent-foreground` | hover 高亮态文字 |
 
 ### 1.3 主色（action）
-低饱和品牌靛蓝（light #5A74B0 / dark #95A4C6），只用于三处：选中态（sidebar active、tag 选中 pill）、主要操作（主按钮）、AI 功能标识（AI 图标 / AI 头像）。
+与应用图标同一蓝色（light #2563EB / dark #60A5FA）。浅色更深、深色更亮，随 `data-theme` 翻转，不提供换色。只用于三处：选中态（sidebar active、tag 选中 pill）、主要操作（主按钮）、AI 功能标识（AI 图标 / AI 头像）。
 | Token | 角色 |
 |---|---|
 | `--primary` | 品牌主色：主按钮 / 选中态文字 / focus ring |

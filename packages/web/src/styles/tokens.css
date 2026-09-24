@@ -4,7 +4,7 @@
  * 设计原则（Geek & Notion-like）：
  * - 极致极简：纯白/纯黑背景，高对比度，摒弃多余边框与投影
  * - 高信息密度：紧凑的行高，清晰的视觉层级
- * - 专业感：黑白灰为主（95%），低饱和品牌靛蓝仅用于选中态 / 主要操作 / AI 功能
+ * - 专业感：中性底；强调色与应用图标同一蓝色（浅色更深、深色更亮），只用于选中态 / 主要操作 / AI 功能
  * - 仪表盘化：悬浮、扁平，代码感
  */
 
@@ -35,11 +35,12 @@
   --secondary-foreground: 55 53 47;
 
   /* ───────────── 主色 ───────────── */
-  /* 高级感公式：界面 95% 黑白灰；低饱和品牌靛蓝只用于三处——
-     选中态（sidebar active / tag 选中）、主要操作（主按钮）、AI 功能标识 */
-  --primary: 90 116 176;      /* #5A74B0 — 低饱和石板靛蓝 */
+  /* 强调色与应用图标 #3B82F6 同一色相，不提供换色。
+     浅色更深一档：白字按钮和浅底文字都过 AA。图标本身保持亮蓝，不当 13px 正文色。
+     只用于选中态（sidebar active / tag 选中）、主要操作（主按钮）、AI 功能标识。 */
+  --primary: 37 99 235;       /* #2563EB */
   --primary-foreground: 255 255 255;
-  --primary-hover: 78 100 152; /* #4E6498 */
+  --primary-hover: 29 78 216; /* #1D4ED8 */
   --primary-soft: rgb(var(--primary) / 0.08);
   --primary-softer: rgb(var(--primary) / 0.04);
   --selection: rgb(var(--primary) / 0.14); /* 文本选中底色 */
@@ -67,7 +68,7 @@
   --border: 233 233 231;
   --border-strong: 200 200 198;
   --input: 233 233 231;
-  --ring: 90 116 176;
+  --ring: 37 99 235;
 
   /* ───────────── 编辑器专属 ───────────── */
   --editor-bg: 255 255 255;
@@ -127,14 +128,14 @@
   --dialog-shadow: var(--shadow-floating);
 
   /* ───────────── 代码高亮（低饱和，贴合极简基调） ───────────── */
-  --code-keyword: 90 116 176;  /* 与品牌 primary 同值 */
+  --code-keyword: 37 99 235;   /* 与品牌 primary 同值 */
   --code-string: 21 128 61;    /* green-700 */
   --code-comment: 146 147 144; /* 灰，近 muted */
   --code-number: 180 83 9;     /* amber-700 */
   --code-title: 55 53 47;      /* 近前景色 */
 
   /* ───────────── 图谱节点（低饱和分类色，深浅主题均可读） ───────────── */
-  --graph-concept: 90 116 176; /* 概念 — 与品牌 primary 同值（石板靛蓝） */
+  --graph-concept: 37 99 235;  /* 概念 — 与品牌 primary 同值 */
   --graph-person: 176 116 90;  /* 人物 — 暖赭 */
   --graph-tool: 90 155 107;    /* 工具 — 苔绿 */
   --graph-doc: 139 123 176;    /* 文档 — 雾紫 */
@@ -182,9 +183,10 @@
   --secondary: 47 47 47;
   --secondary-foreground: 255 255 255;
 
-  --primary: 149 164 198;
+  /* 深色提亮同一色相，深底文字和深色按钮字都过 AA */
+  --primary: 96 165 250;        /* #60A5FA */
   --primary-foreground: 25 25 25;
-  --primary-hover: 169 184 214;
+  --primary-hover: 147 197 253; /* #93C5FD */
   --primary-soft: rgb(var(--primary) / 0.15);
   --primary-softer: rgb(var(--primary) / 0.08);
   /* 暗色下选中色需更高不透明度——浅色 0.14 在深底上几乎不可见 */
@@ -210,7 +212,7 @@
   --border: 60 60 60;
   --border-strong: 80 80 80;
   --input: 60 60 60;
-  --ring: 149 164 198;
+  --ring: 96 165 250;
 
   --sidebar-background: 32 32 32;
   --sidebar-foreground: 168 168 168;
@@ -227,14 +229,14 @@
   --shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
   --shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 
-  --code-keyword: 149 164 198; /* 与品牌 primary 同值 */
+  --code-keyword: 96 165 250;  /* 与品牌 primary 同值 */
   --code-string: 134 239 172;  /* green-300 */
   --code-comment: 110 110 108;
   --code-number: 252 211 77;   /* amber-300 */
   --code-title: 240 240 240;
 
   /* 图谱节点 — 深色主题提亮一档 */
-  --graph-concept: 149 164 198;
+  --graph-concept: 96 165 250;
   --graph-person: 201 161 136;
   --graph-tool: 143 191 158;
   --graph-doc: 179 166 206;
