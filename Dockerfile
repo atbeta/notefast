@@ -22,6 +22,13 @@ RUN mkdir -p /tmp/runtime-check/server-dist \
 FROM base AS runner
 WORKDIR /app
 
+# oven/bun 是冻结的 debian:trixie，构建时不跑 apt upgrade，perl-base 等包会停在发布日的版本。
+# 发布门禁拒绝已有补丁的 CRITICAL；在切到 bun 用户前把基础包升到当前 Debian 安全更新。
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+
 ARG VERSION
 ARG COMMIT
 ARG BUILD_TIME
