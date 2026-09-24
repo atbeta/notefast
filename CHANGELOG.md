@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.88.0](https://github.com/atbeta/notefast/compare/v0.87.0...v0.88.0) (2026-09-24)
+
+
+### Features
+
+* **web:** use one app-icon accent in light and dark ([168175d](https://github.com/atbeta/notefast/commit/168175df5de07a5a9f078887e9329af120b5ef55))
+
+
+### Bug Fixes
+
+* **docker:** upgrade Debian packages in the runner image ([ee6553d](https://github.com/atbeta/notefast/commit/ee6553d218bca48f9f0fd8cb3cbddd17e6bcac5a))
+
 ## [0.87.0](https://github.com/atbeta/notefast/compare/v0.86.1...v0.87.0) (2026-09-21)
 
 
