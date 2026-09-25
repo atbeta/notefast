@@ -125,3 +125,31 @@ export function deleteProjectionFileByPath(db: Db, notebookId: string, relPath: 
 export function deleteProjectionFileByDoc(db: Db, notebookId: string, docId: string): void {
   db.query('DELETE FROM projection_files WHERE notebook_id = ? AND doc_id = ?').run(notebookId, docId)
 }
+
+/**
+ * 找「内容相同但路径已经不在磁盘上」的映射行 —— 移动检测的依据（RFC 0007 D6）。
+ *
+ * 使用场景：文件从 A 消失、出现在 B。若在 A 上我们保留了映射行（见 ingest 的
+ * removeProjectionFile 注释），这里就能配对出「同一个文档被移到了 B」，
+ * 而不是新建一篇。`staleRelPaths` 是调用方当前扫到的磁盘文件集合，
+ * 用于排除「映射行还在、文件也还在」的正常情况。
+ */
+export function findMovedProjectionFile(
+  db: Db,
+  notebookId: string,
+  sha: string,
+  staleRelPaths: ReadonlySet<string>,
+  excludeDocId?: string,
+): ProjectionFileRow | null {
+  const candidates = db
+    .query(
+      'SELECT * FROM projection_files WHERE notebook_id = ? AND content_sha256 = ? ORDER BY updated_at DESC',
+    )
+    .all(notebookId, sha) as ProjectionFileRow[]
+  for (const row of candidates) {
+    if (excludeDocId && row.doc_id === excludeDocId) continue
+    if (staleRelPaths.has(row.rel_path)) continue
+    return row
+  }
+  return null
+}
