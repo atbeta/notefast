@@ -9,10 +9,24 @@
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, rmdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { readTags, type BlockRow } from '@notefast/core'
+import {
+  blocksToMarkdown,
+  patchFrontmatter,
+  readTags,
+  stripDocFrontmatter,
+  type Block,
+  type BlockRow,
+} from '@notefast/core'
 import { readAsset } from '../assets/store'
 import { getDb } from '../db'
+import { patchProjectionBody } from '../projection/patch'
+import { blockSubtreeHash, recordProjectionSpans, topLevelBlocks } from '../projection/spans'
 import { getLiveDocById, listDocRows } from '../store/blocks'
+import {
+  deleteProjectionBlockSpans,
+  listProjectionBlockSpans,
+  replaceProjectionBlockSpans,
+} from '../store/projectionSpans'
 import { archiveRelPath } from '../sync/archive'
 import { subscribeDocChanges } from './docEvents'
 import { createJsonConfigStore } from './jsonConfig'
@@ -233,11 +247,22 @@ function unlinkRel(rel: string): void {
   }
 }
 
+/**
+ * 写一篇文档的投影文件。
+ *
+ * 优先走**按块局部改写**：只重写被编辑的块，其余块复用磁盘旧字节。
+ * 拿不到区间记录（首次投影、文档刚被整篇保存过）、区间校验失败时退回整篇序列化。
+ *
+ * 为什么值得：整篇序列化会把用户的排版交给 mdast 归一化（`_x_` → `*x*`、
+ * `$$` → ```math、引用前缀重排），且每次变更都要重算全文。局部改写让
+ * 「没动过的块」逐字节保持原样。
+ */
 function persistDocFile(doc: BlockRow): string {
   const rel = archiveRelPath(doc.content || 'untitled', doc.id, readTags(doc))
   const dest = join(getMarkdownDirAbs(), rel)
-  const content = rewriteShadowAssetRefs(portableDocMarkdown(doc))
   mkdirSync(dirname(dest), { recursive: true })
+
+  const content = renderShadowContent(doc, dest)
   try {
     if (existsSync(dest) && readFileSync(dest, 'utf-8') === content) return rel
   } catch {
@@ -245,6 +270,97 @@ function persistDocFile(doc: BlockRow): string {
   }
   writeFileSync(dest, content, 'utf-8')
   return rel
+}
+
+/**
+ * 生成投影文件内容：能局部改写就局部改写，否则整篇序列化。
+ * 两条路径都会刷新块区间记录，让下一次写回仍可局部化。
+ *
+ * 区间记录相对的是**去掉首行 H1 标题之后**的正文：投影文件里写着 `# 标题`，
+ * 但库里标题是文档根而不是块，不剥掉会让「解析出的顶层块」比「库里的顶层块」
+ * 多一个，对齐必然失败（实测踩过：区间表永远是空的，局部改写从不生效）。
+ */
+function renderShadowContent(doc: BlockRow, dest: string): string {
+  const db = getDb()
+  let disk: string | null = null
+  try {
+    if (existsSync(dest)) disk = readFileSync(dest, 'utf-8')
+  } catch {
+    disk = null
+  }
+
+  if (disk !== null) {
+    const oldSpans = listProjectionBlockSpans(db, doc.id)
+    if (oldSpans.length > 0) {
+      const stripped = stripDocFrontmatter(disk)
+      // 区间相对「剥 frontmatter + 剥标题行」之后的正文；标题行按原样留着，
+      // 否则第二次写回会把 `# 标题` 丢掉（实测踩过）
+      const titleLine = leadingTitleLine(stripped.body, doc)
+      const oldBody = titleLine === null ? stripped.body : stripped.body.slice(titleLine.length)
+      const tops = topLevelBlocks(db, doc.id)
+      const blocks = tops.map((b) => ({ id: b.id, hash: blockSubtreeHash(b), text: serializeBlock(b) }))
+      const patched = patchProjectionBody({ oldBody, oldSpans, blocks })
+      if (patched) {
+        replaceProjectionBlockSpans(db, doc.id, patched.spans)
+        return withProjectedFrontmatter(disk, (titleLine ?? '') + patched.body, doc)
+      }
+    }
+  }
+
+  // 退回整篇序列化：内容由 portableDocMarkdown 生成，随后重建区间记录
+  const full = rewriteShadowAssetRefs(portableDocMarkdown(doc))
+  const replaced = recordProjectionSpans(db, doc.id, { body: projectionBodyOf(full, doc) })
+  if (!replaced) deleteProjectionBlockSpans(db, doc.id)
+  return full
+}
+
+/**
+ * 取「区间记录所相对的正文」：剥掉 frontmatter，再剥掉与文档标题重复的首行 H1。
+ * 局部改写路径与整篇回退路径都必须走这一个口径，否则两边的偏移对不上。
+ */
+function projectionBodyOf(content: string, doc: BlockRow): string {
+  const body = stripDocFrontmatter(content).body
+  const titleLine = leadingTitleLine(body, doc)
+  return titleLine === null ? body : body.slice(titleLine.length)
+}
+
+/**
+ * 若正文首行是「与文档标题同文的 H1」，返回该行（含换行）；否则 null。
+ * 与 core 的 `stripTitleFromMarkdown` 同判据，但保留原文以便原样写回。
+ */
+function leadingTitleLine(body: string, doc: BlockRow): string | null {
+  const title = (doc.content || '').trim()
+  if (!title || !body) return null
+  const nl = body.indexOf('\n')
+  const firstLine = nl < 0 ? body : body.slice(0, nl)
+  const candidate = firstLine.trim()
+  if (candidate === `# ${title}` || candidate === `#${title}`) {
+    return nl < 0 ? body : body.slice(0, nl + 1)
+  }
+  return null
+}
+
+/**
+ * 保留磁盘上用户手写的 frontmatter，只把 NoteFast 的 tags 投影进去。
+ *
+ * tags 为空时**不动** frontmatter：`patchFrontmatter` 把空数组视为「删除该键」，
+ * 而整篇序列化路径写的是 `tags: []`。两条路径必须产出同一份内容，
+ * 否则「内容未变时 fullSync 不重写文件」会退化——每次同步都认为内容变了。
+ */
+function withProjectedFrontmatter(disk: string, body: string, doc: BlockRow): string {
+  const stripped = stripDocFrontmatter(disk)
+  const tags = readTags(doc)
+  const frontmatterRaw =
+    tags.length === 0 && stripped.raw === null
+      ? null
+      : patchFrontmatter(stripped.raw, tags.length === 0 ? {} : { tags })
+  const fm = frontmatterRaw ? `---\n${frontmatterRaw}\n---\n` : ''
+  return rewriteShadowAssetRefs(fm + body)
+}
+
+/** 单个顶层块的 Markdown 序列化（与整篇路径同一函数，保证口径一致） */
+function serializeBlock(block: Block): string {
+  return blocksToMarkdown([block])
 }
 
 /** 批量导入：暂停影子副本的逐篇写盘（可嵌套） */

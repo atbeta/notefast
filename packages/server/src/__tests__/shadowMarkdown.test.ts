@@ -4,7 +4,7 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
@@ -257,5 +257,168 @@ describe('GET/PUT /api/v1/instance', () => {
     const body = (await res.json()) as { shadow_markdown_enabled: boolean }
     expect(body.shadow_markdown_enabled).toBe(false)
     expect(getShadowConfig().enabled).toBe(false)
+  })
+})
+
+// ───────────────────── 按块局部改写（P1b 出方向接线） ─────────────────────
+
+describe('writeShadowDoc 局部改写', () => {
+  /**
+   * 语料含 Obsidian 语法、不规则空行与嵌套列表。
+   *
+   * 重要前提（实测）：**首次投影是整篇序列化，本身就有损**——`_斜体_` 会变 `*斜体*`、
+   * 嵌套列表会被拍平（现行序列化器不缩进嵌套项）、连续空行被压成一个。
+   * 这是既有行为，不是本次改动引入的。因此本组用例的契约是：
+   * **首次投影之后，后续写回必须逐字节保留未被编辑的部分**，而不是要求首次就有损保真。
+   */
+  const FIXTURE = [
+    '第一段 *斜体* 与 _斜体_',
+    '',
+    '> [!note] 提醒',
+    '> 细节一',
+    '>',
+    '> 细节二',
+    '',
+    '%%私密注释%%',
+    '',
+    '',
+    '',
+    '- 列表项 A',
+    '  - 嵌套 B',
+    '',
+    '尾段 ^abc123',
+    '',
+  ].join('\n')
+
+  function shadowPath(docId: string): string {
+    const doc = getDocById(getDb(), docId)!
+    return join(markdownRoot(), archiveRelPath(doc.content || 'untitled', docId, readTags(doc)))
+  }
+
+  function paragraphId(docId: string, like: string): string {
+    const row = getDb()
+      .query("SELECT id FROM blocks WHERE root_id = ? AND type = 'paragraph' AND content LIKE ? ORDER BY sort")
+      .get(docId, like) as { id: string } | null
+    expect(row).toBeTruthy()
+    return row!.id
+  }
+
+  test('首次投影有损（钉住既有行为，避免用例建立在不存在的假设上）', () => {
+    const docId = createDoc('首次有损', FIXTURE)
+    writeShadowDoc(getDocById(getDb(), docId)!)
+    const first = readFileSync(shadowPath(docId), 'utf-8')
+    // 这些是既有序列化行为，改掉它们要单独评估，不该被本组用例悄悄寄望
+    expect(first).toContain('第一段 *斜体* 与 *斜体*')
+    expect(first).toContain('- 列表项 A\n- 嵌套 B')
+  })
+
+  test('改一个块：其余块逐字节保留', () => {
+    const docId = createDoc('局部改写', FIXTURE)
+    writeShadowDoc(getDocById(getDb(), docId)!)
+    const before = readFileSync(shadowPath(docId), 'utf-8')
+
+    const tailId = paragraphId(docId, '尾段%')
+    getDb()
+      .query('UPDATE blocks SET content = ?, updated_at = ? WHERE id = ?')
+      .run('尾段（改）', new Date().toISOString(), tailId)
+
+    writeShadowDoc(getDocById(getDb(), docId)!)
+    const after = readFileSync(shadowPath(docId), 'utf-8')
+
+    expect(after).toContain('尾段（改）')
+    expect(after).not.toContain('尾段 ^abc123')
+
+    // 其余部分逐字节保留：把被改块替换成原文后，整份文件应当与 before 完全一致
+    const restored = after.replace('尾段（改） ^abc123', '尾段 ^abc123')
+    expect(restored).toBe(before)
+  })
+
+  test('连续改两次：每次都只动被改的块，第三次仍可局部化', () => {
+    const docId = createDoc('连续改写', FIXTURE)
+    writeShadowDoc(getDocById(getDb(), docId)!)
+    const baseline = readFileSync(shadowPath(docId), 'utf-8')
+
+    const firstId = paragraphId(docId, '第一段%')
+    const tailId = paragraphId(docId, '尾段%')
+
+    getDb().query('UPDATE blocks SET content = ? WHERE id = ?').run('第一段（改）', firstId)
+    writeShadowDoc(getDocById(getDb(), docId)!)
+
+    getDb().query('UPDATE blocks SET content = ? WHERE id = ?').run('尾段（改）', tailId)
+    writeShadowDoc(getDocById(getDb(), docId)!)
+
+    const after = readFileSync(shadowPath(docId), 'utf-8')
+    expect(after).toContain('第一段（改）')
+    expect(after).toContain('尾段（改）')
+    // 两次改写之后，把两处替换回原文应当逐字节等于基线
+    const restored = after
+      .replace('第一段（改）', '第一段 *斜体* 与 *斜体*')
+      .replace('尾段（改） ^abc123', '尾段 ^abc123')
+    expect(restored).toBe(baseline)
+  })
+
+  test('引用块与列表在第二次写回时不被重新归一化', () => {
+    const docId = createDoc('引用保真', FIXTURE)
+    writeShadowDoc(getDocById(getDb(), docId)!)
+    const quoteBefore = '> [!note] 提醒\n> 细节一\n>\n> 细节二'
+    const listBefore = '- 列表项 A\n- 嵌套 B'
+    const before = readFileSync(shadowPath(docId), 'utf-8')
+    expect(before).toContain(quoteBefore)
+    expect(before).toContain(listBefore)
+
+    const tailId = paragraphId(docId, '尾段%')
+    getDb().query('UPDATE blocks SET content = ? WHERE id = ?').run('尾段（改）', tailId)
+    writeShadowDoc(getDocById(getDb(), docId)!)
+
+    const after = readFileSync(shadowPath(docId), 'utf-8')
+    expect(after).toContain(quoteBefore)
+    expect(after).toContain(listBefore)
+    expect(after).toContain('%%私密注释%%')
+  })
+
+  test('磁盘内容与 DB 序列化结果不同：局部改写保磁盘字节，整篇序列化会覆盖它们', () => {
+    /**
+     * 这是区分两条路径的关键场景，也是本机制存在的理由。
+     *
+     * 首次投影后手工把文件改成「排版与序列化结果不同」的形态（模拟用户在外部编辑器
+     * 调整了排版，或历史版本写入的旧格式）。此时：
+     * - 局部改写 → 未被编辑的块**复用磁盘字节** → 用户排版保留
+     * - 整篇序列化 → 全部重新序列化 → 用户排版被冲掉
+     *
+     * 只改一个块，因此可以直接断言「另一块的磁盘形态是否幸存」。
+     */
+    const docId = createDoc('磁盘优先', '第一段内容\n\n第二段内容\n\n第三段内容')
+    writeShadowDoc(getDocById(getDb(), docId)!)
+
+    const p = shadowPath(docId)
+    let disk = readFileSync(p, 'utf-8')
+    // 把第一段改成序列化器不会产出的形态（行尾两个空格 = Markdown 硬换行）
+    disk = disk.replace('第一段内容', '第一段内容  ')
+    writeFileSync(p, disk, 'utf-8')
+    expect(readFileSync(p, 'utf-8')).toContain('第一段内容  ')
+
+    // 改第三个块，前两块不应被重写
+    const thirdId = paragraphId(docId, '第三段内容')
+    getDb().query('UPDATE blocks SET content = ? WHERE id = ?').run('第三段（改）', thirdId)
+    writeShadowDoc(getDocById(getDb(), docId)!)
+
+    const after = readFileSync(p, 'utf-8')
+    expect(after).toContain('第三段（改）')
+    // 关键断言：磁盘上第一段的字面排版幸存 → 走的是局部改写
+    expect(after).toContain('第一段内容  ')
+    expect(after).not.toContain('第一段内容\n')
+  })
+
+  test('文档在磁盘上被外部改过：退回整篇序列化，不抛错', () => {
+    const docId = createDoc('外部改动', FIXTURE)
+    writeShadowDoc(getDocById(getDb(), docId)!)
+    const p = shadowPath(docId)
+    // 外部工具把文件改成了完全不同的内容
+    writeFileSync(p, '外部乱改的内容\n', 'utf-8')
+    expect(() => writeShadowDoc(getDocById(getDb(), docId)!)).not.toThrow()
+    const after = readFileSync(p, 'utf-8')
+    // 仍是权威端内容，外部改动不会被合并进来（投影是单向的）
+    expect(after).toContain('第一段')
+    expect(after).not.toContain('外部乱改的内容')
   })
 })

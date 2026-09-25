@@ -154,6 +154,152 @@ describe('docEvents 聚合广播', () => {
   })
 })
 
+// ───────────────────── 块级变更信号（出方向局部改写的触发源） ─────────────────────
+
+describe('docEvents 块级变更信号', () => {
+  beforeEach(async () => { await waitFlush() })
+
+  test('更新单个块：事件带出该块 id', async () => {
+    const db = getDb()
+    const { docId, blockIds } = insertDocFromMarkdown(db, {
+      notebookId,
+      title: '块信号测试',
+      markdown: '第一段\n\n第二段\n\n第三段',
+    })
+
+    const { events, unsubscribe } = collect(docId)
+    const row = db.query('SELECT * FROM blocks WHERE id = ?').get(blockIds[1]) as BlockRow
+    await pluginSystem.note.afterUpdate.call(rowToBlock(row))
+    await waitFlush()
+    unsubscribe()
+
+    expect(events.length).toBe(1)
+    expect(events[0].changed_block_ids).toEqual([blockIds[1]])
+  })
+
+  test('同窗口改多个块：id 去重合并，不重复', async () => {
+    const db = getDb()
+    const { docId, blockIds } = insertDocFromMarkdown(db, {
+      notebookId,
+      title: '多块信号测试',
+      markdown: '第一段\n\n第二段',
+    })
+
+    const { events, unsubscribe } = collect(docId)
+    const first = db.query('SELECT * FROM blocks WHERE id = ?').get(blockIds[0]) as BlockRow
+    await pluginSystem.note.afterUpdate.call(rowToBlock(first))
+    await pluginSystem.note.afterUpdate.call(rowToBlock(first)) // 同一个块改两次
+    await waitFlush()
+    unsubscribe()
+
+    expect(events.length).toBe(1)
+    expect(events[0].changed_block_ids).toEqual([blockIds[0]])
+  })
+
+  test('纯元数据写入（无块变更）：给空数组，而不是 undefined', async () => {
+    const db = getDb()
+    const { docId } = insertDocFromMarkdown(db, {
+      notebookId,
+      title: '元数据测试',
+      markdown: '内容',
+    })
+
+    const { events, unsubscribe } = collect(docId)
+    publishDocChange(docId, 'updated') // 模拟 tags / ai_exclude 的显式发布
+    await waitFlush()
+    unsubscribe()
+
+    expect(events.length).toBe(1)
+    expect(events[0].changed_block_ids).toEqual([])
+  })
+
+  test('子块删除：标出其顶层祖先（局部改写以顶层块为单位）', async () => {
+    const db = getDb()
+    const { docId, blockIds } = insertDocFromMarkdown(db, {
+      notebookId,
+      title: '子块删除信号',
+      markdown: '第一段\n\n第二段',
+    })
+    const target = blockIds[0]!
+    db.query('UPDATE blocks SET is_deleted = 1 WHERE id = ?').run(target)
+
+    const { events, unsubscribe } = collect(docId)
+    await pluginSystem.note.afterDelete.call(target)
+    await waitFlush()
+    unsubscribe()
+
+    expect(events.length).toBe(1)
+    expect(events[0].kind).toBe('updated')
+    // 该子块本身就是顶层块 → 祖先即自身
+    expect(events[0].changed_block_ids).toEqual([target])
+  })
+
+  test('整篇删除不带块信号（文件整体移除，不需要定位块）', async () => {
+    const db = getDb()
+    const { docId } = insertDocFromMarkdown(db, {
+      notebookId,
+      title: '整篇删除信号',
+      markdown: '内容',
+    })
+    db.query('UPDATE blocks SET is_deleted = 1 WHERE root_id = ?').run(docId)
+
+    const { events, unsubscribe } = collect(docId)
+    await pluginSystem.note.afterDelete.call(docId)
+    await waitFlush()
+    unsubscribe()
+
+    expect(events.length).toBe(1)
+    expect(events[0].kind).toBe('deleted')
+    expect(events[0].changed_block_ids).toEqual([])
+  })
+
+  test('块信号按窗口清理，不跨窗口泄漏', async () => {
+    const db = getDb()
+    const { docId, blockIds } = insertDocFromMarkdown(db, {
+      notebookId,
+      title: '窗口隔离测试',
+      markdown: '第一段\n\n第二段',
+    })
+
+    const { events, unsubscribe } = collect(docId)
+    // 第一个窗口：改 A
+    const a = db.query('SELECT * FROM blocks WHERE id = ?').get(blockIds[0]) as BlockRow
+    await pluginSystem.note.afterUpdate.call(rowToBlock(a))
+    await waitFlush()
+    // 第二个窗口：只改 B
+    const b = db.query('SELECT * FROM blocks WHERE id = ?').get(blockIds[1]) as BlockRow
+    await pluginSystem.note.afterUpdate.call(rowToBlock(b))
+    await waitFlush()
+    unsubscribe()
+
+    expect(events.length).toBe(2)
+    expect(events[0].changed_block_ids).toEqual([blockIds[0]])
+    // 第二个窗口不得再带上 A —— 泄漏会让每次写回都重写早已稳定的块
+    expect(events[1].changed_block_ids).toEqual([blockIds[1]])
+  })
+
+  test('纯元数据写入夹在两次块写入之间：各自窗口互不污染', async () => {
+    const db = getDb()
+    const { docId, blockIds } = insertDocFromMarkdown(db, {
+      notebookId,
+      title: '混合窗口测试',
+      markdown: '内容',
+    })
+
+    const { events, unsubscribe } = collect(docId)
+    const row = db.query('SELECT * FROM blocks WHERE id = ?').get(blockIds[0]) as BlockRow
+    await pluginSystem.note.afterUpdate.call(rowToBlock(row))
+    await waitFlush()
+    publishDocChange(docId, 'updated') // 纯元数据，无块变更
+    await waitFlush()
+    unsubscribe()
+
+    expect(events.length).toBe(2)
+    expect(events[0].changed_block_ids).toEqual([blockIds[0]])
+    expect(events[1].changed_block_ids).toEqual([])
+  })
+})
+
 describe('GET /events SSE 端点', () => {
   test('doc 事件以 SSE 帧推送', async () => {
     await waitFlush() // drain 同进程其它文件残留的 pending/定时器，避免陈旧帧抢先到达
