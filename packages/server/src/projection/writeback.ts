@@ -27,6 +27,7 @@ import { toProjectionAbsPath } from './paths'
 import { portableDocMarkdown } from '../services/portableMarkdown'
 import { auditProjection, PROJECTION_AUDIT } from './audit'
 import { writeConflictCopy } from './conflict'
+import { materializeAssets } from './assets'
 import type { ProjectionConfig } from './config'
 import type { SerialLock } from './lock'
 
@@ -145,8 +146,12 @@ export function renderProjectionContent(
   db: Db,
   doc: BlockRow,
   diskContent: string | null,
+  opts: { relPath?: string; config?: ProjectionConfig } = {},
 ): { content: string; mode: 'patch' | 'full' } {
-  const full = renderFull(doc)
+  const materialize = (markdown: string): string =>
+    opts.relPath && opts.config ? materializeAssets(markdown, opts.relPath, opts.config).markdown : markdown
+
+  const full = materialize(renderFull(doc))
   if (diskContent === null) return { content: full, mode: 'full' }
 
   const oldSpans = listProjectionBlockSpans(db, doc.id)
@@ -169,7 +174,7 @@ export function renderProjectionContent(
   // 首行 `# 标题` 落在 patch 结果的头部缝隙里，不在任何块区间内。
   // 库里改了标题必须在这里替换它，否则文件标题永远停在旧值（实测踩过）。
   return {
-    content: withFrontmatter(stripped.raw, replaceRootHeading(patched.body, doc, db), doc),
+    content: materialize(withFrontmatter(stripped.raw, replaceRootHeading(patched.body, doc, db), doc)),
     mode: 'patch',
   }
 }
