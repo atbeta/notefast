@@ -82,6 +82,19 @@ function onDiskRelPaths(root: string): Set<string> {
   return out
 }
 
+/**
+ * 当前处于软删除（回收站）状态的投影文档 id 集合。
+ * 移动检测要求候选文档已不在流通——否则内容相同的两个独立文件会互相认领。
+ */
+function deletedDocIds(db: Db, notebookId: string): Set<string> {
+  const rows = listProjectionFiles(db, notebookId)
+  const out = new Set<string>()
+  for (const row of rows) {
+    if (!getLiveDocById(db, row.doc_id)) out.add(row.doc_id)
+  }
+  return out
+}
+
 export interface ProjectionContext {
   db: Db
   notebookId: string
@@ -140,7 +153,13 @@ export async function ingestProjectionFile(
   // 文件从 A 消失、出现在 B（内容相同）。unlink(A) 时我们保留了映射行，
   // 这里按内容 sha 配对出来，改路径 + 恢复，而不是新建一篇重复文档。
   if (!existing) {
-    const moved = findMovedProjectionFile(db, notebookId, file.sha256, onDiskRelPaths(config.root))
+    const moved = findMovedProjectionFile(
+      db,
+      notebookId,
+      file.sha256,
+      onDiskRelPaths(config.root),
+      deletedDocIds(db, notebookId),
+    )
     if (moved) {
       const prior = getDocById(db, moved.doc_id)
       if (prior) {

@@ -127,18 +127,25 @@ export function deleteProjectionFileByDoc(db: Db, notebookId: string, docId: str
 }
 
 /**
- * 找「内容相同但路径已经不在磁盘上」的映射行 —— 移动检测的依据（RFC 0007 D6）。
+ * 找「内容相同、且其文档已不在流通」的映射行 —— 移动检测的依据（RFC 0007 D6）。
  *
- * 使用场景：文件从 A 消失、出现在 B。若在 A 上我们保留了映射行（见 ingest 的
- * removeProjectionFile 注释），这里就能配对出「同一个文档被移到了 B」，
- * 而不是新建一篇。`staleRelPaths` 是调用方当前扫到的磁盘文件集合，
- * 用于排除「映射行还在、文件也还在」的正常情况。
+ * 使用场景：文件从 A 消失（文档进回收站）、出现在 B。这里配对出来，
+ * 把映射改到 B 并恢复文档，而不是新建一篇重复文档。
+ *
+ * **两个条件缺一不可**（都是实测踩出来的）：
+ *   1. 候选的 `rel_path` 不在 `onDiskRelPaths` 里 —— 那个文件确实已经不在磁盘上了。
+ *      只看内容会让两个内容相同、但各自独立的文件互相认领（用户完全可能有两篇一样的文本）。
+ *   2. 候选的文档处于软删除状态 —— 由 `deletedDocIds` 判定。
+ *      文件仍在、文档也活着的映射行不该被抢走：那说明只是碰巧内容相同。
+ *
+ * 调用方负责提供这两个集合，因为判定需要查 blocks 表 / 扫目录，不属于本模块的职责。
  */
 export function findMovedProjectionFile(
   db: Db,
   notebookId: string,
   sha: string,
-  staleRelPaths: ReadonlySet<string>,
+  onDiskRelPaths: ReadonlySet<string>,
+  deletedDocIds: ReadonlySet<string>,
   excludeDocId?: string,
 ): ProjectionFileRow | null {
   const candidates = db
@@ -148,7 +155,8 @@ export function findMovedProjectionFile(
     .all(notebookId, sha) as ProjectionFileRow[]
   for (const row of candidates) {
     if (excludeDocId && row.doc_id === excludeDocId) continue
-    if (staleRelPaths.has(row.rel_path)) continue
+    if (onDiskRelPaths.has(row.rel_path)) continue
+    if (!deletedDocIds.has(row.doc_id)) continue
     return row
   }
   return null

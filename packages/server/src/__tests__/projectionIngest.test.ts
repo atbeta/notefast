@@ -146,16 +146,86 @@ describe('ingestProjectionFile：更新', () => {
   test('改名文件（换路径）按 move 处理，同一文档不新建', async () => {
     writeMd('移动前.md', '内容\n')
     const first = await ingestProjectionFile(ctx, '移动前.md')
+    expect(first.action).toBe('created')
 
-    // 用户在外部改名
-    writeMd('移动后.md', '内容\n')
+    // 用户在外部改名：watcher 的真实顺序是 unlink(旧) 然后 add(新)
     removeMd('移动前.md')
-    // watcher 会先看到新路径：此时是同 sha 的新文件，应认领旧文档
+    removeProjectionFile(ctx, '移动前.md')
+    writeMd('移动后.md', '内容\n')
+
+    // 新路径出现：应按内容 + 「旧文档已在回收站」配对出移动，而不是新建
     const second = await ingestProjectionFile(ctx, '移动后.md')
     expect(second.docId).toBe(first.docId!)
-    // 旧路径的映射已不在
+    expect(second.action).toBe('moved')
+
+    // 旧路径的映射已不在，新路径指向同一文档
     expect(getProjectionFileByPath(getDb(), ctx.notebookId, '移动前.md')).toBeNull()
-    expect(getProjectionFileByPath(getDb(), ctx.notebookId, '移动后.md')).not.toBeNull()
+    expect(getProjectionFileByPath(getDb(), ctx.notebookId, '移动后.md')!.doc_id).toBe(first.docId!)
+    // 文档已从回收站恢复
+    expect(getLiveDocById(getDb(), first.docId!)).not.toBeNull()
+  })
+
+  test('内容相同的两个独立文件不会互相认领', async () => {
+    // 用户完全可能有两篇文本一样的笔记；移动检测不能只看内容
+    writeMd('独立A.md', '一模一样的内容\n')
+    const a = await ingestProjectionFile(ctx, '独立A.md')
+    writeMd('独立B.md', '一模一样的内容\n')
+    const b = await ingestProjectionFile(ctx, '独立B.md')
+
+    expect(b.docId).not.toBe(a.docId!)
+    expect(b.action).toBe('created')
+    // 两个文件各自的映射都在
+    expect(getProjectionFileByPath(getDb(), ctx.notebookId, '独立A.md')).not.toBeNull()
+    expect(getProjectionFileByPath(getDb(), ctx.notebookId, '独立B.md')).not.toBeNull()
+  })
+
+  test('第三个同内容文件：不认领前两个还活着的文档', async () => {
+    // 直接钉住「候选文档必须在回收站」这条守卫：A、B 都活着且文件都在磁盘上，
+    // 再出现一个同内容文件时，绝不能认领它们（否则三篇笔记会被并成一篇）
+    writeMd('同文A.md', '三份相同\n')
+    const a = await ingestProjectionFile(ctx, '同文A.md')
+    writeMd('同文B.md', '三份相同\n')
+    const b = await ingestProjectionFile(ctx, '同文B.md')
+
+    writeMd('同文C.md', '三份相同\n')
+    const c = await ingestProjectionFile(ctx, '同文C.md')
+
+    expect(c.action).toBe('created')
+    expect(new Set([a.docId, b.docId, c.docId]).size).toBe(3)
+    // 三篇文档都还活着，且各自映射都在
+    for (const id of [a.docId!, b.docId!, c.docId!]) {
+      expect(getLiveDocById(getDb(), id)).not.toBeNull()
+    }
+    expect(listProjectionFiles(getDb(), ctx.notebookId).filter((r) => r.rel_path.startsWith('同文')).length).toBe(3)
+  })
+
+  test('文件被移走但文档还活着（watcher 宽限窗口内）：不被同内容文件认领', async () => {
+    /**
+     * 这个场景单独覆盖「候选文档必须在回收站」这条守卫。
+     *
+     * 造法是真实的：watcher 的 unlink 有宽限窗口，文件从磁盘上消失之后、
+     * `removeProjectionFile` 被调用之前，映射行还在、文档也还活着。
+     * 此时若只看「文件不在磁盘上 + 内容相同」，另一个同内容文件就会把这篇文档抢走。
+     *
+     * 注意：上一条用例（三份同内容文件都在磁盘上）覆盖不到这条守卫——
+     * 那时 on-disk 那条检查已经挡住了，两条守卫重叠。
+     */
+    writeMd('宽限源.md', '宽限内容\n')
+    const src = await ingestProjectionFile(ctx, '宽限源.md')
+
+    // 文件从磁盘消失，但**不**调用 removeProjectionFile（模拟宽限窗口内）
+    removeMd('宽限源.md')
+    expect(getLiveDocById(getDb(), src.docId!)).not.toBeNull()
+
+    // 另一个同内容文件出现
+    writeMd('宽限目标.md', '宽限内容\n')
+    const other = await ingestProjectionFile(ctx, '宽限目标.md')
+
+    // 必须新建，不能认领那篇还活着的文档
+    expect(other.docId).not.toBe(src.docId!)
+    expect(other.action).toBe('created')
+    expect(getLiveDocById(getDb(), src.docId!)).not.toBeNull()
+    expect(getProjectionFileByPath(getDb(), ctx.notebookId, '宽限源.md')!.doc_id).toBe(src.docId!)
   })
 
   test('更新时刷新区间记录（区间跟着新正文走）', async () => {
