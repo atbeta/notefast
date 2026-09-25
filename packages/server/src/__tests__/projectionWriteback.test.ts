@@ -198,29 +198,28 @@ describe('标题行的处理', () => {
     expect(rendered.content).toBe(readMd('纯正文.md'))
   })
 
-  test('与文件名同文的 H1：内容不重复，但这类文件退回整篇（已知限制）', async () => {
+  test('与文件名同文的 H1：按当前标题重写，不重复（限制已解除）', async () => {
     /**
-     * 已知限制（**不是**本次引入）：当正文首行是「与文件名同文的 H1」时，
-     * `insertDocFromMarkdown` 会把它剥离（标题 = 文件名，不该重复），
-     * 但区间记录是按**完整 body** 解析的 —— 解析出 2 个顶层块，库里只有 1 个，
-     * 对齐失败 → 区间表被清空 → 这类文件**永久退回整篇序列化**。
+     * 这一条曾记录为「已知限制」：与文件名同文的 H1 会被 `insertDocFromMarkdown` 剥离，
+     * 导致解析块数比库里的多一个、区间永远建不起来、这类文件永久退回整篇。
      *
-     * 影响：排版不再逐字节保留（但内容不丢、不重复）。
-     * 与 vault V-203 记录的「整篇退回后无法重建区间」同源。
-     * 这里钉住现状，避免哪天它被当成新 bug 反复排查。
+     * 现在已解决：解析时跳过「文档根标题」那一行（见 `spans.ts`），对齐恢复，
+     * 这类文件也能局部改写。这里验证它不再退回整篇。
      */
     writeMd('同名.md', '# 同名\n\n正文\n')
     await ingestProjectionFile(ctx, '同名.md')
     const m = getProjectionFileByPath(getDb(), ctx.notebookId, '同名.md')!
     const doc = getDocById(getDb(), m.doc_id)!
 
-    // 区间表确实为空 → 走整篇
-    expect(listProjectionBlockSpans(getDb(), m.doc_id).length).toBe(0)
+    // 区间已建立（限制解除的直接证据）
+    expect(listProjectionBlockSpans(getDb(), m.doc_id).length).toBeGreaterThan(0)
     const rendered = renderProjectionContent(getDb(), doc, readMd('同名.md'))
-    expect(rendered.mode).toBe('full')
-    // 但仍只出现一个标题行，内容不重复
+    expect(rendered.mode).toBe('patch')
+    // 恰好一个标题行，不重复
     expect(rendered.content.match(/^#\s/gm)?.length).toBe(1)
     expect(rendered.content).toContain('正文')
+    // 内容未变 → 逐字节一致
+    expect(rendered.content).toBe(readMd('同名.md'))
   })
 })
 

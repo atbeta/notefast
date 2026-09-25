@@ -31,6 +31,10 @@ import { archiveRelPath } from '../sync/archive'
 import { subscribeDocChanges } from './docEvents'
 import { createJsonConfigStore } from './jsonConfig'
 import { portableDocMarkdown } from './portableMarkdown'
+import { materializeAssets } from '../projection/assets'
+import { resolveProjectionConfig, type ProjectionConfig } from '../projection/config'
+
+type ShadowDb = ReturnType<typeof getDb>
 
 export const SHADOW_DIR_NAME = 'markdown'
 export const SHADOW_MANIFEST_NAME = 'notefast-shadow.manifest.json'
@@ -286,11 +290,36 @@ export function publicInstanceView(): {
   }
 }
 
-/** 把 markdown 中的 asset:<sha> 改写为相对 data/media 的路径（文档固定在 markdown 下一层目录） */
+/**
+ * 兜底改写：把 `asset:<sha>` 指向 `data/media/`（**相对**路径，仅在本机同一目录树内可读）。
+ *
+ * 这是**旧行为**，仍在用于「没有投影映射」的场合。投影文档走
+ * `projection/assets.ts` 的 `materializeAssets`——图片落到笔记同名的
+ * `<笔记名>.assets/`，正文写相对引用，这样拷走文件夹不会碎图（RFC 0007 D10）。
+ */
 export function rewriteShadowAssetRefs(markdown: string): string {
   return markdown.replace(/asset:([0-9a-f]{64})/g, (full, id: string) => {
     return readAsset(id) ? `../../media/${id}` : full
   })
+}
+
+/**
+ * 投影文档的附件改写：图片落资源夹 + 正文写相对引用。
+ *
+ * 失败时不抛：`materializeAssets` 保留悬空引用的原文，让用户能看见而不是丢图。
+ */
+function projectAssets(markdown: string, relPath: string): string {
+  try {
+    return materializeAssets(markdown, relPath, projectionConfig()).markdown
+  } catch (e) {
+    console.warn('[shadowMarkdown] 附件落盘失败:', e instanceof Error ? e.message : e)
+    return rewriteShadowAssetRefs(markdown)
+  }
+}
+
+/** 投影配置（监听用的字段这里只用到 root / ignore） */
+function projectionConfig(): ProjectionConfig {
+  return resolveProjectionConfig(getMarkdownDirAbs())
 }
 
 function manifestPath(): string {
@@ -355,7 +384,7 @@ function persistDocFile(doc: BlockRow, knownRel: string | null): string {
   const dest = join(getMarkdownDirAbs(), rel)
   mkdirSync(dirname(dest), { recursive: true })
 
-  const content = renderShadowContent(doc, dest)
+  const content = renderShadowContent(doc, dest, rel)
   try {
     if (existsSync(dest) && readFileSync(dest, 'utf-8') === content) return rel
   } catch {
@@ -421,7 +450,7 @@ function uniqueProjectionRel(candidate: string): string {
  * 但库里标题是文档根而不是块，不剥掉会让「解析出的顶层块」比「库里的顶层块」
  * 多一个，对齐必然失败（实测踩过：区间表永远是空的，局部改写从不生效）。
  */
-function renderShadowContent(doc: BlockRow, dest: string): string {
+function renderShadowContent(doc: BlockRow, dest: string, knownRel: string): string {
   const db = getDb()
   let disk: string | null = null
   try {
@@ -434,71 +463,79 @@ function renderShadowContent(doc: BlockRow, dest: string): string {
     const oldSpans = listProjectionBlockSpans(db, doc.id)
     if (oldSpans.length > 0) {
       const stripped = stripDocFrontmatter(disk)
-      // 区间相对「剥 frontmatter + 剥标题行」之后的正文
-      const titleLine = leadingTitleLine(stripped.body, doc)
-      const hadTitle = hasHeadingLine(stripped.body)
-      const oldBody = titleLine === null ? stripped.body : stripped.body.slice(titleLine.length)
+      // 偏移口径与 ingest 一致：**只剥 frontmatter，不剥标题行**。
+      // 库里那行 H1 是一个真实的 heading 块，必须参与对齐；把它摘出去会让块数
+      // 与区间对不上，区间表整体失效、文档永久退回整篇（实测踩过两处：
+      // 带图文档 spans=0，以及 writeback.ts 的同名问题）。
+      const oldBody = stripped.body
       const tops = topLevelBlocks(db, doc.id)
       const blocks = tops.map((b) => ({ id: b.id, hash: blockSubtreeHash(b), text: serializeBlock(b) }))
       const patched = patchProjectionBody({ oldBody, oldSpans, blocks })
       if (patched) {
         replaceProjectionBlockSpans(db, doc.id, patched.spans)
-        // 标题行按**当前**标题重写，不能照抄磁盘旧值：标题变了但只改了一个块时，
-        // 照抄会让文件里的 `# 标题` 永远停在旧值（实测踩过）。
-        // 注意 user 档位下文件名可能已被用户改过，因此这里写的是**标题**，不是文件名。
-        // 文件本来有标题行 → 用当前标题重写；本来没有 → 不凭空加一行。
-        // 注意判据是「**本来有没有**标题行」，不是「首行是否等于当前标题」：
-        // 后者在改名之后会返回 false，导致标题行被悄悄丢掉（实测踩过）。
-        return withProjectedFrontmatter(disk, (hadTitle ? titleHeadingOf(doc) : '') + patched.body, doc)
+        // 首行 `# 标题` 在 patch 结果的头部缝隙里，不在块区间内；
+        // 在这里按当前标题替换它，否则库里改名后文件标题永远停在旧值
+        return withProjectedFrontmatter(disk, replaceRootHeading(patched.body, doc, db), doc, knownRel)
       }
     }
   }
 
   // 退回整篇序列化：内容由 portableDocMarkdown 生成，随后重建区间记录
-  const full = rewriteShadowAssetRefs(portableDocMarkdown(doc))
-  const replaced = recordProjectionSpans(db, doc.id, { body: projectionBodyOf(full, doc) })
+  const raw = portableDocMarkdown(doc)
+  const full = projectAssets(raw, knownRel)
+  // 区间必须相对**库里存的那份内容**（`asset:<sha>`），不是渲染后的文件内容。
+  // 用渲染后的正文记录会与 DB 的块对不上（图片引用被改写成了相对路径），
+  // 于是区间表永远为空、这类文档永久退回整篇（实测踩过：带图文档 spans=0）。
+  const replaced = recordProjectionSpans(db, doc.id, { body: projectionBodyOf(raw) })
   if (!replaced) deleteProjectionBlockSpans(db, doc.id)
   return full
 }
 
 /**
- * 取「区间记录所相对的正文」：剥掉 frontmatter，再剥掉与文档标题重复的首行 H1。
- * 局部改写路径与整篇回退路径都必须走这一个口径，否则两边的偏移对不上。
+ * 取「区间记录所相对的正文」：**只剥 frontmatter**。
+ *
+ * 不要再剥标题行——库里那行 H1 是真实的 heading 块，剥掉会让解析块数比库里的多，
+ * 对齐必然失败、区间表永远为空（实测踩过三次：带图文档、writeback.ts、这里）。
+ * 出方向与本函数的口径必须完全一致。
  */
-function projectionBodyOf(content: string, doc: BlockRow): string {
-  const body = stripDocFrontmatter(content).body
-  const titleLine = leadingTitleLine(body, doc)
-  return titleLine === null ? body : body.slice(titleLine.length)
+function projectionBodyOf(content: string): string {
+  return stripDocFrontmatter(content).body
 }
 
 /**
- * 正文首行是不是一个 H1（不关心内容是否等于当前标题）。
- * 用于判断「这个文件本来有没有标题行」——改名之后标题行内容会变，但「有没有」不变。
+ * 正文首行是不是「文档根标题」那一行（库里**没有**对应块的那一行）。
+ *
+ * 判据是「首行是 H1 **且** 库里的首个顶层块不是同内容的 heading」——
+ * **不能**用「首行 H1 与当前标题同文」：渲染侧手里是**磁盘旧内容 + 当前标题**，
+ * 一旦在库里改了名，两者必然不同，判据就会失效、文件标题永远停在旧值（实测踩过）。
+ *
+ * 为什么要区分：用户完全可以自己写一个与标题不同的 H1（`# 旧名`，标题是文件名）。
+ * 那一行在库里有对应的 heading 块，是**用户内容**，必须原样往返，不能被覆盖。
+ *
+ * 与 `spans.ts` 的判据等价（那边是解析结果与库里逐块比对，同一次快照，天然自洽）。
  */
-function hasHeadingLine(body: string): boolean {
+function isRootHeadingLine(body: string, db: ShadowDb, docId: string): boolean {
   if (!body) return false
   const nl = body.indexOf('\n')
   const firstLine = (nl < 0 ? body : body.slice(0, nl)).trim()
-  return /^#\s+\S/.test(firstLine)
+  if (!/^#\s+\S/.test(firstLine)) return false
+  const firstBlock = topLevelBlocks(db, docId)[0]
+  if (!firstBlock || firstBlock.type !== 'heading') return true
+  const headingText = firstLine.replace(/^#\s*/, '').trim()
+  return (firstBlock.content ?? '').trim() !== headingText
 }
 
 /**
- * 若正文首行是「与文档标题同文的 H1」，返回该行（含换行）；否则 null。
- * 与 core 的 `stripTitleFromMarkdown` 同判据，但保留原文以便原样写回。
+ * 把正文首行的「文档根标题」替换为当前标题（不改变后续偏移）。
+ * 只在首行确实是根标题时替换；用户自己写的别的 H1 不动。
  */
-function leadingTitleLine(body: string, doc: BlockRow): string | null {
-  const title = (doc.content || '').trim()
-  if (!title || !body) return null
+function replaceRootHeading(body: string, doc: BlockRow, db: ShadowDb): string {
+  if (!isRootHeadingLine(body, db, doc.id)) return body
   const nl = body.indexOf('\n')
-  const firstLine = nl < 0 ? body : body.slice(0, nl)
-  const candidate = firstLine.trim()
-  if (candidate === `# ${title}` || candidate === `#${title}`) {
-    return nl < 0 ? body : body.slice(0, nl + 1)
-  }
-  return null
+  const rest = nl < 0 ? '' : body.slice(nl + 1)
+  return titleHeadingOf(doc) + rest
 }
 
-/** 文档标题行（含换行）；无标题时返回空串 */
 function titleHeadingOf(doc: BlockRow): string {
   const title = (doc.content || '').trim()
   return title ? `# ${title}\n` : ''
@@ -511,7 +548,12 @@ function titleHeadingOf(doc: BlockRow): string {
  * 而整篇序列化路径写的是 `tags: []`。两条路径必须产出同一份内容，
  * 否则「内容未变时 fullSync 不重写文件」会退化——每次同步都认为内容变了。
  */
-function withProjectedFrontmatter(disk: string, body: string, doc: BlockRow): string {
+function withProjectedFrontmatter(
+  disk: string,
+  body: string,
+  doc: BlockRow,
+  knownRel: string | null,
+): string {
   const stripped = stripDocFrontmatter(disk)
   const tags = readTags(doc)
   const frontmatterRaw =
@@ -519,8 +561,11 @@ function withProjectedFrontmatter(disk: string, body: string, doc: BlockRow): st
       ? null
       : patchFrontmatter(stripped.raw, tags.length === 0 ? {} : { tags })
   const fm = frontmatterRaw ? `---\n${frontmatterRaw}\n---\n` : ''
-  return rewriteShadowAssetRefs(fm + body)
+  const content = fm + body
+  // 投影文档：附件落资源夹；没有映射的场合保持旧行为
+  return knownRel ? projectAssets(content, knownRel) : rewriteShadowAssetRefs(content)
 }
+
 
 /** 单个顶层块的 Markdown 序列化（与整篇路径同一函数，保证口径一致） */
 function serializeBlock(block: Block): string {

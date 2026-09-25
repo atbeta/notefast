@@ -52,13 +52,48 @@ export interface RecordProjectionSpansOptions {
  * 对不上（块数不等、缺 position、类型/内容不符）就清空该文档的区间并返回 false ——
  * 调用方的下一步写回会自动退回整篇序列化。
  */
+/**
+ * 文档根标题（`blocks.content`，type='document'）。取不到时返回空串。
+ */
+function docTitleOf(db: Db, docId: string): string {
+  const row = db.query("SELECT content FROM blocks WHERE id = ? AND type = 'document'").get(docId) as
+    | { content: string | null }
+    | undefined
+  return row?.content ?? ''
+}
+
 export function recordProjectionSpans(db: Db, docId: string, opts: RecordProjectionSpansOptions): boolean {
   const { blocks, spans } = parseMarkdownToBlocksWithSpans(opts.body, '', { bodyOnly: true })
-  const parsedTop = blocks
+  let parsedTop = blocks
     .map((block, index) => ({ block, index }))
     .filter(({ block }) => block.parent_id === null)
 
   const current = topLevelBlocks(db, docId)
+
+  /**
+   * 跳过投影文件里那一行「文档根标题」——它**不对应任何块**。
+   *
+   * 序列化时 `blocksToMarkdown` 会对 document 根输出 `# {doc.content}`，
+   * 而库里通常没有对应块：`insertDocFromMarkdown` 建文档时把与标题同文的首 H1 剥掉了。
+   * 不跳过 → 解析 N+1 块 vs 库里 N 块 → 对齐永远失败、区间表永远为空、
+   * 这类文档**永久退回整篇序列化**。
+   *
+   * **但判据必须是「这一行就是文档根标题」，不能是「首行是 H1」**：
+   * 当正文另有一个与标题不同的 H1（`# 旧名`，文档标题是文件名 `t`）时，
+   * 那一行是**真实的 heading 块**，跳过它反而会把块数与库里对不上
+   * （实测踩过：无条件跳过导致所有首行为 H1 的文档区间建立失败）。
+   */
+  const first = parsedTop[0]?.block
+  const title = (current.length > 0 ? docTitleOf(db, docId) : '').trim()
+  if (
+    title &&
+    first &&
+    first.type === 'heading' &&
+    (first.properties as { headingLevel?: number } | undefined)?.headingLevel === 1 &&
+    (first.content ?? '').trim() === title
+  ) {
+    parsedTop = parsedTop.slice(1)
+  }
   if (parsedTop.length !== current.length) {
     deleteProjectionBlockSpans(db, docId)
     return false

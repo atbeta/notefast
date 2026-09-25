@@ -5,12 +5,13 @@
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
 import { initAssetStore, saveAsset } from '../assets/store'
 import { insertDocFromMarkdown } from '../services/docImport'
 import { archiveRelPath } from '../sync/archive'
+import { listProjectionBlockSpans } from '../store/projectionSpans'
 import { readTags } from '@notefast/core'
 import { getDocById } from '../store/blocks'
 import { publishDocChange, FLUSH_MS } from '../services/docEvents'
@@ -110,14 +111,49 @@ describe('writeShadowDoc', () => {
     expect(body.startsWith('---\n')).toBe(true)
   })
 
-  test('不把 media blob 复制进 markdown/', () => {
+  test('附件落进笔记的资源夹，正文写相对引用（RFC 0007 D10）', () => {
+    /**
+     * 这是 D10 的核心承诺：**拷走文件夹不碎图**。
+     *
+     * 早先图片留在 `data/media/`，正文写 `../../media/<sha>` —— 那个相对路径
+     * 指向文件夹**外面**，拷走投影文件夹就全是碎图，投影也就白做了。
+     * 现在图片落进与笔记同目录的 `<笔记名>.assets/`，正文写相对引用，
+     * 在任何 Markdown 工具里都能渲染。
+     */
     const { meta } = saveAsset(PNG_BYTES, 'image/png')
     const id = createDoc('带图', `![x](asset:${meta.id})`)
     writeShadowDoc(getDocById(getDb(), id)!)
+
+    // 库里仍保留内容寻址的原始副本（不删，db 文档还要用）
     expect(existsSync(join(testDir, 'media', meta.id))).toBe(true)
-    expect(existsSync(join(markdownRoot(), 'media'))).toBe(false)
+
     const rel = archiveRelPath('带图', id, [])
-    expect(readFileSync(join(markdownRoot(), rel), 'utf-8')).toContain(`../../media/${meta.id}`)
+    const written = readFileSync(join(markdownRoot(), rel), 'utf-8')
+    // 正文是相对引用，且指向资源夹。
+    // 资源夹名取自**文件 stem**（system 档位下是 `<slug>--<id12>`），不是标题：
+    // 投影文件夹里的文件叫什么，资源夹就跟什么，改名才对得上
+    expect(written).toMatch(/\.assets\//)
+    expect(written).toContain('assets/')
+    expect(written).toMatch(/assets\/[0-9a-f]{16}\.png/)
+    expect(written).not.toContain(`../../media/${meta.id}`)
+    expect(written).not.toContain('asset:')
+
+    // 资源夹里确实有那张图，且是同样的字节。
+    // 目录名从正文里的相对引用反推，避免把命名规则抄进测试（抄了就测不出改名漂移）
+    const ref = written.match(/([^\s()]+\.assets)\/[0-9a-f]{16}\.png/)?.[1]
+    expect(ref).toBeTruthy()
+    const assetsDir = join(markdownRoot(), 'untagged', ref!)
+    expect(existsSync(assetsDir)).toBe(true)
+    const files = readdirSync(assetsDir)
+    expect(files.length).toBe(1)
+    expect(readFileSync(join(assetsDir, files[0]!))).toEqual(PNG_BYTES)
+  })
+
+  test('没有投影映射的场合不落资源夹（旧行为保留）', () => {
+    const { meta } = saveAsset(PNG_BYTES, 'image/png')
+    // 直接调兜底改写：不带 relPath，就是「没有映射」的语义
+    const out = rewriteShadowAssetRefs(`![x](asset:${meta.id})`)
+    expect(out).toBe(`![x](../../media/${meta.id})`)
   })
 
   test('首标签变化 → 删除旧路径文件', () => {
@@ -260,6 +296,60 @@ describe('GET/PUT /api/v1/instance', () => {
   })
 })
 
+// ───────────────────── D10：附件落资源夹（两条渲染路径都要走） ─────────────────────
+
+describe('D10：附件落盘覆盖两条渲染路径', () => {
+  /**
+   * 出方向有两条渲染路径：整篇序列化（full）与按块局部改写（patch）。
+   * 附件改写必须在**两条**上都生效——只覆盖一条的话，图片会在某次编辑之后
+   * 悄悄退回 `../../media/<sha>`，而那个路径指向文件夹外面（拷走就碎图）。
+   * 实测踩过：只测了 full 路径，patch 路径的变异没有被捕获。
+   */
+  test('patch 路径：改一个块之后，图片引用仍是资源夹相对路径', () => {
+    const { meta } = saveAsset(PNG_BYTES, 'image/png')
+    const id = createDoc('patch图', `第一段\n\n![x](asset:${meta.id})\n\n第三段\n`)
+    writeShadowDoc(getDocById(getDb(), id)!)
+
+    const rel = archiveRelPath('patch图', id, [])
+    const before = readFileSync(join(markdownRoot(), rel), 'utf-8')
+    expect(before).toMatch(/assets\/[0-9a-f]{16}\.png/)
+    expect(before).not.toContain('asset:')
+    expect(before).not.toContain('../../media/')
+
+    // 改一个段落 → 走 patch 路径
+    const para = getDb()
+      .query("SELECT id FROM blocks WHERE root_id = ? AND type = 'paragraph' AND content LIKE '第三段%'")
+      .get(id) as { id: string }
+    getDb().query('UPDATE blocks SET content = ? WHERE id = ?').run('第三段（改）', para.id)
+    writeShadowDoc(getDocById(getDb(), id)!)
+
+    const after = readFileSync(join(markdownRoot(), rel), 'utf-8')
+    expect(after).toContain('第三段（改）')
+    // 关键：附件引用没有退回 media 路径
+    expect(after).toMatch(/assets\/[0-9a-f]{16}\.png/)
+    expect(after).not.toContain('asset:')
+    expect(after).not.toContain('../../media/')
+  })
+
+  test('文件夹自包含：正文里的相对引用在文件夹内真实存在', () => {
+    // 这条是 D10 的**契约断言**：拷走文件夹就能用，所以每个相对引用都必须落在文件夹里
+    const { meta } = saveAsset(PNG_BYTES, 'image/png')
+    const id = createDoc('自包含', `![x](asset:${meta.id})\n`)
+    writeShadowDoc(getDocById(getDb(), id)!)
+
+    const rel = archiveRelPath('自包含', id, [])
+    const written = readFileSync(join(markdownRoot(), rel), 'utf-8')
+    const noteDir = dirname(join(markdownRoot(), rel))
+    const refs = [...written.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)].map((m) => m[1]!)
+    expect(refs.length).toBe(1)
+    // 不是绝对路径、不指向文件夹外
+    expect(refs[0]!.startsWith('/')).toBe(false)
+    expect(refs[0]!).not.toContain('..')
+    // 解析后的目标真实存在
+    expect(existsSync(join(noteDir, refs[0]!))).toBe(true)
+  })
+})
+
 // ───────────────────── 按块局部改写（P1b 出方向接线） ─────────────────────
 
 describe('writeShadowDoc 局部改写', () => {
@@ -387,11 +477,22 @@ describe('writeShadowDoc 局部改写', () => {
      *
      * 只改一个块，因此可以直接断言「另一块的磁盘形态是否幸存」。
      */
-    const docId = createDoc('磁盘优先', '第一段内容\n\n第二段内容\n\n第三段内容')
+    /**
+     * 标题**故意与文件名不同**（文档标题「磁盘优先」，文件名「磁盘优先」→ 相同会被
+     * `insertDocFromMarkdown` 剥掉首 H1，导致解析块数与库里的对不上、区间永远建立不起来，
+     * 那条路径是 P4 记录的已知限制）。
+     *
+     * 这里要验的是**局部改写本身**，所以必须走能建立区间的那种文档形态；
+     * 用同名标题写过一版，当时靠旧的（与 ingest 不一致的）偏移口径碰巧通过，
+     * 统一口径后就暴露出来了。
+     */
+    const docId = createDoc('磁盘优先文件', '# 另一个标题\n\n第一段内容\n\n第二段内容\n\n第三段内容')
     writeShadowDoc(getDocById(getDb(), docId)!)
 
     const p = shadowPath(docId)
     let disk = readFileSync(p, 'utf-8')
+    // 前提：区间已建立（否则本用例验的是整篇路径，不是局部改写）
+    expect(listProjectionBlockSpans(getDb(), docId).length).toBeGreaterThan(0)
     // 把第一段改成序列化器不会产出的形态（行尾两个空格 = Markdown 硬换行）
     disk = disk.replace('第一段内容', '第一段内容  ')
     writeFileSync(p, disk, 'utf-8')

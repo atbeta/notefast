@@ -166,7 +166,12 @@ export function renderProjectionContent(
   if (!patched) return { content: full, mode: 'full' }
 
   replaceProjectionBlockSpans(db, doc.id, patched.spans)
-  return { content: withFrontmatter(stripped.raw, patched.body, doc), mode: 'patch' }
+  // 首行 `# 标题` 落在 patch 结果的头部缝隙里，不在任何块区间内。
+  // 库里改了标题必须在这里替换它，否则文件标题永远停在旧值（实测踩过）。
+  return {
+    content: withFrontmatter(stripped.raw, replaceRootHeading(patched.body, doc, db), doc),
+    mode: 'patch',
+  }
 }
 
 /**
@@ -178,6 +183,53 @@ export function renderProjectionContent(
  */
 function renderFull(doc: BlockRow): string {
   return portableDocMarkdown(doc)
+}
+
+/**
+ * 磁盘正文首行是不是「文档根标题」那一行。
+ *
+ * 这一行由 `blocksToMarkdown` 对 document 根输出，**不对应任何块**，
+ * 所以它既不参与区间对齐（见 spans.ts），也不在任何块区间里。
+ * 判断只看「是不是首行 H1」，不看内容是否等于当前标题——改名时内容会变，
+ * 但「有没有这一行」不变。
+ */
+/**
+ * 正文首行是不是「文档根标题」那一行（库里**没有**对应块的那一行）。
+ *
+ * 判据是「首行是 H1 **且** 库里的首个顶层块不是同内容的 heading」——
+ * **不能**用「首行 H1 与当前标题同文」：渲染侧手里是**磁盘旧内容 + 当前标题**，
+ * 一旦在库里改了名，两者必然不同，判据就会失效、文件标题永远停在旧值（实测踩过）。
+ *
+ * 为什么要区分：用户完全可以自己写一个与标题不同的 H1（`# 旧名`，标题是文件名）。
+ * 那一行在库里有对应的 heading 块，是**用户内容**，必须原样往返，不能被覆盖。
+ *
+ * 与 `spans.ts` 的判据等价（那边是解析结果与库里逐块比对，同一次快照，天然自洽）。
+ */
+function isRootHeadingLine(body: string, db: Db, docId: string): boolean {
+  if (!body) return false
+  const nl = body.indexOf('\n')
+  const firstLine = (nl < 0 ? body : body.slice(0, nl)).trim()
+  if (!/^#\s+\S/.test(firstLine)) return false
+  const firstBlock = topLevelBlocks(db, docId)[0]
+  if (!firstBlock || firstBlock.type !== 'heading') return true
+  const headingText = firstLine.replace(/^#\s*/, '').trim()
+  return (firstBlock.content ?? '').trim() !== headingText
+}
+
+/**
+ * 把正文首行的「文档根标题」替换为当前标题（不改变后续偏移）。
+ * 只在首行确实是根标题时替换；用户自己写的别的 H1 不动。
+ */
+function replaceRootHeading(body: string, doc: BlockRow, db: Db): string {
+  if (!isRootHeadingLine(body, db, doc.id)) return body
+  const nl = body.indexOf('\n')
+  const rest = nl < 0 ? '' : body.slice(nl + 1)
+  return titleHeadingOf(doc) + rest
+}
+
+function titleHeadingOf(doc: BlockRow): string {
+  const title = (doc.content || '').trim()
+  return title ? `# ${title}\n` : ''
 }
 
 /** 保留磁盘上的 frontmatter（用户手写字段逐字节不动），只把 tags 投影进去 */
