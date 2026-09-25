@@ -436,6 +436,7 @@ function renderShadowContent(doc: BlockRow, dest: string): string {
       const stripped = stripDocFrontmatter(disk)
       // 区间相对「剥 frontmatter + 剥标题行」之后的正文
       const titleLine = leadingTitleLine(stripped.body, doc)
+      const hadTitle = hasHeadingLine(stripped.body)
       const oldBody = titleLine === null ? stripped.body : stripped.body.slice(titleLine.length)
       const tops = topLevelBlocks(db, doc.id)
       const blocks = tops.map((b) => ({ id: b.id, hash: blockSubtreeHash(b), text: serializeBlock(b) }))
@@ -445,7 +446,10 @@ function renderShadowContent(doc: BlockRow, dest: string): string {
         // 标题行按**当前**标题重写，不能照抄磁盘旧值：标题变了但只改了一个块时，
         // 照抄会让文件里的 `# 标题` 永远停在旧值（实测踩过）。
         // 注意 user 档位下文件名可能已被用户改过，因此这里写的是**标题**，不是文件名。
-        return withProjectedFrontmatter(disk, titleHeadingOf(doc) + patched.body, doc)
+        // 文件本来有标题行 → 用当前标题重写；本来没有 → 不凭空加一行。
+        // 注意判据是「**本来有没有**标题行」，不是「首行是否等于当前标题」：
+        // 后者在改名之后会返回 false，导致标题行被悄悄丢掉（实测踩过）。
+        return withProjectedFrontmatter(disk, (hadTitle ? titleHeadingOf(doc) : '') + patched.body, doc)
       }
     }
   }
@@ -465,6 +469,17 @@ function projectionBodyOf(content: string, doc: BlockRow): string {
   const body = stripDocFrontmatter(content).body
   const titleLine = leadingTitleLine(body, doc)
   return titleLine === null ? body : body.slice(titleLine.length)
+}
+
+/**
+ * 正文首行是不是一个 H1（不关心内容是否等于当前标题）。
+ * 用于判断「这个文件本来有没有标题行」——改名之后标题行内容会变，但「有没有」不变。
+ */
+function hasHeadingLine(body: string): boolean {
+  if (!body) return false
+  const nl = body.indexOf('\n')
+  const firstLine = (nl < 0 ? body : body.slice(0, nl)).trim()
+  return /^#\s+\S/.test(firstLine)
 }
 
 /**
