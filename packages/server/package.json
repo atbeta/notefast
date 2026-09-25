@@ -20,6 +20,7 @@
     "@hono/zod-validator": "^0.4.3",
     "@modelcontextprotocol/sdk": "^1.9.0",
     "@notefast/core": "workspace:*",
+    "chokidar": "^4",
     "hono": "^4.7.5",
     "mammoth": "^1.12.1",
     "sqlite-vec": "0.1.9",
