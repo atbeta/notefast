@@ -35,7 +35,10 @@ export function sanitizeFilename(name: string, maxLen = 80): string {
     .slice(0, maxLen) || 'untitled'
 }
 
-/** 稳定唯一文件名：标题 slug + docId，避免同名覆盖 */
+/**
+ * 稳定唯一文件名：标题 slug + docId，避免同名覆盖。
+ * 同上：服务于一次性归档；长期驻留的文件夹请用带 ` (n)` 去重的可读命名。
+ */
 export function archiveFilename(title: string, docId: string): string {
   const slug = sanitizeFilename(title || 'untitled')
   const shortId = docId.replace(/-/g, '').slice(0, 12)
@@ -53,7 +56,23 @@ export function archiveDirName(tags: readonly string[]): string {
   return slug || ARCHIVE_UNTAGGED_DIR
 }
 
-/** 归档相对路径：<目录>/<slug>--<id>.md */
+/**
+ * 归档相对路径：`<目录>/<slug>--<id>.md`。
+ *
+ * **只用于「一次性输出」的归档场景**（RFC 0007 S2）：
+ *   - 远端归档 `sync/archivePush.ts`（S3 / WebDAV / LocalFS）
+ *   - 整库 zip `services/docExport.ts`（`GET /export/archive`）
+ *   - 兜底导出 `services/autoExport.ts`（`GET /api/v1/sync/export/markdown`）
+ *
+ * 这些场景的产物是**一次性的**（下载走、传走就完了），所以：
+ *   ① 用 `<首标签>` 分目录 —— 人类查看时好找
+ *   ② 用 `<id12>` 后缀 —— 同名文档不会互相覆盖
+ *
+ * **不要**把它用于**长期驻留**的文件夹。投影（`services/shadowMarkdown.ts`）早先借它
+ * 生成路径，代价是用户在自己的文件夹里看到 `我的笔记--a1b2c3d4e5f6.md`，
+ * 而且标题一变路径就跟着搬。投影现在有自己的命名（`projectionSlug` + 用户可改），
+ * 见 RFC 0007 D2。
+ */
 export function archiveRelPath(title: string, docId: string, tags: readonly string[]): string {
   return `${archiveDirName(tags)}/${archiveFilename(title, docId)}`
 }

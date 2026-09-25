@@ -121,7 +121,10 @@ docker compose up -d
 - **blocks / block_refs 读写走 `server/src/store/`**，不要另开 SQL 旁路
 - **图片**：主数据在 `data/media/<sha256>`（内容寻址），Markdown 用 `asset:<sha256>`；引用靠内容扫描，不建关联表。备份 SQLite 快照不覆盖 media，需另行纳入卷/文件级备份
 - **Markdown 仅作表达与导出**，不是权威存储。便携导出/归档可把 tags、时间、`notefast_id` 投影为 YAML frontmatter；导入可读 tags，不按 id 静默覆盖
-- **备份与归档分轨**：灾备 = 应用内 SQLite→S3 快照（设置页 / `docs/backup.md`），恢复走停服 `bun --filter @notefast/server backup:restore`。Markdown 归档（LocalFS/S3/WebDAV）是单向便携副本，仅手动触发，会丢 ID/引用等元数据
+- **文件夹投影**（RFC 0007）：把库**双向**接到一个用户文件夹——出方向按块局部改写（只动被编辑的块，其余字节原样保留），入方向 watcher 导入外部编辑。**SQLite 仍是唯一权威**；两边同时改时**库赢**，外部版本落 `<stem>.notefast-conflict-<时间戳>.md`。路径归属由 `pathMode` 决定：`system`（按标题/标签派生，默认）或 `user`（首次取可读名，此后以磁盘为准）。文件消失 = 文档进回收站（软删除），不是物理删除
+  - 投影代码在 `server/src/projection/`，映射表 `projection_files`，块区间 `projection_block_spans`；**出方向的渲染与入方向的解析必须共用同一个正文口径**（只剥 frontmatter，不剥标题行），否则区间偏移对不上
+  - `AUTO_EXPORT_DIR` 的定时导出在投影启用时**不再启动**（它是投影的劣化版本）；手动导出端点照常
+- **备份与归档分轨**：灾备 = 应用内 SQLite→S3 快照（设置页 / `docs/backup.md`），恢复走停服 `bun --filter @notefast/server backup:restore`。Markdown 归档（LocalFS/S3/WebDAV）是单向便携副本，仅手动触发，会丢 ID/引用等元数据。归档的 `<首标签>/<slug>--<id12>.md` 命名**只服务一次性输出**，不要借给长期驻留的文件夹（那是投影的事）
 - 备份、多端同步、Markdown 归档共用 `data/storage-locations.json` 里的对象存储连接，各自引用 locationId + 前缀，配置文件不内嵌凭据
 
 #### 产品边界

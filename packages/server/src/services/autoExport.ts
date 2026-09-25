@@ -1,31 +1,52 @@
 /**
- * 自动导出 → 已迁移到 sync adapter
+ * 自动导出（AUTO_EXPORT_DIR）—— **兜底**，正在被投影取代（RFC 0007 S1）
  *
- * 老 startAutoExport 的行为：
- * - 若 sync manager 已配置且 active adapter 启用，仅打印一条日志告知已被接管
- * - 否则保留一个兜底的 setInterval，循环调用 legacyExportOnce() 写 Markdown
+ * 三层关系，优先级从高到低：
+ *   1. 多端同步 adapter 已配置 → `sync/manager` 的 autoSyncTimer 负责，这里直接让位
+ *   2. **投影已启用** → 让位给投影。投影就是「把库导出成文件夹」，而且做得更好：
+ *      实时（变更即写）、增量（只改被编辑的块，不整篇重写）、路径归用户（D2）。
+ *      这时还跑每小时全量重写是纯浪费，也会与投影争同一个目录。
+ *   3. 都没有 → 保留兜底定时循环，兼容只设了 AUTO_EXPORT_DIR 的老部署
  *
- * 真正的"按 interval 同步"逻辑由 sync/manager.ts 的 autoSyncTimer 负责，
- * 这里仅在**显式**设置 AUTO_EXPORT_DIR 且尚未配 sync 时回退。
  * Docker 镜像默认不设该变量，避免每小时全量重写卡住 1 CPU / 512 MB 实例。
  *
- * legacyExportMarkdown 同时是 GET /api/v1/sync/export/markdown（api/sync.ts）
- * 的实现——全库一次性兜底导出只保留这一份。
+ * `legacyExportMarkdown` 同时是 `GET /api/v1/sync/export/markdown`（api/sync.ts）的实现，
+ * 是用户主动触发的一次性导出，**不受本收敛影响**——按需调用不是冗余。
  */
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { readTags } from '@notefast/core'
 import { isSyncConfigured, syncPush } from '../sync/manager'
+import { getShadowConfig } from './shadowMarkdown'
 import { archiveRelPath } from '../sync/archive'
 import { getDb } from '../db'
 import { listDocRows } from '../store/blocks'
 import { portableDocMarkdown } from './portableMarkdown'
 
-/** 老入口：保留 API 形态；底层逻辑已切到 sync manager */
+/** 投影（影子副本）是否启用——决定这套兜底还要不要跑 */
+function isProjectionEnabled(): boolean {
+  try {
+    return getShadowConfig().enabled
+  } catch {
+    // 影子副本尚未初始化（早期启动顺序）→ 按未启用处理，走兜底
+    return false
+  }
+}
+
+/** 老入口：保留 API 形态；底层逻辑已切到 sync manager / 投影 */
 export function startAutoExport(dir: string): void {
   if (isSyncConfigured()) {
     console.log(`📁 Auto-export: 已被 sync adapter 接管（dir=${dir} 不再生效）`)
+    return
+  }
+  if (isProjectionEnabled()) {
+    // 投影是这套兜底的上位替代：更实时、更省、且不与它争目录。
+    // 注意这里只是**不启动定时器**，页面上的手动导出仍然可用。
+    console.log(
+      `📁 Auto-export: 投影已启用，AUTO_EXPORT_DIR（${dir}）不再启动定时导出；` +
+        '如需导出请用「设置 → 数据来源」或 GET /api/v1/sync/export/markdown',
+    )
     return
   }
   mkdirSync(dir, { recursive: true })
