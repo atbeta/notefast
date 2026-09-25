@@ -3,8 +3,8 @@
  * 单向（改文件不写回）；图片改写为 ../../media/<sha>，不复制 blob。
  */
 
-import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { Hono } from 'hono'
 import { initDb, closeDb, getDb } from '../db'
@@ -420,5 +420,159 @@ describe('writeShadowDoc 局部改写', () => {
     // 仍是权威端内容，外部改动不会被合并进来（投影是单向的）
     expect(after).toContain('第一段')
     expect(after).not.toContain('外部乱改的内容')
+  })
+})
+
+// ───────────────────── P2：路径归用户（RFC 0007 D2） ─────────────────────
+
+describe('pathMode：路径归属', () => {
+  afterEach(() => {
+    // 档位是模块级配置，用例之间必须还原
+    applyShadowConfig({ pathMode: 'system' })
+  })
+
+  function relOf(docId: string): string {
+    const doc = getDocById(getDb(), docId)!
+    return archiveRelPath(doc.content || 'untitled', docId, readTags(doc))
+  }
+
+  test('默认档位是 system（既有用户不被搬文件）', () => {
+    expect(getShadowConfig().pathMode).toBe('system')
+  })
+
+  test('system 档位：标题变化仍按派生命名换路径（既有行为不变）', () => {
+    const id = createDoc('原名', '正文')
+    writeShadowDoc(getDocById(getDb(), id)!)
+    const first = readFileSync(join(markdownRoot(), relOf(id)), 'utf-8')
+    expect(first).toContain('正文')
+
+    getDb().query('UPDATE blocks SET content = ? WHERE id = ?').run('改名', id)
+    writeShadowDoc(getDocById(getDb(), id)!)
+    const doc = getDocById(getDb(), id)!
+    const newRel = archiveRelPath(doc.content || 'untitled', id, readTags(doc))
+    expect(newRel).toContain('改名')
+    expect(existsSync(join(markdownRoot(), newRel))).toBe(true)
+  })
+
+  test('user 档位：首次投影落可读文件名（不带 id 后缀）', () => {
+    applyShadowConfig({ pathMode: 'user' })
+    const id = createDoc('我的笔记', '正文')
+    writeShadowDoc(getDocById(getDb(), id)!)
+
+    expect(existsSync(join(markdownRoot(), '我的笔记.md'))).toBe(true)
+    // 不带 12 位 id 后缀
+    const entries = readdirSync(markdownRoot()).filter((f) => f.endsWith('.md'))
+    expect(entries).toContain('我的笔记.md')
+    expect(entries.some((f) => /--[0-9a-f]{12}\.md$/.test(f))).toBe(false)
+  })
+
+  test('user 档位：文档改名后文件路径不变（磁盘为准）', () => {
+    applyShadowConfig({ pathMode: 'user' })
+    const id = createDoc('原文件名', '正文')
+    writeShadowDoc(getDocById(getDb(), id)!)
+    expect(existsSync(join(markdownRoot(), '原文件名.md'))).toBe(true)
+
+    // 改标题（system 档位下这会搬文件）
+    getDb().query('UPDATE blocks SET content = ? WHERE id = ?').run('新标题', id)
+    writeShadowDoc(getDocById(getDb(), id)!)
+
+    // 关键断言：文件仍在原路径，未被搬到「新标题.md」
+    expect(existsSync(join(markdownRoot(), '原文件名.md'))).toBe(true)
+    expect(existsSync(join(markdownRoot(), '新标题.md'))).toBe(false)
+    // 位置不变，但内容确实跟着库走：重复的标题行按新标题写
+    // （标题是文档根不是块，所以它由整篇路径写入，不在局部改写的区间里）
+    expect(readFileSync(join(markdownRoot(), '原文件名.md'), 'utf-8')).toContain('# 新标题')
+  })
+
+  test('user 档位：用户在外部改名 → 投影跟随，不覆盖、不新建', () => {
+    applyShadowConfig({ pathMode: 'user' })
+    const id = createDoc('用户会改名', '正文')
+    writeShadowDoc(getDocById(getDb(), id)!)
+
+    // 用户在 Finder / Obsidian 里把它改名并挪进子目录
+    const from = join(markdownRoot(), '用户会改名.md')
+    const toDir = join(markdownRoot(), '我的目录')
+    mkdirSync(toDir, { recursive: true })
+    const to = join(toDir, '用户会改名.md')
+    renameSync(from, to)
+
+    // 让 manifest 知道新路径（真实场景由入方向 watcher 做，P3 实现）
+    const manifestPath = join(markdownRoot(), 'notefast-shadow.manifest.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as {
+      files: Array<{ docId: string; filename: string }>
+    }
+    for (const f of manifest.files) if (f.docId === id) f.filename = '我的目录/用户会改名.md'
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8')
+
+    // 库里改一个块 → 写回应落在**新路径**
+    const para = getDb()
+      .query("SELECT id FROM blocks WHERE root_id = ? AND type = 'paragraph'")
+      .get(id) as { id: string }
+    getDb().query('UPDATE blocks SET content = ? WHERE id = ?').run('改过的正文', para.id)
+    writeShadowDoc(getDocById(getDb(), id)!)
+
+    expect(existsSync(to)).toBe(true)
+    expect(existsSync(from)).toBe(false)
+    expect(readFileSync(to, 'utf-8')).toContain('改过的正文')
+  })
+
+  test('user 档位：同题文档重名时追加 " (n)"，不互相覆盖', () => {
+    applyShadowConfig({ pathMode: 'user' })
+    const a = createDoc('同名', 'A')
+    const b = createDoc('同名', 'B')
+    writeShadowDoc(getDocById(getDb(), a)!)
+    writeShadowDoc(getDocById(getDb(), b)!)
+
+    expect(existsSync(join(markdownRoot(), '同名.md'))).toBe(true)
+    expect(existsSync(join(markdownRoot(), '同名 (1).md'))).toBe(true)
+    expect(readFileSync(join(markdownRoot(), '同名.md'), 'utf-8')).toContain('A')
+    expect(readFileSync(join(markdownRoot(), '同名 (1).md'), 'utf-8')).toContain('B')
+  })
+
+  test('user 档位：文件被外部删除 → 下次投影按标题重新落默认名', () => {
+    applyShadowConfig({ pathMode: 'user' })
+    const id = createDoc('会被删掉', '正文')
+    writeShadowDoc(getDocById(getDb(), id)!)
+    const p = join(markdownRoot(), '会被删掉.md')
+    unlinkSync(p)
+
+    writeShadowDoc(getDocById(getDb(), id)!)
+    // 不把路径钉死在一个已不存在的文件上
+    expect(existsSync(p)).toBe(true)
+  })
+
+  test('切换档位：system → user 会重算路径', async () => {
+    const id = createDoc('切换测试', '正文')
+    writeShadowDoc(getDocById(getDb(), id)!)
+    expect(existsSync(join(markdownRoot(), relOf(id)))).toBe(true)
+
+    const oldRel = relOf(id)
+    applyShadowConfig({ pathMode: 'user' })
+    await waitDeferredFullSync()
+
+    // system → user 走 fullSync 重算：新路径是去 id 后缀的可读名
+    const entries = readdirSync(markdownRoot()).filter((f) => f.endsWith('.md'))
+    expect(entries).toContain('切换测试.md')
+    // 旧的派生路径已清理（带 --<id12> 后缀的那个）
+    expect(entries.some((f) => f === oldRel)).toBe(false)
+  })
+
+  test('PUT /instance 可设置 pathMode 且不影响 enabled', async () => {
+    const res = await app.fetch(new Request('http://localhost/api/v1/instance', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shadow_path_mode: 'user' }),
+    }))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { shadow_path_mode: string; shadow_markdown_enabled: boolean }
+    expect(body.shadow_path_mode).toBe('user')
+    expect(body.shadow_markdown_enabled).toBe(true) // 未被这次调用改掉
+    expect(getShadowConfig().pathMode).toBe('user')
+  })
+
+  test('GET /instance 报出当前档位', async () => {
+    const res = await app.fetch(new Request('http://localhost/api/v1/instance'))
+    const body = (await res.json()) as { shadow_path_mode: string }
+    expect(['system', 'user']).toContain(body.shadow_path_mode)
   })
 })
