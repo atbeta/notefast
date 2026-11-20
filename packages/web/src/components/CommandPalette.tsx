@@ -22,6 +22,7 @@ import { useTheme } from '../hooks/useTheme'
 import { EmptyState, Kbd, ShortcutKeys } from './ui'
 import {
   collapseSearchHitsByDoc,
+  highlightSegments,
   paletteDocTitle,
   searchHitDocPath,
   PALETTE_DOC_LIMIT,
@@ -270,6 +271,7 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
                 key={item.id}
                 item={item}
                 index={index}
+                query={query}
                 active={index === active}
                 onHover={() => setActive(index)}
                 onClick={item.action}
@@ -287,6 +289,7 @@ export default function CommandPalette({ open, onClose, onToggleAiChat, aiChatOp
                 key={item.id}
                 item={item}
                 index={index}
+                query={query}
                 active={index === active}
                 onHover={() => setActive(index)}
                 onClick={item.action}
@@ -326,15 +329,29 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
+function Highlighted({ text, query }: { text: string; query: string }) {
+  return (
+    <>
+      {highlightSegments(text, query).map((seg, i) =>
+        seg.hit
+          ? <mark key={i} className="bg-primary/15 text-foreground rounded-sm">{seg.text}</mark>
+          : seg.text,
+      )}
+    </>
+  )
+}
+
 function PaletteRow({
   item,
   index,
+  query,
   active,
   onHover,
   onClick,
 }: {
   item: PaletteItem
   index: number
+  query: string
   active: boolean
   onHover: () => void
   onClick: () => void
@@ -362,9 +379,9 @@ function PaletteRow({
         <Icon className="w-4 h-4" />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium truncate">{item.title}</div>
+        <div className="text-sm font-medium truncate"><Highlighted text={item.title} query={query} /></div>
         {item.hint && (
-          <div className="text-xs text-muted-foreground truncate mt-0.5">{item.hint}</div>
+          <div className="text-xs text-muted-foreground truncate mt-0.5"><Highlighted text={item.hint} query={query} /></div>
         )}
       </div>
       {item.shortcut && (

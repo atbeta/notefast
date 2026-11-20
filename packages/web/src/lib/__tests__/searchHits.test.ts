@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Block, SearchResult } from '@notefast/core'
-import { collapseSearchHitsByDoc, paletteDocTitle, searchHitDocPath, parseDocScrollHash } from '../searchHits'
+import { collapseSearchHitsByDoc, highlightSegments, paletteDocTitle, searchHitDocPath, parseDocScrollHash } from '../searchHits'
 
 function hit(partial: { id: string; root_id: string; content: string; snippet: string; doc_title?: string; rank?: number }): SearchResult {
   const block = {
@@ -85,6 +85,45 @@ describe('searchHitDocPath', () => {
       content: '标题',
       snippet: '标题',
     }))).toBe('/doc/doc-a')
+  })
+})
+
+describe('highlightSegments', () => {
+  test('大小写不敏感地切出命中段，保留原文大小写', () => {
+    expect(highlightSegments('Hello World', 'world')).toEqual([
+      { text: 'Hello ', hit: false },
+      { text: 'World', hit: true },
+    ])
+  })
+
+  test('多处命中全部标出', () => {
+    expect(highlightSegments('abXabXab', 'ab')).toEqual([
+      { text: 'ab', hit: true },
+      { text: 'X', hit: false },
+      { text: 'ab', hit: true },
+      { text: 'X', hit: false },
+      { text: 'ab', hit: true },
+    ])
+  })
+
+  test('空查询或无命中时整段不标', () => {
+    expect(highlightSegments('标题', '')).toEqual([{ text: '标题', hit: false }])
+    expect(highlightSegments('标题', '  ')).toEqual([{ text: '标题', hit: false }])
+    expect(highlightSegments('标题', '别的')).toEqual([{ text: '标题', hit: false }])
+  })
+
+  test('正则特殊字符按字面匹配，不当正则用', () => {
+    expect(highlightSegments('a.b (c)', '.b')).toEqual([
+      { text: 'a', hit: false },
+      { text: '.b', hit: true },
+      { text: ' (c)', hit: false },
+    ])
+    expect(highlightSegments('axb', 'a.b')).toEqual([{ text: 'axb', hit: false }])
+  })
+
+  test('拼接各段还原原文', () => {
+    const text = 'NoteFast 知识库 noteFast'
+    expect(highlightSegments(text, 'notefast').map((s) => s.text).join('')).toBe(text)
   })
 })
 

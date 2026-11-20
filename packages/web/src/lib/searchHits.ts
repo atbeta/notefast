@@ -39,6 +39,26 @@ export function parseDocScrollHash(hash: string): string | null {
   return raw.startsWith('block-') ? raw.slice(6) : raw
 }
 
+/** 命中词高亮分段：大小写不敏感的 indexOf 切分，不走正则（免转义） */
+export function highlightSegments(text: string, query: string): { text: string; hit: boolean }[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return [{ text, hit: false }]
+  const lower = text.toLowerCase()
+  const out: { text: string; hit: boolean }[] = []
+  let pos = 0
+  while (pos < text.length) {
+    const i = lower.indexOf(q, pos)
+    if (i === -1) {
+      out.push({ text: text.slice(pos), hit: false })
+      break
+    }
+    if (i > pos) out.push({ text: text.slice(pos, i), hit: false })
+    out.push({ text: text.slice(i, i + q.length), hit: true })
+    pos = i + q.length
+  }
+  return out
+}
+
 /** 面板主行用文档标题，不要用子块 snippet 冒充篇名 */
 export function paletteDocTitle(hit: SearchResult, untitled: string): string {
   const fromApi = hit.doc_title?.trim()
