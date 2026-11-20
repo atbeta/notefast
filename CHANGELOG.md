@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.89.0](https://github.com/atbeta/notefast/compare/v0.88.0...v0.89.0) (2026-11-20)
+
+
+### Features
+
+* **core:** expose block spans and frontmatter passthrough ([2cc2e5f](https://github.com/atbeta/notefast/commit/2cc2e5f98df07a95e07ca0d09499e440f0256871))
+* **projection:** add paths, watch probe and the file map ([7aa4e7e](https://github.com/atbeta/notefast/commit/7aa4e7e1cca4b01e121f393a22c981a432c9f6cf))
+* **projection:** import external edits back into the library ([01f81e3](https://github.com/atbeta/notefast/commit/01f81e30b33ce059c916855823ba95ed16cf1e52))
+* **projection:** keep images inside the folder and fix the heading row ([4ce1e1e](https://github.com/atbeta/notefast/commit/4ce1e1e7e3ac24637521cc1f6112c3d37f659b5d))
+* **projection:** report projection status on the instance endpoint ([6e5191f](https://github.com/atbeta/notefast/commit/6e5191f3ef0d51c048ba569b01caef0460ba5b0f))
+* **projection:** watch the folder and feed the import queue ([6cdd6ff](https://github.com/atbeta/notefast/commit/6cdd6ff1414f98ca51f54a5dc754dd1e87e6d9ff))
+* **projection:** write back to the folder with conflict copies ([94e191e](https://github.com/atbeta/notefast/commit/94e191ed88293dd4141924654a31684aa57017ea))
+* **server:** add the projection block-patch mechanism ([4bff899](https://github.com/atbeta/notefast/commit/4bff899581e68bec0eaf44c12f2d0249864694fe))
+* **shadow:** let the user own the projection paths ([34f8ca4](https://github.com/atbeta/notefast/commit/34f8ca45bbdcfc9c1bbf67b62f0ec36b496d91c4))
+* **web:** highlight query hits in command palette results ([6667876](https://github.com/atbeta/notefast/commit/66678767709120e7f090f5e8ab9acd97796150d1))
+
+
+### Bug Fixes
+
+* **web:** repair scroll fade, card alignment and status a11y gaps ([776be54](https://github.com/atbeta/notefast/commit/776be54b91a1c6a2eb0607123d9da68e1b8d6d6b))
+
+
+### Performance Improvements
+
+* **shadow:** rewrite only edited blocks in the markdown projection ([df1f84a](https://github.com/atbeta/notefast/commit/df1f84aee847aa73002a0f3e7abcfe3d6c78692f))
+
 ## [0.88.0](https://github.com/atbeta/notefast/compare/v0.87.0...v0.88.0) (2026-09-24)
 
 
