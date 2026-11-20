@@ -2,21 +2,27 @@ import { useEffect, useRef } from 'react'
 
 /**
  * 滚动边缘羽化：返回 ref 挂到滚动容器上，按当前滚动位置维护
- * data-fade-top / data-fade-bottom（仅当该方向还有溢出内容时为 true），
- * CSS（index.css 的 .scroll-fade）据此只对那一侧加 mask 淡出。
+ * data-fade-top / data-fade-bottom（axis='x' 时为 left / right），
+ * 仅当该方向还有溢出内容时为 true，CSS（index.css 的 .scroll-fade / .scroll-fade-x）
+ * 据此只对那一侧加 mask 淡出。
  *
  * 直接写 dataset 而非 setState —— 滚动是高频事件，避免重渲染；
  * 静态 mask 会在已滚到顶/底时错误地淡化首尾内容，所以必须边缘感知。
  */
-export function useScrollFade<T extends HTMLElement>() {
+export function useScrollFade<T extends HTMLElement>(axis: 'x' | 'y' = 'y') {
   const ref = useRef<T>(null)
 
   useEffect(() => {
     const el = ref.current
     if (!el) return
     const update = () => {
-      el.dataset.fadeTop = String(el.scrollTop > 1)
-      el.dataset.fadeBottom = String(el.scrollTop + el.clientHeight < el.scrollHeight - 1)
+      if (axis === 'x') {
+        el.dataset.fadeLeft = String(el.scrollLeft > 1)
+        el.dataset.fadeRight = String(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
+      } else {
+        el.dataset.fadeTop = String(el.scrollTop > 1)
+        el.dataset.fadeBottom = String(el.scrollTop + el.clientHeight < el.scrollHeight - 1)
+      }
     }
     update()
     el.addEventListener('scroll', update, { passive: true })
@@ -30,7 +36,7 @@ export function useScrollFade<T extends HTMLElement>() {
       ro.disconnect()
       mo.disconnect()
     }
-  }, [])
+  }, [axis])
 
   return ref
 }

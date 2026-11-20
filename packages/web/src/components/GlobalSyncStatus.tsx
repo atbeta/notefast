@@ -1,10 +1,20 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Loader2, Cloud, CheckCircle2, AlertCircle } from 'lucide-react'
-import { useSyncStatus } from '../hooks/useSyncStatus'
+import { useSyncStatus, type SyncStatusData } from '../hooks/useSyncStatus'
 import { useDocRailCollapsed } from '../hooks/useDocRailCollapsed'
 import { Tooltip } from './ui'
 import { formatIsoDateTime } from '../lib/time'
+
+export type SyncStatusKind = 'syncing' | 'failed' | 'pending' | 'synced' | 'never'
+
+/** 展示优先级：同步中 > 同步失败 > 有待同步 > 已同步 > 从未同步（中性，不亮绿勾） */
+export function syncStatusKind(status: SyncStatusData): SyncStatusKind {
+  if (status.running) return 'syncing'
+  if (status.lastError) return 'failed'
+  if ((status.pendingChanges ?? 0) > 0) return 'pending'
+  return status.lastSuccessAt ? 'synced' : 'never'
+}
 
 /**
  * 全局同步状态（固定在窗口右下角的图标按钮，类比客户端底部状态栏）。
@@ -28,24 +38,27 @@ export default function GlobalSyncStatus() {
   let label: string
   let tooltip: string
 
-  if (status.running) {
+  const kind = syncStatusKind(status)
+  if (kind === 'syncing') {
     icon = <Loader2 className="w-4 h-4 animate-spin text-primary" strokeWidth={1.75} />
     label = t('syncStatus.syncing')
     tooltip = t('syncStatus.syncingTooltip')
-  } else if (status.lastError) {
+  } else if (kind === 'failed') {
     icon = <AlertCircle className="w-4 h-4 text-destructive" strokeWidth={1.75} />
     label = t('syncStatus.syncFailed')
     tooltip = t('syncStatus.syncFailedWithError', { error: status.lastError })
-  } else if ((status.pendingChanges ?? 0) > 0) {
+  } else if (kind === 'pending') {
     icon = <Cloud className="w-4 h-4 text-warning" strokeWidth={1.75} />
     label = t('syncStatus.pendingChanges', { n: status.pendingChanges })
     tooltip = t('syncStatus.hasPendingChanges')
-  } else {
+  } else if (kind === 'synced') {
     icon = <CheckCircle2 className="w-4 h-4 text-success" strokeWidth={1.75} />
-    label = status.lastSuccessAt ? t('syncStatus.synced') : t('syncStatus.pending')
-    tooltip = status.lastSuccessAt
-      ? t('syncStatus.syncedAt', { time: formatIsoDateTime(status.lastSuccessAt) })
-      : t('syncStatus.neverSynced')
+    label = t('syncStatus.synced')
+    tooltip = t('syncStatus.syncedAt', { time: formatIsoDateTime(status.lastSuccessAt!) })
+  } else {
+    icon = <Cloud className="w-4 h-4" strokeWidth={1.75} />
+    label = t('syncStatus.pending')
+    tooltip = t('syncStatus.neverSynced')
   }
 
   // 文档页 rail 让位：w-72=18rem / 收起 w-9=2.25rem，另加 0.75rem 边距

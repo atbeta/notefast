@@ -962,6 +962,7 @@ useEffect(() => {
                 }`}
                 aria-expanded={showShare}
                 aria-haspopup="dialog"
+                aria-label={docShared ? t('doc.alreadyShared') : t('doc.shareDoc')}
               >
                 {docShared
                   ? <Globe className="w-3.5 h-3.5" strokeWidth={1.75} />

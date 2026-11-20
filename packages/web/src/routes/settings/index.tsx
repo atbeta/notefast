@@ -12,6 +12,7 @@ import {
   Info,
 } from 'lucide-react'
 import { AiChatHeaderSlot } from '../../components/PageHeader'
+import { useScrollFade } from '../../hooks/useScrollFade'
 
 const NAV_ITEMS = [
   { to: 'general', tabKey: 'general', Icon: Sliders },
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
 
 export default function SettingsLayout() {
   const { t } = useTranslation()
+  const tabsRef = useScrollFade<HTMLDivElement>('x')
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 sm:px-8 py-8 sm:py-10 animate-fade-in pb-32">
@@ -68,7 +70,7 @@ export default function SettingsLayout() {
 
         {/* 移动端：顶部胶囊 tabs（窄屏下保留横向滚动） */}
         <div className="lg:hidden mb-5 sticky top-0 z-header -mx-2 px-2 py-3 bg-background/80 backdrop-blur-md border-b border-border/50">
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar mask-edges">
+          <div ref={tabsRef} className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-fade-x">
             {NAV_ITEMS.map(({ to, tabKey, Icon: _ }) => (
               <NavLink
                 key={to}
@@ -88,9 +90,10 @@ export default function SettingsLayout() {
           </div>
         </div>
 
-        <main className="min-w-0">
+        {/* 应用壳已提供唯一 <main> landmark，这里不能再嵌套一层 */}
+        <div className="min-w-0">
           <Outlet />
-        </main>
+        </div>
       </div>
     </div>
   )

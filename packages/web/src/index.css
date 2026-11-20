@@ -152,6 +152,27 @@
   .scroll-fade[data-fade-bottom='true'] {
     --sf-bottom: 16px;
   }
+  /* 横向版本：胶囊 tabs 等横向滚动条容器（useScrollFade('x') 驱动） */
+  .scroll-fade-x {
+    --sf-left: 0px;
+    --sf-right: 0px;
+    mask-image: linear-gradient(to right, transparent, black var(--sf-left), black calc(100% - var(--sf-right)), transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black var(--sf-left), black calc(100% - var(--sf-right)), transparent);
+  }
+  .scroll-fade-x[data-fade-left='true'] {
+    --sf-left: 16px;
+  }
+  .scroll-fade-x[data-fade-right='true'] {
+    --sf-right: 16px;
+  }
+  /* 完全隐藏滚动条（横向胶囊 tabs：羽化已承担溢出提示） */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
   /* 焦点环唯一方案：:focus-visible + outline。
      按钮/链接 1px + 2px 偏移；输入框 1px + 1px 偏移。
      不要再写 focus:ring-* / 3px box-shadow；透明搜索框用 [data-no-focus-ring]。 */
